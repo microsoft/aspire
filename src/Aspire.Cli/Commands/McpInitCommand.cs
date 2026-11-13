@@ -23,7 +23,7 @@ internal sealed class McpInitCommand : BaseCommand
 
         Options.Add(AgentInitCommand.s_workspaceRootOption);
         Options.Add(AgentInitCommand.s_mcpOption);
-        Options.Add(AgentInitCommand.s_keepSkillCopiesOption);
+        Options.Add(AgentInitCommand.s_removeSkillCopiesOption);
         Options.Add(_agentInitCommand.AgentsOption);
         Options.Add(AgentInitCommand.s_scopeOption);
         Options.Add(AgentInitCommand.s_skillsOption);

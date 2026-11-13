@@ -113,8 +113,8 @@
         <note>{0} lists the configuration file paths with their agent names in parentheses, separated by commas.</note>
       </trans-unit>
       <trans-unit id="InitCommand_DeleteSkillCopiesPrompt">
-        <source>Delete these {0} copied skill folders?</source>
-        <target state="new">Delete these {0} copied skill folders?</target>
+        <source>Delete {0} copied skill folders?</source>
+        <target state="new">Delete {0} copied skill folders?</target>
         <note>{0} is the number of skill folders, always greater than one.</note>
       </trans-unit>
       <trans-unit id="InitCommand_DeleteSkillCopyPrompt">
@@ -199,15 +199,10 @@
         <target state="new">Invalid skill/tool selection '{0}'. Use {1}, '{2}', or '{3}'.</target>
         <note />
       </trans-unit>
-      <trans-unit id="InitCommand_KeepSkillCopiesOptionDescription">
-        <source>Keep copied Aspire skill folders when the Aspire skills plugin replaces them at the selected scope. Omit to be asked before they are deleted.</source>
-        <target state="new">Keep copied Aspire skill folders when the Aspire skills plugin replaces them at the selected scope. Omit to be asked before they are deleted.</target>
-        <note />
-      </trans-unit>
       <trans-unit id="InitCommand_KeptSkillCopies">
-        <source>Kept copied Aspire skills.</source>
-        <target state="new">Kept copied Aspire skills.</target>
-        <note />
+        <source>Kept copied Aspire skills in {0}</source>
+        <target state="new">Kept copied Aspire skills in {0}</target>
+        <note>{0} lists the copied skill folder paths, separated by commas.</note>
       </trans-unit>
       <trans-unit id="InitCommand_LocationWithAgents">
         <source>{0} ({1})</source>
@@ -244,15 +239,20 @@
         <target state="needs-review-translation">Project (instalación en la raíz del área de trabajo; confirmada con el proyecto)</target>
         <note />
       </trans-unit>
+      <trans-unit id="InitCommand_RemoveSkillCopiesOptionDescription">
+        <source>Remove copied Aspire skills when the Aspire skills plugin replaces them at the selected scope. Defaults to false</source>
+        <target state="new">Remove copied Aspire skills when the Aspire skills plugin replaces them at the selected scope. Defaults to false</target>
+        <note />
+      </trans-unit>
       <trans-unit id="InitCommand_RemoveSkillCopyFailed">
         <source>Could not remove copied Aspire skill '{0}': {1}</source>
         <target state="new">Could not remove copied Aspire skill '{0}': {1}</target>
         <note>{0} is the skill directory path, and {1} is the failure reason.</note>
       </trans-unit>
       <trans-unit id="InitCommand_RemovedSkillCopies">
-        <source>Removed copied Aspire skills: {0}</source>
-        <target state="new">Removed copied Aspire skills: {0}</target>
-        <note>{0} lists the removed skill directory paths, separated by commas.</note>
+        <source>Removed copied Aspire skills in {0}</source>
+        <target state="new">Removed copied Aspire skills in {0}</target>
+        <note>{0} lists the removed skill folder paths, separated by commas.</note>
       </trans-unit>
       <trans-unit id="InitCommand_ScopeOptionDescription">
         <source>Configuration and skill scope: project or global (default: project)</source>
@@ -279,14 +279,14 @@
         <target state="translated">Los agentes que no están seleccionados pueden detectar archivos compartidos.</target>
         <note />
       </trans-unit>
-      <trans-unit id="InitCommand_SkillCopiesDeleteDetail">
-        <source>Deleting removes each folder and all files in it.</source>
-        <target state="new">Deleting removes each folder and all files in it.</target>
+      <trans-unit id="InitCommand_SkillCopiesFound">
+        <source>Found copied Aspire skills that the Aspire skills plugin now provides:</source>
+        <target state="new">Found copied Aspire skills that the Aspire skills plugin now provides:</target>
         <note />
       </trans-unit>
-      <trans-unit id="InitCommand_SkillCopiesFound">
-        <source>Found copied Aspire skills that the Aspire skills plugin now provides.</source>
-        <target state="new">Found copied Aspire skills that the Aspire skills plugin now provides.</target>
+      <trans-unit id="InitCommand_SkillCopiesRequirePlugin">
+        <source>Copies are only removed when the Aspire skills plugin is configured and enabled at the selected scope for every selected agent.</source>
+        <target state="new">Copies are only removed when the Aspire skills plugin is configured and enabled at the selected scope for every selected agent.</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_SkillCopyBehindLink">

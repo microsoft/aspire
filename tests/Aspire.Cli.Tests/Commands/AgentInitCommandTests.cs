@@ -490,6 +490,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             PromptBinding.CreateDefault<string?>("copilot"),
             PromptBinding.CreateDefault<string?>(CommonAgentApplicators.AspireSkillName),
             PromptBinding.CreateDefault(AgentConfigurationScope.Project),
+            PromptBinding.CreateDefault(false),
             CancellationToken.None).DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, result.ExitCode);
@@ -528,6 +529,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             PromptBinding.CreateDefault<string?>("copilot"),
             PromptBinding.CreateDefault<string?>(CommonAgentApplicators.AspireSkillName),
             PromptBinding.CreateDefault(AgentConfigurationScope.Project),
+            PromptBinding.CreateDefault(false),
             CancellationToken.None).DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, result.ExitCode);
@@ -1011,12 +1013,12 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         }).BuildServiceProvider();
 
         var result = provider.GetRequiredService<RootCommand>().Parse(
-            "agent init --agents opencode --scope project --skills aspire --mcp=false");
+            "agent init --agents opencode --scope project --skills aspire --mcp=false --remove-skill-copies");
 
         Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
         Assert.Empty(interaction.DisplayedErrors);
-        Assert.Contains(interaction.DisplayedMessages, message => message.Emoji.Equals(KnownEmojis.Robot) &&
-            message.Message.Contains(string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_RemovedSkillCopies, ".opencode/skill/aspire"), StringComparison.Ordinal));
+        Assert.Contains(interaction.DisplayedMessages, message => message.Emoji.Equals(KnownEmojis.FileFolder) &&
+            message.Message == string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_RemovedSkillCopies, ".opencode/skill/aspire"));
         Assert.False(Directory.Exists(skillDirectory));
         Assert.True(Directory.Exists(Path.Combine(context.Project.FullName, ".opencode", "skill")));
         Assert.Equal(configuredSkill, await File.ReadAllTextAsync(configuredSkillPath));
@@ -1072,12 +1074,24 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         var agents = reason == "opencode-without-catalog" ? "opencode" : "copilot";
         var skills = reason == "not-selected" ? "none" : "aspire";
 
-        var result = provider.GetRequiredService<RootCommand>().Parse($"agent init --agents {agents} --scope project --skills {skills} --mcp=false");
+        var result = provider.GetRequiredService<RootCommand>().Parse($"agent init --agents {agents} --scope project --skills {skills} --mcp=false --remove-skill-copies");
 
         Assert.Equal(reason == "registration-failed" ? CliExitCodes.InvalidCommand : CliExitCodes.Success,
             await result.InvokeAsync().DefaultTimeout());
         Assert.Equal(skill, await File.ReadAllTextAsync(skillPath));
         Assert.Equal(reason == "registration-failed" ? 1 : 0, interaction.DisplayedErrors.Count);
+        // --remove-skill-copies was passed, so copies at the selected scope are reported as kept.
+        string[] kept = reason == "project-scope"
+            ? []
+            : [string.Join(Environment.NewLine,
+            [
+                string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_KeptSkillCopies, ".agents/skills/aspire"),
+                $"[dim]{AgentCommandStrings.InitCommand_SkillCopiesRequirePlugin}[/]"
+            ])];
+        Assert.Equal(kept, interaction.DisplayedMessages
+            .Where(message => message.Emoji.Equals(KnownEmojis.FileFolder) &&
+                message.Message.StartsWith(AgentCommandStrings.InitCommand_KeptSkillCopies.Split("{0}")[0], StringComparison.Ordinal))
+            .Select(message => message.Message));
     }
 
     [Theory]
@@ -1113,7 +1127,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         using var provider = context.CreateServiceCollection(outputHelper).BuildServiceProvider();
 
         var result = provider.GetRequiredService<RootCommand>().Parse(
-            $"agent init --agents {agent} --scope project --skills aspire --mcp=false");
+            $"agent init --agents {agent} --scope project --skills aspire --mcp=false --remove-skill-copies");
 
         Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
         Assert.Equal(!removed, Directory.Exists(skillDirectory));
@@ -1124,11 +1138,12 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData(" --keep-skill-copies", false, true, false)]
-    [InlineData(" --keep-skill-copies=false", true, true, true)]
+    [InlineData(" --remove-skill-copies", false, false, true)]
+    [InlineData(" --remove-skill-copies=false", true, true, false)]
     [InlineData("", true, false, false)]
     [InlineData("", true, true, true)]
-    public async Task Remote_KeepSkillCopiesOptionControlsSkillCopyDeletion(string option, bool interactive, bool confirm, bool removed)
+    [InlineData("", false, true, false)]
+    public async Task Remote_RemoveSkillCopiesOptionControlsSkillCopyDeletion(string option, bool interactive, bool confirm, bool removed)
     {
         using var context = new AgentConfigurationTestContext(outputHelper);
         var skillDirectory = Path.Combine(context.Project.FullName, ".agents", "skills", "aspire");
@@ -1147,26 +1162,20 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
         Assert.Equal(!removed, Directory.Exists(skillDirectory));
-        var prompted = option.Length == 0;
-        Assert.Equal(prompted ? [AgentCommandStrings.InitCommand_DeleteSkillCopyPrompt] : [],
-            interaction.BooleanPromptCalls.Select(call => call.PromptText));
-        var warnings = interaction.DisplayedMessages.Where(message => message.Emoji.Equals(KnownEmojis.PoliceCarLight)).ToArray();
-        if (prompted)
-        {
-            var warning = Assert.Single(warnings);
-            Assert.Equal(string.Join(Environment.NewLine,
-            [
-                $"[yellow]{AgentCommandStrings.InitCommand_SkillCopiesFound}[/]",
-                "    .agents/skills/aspire",
-                $"[dim]{AgentCommandStrings.InitCommand_SkillCopiesDeleteDetail}[/]"
-            ]), warning.Message);
-        }
-        else
-        {
-            Assert.Empty(warnings);
-        }
-        Assert.Equal(removed ? 0 : 1, interaction.DisplayedMessages.Count(message =>
-            message.Emoji.Equals(KnownEmojis.FileFolder) && message.Message == AgentCommandStrings.InitCommand_KeptSkillCopies));
+        var prompted = option.Length == 0 && interactive;
+        Assert.Equal(prompted ? [new BooleanPromptCall(AgentCommandStrings.InitCommand_DeleteSkillCopyPrompt, false)] : [],
+            interaction.BooleanPromptCalls);
+        Assert.Equal(prompted ? [string.Join(Environment.NewLine, [$"[yellow]{AgentCommandStrings.InitCommand_SkillCopiesFound}[/]", "  .agents/skills/aspire"])] : [],
+            interaction.DisplayedMessages
+                .Where(message => message.Emoji.Equals(KnownEmojis.PoliceCarLight) &&
+                    message.Message.StartsWith($"[yellow]{AgentCommandStrings.InitCommand_SkillCopiesFound}", StringComparison.Ordinal))
+                .Select(message => message.Message));
+        // The plugin replaces these copies, so the plugin requirement note does not apply.
+        var kept = string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_KeptSkillCopies, ".agents/skills/aspire");
+        Assert.Equal(removed ? [] : [kept], interaction.DisplayedMessages
+            .Where(message => message.Emoji.Equals(KnownEmojis.FileFolder) &&
+                message.Message.StartsWith(AgentCommandStrings.InitCommand_KeptSkillCopies.Split("{0}")[0], StringComparison.Ordinal))
+            .Select(message => message.Message));
     }
 
     [Theory]
@@ -1194,7 +1203,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         using var provider = context.CreateServiceCollection(outputHelper).BuildServiceProvider();
 
         var result = provider.GetRequiredService<RootCommand>().Parse(
-            $"agent init --agents {agent} --scope {scope.ToString().ToLowerInvariant()} --skills aspire --mcp=false");
+            $"agent init --agents {agent} --scope {scope.ToString().ToLowerInvariant()} --skills aspire --mcp=false --remove-skill-copies");
 
         Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
         Assert.Equal(skill, await File.ReadAllTextAsync(skillPath));
@@ -1213,7 +1222,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         using var provider = context.CreateServiceCollection(outputHelper).BuildServiceProvider();
 
         var result = provider.GetRequiredService<RootCommand>().Parse(
-            "agent init --agents copilot --scope project --skills aspire --mcp=false");
+            "agent init --agents copilot --scope project --skills aspire --mcp=false --remove-skill-copies");
 
         Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
         Assert.Equal([".claude/skills", ".opencode/skill"],
@@ -1245,7 +1254,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         }).BuildServiceProvider();
 
         var result = provider.GetRequiredService<RootCommand>().Parse(
-            "agent init --agents copilot --scope project --skills aspire --mcp=false");
+            "agent init --agents copilot --scope project --skills aspire --mcp=false --remove-skill-copies");
 
         Assert.Equal(CliExitCodes.InvalidCommand, await result.InvokeAsync().DefaultTimeout());
         Assert.Equal(

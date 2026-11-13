@@ -1623,7 +1623,7 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
         var before = GetFilesWithoutCliLogs(context.Workspace.WorkspaceRoot);
 
         var result = provider.GetRequiredService<RootCommand>().Parse(
-            "agent init --agents copilot --scope global --skills all --mcp");
+            "agent init --agents copilot --scope global --skills all --mcp --remove-skill-copies");
 
         Assert.Equal(hasCopiedSkills ? CliExitCodes.Success : CliExitCodes.InvalidCommand,
             await result.InvokeAsync().DefaultTimeout());
@@ -1634,8 +1634,8 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
         if (hasCopiedSkills)
         {
             Assert.Empty(interaction.DisplayedErrors);
-            Assert.Contains(interaction.DisplayedMessages, message => message.Emoji.Equals(KnownEmojis.Robot) &&
-                message.Message.Contains(string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_RemovedSkillCopies, "~/.agents/skills/aspire"), StringComparison.Ordinal));
+            Assert.Contains(interaction.DisplayedMessages, message => message.Emoji.Equals(KnownEmojis.FileFolder) &&
+                message.Message == string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_RemovedSkillCopies, "~/.agents/skills/aspire"));
             Assert.False(Directory.Exists(Path.GetDirectoryName(path)));
             Assert.Equal(content, await File.ReadAllTextAsync(projectSkillPath));
             Assert.True(File.Exists(context.Copilot.GetIntegrationConfigPath(AgentConfigurationScope.Global, context.Project)));

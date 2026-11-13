@@ -65,7 +65,7 @@ internal sealed class AgentInitCommand : BaseCommand
         _projectLocator = projectLocator;
         Options.Add(s_workspaceRootOption);
         Options.Add(s_mcpOption);
-        Options.Add(s_keepSkillCopiesOption);
+        Options.Add(s_removeSkillCopiesOption);
         Options.Add(AgentsOption);
         Options.Add(s_scopeOption);
         Options.Add(s_skillsOption);
@@ -94,9 +94,14 @@ internal sealed class AgentInitCommand : BaseCommand
         Recursive = true
     };
 
-    internal static readonly Option<bool?> s_keepSkillCopiesOption = new("--keep-skill-copies")
+    /// <summary>
+    /// Authorizes deleting copied Aspire skill folders that the Aspire skills plugin replaces at the
+    /// selected scope. Those folders can contain user edits, so omitting the option asks interactively
+    /// (defaulting to "no") and keeps them in non-interactive runs.
+    /// </summary>
+    internal static readonly Option<bool?> s_removeSkillCopiesOption = new("--remove-skill-copies")
     {
-        Description = AgentCommandStrings.InitCommand_KeepSkillCopiesOptionDescription,
+        Description = AgentCommandStrings.InitCommand_RemoveSkillCopiesOptionDescription,
         Recursive = true
     };
 
@@ -223,6 +228,7 @@ internal sealed class AgentInitCommand : BaseCommand
         PromptBinding<string?> agentsBinding,
         PromptBinding<string?> skillsBinding,
         PromptBinding<AgentConfigurationScope> scopeBinding,
+        PromptBinding<bool> removeSkillCopiesBinding,
         CancellationToken cancellationToken)
     {
         if (previousResultExitCode != CliExitCodes.Success)
@@ -242,7 +248,7 @@ internal sealed class AgentInitCommand : BaseCommand
         {
             return await ExecuteAgentInitAsync(
                 workspaceRoot, configurationDirectory, agentsBinding, skillsBinding,
-                scopeBinding, mcpBinding: null, PromptBinding.CreateDefault(true), cancellationToken);
+                scopeBinding, mcpBinding: null, removeSkillCopiesBinding, cancellationToken);
         }
 
         return new(CliExitCodes.Success, [], []);
@@ -258,7 +264,7 @@ internal sealed class AgentInitCommand : BaseCommand
             PromptBinding.Create(parseResult, s_skillsOption, CommonAgentApplicators.AspireSkillName),
             PromptBinding.Create(parseResult, s_scopeOption, AgentConfigurationScope.Project),
             PromptBinding.CreateBoolConfirm(parseResult, s_mcpOption, defaultValue: false),
-            PromptBinding.CreateInvertedBoolConfirm(parseResult, s_keepSkillCopiesOption, defaultValue: true),
+            PromptBinding.CreateBoolConfirm(parseResult, s_removeSkillCopiesOption, defaultValue: false),
             cancellationToken);
         return CommandResult.FromExitCode(result.ExitCode);
     }
@@ -324,7 +330,7 @@ internal sealed class AgentInitCommand : BaseCommand
         PromptBinding<string?> skillsBinding,
         PromptBinding<AgentConfigurationScope> scopeBinding,
         PromptBinding<bool>? mcpBinding,
-        PromptBinding<bool> deleteSkillCopiesBinding,
+        PromptBinding<bool> removeSkillCopiesBinding,
         CancellationToken cancellationToken)
     {
         var (agentsProvided, requestedAgents) = agentsBinding.Resolve();
@@ -502,6 +508,7 @@ internal sealed class AgentInitCommand : BaseCommand
             // clients whose Aspire setup already exists at the resolved scope.
             await ConfigureTelemetryHooksForAspireSetupAsync(selectedClients, [], workspaceRoot, scope, cancellationToken);
 
+            DisplayRequestedSkillCopiesKept(selectedClients, workspaceRoot, scope, removeSkillCopiesBinding, cancellationToken);
             InteractionService.DisplaySubtleMessage(AgentCommandStrings.InitCommand_NoConfigurationSelected);
             return new(CliExitCodes.Success, selectedClients, []);
         }
@@ -542,21 +549,36 @@ internal sealed class AgentInitCommand : BaseCommand
             cancellationToken.ThrowIfCancellationRequested();
             registrationResults = await AgentConfiguration.ApplyRemoteAsync(selectedClients, workspaceRoot, scope, skillSources, cancellationToken);
 
-            // Removal runs before display so removed copies are listed under the sources that replaced them.
-            var skillCopiesToRemove = FindSkillCopiesReplacedAtSelectedScope(registrationResults, selectedClients, workspaceRoot, scope, cancellationToken);
+            var aspireSkillsReplaceCopies = AspireSkillsReplaceSkillCopies(registrationResults, selectedClients, workspaceRoot, scope);
+            var skillCopiesToRemove = aspireSkillsReplaceCopies
+                ? FindSkillCopiesAtSelectedScope(selectedClients, workspaceRoot, scope, cancellationToken)
+                : [];
             var deleteSkillCopies = skillCopiesToRemove.Length > 0 &&
-                await ConfirmSkillCopyDeletionAsync(skillCopiesToRemove, workspaceRoot, deleteSkillCopiesBinding, cancellationToken);
+                await ConfirmSkillCopyDeletionAsync(skillCopiesToRemove, workspaceRoot, removeSkillCopiesBinding, cancellationToken);
             var (removedSkillCopies, skillCopyFailures) = RemoveSkillCopies(deleteSkillCopies ? skillCopiesToRemove : [], workspaceRoot);
-            hasErrors |= DisplayRemoteConfigurationResults(registrationResults, removedSkillCopies, workspaceRoot);
-            if (skillCopiesToRemove.Length > 0 && !deleteSkillCopies)
+            hasErrors |= DisplayRemoteConfigurationResults(registrationResults, workspaceRoot);
+            if (removedSkillCopies.Count > 0)
             {
-                InteractionService.DisplayMessage(KnownEmojis.FileFolder, AgentCommandStrings.InitCommand_KeptSkillCopies);
+                InteractionService.DisplayMessage(KnownEmojis.FileFolder, string.Format(CultureInfo.CurrentCulture,
+                    AgentCommandStrings.InitCommand_RemovedSkillCopies, string.Join(", ", removedSkillCopies)));
+            }
+            else if (skillCopiesToRemove.Length > 0 && !deleteSkillCopies)
+            {
+                DisplaySkillCopiesKept(skillCopiesToRemove, workspaceRoot, explainPluginRequirement: false);
             }
             foreach (var failure in skillCopyFailures)
             {
                 InteractionService.DisplayError(failure);
                 hasErrors = true;
             }
+            if (!aspireSkillsReplaceCopies)
+            {
+                DisplayRequestedSkillCopiesKept(selectedClients, workspaceRoot, scope, removeSkillCopiesBinding, cancellationToken);
+            }
+        }
+        else
+        {
+            DisplayRequestedSkillCopiesKept(selectedClients, workspaceRoot, scope, removeSkillCopiesBinding, cancellationToken);
         }
 
         // --- Phase 3: Apply copied skill files at each unique destination ---
@@ -1018,7 +1040,7 @@ internal sealed class AgentInitCommand : BaseCommand
         InteractionService.DisplayEmptyLine();
     }
 
-    private bool DisplayRemoteConfigurationResults(IReadOnlyList<AgentTargetResult> results, IReadOnlyList<string> removedSkillCopies, DirectoryInfo workspaceRoot)
+    private bool DisplayRemoteConfigurationResults(IReadOnlyList<AgentTargetResult> results, DirectoryInfo workspaceRoot)
     {
         var hasErrors = false;
         foreach (var resultGroup in results.GroupBy(result => result.Status switch
@@ -1049,59 +1071,92 @@ internal sealed class AgentInitCommand : BaseCommand
                     AgentPath.GetDisplayPath(result.TargetPath, workspaceRoot, ExecutionContext),
                     string.Join(", ", result.Clients.Select(static client => client.DisplayName))));
             var message = string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_ConfiguredTargets,
-                string.Join(", ", targets)).EscapeMarkup();
-            if (removedSkillCopies.Count > 0)
-            {
-                message += $"{Environment.NewLine}  [dim]{string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_RemovedSkillCopies, string.Join(", ", removedSkillCopies)).EscapeMarkup()}[/]";
-            }
-
-            InteractionService.DisplayMessage(KnownEmojis.Robot, message, allowMarkup: true);
+                string.Join(", ", targets));
+            InteractionService.DisplayMessage(KnownEmojis.Robot, message);
         }
 
         return hasErrors;
     }
 
-    private string[] FindSkillCopiesReplacedAtSelectedScope(IReadOnlyList<AgentTargetResult> registrationResults,
-        IReadOnlyList<IAgentClient> selectedClients, DirectoryInfo workspaceRoot, AgentConfigurationScope scope,
-        CancellationToken cancellationToken)
+    private static bool AspireSkillsReplaceSkillCopies(IReadOnlyList<AgentTargetResult> registrationResults,
+        IReadOnlyList<IAgentClient> selectedClients, DirectoryInfo workspaceRoot, AgentConfigurationScope scope)
     {
         // The saved configuration proves the replacement lives at the selected scope, but a local or managed
         // settings file can still disable it, so the merged settings must enable it too.
-        if (registrationResults.Any(static result => result.Status is AgentConfigurationStatus.Failed) ||
-            !selectedClients.All(client => registrationResults.Any(result =>
+        return !registrationResults.Any(static result => result.Status is AgentConfigurationStatus.Failed) &&
+            selectedClients.All(client => registrationResults.Any(result =>
                 result.Clients.Contains(client) && result.Configuration is { } configuration &&
                 ConfigurationContainsAspireSkills(client, configuration)) &&
-                HasAspireSkillsRegistration(client, workspaceRoot, scope)))
-        {
-            return [];
-        }
+                HasAspireSkillsRegistration(client, workspaceRoot, scope));
+    }
 
-        return LocalAspireSkills.Find(ExecutionContext.WorkingDirectory, workspaceRoot, ExecutionContext.HomeDirectory, cancellationToken)
+    private string[] FindSkillCopiesAtSelectedScope(IReadOnlyList<IAgentClient> selectedClients, DirectoryInfo workspaceRoot,
+        AgentConfigurationScope scope, CancellationToken cancellationToken)
+        => LocalAspireSkills.Find(ExecutionContext.WorkingDirectory, workspaceRoot, ExecutionContext.HomeDirectory, cancellationToken)
             .Where(copy => copy.Scope == scope && selectedClients.Any(client =>
                 copy.Owners.Contains(client.Id, StringComparers.AgentClientId)))
             .Select(copy => copy.Directory)
             .ToArray();
-    }
 
-    private async Task<bool> ConfirmSkillCopyDeletionAsync(string[] skillDirectories, DirectoryInfo workspaceRoot,
-        PromptBinding<bool> deleteSkillCopiesBinding, CancellationToken cancellationToken)
+    // Copies are only removed once the Aspire skills plugin replaces them. When --remove-skill-copies
+    // was passed but that did not happen, report the kept copies instead of ignoring the request silently.
+    private void DisplayRequestedSkillCopiesKept(IReadOnlyList<IAgentClient> selectedClients, DirectoryInfo workspaceRoot,
+        AgentConfigurationScope scope, PromptBinding<bool> removeSkillCopiesBinding, CancellationToken cancellationToken)
     {
-        if (!deleteSkillCopiesBinding.Resolve().WasProvided && _hostEnvironment.SupportsInteractiveInput)
+        if (removeSkillCopiesBinding.Resolve() is not (true, true))
         {
-            var folders = skillDirectories.Select(directory =>
-                $"    {AgentPath.GetDisplayPath(directory, workspaceRoot, ExecutionContext).EscapeMarkup()}");
-            InteractionService.DisplayMessage(KnownEmojis.PoliceCarLight, string.Join(Environment.NewLine,
-            [
-                $"[yellow]{AgentCommandStrings.InitCommand_SkillCopiesFound.EscapeMarkup()}[/]",
-                .. folders,
-                $"[dim]{AgentCommandStrings.InitCommand_SkillCopiesDeleteDetail.EscapeMarkup()}[/]"
-            ]), allowMarkup: true);
+            return;
         }
 
-        var prompt = skillDirectories.Length == 1
+        var skillDirectories = FindSkillCopiesAtSelectedScope(selectedClients, workspaceRoot, scope, cancellationToken);
+        if (skillDirectories.Length > 0)
+        {
+            DisplaySkillCopiesKept(skillDirectories, workspaceRoot, explainPluginRequirement: true);
+        }
+    }
+
+    private void DisplaySkillCopiesKept(IEnumerable<string> skillDirectories, DirectoryInfo workspaceRoot, bool explainPluginRequirement)
+    {
+        var kept = string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_KeptSkillCopies,
+            string.Join(", ", skillDirectories.Select(directory => AgentPath.GetDisplayPath(directory, workspaceRoot, ExecutionContext))));
+        InteractionService.DisplayMessage(KnownEmojis.FileFolder, string.Join(Environment.NewLine,
+        [
+            kept.EscapeMarkup(),
+            .. explainPluginRequirement
+                ? [$"[dim]{AgentCommandStrings.InitCommand_SkillCopiesRequirePlugin.EscapeMarkup()}[/]"]
+                : Array.Empty<string>()
+        ]), allowMarkup: true);
+    }
+
+    private IEnumerable<string> FormatSkillCopyFolders(IEnumerable<string> skillDirectories, DirectoryInfo workspaceRoot)
+        => skillDirectories.Select(directory =>
+            $"  {AgentPath.GetDisplayPath(directory, workspaceRoot, ExecutionContext).EscapeMarkup()}");
+
+    private async Task<bool> ConfirmSkillCopyDeletionAsync(IReadOnlyList<string> skillDirectories, DirectoryInfo workspaceRoot,
+        PromptBinding<bool> removeSkillCopiesBinding, CancellationToken cancellationToken)
+    {
+        var (wasProvided, removeSkillCopies) = removeSkillCopiesBinding.Resolve();
+        if (wasProvided)
+        {
+            return removeSkillCopies;
+        }
+
+        // The copies can contain user edits, so only an explicit option or an interactive answer
+        // authorizes recursively deleting them.
+        if (!_hostEnvironment.SupportsInteractiveInput)
+        {
+            return false;
+        }
+
+        InteractionService.DisplayMessage(KnownEmojis.PoliceCarLight, string.Join(Environment.NewLine,
+        [
+            $"[yellow]{AgentCommandStrings.InitCommand_SkillCopiesFound.EscapeMarkup()}[/]",
+            .. FormatSkillCopyFolders(skillDirectories, workspaceRoot)
+        ]), allowMarkup: true);
+        var prompt = skillDirectories.Count == 1
             ? AgentCommandStrings.InitCommand_DeleteSkillCopyPrompt
-            : string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_DeleteSkillCopiesPrompt, skillDirectories.Length);
-        return await InteractionService.PromptConfirmAsync(prompt, deleteSkillCopiesBinding, cancellationToken);
+            : string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_DeleteSkillCopiesPrompt, skillDirectories.Count);
+        return await InteractionService.PromptConfirmAsync(prompt, removeSkillCopiesBinding, cancellationToken);
     }
 
     private (List<string> Removed, List<string> Failures) RemoveSkillCopies(IReadOnlyList<string> skillDirectories, DirectoryInfo workspaceRoot)

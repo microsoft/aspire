@@ -227,7 +227,13 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("Where should skills and tools be installed?", timeout: TimeSpan.FromSeconds(30));
         await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("Removed copied Aspire skills: .agents/skills/aspire", timeout: TimeSpan.FromSeconds(30));
+        // Deleting copied skills is opt-in and the prompt defaults to No, so answer it explicitly.
+        // The [y/N] prompt accepts a single key, so a trailing Enter would reach bash as a blank
+        // command and desync the sequence counter.
+        await auto.WaitUntilTextAsync("Delete this copied skill folder?", timeout: TimeSpan.FromSeconds(30));
+        await auto.WaitAsync(500);
+        await auto.TypeAsync("y");
+        await auto.WaitUntilTextAsync("Removed copied Aspire skills in", timeout: TimeSpan.FromSeconds(30));
         await auto.WaitUntilTextAsync("configuration complete", timeout: TimeSpan.FromSeconds(30));
         await auto.WaitForSuccessPromptAsync(counter);
 

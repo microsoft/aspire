@@ -282,24 +282,25 @@
   <data name="InitCommand_AspireSkillChoice" xml:space="preserve">
     <value>Agent assets from configured skill sources</value>
   </data>
-  <data name="InitCommand_KeepSkillCopiesOptionDescription" xml:space="preserve">
-    <value>Keep copied Aspire skill folders when the Aspire skills plugin replaces them at the selected scope. Omit to be asked before they are deleted.</value>
-  </data>
-  <data name="InitCommand_SkillCopiesFound" xml:space="preserve">
-    <value>Found copied Aspire skills that the Aspire skills plugin now provides.</value>
-  </data>
-  <data name="InitCommand_SkillCopiesDeleteDetail" xml:space="preserve">
-    <value>Deleting removes each folder and all files in it.</value>
+  <data name="InitCommand_RemoveSkillCopiesOptionDescription" xml:space="preserve">
+    <value>Remove copied Aspire skills when the Aspire skills plugin replaces them at the selected scope. Defaults to false</value>
   </data>
   <data name="InitCommand_DeleteSkillCopyPrompt" xml:space="preserve">
     <value>Delete this copied skill folder?</value>
   </data>
   <data name="InitCommand_DeleteSkillCopiesPrompt" xml:space="preserve">
-    <value>Delete these {0} copied skill folders?</value>
+    <value>Delete {0} copied skill folders?</value>
     <comment>{0} is the number of skill folders, always greater than one.</comment>
   </data>
+  <data name="InitCommand_SkillCopiesFound" xml:space="preserve">
+    <value>Found copied Aspire skills that the Aspire skills plugin now provides:</value>
+  </data>
   <data name="InitCommand_KeptSkillCopies" xml:space="preserve">
-    <value>Kept copied Aspire skills.</value>
+    <value>Kept copied Aspire skills in {0}</value>
+    <comment>{0} lists the copied skill folder paths, separated by commas.</comment>
+  </data>
+  <data name="InitCommand_SkillCopiesRequirePlugin" xml:space="preserve">
+    <value>Copies are only removed when the Aspire skills plugin is configured and enabled at the selected scope for every selected agent.</value>
   </data>
   <data name="InitCommand_FailedTarget" xml:space="preserve">
     <value>Failed to configure Aspire plugin:
@@ -307,8 +308,8 @@
     <comment>{0} lists each agent's configuration path and failure details, one target per line.</comment>
   </data>
   <data name="InitCommand_RemovedSkillCopies" xml:space="preserve">
-    <value>Removed copied Aspire skills: {0}</value>
-    <comment>{0} lists the removed skill directory paths, separated by commas.</comment>
+    <value>Removed copied Aspire skills in {0}</value>
+    <comment>{0} lists the removed skill folder paths, separated by commas.</comment>
   </data>
   <data name="InitCommand_RemoveSkillCopyFailed" xml:space="preserve">
     <value>Could not remove copied Aspire skill '{0}': {1}</value>
