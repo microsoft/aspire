@@ -95,6 +95,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         };
         using var provider = context.CreateServiceCollection(outputHelper, options =>
         {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
             options.InteractionServiceFactory = _ => interaction;
             options.ProjectLocatorFactory = _ => locator;
         }).BuildServiceProvider();
@@ -105,6 +106,41 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         await Verify(await File.ReadAllTextAsync(
             context.Copilot.GetIntegrationConfigPath(AgentConfigurationScope.Project, context.Project)), "json")
             .UseParameters(configured);
+    }
+
+    [Fact]
+    public async Task AgentInit_NonInteractive_WithMultipleAppHosts_UsesWorkingDirectorySettings()
+    {
+        using var context = new AgentConfigurationTestContext(outputHelper);
+        await AgentConfigurationTestContext.WriteAsync(Path.Combine(context.Project.FullName, AspireConfigFile.FileName), """
+            {"skillSources":{"default":{"enabled":false},"team":{"repository":"example/working-directory","plugins":["deployment"]}}}
+            """);
+        List<FileInfo> candidates = [];
+        foreach (var name in new[] { "First", "Second" })
+        {
+            var directory = context.Project.CreateSubdirectory(name);
+            await AgentConfigurationTestContext.WriteAsync(Path.Combine(directory.FullName, AspireConfigFile.FileName),                         """
+                            {"skillSources":{"default":{"enabled":false},"team":{"repository":"example/NAME","plugins":["deployment"]}}}
+                            """.Replace("NAME", name, StringComparison.Ordinal));
+            candidates.Add(new FileInfo(Path.Combine(directory.FullName, $"{name}.csproj")));
+        }
+
+        // Use the default non-interactive host and console interaction service so an AppHost
+        // selection prompt fails the command the same way it does for real users.
+        using var provider = context.CreateServiceCollection(outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = _ => new TestProjectLocator
+            {
+                GetAppHostFromSettingsAsyncCallback = _ => Task.FromResult<FileInfo?>(null),
+                FindAppHostProjectFilesAsyncCallback = (_, _, _, _) => Task.FromResult(candidates)
+            };
+        }).BuildServiceProvider();
+        var result = provider.GetRequiredService<RootCommand>().Parse(
+            "agent init --agents copilot --scope project --non-interactive");
+
+        Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
+        await Verify(await File.ReadAllTextAsync(
+            context.Copilot.GetIntegrationConfigPath(AgentConfigurationScope.Project, context.Project)), "json");
     }
 
     [Fact]
