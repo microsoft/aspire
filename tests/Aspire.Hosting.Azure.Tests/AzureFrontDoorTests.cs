@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable CS0618 // Retain legacy ProjectResource Azure publishing/provisioning contracts with synthetic metadata.
-#pragma warning disable ASPIRECOMPUTE002
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Utils;

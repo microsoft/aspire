@@ -102,9 +102,7 @@ internal static class ComputeEnvironmentEndpointResolver
             }
         }
 
-#pragma warning disable ASPIRECOMPUTE002 // Experimental: compute environment endpoint expression
         expression = owningComputeEnvironment.GetEndpointPropertyExpression(endpointReferenceExpression);
-#pragma warning restore ASPIRECOMPUTE002
 
         return true;
     }

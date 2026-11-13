@@ -21,9 +21,7 @@ public class ProjectResourceTests
         var agent = builder.AddContainer("agent", "image").WithHttpEndpoint(targetPort: 8080);
         project.Resource.Outputs["endpointOrigin"] = "https://account.services.ai.azure.com";
 
-#pragma warning disable ASPIRECOMPUTE002
         var value = ((IComputeEnvironmentResource)project.Resource).GetEndpointPropertyExpression(agent.GetEndpoint("http").Property(property));
-#pragma warning restore ASPIRECOMPUTE002
 
         Assert.Equal(expression, value.ValueExpression);
         Assert.Equal(expected, await value.GetValueAsync(default));
