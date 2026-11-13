@@ -506,7 +506,9 @@
                     <FluentIcon Value="@(new Icons.Regular.Size16.Open())" Color="Color.Primary" />
                 </a>
             }
-            @* Resolved icons are shared. Set the component color rather than mutating the cached icon with WithColor. *@
+            @* Resolved icons are shared. Set the component color rather than mutating the cached icon with WithColor.
+               Every action icon takes its button's text color, labeled or not, so an icon reads as part of its button
+               and dims with it when the button is disabled. *@
             @foreach (var command in showLabels ? GetHighlightedCommands(resource) : _isPaneFullCanvas ? GetFullPageRowCommands(resource) : GetSidebarCommands(resource))
             {
                 var commandTitle = !string.IsNullOrEmpty(command.GetDisplayDescription()) ? command.GetDisplayDescription() : command.GetDisplayName();
@@ -516,7 +518,7 @@
                                   data-tooltip="@commandTitle"
                                   OnClick="@handlers.Command(command.Name)"
                                   Disabled="@IsCommandDisabled(resource, command)">
-                        <FluentIcon Value="@IconResolver.ResolveHighlightedCommandIcon(command.IconName, command.IconVariant)" Color="Color.Primary" Slot="start" />
+                        <FluentIcon Value="@IconResolver.ResolveHighlightedCommandIcon(command.IconName, command.IconVariant)" Color="Color.Custom" CustomColor="currentColor" Slot="start" />
                         @command.GetDisplayName()
                     </FluentButton>
                 }
@@ -539,7 +541,6 @@
             <AspireMenuButton ButtonAppearance="@(showLabels ? ButtonAppearance.Default : ButtonAppearance.Transparent)"
                               ButtonClass="@(showLabels ? null : "resource-row-action")"
                               Icon="@(new Icons.Regular.Size16.MoreHorizontal())"
-                              IconColor="@(showLabels ? Color.Primary : Color.Custom)"
                               ItemsProvider="@handlers.MenuItems"
                               data-tooltip-positioning="@(!showLabels ? "above" : null)"
                               Title="@string.Format(CultureInfo.CurrentCulture, Loc[nameof(Dashboard.Resources.Layout.ResourcePaneResourceActions)], resourceName)" />
