@@ -1266,6 +1266,66 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             context.Project, AgentConfigurationScope.Project, [SkillSource.BuiltIn]));
     }
 
+    [Fact]
+    public async Task Remote_ContinuesRemovingSkillCopiesAfterADeletionFails()
+    {
+        if (!OperatingSystem.IsWindows() && Environment.IsPrivilegedProcess)
+        {
+            Assert.Skip("Requires a non-privileged process so Unix file modes can block deletion.");
+        }
+
+        using var context = new AgentConfigurationTestContext(outputHelper);
+        var skillsDirectory = Path.Combine(context.Project.FullName, ".agents", "skills");
+        var failedDirectory = Path.Combine(skillsDirectory, "aspire");
+        var failedSkillPath = Path.Combine(failedDirectory, "SKILL.md");
+        var removableDirectory = Path.Combine(skillsDirectory, "aspire-deployment");
+        const string skill = "My customized Aspire instructions.";
+        await AgentConfigurationTestContext.WriteAsync(failedSkillPath, skill);
+        await AgentConfigurationTestContext.WriteAsync(Path.Combine(removableDirectory, "SKILL.md"), skill);
+        var interaction = new TestInteractionService();
+        using var provider = context.CreateServiceCollection(outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interaction;
+        }).BuildServiceProvider();
+        var result = provider.GetRequiredService<RootCommand>().Parse(
+            "agent init --agents copilot --scope project --skills aspire --mcp=false --remove-skill-copies");
+
+        // Windows refuses to delete a file another handle opened without sharing; Unix refuses to
+        // unlink entries from a directory without write permission.
+        int exitCode;
+        if (OperatingSystem.IsWindows())
+        {
+            using (File.Open(failedSkillPath, FileMode.Open, FileAccess.Read, FileShare.None))
+            {
+                exitCode = await result.InvokeAsync().DefaultTimeout();
+            }
+        }
+        else
+        {
+            var originalMode = File.GetUnixFileMode(failedDirectory);
+            File.SetUnixFileMode(failedDirectory, UnixFileMode.UserRead | UnixFileMode.UserExecute);
+            try
+            {
+                exitCode = await result.InvokeAsync().DefaultTimeout();
+            }
+            finally
+            {
+                File.SetUnixFileMode(failedDirectory, originalMode);
+            }
+        }
+
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+        Assert.StartsWith(
+            string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_RemoveSkillCopyFailed, ".agents/skills/aspire", string.Empty),
+            Assert.Single(interaction.DisplayedErrors), StringComparison.Ordinal);
+        Assert.Contains(interaction.DisplayedMessages, message => message.Emoji.Equals(KnownEmojis.FileFolder) &&
+            message.Message == string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_RemovedSkillCopies, ".agents/skills/aspire-deployment"));
+        Assert.False(Directory.Exists(removableDirectory));
+        Assert.Equal(skill, await File.ReadAllTextAsync(failedSkillPath));
+        Assert.Equal([failedDirectory], LocalAspireSkills.Find(context.Project, context.Project, context.Home, TestContext.Current.CancellationToken)
+            .Select(copy => copy.Directory));
+    }
+
     [Theory]
     [InlineData(nameof(AgentConfigurationScope.Project))]
     [InlineData(nameof(AgentConfigurationScope.Global))]
