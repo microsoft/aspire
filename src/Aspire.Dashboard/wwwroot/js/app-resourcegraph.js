@@ -12,8 +12,12 @@ export function initializeResourcesGraph(resourcesInterop, graphIcons) {
         resourceGraph.resize();
     });
 
-    for (const child of document.getElementsByClassName('resources-summary-layout')) {
-        observer.observe(child);
+    // Observe the element the graph is drawn in rather than the page layout around it. Its size also changes when
+    // the surrounding chrome changes (for example the previous experience's tab header wrapping) and when the graph is
+    // shown or hidden.
+    const viewport = resourceGraph.getViewportElement();
+    if (viewport) {
+        observer.observe(viewport);
     }
 }
 
@@ -161,18 +165,19 @@ class ResourceGraph {
         this.fitGraph(true);
     }
 
+    // Returns false when the graph couldn't be measured, e.g. because it is hidden behind another tab.
     fitGraph(animate) {
         const bounds = this.baseGroup.node()?.getBBox();
-        const container = document.querySelector(".resources-summary-layout");
-        if (!bounds || !container || bounds.width <= 0 || bounds.height <= 0) {
+        const viewport = this.getViewportSize();
+        if (!bounds || !viewport || bounds.width <= 0 || bounds.height <= 0) {
             const selection = animate ? this.svg.transition().duration(300) : this.svg;
             selection.call(this.zoom.transform, d3.zoomIdentity);
-            return;
+            return false;
         }
 
         const padding = 64;
-        const availableWidth = Math.max(container.clientWidth - (padding * 2), 1);
-        const availableHeight = Math.max(container.clientHeight - (padding * 2), 1);
+        const availableWidth = Math.max(viewport.width - (padding * 2), 1);
+        const availableHeight = Math.max(viewport.height - (padding * 2), 1);
         const fitScale = Math.min(availableWidth / bounds.width, availableHeight / bounds.height);
         // Avoid both extremes: don't enlarge a small graph, and don't reduce a large graph to an unreadable thumbnail.
         // Larger topologies can still be panned after reset.
@@ -185,6 +190,7 @@ class ResourceGraph {
 
         const selection = animate ? this.svg.transition().duration(300) : this.svg;
         selection.call(this.zoom.transform, transform);
+        return true;
     }
 
     zoomIn() {
@@ -210,12 +216,36 @@ class ResourceGraph {
             .attr("d", 'M0,-5L10,0L0,5');
     }
 
+    // The element the SVG is drawn in (.resource-graph-container). CSS sizes the SVG to fill it on both the overview
+    // and the previous experience's resources page, so its size is the drawing area. Don't measure an ancestor such as
+    // .resources-summary-layout: on the previous experience's page it also contains the tab header, so a viewBox built
+    // from it is taller than the graph area and pushes the bottom-anchored graph controls out of view.
+    getViewportElement() {
+        return this.svg.node()?.parentElement ?? null;
+    }
+
+    getViewportSize() {
+        const viewport = this.getViewportElement();
+        if (!viewport || viewport.clientWidth <= 0 || viewport.clientHeight <= 0) {
+            return null;
+        }
+
+        return { width: viewport.clientWidth, height: viewport.clientHeight };
+    }
+
     resize() {
-        var container = document.querySelector(".resources-summary-layout");
-        if (container) {
-            var width = container.clientWidth;
-            var height = container.clientHeight;
-            this.svg.attr("viewBox", [-width / 2, -height / 2, width, height]);
+        // A hidden graph (another tab or overview mode is selected) has no size. Keep the last viewBox until it is shown.
+        const viewport = this.getViewportSize();
+        if (!viewport) {
+            return;
+        }
+
+        this.svg.attr("viewBox", [-viewport.width / 2, -viewport.height / 2, viewport.width, viewport.height]);
+
+        // Resources can arrive while the graph is hidden, when there is nothing to measure. Fit them the first time the
+        // graph has a size.
+        if (!this.hasFitInitialGraph && this.nodes.length > 0) {
+            this.hasFitInitialGraph = this.fitGraph(false);
         }
     }
 
@@ -631,8 +661,7 @@ class ResourceGraph {
             }
             this.onTick();
             if (!this.hasFitInitialGraph) {
-                this.fitGraph(false);
-                this.hasFitInitialGraph = true;
+                this.hasFitInitialGraph = this.fitGraph(false);
             }
         }
 
