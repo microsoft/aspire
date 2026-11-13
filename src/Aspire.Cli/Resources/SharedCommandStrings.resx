@@ -293,4 +293,8 @@
     <value>Failed to search NuGet source '{0}'. Some integrations may be missing. Check the source configuration and authentication. See the CLI logs for details.</value>
     <comment>{0} is the redacted NuGet source name or URL.</comment>
   </data>
+  <data name="UnrecognizedOptionFormat" xml:space="preserve">
+    <value>Unrecognized option '{0}'. To pass it to the AppHost, put it after '--', for example: aspire {1} -- {0}</value>
+    <comment>{0} is the unrecognized option, {1} is the command name. Do not translate '--' or 'aspire'.</comment>
+  </data>
 </root>

@@ -267,6 +267,11 @@
         <target state="translated">認識されないオプション '{0}'。候補: '{1}'。</target>
         <note>{0} is the unrecognized option, {1} is the suggested correct option.</note>
       </trans-unit>
+      <trans-unit id="UnrecognizedOptionFormat">
+        <source>Unrecognized option '{0}'. To pass it to the AppHost, put it after '--', for example: aspire {1} -- {0}</source>
+        <target state="new">Unrecognized option '{0}'. To pass it to the AppHost, put it after '--', for example: aspire {1} -- {0}</target>
+        <note>{0} is the unrecognized option, {1} is the command name. Do not translate '--' or 'aspire'.</note>
+      </trans-unit>
       <trans-unit id="UsingAppHost">
         <source>Using AppHost: {0}</source>
         <target state="translated">AppHost を使用しています: {0}</target>

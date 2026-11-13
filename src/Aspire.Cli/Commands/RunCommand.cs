@@ -114,6 +114,8 @@ internal sealed class RunCommand : BaseCommand
 
     protected override string CancellationMessage => InteractionServiceStrings.StoppingAspire;
 
+    protected override bool RejectsUnknownOptionsBeforeDoubleDash => true;
+
     internal override void PrepareForExecution(ParseResult parseResult)
     {
         // The spawned child runs without --detach, so its environment marker preserves detach-only

@@ -20,6 +20,8 @@ internal sealed class StartCommand : BaseCommand
 
     protected override string CancellationMessage => InteractionServiceStrings.StoppingAspire;
 
+    protected override bool RejectsUnknownOptionsBeforeDoubleDash => true;
+
     private readonly AppHostLauncher _appHostLauncher;
     private readonly IConfiguration _configuration;
     private readonly ProfileCaptureState _profileCaptureState;

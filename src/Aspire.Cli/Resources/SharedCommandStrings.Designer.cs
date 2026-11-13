@@ -554,5 +554,11 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("UsingAppHost", resourceCulture);
             }
         }
+
+        internal static string UnrecognizedOptionFormat {
+            get {
+                return ResourceManager.GetString("UnrecognizedOptionFormat", resourceCulture);
+            }
+        }
     }
 }
