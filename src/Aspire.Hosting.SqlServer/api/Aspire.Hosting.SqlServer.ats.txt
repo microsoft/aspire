@@ -4,12 +4,18 @@
 # Handle Types
 Aspire.Hosting.SqlServer/Aspire.Hosting.ApplicationModel.SqlServerDatabaseResource [ExposeProperties]
 Aspire.Hosting.SqlServer/Aspire.Hosting.ApplicationModel.SqlServerServerResource [ExposeProperties]
+Aspire.Hosting.SqlServer/Aspire.Hosting.SqlServerReplOptions
+
+# Exported Values
+SqlServerReplCommand.Version17: string = "/opt/mssql-tools/bin/sqlcmd" # The sqlcmd executable path for SQL Server client tools version 17.
+SqlServerReplCommand.Version18: string = "/opt/mssql-tools18/bin/sqlcmd" # The sqlcmd executable path for SQL Server client tools version 18.
 
 # Capabilities
 Aspire.Hosting.ApplicationModel/SqlServerDatabaseResource.connectionStringExpression(context: Aspire.Hosting.SqlServer/Aspire.Hosting.ApplicationModel.SqlServerDatabaseResource) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression
 Aspire.Hosting.ApplicationModel/SqlServerDatabaseResource.databaseName(context: Aspire.Hosting.SqlServer/Aspire.Hosting.ApplicationModel.SqlServerDatabaseResource) -> string
 Aspire.Hosting.ApplicationModel/SqlServerDatabaseResource.jdbcConnectionString(context: Aspire.Hosting.SqlServer/Aspire.Hosting.ApplicationModel.SqlServerDatabaseResource) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression
 Aspire.Hosting.ApplicationModel/SqlServerDatabaseResource.parent(context: Aspire.Hosting.SqlServer/Aspire.Hosting.ApplicationModel.SqlServerDatabaseResource) -> Aspire.Hosting.SqlServer/Aspire.Hosting.ApplicationModel.SqlServerServerResource
+Aspire.Hosting.ApplicationModel/SqlServerDatabaseResource.resourceTypeDisplayName(context: Aspire.Hosting.SqlServer/Aspire.Hosting.ApplicationModel.SqlServerDatabaseResource) -> string
 Aspire.Hosting.ApplicationModel/SqlServerDatabaseResource.uriExpression(context: Aspire.Hosting.SqlServer/Aspire.Hosting.ApplicationModel.SqlServerDatabaseResource) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression
 Aspire.Hosting.ApplicationModel/SqlServerServerResource.connectionStringExpression(context: Aspire.Hosting.SqlServer/Aspire.Hosting.ApplicationModel.SqlServerServerResource) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression
 Aspire.Hosting.ApplicationModel/SqlServerServerResource.databases(context: Aspire.Hosting.SqlServer/Aspire.Hosting.ApplicationModel.SqlServerServerResource) -> Aspire.Hosting/Dict<string,string>
@@ -18,6 +24,7 @@ Aspire.Hosting.ApplicationModel/SqlServerServerResource.jdbcConnectionString(con
 Aspire.Hosting.ApplicationModel/SqlServerServerResource.passwordParameter(context: Aspire.Hosting.SqlServer/Aspire.Hosting.ApplicationModel.SqlServerServerResource) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource
 Aspire.Hosting.ApplicationModel/SqlServerServerResource.port(context: Aspire.Hosting.SqlServer/Aspire.Hosting.ApplicationModel.SqlServerServerResource) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReferenceExpression
 Aspire.Hosting.ApplicationModel/SqlServerServerResource.primaryEndpoint(context: Aspire.Hosting.SqlServer/Aspire.Hosting.ApplicationModel.SqlServerServerResource) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference
+Aspire.Hosting.ApplicationModel/SqlServerServerResource.resourceTypeDisplayName(context: Aspire.Hosting.SqlServer/Aspire.Hosting.ApplicationModel.SqlServerServerResource) -> string
 Aspire.Hosting.ApplicationModel/SqlServerServerResource.setPasswordParameter(context: Aspire.Hosting.SqlServer/Aspire.Hosting.ApplicationModel.SqlServerServerResource, value: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource) -> Aspire.Hosting.SqlServer/Aspire.Hosting.ApplicationModel.SqlServerServerResource
 Aspire.Hosting.ApplicationModel/SqlServerServerResource.uriExpression(context: Aspire.Hosting.SqlServer/Aspire.Hosting.ApplicationModel.SqlServerServerResource) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression
 Aspire.Hosting.ApplicationModel/SqlServerServerResource.userNameReference(context: Aspire.Hosting.SqlServer/Aspire.Hosting.ApplicationModel.SqlServerServerResource) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression
@@ -28,4 +35,6 @@ Aspire.Hosting.SqlServer/withDataBindMount(source: string, isReadOnly?: boolean)
 Aspire.Hosting.SqlServer/withDataVolume(name?: string, isReadOnly?: boolean) -> Aspire.Hosting.SqlServer/Aspire.Hosting.ApplicationModel.SqlServerServerResource
 Aspire.Hosting.SqlServer/withHostPort(port: number) -> Aspire.Hosting.SqlServer/Aspire.Hosting.ApplicationModel.SqlServerServerResource
 Aspire.Hosting.SqlServer/withPassword(password: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource) -> Aspire.Hosting.SqlServer/Aspire.Hosting.ApplicationModel.SqlServerServerResource
-Aspire.Hosting.SqlServer/withRepl() -> Aspire.Hosting.SqlServer/Aspire.Hosting.ApplicationModel.SqlServerServerResource
+Aspire.Hosting.SqlServer/withRepl(configure?: callback) -> Aspire.Hosting.SqlServer/Aspire.Hosting.ApplicationModel.SqlServerServerResource
+Aspire.Hosting/SqlServerReplOptions.command(context: Aspire.Hosting.SqlServer/Aspire.Hosting.SqlServerReplOptions) -> string
+Aspire.Hosting/SqlServerReplOptions.setCommand(context: Aspire.Hosting.SqlServer/Aspire.Hosting.SqlServerReplOptions, value: string) -> Aspire.Hosting.SqlServer/Aspire.Hosting.SqlServerReplOptions

@@ -6,4 +6,5 @@ Aspire.Hosting.Azure.FrontDoor/Aspire.Hosting.Azure.AzureFrontDoorResource
 
 # Capabilities
 Aspire.Hosting.Azure.FrontDoor/addAzureFrontDoor(name: string) -> Aspire.Hosting.Azure.FrontDoor/Aspire.Hosting.Azure.AzureFrontDoorResource
+Aspire.Hosting.Azure.FrontDoor/withFrontDoorAzureFrontDoorPrivateLink(frontDoor: Aspire.Hosting.Azure.FrontDoor/Aspire.Hosting.Azure.AzureFrontDoorResource) -> Aspire.Hosting.Azure/Aspire.Hosting.Azure.IAzureCdnPrivateLinkTarget
 Aspire.Hosting.Azure.FrontDoor/withOrigin(resource: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IComputeResource) -> Aspire.Hosting.Azure.FrontDoor/Aspire.Hosting.Azure.AzureFrontDoorResource
