@@ -17,6 +17,7 @@ public static class AttributeDataReader
     private const string AspireDtoAttributeFullName = HostingTypeNames.AspireDtoAttribute;
     private const string AspireValueAttributeFullName = HostingTypeNames.AspireValueAttribute;
     private const string AspireUnionAttributeFullName = HostingTypeNames.AspireUnionAttribute;
+    private const string ExperimentalAttributeFullName = "System.Diagnostics.CodeAnalysis.ExperimentalAttribute";
     private const string ObsoleteAttributeFullName = "System.ObsoleteAttribute";
 
     // --- AspireExport lookup ---
@@ -101,6 +102,42 @@ public static class AttributeDataReader
     public static AspireUnionData? GetAspireUnionData(PropertyInfo property)
         => FindSingleAttribute<AspireUnionData>(property.GetCustomAttributesData(), AspireUnionAttributeFullName, ParseAspireUnionData);
 
+    // --- Experimental lookup ---
+
+    /// <summary>
+    /// Determines whether the specified method, any of its declaring types, its module, or its assembly
+    /// has the <c>ExperimentalAttribute</c>.
+    /// </summary>
+    /// <param name="method">The method whose experimental scope is inspected.</param>
+    /// <returns><c>true</c> if the method is in an experimental scope; otherwise, <c>false</c>.</returns>
+    public static bool HasExperimentalData(MethodInfo method)
+    {
+        if (HasAttribute(method.GetCustomAttributesData(), ExperimentalAttributeFullName))
+        {
+            return true;
+        }
+
+        for (var type = method.DeclaringType; type is not null; type = type.DeclaringType)
+        {
+            if (HasAttribute(type.GetCustomAttributesData(), ExperimentalAttributeFullName))
+            {
+                return true;
+            }
+        }
+
+        return HasAttribute(method.Module.GetCustomAttributesData(), ExperimentalAttributeFullName) ||
+            HasAttribute(method.Module.Assembly.GetCustomAttributesData(), ExperimentalAttributeFullName);
+    }
+
+    /// <summary>
+    /// Determines whether the specified property or any of its accessors is in an experimental scope.
+    /// </summary>
+    /// <param name="property">The property whose experimental scope is inspected.</param>
+    /// <returns><c>true</c> if the property is in an experimental scope; otherwise, <c>false</c>.</returns>
+    public static bool HasExperimentalData(PropertyInfo property)
+        => HasAttribute(property.GetCustomAttributesData(), ExperimentalAttributeFullName) ||
+            property.GetAccessors(nonPublic: true).Any(HasExperimentalData);
+
     // --- Obsolete lookup ---
 
     /// <summary>
@@ -114,6 +151,12 @@ public static class AttributeDataReader
     /// </summary>
     public static ObsoleteData? GetObsoleteData(PropertyInfo property)
         => FindSingleAttribute<ObsoleteData>(property.GetCustomAttributesData(), ObsoleteAttributeFullName, ParseObsoleteData);
+
+    /// <summary>
+    /// Gets <see cref="ObsoleteData"/> from the specified <paramref name="field"/>, if present.
+    /// </summary>
+    public static ObsoleteData? GetObsoleteData(FieldInfo field)
+        => FindSingleAttribute<ObsoleteData>(field.GetCustomAttributesData(), ObsoleteAttributeFullName, ParseObsoleteData);
 
     /// <summary>
     /// Gets <see cref="ObsoleteData"/> from the specified <paramref name="type"/>, if present.

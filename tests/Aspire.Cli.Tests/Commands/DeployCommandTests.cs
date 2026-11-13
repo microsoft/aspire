@@ -5,6 +5,8 @@ using System.Runtime.CompilerServices;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.Projects;
+using Aspire.Cli.Secrets;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Tests.TestServices;
 using Microsoft.Extensions.DependencyInjection;
@@ -66,6 +68,86 @@ public class DeployCommandTests(ITestOutputHelper outputHelper)
                 [KnownConfigNames.AspireHome] = expectedAspireHome
             },
             capturedOptions.EnvironmentVariables);
+    }
+
+    [Theory]
+    [InlineData("deploy", "deploy", null, false, "default-discovery")]
+    [InlineData("deploy", "deploy", null, true, "explicit-cli")]
+    [InlineData("publish", "publish", null, false, "default-discovery")]
+    [InlineData("publish", "publish", null, true, "explicit-cli")]
+    [InlineData("do", "do deploy", "deploy", false, "default-discovery")]
+    [InlineData("do", "do deploy", "deploy", true, "explicit-cli")]
+    public async Task PipelineCommands_WhenDelegatingToExtension_CarryAppHostSelectionOrigin(
+        string commandName,
+        string commandText,
+        string? expectedCommandArg,
+        bool explicitAppHost,
+        string expectedOrigin)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
+        var expectedAspireHome = Path.Combine(workspace.WorkspaceRoot.FullName, ".home", ".aspire");
+
+        string? workingDirectory = null;
+        string? projectFile = null;
+        bool? debug = null;
+        DebugSessionOptions? capturedOptions = null;
+
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (passedProjectFile, _, _, _) =>
+            {
+                var selectedProjectFile = passedProjectFile ?? appHostFile;
+                return Task.FromResult(new AppHostProjectSearchResult(selectedProjectFile, [selectedProjectFile]));
+            }
+        };
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = _ => projectLocator;
+            options.ExtensionBackchannelFactory = _ => new TestExtensionBackchannel();
+            options.InteractionServiceFactory = sp =>
+            {
+                var interactionService = new TestExtensionInteractionService(sp);
+                interactionService.StartDebugSessionCallback = (capturedWorkingDirectory, capturedProjectFile, capturedDebug, debugSessionOptions) =>
+                {
+                    workingDirectory = capturedWorkingDirectory;
+                    projectFile = capturedProjectFile;
+                    debug = capturedDebug;
+                    capturedOptions = debugSessionOptions;
+                };
+                return interactionService;
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var invocation = explicitAppHost ? $"{commandText} --apphost \"{appHostFile.FullName}\"" : commandText;
+
+        var result = command.Parse(invocation);
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal(workspace.WorkspaceRoot.FullName, workingDirectory);
+        Assert.Equal(appHostFile.FullName, projectFile);
+        Assert.True(debug);
+        Assert.NotNull(capturedOptions);
+        Assert.Equal(commandName, capturedOptions.Command);
+        if (expectedCommandArg is null)
+        {
+            Assert.Null(capturedOptions.Args);
+        }
+        else
+        {
+            Assert.NotNull(capturedOptions.Args);
+            Assert.Equal([expectedCommandArg], capturedOptions.Args);
+        }
+        Assert.Equal(
+            new Dictionary<string, string>
+            {
+                [KnownConfigNames.AspireHome] = expectedAspireHome
+            },
+            capturedOptions.EnvironmentVariables);
+        Assert.Equal(expectedOrigin, capturedOptions.AppHostSelectionOrigin);
     }
 
     [Fact]
@@ -306,6 +388,112 @@ public class DeployCommandTests(ITestOutputHelper outputHelper)
 
         // Assert
         Assert.Equal(0, exitCode); // Ensure the command succeeds
+    }
+
+    [Theory]
+    [InlineData("Production", false)]
+    [InlineData("QA.EU", false)]
+    [InlineData("Local Development", false)]
+    [InlineData("QA.EU", true)]
+    [InlineData("Production", true)]
+    public async Task DeployCommandSelectsSecretsFileWithoutRestrictingHostEnvironment(string environment, bool explicitFile)
+    {
+        using var tempRepo = TemporaryWorkspace.Create(outputHelper);
+        var appHostFile = new FileInfo(Path.Combine(tempRepo.WorkspaceRoot.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
+
+        string? capturedSecretsFile = null;
+
+        var services = CliTestHelper.CreateServiceCollection(tempRepo, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = _ => new TestProjectLocator();
+
+            options.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner
+            {
+                BuildAsyncCallback = (_, _, _, _) => 0,
+                GetAppHostInformationAsyncCallback = (_, _, _) => (0, true, VersionHelper.GetDefaultTemplateVersion()),
+                RunAsyncCallback = async (_, _, _, _, _, env, backchannelCompletionSource, _, _) =>
+                {
+                    Assert.NotNull(env);
+                    env.TryGetValue(KnownConfigNames.AspireSecretsFile, out capturedSecretsFile);
+
+                    var deployModeCompleted = new TaskCompletionSource();
+                    backchannelCompletionSource?.SetResult(new TestAppHostBackchannel
+                    {
+                        RequestStopAsyncCalled = deployModeCompleted
+                    });
+                    await deployModeCompleted.Task.DefaultTimeout();
+                    return 0;
+                }
+            };
+        });
+
+        var explicitPath = Path.Combine(tempRepo.WorkspaceRoot.FullName, "explicit.json");
+        services.AddSingleton<IEnvironment>(new TestEnvironment(explicitFile
+                ? new Dictionary<string, string?> { [KnownConfigNames.AspireSecretsFile] = explicitPath }
+                : new Dictionary<string, string?>()));
+        using var provider = services.BuildServiceProvider();
+        var resolver = provider.GetRequiredService<AspireSecretsStoreResolver>();
+        var project = provider.GetRequiredService<IAppHostProjectFactory>().GetProject(appHostFile);
+        var secrets = await resolver.ResolveAsync(appHostFile, project, "Production", CancellationToken.None);
+        Assert.NotNull(secrets);
+        secrets.AspireStore.Set("Parameters:api_key", "prod-secret");
+        secrets.AspireStore.Save();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"deploy --apphost \"{appHostFile.FullName}\" --environment \"{environment}\"");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal(explicitFile ? explicitPath : environment == "Production" ? secrets.AspireSecretsFilePath : null, capturedSecretsFile);
+    }
+
+    [Fact]
+    public async Task DeployCommandPassesAspireSecretsFileWhenStoreIsMissing()
+    {
+        using var tempRepo = TemporaryWorkspace.Create(outputHelper);
+        var appHostFile = new FileInfo(Path.Combine(tempRepo.WorkspaceRoot.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
+
+        string? capturedSecretsFile = null;
+
+        var services = CliTestHelper.CreateServiceCollection(tempRepo, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = _ => new TestProjectLocator();
+
+            options.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner
+            {
+                BuildAsyncCallback = (_, _, _, _) => 0,
+                GetAppHostInformationAsyncCallback = (_, _, _) => (0, true, VersionHelper.GetDefaultTemplateVersion()),
+                RunAsyncCallback = async (_, _, _, _, _, env, backchannelCompletionSource, _, _) =>
+                {
+                    Assert.NotNull(env);
+                    Assert.True(env.TryGetValue(KnownConfigNames.AspireSecretsFile, out capturedSecretsFile));
+
+                    var deployModeCompleted = new TaskCompletionSource();
+                    backchannelCompletionSource?.SetResult(new TestAppHostBackchannel
+                    {
+                        RequestStopAsyncCalled = deployModeCompleted
+                    });
+                    await deployModeCompleted.Task.DefaultTimeout();
+                    return 0;
+                }
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var resolver = provider.GetRequiredService<AspireSecretsStoreResolver>();
+        var project = provider.GetRequiredService<IAppHostProjectFactory>().GetProject(appHostFile);
+        var secrets = await resolver.ResolveAsync(appHostFile, project, "Production", CancellationToken.None);
+        Assert.NotNull(secrets);
+        Assert.False(File.Exists(secrets.AspireSecretsFilePath));
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"deploy --apphost \"{appHostFile.FullName}\" --environment Production");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal(secrets.AspireSecretsFilePath, capturedSecretsFile);
     }
 
     [Fact]

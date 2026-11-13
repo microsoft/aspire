@@ -1,10 +1,12 @@
 import './d3.v7.min.js'
+import { attachResourceGraphGame } from './app-resourcegraph-game.js'
 
 let resourceGraph = null;
 
-export function initializeResourcesGraph(resourcesInterop) {
-    resourceGraph = new ResourceGraph(resourcesInterop);
+export function initializeResourcesGraph(resourcesInterop, graphIcons) {
+    resourceGraph = new ResourceGraph(resourcesInterop, graphIcons);
     resourceGraph.resize();
+    attachResourceGraphGame(resourceGraph, graphIcons?.game);
 
     const observer = new ResizeObserver(function () {
         resourceGraph.resize();
@@ -27,14 +29,24 @@ export function updateResourcesGraphSelected(resourceName) {
     }
 }
 
+export function updateResourcesGraphContextMenu(open) {
+    if (resourceGraph) {
+        resourceGraph.contextMenuChanged(open);
+    }
+}
+
 class ResourceGraph {
-    constructor(resourcesInterop) {
+    constructor(resourcesInterop, graphIcons) {
         this.resources = [];
         this.resourcesInterop = resourcesInterop;
-        this.openContextMenu = false;
+
+        // Static icon (SVG path + tooltip) shared by every node's context-menu affordance (cog).
+        this.menuIcon = graphIcons ? graphIcons.menu : null;
+        this.hiddenIcon = graphIcons ? graphIcons.hidden : null;
 
         this.nodes = [];
         this.links = [];
+        this.hasFitInitialGraph = false;
 
         this.svg = d3.select('.resource-graph');
         this.baseGroup = this.svg.append("g");
@@ -45,7 +57,7 @@ class ResourceGraph {
         this.zoom = d3.zoom().scaleExtent([0.2, 4]).on('zoom', (event) => {
             this.baseGroup.attr('transform', event.transform);
         });
-        this.svg.call(this.zoom);
+        this.svg.call(this.zoom).on('dblclick.zoom', null);
 
         // simulation setup with all forces
         this.linkForce = d3
@@ -119,7 +131,7 @@ class ResourceGraph {
             .attr("y", "0")
             .attr("width", "17.5")
             .attr("height", "17.5")
-            .attr("fill", "var(--fill-color)");
+            .attr("fill", "var(--aspire-page-background)");
 
         highlightedPattern
             .append("line")
@@ -127,11 +139,14 @@ class ResourceGraph {
             .attr("y", "0")
             .attr("x2", "0")
             .attr("y2", "17.5")
-            .attr("stroke", "var(--neutral-fill-secondary-hover)")
+            .attr("stroke", "var(--resource-graph-secondary-hover-background)")
             .attr("stroke-width", "15");
 
         this.linkElementsG = this.baseGroup.append("g").attr("class", "links");
         this.nodeElementsG = this.baseGroup.append("g").attr("class", "nodes");
+        // Selection updates can arrive before the first resource snapshot.
+        this.linkElements = this.linkElementsG.selectAll(".resource-link");
+        this.nodeElements = this.nodeElementsG.selectAll(".resource-group");
 
         this.initializeButtons();
     }
@@ -143,7 +158,33 @@ class ResourceGraph {
     }
 
     resetZoomAndPan() {
-        this.svg.transition().call(this.zoom.transform, d3.zoomIdentity);
+        this.fitGraph(true);
+    }
+
+    fitGraph(animate) {
+        const bounds = this.baseGroup.node()?.getBBox();
+        const container = document.querySelector(".resources-summary-layout");
+        if (!bounds || !container || bounds.width <= 0 || bounds.height <= 0) {
+            const selection = animate ? this.svg.transition().duration(300) : this.svg;
+            selection.call(this.zoom.transform, d3.zoomIdentity);
+            return;
+        }
+
+        const padding = 64;
+        const availableWidth = Math.max(container.clientWidth - (padding * 2), 1);
+        const availableHeight = Math.max(container.clientHeight - (padding * 2), 1);
+        const fitScale = Math.min(availableWidth / bounds.width, availableHeight / bounds.height);
+        // Avoid both extremes: don't enlarge a small graph, and don't reduce a large graph to an unreadable thumbnail.
+        // Larger topologies can still be panned after reset.
+        const scale = Math.min(Math.max(fitScale, 0.55), 1);
+        const centerX = bounds.x + (bounds.width / 2);
+        const centerY = bounds.y + (bounds.height / 2);
+        const transform = d3.zoomIdentity
+            .translate(-centerX * scale, -centerY * scale)
+            .scale(scale);
+
+        const selection = animate ? this.svg.transition().duration(300) : this.svg;
+        selection.call(this.zoom.transform, transform);
     }
 
     zoomIn() {
@@ -173,7 +214,7 @@ class ResourceGraph {
         var container = document.querySelector(".resources-summary-layout");
         if (container) {
             var width = container.clientWidth;
-            var height = Math.max(container.clientHeight - 50, 0);
+            var height = container.clientHeight;
             this.svg.attr("viewBox", [-width / 2, -height / 2, width, height]);
         }
     }
@@ -188,6 +229,9 @@ class ResourceGraph {
             return false;
         }
         if (r1.displayName !== r2.displayName) {
+            return false;
+        }
+        if (r1.isHidden !== r2.isHidden) {
             return false;
         }
         if (!this.iconEqual(r1.resourceIcon, r2.resourceIcon)) {
@@ -264,6 +308,7 @@ class ResourceGraph {
                     endpointText: resource.endpointText,
                     resourceIcon: createIcon(resource.resourceIcon),
                     stateIcon: createIcon(resource.stateIcon),
+                    isHidden: resource.isHidden,
                     degree: degree
                 });
             } else {
@@ -275,6 +320,7 @@ class ResourceGraph {
                     endpointText: resource.endpointText,
                     resourceIcon: createIcon(resource.resourceIcon),
                     stateIcon: createIcon(resource.stateIcon),
+                    isHidden: resource.isHidden,
                     degree: degree
                 });
             }
@@ -339,13 +385,14 @@ class ResourceGraph {
             .attr("resource-name", n => n.id)
             .call(this.dragDrop);
 
+        // Enter/leave keeps hover stable while moving between a node's child shapes.
         var newNodesContainer = newNodes
             .append("g")
             .attr("class", "resource-scale")
             .on('click', this.selectNode)
             .on('contextmenu', this.nodeContextMenu)
-            .on('mouseover', this.hoverNode)
-            .on('mouseout', this.unHoverNode);
+            .on('mouseenter', this.hoverNode)
+            .on('mouseleave', this.unHoverNode);
         newNodesContainer
             .append("circle")
             .attr("r", 56)
@@ -364,8 +411,7 @@ class ResourceGraph {
         iconPath
             .attr("fill", n => n.resourceIcon.color)
             .attr("d", n => n.resourceIcon.path)
-            .append("title")
-            .text(n => n.resourceIcon.tooltip);
+            .attr("data-tooltip", n => n.resourceIcon.tooltip);
 
         // Icon paths could be mixed size. We need to transform icons to always be displayed at a consistent size.
         iconPath.each(function (d) {
@@ -376,7 +422,12 @@ class ResourceGraph {
             const bbox = node.getBBox();
 
             const available = Math.max(1, iconSize - 2);
-            const scale = available / Math.max(bbox.width, bbox.height);
+            const largestDimension = Math.max(bbox.width, bbox.height);
+            if (!Number.isFinite(largestDimension) || largestDimension <= 0) {
+                path.attr("transform", null);
+                return;
+            }
+            const scale = available / largestDimension;
 
             const cx = bbox.x + bbox.width / 2;
             const cy = bbox.y + bbox.height / 2;
@@ -392,7 +443,6 @@ class ResourceGraph {
             .attr("class", "resource-endpoint")
             .style("display", n => n.endpointText ? null : "none");
         endpointGroup.append("text");
-        endpointGroup.append("title");
 
         // Resource status
         var statusGroup = newNodesContainer
@@ -403,30 +453,126 @@ class ResourceGraph {
             .attr("r", 8)
             .attr("cy", 8)
             .attr("cx", 8)
-            .attr("class", "resource-status-circle")
-            .append("title");
+            .attr("class", "resource-status-circle");
         statusGroup
             .append("path")
-            .attr("class", "resource-status-path")
-            .append("title");
+            .attr("class", "resource-status-path");
 
         var resourceNameGroup = newNodesContainer
             .append("g")
             .attr("transform", "translate(0,71)")
             .attr("class", "resource-name");
         resourceNameGroup
+            .append("rect")
+            .attr("class", "resource-name-hitbox");
+        resourceNameGroup
             .append("text")
             .text(n => trimText(n.label, 30));
-        resourceNameGroup
-            .append("title")
-            .text(n => n.label);
+        resourceNameGroup.attr("data-tooltip", n => n.label);
+
+        if (this.hiddenIcon) {
+            var hiddenIconGroup = resourceNameGroup
+                .append("g")
+                .attr("class", "resource-hidden-icon")
+                .style("display", n => n.isHidden ? null : "none");
+            hiddenIconGroup
+                .append("rect")
+                .attr("class", "resource-hidden-icon-hitbox")
+                .attr("x", -4)
+                .attr("width", 20);
+            hiddenIconGroup
+                .append("path")
+                .attr("d", this.hiddenIcon.path);
+            hiddenIconGroup
+                .append("title")
+                .text(this.hiddenIcon.tooltip);
+        }
+
+        // Context menu affordance. A cog positioned on the circle rim directly below the status badge.
+        // The status badge sits at the top-right via "scale(1.6) translate(14,-34)" (center ~(35,-42)),
+        // so mirroring it vertically puts the cog at the bottom-right ~(35,43). Hidden until the node is
+        // hovered (see .resource-menu-cog CSS); it makes the node's interactivity discoverable by opening
+        // the same context menu as right-clicking the node.
+        var cogGroup = newNodesContainer
+            .append("g")
+            .attr("class", "resource-menu-cog")
+            .attr("id", n => `resource-menu-cog-${n.id}`)
+            .attr("transform", "translate(35,43)")
+            .attr("role", "button")
+            .attr("tabindex", 0)
+            .attr("aria-label", n => this.getResourceMenuLabel(n))
+            .attr("aria-haspopup", "menu")
+            .attr("aria-expanded", "false")
+            // D3's drag handler is attached to the ancestor resource group. Stop drag-start
+            // events here so an imprecise cog click can never move the resource node.
+            .on('mousedown touchstart', event => event.stopPropagation())
+            .on('keydown', this.cogMenuKeyDown)
+            .on('click', this.cogMenuClick);
+        cogGroup
+            .append("circle")
+            .attr("r", 14)
+            .attr("class", "resource-menu-cog-background");
+        cogGroup.attr("data-tooltip", n => this.getResourceMenuLabel(n));
+        if (this.menuIcon) {
+            var cogIcon = cogGroup
+                .append("path")
+                .attr("class", "resource-menu-cog-icon")
+                .attr("d", this.menuIcon.path);
+
+            // Scale and center the icon inside the cog background, matching how resource icons are sized.
+            cogIcon.each(function () {
+                const iconSize = 16;
+                const path = d3.select(this);
+                const bbox = this.getBBox();
+                const largestDimension = Math.max(bbox.width, bbox.height);
+                if (!Number.isFinite(largestDimension) || largestDimension <= 0) {
+                    path.attr("transform", null);
+                    return;
+                }
+                const scale = iconSize / largestDimension;
+                const cx = bbox.x + bbox.width / 2;
+                const cy = bbox.y + bbox.height / 2;
+
+                path.attr("transform", `scale(${scale}) translate(${-cx},${-cy})`);
+            });
+        }
 
         newNodes.transition()
             .attr("opacity", 1);
 
         this.nodeElements = newNodes.merge(this.nodeElements);
+        this.nodeElements.classed('resource-group-hidden', n => n.isHidden);
 
         // Set resource values that change.
+        this.nodeElementsG
+            .selectAll(".resource-group")
+            .select(".resource-name")
+            .each(function (n) {
+                const nameGroup = d3.select(this);
+                const bounds = nameGroup.select("text").node().getBBox();
+                const hitboxHeight = Math.max(bounds.height, 16);
+                nameGroup.select(".resource-name-hitbox")
+                    .attr("x", bounds.x)
+                    .attr("y", bounds.y + (bounds.height - hitboxHeight) / 2)
+                    .attr("width", bounds.width)
+                    .attr("height", hitboxHeight);
+                const hiddenIconGroup = nameGroup
+                    .select(".resource-hidden-icon")
+                    .style("display", n.isHidden ? null : "none");
+                if (n.isHidden && !hiddenIconGroup.empty()) {
+                    // Join the icon's hitbox to the measured label, including the gap between them.
+                    hiddenIconGroup.attr("transform",
+                        `translate(${bounds.x + bounds.width + 4},${bounds.y + (bounds.height - 16) / 2})`);
+                    hiddenIconGroup.select(".resource-hidden-icon-hitbox")
+                        .attr("y", (16 - hitboxHeight) / 2)
+                        .attr("height", hitboxHeight);
+                }
+            });
+        this.nodeElementsG
+            .selectAll(".resource-group")
+            .select(".resource-menu-cog")
+            .attr("aria-label", n => this.getResourceMenuLabel(n))
+            .attr("data-tooltip", n => this.getResourceMenuLabel(n));
         this.nodeElementsG
             .selectAll(".resource-group")
             .select(".resource-endpoint")
@@ -436,20 +582,17 @@ class ResourceGraph {
         this.nodeElementsG
             .selectAll(".resource-group")
             .select(".resource-endpoint")
-            .select("title")
-            .text(n => n.endpointText || "");
+            .attr("data-tooltip", n => n.endpointText || "");
         this.nodeElementsG
             .selectAll(".resource-group")
             .select(".resource-status-circle")
-            .select("title")
-            .text(n => n.stateIcon.tooltip);
+            .attr("data-tooltip", n => n.stateIcon.tooltip);
         this.nodeElementsG
             .selectAll(".resource-group")
             .select(".resource-status-path")
             .attr("d", n => n.stateIcon.path)
             .attr("fill", n => n.stateIcon.color)
-            .select("title")
-            .text(n => n.stateIcon.tooltip);
+            .attr("data-tooltip", n => n.stateIcon.tooltip);
 
         // Update links
         this.linkElements = this.linkElementsG
@@ -485,6 +628,11 @@ class ResourceGraph {
             this.simulation.alpha(1);
             for (let i = 0; i < 300; i++) {
                 this.simulation.tick();
+            }
+            this.onTick();
+            if (!this.hasFitInitialGraph) {
+                this.fitGraph(false);
+                this.hasFitInitialGraph = true;
             }
         }
 
@@ -522,6 +670,10 @@ class ResourceGraph {
             [node.id]);
     }
 
+    getResourceMenuLabel(node) {
+        return this.menuIcon ? this.menuIcon.labelFormat.split('{0}').join(node.label) : "";
+    }
+
     isNeighborLink(node, link) {
         return link.target.id === node.id || link.source.id === node.id
     }
@@ -541,16 +693,58 @@ class ResourceGraph {
 
         // Prevent default browser context menu.
         event.preventDefault();
+        event.stopPropagation();
 
-        this.openContextMenu = true;
+        await this.openResourceContextMenu(data.id, event.clientX, event.clientY, null, null);
+    };
 
-        try {
-            // Wait for method completion. It completes when the context menu is closed.
-            await this.resourcesInterop.invokeMethodAsync('ResourceContextMenu', data.id, window.innerWidth, window.innerHeight, event.clientX, event.clientY);
-        } finally {
-            this.openContextMenu = false;
+    cogMenuClick = async (event) => {
+        // currentTarget is the cog group the handler is attached to. Its datum is inherited from the
+        // node group (d3 propagates data to appended children).
+        var data = event.currentTarget.__data__;
 
-            // Unselect the node when the context menu is closed to reset mouseover state.
+        // Stop the click from also reaching the node's click handler (which would select/deselect it).
+        event.preventDefault();
+        event.stopPropagation();
+
+        await this.openResourceContextMenu(data.id, event.clientX, event.clientY, event.currentTarget, null);
+    };
+
+    cogMenuKeyDown = async (event) => {
+        if (event.repeat || (event.key !== 'Enter' && event.key !== ' ')) {
+            return;
+        }
+
+        event.preventDefault();
+        event.stopPropagation();
+
+        var data = event.currentTarget.__data__;
+        var bounds = event.currentTarget.getBoundingClientRect();
+        await this.openResourceContextMenu(
+            data.id,
+            Math.round(bounds.left + bounds.width / 2),
+            Math.round(bounds.top + bounds.height / 2),
+            event.currentTarget,
+            event.currentTarget.id);
+    };
+
+    openResourceContextMenu = (id, clientX, clientY, trigger, focusElementId) => {
+        this.contextMenuTrigger?.setAttribute("aria-expanded", "false");
+        this.contextMenuTrigger = trigger;
+        this.contextMenuChanged(true);
+
+        return this.resourcesInterop.invokeMethodAsync('ResourceContextMenu', id, clientX, clientY, focusElementId)
+            .catch(error => {
+                this.contextMenuChanged(false);
+                throw error;
+            });
+    };
+
+    contextMenuChanged = (open) => {
+        this.openContextMenu = open;
+        this.contextMenuTrigger?.setAttribute("aria-expanded", open ? "true" : "false");
+        if (!open) {
+            this.contextMenuTrigger = null;
             this.updateNodeHighlights(null);
         }
     };
@@ -594,17 +788,13 @@ class ResourceGraph {
     }
 
     hoverNode = (event) => {
-        var mouseoverNode = event.target.__data__;
+        var mouseoverNode = event.currentTarget.__data__;
 
         this.updateNodeHighlights(mouseoverNode);
     }
 
     unHoverNode = (event) => {
-        // Don't unhover the selected node when the context menu is open.
-        // This is done to keep the node selected until the context menu is closed.
-        if (!this.openContextMenu) {
-            this.updateNodeHighlights(null);
-        }
+        this.updateNodeHighlights(null);
     };
 
     nodeEquals(resource1, resource2) {
@@ -622,6 +812,9 @@ class ResourceGraph {
         // we modify the styles to highlight selected nodes
         this.nodeElements.attr('class', (node) => {
             var classNames = ['resource-group'];
+            if (node.isHidden) {
+                classNames.push('resource-group-hidden');
+            }
             if (this.nodeEquals(node, mouseoverNode)) {
                 classNames.push('resource-group-hover');
             }

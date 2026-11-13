@@ -3,6 +3,7 @@
 
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
+using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using RootCommand = Aspire.Cli.Commands.RootCommand;
@@ -42,7 +43,10 @@ public class RestoreCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(Aspire.Cli.CliExitCodes.Success, exitCode);
         Assert.True(restoreCalled);
-        Assert.Equal(appHostFile.FullName, capturedProjectFilePath);
+        Assert.NotNull(capturedProjectFilePath);
+        Assert.Equal(
+            PathNormalizer.ResolveToFilesystemPath(appHostFile.FullName),
+            PathNormalizer.ResolveToFilesystemPath(capturedProjectFilePath));
     }
 
     [Fact]

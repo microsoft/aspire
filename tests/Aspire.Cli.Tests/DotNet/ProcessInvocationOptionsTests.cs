@@ -4,6 +4,7 @@
 using System.Reflection;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Tests.TestServices;
+using Aspire.Shared;
 
 namespace Aspire.Cli.Tests.DotNet;
 
@@ -20,6 +21,10 @@ public sealed class ProcessInvocationOptionsTests
             StandardOutputCallback = _ => { },
             StandardErrorCallback = _ => { },
             NoLaunchProfile = true,
+            NoRestore = true,
+            ExcludeRestorePackageImports = true,
+            NuGetRestoreTargetsFile = new FileInfo(Path.Combine(Path.GetFullPath("."), "Candidate.targets")),
+            LaunchProfile = "E2E",
             StartDebugSession = true,
             Debug = true,
             SuppressLogging = true,
@@ -27,10 +32,20 @@ public sealed class ProcessInvocationOptionsTests
             KillEntireProcessTreeOnCancel = false,
             IsolateConsole = true,
             KillOnParentExit = true,
+            Lifetime = ChildProcessLifetime.AppHost,
+            CompletionPath = "exit-code",
+            CreateSupervisorStartInfo = (command, _, _) => command,
             Detached = true,
+            // Internal properties are included below, so they need non-default values too.
+            AppHostArgumentStartIndex = 3,
             EnvironmentVariableFilter = _ => false,
+            EnvironmentVariables = new Dictionary<string, string>
+            {
+                ["ASPIRE_TEST_VALUE"] = "configured",
+            },
             GracefulShutdownSignaler = new RecordingGracefulSignaler(),
             ShutdownService = new TestGracefulShutdownWindow(),
+            ExtensionAppHostLaunchCompletedAsync = () => Task.CompletedTask,
         };
 
         // Compare against a pristine instance so we assert every property was given a value that
@@ -54,6 +69,8 @@ public sealed class ProcessInvocationOptionsTests
 
     private static IEnumerable<PropertyInfo> GetSettableProperties() =>
         typeof(ProcessInvocationOptions)
-            .GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            // NonPublic is included so internal options — such as the redaction boundary carried for
+            // direct AppHost launches — are held to the same Clone() coverage as public ones.
+            .GetProperties(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
             .Where(p => p is { CanRead: true, CanWrite: true });
 }

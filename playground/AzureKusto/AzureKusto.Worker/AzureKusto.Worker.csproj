@@ -11,7 +11,7 @@
     <PackageReference Include="Microsoft.Azure.Kusto.Data" />
     <PackageReference Include="Microsoft.Azure.Kusto.Ingest" />
     <PackageReference Include="Polly.Extensions" />
-    <PackageReference Include="System.Text.Json" VersionOverride="9.0.7" /><!-- Microsoft.Azure.Kusto.Ingest requires STJ 9 -->
+    <PackageReference Include="System.Text.Json" />
     <ProjectReference Include="..\..\Playground.ServiceDefaults\Playground.ServiceDefaults.csproj" />
   </ItemGroup>
 

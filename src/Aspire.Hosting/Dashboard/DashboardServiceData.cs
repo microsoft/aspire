@@ -45,8 +45,8 @@ internal sealed class DashboardServiceData : IDisposable
                 // If the resource has a TerminalAnnotation, stamp the per-replica terminal
                 // properties onto the snapshot so the Dashboard can:
                 //   * detect that a terminal is available (HasTerminal),
-                //   * build a /api/terminal?resource=<name>&replica=<index> URL pointing
-                //     at the right replica (TryGetTerminalReplicaInfo).
+                //   * attach through /api/terminal?resource=<instance-name> using
+                //     the matching snapshot's consumer UDS path.
                 //
                 // The dashboard never *follows* this path itself - it only displays it
                 // (masked) in the resource details panel and uses it via
@@ -57,7 +57,8 @@ internal sealed class DashboardServiceData : IDisposable
                 // The same stamping is applied on the auxiliary backchannel path so that
                 // `aspire describe` and the VS Code extension observe identical terminal
                 // metadata; both call sites share TerminalResourceSnapshotProperties.
-                var terminalProperties = TerminalResourceSnapshotProperties.AddTerminalProperties(resource, resourceId, snapshot.Properties);
+                var terminalProperties = TerminalResourceSnapshotProperties.AddTerminalProperties(resource, resourceId,
+                    ResourceTraitSnapshotProperties.AddTraitProperties(resource, snapshot.Properties));
 
                 // ImmutableArray's == operator compares the underlying array reference, so this is
                 // true only when AddTerminalProperties returned the original array unchanged (no
@@ -209,15 +210,26 @@ internal sealed class DashboardServiceData : IDisposable
                         return new InteractionCompletionState { Complete = true, State = request.Notification.Result };
                     case WatchInteractionsRequestUpdate.KindOneofCase.PromptProgress:
                         return new InteractionCompletionState { Complete = true, State = request.PromptProgress.Result };
+                    case WatchInteractionsRequestUpdate.KindOneofCase.PromptTerminal:
+                        if (interaction.InteractionInfo is not Interaction.TerminalInteractionInfo terminal ||
+                            !string.Equals(terminal.TerminalId, request.PromptTerminal.TerminalId, StringComparison.Ordinal))
+                        {
+                            throw new InvalidOperationException("The terminal response must match the interaction's terminal.");
+                        }
+                        return new InteractionCompletionState { Complete = true, State = request.PromptTerminal.Result };
                     case WatchInteractionsRequestUpdate.KindOneofCase.InputsDialog:
                         var inputsInfo = (Interaction.InputsInteractionInfo)interaction.InteractionInfo;
                         var options = (InputsDialogInteractionOptions)interaction.Options;
+                        var submittedInputs = request.InputsDialog.InputItems
+                            .Select(i => new InputDto(i.Name, i.Value, DashboardService.MapInputType(i.InputType)))
+                            .ToList();
+                        var inputDtos = CreateInputDtos(_fileUploadStore, interaction.InteractionId, inputsInfo, submittedInputs);
 
                         ProcessInputs(
                             serviceProvider,
                             logger,
                             inputsInfo,
-                            request.InputsDialog.InputItems.Select(i => MapInputDto(interaction.InteractionId, inputsInfo, i)).ToList(),
+                            inputDtos,
                             request.ResponseUpdate,
                             interaction.CancellationToken);
 
@@ -230,32 +242,68 @@ internal sealed class DashboardServiceData : IDisposable
             cancellationToken).ConfigureAwait(false);
     }
 
-    private InputDto MapInputDto(int interactionId, Interaction.InputsInteractionInfo inputsInfo, Aspire.DashboardService.Proto.V1.InteractionInput i)
+    public record InputFileDto(string Id, string Name, string FilePath, Action? Delete = null);
+
+    public record InputDto(string Name, string Value, InputType InputType, IReadOnlyList<InputFileDto>? Files = null);
+
+    internal static List<InputDto> CreateInputDtos(
+        IInteractionFileUploadStore fileUploadStore,
+        int interactionId,
+        Interaction.InputsInteractionInfo inputsInfo,
+        IReadOnlyList<InputDto> submittedInputs)
     {
-        if (!inputsInfo.Inputs.TryGetByName(i.Name, out var modelInput))
+        var submittedInputsByName = new Dictionary<string, InputDto>(StringComparers.InteractionInputName);
+        foreach (var submittedInput in submittedInputs)
         {
-            return new InputDto(i.Name, i.Value, DashboardService.MapInputType(i.InputType));
+            submittedInputsByName[submittedInput.Name] = submittedInput;
         }
 
-        var inputType = modelInput.InputType;
-
-        // For file inputs, Value contains a JSON array of objects with file IDs and names.
-        // Resolve each ID to the temp file path and build InputFileDto entries.
-        if (inputType == InputType.File)
+        var inputDtos = new List<InputDto>(inputsInfo.Inputs.Count);
+        foreach (var input in inputsInfo.Inputs)
         {
-            var files = InteractionFileUploadStore.ResolveFileReferences(_fileUploadStore, i.Value, interactionId, i.Name, _logger);
-            if (files is not null)
+            if (submittedInputsByName.TryGetValue(input.Name, out var submittedInput))
             {
-                return new InputDto(i.Name, i.Value, inputType, files);
+                var files = input.InputType == InputType.File
+                    ? GetAcceptedFiles(fileUploadStore, submittedInput.Value, interactionId, input.Name)
+                    : null;
+                inputDtos.Add(new InputDto(input.Name, submittedInput.Value, input.InputType, files));
+            }
+            else if (input.InputType == InputType.File)
+            {
+                var files = GetAcceptedFiles(fileUploadStore, jsonValue: null, interactionId, input.Name);
+                inputDtos.Add(new InputDto(input.Name, input.Value ?? string.Empty, input.InputType, files));
             }
         }
 
-        return new InputDto(i.Name, i.Value, inputType);
+        return inputDtos;
     }
 
-    public record InputFileDto(string Id, string Name, string FilePath);
+    internal static IReadOnlyList<InputFileDto>? GetAcceptedFiles(
+        IInteractionFileUploadStore fileUploadStore,
+        string? jsonValue,
+        int interactionId,
+        string inputName)
+    {
+        IReadOnlyList<InteractionFileUpload>? files = fileUploadStore.GetCompletedFiles(interactionId, inputName);
+        if (files.Count == 0)
+        {
+            files = null;
+        }
+        files = InteractionFileUploadStore.ValidateFileReferences(jsonValue, inputName, files);
+        if (files is null)
+        {
+            return null;
+        }
 
-    public record InputDto(string Name, string Value, InputType InputType, IReadOnlyList<InputFileDto>? Files = null);
+        fileUploadStore.MarkFilesAccepted(interactionId, inputName, files.Select(file => file.Id).ToArray());
+        return files
+            .Select(file => new InputFileDto(
+                file.Id,
+                file.Name,
+                file.FilePath,
+                () => fileUploadStore.RemoveEntry(interactionId, file.Id)))
+            .ToArray();
+    }
 
     public static void ProcessInputs(IServiceProvider serviceProvider, ILogger logger, Interaction.InputsInteractionInfo inputsInfo, List<InputDto> inputDtos, bool dependencyChange, CancellationToken cancellationToken)
     {
@@ -277,7 +325,7 @@ internal sealed class DashboardServiceData : IDisposable
                 incomingValue = (bool.TryParse(incomingValue, out var b) && b) ? "true" : "false";
             }
 
-            if (!string.Equals(modelInput.Value ?? string.Empty, incomingValue ?? string.Empty))
+            if (!string.Equals(modelInput.Value ?? string.Empty, incomingValue ?? string.Empty) || requestInput.InputType == InputType.File)
             {
                 modelInput.Value = incomingValue;
 
@@ -289,12 +337,20 @@ internal sealed class DashboardServiceData : IDisposable
                         var interactionFiles = requestInput.Files
                             .Select(f => new InteractionFile(f.Id, f.Name, f.FilePath))
                             .ToArray();
-                        modelInput.SetFiles(interactionFiles);
+                        modelInput.SetFiles(new InteractionFileCollection(
+                            interactionFiles,
+                            () =>
+                            {
+                                foreach (var file in requestInput.Files)
+                                {
+                                    file.Delete?.Invoke();
+                                }
+                            }));
                     }
                     else
                     {
                         // Clear stale file references when the selection is empty.
-                        modelInput.SetFiles([]);
+                        modelInput.SetFiles(new InteractionFileCollection([]));
                     }
                 }
 
@@ -340,4 +396,3 @@ internal enum ExecuteCommandResultType
     Failure,
     Canceled
 }
-

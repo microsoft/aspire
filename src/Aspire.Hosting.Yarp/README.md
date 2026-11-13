@@ -10,6 +10,7 @@ From your AppHost directory, add the `Aspire.Hosting.Yarp` integration with the 
 
 ```bash
 aspire add Aspire.Hosting.Yarp
+aspire add Aspire.Hosting.Dotnet
 ```
 
 ## Usage examples
@@ -21,8 +22,8 @@ The modern approach uses programmatic configuration with the `WithConfiguration`
 ```csharp
 var builder = DistributedApplication.CreateBuilder(args);
 
-var backendService = builder.AddProject<Projects.Backend>("backend");
-var frontendService = builder.AddProject<Projects.Frontend>("frontend");
+var backendService = builder.AddDotnetProject("backend", "../Backend/Backend.csproj");
+var frontendService = builder.AddDotnetProject("frontend", "../Frontend/Frontend.csproj");
 
 var gateway = builder.AddYarp("gateway")
                      .WithConfiguration(yarp =>
@@ -177,6 +178,28 @@ builder.AddYarp("gateway")
                .WithTransformPathPrefix("/v2");
        });
 ```
+
+### Terminate TLS and proxy h2c (for gRPC)
+
+```csharp
+var grpcBackend = builder.AddDotnetProject("grpc-backend", "../GrpcBackend/GrpcBackend.csproj");
+
+builder.AddYarp("gateway")
+    .WithHostHttpsPort(8080)
+    .WithConfiguration(yarp =>
+    {
+        var cluster = yarp.AddCluster(grpcBackend.GetEndpoint("http"))
+            .WithForwarderRequestConfig(new ForwarderRequestConfig
+            {
+                Version = HttpVersion.Version20,
+                VersionPolicy = HttpVersionPolicy.RequestVersionExact,
+            });
+        yarp.AddRoute(cluster);
+    });
+```
+
+The `grpcBackend` resource must expose an `http` endpoint and be configured to accept HTTP/2 without TLS (h2c). Passing its endpoint reference lets Aspire resolve an address that is reachable from the YARP container.
+Aspire uses the local development certificate for TLS termination when it is available. For certificate setup or trust issues, see https://aka.ms/aspire/devcerts.
 
 ## Additional documentation
 

@@ -4,23 +4,220 @@
 using System.Text.Json.Nodes;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure.Provisioning;
+using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Utils;
-using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Hosting.Azure.Tests;
 
-public class BicepUtilitiesTests
+public class BicepUtilitiesTests(ITestOutputHelper testOutputHelper)
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task SetScopeAsync_ExistingComputeEnvironmentDoesNotChangeModuleScope(bool appService)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        AzureBicepResource resource = appService
+            ? builder.AddAzureAppServiceEnvironment("env")
+                .AsExistingInResourceGroup("existing-env", "existing-rg", "existing-subscription").Resource
+            : builder.AddAzureContainerAppEnvironment("env")
+                .AsExistingInResourceGroup("existing-env", "existing-rg", "existing-subscription").Resource;
+
+        var scope = new JsonObject();
+        await BicepUtilities.SetScopeAsync(scope, resource);
+
+        Assert.Single(scope);
+        Assert.Null(scope["resourceGroup"]);
+
+        resource.Scope = new AzureBicepResourceScope("module-rg", "module-subscription");
+        await BicepUtilities.SetScopeAsync(scope, resource);
+
+        Assert.Equal("module-rg", scope["resourceGroup"]?.GetValue<string>());
+        Assert.Equal("module-subscription", scope["subscription"]?.GetValue<string>());
+
+        using var template = resource.GetBicepTemplateFile();
+        await Verify(await File.ReadAllTextAsync(template.Path), "bicep").UseParameters(appService);
+    }
+
+    [Fact]
+    public async Task SetScopeAsync_ExistingComputeRoleTargetDoesNotReenterTemplateGeneration()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var environment = builder.AddAzureContainerAppEnvironment("env")
+            .AsExistingInResourceGroup("existing-env", "existing-rg", "existing-subscription");
+        var configurationCount = 0;
+        environment.ConfigureInfrastructure(_ => configurationCount++);
+        var roles = new AzureRoleAssignmentResource("roles", environment.Resource, null, null, infrastructure =>
+            environment.Resource.AddAsExistingResource(infrastructure));
+        environment.Resource.RegisterRoleAssignmentScope(roles);
+
+        var moduleScope = new JsonObject();
+        await BicepUtilities.SetScopeAsync(moduleScope, environment.Resource);
+        await BicepUtilities.SetScopeAsync(moduleScope, environment.Resource);
+
+        Assert.Equal(1, configurationCount);
+        Assert.Single(moduleScope);
+        Assert.Null(moduleScope["resourceGroup"]);
+        Assert.Equal("existing-rg", roles.Scope!.ResourceGroup);
+        Assert.Equal("existing-subscription", roles.Scope.Subscription);
+        Assert.Contains(environment.Resource, roles.References);
+        using var template = roles.GetBicepTemplateFile();
+        await Verify(await File.ReadAllTextAsync(template.Path), "bicep");
+    }
+
+    [Fact]
+    public async Task SetScopeAsync_ExistingResourceStillUsesAnnotationScope()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var resource = builder.AddAzureStorage("storage")
+            .AsExistingInResourceGroup("existing-storage", "existing-rg", "existing-subscription").Resource;
+
+        var scope = new JsonObject();
+        await BicepUtilities.SetScopeAsync(scope, resource);
+
+        Assert.Equal("existing-rg", scope["resourceGroup"]?.GetValue<string>());
+        Assert.Equal("existing-subscription", scope["subscription"]?.GetValue<string>());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task SetScopeAsync_ExistingComputeEnvironmentWithModuleScopedReferenceUsesAnnotationScope(bool foundryProject)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        AzureBicepResource resource;
+        if (foundryProject)
+        {
+            resource = builder.AddFoundry("foundry")
+                .AsExistingInResourceGroup("existing-account", "existing-rg", "existing-subscription")
+                .AddProject("project")
+                .AsExistingInResourceGroup("existing-project", "existing-rg", "existing-subscription").Resource;
+        }
+        else
+        {
+            var identity = builder.AddAzureUserAssignedIdentity("identity")
+                .AsExistingInResourceGroup("existing-identity", "existing-rg", "existing-subscription");
+            resource = builder.AddAzureSandboxGroup("sandbox")
+                .WithAcrPullIdentity(identity)
+                .AsExistingInResourceGroup("existing-sandbox", "existing-rg", "existing-subscription").Resource;
+        }
+
+        var scope = new JsonObject();
+        await BicepUtilities.SetScopeAsync(scope, resource);
+
+        Assert.Equal("existing-rg", scope["resourceGroup"]?.GetValue<string>());
+        Assert.Equal("existing-subscription", scope["subscription"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task SetScopeAsync_ModuleScopedComputeReferencesPreserveExplicitScope()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var identity = builder.AddAzureUserAssignedIdentity("identity")
+            .AsExistingInResourceGroup("existing-identity", "existing-rg", "existing-subscription");
+        var resource = builder.AddAzureSandboxGroup("sandbox")
+            .WithAcrPullIdentity(identity)
+            .AsExistingInResourceGroup("existing-sandbox", "existing-rg", "existing-subscription").Resource;
+        var explicitScope = new AzureBicepResourceScope("module-rg", "module-subscription");
+        resource.Scope = explicitScope;
+        var roles = new AzureRoleAssignmentResource("roles", resource, null, null, infrastructure =>
+            resource.AddAsExistingResource(infrastructure));
+        resource.RegisterRoleAssignmentScope(roles);
+        var consumer = new AzureProvisioningResource("consumer", infrastructure =>
+            resource.AddAsExistingResource(infrastructure))
+        {
+            Scope = new AzureBicepResourceScope("consumer-rg", "consumer-subscription")
+        };
+
+        // Generate the consumer first so the reference cannot depend on prior source materialization.
+        var consumerBicep = consumer.GetBicepTemplateString();
+        var scope = new JsonObject();
+        await BicepUtilities.SetScopeAsync(scope, resource);
+
+        Assert.Equal("module-rg", scope["resourceGroup"]?.GetValue<string>());
+        Assert.Equal("module-subscription", scope["subscription"]?.GetValue<string>());
+        Assert.Same(explicitScope, resource.Scope);
+        Assert.Same(explicitScope, roles.Scope);
+        await Verify(resource.GetBicepTemplateString(), "bicep")
+            .AppendContentAsFile(roles.GetBicepTemplateString(), "bicep")
+            .AppendContentAsFile(consumerBicep, "bicep");
+    }
+
+    [Theory]
+    [InlineData(DistributedApplicationOperation.Run, null, "", null)]
+    [InlineData(DistributedApplicationOperation.Run, "dev-a", "dev-a", null)]
+    [InlineData(DistributedApplicationOperation.Publish, "production", "production", null)]
+    [InlineData(DistributedApplicationOperation.Run, "dev-a", "explicit", "explicit")]
+    [InlineData(DistributedApplicationOperation.Publish, "production", "explicit", "explicit")]
+    public async Task TenantResourceSuffix_ResolvesConfigurationAndExplicitOverrides(
+        DistributedApplicationOperation operation, string? configuredSuffix, string expectedSuffix, string? parameterOverride)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(operation, testOutputHelper);
+        builder.Configuration["Azure:TenantResourceSuffix"] = configuredSuffix;
+        var resource = builder.AddBicepTemplateString("registration", "param tenantResourceSuffix string = ''");
+        if (parameterOverride is null)
+        {
+            resource.WithParameter(AzureBicepResource.KnownParameters.TenantResourceSuffix);
+        }
+        else
+        {
+            resource.WithParameter(AzureBicepResource.KnownParameters.TenantResourceSuffix, parameterOverride);
+        }
+        using var app = builder.Build();
+        var parameters = new JsonObject();
+
+        await BicepUtilities.SetParametersAsync(parameters, resource.Resource, builder.ExecutionContext, skipKnownValues: true);
+
+        Assert.Equal(expectedSuffix, parameters["tenantResourceSuffix"]!["value"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task TenantResourceSuffix_ChangesInvalidateDeploymentChecksum()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        builder.Configuration["Azure:TenantResourceSuffix"] = "dev-a";
+        var deploymentState = ProvisioningTestHelpers.CreateUserSecretsManager();
+        builder.Services.AddSingleton<IDeploymentStateManager>(deploymentState);
+        var resource = builder.AddBicepTemplateString("registration", "param tenantResourceSuffix string = ''")
+            .WithParameter(AzureBicepResource.KnownParameters.TenantResourceSuffix);
+        using var app = builder.Build();
+        var parameters = new JsonObject();
+        await BicepUtilities.SetParametersAsync(parameters, resource.Resource, builder.ExecutionContext);
+        var originalChecksum = BicepUtilities.GetChecksum(resource.Resource, parameters, null);
+        var cached = await deploymentState.AcquireSectionAsync("Azure:Deployments:registration");
+        cached.Data[BicepUtilities.DeploymentStateParametersKey] = parameters.ToJsonString();
+
+        Assert.Equal(originalChecksum, await BicepUtilities.GetCurrentChecksumAsync(
+            resource.Resource, cached, builder.ExecutionContext, NullLogger.Instance));
+
+        var azureState = await deploymentState.AcquireSectionAsync("Azure");
+        azureState.Data["TenantResourceSuffix"] = "dev-b";
+        await deploymentState.SaveSectionAsync(azureState);
+
+        var changedChecksum = await BicepUtilities.GetCurrentChecksumAsync(
+            resource.Resource, cached, builder.ExecutionContext, NullLogger.Instance);
+        Assert.NotNull(changedChecksum);
+        Assert.NotEqual(originalChecksum, changedChecksum);
+
+        azureState.Data["TenantResourceSuffix"] = string.Empty;
+        await deploymentState.SaveSectionAsync(azureState);
+        parameters.Clear();
+        await BicepUtilities.SetParametersAsync(parameters, resource.Resource, builder.ExecutionContext);
+        Assert.Equal(string.Empty, parameters["tenantResourceSuffix"]!["value"]!.GetValue<string>());
+    }
+
     [Fact]
     public async Task SetParametersTranslatesParametersToARMCompatibleJsonParameters()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
         var bicep0 = builder.AddBicepTemplateString("bicep0", "param name string")
                .WithParameter("name", "david");
 
         var parameters = new JsonObject();
-        await BicepUtilities.SetParametersAsync(parameters, bicep0.Resource);
+        await BicepUtilities.SetParametersAsync(parameters, bicep0.Resource, builder.ExecutionContext);
 
         Assert.Single(parameters);
         Assert.Equal("david", parameters["name"]?["value"]?.ToString());
@@ -29,7 +226,7 @@ public class BicepUtilitiesTests
     [Fact]
     public async Task SetParametersTranslatesCompatibleParameterTypes()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
         var container = builder.AddContainer("foo", "image")
             .WithHttpEndpoint()
@@ -56,7 +253,7 @@ public class BicepUtilitiesTests
                .WithParameter("endpoint", container.GetEndpoint("http"));
 
         var parameters = new JsonObject();
-        await BicepUtilities.SetParametersAsync(parameters, bicep0.Resource);
+        await BicepUtilities.SetParametersAsync(parameters, bicep0.Resource, builder.ExecutionContext);
 
         Assert.Equal(8, parameters.Count);
         Assert.Equal("john", parameters["name"]?["value"]?.ToString());
@@ -89,10 +286,42 @@ public class BicepUtilitiesTests
             });
     }
 
+    [Theory]
+    [InlineData(DistributedApplicationOperation.Run)]
+    [InlineData(DistributedApplicationOperation.Publish)]
+    public async Task SetParametersAsync_PassesExecutionContextToValueProviders(DistributedApplicationOperation operation)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(operation, testOutputHelper);
+        var bicep = builder.AddBicepTemplateString("test", "param value string").Resource;
+        using var cts = new CancellationTokenSource();
+        var callCount = 0;
+        var valueProvider = new TestContextValueProvider((context, cancellationToken) =>
+        {
+            Assert.Same(builder.ExecutionContext, context.ExecutionContext);
+            Assert.Same(bicep, context.Caller);
+            Assert.Equal(cts.Token, cancellationToken);
+            callCount++;
+            return new("context-value");
+        });
+
+        bicep.Parameters["value"] = valueProvider;
+        bicep.Parameters["deferred"] = () => valueProvider;
+        bicep.Parameters["expression"] = ReferenceExpression.Create($"{valueProvider}/suffix");
+
+        var parameters = new JsonObject();
+        await BicepUtilities.SetParametersAsync(parameters, bicep, builder.ExecutionContext, cancellationToken: cts.Token);
+
+        Assert.Equal(3, callCount);
+        Assert.Equal(3, parameters.Count);
+        Assert.Equal("context-value", parameters["value"]?["value"]?.GetValue<string>());
+        Assert.Equal("context-value", parameters["deferred"]?["value"]?.GetValue<string>());
+        Assert.Equal("context-value/suffix", parameters["expression"]?["value"]?.GetValue<string>());
+    }
+
     [Fact]
     public async Task ResourceWithTheSameBicepTemplateAndParametersHaveTheSameCheckSum()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
         var bicep0 = builder.AddBicepTemplateString("bicep0", "param name string")
                        .WithParameter("name", "david")
@@ -107,11 +336,11 @@ public class BicepUtilitiesTests
                        .WithParameter("jsonObj", new JsonObject { ["key"] = "value" });
 
         var parameters0 = new JsonObject();
-        await BicepUtilities.SetParametersAsync(parameters0, bicep0.Resource);
+        await BicepUtilities.SetParametersAsync(parameters0, bicep0.Resource, builder.ExecutionContext);
         var checkSum0 = BicepUtilities.GetChecksum(bicep0.Resource, parameters0, null);
 
         var parameters1 = new JsonObject();
-        await BicepUtilities.SetParametersAsync(parameters1, bicep1.Resource);
+        await BicepUtilities.SetParametersAsync(parameters1, bicep1.Resource, builder.ExecutionContext);
         var checkSum1 = BicepUtilities.GetChecksum(bicep1.Resource, parameters1, null);
 
         Assert.Equal(checkSum0, checkSum1);
@@ -120,7 +349,7 @@ public class BicepUtilitiesTests
     [Fact]
     public async Task ResourceWithSameTemplateButDifferentParametersHaveDifferentChecksums()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
         var bicep0 = builder.AddBicepTemplateString("bicep0", "param name string")
                        .WithParameter("name", "david")
@@ -134,11 +363,11 @@ public class BicepUtilitiesTests
                        .WithParameter("jsonObj", new JsonObject { ["key"] = "value" });
 
         var parameters0 = new JsonObject();
-        await BicepUtilities.SetParametersAsync(parameters0, bicep0.Resource);
+        await BicepUtilities.SetParametersAsync(parameters0, bicep0.Resource, builder.ExecutionContext);
         var checkSum0 = BicepUtilities.GetChecksum(bicep0.Resource, parameters0, null);
 
         var parameters1 = new JsonObject();
-        await BicepUtilities.SetParametersAsync(parameters1, bicep1.Resource);
+        await BicepUtilities.SetParametersAsync(parameters1, bicep1.Resource, builder.ExecutionContext);
         var checkSum1 = BicepUtilities.GetChecksum(bicep1.Resource, parameters1, null);
 
         Assert.NotEqual(checkSum0, checkSum1);
@@ -147,7 +376,7 @@ public class BicepUtilitiesTests
     [Fact]
     public async Task ResourceWithDifferentScopeHaveDifferentChecksums()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
         var bicep0 = builder.AddBicepTemplateString("bicep0", "param name string")
                        .WithParameter("key", "value");
@@ -159,13 +388,13 @@ public class BicepUtilitiesTests
 
         var parameters0 = new JsonObject();
         var scope0 = new JsonObject();
-        await BicepUtilities.SetParametersAsync(parameters0, bicep0.Resource);
+        await BicepUtilities.SetParametersAsync(parameters0, bicep0.Resource, builder.ExecutionContext);
         await BicepUtilities.SetScopeAsync(scope0, bicep0.Resource);
         var checkSum0 = BicepUtilities.GetChecksum(bicep0.Resource, parameters0, scope0);
 
         var parameters1 = new JsonObject();
         var scope1 = new JsonObject();
-        await BicepUtilities.SetParametersAsync(parameters1, bicep1.Resource);
+        await BicepUtilities.SetParametersAsync(parameters1, bicep1.Resource, builder.ExecutionContext);
         await BicepUtilities.SetScopeAsync(scope1, bicep1.Resource);
         var checkSum1 = BicepUtilities.GetChecksum(bicep1.Resource, parameters1, scope1);
 
@@ -175,7 +404,7 @@ public class BicepUtilitiesTests
     [Fact]
     public async Task ResourceWithSameScopeHaveSameChecksums()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
         var bicep0 = builder.AddBicepTemplateString("bicep0", "param name string")
                        .WithParameter("key", "value");
@@ -187,13 +416,13 @@ public class BicepUtilitiesTests
 
         var parameters0 = new JsonObject();
         var scope0 = new JsonObject();
-        await BicepUtilities.SetParametersAsync(parameters0, bicep0.Resource);
+        await BicepUtilities.SetParametersAsync(parameters0, bicep0.Resource, builder.ExecutionContext);
         await BicepUtilities.SetScopeAsync(scope0, bicep0.Resource);
         var checkSum0 = BicepUtilities.GetChecksum(bicep0.Resource, parameters0, scope0);
 
         var parameters1 = new JsonObject();
         var scope1 = new JsonObject();
-        await BicepUtilities.SetParametersAsync(parameters1, bicep1.Resource);
+        await BicepUtilities.SetParametersAsync(parameters1, bicep1.Resource, builder.ExecutionContext);
         await BicepUtilities.SetScopeAsync(scope1, bicep1.Resource);
         var checkSum1 = BicepUtilities.GetChecksum(bicep1.Resource, parameters1, scope1);
 
@@ -204,7 +433,7 @@ public class BicepUtilitiesTests
     public void GetChecksum_ReturnsSameChecksum_ForSameInputs()
     {
         // Arrange
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var bicep1 = builder.AddBicepTemplateString("test1", "param name string").Resource;
         var bicep2 = builder.AddBicepTemplateString("test2", "param name string").Resource;
         
@@ -225,7 +454,7 @@ public class BicepUtilitiesTests
     public void GetChecksum_ReturnsDifferentChecksum_ForDifferentParameters()
     {
         // Arrange
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var bicep = builder.AddBicepTemplateString("test", "param name string").Resource;
         
         var parameters1 = new JsonObject
@@ -250,7 +479,7 @@ public class BicepUtilitiesTests
     public void GetChecksum_ReturnsDifferentChecksum_ForDifferentScope()
     {
         // Arrange
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var bicep = builder.AddBicepTemplateString("test", "param name string").Resource;
         
         var parameters = new JsonObject
@@ -278,7 +507,7 @@ public class BicepUtilitiesTests
     public void GetChecksum_ConsistentBehavior_ForParameterComparisons(string? value1, string? value2, bool shouldEqual)
     {
         // Arrange
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var bicep = builder.AddBicepTemplateString("test", "param name string").Resource;
         
         var parameters1 = new JsonObject
@@ -310,7 +539,7 @@ public class BicepUtilitiesTests
     public async Task SetParametersAsync_IncludesAllParametersWhenSkipDynamicValuesIsFalse()
     {
         // Arrange
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var bicep = builder.AddBicepTemplateString("test", "param name string").Resource;
         bicep.Parameters["normalParam"] = "normalValue";
         bicep.Parameters[AzureBicepResource.KnownParameters.PrincipalId] = "someId";
@@ -319,7 +548,7 @@ public class BicepUtilitiesTests
         var parameters = new JsonObject();
 
         // Act
-        await BicepUtilities.SetParametersAsync(parameters, bicep);
+        await BicepUtilities.SetParametersAsync(parameters, bicep, builder.ExecutionContext);
 
         // Assert
         Assert.Equal(3, parameters.Count);
@@ -331,7 +560,7 @@ public class BicepUtilitiesTests
     [Fact]
     public async Task SetScopeAsync_SetsResourceGroupFromScope()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var bicep = builder.AddBicepTemplateString("test", "param name string").Resource;
         bicep.Scope = new("test-rg");
 
@@ -346,7 +575,7 @@ public class BicepUtilitiesTests
     [Fact]
     public async Task SetScopeAsync_SetsResourceGroupAndSubscriptionFromScope()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var bicep = builder.AddBicepTemplateString("test", "param name string").Resource;
         bicep.Scope = new("test-rg", "12345678-1234-1234-1234-123456789012");
 
@@ -362,7 +591,7 @@ public class BicepUtilitiesTests
     [Fact]
     public async Task SetScopeAsync_SetsSubscriptionFromScope()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var bicep = builder.AddBicepTemplateString("test", "param name string").Resource;
         bicep.Scope = AzureBicepResourceScope.CreateForSubscription("12345678-1234-1234-1234-123456789012");
 
@@ -377,7 +606,7 @@ public class BicepUtilitiesTests
     [Fact]
     public async Task SetScopeAsync_RemovesStaleScopeValues()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var bicep = builder.AddBicepTemplateString("test", "param name string").Resource;
         bicep.Scope = AzureBicepResourceScope.CreateForSubscription("12345678-1234-1234-1234-123456789012");
 
@@ -396,7 +625,7 @@ public class BicepUtilitiesTests
     [Fact]
     public async Task SetScopeAsync_SetsTenantFromScope()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var bicep = builder.AddBicepTemplateString("test", "param name string").Resource;
         bicep.Scope = AzureBicepResourceScope.CreateForTenant();
 
@@ -411,7 +640,7 @@ public class BicepUtilitiesTests
     [Fact]
     public async Task SetScopeAsync_SetsNullWhenNoScope()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var bicep = builder.AddBicepTemplateString("test", "param name string").Resource;
 
         var scope = new JsonObject();
@@ -425,11 +654,11 @@ public class BicepUtilitiesTests
     [Fact]
     public async Task GetCurrentChecksumAsync_ReturnsNullForMissingParameters()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var bicep = builder.AddBicepTemplateString("test", "param name string").Resource;
-        var config = new ConfigurationBuilder().Build();
+        var stateSection = new DeploymentStateSection("test", [], 0);
 
-        var result = await BicepUtilities.GetCurrentChecksumAsync(bicep, config);
+        var result = await BicepUtilities.GetCurrentChecksumAsync(bicep, stateSection, builder.ExecutionContext, NullLogger.Instance);
 
         Assert.Null(result);
     }
@@ -437,17 +666,15 @@ public class BicepUtilitiesTests
     [Fact]
     public async Task GetCurrentChecksumAsync_ReturnsNullForInvalidJson()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var bicep = builder.AddBicepTemplateString("test", "param name string").Resource;
 
-        var configurationBuilder = new ConfigurationBuilder();
-        configurationBuilder.AddInMemoryCollection(new Dictionary<string, string?>
+        var stateSection = new DeploymentStateSection("test", new JsonObject
         {
-            ["Parameters"] = "invalid-json"
-        });
-        var config = configurationBuilder.Build();
+            [BicepUtilities.DeploymentStateParametersKey] = "invalid-json"
+        }, 0);
 
-        var result = await BicepUtilities.GetCurrentChecksumAsync(bicep, config);
+        var result = await BicepUtilities.GetCurrentChecksumAsync(bicep, stateSection, builder.ExecutionContext, NullLogger.Instance);
 
         Assert.Null(result);
     }
@@ -455,7 +682,7 @@ public class BicepUtilitiesTests
     [Fact]
     public async Task GetCurrentChecksumAsync_ReturnsValidChecksumForValidParameters()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var bicep = builder.AddBicepTemplateString("test", "param name string").Resource;
         bicep.Parameters["param1"] = "value1";
 
@@ -464,14 +691,12 @@ public class BicepUtilitiesTests
             ["param1"] = new JsonObject { ["value"] = "value1" }
         };
 
-        var configurationBuilder = new ConfigurationBuilder();
-        configurationBuilder.AddInMemoryCollection(new Dictionary<string, string?>
+        var stateSection = new DeploymentStateSection("test", new JsonObject
         {
-            ["Parameters"] = parameters.ToJsonString()
-        });
-        var config = configurationBuilder.Build();
+            [BicepUtilities.DeploymentStateParametersKey] = parameters.ToJsonString()
+        }, 0);
 
-        var result = await BicepUtilities.GetCurrentChecksumAsync(bicep, config);
+        var result = await BicepUtilities.GetCurrentChecksumAsync(bicep, stateSection, builder.ExecutionContext, NullLogger.Instance);
 
         Assert.NotNull(result);
         Assert.NotEmpty(result);
@@ -480,29 +705,27 @@ public class BicepUtilitiesTests
     [Fact]
     public async Task GetCurrentChecksumAsync_UsesCurrentScopeWhenSavedScopeIsMissing()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var bicep = builder.AddBicepTemplateString("test", "param name string")
             .WithParameter("key", "value")
             .Resource;
 
         var legacyParameters = new JsonObject();
-        await BicepUtilities.SetParametersAsync(legacyParameters, bicep);
+        await BicepUtilities.SetParametersAsync(legacyParameters, bicep, builder.ExecutionContext);
         var legacyChecksum = BicepUtilities.GetChecksum(bicep, legacyParameters, scope: null);
 
         bicep.Scope = AzureBicepResourceScope.CreateForSubscription("12345678-1234-1234-1234-123456789012");
 
-        var configurationBuilder = new ConfigurationBuilder();
-        configurationBuilder.AddInMemoryCollection(new Dictionary<string, string?>
+        var stateSection = new DeploymentStateSection("test", new JsonObject
         {
-            ["Parameters"] = legacyParameters.ToJsonString()
-        });
-        var config = configurationBuilder.Build();
+            [BicepUtilities.DeploymentStateParametersKey] = legacyParameters.ToJsonString()
+        }, 0);
 
-        var result = await BicepUtilities.GetCurrentChecksumAsync(bicep, config);
+        var result = await BicepUtilities.GetCurrentChecksumAsync(bicep, stateSection, builder.ExecutionContext, NullLogger.Instance);
 
         var currentParameters = new JsonObject();
         var currentScope = new JsonObject();
-        await BicepUtilities.SetParametersAsync(currentParameters, bicep, skipKnownValues: true);
+        await BicepUtilities.SetParametersAsync(currentParameters, bicep, builder.ExecutionContext, skipKnownValues: true);
         await BicepUtilities.SetScopeAsync(currentScope, bicep);
         var expected = BicepUtilities.GetChecksum(bicep, currentParameters, currentScope);
 
@@ -519,7 +742,7 @@ public class BicepUtilitiesTests
     public async Task GetCurrentChecksumAsync_DoesNotOverwriteKnownParameters()
     {
         // Arrange
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var bicep = builder.AddBicepTemplateString("test", "param name string").Resource;
         bicep.Parameters[AzureBicepResource.KnownParameters.PrincipalType] = null;
         bicep.Parameters[AzureBicepResource.KnownParameters.PrincipalId] = null;
@@ -530,20 +753,18 @@ public class BicepUtilitiesTests
             [AzureBicepResource.KnownParameters.PrincipalId] = new JsonObject { ["value"] = "1234" },
         };
 
-        var configurationBuilder = new ConfigurationBuilder();
-        configurationBuilder.AddInMemoryCollection(new Dictionary<string, string?>
+        var stateSection = new DeploymentStateSection("test", new JsonObject
         {
-            ["Parameters"] = parameters.ToJsonString()
-        });
-        var config = configurationBuilder.Build();
+            [BicepUtilities.DeploymentStateParametersKey] = parameters.ToJsonString()
+        }, 0);
 
         // Act
-        var result = await BicepUtilities.GetCurrentChecksumAsync(bicep, config);
+        var result = await BicepUtilities.GetCurrentChecksumAsync(bicep, stateSection, builder.ExecutionContext, NullLogger.Instance);
 
         // Assert
         Assert.NotNull(result);
 
-        // verify the checksum is the same as using the config parameters directly
+        // Verify the checksum is the same as using the saved parameters directly.
         var expected = BicepUtilities.GetChecksum(bicep, parameters, scope: null);
         Assert.Equal(expected, result);
     }

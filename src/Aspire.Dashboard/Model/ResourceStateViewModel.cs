@@ -78,7 +78,7 @@ internal class ResourceStateViewModel(string text, Icon icon, Color color)
                 "error" => (new Icons.Filled.Size16.ErrorCircle(), Color.Error),
                 "success" => (new Icons.Filled.Size16.CheckmarkCircle(), Color.Success),
                 "info" => (new Icons.Filled.Size16.Info(), Color.Info),
-                _ => (new Icons.Filled.Size16.Circle(), Color.Neutral)
+                _ => (new Icons.Filled.Size16.Circle(), Color.Default)
             };
         }
         else if (resource.HealthStatus is HealthStatus.Unhealthy or HealthStatus.Degraded)
@@ -105,19 +105,19 @@ internal class ResourceStateViewModel(string text, Icon icon, Color color)
     {
         if (resource.IsFailedToStart())
         {
-            return loc.GetString(nameof(Columns.StateColumnResourceFailedToStart), resource.ResourceType);
+            return loc.GetString(nameof(Columns.StateColumnResourceFailedToStart), resource.ResourceTypeDisplayName);
         }
         else if (resource.IsStopped())
         {
             if (resource.TryGetExitCode(out var exitCode) && exitCode is not 0)
             {
                 // Process completed unexpectedly, hence the non-zero code. This is almost certainly an error, so warn users.
-                return loc.GetString(nameof(Columns.StateColumnResourceExitedUnexpectedly), resource.ResourceType, exitCode);
+                return loc.GetString(nameof(Columns.StateColumnResourceExitedUnexpectedly), resource.ResourceTypeDisplayName, exitCode);
             }
             else
             {
                 // Process completed, which may not have been unexpected.
-                return loc.GetString(nameof(Columns.StateColumnResourceExited), resource.ResourceType);
+                return loc.GetString(nameof(Columns.StateColumnResourceExited), resource.ResourceTypeDisplayName);
             }
         }
         else if (resource is { KnownState: KnownResourceState.Running, HealthStatus: not HealthStatus.Healthy })

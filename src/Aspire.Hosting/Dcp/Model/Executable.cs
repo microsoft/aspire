@@ -284,6 +284,7 @@ internal static class ExecutableState
 internal sealed class Executable : CustomResource<ExecutableSpec, ExecutableStatus>, IKubernetesStaticMetadata
 {
     public const string LaunchConfigurationsAnnotation = "executable.usvc-dev.developer.microsoft.com/launch-configurations";
+    public const string SensitiveEffectiveArgumentIndexesAnnotation = "executable.usvc-dev.developer.microsoft.com/sensitive-effective-argument-indexes";
 
     [JsonConstructor]
     public Executable(ExecutableSpec spec) : base(spec) { }
@@ -304,21 +305,12 @@ internal sealed class Executable : CustomResource<ExecutableSpec, ExecutableStat
 
     public bool LogsAvailable => !string.IsNullOrEmpty(this.Status?.State);
 
-    public void SetProjectLaunchConfiguration(ProjectLaunchConfiguration launchConfiguration)
-    {
-        // In Aspire v1 only one launch configuration, of type "project", is supported.
-        // Further, there can be only one instance of project launch configuration per Executable.
-
-        this.Annotate(LaunchConfigurationsAnnotation, string.Empty); // Clear existing annotation, if any.
-        this.AnnotateAsObjectList(LaunchConfigurationsAnnotation, launchConfiguration);
-    }
-
     public bool TryGetProjectLaunchConfiguration([NotNullWhen(true)] out ProjectLaunchConfiguration? launchConfiguration)
     {
         launchConfiguration = null;
         if (this.TryGetAnnotationAsObjectList(LaunchConfigurationsAnnotation, out List<ProjectLaunchConfiguration>? launchConfigurations))
         {
-            // See above regarding how many launch configurations are currently supported.
+            // Aspire currently supports only one project launch configuration per Executable.
             launchConfiguration = launchConfigurations?.FirstOrDefault();
         }
 

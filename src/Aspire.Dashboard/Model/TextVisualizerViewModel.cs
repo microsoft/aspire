@@ -308,7 +308,7 @@ public class TextVisualizerViewModel
                 ChangeFormattedText(newFormat, formattedJson);
             }
         }
-        else if (newFormat == DashboardUIHelpers.MarkdownFormat)
+        else if (newFormat is DashboardUIHelpers.MarkdownFormat or DashboardUIHelpers.SqlFormat)
         {
             ChangeFormattedText(newFormat, Text);
         }

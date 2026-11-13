@@ -35,8 +35,7 @@ internal sealed class OtlpLoopbackResource : Resource, IResourceWithEndpoints
             port: port,
             isProxied: false)
         {
-            // TargetHost = localhost means this resource is running on the local machine
-            // When tunneled through dev tunnels, the service discovery will rewrite this to the tunnel URL
+            // Dev Tunnels only accepts localhost target endpoints.
             TargetHost = "localhost"
         };
 

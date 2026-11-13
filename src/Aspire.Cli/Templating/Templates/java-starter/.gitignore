@@ -2,6 +2,11 @@
 .aspire/
 .modules/
 
-# Maven build output for the api service, including the OpenTelemetry agent the POM
-# downloads into target/agent during the build.
-target/
+# Frontend dependencies and build output.
+node_modules/
+dist/
+
+# Gradle cache and build output for the api service, including the OpenTelemetry agent
+# downloaded into build/agent during the build.
+.gradle/
+build/

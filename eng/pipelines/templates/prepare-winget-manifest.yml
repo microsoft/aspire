@@ -50,6 +50,28 @@ steps:
       Write-Host "##vso[task.setvariable variable=WinGetIsPrereleaseInStablePackage]$isPrereleaseInStablePackage"
     displayName: 🟣Set version ${{ parameters.version }}
 
+  # wingetcreate is framework-dependent and still targets .NET 9. Scope major
+  # roll-forward to its process so it runs on our .NET 10 baseline. Probe it in
+  # regular builds before the release pipeline attempts a public submission.
+  - task: UseDotNet@2
+    displayName: '🟣Install .NET 10 runtime for wingetcreate'
+    inputs:
+      packageType: 'runtime'
+      version: '10.0.x'
+
+  - pwsh: |
+      $ErrorActionPreference = 'Stop'
+
+      Invoke-WebRequest -Uri "https://aka.ms/wingetcreate/latest" -OutFile "$(Build.StagingDirectory)/wingetcreate.exe"
+      & "$(Build.StagingDirectory)/wingetcreate.exe" info
+      if ($LASTEXITCODE -ne 0) {
+        Write-Error "wingetcreate info failed with exit code $LASTEXITCODE"
+        exit $LASTEXITCODE
+      }
+    displayName: '🟣Verify wingetcreate'
+    env:
+      DOTNET_ROLL_FORWARD: Major
+
   - pwsh: |
       # Probe-only: do not attempt to install/repair winget here. The 1ES `1es-windows-2022`
       # pool blocks outbound access to cdn.winget.microsoft.com, so

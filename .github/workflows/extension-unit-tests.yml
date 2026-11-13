@@ -1,0 +1,98 @@
+name: VS Code extension unit tests
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  extension_tests_win:
+    name: Run VS Code extension unit tests (Windows)
+    if: ${{ github.repository == 'microsoft/aspire' }}
+    runs-on: windows-latest
+    env:
+      NPM_REGISTRY: https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/
+      COREPACK_ENABLE_DOWNLOAD_PROMPT: 0
+    defaults:
+      run:
+        working-directory: ./extension
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Setup Node.js environment
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22.x'
+      - name: Install Corepack
+        run: |
+          # Scope Corepack's cache to this job so prepareCorepackYarn.mjs cannot
+          # collide with any other build sharing the runner's user profile.
+          # Cannot be set at job-level env: the `runner` context is unavailable
+          # in job env evaluation, so we forward it through $GITHUB_ENV instead.
+          $CorepackHome = Join-Path $env:RUNNER_TEMP 'corepack'
+          $env:COREPACK_HOME = $CorepackHome
+          "COREPACK_HOME=$CorepackHome" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+          $CorepackVersion = (Get-Content -Raw -Path 'scripts/corepack-version.txt').Trim()
+          # The hosted Windows image already has a yarn shim in npm's global
+          # prefix. The npm Corepack package owns that shim too, so force only
+          # in CI where the tool install is isolated to this ephemeral job.
+          npm install --global --force --registry "$env:NPM_REGISTRY" "corepack@$CorepackVersion"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          $npmGlobalBin = (npm prefix --global).Trim()
+          $env:PATH = "$npmGlobalBin$([IO.Path]::PathSeparator)$env:PATH"
+          $npmGlobalBin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+          $installed = (corepack --version).Trim()
+          if ($installed -ne $CorepackVersion) {
+            Write-Error "corepack version mismatch: expected $CorepackVersion, got '$installed'. The bundled Corepack on PATH may be taking precedence over the npm-global install."
+            exit 1
+          }
+
+          corepack enable
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          # Seed Corepack's cache from the internal dnceng npm feed. Corepack's
+          # built-in `corepack prepare --activate` would download Yarn 1.x from
+          # its hardcoded upstream endpoint rather than the configured internal
+          # feed, bypassing the dependency source this workflow is supposed to
+          # validate. The shared prepareCorepackYarn.mjs script does the
+          # equivalent via `npm pack` against $NPM_REGISTRY, then drops the same
+          # on-disk layout Corepack would have written.
+          node ./scripts/prepareCorepackYarn.mjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          corepack yarn --version
+      - name: Validate lockfile registries
+        # Allowlist scoped to lines starting with "resolved" (the only lines in
+        # yarn.lock that carry a tarball URL — `npm:` aliases don't).
+        # CONTRIBUTING.MD asks contributors to regenerate yarn.lock through the
+        # internal dotnet-public-npm feed; an allowlist catches drift to any
+        # other public mirror or tarball host.
+        run: |
+          node -e "const fs = require('fs'); const allow = 'pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm'; const bad = fs.readFileSync('yarn.lock', 'utf8').split(/\r?\n/).filter(l => /^\s*resolved\s+\x22/.test(l)).filter(l => !l.includes(allow)); if (bad.length) { throw new Error('extension/yarn.lock contains resolved entries outside the internal dotnet-public-npm feed. Regenerate it through the internal feed before restoring. First offender -> ' + bad[0]); }"
+      - name: Install dependencies
+        # The dnceng npm feed intermittently returns 429 Too Many Requests, and
+        # Yarn 1 only retries 408/5xx responses. Mirror the bounded install
+        # retry used by extension-e2e-tests.yml. Tests themselves are not retried.
+        run: |
+          for ($attempt = 1; $attempt -le 3; $attempt++) {
+            corepack yarn install --frozen-lockfile --non-interactive
+            if ($LASTEXITCODE -eq 0) {
+              exit 0
+            }
+
+            $exitCode = $LASTEXITCODE
+            if ($attempt -eq 3) {
+              Write-Error "corepack yarn install failed after $attempt attempts."
+              exit $exitCode
+            }
+
+            $delay = $attempt * 30
+            Write-Host "corepack yarn install failed with exit code $exitCode. Retrying in ${delay}s (attempt $($attempt + 1) of 3)."
+            Start-Sleep -Seconds $delay
+          }
+      - name: Run tests
+        run: corepack yarn test

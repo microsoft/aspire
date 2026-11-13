@@ -5,6 +5,7 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Configuration;
+using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
@@ -23,7 +24,6 @@ internal sealed class ScaffoldingService : IScaffoldingService
 {
     private const string PackageJsonFileName = "package.json";
     private const string VsCodeSettingsFileName = ".vscode/settings.json";
-    private const string JavaScriptHostingPackageName = "Aspire.Hosting.JavaScript";
     internal const string BrownfieldTypeScriptAppHostDirectoryName = "aspire-apphost";
 
     private static readonly JsonSerializerOptions s_scaffoldJsonSerializerOptions = new()
@@ -47,6 +47,8 @@ internal sealed class ScaffoldingService : IScaffoldingService
     private readonly ILogger<ScaffoldingService> _logger;
     private readonly CliExecutionContext _executionContext;
     private readonly ProfilingTelemetry _profilingTelemetry;
+    private readonly IFeatures _features;
+    private readonly IProcessExecutionFactory _processExecutionFactory;
 
     public ScaffoldingService(
         IAppHostServerProjectFactory appHostServerProjectFactory,
@@ -56,7 +58,9 @@ internal sealed class ScaffoldingService : IScaffoldingService
         IEnvironment environment,
         ILogger<ScaffoldingService> logger,
         CliExecutionContext executionContext,
-        ProfilingTelemetry profilingTelemetry)
+        ProfilingTelemetry profilingTelemetry,
+        IFeatures features,
+        IProcessExecutionFactory processExecutionFactory)
     {
         _appHostServerProjectFactory = appHostServerProjectFactory;
         _serverSessionFactory = serverSessionFactory;
@@ -66,6 +70,8 @@ internal sealed class ScaffoldingService : IScaffoldingService
         _logger = logger;
         _executionContext = executionContext;
         _profilingTelemetry = profilingTelemetry;
+        _features = features;
+        _processExecutionFactory = processExecutionFactory;
     }
 
     /// <inheritdoc />
@@ -114,7 +120,10 @@ internal sealed class ScaffoldingService : IScaffoldingService
             config.Channel = context.Channel;
         }
 
-        PreAddJavaScriptHostingForBrownfieldTypeScript(config, directory, language, sdkVersion);
+        // The language's default hosting packages go into the config before the integrations are collected
+        // so they are restored and code generated with the code generation package instead of waiting for
+        // `aspire add`. They use the SDK version, like the starter templates, to match that package.
+        AddDefaultHostingPackages(config, language, sdkVersion);
         if (!string.IsNullOrWhiteSpace(context.SdkVersion) ||
             !string.IsNullOrEmpty(context.Channel))
         {
@@ -124,6 +133,12 @@ internal sealed class ScaffoldingService : IScaffoldingService
         // Include the code generation package for scaffolding and code gen
         var codeGenPackage = await _languageDiscovery.GetPackageForLanguageAsync(language.LanguageId, cancellationToken);
         var integrations = config.GetIntegrationReferences(sdkVersion, directory.FullName).ToList();
+        if (integrations.Any(i => i.Source == IntegrationSource.Npm)
+            && !KnownFeatures.IsHostingIntegrationsEnabled(_features, config))
+        {
+            throw new InvalidOperationException(ErrorStrings.HostingIntegrationsFeatureNotEnabled);
+        }
+
         if (codeGenPackage is not null)
         {
             var codeGenVersion = config.GetEffectiveSdkVersion(sdkVersion);
@@ -150,7 +165,7 @@ internal sealed class ScaffoldingService : IScaffoldingService
         }
 
         // Step 2: Start the server temporarily for scaffolding and code generation
-        await using var serverSession = _serverSessionFactory.Create(appHostServerProject, environmentVariables: null, debug: false, gracefulShutdownSignaler: null, shutdownService: null, isolateConsole: false, cancellationToken);
+        await using var serverSession = _serverSessionFactory.Create(appHostServerProject, environmentVariables: null, debug: false, gracefulShutdownSignaler: null, shutdownService: null, isolateConsole: false, ownsProject: true, cancellationToken);
         // Short-lived RPC session: StartAsync() spawns the server. We never observe the
         // exit-code task (WaitForExitAsync) because disposal flows the exit code through the
         // activity scope and the only failure mode we care about surfaces via the RPC call below.
@@ -164,6 +179,14 @@ internal sealed class ScaffoldingService : IScaffoldingService
             scaffoldDirectory.FullName,
             context.ProjectName,
             cancellationToken);
+        if (language.LanguageId.Value.Equals(KnownLanguageId.Go, StringComparison.OrdinalIgnoreCase) &&
+            !StringComparers.FileSystemPath.Equals(directory.FullName, scaffoldDirectory.FullName))
+        {
+            // A nested Go module is still subject to an ancestor's go.work. Give the AppHost its own
+            // workspace so it runs without adding it to, or otherwise changing, the application's workspace.
+            scaffoldFiles["go.work"] = "go 1.26\n\nuse .\n";
+        }
+
         var appHostRelativePath = GetScaffoldedAppHostRelativePath(directory, scaffoldDirectory, language, scaffoldFiles.Keys);
 
         var conflictingFiles = GetConflictingScaffoldFiles(scaffoldDirectory.FullName, scaffoldFiles.Keys);
@@ -272,6 +295,13 @@ internal sealed class ScaffoldingService : IScaffoldingService
             return new DirectoryInfo(Path.Combine(directory.FullName, BrownfieldTypeScriptAppHostDirectoryName));
         }
 
+        if (language.LanguageId.Value.Equals(KnownLanguageId.Go, StringComparison.OrdinalIgnoreCase) &&
+            File.Exists(Path.Combine(directory.FullName, "go.mod")))
+        {
+            // Keep the AppHost's main package and generated-SDK dependencies out of the application's module.
+            return new DirectoryInfo(Path.Combine(directory.FullName, "aspire-apphost"));
+        }
+
         return directory;
     }
 
@@ -314,7 +344,7 @@ internal sealed class ScaffoldingService : IScaffoldingService
         if (preservedScriptNames.Count > 0)
         {
             _interactionService.DisplayMessage(
-                KnownEmojis.Warning,
+                KnownEmojis.PoliceCarLight,
                 $"Preserved existing package.json script(s) {string.Join(", ", preservedScriptNames)}. Run the AppHost directly from {relativeAppHostDirectory} or remove the existing script(s) and rerun 'aspire init' to regenerate the root delegates.");
         }
 
@@ -389,6 +419,9 @@ internal sealed class ScaffoldingService : IScaffoldingService
             TypeScriptAppHostToolchain.Pnpm => $"pnpm --dir {relativeAppHostDirectory} run {scriptName}",
             TypeScriptAppHostToolchain.Yarn => $"yarn --cwd {relativeAppHostDirectory} run {scriptName}",
             TypeScriptAppHostToolchain.Bun => $"bun --cwd {relativeAppHostDirectory} run {scriptName}",
+            // Deno has no `run <script>` for package.json scripts; `deno task` runs them and `--cwd`
+            // scopes the task to the nested AppHost package, mirroring npm's `--prefix`.
+            TypeScriptAppHostToolchain.Deno => $"deno task --cwd {relativeAppHostDirectory} {scriptName}",
             _ => throw new ArgumentOutOfRangeException(nameof(toolchain), toolchain, null)
         };
     }
@@ -426,7 +459,7 @@ internal sealed class ScaffoldingService : IScaffoldingService
             runtimeSpec = TypeScriptAppHostToolchainResolver.ApplyToRuntimeSpec(runtimeSpec, toolchain);
         }
 
-        var runtime = new GuestRuntime(runtimeSpec, _logger, PathLookupHelper.FindFullPathFromPath, _environment, _profilingTelemetry);
+        var runtime = new GuestRuntime(runtimeSpec, _logger, PathLookupHelper.FindFullPathFromPath, _environment, _profilingTelemetry, _processExecutionFactory);
 
         var (initResult, initOutput) = await runtime.InitializeAsync(directory, cancellationToken);
         if (initResult != 0)
@@ -443,7 +476,10 @@ internal sealed class ScaffoldingService : IScaffoldingService
             return initResult;
         }
 
-        var (result, output) = await runtime.InstallDependenciesAsync(directory, cancellationToken);
+        var (result, output) = await runtime.InstallDependenciesAsync(
+            directory,
+            new Dictionary<string, string>(),
+            cancellationToken);
         if (result != 0)
         {
             var lines = output.GetLines().ToArray();
@@ -455,7 +491,7 @@ internal sealed class ScaffoldingService : IScaffoldingService
                 }
 
                 _interactionService.DisplayMessage(
-                    KnownEmojis.Warning,
+                    KnownEmojis.PoliceCarLight,
                     MissingJavaScriptToolWarning.GetMessage(directory, language, _environment));
                 return 0;
             }
@@ -499,20 +535,24 @@ internal sealed class ScaffoldingService : IScaffoldingService
         _logger.LogDebug("Generated {Count} code files in {Path}", generatedFiles.Count, outputPath);
     }
 
-    private static void PreAddJavaScriptHostingForBrownfieldTypeScript(
+    private static void AddDefaultHostingPackages(
         AspireConfigFile config,
-        DirectoryInfo directory,
         LanguageInfo language,
         string defaultSdkVersion)
     {
-        if (!IsTypeScriptLanguage(language) ||
-            !File.Exists(Path.Combine(directory.FullName, PackageJsonFileName)) ||
-            config.Packages?.ContainsKey(JavaScriptHostingPackageName) == true)
+        foreach (var packageName in language.DefaultHostingPackages)
         {
-            return;
-        }
+            // Keep whatever the config already declares for the package (a pinned version, a project
+            // reference) instead of replacing it with the SDK version. Packages is keyed ordinally but
+            // NuGet package ids are case-insensitive, so a hand-edited "aspire.hosting.python" entry
+            // must count as the same package or it would be duplicated.
+            if (config.Packages?.Keys.Contains(packageName, StringComparer.OrdinalIgnoreCase) is true)
+            {
+                continue;
+            }
 
-        config.AddOrUpdatePackage(JavaScriptHostingPackageName, config.GetEffectiveSdkVersion(defaultSdkVersion));
+            config.AddOrUpdatePackage(packageName, config.GetEffectiveSdkVersion(defaultSdkVersion));
+        }
     }
 
     private static bool IsTypeScriptLanguage(LanguageInfo language)

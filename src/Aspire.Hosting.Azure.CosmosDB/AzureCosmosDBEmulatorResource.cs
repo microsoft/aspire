@@ -10,8 +10,11 @@ namespace Aspire.Hosting.Azure;
 /// </summary>
 /// <param name="innerResource">The inner resource used to store annotations.</param>
 public class AzureCosmosDBEmulatorResource(AzureCosmosDBResource innerResource)
-    : ContainerResource(innerResource.Name), IResource
+    : ContainerResource(innerResource.Name)
 {
+    /// <inheritdoc/>
+    public override string ResourceTypeDisplayName => "Azure Cosmos DB Emulator";
+
     internal AzureCosmosDBResource InnerResource { get; } = innerResource ?? throw new ArgumentNullException(nameof(innerResource));
 
     /// <inheritdoc />

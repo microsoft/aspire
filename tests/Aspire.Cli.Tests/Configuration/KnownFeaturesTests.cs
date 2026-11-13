@@ -4,11 +4,70 @@
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Tests.TestServices;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.Configuration;
 
 public class KnownFeaturesTests
 {
+    [Theory]
+    [InlineData(null, false)]
+    [InlineData(false, false)]
+    [InlineData(true, true)]
+    public void AppHostServerV2_RequiresExplicitProjectOptIn(bool? enabled, bool expected)
+    {
+        var config = new Aspire.Cli.Configuration.AspireConfigFile();
+        if (enabled is { } value)
+        {
+            config.Features = new Dictionary<string, bool> { [KnownFeatures.AppHostServerV2] = value };
+        }
+
+        Assert.False(KnownFeatures.GetFeatureMetadata(KnownFeatures.AppHostServerV2)!.DefaultValue);
+        Assert.True(KnownFeatures.GetFeatureMetadata(KnownFeatures.AppHostServerV2)!.ProjectOnly);
+        Assert.Equal(expected, KnownFeatures.IsAppHostServerV2Enabled(config));
+        Assert.False(KnownFeatures.IsAppHostServerV2Enabled(null));
+    }
+
+    [Theory]
+    [InlineData(false, null, false)]
+    [InlineData(true, null, true)]
+    [InlineData(false, true, true)]
+    [InlineData(true, true, true)]
+    [InlineData(false, false, false)]
+    [InlineData(true, false, false)]
+    public void HostingIntegrations_ProjectSettingOverridesCliScope(bool cliEnabled, bool? projectEnabled, bool expected)
+    {
+        var config = new Aspire.Cli.Configuration.AspireConfigFile();
+        if (projectEnabled is { } enabled)
+        {
+            config.Features = new Dictionary<string, bool>
+            {
+                [KnownFeatures.ExperimentalHostingIntegrations] = enabled
+            };
+        }
+
+        var features = new TestFeatures().SetFeature(KnownFeatures.ExperimentalHostingIntegrations, cliEnabled);
+        Assert.Equal(expected, KnownFeatures.IsHostingIntegrationsEnabled(features, config));
+    }
+
+    [Theory]
+    [InlineData(null, false)]
+    [InlineData("false", false)]
+    [InlineData("true", true)]
+    public void ExperimentalHostingIntegrations_DefaultsOffAndHonorsConfiguration(string? enabled, bool expected)
+    {
+        var metadata = KnownFeatures.GetFeatureMetadata(KnownFeatures.ExperimentalHostingIntegrations);
+        Assert.NotNull(metadata);
+        Assert.False(metadata.DefaultValue);
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["features:experimentalHostingIntegrations"] = enabled
+        }).Build();
+        var features = new Aspire.Cli.Configuration.Features(configuration, NullLogger<Aspire.Cli.Configuration.Features>.Instance);
+
+        Assert.Equal(expected, features.IsFeatureEnabled(metadata.Name, metadata.DefaultValue));
+    }
+
     [Fact]
     public void IsStagingChannelEnabled_ReturnsTrue_WhenChannelIsStaging()
     {

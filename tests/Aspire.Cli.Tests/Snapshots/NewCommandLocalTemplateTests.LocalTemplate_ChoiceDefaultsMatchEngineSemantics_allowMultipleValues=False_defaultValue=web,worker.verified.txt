@@ -1,0 +1,3 @@
+﻿{
+  features.txt: web,worker
+}

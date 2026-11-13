@@ -33,7 +33,18 @@ suite('registerCodeLensCommands', () => {
         const registrations = registerCodeLensCommands(
             treeProvider,
             {} as vscode.TreeView<unknown>,
-            { viewMode: 'global' } as AppHostDataRepository,
+            {
+                viewMode: 'global',
+                // registerCodeLensCommands now wires the debugger install hint watcher to this
+                // repository, and the watcher refreshes immediately, so the fake has to satisfy the
+                // whole DebuggerInstallHintDataSource shape. Empty collections mean no AppHost is
+                // known, so no data lease is taken and no install hints fire during this test.
+                workspaceAppHostCandidatePaths: [],
+                workspaceResources: [],
+                appHosts: [],
+                onDidChangeData: () => ({ dispose: () => { } }),
+                keepDataActive: () => ({ dispose: () => { } }),
+            } as unknown as AppHostDataRepository,
             terminalProvider,
             {} as AspireEditorCommandProvider,
             { get: () => undefined, update: async () => { } } as unknown as vscode.Memento,
@@ -46,6 +57,24 @@ suite('registerCodeLensCommands', () => {
 
             assert.deepStrictEqual(sendCommandStub.firstCall.args[3], { target });
             assert.deepStrictEqual(sendCommandStub.secondCall.args[3], { target });
+
+            const terminalError = new Error('terminal startup failed');
+            const rejectedCommand = Promise.reject(terminalError);
+            void rejectedCommand.catch(() => { });
+            sendCommandStub.returns(rejectedCommand);
+
+            await assert.rejects(
+                callbacks.get('aspire-vscode.codeLensViewLogs')!('api', appHostPath),
+                error => error === terminalError);
+
+            const appHostTerminalError = new Error('AppHost terminal startup failed');
+            const rejectedAppHostCommand = Promise.reject(appHostTerminalError);
+            void rejectedAppHostCommand.catch(() => { });
+            sendCommandStub.returns(rejectedAppHostCommand);
+
+            await assert.rejects(
+                callbacks.get('aspire-vscode.codeLensViewAppHostLogs')!(appHostPath),
+                error => error === appHostTerminalError);
         }
         finally {
             registrations.forEach(registration => registration.dispose());

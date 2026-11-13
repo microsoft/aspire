@@ -273,9 +273,10 @@ internal static class InteractionExports
             // DynamicLoading is intentionally omitted: it holds the non-serializable LoadCallback delegate.
         };
 
-        if (input.Files is { Count: > 0 })
+        var files = input.GetFiles();
+        if (files.Count > 0)
         {
-            result.SetFiles(input.Files);
+            result.SetFiles(new InteractionFileCollection(files));
         }
 
         return result;
@@ -349,6 +350,20 @@ internal sealed class InteractionInputBuilder
     {
         Input.Value = value;
         return this;
+    }
+
+    /// <summary>
+    /// Releases uploaded files associated with the input.
+    /// </summary>
+    /// <remarks>
+    /// Call this after processing the file paths returned by the prompt. Releasing the files deletes the
+    /// server-side temporary files before AppHost shutdown and is idempotent. Files that are not released are
+    /// deleted when the AppHost shuts down.
+    /// </remarks>
+    [AspireExport]
+    public void ReleaseFiles()
+    {
+        Input.GetFiles().Dispose();
     }
 
     /// <summary>

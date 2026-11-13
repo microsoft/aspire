@@ -6,6 +6,7 @@ using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
+using Aspire.Cli.Secrets;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -19,9 +20,9 @@ internal sealed class DoCommand : PipelineCommandBase
 
     private readonly Argument<string> _stepArgument;
 
-    public DoCommand(IDotNetCliRunner runner, IProjectLocator projectLocator, IFeatures features, ICliHostEnvironment hostEnvironment, IAppHostProjectFactory projectFactory, IConfiguration configuration, ILogger<DoCommand> logger, IAnsiConsole ansiConsole,
+    public DoCommand(IDotNetCliRunner runner, IProjectLocator projectLocator, IFeatures features, ICliHostEnvironment hostEnvironment, IAppHostProjectFactory projectFactory, IConfiguration configuration, IEnvironment environment, AspireSecretsStoreResolver aspireSecretsStoreResolver, ILogger<DoCommand> logger, IAnsiConsole ansiConsole,
         CommonCommandServices services)
-        : base("do", DoCommandStrings.Description, runner, projectLocator, features, hostEnvironment, projectFactory, configuration, logger, ansiConsole, services)
+        : base("do", DoCommandStrings.Description, runner, projectLocator, features, hostEnvironment, projectFactory, configuration, environment, aspireSecretsStoreResolver, logger, ansiConsole, services)
     {
         _stepArgument = new Argument<string>("step")
         {
@@ -41,14 +42,6 @@ internal sealed class DoCommand : PipelineCommandBase
 
             if (listSteps)
             {
-                // `aspire do --list-steps` with no step has no meaningful scope: the listing for
-                // `do` is always relative to a target step. Surface a friendly error pointing at
-                // common starting steps and the docs rather than launching the AppHost and
-                // crashing mid-pipeline (see https://github.com/microsoft/aspire/issues/17526).
-                // This applies in the extension host too because `--list-steps` does not flow
-                // through the interactive step prompt in GetRunArgumentsAsync, so without this
-                // error the extension would still hit the original crash path.
-                result.AddError(DoCommandStrings.ListStepsRequiresStep);
                 return;
             }
 
@@ -71,22 +64,24 @@ internal sealed class DoCommand : PipelineCommandBase
         return !string.IsNullOrEmpty(step) ? [step] : [];
     }
 
-    protected override async Task<string[]> GetRunArgumentsAsync(string? fullyQualifiedOutputPath, string[] unmatchedTokens, ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<string[]> GetRunArgumentsAsync(string? fullyQualifiedOutputPath, string[] unmatchedTokens, string? targetStep, ParseResult parseResult, CancellationToken cancellationToken)
     {
-        var baseArgs = new List<string> { "--operation", "publish" };
+        var operation = parseResult.GetValue(s_listStepsOption) ? "inspect" : "publish";
+        var baseArgs = new List<string> { "--operation", operation };
 
-        var step = parseResult.GetValue(_stepArgument);
-        if (string.IsNullOrEmpty(step) && ExtensionHelper.IsExtensionHost(InteractionService, out _, out _))
+        if (string.IsNullOrEmpty(targetStep)
+            && !parseResult.GetValue(s_listStepsOption)
+            && ExtensionHelper.IsExtensionHost(InteractionService, out _, out _))
         {
-            step = await InteractionService.PromptForStringAsync(
+            targetStep = await InteractionService.PromptForStringAsync(
                 DoCommandStrings.StepArgumentDescription,
                 required: true,
                 cancellationToken: cancellationToken);
         }
 
-        if (!string.IsNullOrEmpty(step))
+        if (!string.IsNullOrEmpty(targetStep))
         {
-            baseArgs.AddRange(["--step", step]);
+            baseArgs.AddRange(["--step", targetStep]);
         }
 
         if (fullyQualifiedOutputPath != null)
@@ -118,7 +113,7 @@ internal sealed class DoCommand : PipelineCommandBase
         return [.. baseArgs];
     }
 
-    protected override string GetCanceledMessage() => DoCommandStrings.OperationCanceled;
+    protected override string CancellationMessage => DoCommandStrings.OperationCanceled;
 
     protected override string? GetTargetStepName(ParseResult parseResult) => parseResult.GetValue(_stepArgument);
 

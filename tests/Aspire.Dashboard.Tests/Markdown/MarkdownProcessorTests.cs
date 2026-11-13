@@ -147,25 +147,8 @@ public class MarkdownProcessorTests
 
         // Assert
         Assert.Contains("language-csharp", html);
+        Assert.Contains("aria-label=\"Localized:GridValueCopyToClipboard\"", html);
         Assert.Contains("</code>", html);
-    }
-
-    [Fact]
-    public void ToHtml_FencedCodeBlock_CopyButtonHasLocalizedAccessibleName()
-    {
-        var processor = CreateMarkdownProcessor();
-
-        var markdown =
-            """
-            ```csharp
-            Console.WriteLine("Hello");
-            ```
-            """;
-
-        var html = processor.ToHtml(markdown, inCompleteDocument: true);
-
-        var copyButton = Regex.Match(html, """<button[^>]* (?<accessibleName>aria-label="[^"]+")[^>]*>""");
-        Assert.Equal("aria-label=\"Localized:GridValueCopyToClipboard\"", copyButton.Groups["accessibleName"].Value);
     }
 
     [Fact]
@@ -274,6 +257,29 @@ public class MarkdownProcessorTests
         // Assert
         Assert.Equal(
             $"""
+            <p><a href="">test</a></p>
+            """, html.Trim(), ignoreLineEndingDifferences: true);
+    }
+
+    [Theory]
+    [InlineData("vscode://%0alocalhost:8080")]
+    [InlineData("http://%0alocalhost:8080")]
+    public void ToHtml_UrlThatCannotBeParsed_UrlRemoved(string url)
+    {
+        // Arrange
+        var processor = CreateMarkdownProcessor(safeUrlSchemes: MarkdownHelpers.SafeUrlSchemes);
+
+        var markdown =
+            $"""
+            [test]({url})
+            """;
+
+        // Act
+        var html = processor.ToHtml(markdown, inCompleteDocument: true);
+
+        // Assert
+        Assert.Equal(
+            """
             <p><a href="">test</a></p>
             """, html.Trim(), ignoreLineEndingDifferences: true);
     }

@@ -156,7 +156,7 @@ const windowsExecutableExtensions = ['.exe', '.cmd', '.bat'];
  * four candidates so that both native executables and command shims are found.
  *
  * A directory containing the CLI is also probed, because pointing the setting at a build
- * output folder such as `artifacts/bin/Aspire.Cli/Debug/net10.0` is a natural mistake that
+ * output folder such as `artifacts/bin/Aspire.Cli/Debug/net11.0` is a natural mistake that
  * otherwise fails silently. Probing is a process launch that fails fast when the joined path
  * does not exist, so the extra candidates cost nothing once an earlier candidate matches.
  */

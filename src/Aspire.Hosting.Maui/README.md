@@ -2,6 +2,10 @@
 
 This library provides support for running .NET MAUI applications within an Aspire application model. It enables local development and debugging of MAUI apps alongside other services in your distributed application.
 
+MAUI migration to the new .NET resource model is separate. Keep `AddMauiProject` and its six
+platform resource shapes; ordinary `AddDotnetProject` does not replace their build, launch,
+debug, or OTLP behavior. See the [project migration guide](../../docs/migrate-from-addproject.md#retained-legacy-scenarios).
+
 ## Getting Started
 
 ### Adding a MAUI Application
@@ -106,17 +110,26 @@ This method automatically:
 When you configure OTLP with dev tunnel, the following environment variables are automatically set:
 
 - `OTEL_EXPORTER_OTLP_ENDPOINT`: The dev tunnel URL for the OTLP endpoint
-- `OTEL_EXPORTER_OTLP_PROTOCOL`: Set to `grpc` (standard Aspire configuration)
+- `OTEL_EXPORTER_OTLP_PROTOCOL`: Set to `http/protobuf` for the preferred dashboard OTLP/HTTP endpoint, or `grpc` when only OTLP/gRPC is available
 - `OTEL_SERVICE_NAME`: The resource name
 - `OTEL_RESOURCE_ATTRIBUTES`: Service instance ID
 
+When both dashboard OTLP endpoints are available, MAUI dev tunnels prefer OTLP/HTTP. Android and iOS environment targets are reevaluated when their resource restarts so updated tunnel settings are applied to the relaunched app.
+
 ## Example: Complete Aspire App with MAUI
+
+This staged mobile scenario deliberately retains its legacy backend declaration and generated
+metadata/build references. Its local obsolete-warning suppression is not a recommendation for
+new ordinary services. Migrate a companion backend independently only after validating the
+complete platform/tunnel scenario.
 
 ```csharp
 var builder = DistributedApplication.CreateBuilder(args);
 
 // Add backend services
+#pragma warning disable CS0618 // Retain the staged legacy MAUI scenario until its backend is validated independently.
 var apiService = builder.AddProject<Projects.ApiService>("apiservice");
+#pragma warning restore CS0618
 
 // Create a dev tunnel for the API service
 var apiTunnel = builder.AddDevTunnel("api-tunnel")
@@ -204,7 +217,8 @@ When multiple MAUI platform targets reference the same project (e.g., Android, i
 - **Cancel support**: Clicking Stop on a Queued resource removes it from the queue. Clicking Stop on a Building resource kills the `dotnet build` process.
 - **Restart after cancel**: You can start a cancelled resource again — it re-enters the queue.
 - **Build timeout**: Builds that take longer than 10 minutes are automatically cancelled to prevent a hung build from blocking the queue.
-- **DCP launch handoff**: After the serialized build completes for the AppHost configuration and platform MSBuild properties, DCP launches the already-built app with build and restore disabled so the next queued platform can build without overlapping shared output writes.
+- **DCP launch handoff**: After the serialized build completes for the AppHost configuration and platform MSBuild properties, DCP invokes the MAUI Run target. Non-Android platforms disable restore/build work and release the queue when DCP reports the launch process as running. Android keeps the normal Run target shape because it performs required fast-deploy/runtime upload work after Build; the queue is released when that short-lived Run process exits, not when the Android app exits. If Android launch work exceeds the handoff timeout, Aspire stops the Run process before releasing the queue so another platform build cannot overlap it.
+- **Android resource state**: After Android deploys successfully, the dashboard resource may show the short-lived Run process as **"Finished"** even though the app remains running on the emulator or device.
 
 ### Architecture
 
@@ -213,7 +227,7 @@ The build queue is implemented via:
 - **`MauiBuildQueueAnnotation`**: Added to the parent `MauiProjectResource`, holds a `SemaphoreSlim(1,1)` and per-resource cancellation tokens
 - **`MauiBuildQueueEventSubscriber`**: Subscribes to `BeforeResourceStartedEvent`, manages the queue, runs `dotnet build` as a subprocess, and replaces the default Stop command with a queue-aware version
 - **`MauiBuildInfoAnnotation`**: Attached to each platform resource with the project path, working directory, target framework, configuration, and platform MSBuild properties used for the build subprocess
-- **`ProjectLaunchArgsOverrideAnnotation`**: A core `Aspire.Hosting` annotation that overrides DCP's default `dotnet run` args, enabling `dotnet build --no-restore /t:Run -p:NoBuild=true` for MAUI projects after the serialized pre-build
+- **`ProjectLaunchArgsOverrideAnnotation`**: A core `Aspire.Hosting` annotation that overrides DCP's default `dotnet run` args, enabling `dotnet build --no-restore /t:Run -p:BuildDependsOn= -p:NoBuild=true` for non-Android MAUI projects after the serialized pre-build. Android uses `dotnet build --no-restore /t:Run` so the SDK can perform its required deploy/runtime upload steps.
 
 ## Requirements
 

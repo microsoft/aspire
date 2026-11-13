@@ -60,6 +60,10 @@ public sealed class ResourceServiceConnectionProvider : ComponentBase, IAsyncDis
         {
             // Circuit disconnected, JS interop is no longer available.
         }
+        catch (OperationCanceledException)
+        {
+            // Circuit disconnected while JS interop was in progress.
+        }
     }
 
     private async Task UpdateModalStateAsync(DashboardConnectionState state)

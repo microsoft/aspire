@@ -26,6 +26,11 @@ public sealed class ResourceViewModel
 
     public required string Name { get; init; }
     public required string ResourceType { get; init; }
+    public string ResourceTypeDisplayName
+    {
+        get => string.IsNullOrWhiteSpace(field) ? ResourceType : field;
+        init;
+    }
     public required string DisplayName { get; init; }
     public required string Uid { get; init; }
     public required int ReplicaIndex { get; init; }
@@ -46,13 +51,36 @@ public sealed class ResourceViewModel
     public bool SupportsDetailedTelemetry { get; init; }
     public string? IconName { get; init; }
     public IconVariant? IconVariant { get; init; }
+    internal bool ConsoleLogsLoaded { get; set; }
     public bool IsParameter => string.Equals(ResourceType, KnownResourceTypes.Parameter, StringComparison.Ordinal);
+
+    /// <summary>Gets the immutable AppHost values for a case-sensitive trait name.</summary>
+    public IReadOnlyList<string> GetTraitValues(string name) =>
+        Properties.TryGetValue(KnownProperties.Resource.TraitPrefix + name, out var property) && property.Value.KindCase == Value.KindOneofCase.ListValue
+            ? property.Value.ListValue.Values.Where(v => v.HasStringValue).Select(v => v.StringValue).ToArray()
+            : [];
+
+    internal IReadOnlyList<string> AppHostTags => GetTraitValues(KnownResourceTraits.Tag);
+
+    internal int? DisplayOrder =>
+        Properties.TryGetValue(KnownProperties.Resource.DisplayOrder, out var property) &&
+        property.Value.HasStringValue &&
+        int.TryParse(property.Value.StringValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out var order) ? order : null;
 
     /// <summary>
     /// A persistent key for the resource that takes into account replicas.
     /// This key should be used instead of resource name because the name includes randomly generated suffix that changes each time the app host is restarted.
     /// </summary>
     public string PersistentKey { get => field ??= $"{DisplayName}_{ReplicaIndex}"; }
+
+    public bool IsPersistentContainer =>
+        Properties.TryGetValue(KnownProperties.Container.Lifetime, out var lifetime) &&
+        lifetime.Value.HasStringValue &&
+        string.Equals(lifetime.Value.StringValue, "Persistent", StringComparison.Ordinal);
+
+    internal string GetResourceTypeDisplayName(IStringLocalizer<Resources.Resources> localizer) => IsPersistentContainer
+        ? string.Format(CultureInfo.CurrentCulture, localizer[nameof(Resources.Resources.ResourcePersistentType)], ResourceTypeDisplayName)
+        : ResourceTypeDisplayName;
 
     /// <summary>
     /// Gets the cached addresses for this resource that can be used for peer matching.
@@ -163,7 +191,8 @@ public sealed class ResourceViewModel
     internal bool MatchesFilter(string filter)
     {
         // TODO let ResourceType define the additional data values we include in searches
-        return Name.Contains(filter, StringComparisons.UserTextSearch);
+        return Name.Contains(filter, StringComparisons.UserTextSearch) ||
+            ResourceTypeDisplayName.Contains(filter, StringComparisons.UserTextSearch);
     }
 
     public string? GetResourcePropertyValue(string propertyName)
@@ -371,7 +400,16 @@ public sealed class DisplayedResourcePropertyViewModel : IPropertyGridItem
     public Value Value => _propertyViewModel.Value;
     public bool IsHighlighted => _propertyViewModel.IsHighlighted;
     public int SortOrder => _propertyViewModel.SortOrder;
-    public string DisplayName => _propertyViewModel.DisplayName ?? _propertyViewModel.KnownProperty?.GetDisplayName(_loc) ?? _propertyViewModel.Name;
+    public bool IsTrait => _propertyViewModel.IsTrait;
+
+    // The AppHost sends the raw trait name as the display name, e.g. "Aspire_Tag". Reserved Aspire
+    // properties get a readable, localized name instead.
+    public string DisplayName => _propertyViewModel.Name switch
+    {
+        KnownProperties.Resource.TraitPrefix + KnownResourceTraits.Tag => _loc[nameof(Resources.Resources.ResourceTraitDashboardTags)],
+        KnownProperties.Resource.DisplayOrder => _loc[nameof(Resources.Resources.ResourceDisplayOrder)],
+        _ => _propertyViewModel.DisplayName ?? _propertyViewModel.KnownProperty?.GetDisplayName(_loc) ?? _propertyViewModel.Name
+    };
 
     string IPropertyGridItem.Name => DisplayName;
     string? IPropertyGridItem.Value => _displayValue.Value;
@@ -389,12 +427,14 @@ public sealed class DisplayedResourcePropertyViewModel : IPropertyGridItem
         // Known and unknown properties are displayed together. Avoid any duplicate keys.
         _key = propertyViewModel.KnownProperty != null ? propertyViewModel.KnownProperty.Key : GetUnknownKey(propertyViewModel.Name);
 
-        _tooltip = new(() => propertyViewModel.Value.HasStringValue ? propertyViewModel.Value.StringValue : propertyViewModel.Value.ToString());
+        _tooltip = new(() => propertyViewModel.Value.HasStringValue ? propertyViewModel.Value.StringValue : GetTraitText(propertyViewModel) ?? propertyViewModel.Value.ToString());
 
         _displayValue = new(() =>
         {
             var value = propertyViewModel.Value is { HasStringValue: true, StringValue: var stringValue }
                 ? stringValue
+                : GetTraitText(propertyViewModel) is { } traitText
+                ? traitText
                 // Complex values such as arrays and objects will be output as JSON.
                 // Consider how complex values are rendered in the future.
                 : propertyViewModel.Value.ToString();
@@ -422,6 +462,13 @@ public sealed class DisplayedResourcePropertyViewModel : IPropertyGridItem
 
     internal static string GetUnknownKey(string propertyName) => $"unknown-{propertyName}";
 
+    // Traits are list values, e.g. resource.trait.Owner = ["Finance", "Platform"]. Show them as "Finance, Platform"
+    // rather than the JSON used for other complex values.
+    private static string? GetTraitText(ResourcePropertyViewModel propertyViewModel) =>
+        propertyViewModel.IsTrait && propertyViewModel.Value.KindCase == Value.KindOneofCase.ListValue
+            ? string.Join(", ", propertyViewModel.Value.ListValue.Values.Where(v => v.HasStringValue).Select(v => v.StringValue))
+            : null;
+
     public bool MatchesFilter(string filter) =>
         _propertyViewModel.Name.Contains(filter, StringComparison.CurrentCultureIgnoreCase) ||
         DisplayName.Contains(filter, StringComparison.CurrentCultureIgnoreCase) ||
@@ -439,6 +486,9 @@ public sealed class ResourcePropertyViewModel
     public bool IsValueMasked { get; set; }
     public bool IsHighlighted { get; }
     public int SortOrder { get; }
+
+    /// <summary>Gets whether the property is an AppHost trait, such as one added with <c>WithTrait</c> or <c>WithTags</c>.</summary>
+    public bool IsTrait => Name.StartsWith(KnownProperties.Resource.TraitPrefix, StringComparison.Ordinal);
 
     public ResourcePropertyViewModel(string name, Value value, bool isValueSensitive, KnownProperty? knownProperty, int sortOrder, string? displayName, bool isHighlighted)
     {
@@ -492,6 +542,10 @@ public sealed record class VolumeViewModel(int index, string Source, string Targ
     // Source could be empty for an anomymous volume so it can't be used as a key.
     // Because there is no good key in data, use index of the volume in results.
     object IPropertyGridItem.Key => index;
+
+    // Only a bind mount's Source is a real host filesystem path. A named volume's Source is an opaque Docker
+    // volume identifier with no corresponding path on disk, so it can't be "revealed" in a file explorer.
+    public bool IsBindMount => string.Equals(MountType, "bind", StringComparison.OrdinalIgnoreCase);
 
     public bool MatchesFilter(string filter) =>
         Source?.Contains(filter, StringComparison.CurrentCultureIgnoreCase) == true ||

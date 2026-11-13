@@ -16,14 +16,15 @@ const CACHE_ENTRY_GENERATION_DIGITS = 6;
 // The widest generation `CACHE_ENTRY_NAME_PATTERN` can read back. It is comfortably below
 // `Number.MAX_SAFE_INTEGER`, so parsing and incrementing a generation is always exact.
 const MAX_CACHE_ENTRY_GENERATION = 999999999999999;
+const MAX_RESERVED_GENERATIONS_PER_GROUP = 2;
 
 // A candidate carries the process id that created it so the sweep can tell an in-flight download
 // from debris without waiting for a timestamp to age out. See isCandidateOwnedByLiveProcess.
 const CANDIDATE_DIRECTORY_PREFIX = 'candidate-';
 const CANDIDATE_DIRECTORY_NAME_PATTERN = /^candidate-(\d{1,15})-/;
 
-// `readdir` on a group leaf that is a file, a symlink loop, or a link into a directory this user
-// cannot open has to read as "no entries here" so the miss path can detach and rebuild the leaf.
+// A group leaf can disappear or become unreadable between trust establishment and `readdir`.
+// Reading that race as "no entries here" lets candidate creation repair or reject the new leaf.
 const UNREADABLE_DIRECTORY_ERROR_CODES = new Set(['ENOENT', 'ENOTDIR', 'ELOOP', 'EACCES', 'EPERM']);
 
 // A publish only ever loses to a concurrent run, and a loser either adopts the winner or moves on
@@ -31,6 +32,12 @@ const UNREADABLE_DIRECTORY_ERROR_CODES = new Set(['ENOENT', 'ENOTDIR', 'ELOOP', 
 // wrong rather than contended.
 const MAX_PUBLISH_ATTEMPTS = 8;
 const MAX_CANDIDATE_CREATE_ATTEMPTS = 3;
+
+// A late writer racing cleanup settles within a few hundred milliseconds once its process is gone,
+// so a handful of sweeps covers it while still failing fast against a process that never stops
+// writing. See removeDirectoryContentsAndSelf for why re-sweeping is what clears ENOTEMPTY.
+const MAX_DIRECTORY_SWEEP_RETRIES = 5;
+const DIRECTORY_SWEEP_RETRY_DELAY_MS = 100;
 
 // Candidates only exist while a download is in flight, so a non-generation group child this old is
 // debris left by a crash or by an older cache layout. Published generations are never swept on
@@ -86,7 +93,8 @@ function getDownloadCacheEntryGroupDirectory(cacheRoot, { platform, architecture
  * children are numbered generations (`entry-000001`, `entry-000002`, ...), and a generation is
  * published by renaming a fully populated candidate onto a name that does not exist yet. Readers
  * take the highest generation that validates, so a corrupt entry is stepped over by publishing the
- * next generation beside it instead of being deleted and replaced.
+ * next generation beside it instead of being deleted and replaced. A group stops after two
+ * published generations so repeated validation failures cannot consume unbounded disk space.
  *
  * That is what makes concurrency safe here without a lock: nothing this function deletes is
  * shared. A run only ever removes its own candidate, which has never been visible to anyone else,
@@ -101,6 +109,11 @@ function getDownloadCacheEntryGroupDirectory(cacheRoot, { platform, architecture
  * runs cold-start together, which is far cheaper than a lock protocol whose failure modes
  * (abandoned locks, half-released generations) can wedge every later run until a human deletes the
  * cache by hand.
+ *
+ * This machine-local cache assumes cooperative E2E processes do not replace an established
+ * ordinary group directory with a hostile link. Node's path APIs cannot make a trust check and
+ * later pathname operations atomic; defending malicious same-user swaps requires native
+ * handle-relative dirfd/openat operations and is out of scope.
  */
 function ensureDownloadCache(options) {
   const normalizedOptions = normalizeEnsureDownloadCacheOptions(options);
@@ -108,7 +121,9 @@ function ensureDownloadCache(options) {
   const groupDirectory = getDownloadCacheEntryGroupDirectory(normalizedOptions.cacheRoot, expectedManifest);
   const cacheRootOptions = { cacheRoot: normalizedOptions.cacheRoot };
 
-  const publishedEntry = selectPublishedCacheEntry(groupDirectory, expectedManifest, { ...cacheRootOptions, warnOnInvalid: true });
+  const initialGroupReadIsAuthoritative = isTrustedCacheEntryGroupDirectory(normalizedOptions.cacheRoot, groupDirectory);
+  const group = readCacheEntryGroup(groupDirectory);
+  const publishedEntry = selectValidCacheEntry(groupDirectory, group.entryNames, expectedManifest, { ...cacheRootOptions, warnOnInvalid: true });
   if (publishedEntry) {
     // Sweeping on the hit path as well as the miss path matters: once a key is warm the miss path
     // never runs again, so a candidate abandoned by a crash would otherwise stay forever.
@@ -116,6 +131,9 @@ function ensureDownloadCache(options) {
     return { cacheHit: true, cacheDirectory: publishedEntry.cacheDirectory, manifest: publishedEntry.manifest };
   }
 
+  if (initialGroupReadIsAuthoritative) {
+    assertCanPublishAnotherCacheEntry(groupDirectory, group.reservedGenerationCount);
+  }
   const candidateDirectory = createCacheEntryCandidate(normalizedOptions.cacheRoot, groupDirectory);
 
   let publishedCandidate = false;
@@ -168,6 +186,8 @@ function publishCacheEntryCandidate(groupDirectory, candidateDirectory, expected
       return { published: false, ...adoptedEntry };
     }
 
+    assertCanPublishAnotherCacheEntry(groupDirectory, group.reservedGenerationCount);
+
     let entryDirectory;
     try {
       entryDirectory = path.join(groupDirectory, formatCacheEntryName(group.highestGeneration + 1));
@@ -191,11 +211,6 @@ function publishCacheEntryCandidate(groupDirectory, candidateDirectory, expected
   throw new Error(`Unable to publish an E2E download cache entry under '${groupDirectory}' after ${MAX_PUBLISH_ATTEMPTS} attempts.`);
 }
 
-function selectPublishedCacheEntry(groupDirectory, expectedManifest, { cacheRoot, warnOnInvalid }) {
-  const group = readCacheEntryGroup(groupDirectory);
-  return selectValidCacheEntry(groupDirectory, group.entryNames, expectedManifest, { cacheRoot, warnOnInvalid });
-}
-
 function selectValidCacheEntry(groupDirectory, entryNames, expectedManifest, { cacheRoot, warnOnInvalid }) {
   for (const entryName of entryNames) {
     const cacheDirectory = path.join(groupDirectory, entryName);
@@ -208,9 +223,17 @@ function selectValidCacheEntry(groupDirectory, entryNames, expectedManifest, { c
   return null;
 }
 
+function assertCanPublishAnotherCacheEntry(groupDirectory, reservedGenerationCount) {
+  if (reservedGenerationCount >= MAX_RESERVED_GENERATIONS_PER_GROUP) {
+    throw new Error(
+      `E2E download cache group '${groupDirectory}' already contains ${reservedGenerationCount} reserved generations. ` +
+      `The runner will not publish another. Wait until all E2E processes using this group have stopped, then delete '${groupDirectory}' to clean it up.`);
+  }
+}
+
 /**
- * Lists the generations under a group directory, newest first, along with the highest generation
- * number seen.
+ * Lists the ordinary-directory generations under a group directory, newest first, along with the
+ * highest generation number and total reserved generation names seen.
  *
  * Names that are not ordinary directories still reserve their generation number even though they
  * cannot hold an entry. Skipping them there would make a publish aim at a name that is already
@@ -221,19 +244,19 @@ function readCacheEntryGroup(groupDirectory) {
   try {
     dirents = fs.readdirSync(groupDirectory, { withFileTypes: true });
   } catch (error) {
-    // Anything that makes the leaf unreadable -- missing, a file, a symlink loop, or a link to a
-    // directory this user cannot open -- has to read as an empty group rather than propagate.
-    // Propagating would wedge the key permanently, because the repair that detaches a bad leaf
-    // only runs further down the miss path. A genuine permission problem on a real directory
-    // still surfaces: the candidate that gets created there fails loudly.
+    // A group can be missing or unreadable on the initial observation, or disappear before a
+    // publish-time re-read. Treat that as an empty group so candidate creation can repair or reject
+    // the leaf. A genuine permission problem on a real directory still surfaces when the candidate
+    // is created there.
     if (isUnreadableDirectoryError(error)) {
-      return { highestGeneration: 0, entryNames: [] };
+      return { highestGeneration: 0, reservedGenerationCount: 0, entryNames: [] };
     }
 
     throw error;
   }
 
   let highestGeneration = 0;
+  let reservedGenerationCount = 0;
   const entries = [];
 
   for (const dirent of dirents) {
@@ -244,6 +267,7 @@ function readCacheEntryGroup(groupDirectory) {
 
     const generation = Number(match[1]);
     highestGeneration = Math.max(highestGeneration, generation);
+    reservedGenerationCount++;
 
     if (dirent.isDirectory()) {
       entries.push({ name: dirent.name, generation });
@@ -252,7 +276,7 @@ function readCacheEntryGroup(groupDirectory) {
 
   entries.sort((left, right) => right.generation - left.generation);
 
-  return { highestGeneration, entryNames: entries.map(entry => entry.name) };
+  return { highestGeneration, reservedGenerationCount, entryNames: entries.map(entry => entry.name) };
 }
 
 function formatCacheEntryName(generation) {
@@ -307,6 +331,21 @@ function ensureTrustedCacheEntryGroupDirectory(cacheRoot, groupDirectory) {
   detachUntrustedCacheEntryGroupDirectory(groupDirectory);
   fs.mkdirSync(groupDirectory, { recursive: true });
   assertTrustedCacheEntryDirectory(groupDirectory, cacheRoot);
+}
+
+/**
+ * Reports whether an initial group read can come from an ordinary directory inside the cache root.
+ *
+ * This is deliberately read-only: an untrusted or missing leaf is repaired later, when the miss
+ * path creates a candidate.
+ */
+function isTrustedCacheEntryGroupDirectory(cacheRoot, groupDirectory) {
+  try {
+    assertTrustedCacheEntryDirectory(groupDirectory, cacheRoot);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function detachUntrustedCacheEntryGroupDirectory(groupDirectory) {
@@ -549,11 +588,51 @@ function removePathWithoutFollowingLinks(targetPath, options = {}) {
     return;
   }
 
-  for (const entry of fs.readdirSync(targetPath)) {
-    removePathWithoutFollowingLinks(path.join(targetPath, entry), options);
-  }
+  removeDirectoryContentsAndSelf(targetPath, options);
+}
 
-  removeEmptyDirectory(targetPath, options);
+/**
+ * Empties a directory and removes it, re-listing it when `rmdir` reports it is not empty.
+ *
+ * A directory can gain an entry between the listing and the `rmdir`: the Java language server and
+ * Maven/Gradle daemons keep writing for a moment after a test finishes, so a tree that was walked
+ * empty is not empty by the time it is removed. Observed in CI as a shard that passed its tests and
+ * then failed in cleanup with `ENOTEMPTY: directory not empty, rmdir`.
+ *
+ * Retrying the `rmdir` alone cannot clear that, because the entry that appeared is still on disk -
+ * only a fresh listing can remove it - which is why this re-sweeps instead of leaning on the
+ * `maxRetries` budget. That budget stays useful for its own case: on Windows a removed entry can
+ * linger until the last handle closes, and there retrying the same `rmdir` does eventually succeed.
+ */
+function removeDirectoryContentsAndSelf(directoryPath, options) {
+  for (let sweep = 0; ; sweep++) {
+    let entries;
+    try {
+      entries = fs.readdirSync(directoryPath);
+    } catch (error) {
+      if (error && error.code === 'ENOENT') {
+        return;
+      }
+
+      throw error;
+    }
+
+    for (const entry of entries) {
+      removePathWithoutFollowingLinks(path.join(directoryPath, entry), options);
+    }
+
+    try {
+      removeEmptyDirectory(directoryPath, options);
+      return;
+    } catch (error) {
+      // Bounded so a process writing continuously fails the cleanup instead of hanging the shard.
+      if (!error || error.code !== 'ENOTEMPTY' || sweep >= MAX_DIRECTORY_SWEEP_RETRIES) {
+        throw error;
+      }
+
+      sleepSync((sweep + 1) * DIRECTORY_SWEEP_RETRY_DELAY_MS);
+    }
+  }
 }
 
 function removeEmptyDirectory(directoryPath, options) {
@@ -659,7 +738,7 @@ function normalizeEnsureDownloadCacheOptions(options) {
   // Validate the VS Code layout up front so unsupported combinations fail before
   // populate() starts an expensive download into a staging directory.
   getVsCodeDirectoryName(platform, architecture);
-  getVsCodeExecutableRelativePaths(platform, architecture, options.extesterVersion);
+  getVsCodeExecutableRelativePaths(platform, architecture);
 
   return {
     cacheRoot: path.resolve(options.cacheRoot),
@@ -768,8 +847,7 @@ function readCacheManifest(cacheDirectory, expectedManifest, { cacheRoot }) {
  * VS Code loads far more than the executable named in the manifest.
  *
  * Genuine artifacts contain internal symlinks -- a macOS VS Code bundle has framework links such
- * as `Contents/Frameworks/Electron Framework.framework/Versions/Current`, plus the
- * `Contents/MacOS/Electron -> Code` link ExTester creates while unpacking -- so links are allowed
+ * as `Contents/Frameworks/Electron Framework.framework/Versions/Current` -- so links are allowed
  * as long as they resolve inside the entry.
  *
  * Hard links are judged by reachability too, not by link count. `nlink` counts directory entries
@@ -1124,9 +1202,9 @@ function isPathContainedWithin(rootPath, candidatePath) {
   return relativePath === '' || (!relativePath.startsWith('..') && !path.isAbsolute(relativePath));
 }
 
-function discoverCacheArtifacts(rootDirectory, platform, architecture, extesterVersion, realRootDirectory = resolveRealPath(rootDirectory)) {
+function discoverCacheArtifacts(rootDirectory, platform, architecture, _extesterVersion, realRootDirectory = resolveRealPath(rootDirectory)) {
   const vscodeDirectory = getVsCodeDirectoryName(platform, architecture);
-  const vscodeExecutableRelativePaths = getVsCodeExecutableRelativePaths(platform, architecture, extesterVersion);
+  const vscodeExecutableRelativePaths = getVsCodeExecutableRelativePaths(platform, architecture);
   const vscodeExecutableRelativePath = vscodeExecutableRelativePaths.find(
     relativePath => pathExistsWithoutFollowingLinks(path.join(rootDirectory, relativePath)));
   const chromeDriverBinaryName = getChromeDriverBinaryName(platform);
@@ -1189,24 +1267,12 @@ function getVsCodeDirectoryName(platform, architecture) {
   }
 }
 
-function getVsCodeExecutableRelativePaths(platform, architecture, extesterVersion) {
+function getVsCodeExecutableRelativePaths(platform, architecture) {
   const vscodeDirectory = getVsCodeDirectoryName(platform, architecture);
 
   switch (platform) {
     case 'darwin':
-      // VS Code 1.131 removes the legacy Contents/MacOS/Electron -> Code compatibility symlink. The
-      // cache key includes ExTester because 8.23 can launch only Electron while 8.24 falls back to
-      // Code. Validate against the executable that keyed dependency can actually launch rather than
-      // publishing a cache entry that will fail later in install-vsix or run-tests.
-      const legacyExecutable = path.join(vscodeDirectory, 'Contents', 'MacOS', 'Electron');
-      if (!isConcreteVersionAtLeast(extesterVersion, '8.24.0')) {
-        return [legacyExecutable];
-      }
-
-      return [
-        path.join(vscodeDirectory, 'Contents', 'MacOS', 'Code'),
-        legacyExecutable,
-      ];
+      return [path.join(vscodeDirectory, 'Contents', 'MacOS', 'Code')];
     case 'linux':
       return [path.join(vscodeDirectory, 'code')];
     case 'win32':
@@ -1409,12 +1475,52 @@ function encodePathSegment(value) {
  */
 function projectDownloadCache(result, storageDirectory) {
   fs.mkdirSync(storageDirectory, { recursive: true });
-  projectCacheEntry(
-    path.join(result.cacheDirectory, result.manifest.vscodeDirectory),
-    path.join(storageDirectory, result.manifest.vscodeDirectory));
+  const cachedVsCodeDirectory = path.join(result.cacheDirectory, result.manifest.vscodeDirectory);
+  const projectedVsCodeDirectory = path.join(storageDirectory, result.manifest.vscodeDirectory);
+  const cachedMacOsDirectory = path.join(cachedVsCodeDirectory, 'Contents', 'MacOS');
+  const cachedCode = path.join(cachedMacOsDirectory, 'Code');
+  const cachedElectron = path.join(cachedMacOsDirectory, 'Electron');
+  const needsLegacyMacOsProjection =
+    result.manifest.platform === 'darwin' &&
+    !isConcreteVersionAtLeast(result.manifest.extesterVersion, '8.24.0') &&
+    pathExistsWithoutFollowingLinks(cachedCode) &&
+    !pathExistsWithoutFollowingLinks(cachedElectron);
+
+  if (needsLegacyMacOsProjection) {
+    removePathWithoutFollowingLinks(projectedVsCodeDirectory);
+    fs.mkdirSync(projectedVsCodeDirectory);
+    projectDirectoryChildren(cachedVsCodeDirectory, projectedVsCodeDirectory, 'Contents');
+
+    const cachedContentsDirectory = path.join(cachedVsCodeDirectory, 'Contents');
+    const projectedContentsDirectory = path.join(projectedVsCodeDirectory, 'Contents');
+    fs.mkdirSync(projectedContentsDirectory);
+    projectDirectoryChildren(cachedContentsDirectory, projectedContentsDirectory, 'MacOS');
+
+    const projectedMacOsDirectory = path.join(projectedContentsDirectory, 'MacOS');
+    // Keep MacOS run-local so ExTester compatibility cleanup or replacement cannot mutate the
+    // shared immutable generation through a projected directory.
+    fs.mkdirSync(projectedMacOsDirectory);
+    projectDirectoryChildren(cachedMacOsDirectory, projectedMacOsDirectory);
+    fs.symlinkSync('Code', path.join(projectedMacOsDirectory, 'Electron'), 'file');
+  } else {
+    projectCacheEntry(cachedVsCodeDirectory, projectedVsCodeDirectory);
+  }
+
   projectCacheEntry(
     path.join(result.cacheDirectory, result.manifest.chromeDriverEntry),
     path.join(storageDirectory, result.manifest.chromeDriverEntry));
+}
+
+function projectDirectoryChildren(sourceDirectory, destinationDirectory, excludedName) {
+  for (const childName of fs.readdirSync(sourceDirectory)) {
+    if (childName === excludedName) {
+      continue;
+    }
+
+    projectCacheEntry(
+      path.join(sourceDirectory, childName),
+      path.join(destinationDirectory, childName));
+  }
 }
 
 function projectCacheEntry(sourcePath, destinationPath) {

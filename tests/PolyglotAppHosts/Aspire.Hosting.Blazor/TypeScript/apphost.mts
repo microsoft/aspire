@@ -16,4 +16,8 @@ const gateway = await builder.addBlazorGateway('gateway')
 
 await gateway.withBlazorClientApp(blazorApp);
 
+const dotnetProjectBlazorApp = await builder.addBlazorWasmProject('dotnet-app', './src/Client/Client.csproj');
+const dotnetProjectGateway = await builder.addDotnetProjectBlazorGateway('dotnet-gateway');
+await dotnetProjectGateway.withBlazorClientApp(dotnetProjectBlazorApp);
+
 await builder.build().run();

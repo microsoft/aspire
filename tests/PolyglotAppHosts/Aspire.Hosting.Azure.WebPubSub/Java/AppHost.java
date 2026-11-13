@@ -4,6 +4,10 @@ void main() throws Exception {
         var builder = DistributedApplication.CreateBuilder();
         // addAzureWebPubSub - factory method
         var webpubsub = builder.addAzureWebPubSub("webpubsub");
+        webpubsub.configureInfrastructure((infrastructure) -> {
+            var service = infrastructure.getWebPubSubService();
+            service.tags().set("provisioning-proxy", "java");
+        });
         // addHub - adds a hub to the Web PubSub resource (with optional hubName)
         var hub = webpubsub.addHub("myhub");
         var hubWithName = webpubsub.addHub("hub2", "customhub");

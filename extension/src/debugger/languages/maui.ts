@@ -2,6 +2,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
+import { mauiExtensionId } from '../../capabilities';
 import { AspireResourceExtendedDebugConfiguration, EnvVar, ExecutableLaunchConfiguration, MauiLaunchConfiguration, isMauiLaunchConfiguration } from "../../dcp/types";
 import { invalidLaunchConfiguration } from "../../loc/strings";
 import { delay } from "../../utils/async";
@@ -377,7 +378,7 @@ function getDeviceIdentity(device: MauiDeviceInfo): string {
 }
 
 async function listMauiDevices(): Promise<MauiDeviceInfo[]> {
-    const mauiExtension = vscode.extensions.getExtension('ms-dotnettools.dotnet-maui');
+    const mauiExtension = vscode.extensions.getExtension(mauiExtensionId);
     if (!mauiExtension) {
         throw new Error('The .NET MAUI VS Code extension is required to resolve MAUI device targets.');
     }
@@ -607,7 +608,7 @@ function registerMauiLaunchJsonConfigurationWrapper(runId: string, projectPath: 
         }
 
         try {
-            await vscode.extensions.getExtension('ms-dotnettools.dotnet-maui')?.activate();
+            await vscode.extensions.getExtension(mauiExtensionId)?.activate();
             const debugCommandAvailable = await waitForMauiCommand(mauiStartDebugSessionCommand, mauiCommandRegistrationTimeoutMs);
             if (!debugCommandAvailable) {
                 throw new Error(`The .NET MAUI extension did not register '${mauiStartDebugSessionCommand}' within ${mauiCommandRegistrationTimeoutMs}ms.`);
@@ -635,7 +636,7 @@ function registerMauiActiveDebugTargetWrapper(runId: string, platform: string | 
 }
 
 async function setMauiActiveDebugTarget(platform: string, device: string): Promise<void> {
-    const mauiExtension = vscode.extensions.getExtension<MauiExtensionApi>('ms-dotnettools.dotnet-maui');
+    const mauiExtension = vscode.extensions.getExtension<MauiExtensionApi>(mauiExtensionId);
     const exports = await mauiExtension?.activate() ?? mauiExtension?.exports;
     const debugTargetsManager = exports?.maui?.debugTargetsManager;
     const setActiveDebugTarget = debugTargetsManager?.setActiveDebugTarget;
@@ -751,7 +752,7 @@ function applyEnvironmentToMauiConfiguration(env: EnvVar[], debugConfiguration: 
 export const mauiDebuggerExtension: ResourceDebuggerExtension = {
     resourceType: 'maui',
     debugAdapter: 'maui',
-    extensionId: 'ms-dotnettools.dotnet-maui',
+    extensionId: mauiExtensionId,
     getDisplayName,
     getSupportedFileTypes: () => ['.csproj'],
     getProjectFile: (launchConfig) => getProjectFile(launchConfig),

@@ -1,8 +1,10 @@
-parameters:
+﻿parameters:
   project1:
     project1_image: "project1:latest"
 secrets: {}
 config:
+  env_dashboard:
+    ASPIRE_DASHBOARD_TELEMETRY_OPTOUT: "true"
   myapp:
     ASPNETCORE_ENVIRONMENT: "Development"
   project1:

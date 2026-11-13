@@ -1,8 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREFILESYSTEM001 // Type is for evaluation purposes only
-
 using System.Collections.Concurrent;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -27,7 +25,7 @@ internal sealed class FileSystemService : IFileSystemService, IDisposable
 
         // Check configuration to preserve temp files for debugging
         _preserveTempFiles = configuration["ASPIRE_PRESERVE_TEMP_FILES"] is not null;
-        
+
         _tempDirectory = new TempFileSystemService(this);
     }
 

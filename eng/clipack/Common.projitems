@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.Build.NoTargets">
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFramework>net11.0</TargetFramework>
 
     <ArchiveName>aspire-cli-$(CliRuntime)</ArchiveName>
     <ArchiveFormat Condition="$(CliRuntime.StartsWith('win-'))">zip</ArchiveFormat>
@@ -182,7 +182,7 @@
       <_ExtractedNativeBinaryPath Condition="$(CliRuntime.StartsWith('win-'))">$(_ExtractedNativeBinaryPath).exe</_ExtractedNativeBinaryPath>
       <_CliToolPublishBaseDir>$([MSBuild]::NormalizeDirectory($(IntermediateOutputPath), 'tool-publish'))</_CliToolPublishBaseDir>
       <_CliToolPublishDir>$([MSBuild]::NormalizeDirectory($(_CliToolPublishBaseDir), '$(CliRuntime)'))</_CliToolPublishDir>
-      <_CliToolPointerPublishDir>$([MSBuild]::NormalizeDirectory($(_CliToolPublishBaseDir), 'pointer'))</_CliToolPointerPublishDir>
+      <_CliToolPointerPublishDir>$([MSBuild]::NormalizeDirectory($(_CliToolPublishBaseDir), 'pointer-$(CliRuntime)'))</_CliToolPointerPublishDir>
       <_CliNpmPackageStagingDir>$([MSBuild]::NormalizeDirectory($(IntermediateOutputPath), 'npm-packages', '$(CliRuntime)'))</_CliNpmPackageStagingDir>
       <_CliNpmPackageStagingDirArg>$(_CliNpmPackageStagingDir.TrimEnd('\').TrimEnd('/'))</_CliNpmPackageStagingDirArg>
       <_PackageOutputPathArg>$(PackageOutputPath.TrimEnd('\').TrimEnd('/'))</_PackageOutputPathArg>
@@ -190,9 +190,7 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <_SharedPackToolProperties Include="CreateRidSpecificToolPackages=true" />
       <_SharedPackToolProperties Include="PreBuiltCliBinaryPath=$(_ExtractedNativeBinaryPath)" />
-      <_SharedPackToolProperties Include="PublishAot=true" />
       <_SharedPackToolProperties Include="BundlePayloadPath=" />
       <_SharedPackToolProperties Include="Configuration=$(Configuration)" />
       <_SharedPackToolProperties Include="ContinuousIntegrationBuild=$(ContinuousIntegrationBuild)" />
@@ -223,6 +221,16 @@
   <Target Name="_PackRidSpecificDotnetTool">
     <ItemGroup>
       <_PackToolProperties Include="@(_SharedPackToolProperties)" />
+      <_PackToolProperties Include="CreateRidSpecificToolPackages=true" />
+      <_PackToolProperties Include="PublishAot=true" />
+      <!-- Pack the RID-specific tool as self-contained so the SDK lays it out as tools/any/<rid>/
+           instead of tools/<TargetFramework>/<rid>/. The payload is a prebuilt NativeAOT binary that
+           doesn't need a shared runtime, but a TFM folder (e.g. net11.0) would make `dotnet tool install`
+           fail on older SDKs (e.g. .NET 10) with "Settings file 'DotnetToolSettings.xml' was not found in
+           the package", because they can't select a tools/<tfm> folder newer than themselves.
+           PublishAot=true alone doesn't imply this here: the SDK only infers SelfContained from PublishAot when
+           _IsPacking is set (by `dotnet pack`), and this MSBuild task invocation doesn't set it. -->
+      <_PackToolProperties Include="SelfContained=true" />
       <_PackToolProperties Include="RuntimeIdentifier=$(CliRuntime)" />
       <_PackToolProperties Include="PublishDir=$(_CliToolPublishDir)" />
     </ItemGroup>
@@ -244,6 +252,9 @@
   <Target Name="_PackPointerDotnetTool">
     <ItemGroup>
       <_PackPointerProperties Include="@(_SharedPackToolProperties)" />
+      <!-- RID-specific packages are packed separately from their matching native archives. -->
+      <_PackPointerProperties Include="CreateRidSpecificToolPackages=false" />
+      <_PackPointerProperties Include="PublishAot=false" />
       <_PackPointerProperties Include="PublishDir=$(_CliToolPointerPublishDir)" />
       <_PackPointerProperties Include="NoBuild=true" />
     </ItemGroup>

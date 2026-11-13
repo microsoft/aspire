@@ -9,7 +9,7 @@ import (
 func main() {
 	builder, err := aspire.CreateBuilder()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	foundry := builder.AddFoundry("foundry")
@@ -31,11 +31,14 @@ func main() {
 	foundry.AddDeployment("chat-from-model", model)
 
 	localFoundry := builder.AddFoundry("local-foundry")
-	localFoundry.RunAsFoundryLocal()
-	localFoundry.AddDeployment("local-chat", "Phi-3.5-mini-instruct", &aspire.AddDeploymentOptions{
+	localFoundry.RunAsFoundryLocal(&aspire.RunAsFoundryLocalOptions{
+		Endpoint: aspire.StringPtr("http://windows-host:5273"),
+	})
+	localChat := localFoundry.AddDeployment("local-chat", "Phi-3.5-mini-instruct", &aspire.AddDeploymentOptions{
 		ModelVersion: aspire.StringPtr("1"),
 		Format:       aspire.StringPtr("Microsoft"),
 	})
+	localChat.SetLocalModelId(aspire.StringPtr("Phi-3.5-mini-instruct-generic-gpu:1"))
 
 	registry := builder.AddAzureContainerRegistry("registry")
 	keyVault := builder.AddAzureKeyVault("vault")
@@ -60,11 +63,11 @@ func main() {
 	project.AddConnection(keyVault)
 	project.AddSearchConnection(search)
 
-	_ = project.AddCodeInterpreterTool("code-interpreter")
-	_ = project.AddFileSearchTool("file-search", []string{"vs_placeholder"})
-	_ = project.AddWebSearchTool("web-search")
-	_ = project.AddImageGenerationTool("image-gen")
-	_ = project.AddComputerUseTool("computer-use")
+	codeInterpreter := project.AddCodeInterpreterTool("code-interpreter")
+	fileSearch := project.AddFileSearchTool("file-search", []string{"vs_placeholder"})
+	webSearch := project.AddWebSearchTool("web-search")
+	imageGen := project.AddImageGenerationTool("image-gen")
+	computerUse := project.AddComputerUseTool("computer-use")
 
 	aiSearchTool := project.AddAISearchTool("ai-search-tool")
 	aiSearchTool.WithReference(search)
@@ -78,11 +81,22 @@ func main() {
 	bingTool3 := project.AddBingGroundingTool("bing-tool-3")
 	bingTool3.WithReference(bingParam)
 
-	_ = project.AddSharePointTool("sharepoint-tool", []string{"https://contoso.sharepoint.com", "MySite"})
-	_ = project.AddFabricTool("fabric-tool", []string{"workspace-id"})
-	_ = project.AddAzureFunctionTool("az-func-tool", "myFunction", "Does something", "{}", "https://queue.core.windows.net", "input-q", "https://queue.core.windows.net", "output-q")
-	_ = project.AddFunctionTool("func-tool", "myFunc", "{}")
-	_ = project.AddPromptAgent("prompt-agent", chat)
+	sharepoint := project.AddSharePointTool("sharepoint-tool", []string{"https://contoso.sharepoint.com", "MySite"})
+	fabric := project.AddFabricTool("fabric-tool", []string{"workspace-id"})
+	azFunc := project.AddAzureFunctionTool("az-func-tool", "myFunction", "Does something", "{}", "https://queue.core.windows.net", "input-q", "https://queue.core.windows.net", "output-q")
+	funcTool := project.AddFunctionTool("func-tool", "myFunc", "{}")
+	promptAgent := project.AddPromptAgent("prompt-agent", chat)
+	promptAgent.WithTool(codeInterpreter).
+		WithTool(fileSearch).
+		WithTool(webSearch).
+		WithTool(imageGen).
+		WithTool(computerUse).
+		WithTool(aiSearchTool).
+		WithTool(bingTool).
+		WithTool(sharepoint).
+		WithTool(fabric).
+		WithTool(azFunc).
+		WithTool(funcTool)
 
 	builderProjectFoundry := builder.AddFoundry("builder-project-foundry")
 	builderProject := builderProjectFoundry.AddProject("builder-project")
@@ -125,15 +139,17 @@ server.listen(port, '127.0.0.1');
 			hostedAgentScript,
 		})
 
-	hostedAgent.AsHostedAgent(project, &aspire.HostedAgentOptions{
-		Description: "Validation hosted agent",
-		Cpu:         aspire.Float64Ptr(1),
-		Memory:      aspire.Float64Ptr(2),
-		Metadata: map[string]string{
-			"scenario": "validation",
-		},
-		EnvironmentVariables: map[string]string{
-			"VALIDATION_MODE": "true",
+	hostedAgent.AsHostedAgent(project, &aspire.AsHostedAgentOptions{
+		Options: &aspire.HostedAgentOptions{
+			Description: aspire.StringPtr("Validation hosted agent"),
+			Cpu:         aspire.Float64Ptr(1),
+			Memory:      aspire.Float64Ptr(2),
+			Metadata: map[string]string{
+				"scenario": "validation",
+			},
+			EnvironmentVariables: map[string]string{
+				"VALIDATION_MODE": "true",
+			},
 		},
 	})
 
@@ -147,7 +163,7 @@ server.listen(port, '127.0.0.1');
 		})
 	// Both hosted agents run as plain host processes (not containers), so they must not share the
 	// default 8088 target port or the second process fails to bind with EADDRINUSE.
-	hostedAgentWithProtocol.WithHttpEndpoint(&aspire.WithHttpEndpointOptions{TargetPort: aspire.Float64Ptr(8089)})
+	hostedAgentWithProtocol.WithHttpEndpoint(&aspire.WithHttpEndpointOptions{TargetPort: aspire.IntPtr(8089)})
 	hostedAgentWithProtocol.AsHostedAgentWithProtocol(project, aspire.HostedAgentProtocolInvocations, "1.0.0", nil)
 
 	_ = builder.AddContainer("api", "nginx")
@@ -165,9 +181,9 @@ server.listen(port, '127.0.0.1');
 
 	app, err := builder.Build()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 	if err := app.Run(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 }

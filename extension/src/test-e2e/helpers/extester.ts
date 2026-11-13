@@ -4,6 +4,7 @@ const extester = require(extesterModulePath);
 export interface WebDriver {
     wait<T>(condition: () => Promise<T | boolean> | T | boolean, timeout?: number, message?: string): Promise<T>;
     executeScript<T>(script: string, ...args: unknown[]): Promise<T>;
+    findElements(locator: Locator): Promise<WebElement[]>;
     actions(): {
         sendKeys(...keys: string[]): { perform(): Promise<void> };
     };
@@ -14,6 +15,10 @@ export interface Locator {
 
 export interface WebElement {
     getText(): Promise<string>;
+    isDisplayed(): Promise<boolean>;
+    findElements(locator: Locator): Promise<WebElement[]>;
+    click(): Promise<void>;
+    sendKeys(...keys: string[]): Promise<void>;
 }
 
 export interface VSBrowserInstance {
@@ -63,11 +68,13 @@ export interface ActivityBar {
 }
 
 export interface Menu {
+    hasItem(name: string): Promise<boolean>;
     select(...path: string[]): Promise<Menu | undefined>;
     close(): Promise<void>;
 }
 
 export interface InputBox {
+    getText(): Promise<string>;
     setText(text: string): Promise<void>;
     getPlaceHolder(): Promise<string>;
     getTitle(): Promise<string | undefined>;
@@ -134,7 +141,11 @@ export const SideBarView = extester.SideBarView as new () => SideBarView;
 export const Workbench = extester.Workbench as new () => Workbench;
 export const By = extester.By as { css(selector: string): Locator };
 export const InputBox = extester.InputBox as { create(timeout?: number): Promise<InputBox> };
-export const BottomBarPanel = extester.BottomBarPanel as new () => { openTerminalView(): Promise<TerminalView> };
+export const BottomBarPanel = extester.BottomBarPanel as new () => {
+    getRect(): Promise<{ height: number }>;
+    toggle(open: boolean): Promise<void>;
+    openTerminalView(): Promise<TerminalView>;
+};
 export const EditorView = extester.EditorView as new () => EditorView;
 export const WebView = extester.WebView as new () => WebView;
 export const ModalDialog = extester.ModalDialog as new () => ModalDialog;

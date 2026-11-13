@@ -13,8 +13,9 @@ internal interface ITemplateFactory
 
     /// <summary>
     /// Gets templates that are available for use, performing any necessary
-    /// runtime availability checks (e.g. SDK availability).
+    /// runtime availability checks (e.g. SDK availability). A null source selects
+    /// built-in templates; other sources are handled by the appropriate factory.
     /// </summary>
-    Task<IEnumerable<ITemplate>> GetTemplatesAsync(CancellationToken cancellationToken = default);
+    Task<IEnumerable<ITemplate>> GetTemplatesAsync(TemplateSource? source, CancellationToken cancellationToken = default);
     Task<IEnumerable<ITemplate>> GetInitTemplatesAsync(CancellationToken cancellationToken = default);
 }

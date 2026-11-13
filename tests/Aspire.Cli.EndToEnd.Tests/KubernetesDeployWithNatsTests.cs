@@ -57,7 +57,7 @@ public sealed class KubernetesDeployWithNatsTests(ITestOutputHelper output)
 
                 var nats = builder.AddNats("nats");
 
-                var api = builder.AddProject<Projects.{{ProjectName}}_ApiService>("server")
+                var api = builder.AddDotnetProject("server", "../{{ProjectName}}.ApiService/{{ProjectName}}.ApiService.csproj")
                     .WithReference(nats)
                     .WaitFor(nats)
                     .WithExternalHttpEndpoints();

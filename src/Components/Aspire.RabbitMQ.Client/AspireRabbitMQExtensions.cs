@@ -79,7 +79,7 @@ public static class AspireRabbitMQExtensions
         configSection.Bind(settings);
         namedConfigSection.Bind(settings);
 
-        if (builder.Configuration.GetConnectionString(connectionName) is string connectionString)
+        if (builder.Configuration.TryGetConnectionString(connectionName, out var connectionString))
         {
             settings.ConnectionString = connectionString;
         }
@@ -139,11 +139,7 @@ public static class AspireRabbitMQExtensions
                 .WithTracing(traceBuilder =>
                     traceBuilder
                         .AddSource(ActivitySourceName)
-#if RABBITMQ_V6
-                // Note that RabbitMQ.Client v6.x doesn't have built-in support for tracing. See https://github.com/rabbitmq/rabbitmq-dotnet-client/pull/1261
-#else
                         .AddSource("RabbitMQ.Client.*")
-#endif
                 );
         }
 
@@ -157,13 +153,7 @@ public static class AspireRabbitMQExtensions
                     {
                         // if the IConnection can't be resolved, make a health check that will fail
                         var connection = serviceKey is null ? sp.GetRequiredService<IConnection>() : sp.GetRequiredKeyedService<IConnection>(serviceKey);
-#if RABBITMQ_V6
-                        var options = new RabbitMQHealthCheckOptions();
-                        options.Connection = connection;
-                        return new RabbitMQHealthCheck(options);
-#else
                         return new RabbitMQHealthCheck(connection);
-#endif
                     }
                     catch (Exception ex)
                     {
@@ -203,23 +193,6 @@ public static class AspireRabbitMQExtensions
         using var activity = s_activitySource.StartActivity("rabbitmq connect", ActivityKind.Client);
         AddRabbitMQTags(activity, factory.Uri);
 
-#if RABBITMQ_V6
-        return resiliencePipeline.Execute(static factory =>
-        {
-            using var connectAttemptActivity = s_activitySource.StartActivity("rabbitmq connect attempt", ActivityKind.Client);
-            AddRabbitMQTags(connectAttemptActivity, factory.Uri, "connect");
-
-            try
-            {
-                return factory.CreateConnection();
-            }
-            catch (Exception ex)
-            {
-                AddRabbitMQExceptionTags(connectAttemptActivity, ex);
-                throw;
-            }
-        }, factory);
-#else
         return resiliencePipeline.ExecuteAsync(static async (factory, cancellationToken) =>
         {
             using var connectAttemptActivity = s_activitySource.StartActivity("rabbitmq connect attempt", ActivityKind.Client);
@@ -235,7 +208,6 @@ public static class AspireRabbitMQExtensions
                 throw;
             }
         }, factory).AsTask().GetAwaiter().GetResult(); // see https://github.com/microsoft/aspire/issues/565
-#endif
     }
 
     private static void AddRabbitMQTags(Activity? activity, Uri address, string? operation = null)

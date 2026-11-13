@@ -30,8 +30,8 @@ internal sealed class TerminalHostArgs
     public required string ProducerUdsPath { get; init; }
     public required string ConsumerUdsPath { get; init; }
     public required string ControlUdsPath { get; init; }
-    public int Columns { get; init; } = 120;
-    public int Rows { get; init; } = 30;
+    public int Columns { get; init; } = 132;
+    public int Rows { get; init; } = 50;
 
     /// <summary>
     /// Parses command-line arguments. The argument shape is:
@@ -39,8 +39,8 @@ internal sealed class TerminalHostArgs
     ///   <item><c>--producer-uds PATH</c> (required) — path the host LISTENS on; DCP dials.</item>
     ///   <item><c>--consumer-uds PATH</c> (required) — path the host LISTENS on; viewers dial.</item>
     ///   <item><c>--control-uds PATH</c> (required) — path the host LISTENS on; AppHost dials for status/shutdown RPC.</item>
-    ///   <item><c>--columns N</c> (optional, default 120)</item>
-    ///   <item><c>--rows N</c> (optional, default 30)</item>
+    ///   <item><c>--columns N</c> (optional, default 132)</item>
+    ///   <item><c>--rows N</c> (optional, default 50)</item>
     ///   <item><c>--shell NAME</c> (optional, accepted for compatibility and ignored)</item>
     /// </list>
     /// Every option is single-valued and may only be specified once; duplicates throw
@@ -60,9 +60,9 @@ internal sealed class TerminalHostArgs
             "Path the terminal host LISTENS on for the AppHost control RPC channel.");
 
         var columnsOption = SingleValueOption<int>("--columns", required: false,
-            "Initial PTY width in columns (default 120).", defaultValue: 120);
+            "Initial PTY width in columns (default 132).", defaultValue: 132);
         var rowsOption = SingleValueOption<int>("--rows", required: false,
-            "Initial PTY height in rows (default 30).", defaultValue: 30);
+            "Initial PTY height in rows (default 50).", defaultValue: 50);
         // Older Aspire.Hosting packages can run with a newer CLI-provided terminal host
         // and still emit --shell. Accept the argument so that mixed-version AppHosts start,
         // but ignore it because DCP launches the resource process that owns the PTY.

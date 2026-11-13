@@ -4,6 +4,7 @@
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using Aspire.Dashboard.Otlp.Model;
+using Aspire.Dashboard.Otlp.Storage;
 
 namespace Aspire.Dashboard.Model.Otlp;
 
@@ -33,115 +34,6 @@ public sealed class SpanWaterfallViewModel
         }
     }
 
-    public string GetTooltip(List<OtlpResource> allResources)
-    {
-        var tooltip = GetTitle(Span, allResources);
-        if (IsError)
-        {
-            tooltip += Environment.NewLine + "Status = Error";
-        }
-        if (HasUninstrumentedPeer)
-        {
-            tooltip += Environment.NewLine + $"Outgoing call to {UninstrumentedPeer}";
-        }
-
-        return tooltip;
-    }
-
-    public bool MatchesFilter(string filter, TelemetryFilter? typeFilter, IReadOnlyList<FieldTelemetryFilter>? structuredFilters, Func<OtlpResourceView, string> getResourceName, [NotNullWhen(true)] out IEnumerable<SpanWaterfallViewModel>? matchedDescendents)
-    {
-        var enabledStructuredFilters = GetEnabledStructuredFilters(structuredFilters);
-        return MatchesFilterCore(filter, typeFilter, enabledStructuredFilters, getResourceName, out matchedDescendents);
-    }
-
-    internal bool MatchesFilterDirect(string filter, TelemetryFilter? typeFilter, IReadOnlyList<FieldTelemetryFilter> enabledStructuredFilters, Func<OtlpResourceView, string> getResourceName)
-    {
-        if (typeFilter != null)
-        {
-            if (!typeFilter.Apply(Span))
-            {
-                return false;
-            }
-        }
-
-        // A span matches when it satisfies all enabled structured filters,
-        // mirroring TelemetryRepository.GetTraces which checks "a trace matches when
-        // one of its spans matches all filters."
-        if (enabledStructuredFilters is { Count: > 0 } &&
-            !enabledStructuredFilters.All(f => f.Apply(Span)))
-        {
-            return false;
-        }
-
-        if (string.IsNullOrWhiteSpace(filter))
-        {
-            return true;
-        }
-
-        return Span.SpanId.Contains(filter, StringComparison.CurrentCultureIgnoreCase)
-               || getResourceName(Span.Source).Contains(filter, StringComparison.CurrentCultureIgnoreCase)
-               || Span.GetDisplaySummary().Contains(filter, StringComparison.CurrentCultureIgnoreCase)
-               || UninstrumentedPeer?.Contains(filter, StringComparison.CurrentCultureIgnoreCase) is true;
-    }
-
-    private bool MatchesFilterCore(string filter, TelemetryFilter? typeFilter, IReadOnlyList<FieldTelemetryFilter> enabledStructuredFilters, Func<OtlpResourceView, string> getResourceName, [NotNullWhen(true)] out IEnumerable<SpanWaterfallViewModel>? matchedDescendents)
-    {
-        if (MatchesFilterDirect(filter, typeFilter, enabledStructuredFilters, getResourceName))
-        {
-            matchedDescendents = Children.SelectMany(GetWithDescendents);
-            return true;
-        }
-
-        foreach (var child in Children)
-        {
-            if (child.MatchesFilterCore(filter, typeFilter, enabledStructuredFilters, getResourceName, out var matchedChildDescendents))
-            {
-                matchedDescendents = [child, ..matchedChildDescendents];
-                return true;
-            }
-        }
-
-        matchedDescendents = null;
-        return false;
-    }
-
-    private static IReadOnlyList<FieldTelemetryFilter> GetEnabledStructuredFilters(IReadOnlyList<FieldTelemetryFilter>? structuredFilters)
-    {
-        if (structuredFilters is null)
-        {
-            return [];
-        }
-
-        List<FieldTelemetryFilter>? enabledFilters = null;
-        foreach (var filter in structuredFilters)
-        {
-            if (filter.Enabled)
-            {
-                enabledFilters ??= [];
-                enabledFilters.Add(filter);
-            }
-        }
-
-        return enabledFilters ?? [];
-    }
-
-    private static IEnumerable<SpanWaterfallViewModel> GetWithDescendents(SpanWaterfallViewModel s)
-    {
-        var stack = new Stack<SpanWaterfallViewModel>();
-        stack.Push(s);
-
-        while (stack.Count > 0)
-        {
-            var current = stack.Pop();
-            yield return current;
-
-            foreach (var child in current.Children)
-            {
-                stack.Push(child);
-            }
-        }
-    }
-
     private void UpdateHidden(bool isParentCollapsed = false)
     {
         IsHidden = isParentCollapsed;
@@ -153,23 +45,22 @@ public sealed class SpanWaterfallViewModel
 
     private readonly record struct SpanWaterfallViewModelState(SpanWaterfallViewModel? Parent, int Depth, bool Hidden);
 
-    public sealed record TraceDetailState(IOutgoingPeerResolver[] OutgoingPeerResolvers, List<string> CollapsedSpanIds, List<OtlpResource> AllResources);
+    public sealed record TraceDetailState(List<string> CollapsedSpanIds, List<OtlpResource> AllResources);
 
     public static string GetTitle(OtlpSpan span, List<OtlpResource> allResources)
     {
         return $"{OtlpResource.GetResourceName(span.Source, allResources)}: {span.GetDisplaySummary()}";
     }
 
-    public static List<SpanWaterfallViewModel> Create(OtlpTrace trace, List<OtlpLogEntry> logs, TraceDetailState state)
+    public static List<SpanWaterfallViewModel> Create(OtlpTrace trace, List<LogSummary> logs, TraceDetailState state)
     {
         var orderedSpans = new List<SpanWaterfallViewModel>();
         var groupedLogs = logs.GroupBy(l => l.SpanId).ToDictionary(l => l.Key, g => g.ToList());
-        var currentSpanLogIndex = 0;
 
         TraceHelpers.VisitSpans(trace, (OtlpSpan span, SpanWaterfallViewModelState s) =>
         {
             groupedLogs.TryGetValue(span.SpanId, out var spanLogs);
-            var viewModel = CreateViewModel(span, s.Depth, s.Hidden, state, spanLogs, ref currentSpanLogIndex);
+            var viewModel = CreateViewModel(span, s.Depth, s.Hidden, state, spanLogs);
             orderedSpans.Add(viewModel);
 
             s.Parent?.Children.Add(viewModel);
@@ -179,7 +70,7 @@ public sealed class SpanWaterfallViewModel
 
         return orderedSpans;
 
-        static SpanWaterfallViewModel CreateViewModel(OtlpSpan span, int depth, bool hidden, TraceDetailState state, List<OtlpLogEntry>? spanLogs, ref int currentSpanLogIndex)
+        static SpanWaterfallViewModel CreateViewModel(OtlpSpan span, int depth, bool hidden, TraceDetailState state, List<LogSummary>? spanLogs)
         {
             var traceStart = span.Trace.FirstSpan.StartTime;
             var relativeStart = span.StartTime - traceStart;
@@ -195,7 +86,7 @@ public sealed class SpanWaterfallViewModel
             // A span may indicate a call to another service but the service isn't instrumented.
             var hasPeerService = OtlpHelpers.GetPeerAddress(span.Attributes) != null;
             var isUninstrumentedPeer = hasPeerService && span.Kind is OtlpSpanKind.Client or OtlpSpanKind.Producer && !span.GetChildSpans().Any();
-            var uninstrumentedPeer = isUninstrumentedPeer ? ResolveUninstrumentedPeerName(span, state.OutgoingPeerResolvers, state.AllResources) : null;
+            var uninstrumentedPeer = isUninstrumentedPeer ? ResolveUninstrumentedPeerName(span, state.AllResources) : null;
 
             var spanLogVms = new List<SpanLogEntryViewModel>();
             if (spanLogs != null)
@@ -206,7 +97,7 @@ public sealed class SpanWaterfallViewModel
 
                     spanLogVms.Add(new SpanLogEntryViewModel
                     {
-                        Index = currentSpanLogIndex++,
+                        Index = spanLogVms.Count,
                         LogEntry = log,
                         LeftOffset = CalculatePercent(logRelativeStart.TotalMilliseconds, rootDuration)
                     });
@@ -248,7 +139,7 @@ public sealed class SpanWaterfallViewModel
         }
     }
 
-    private static string? ResolveUninstrumentedPeerName(OtlpSpan span, IOutgoingPeerResolver[] outgoingPeerResolvers, List<OtlpResource> allResources)
+    private static string? ResolveUninstrumentedPeerName(OtlpSpan span, List<OtlpResource> allResources)
     {
         if (span.UninstrumentedPeer != null)
         {
@@ -256,16 +147,6 @@ public sealed class SpanWaterfallViewModel
             // We are matching an address to replicas which share the same address. There isn't a way to know exactly which replica was called. The first replica instance will be chosen.
             // This shouldn't be a big issue because typically project replicas will have OTEL setup, and so a child span is recorded.
             return OtlpHelpers.GetResourceName(span.UninstrumentedPeer, allResources);
-        }
-
-        // Attempt to resolve uninstrumented peer to a friendly name from the span.
-        // This should only match non-resource returning resolves such as Browser Link.
-        foreach (var resolver in outgoingPeerResolvers)
-        {
-            if (resolver.TryResolvePeer(span.Attributes, out var name, out _))
-            {
-                return name;
-            }
         }
 
         // Fallback to the peer address.

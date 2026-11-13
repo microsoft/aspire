@@ -2,7 +2,7 @@
     display: flex;
     flex-direction: column;
     height: 100%;
-    gap: 8px;
+    gap: var(--aspire-space-2);
 }
 
 .notification-center-empty {
@@ -11,13 +11,19 @@
     align-items: center;
     justify-content: center;
     padding: 40px 16px;
-    color: var(--neutral-foreground-hint);
-    gap: 8px;
+    color: var(--colorNeutralForeground3);
+    gap: var(--aspire-space-2);
 }
 
 .notifications-dismiss {
     display: flex;
     justify-content: flex-end;
+}
+
+::deep .notifications-dismiss-all {
+    padding: 0 2px;
+    font-size: var(--aspire-font-size-body);
+    line-height: 20px;
 }
 
 .notifications-scroll {
@@ -27,5 +33,5 @@
 }
 
 .notifications-scroll ::deep > :last-child {
-    border-bottom: calc(var(--stroke-width) * 1px) solid var(--neutral-stroke-divider-rest);
+    border-bottom: var(--strokeWidthThin) solid var(--colorNeutralStroke3);
 }

@@ -1,10 +1,13 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Aspire.Cli.Backchannel;
+using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
+using Aspire.Cli.Resources;
 using ModelContextProtocol.Protocol;
 using Semver;
 
@@ -44,12 +47,16 @@ internal sealed class ListIntegrationsResponse
     /// </summary>
     [JsonPropertyName("integrations")]
     public required List<Integration> Integrations { get; set; }
+
+    [JsonPropertyName("warning")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Warning { get; set; }
 }
 
 /// <summary>
 /// MCP tool for listing available Aspire hosting integrations.
 /// </summary>
-internal sealed class ListIntegrationsTool(IPackagingService packagingService, CliExecutionContext executionContext, IAuxiliaryBackchannelMonitor auxiliaryBackchannelMonitor) : CliMcpTool
+internal sealed class ListIntegrationsTool(IntegrationPackageSearchService integrationPackageSearchService, CliExecutionContext executionContext, IAuxiliaryBackchannelMonitor auxiliaryBackchannelMonitor) : CliMcpTool
 {
     public override string Name => KnownMcpTools.ListIntegrations;
 
@@ -71,30 +78,17 @@ internal sealed class ListIntegrationsTool(IPackagingService packagingService, C
     {
         try
         {
-            // Get all channels
-            var packageChannels = await packagingService.GetChannelsAsync(cancellationToken);
-
-            // Use only the default (first) channel
-            var defaultChannel = packageChannels.FirstOrDefault();
-            if (defaultChannel == null)
-            {
-                return new CallToolResult
-                {
-                    IsError = true,
-                    Content = [new TextContentBlock { Text = "No package channels available" }]
-                };
-            }
-
             // Determine the working directory to use
             // If there's an in-scope AppHost, use its directory; otherwise use the MCP's working directory
             var workingDirectory = GetWorkingDirectory();
 
-            // Get integration packages from the default channel
-            var integrationPackages = await defaultChannel.GetIntegrationPackagesAsync(workingDirectory, cancellationToken);
+            var packagesWithChannels = await integrationPackageSearchService.GetIntegrationPackagesWithChannelsAsync(
+                workingDirectory, configuredChannel: null, cancellationToken);
 
             // Group by package ID and select the latest version using semantic version comparison
             // Parse version once and include it in the result to avoid redundant parsing
-            var packagesWithParsedVersions = integrationPackages
+            var packagesWithParsedVersions = packagesWithChannels.Packages
+                .Select(static package => package.Package)
                 .Select(p => new
                 {
                     FriendlyName = GetFriendlyName(p.Id),
@@ -108,7 +102,8 @@ internal sealed class ListIntegrationsTool(IPackagingService packagingService, C
             var distinctPackages = packagesWithParsedVersions
                 .GroupBy(p => p.PackageId)
                 .Select(g => g.OrderByDescending(p => p.ParsedVersion!, SemVersion.PrecedenceComparer).First())
-                .OrderBy(p => p.FriendlyName)
+                .OrderByDescending(p => PackageIdFilters.IsOfficialIntegrationPackageId(p.PackageId))
+                .ThenBy(p => p.FriendlyName, StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
             var integrations = distinctPackages
@@ -122,7 +117,10 @@ internal sealed class ListIntegrationsTool(IPackagingService packagingService, C
 
             var response = new ListIntegrationsResponse
             {
-                Integrations = integrations
+                Integrations = integrations,
+                Warning = packagesWithChannels.LimitReached
+                    ? string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.NuGetSearchLimitWarning, NuGetSearchLimits.MaxResults)
+                    : null
             };
 
             var jsonContent = JsonSerializer.Serialize(response, JsonSourceGenerationContext.Default.ListIntegrationsResponse);

@@ -14,6 +14,8 @@ using Aspire.Dashboard.Tests.Shared;
 using Aspire.Tests.Shared.DashboardModel;
 using Bunit;
 using Google.Protobuf.Collections;
+using Google.Protobuf.WellKnownTypes;
+using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -28,6 +30,36 @@ namespace Aspire.Dashboard.Components.Tests.Dialogs;
 [UseCulture("en-US")]
 public sealed class ManageDataDialogTests : DashboardTestContext
 {
+    [Theory]
+    [InlineData("/resources", true)]
+    [InlineData("/legacy/resources", false)]
+    public void Render_PersistentContainerIndicatorMatchesExperience(string location, bool modern)
+    {
+        var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        SetupManageDataDialogServices(new TestDashboardClient(isEnabled: true,
+            initialResources:
+            [
+                ModelTestHelpers.CreateResource("persistent", properties: new()
+                {
+                    [KnownProperties.Container.Lifetime] = new(KnownProperties.Container.Lifetime, Value.ForString("Persistent"), false, null, 0, null, false)
+                }),
+                ModelTestHelpers.CreateResource("ordinary")
+            ], resourceChannelProvider: () => channel));
+        Services.GetRequiredService<NavigationManager>().NavigateTo(location);
+        var cut = Render<ManageDataDialog>(p => p.Add(p => p.Virtualize, false));
+
+        cut.WaitForAssertion(() =>
+        {
+            var names = cut.FindComponents<ResourceNameDisplay>();
+            Assert.Equal(2, names.Count);
+            var persistent = names.Single(name => name.Instance.Resource.Name == "persistent");
+            var ordinary = names.Single(name => name.Instance.Resource.Name == "ordinary");
+            Assert.Equal(modern ? 1 : 0, persistent.FindAll(".persistent-container-badge").Count);
+            Assert.Equal(modern ? 0 : 1, persistent.FindAll(".persistent-container-icon").Count);
+            Assert.Empty(ordinary.FindAll(".persistent-container-badge, .persistent-container-icon"));
+        });
+    }
+
     [Fact]
     public async Task Render_SelectionControlsExposeAccessibleNamesCheckboxRoleAndState()
     {
@@ -46,7 +78,8 @@ public sealed class ManageDataDialogTests : DashboardTestContext
             resourceChannelProvider: () => resourcesChannel);
         SetupManageDataDialogServices(dashboardClient);
 
-        var cut = RenderComponent<ManageDataDialog>();
+        var cut = Render<ManageDataDialog>(parameters => parameters.Add(dialog => dialog.Virtualize, false));
+        Assert.Single(cut.FindComponents<FluentDialogBody>());
 
         cut.WaitForAssertion(() =>
         {
@@ -133,12 +166,30 @@ public sealed class ManageDataDialogTests : DashboardTestContext
     }
 
     [Fact]
+    public async Task IconCheckbox_CompletesKeyboardInitializationAndCleansUpOnDispose()
+    {
+        FluentUISetupHelpers.AddCommonDashboardServices(this);
+        SetupIconCheckboxJs();
+
+        Render<IconCheckbox>(parameters => parameters
+            .Add(p => p.CheckState, IconCheckboxState.Checked)
+            .Add(p => p.AccessibleLabel, "All data"));
+
+        await DisposeComponentsAsync();
+
+        // Cleanup only runs after initialization completed, so this proves the setup returns a result
+        // instead of leaving the invocation pending until bUnit faults it after DefaultWaitTimeout.
+        Assert.Contains(JSInterop.Invocations, invocation => invocation.Identifier == "disposeIconCheckboxKeyboard");
+    }
+
+    [Fact]
     public async Task IconCheckbox_DoesNotInvokeClickWhenDisabled()
     {
         var clickCount = 0;
+        FluentUISetupHelpers.AddCommonDashboardServices(this);
         SetupIconCheckboxJs();
 
-        var cut = RenderComponent<IconCheckbox>(parameters => parameters
+        var cut = Render<IconCheckbox>(parameters => parameters
             .Add(p => p.CheckState, IconCheckboxState.Checked)
             .Add(p => p.Disabled, true)
             .Add(p => p.AccessibleLabel, "All data")
@@ -152,15 +203,17 @@ public sealed class ManageDataDialogTests : DashboardTestContext
         Assert.Equal(0, clickCount);
     }
 
-    [Fact]
-    public async Task Render_ClearedSignals_PrunesSelectionsAndSupportsRemovingEmptyResource()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Render_ClearedSignals_PrunesSelectionsAndSupportsRemovingEmptyResource(bool dashboardClientIsReadOnly)
     {
-        var dashboardClient = new TestDashboardClient(isEnabled: false, initialResources: []);
+        var dashboardClient = new TestDashboardClient(isEnabled: false, initialResources: [], isReadOnly: dashboardClientIsReadOnly);
         SetupManageDataDialogServices(dashboardClient);
 
-        var repository = Services.GetRequiredService<TelemetryRepository>();
+        var repository = Services.GetRequiredService<SqliteTelemetryRepository>();
         var resourceKey = new ResourceKey("orphan", "instance");
-        repository.AddLogs(new AddContext(), new RepeatedField<ResourceLogs>
+        await repository.AddLogsAsync(new AddContext(), new RepeatedField<ResourceLogs>
         {
             new ResourceLogs
             {
@@ -176,7 +229,7 @@ public sealed class ManageDataDialogTests : DashboardTestContext
             }
         });
         var timestamp = DateTime.UnixEpoch;
-        repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
+        await repository.AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
             {
@@ -192,7 +245,7 @@ public sealed class ManageDataDialogTests : DashboardTestContext
             }
         });
 
-        var cut = RenderComponent<ManageDataDialog>();
+        var cut = Render<ManageDataDialog>(parameters => parameters.Add(dialog => dialog.Virtualize, false));
 
         cut.WaitForAssertion(() =>
         {
@@ -204,8 +257,9 @@ public sealed class ManageDataDialogTests : DashboardTestContext
         await ExpandResourceRowsAsync(cut, expectedCount: 1);
         cut.WaitForAssertion(() => AssertSelectionCheckbox(cut, "Structured logs for orphan", "true"));
         await ClickSelectionCheckboxAsync(cut, "Structured logs for orphan", "true");
+        await ExpandResourceRowsAsync(cut, expectedCount: 1);
 
-        repository.ClearTraces(resourceKey);
+        await repository.ClearTracesAsync(resourceKey);
 
         cut.WaitForAssertion(() =>
         {
@@ -215,7 +269,7 @@ public sealed class ManageDataDialogTests : DashboardTestContext
             AssertButtonDisabled(cut, "Remove selected", expectedDisabled: true);
         });
 
-        repository.ClearStructuredLogs(resourceKey);
+        await repository.ClearStructuredLogsAsync(resourceKey);
 
         cut.WaitForAssertion(() =>
         {
@@ -241,6 +295,35 @@ public sealed class ManageDataDialogTests : DashboardTestContext
         cut.WaitForAssertion(() => Assert.Empty(repository.GetResources()));
     }
 
+    [Fact]
+    public void RemoveSelected_ConsoleLogs_ClearsPersistenceAndUpdatesFilter()
+    {
+        var resource = ModelTestHelpers.CreateResource(
+            resourceName: "api",
+            displayName: "API service",
+            state: KnownResourceState.Running);
+        var resourcesChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        var dashboardClient = new TestDashboardClient(
+            isEnabled: true,
+            initialResources: [resource],
+            resourceChannelProvider: () => resourcesChannel);
+        SetupManageDataDialogServices(dashboardClient);
+
+        var cut = Render<ManageDataDialog>();
+        cut.WaitForAssertion(() => AssertButtonDisabled(cut, "Remove selected", expectedDisabled: false));
+
+        cut.Find("fluent-button[aria-label='Remove selected']").Click();
+
+        cut.WaitForAssertion(() =>
+        {
+            var clearedConsoleLogs = Assert.Single(dashboardClient.ClearedConsoleLogs);
+            Assert.Collection(
+                clearedConsoleLogs.ResourceNames,
+                resourceName => Assert.Equal("api", resourceName));
+            Assert.Equal(clearedConsoleLogs.ClearDate, Services.GetRequiredService<ConsoleLogsManager>().GetFilterDate("api"));
+        });
+    }
+
     private void SetupManageDataDialogServices(TestDashboardClient dashboardClient)
     {
         FluentUISetupHelpers.AddCommonDashboardServices(this);
@@ -249,8 +332,9 @@ public sealed class ManageDataDialogTests : DashboardTestContext
         Services.AddSingleton<IDashboardClient>(dashboardClient);
         Services.AddSingleton<IconResolver>();
         Services.AddSingleton<ConsoleLogsManager>();
-        Services.AddSingleton<ConsoleLogsFetcher>();
-        Services.AddSingleton<TelemetryExportService>();
+        Services.AddScoped<ConsoleLogsFetcher>();
+        Services.AddScoped<TelemetryExportService>();
+        Services.AddSingleton<DashboardActivitySource>();
         Services.AddSingleton<TelemetryImportService>();
 
         FluentUISetupHelpers.SetupFluentUIComponents(this);
@@ -263,8 +347,8 @@ public sealed class ManageDataDialogTests : DashboardTestContext
     private void SetupIconCheckboxJs()
     {
         var module = JSInterop.SetupModule("./Components/Controls/IconCheckbox.razor.js");
-        module.SetupVoid("initializeIconCheckboxKeyboard", _ => true);
-        module.SetupVoid("disposeIconCheckboxKeyboard", _ => true);
+        module.SetupVoid("initializeIconCheckboxKeyboard", _ => true).SetVoidResult();
+        module.SetupVoid("disposeIconCheckboxKeyboard", _ => true).SetVoidResult();
     }
 
     private static async Task ExpandResourceRowsAsync(IRenderedComponent<ManageDataDialog> cut, int expectedCount)
@@ -333,7 +417,7 @@ public sealed class ManageDataDialogTests : DashboardTestContext
         Assert.DoesNotContain(
             cut.FindAll("fluent-button"),
             element =>
-                string.Equals(element.GetAttribute("title"), accessibleName, StringComparison.Ordinal) ||
+                string.Equals(element.GetAttribute("data-tooltip"), accessibleName, StringComparison.Ordinal) ||
                 string.Equals(element.GetAttribute("aria-label"), accessibleName, StringComparison.Ordinal));
 
     private static void AssertButtonDisabled(IRenderedComponent<ManageDataDialog> cut, string accessibleName, bool expectedDisabled)
@@ -344,7 +428,7 @@ public sealed class ManageDataDialogTests : DashboardTestContext
     }
 
     private static bool ElementHasAccessibleName(IElement element, string accessibleName) =>
-        string.Equals(element.GetAttribute("title"), accessibleName, StringComparison.Ordinal) &&
+        string.Equals(element.GetAttribute("data-tooltip"), accessibleName, StringComparison.Ordinal) &&
         string.Equals(element.GetAttribute("aria-label"), accessibleName, StringComparison.Ordinal);
 
     private static Task ClickSelectionCheckboxAsync(IRenderedComponent<ManageDataDialog> cut, string accessibleName, string ariaChecked) =>

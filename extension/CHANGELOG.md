@@ -1,5 +1,113 @@
 # Aspire VS Code Extension Changelog
 
+## v1.25.0
+
+<!-- aspire-ext-changelog-done from=92a66a541b19c5b6347d551ab76053177b7b1217 to=52afb3acb7ad2af5529804361e9b8ffcd1b9d3d3 base=1.24.0 -->
+
+### Features
+
+- Add support for launching and debugging Go AppHosts in VS Code, with resource CodeLens actions and gutter state indicators ([#21826](https://github.com/microsoft/aspire/pull/21826), [#21187](https://github.com/microsoft/aspire/pull/21187)).
+- Attach a debugger to running .NET and Go resources from the Aspire view or agent chat ([#18602](https://github.com/microsoft/aspire/pull/18602)).
+- Add VS Code debugging for JavaScript and TypeScript Azure Functions resources ([#20943](https://github.com/microsoft/aspire/pull/20943)).
+- Add JSON completion and validation for `integrationSources` and `skillSources` in Aspire configuration files ([#21366](https://github.com/microsoft/aspire/pull/21366), [#21364](https://github.com/microsoft/aspire/pull/21364)).
+
+### Fixes
+
+- Honor nested AppHost launch profiles when the C# extension is not installed ([#20765](https://github.com/microsoft/aspire/pull/20765)).
+- Fix Deno AppHost debugging timing out during slow startup and leaving Deno processes running after a failed launch ([#21604](https://github.com/microsoft/aspire/pull/21604)).
+- Fix timeouts when launching or closing the dashboard browser during debugging ([#21274](https://github.com/microsoft/aspire/pull/21274)).
+- Fix native Blazor WebAssembly debugging failures caused by slow debugger connections ([#20404](https://github.com/microsoft/aspire/pull/20404)).
+- Fix the version shown in the CLI update warning ([#21155](https://github.com/microsoft/aspire/pull/21155)).
+- Fix the extension re-adding a configured AppHost path that no longer exists ([#20112](https://github.com/microsoft/aspire/pull/20112)).
+- Fix background Aspire processes being left running when switching AppHosts views or reloading VS Code ([#20763](https://github.com/microsoft/aspire/pull/20763)).
+- Correct translated extension descriptions and messages in German, Polish, Brazilian Portuguese, and Traditional Chinese ([#21352](https://github.com/microsoft/aspire/pull/21352)).
+
+## v1.24.0
+
+<!-- aspire-ext-changelog-done from=41d7fa2c42761b63a694099fdca7eab49718ffd5 to=d2b0c75dd0648beecb6d5f51e25b57930f370ac4 base=1.23.0 -->
+
+### Features
+
+- Add Aspire editor assistance tools for AI agents, including inspecting AppHost and resource debug status, explaining launch failures, opening the Dashboard and Output panel, listing active editor-managed AppHost sessions, and checking Hot Reload applicability ([#19460](https://github.com/microsoft/aspire/issues/19460), [#19414](https://github.com/microsoft/aspire/pull/19414)).
+
+## v1.23.0
+
+<!-- aspire-ext-changelog-done from=039a7c58f11a01521e49882e26d0d6593b87d9cf to=a7d8508b8e2f240580e17b6f97ffc663aeadc026 base=1.22.0 -->
+
+### Features
+
+- Add VS Code debugging support for Deno services running under Aspire with `deno run` or `deno serve` ([#18628](https://github.com/microsoft/aspire/pull/18628), [#20020](https://github.com/microsoft/aspire/pull/20020)).
+- Add VS Code debugging support for TypeScript AppHosts that use Deno ([#16218](https://github.com/microsoft/aspire/issues/16218), [#18627](https://github.com/microsoft/aspire/pull/18627)).
+- Add managed breakpoint support for Blazor WebAssembly projects launched with **Debug in Browser** in VS Code ([#17797](https://github.com/microsoft/aspire/issues/17797), [#17795](https://github.com/microsoft/aspire/issues/17795), [#20001](https://github.com/microsoft/aspire/pull/20001)).
+- Reuse Aspire's coordinated build output when debugging .NET resources in VS Code, avoiding redundant builds ([#19037](https://github.com/microsoft/aspire/issues/19037), [#19678](https://github.com/microsoft/aspire/pull/19678)).
+- Preselect default agent setup options in the VS Code picker when creating a new Aspire app or adding Aspire to an existing project ([#19629](https://github.com/microsoft/aspire/issues/19629), [#19996](https://github.com/microsoft/aspire/pull/19996)).
+
+### Fixes
+
+- Fix **Debug in Browser** getting stuck at `about:blank` on Windows when Microsoft Edge compatibility settings are enabled ([#20151](https://github.com/microsoft/aspire/issues/20151), [#20152](https://github.com/microsoft/aspire/pull/20152)).
+- Fix unpackaged WinUI 3 applications crashing when starting a debug session in VS Code ([#19091](https://github.com/microsoft/aspire/issues/19091), [#19877](https://github.com/microsoft/aspire/pull/19877)).
+- Fix delays when saving **Don't Show Again** for Aspire CLI update notifications in VS Code ([#19854](https://github.com/microsoft/aspire/pull/19854)).
+
+### Documentation
+
+- Update the **Enable Aspire Cli Debug Logging** setting description to explain where to find CLI log files ([#19739](https://github.com/microsoft/aspire/issues/19739), [#19868](https://github.com/microsoft/aspire/pull/19868)).
+
+## v1.22.0
+
+<!-- aspire-ext-changelog-done from=93b731db94a086cb90e6b126d6a2ebab555ee300 to=8e47a3dbf220a74a79fd734ea7b4b941c842595e base=1.21.0 -->
+
+### Fixes
+
+- Fix the Java starter using an ambient JDK instead of the modeled toolchain, and improve Java AppHost transport reliability ([#19635](https://github.com/microsoft/aspire/pull/19635)).
+- Fix Rust AppHost debugging so an early adapter-launched process no longer gets rejected and recycled by DCP, which could leave the resource with no logs or proxy ([#19750](https://github.com/microsoft/aspire/issues/19750), [#19831](https://github.com/microsoft/aspire/pull/19831)).
+- Consolidate AppHost build failure notifications into a single error notification with **Open CLI Log** and **Open AppHost Log** actions ([#19748](https://github.com/microsoft/aspire/issues/19748), [#19755](https://github.com/microsoft/aspire/pull/19755)).
+
+## v1.21.0
+
+<!-- aspire-ext-changelog-done from=689b3c3226482b5d84d80e6d8c7ea8408c704c1f to=1410c1a7fc2e0dce9539f234e2464ca3e20cd9bf base=1.20.0 -->
+
+### Fixes
+
+- Prevent the Aspire view from stealing sidebar focus and reappearing in the Activity Bar when the window is reloaded ([#19746](https://github.com/microsoft/aspire/issues/19746), [#19754](https://github.com/microsoft/aspire/pull/19754)).
+
+## v1.20.0
+
+<!-- aspire-ext-changelog-done from=fe16c888de92ea0b3d1adc2d8bb4f37d58307ae2 to=5bd1eef49fbdf8b2cf72279bc4ba2127b430e7c1 base=1.19.0 -->
+
+### Fixes
+
+- Prevent the Hot Reload advisory notification from repeatedly reappearing during a debug session ([#19672](https://github.com/microsoft/aspire/pull/19672)).
+
+### Documentation
+
+- Rewrite the extension README and walkthrough with clearer setup and getting-started guidance ([#19632](https://github.com/microsoft/aspire/pull/19632)).
+
+## v1.19.0
+
+<!-- aspire-ext-changelog-done from=b5be9fc0742c7cdf5e02e4b6e2b7cb5c45e5c387 to=c1d2831ade34a050e8ea1111ac64aeda67c7321e base=1.18.0 -->
+
+### Features
+
+- Surface **Deploy**, **Publish**, **Run pipeline step**, and **Debug pipeline step** actions directly on AppHost items in the Aspire pane, instead of requiring the Command Palette ([#19407](https://github.com/microsoft/aspire/issues/19407), [#19466](https://github.com/microsoft/aspire/pull/19466)).
+- Add a **Create with Aspire...** action to the Aspire pane toolbar for creating a new Aspire app or adding Aspire to the current workspace ([#19499](https://github.com/microsoft/aspire/issues/19499), [#19539](https://github.com/microsoft/aspire/pull/19539)).
+- Prompt to pick an AppHost when a debug configuration's directory contains multiple buildable AppHosts with no configured default, instead of failing inside a non-interactive launch ([#19280](https://github.com/microsoft/aspire/issues/19280), [#19541](https://github.com/microsoft/aspire/pull/19541)).
+
+## v1.18.0
+
+<!-- aspire-ext-changelog-done from=1c8df90b9860e508e841ee5bae43d9fdd0e6bd60 to=95ba0548da04adf7d7fe6866fff9e3df2d2ee549 base=1.17.0 -->
+
+### Features
+
+- Add a Java hosting integration, including Spring Boot and Quarkus app support, container publishing, and VS Code debugger wiring ([#18033](https://github.com/microsoft/aspire/pull/18033)).
+- Add a Rust hosting package with VS Code debugger wiring ([#18906](https://github.com/microsoft/aspire/pull/18906)).
+
+### Fixes
+
+- Remember the selected AppHost folder correctly in multi-root workspaces ([#19342](https://github.com/microsoft/aspire/issues/19342), [#19359](https://github.com/microsoft/aspire/pull/19359)).
+- Honor the AppHost launch profile selected in `launch.json` instead of falling back to the default profile's environment and URL ([#19387](https://github.com/microsoft/aspire/issues/19387), [#19400](https://github.com/microsoft/aspire/pull/19400)).
+- Scope AppHost start/stop to the current git worktree and fix AppHost launch arguments being dropped or flattened when forwarded through VS Code ([#19357](https://github.com/microsoft/aspire/issues/19357), [#19384](https://github.com/microsoft/aspire/pull/19384)).
+- Harden Aspire Skills bundle integrity checks by switching to SHA-512 and hide the remote-fetch preview toggle from user-facing settings ([#19303](https://github.com/microsoft/aspire/pull/19303)).
+
 ## v1.17.0
 
 <!-- aspire-ext-changelog-done from=8278bca4a530f0fc513bdf4ed03b10683e36c16e to=d1c7add665f7e6582cdaa1b328c44172f0f96339 base= -->

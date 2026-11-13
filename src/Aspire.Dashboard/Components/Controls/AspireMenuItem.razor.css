@@ -1,0 +1,146 @@
+span.aspire-menu-secondary-action-container {
+    align-items: center;
+    align-self: stretch;
+    display: flex;
+    grid-column: 4;
+    grid-row: 1;
+    justify-content: center;
+    gap: var(--aspire-space-2);
+    /* FluentUI centers the 16px checkmark in a 32px track (8px from the edge). The 20px action
+       button insets its 16px icon by 2px, so 6px here mirrors that 8px on the trailing edge. */
+    padding-inline-end: 6px;
+}
+
+/* Keep secondary text from touching the item text when the menu is at its maximum width. */
+/* Only stops clicks from reaching the item. It mustn't affect the layout. */
+span.aspire-menu-secondary-action-wrapper {
+    display: contents;
+}
+
+span.aspire-menu-secondary-action-container:has(.aspire-menu-item-description),
+span.aspire-menu-secondary-action-container:has(.aspire-menu-item-count) {
+    padding-inline-start: 16px;
+}
+
+.aspire-menu-item-description {
+    color: var(--colorNeutralForeground3);
+    font-size: var(--aspire-font-size-secondary);
+    white-space: nowrap;
+}
+
+/* Matches the count pill of the resource list's group headers. */
+.aspire-menu-item-count {
+    min-width: 20px;
+    padding: 0 6px;
+    border-radius: var(--aspire-radius-medium);
+    background: var(--colorNeutralBackground3);
+    color: var(--colorNeutralForeground2);
+    font-size: var(--aspire-font-size-caption);
+    line-height: 18px;
+    text-align: center;
+}
+
+.aspire-menu-item-label {
+    align-items: center;
+    display: inline-flex;
+    gap: var(--aspire-space-2);
+}
+
+::deep .aspire-menu-secondary-action {
+    opacity: 0;
+    visibility: hidden;
+    padding: 0;
+    width: 20px;
+    min-width: 20px;
+    height: 20px;
+    min-height: 20px;
+}
+
+::deep .aspire-menu-secondary-action::part(control) {
+    background-color: transparent;
+}
+
+::deep .aspire-menu-secondary-action:hover::part(control) {
+    background-color: var(--colorNeutralBackground2Hover);
+}
+
+/* Keep the pin tabbable while its menu item has focus without showing it until the pin itself is focused. */
+fluent-menu-item:focus-within > span[slot="end"] ::deep .aspire-menu-secondary-action {
+    visibility: visible;
+}
+
+/* Only reveal for keyboard focus: focus is restored to the action after its item is reordered, and with
+   :focus-within a mouse-toggled action would stay visible on the moved item after the pointer left it. */
+fluent-menu-item:hover > span[slot="end"] ::deep .aspire-menu-secondary-action,
+::deep .aspire-menu-secondary-action:focus-visible,
+::deep .aspire-menu-secondary-action:has(:focus-visible),
+::deep .aspire-menu-secondary-action.selected {
+    opacity: 1;
+    visibility: visible;
+}
+
+@media (hover: none) {
+    fluent-menu-item > span[slot="end"] ::deep .aspire-menu-secondary-action {
+        opacity: 1;
+        visibility: visible;
+    }
+}
+
+/* Match FluentUI's 32px menu-item icon track so the resource identity and actions share
+   one visual axis. Extra vertical space distinguishes the identity from a clickable item. */
+.aspire-menu-header {
+    display: grid;
+    grid-template-columns: 32px minmax(0, 1fr);
+    align-items: center;
+    box-sizing: border-box;
+    min-height: 36px;
+    margin-bottom: 4px;
+    padding: 0px 8px 4px 4px;
+    border-bottom: var(--strokeWidthThin) solid var(--colorNeutralStroke2);
+    color: var(--colorNeutralForeground2);
+    font-family: var(--fontFamilyBase);
+    font-size: var(--aspire-font-size-body);
+    font-weight: var(--aspire-font-weight-semibold);
+    line-height: var(--lineHeightBase300);
+    cursor: default;
+    user-select: none;
+}
+
+.aspire-menu-header ::deep .aspire-menu-header-icon {
+    grid-column: 1;
+    justify-self: center;
+}
+
+.aspire-menu-header-text {
+    grid-column: 2;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Group headers label a run of related items, so they align with the item text column
+   (after FluentUI's 32px indicator track) and stay quieter than the menu-level header. */
+.aspire-menu-empty-group-text {
+    box-sizing: border-box;
+    padding: 4px 8px 6px 36px;
+    color: var(--colorNeutralForeground3);
+    font-family: var(--fontFamilyBase);
+    font-size: var(--aspire-font-size-body);
+    font-style: italic;
+    line-height: var(--lineHeightBase300);
+    cursor: default;
+    user-select: none;
+}
+
+.aspire-menu-group-header {
+    box-sizing: border-box;
+    padding: 6px 8px 2px 36px;
+    color: var(--colorNeutralForeground3);
+    font-family: var(--fontFamilyBase);
+    font-size: var(--aspire-font-size-secondary);
+    font-weight: var(--aspire-font-weight-semibold);
+    line-height: var(--lineHeightBase200);
+    cursor: default;
+    user-select: none;
+}

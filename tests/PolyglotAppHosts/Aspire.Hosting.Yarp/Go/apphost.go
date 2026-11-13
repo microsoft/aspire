@@ -9,20 +9,22 @@ import (
 func main() {
 	builder, err := aspire.CreateBuilder()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	buildVersion := builder.AddParameterFromConfiguration("buildVersion", "MyConfig:BuildVersion")
 	buildSecret := builder.AddParameterFromConfiguration("buildSecret", "MyConfig:Secret", &aspire.AddParameterFromConfigurationOptions{Secret: aspire.BoolPtr(true)})
 
 	backend := builder.AddContainer("backend", "nginx")
-	backend.WithHttpEndpoint(&aspire.WithHttpEndpointOptions{Name: aspire.StringPtr("http"), TargetPort: aspire.Float64Ptr(80)})
-	backendService := builder.AddProject("backend-service", "./src/BackendService", &aspire.AddProjectOptions{LaunchProfileOrOptions: "http"})
+	backend.WithHttpEndpoint(&aspire.WithHttpEndpointOptions{Name: aspire.StringPtr("http"), TargetPort: aspire.IntPtr(80)})
+	backendService := builder.AddDotnetProject("backend-service", "./src/BackendService", &aspire.AddDotnetProjectOptions{
+		Options: &aspire.DotnetProjectOptions{LaunchProfileName: aspire.StringPtr("http")},
+	})
 	externalBackend := builder.AddExternalService("external-backend", "https://example.com")
 
 	proxy := builder.AddYarp("proxy").
-		WithHostPort(8080).
-		WithHostHttpsPort(8443).
+		WithHostPort(aspire.IntPtr(8080)).
+		WithHostHttpsPort(aspire.IntPtr(8443)).
 		WithEndpointProxySupport(true).
 		WithDockerfile("./context").
 		WithImageSHA256("abc123def456").
@@ -36,7 +38,7 @@ func main() {
 	proxy.WithBuildSecret("MY_SECRET", buildSecret)
 
 	if err = proxy.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	proxy.WithConfiguration(func(config aspire.YarpConfigurationBuilder) {
@@ -46,40 +48,40 @@ func main() {
 			WithForwarderRequestConfig(&aspire.YarpForwarderRequestConfig{
 				ActivityTimeout:        aspire.Float64Ptr(30_000_000),
 				AllowResponseBuffering: aspire.BoolPtr(true),
-				Version:                "2.0",
+				Version:                aspire.StringPtr("2.0"),
 			}).
 			WithHttpClientConfig(&aspire.YarpHttpClientConfig{
 				DangerousAcceptAnyServerCertificate: aspire.BoolPtr(true),
 				EnableMultipleHttp2Connections:      aspire.BoolPtr(true),
-				MaxConnectionsPerServer:             aspire.Float64Ptr(10),
-				RequestHeaderEncoding:               "utf-8",
-				ResponseHeaderEncoding:              "utf-8",
+				MaxConnectionsPerServer:             aspire.IntPtr(10),
+				RequestHeaderEncoding:               aspire.StringPtr("utf-8"),
+				ResponseHeaderEncoding:              aspire.StringPtr("utf-8"),
 			}).
 			WithSessionAffinityConfig(&aspire.YarpSessionAffinityConfig{
-				AffinityKeyName: ".Aspire.Affinity",
+				AffinityKeyName: aspire.StringPtr(".Aspire.Affinity"),
 				Enabled:         aspire.BoolPtr(true),
-				FailurePolicy:   "Redistribute",
-				Policy:          "Cookie",
+				FailurePolicy:   aspire.StringPtr("Redistribute"),
+				Policy:          aspire.StringPtr("Cookie"),
 				Cookie: &aspire.YarpSessionAffinityCookieConfig{
-					Domain:      "example.com",
+					Domain:      aspire.StringPtr("example.com"),
 					HttpOnly:    aspire.BoolPtr(true),
 					IsEssential: aspire.BoolPtr(true),
-					Path:        "/",
+					Path:        aspire.StringPtr("/"),
 				},
 			}).
 			WithHealthCheckConfig(&aspire.YarpHealthCheckConfig{
-				AvailableDestinationsPolicy: "HealthyOrPanic",
+				AvailableDestinationsPolicy: aspire.StringPtr("HealthyOrPanic"),
 				Active: &aspire.YarpActiveHealthCheckConfig{
 					Enabled:  aspire.BoolPtr(true),
 					Interval: aspire.Float64Ptr(50_000_000),
-					Path:     "/health",
-					Policy:   "ConsecutiveFailures",
-					Query:    "probe=1",
+					Path:     aspire.StringPtr("/health"),
+					Policy:   aspire.StringPtr("ConsecutiveFailures"),
+					Query:    aspire.StringPtr("probe=1"),
 					Timeout:  aspire.Float64Ptr(20_000_000),
 				},
 				Passive: &aspire.YarpPassiveHealthCheckConfig{
 					Enabled:            aspire.BoolPtr(true),
-					Policy:             "TransportFailureRateHealthPolicy",
+					Policy:             aspire.StringPtr("TransportFailureRateHealthPolicy"),
 					ReactivationPeriod: aspire.Float64Ptr(100_000_000),
 				},
 			})
@@ -121,7 +123,7 @@ func main() {
 
 		fromEndpointRoute := config.AddRoute("/from-endpoint/{**catchall}", endpoint).
 			WithMatch(&aspire.YarpRouteMatch{
-				Path:    "/from-endpoint/{**catchall}",
+				Path:    aspire.StringPtr("/from-endpoint/{**catchall}"),
 				Methods: []string{"GET", "POST"},
 				Hosts:   []string{"endpoint.example.com"},
 			}).
@@ -130,7 +132,7 @@ func main() {
 				"RequestHeadersCopy": "true",
 			})
 		if err = fromEndpointRoute.Err(); err != nil {
-			log.Fatalf(aspire.FormatError(err))
+			log.Fatal(aspire.FormatError(err))
 		}
 
 		fromResourceRoute := config.AddRoute("/from-resource/{**catchall}", backendService).
@@ -138,7 +140,7 @@ func main() {
 				"PathPrefix": "/resource",
 			})
 		if err = fromResourceRoute.Err(); err != nil {
-			log.Fatalf(aspire.FormatError(err))
+			log.Fatal(aspire.FormatError(err))
 		}
 
 		fromExternalRoute := config.AddRoute("/from-external/{**catchall}", externalBackend).
@@ -146,7 +148,7 @@ func main() {
 				"PathPrefix": "/external",
 			})
 		if err = fromExternalRoute.Err(); err != nil {
-			log.Fatalf(aspire.FormatError(err))
+			log.Fatal(aspire.FormatError(err))
 		}
 
 		stringCluster := config.AddClusterWithDestination("string-cluster", "https://example.route")
@@ -155,7 +157,7 @@ func main() {
 				"PathPrefix": "/string",
 			})
 		if err = fromStringRoute.Err(); err != nil {
-			log.Fatalf(aspire.FormatError(err))
+			log.Fatal(aspire.FormatError(err))
 		}
 
 		catchAllRoute := config.AddCatchAllRoute(endpointCluster).
@@ -163,7 +165,7 @@ func main() {
 				"PathPrefix": "/cluster",
 			})
 		if err = catchAllRoute.Err(); err != nil {
-			log.Fatalf(aspire.FormatError(err))
+			log.Fatal(aspire.FormatError(err))
 		}
 
 		catchAllEndpointRoute := config.AddCatchAllRoute(endpoint).
@@ -171,7 +173,7 @@ func main() {
 				"PathPrefix": "/catchall-endpoint",
 			})
 		if err = catchAllEndpointRoute.Err(); err != nil {
-			log.Fatalf(aspire.FormatError(err))
+			log.Fatal(aspire.FormatError(err))
 		}
 
 		catchAllResourceRoute := config.AddCatchAllRoute(backendService).
@@ -179,7 +181,7 @@ func main() {
 				"PathPrefix": "/catchall-resource",
 			})
 		if err = catchAllResourceRoute.Err(); err != nil {
-			log.Fatalf(aspire.FormatError(err))
+			log.Fatal(aspire.FormatError(err))
 		}
 
 		catchAllExternalRoute := config.AddCatchAllRoute(externalBackend).
@@ -187,7 +189,7 @@ func main() {
 				"PathPrefix": "/catchall-external",
 			})
 		if err = catchAllExternalRoute.Err(); err != nil {
-			log.Fatalf(aspire.FormatError(err))
+			log.Fatal(aspire.FormatError(err))
 		}
 
 		catchAllStringCluster := config.AddClusterWithDestination("catchall-string-cluster", "https://example.catchall")
@@ -196,7 +198,7 @@ func main() {
 				"PathPrefix": "/catchall-string",
 			})
 		if err = catchAllStringRoute.Err(); err != nil {
-			log.Fatalf(aspire.FormatError(err))
+			log.Fatal(aspire.FormatError(err))
 		}
 
 		_ = config.AddRoute("/resource/{**catchall}", resourceCluster)
@@ -205,16 +207,15 @@ func main() {
 		_ = config.AddRoute("/multi/{**catchall}", multiDestinationCluster)
 	})
 
-	proxy.PublishAsConnectionString()
 	if err = proxy.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	app, err := builder.Build()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 	if err := app.Run(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 }

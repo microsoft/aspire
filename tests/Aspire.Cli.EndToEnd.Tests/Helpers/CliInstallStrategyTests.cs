@@ -1,14 +1,36 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Formats.Tar;
+using System.IO.Compression;
 using Hex1b;
 using Xunit;
 
 namespace Aspire.Cli.EndToEnd.Tests.Helpers;
 
 [Collection(CliInstallEnvironmentCollection.Name)]
-public class CliInstallStrategyTests
+public class CliInstallStrategyTests(ITestOutputHelper output)
 {
+    [Theory]
+    [InlineData("hives/local/packages/Aspire.Hosting.17.0.99.nupkg", "17.0.99")]
+    [InlineData("./hives/local/packages/Aspire.Hosting.17.0.99.nupkg", "17.0.99")]
+    [InlineData("hives/local/packages/Aspire.Hosting.17.0.0-dev.nupkg", null)]
+    [InlineData("hives/local/packages/Aspire.Hosting.Go.17.0.99.nupkg", null)]
+    [InlineData("other/Aspire.Hosting.17.0.99.nupkg", null)]
+    public void TryGetStableAspireVersionFromArchive_UsesSelectedHive(string packageEntry, string? expectedVersion)
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+        var archivePath = Path.Combine(workspace.WorkspaceRoot.FullName, "selected.tar.gz");
+        using (var file = File.Create(archivePath))
+        using (var gzip = new GZipStream(file, CompressionLevel.Fastest))
+        using (var tar = new TarWriter(gzip))
+        {
+            tar.WriteEntry(new PaxTarEntry(TarEntryType.RegularFile, packageEntry));
+        }
+
+        Assert.Equal(expectedVersion, CliE2ETestHelpers.TryGetStableAspireVersionFromArchive(archivePath));
+    }
+
     [Fact]
     public void GetPullRequestInstallArgs_ReturnsPrNumber()
     {
@@ -20,6 +42,29 @@ public class CliInstallStrategyTests
     {
         var command = AspireCliShellCommandHelpers.GetLocalArchiveInstallCommand("/tmp/cli-archives", "/opt/aspire-scripts/get-aspire-cli-pr.sh");
         Assert.Equal("/opt/aspire-scripts/get-aspire-cli-pr.sh --local-dir '/tmp/cli-archives'", command);
+    }
+
+    [Fact]
+    public void GetLocalArchiveInstallCommandFromCurrentRef_AllowsHiveAutoDetection()
+    {
+        using var environment = new EnvironmentVariableScope(("GITHUB_SHA", "0123456789abcdef0123456789abcdef01234567"));
+
+        var command = AspireCliShellCommandHelpers.GetLocalArchiveInstallCommandFromCurrentRef("/tmp/cli-archives");
+
+        Assert.Equal(
+            "curl -fsSL https://raw.githubusercontent.com/microsoft/aspire/0123456789abcdef0123456789abcdef01234567/eng/scripts/get-aspire-cli-pr.sh | bash -s -- --local-dir '/tmp/cli-archives'",
+            command);
+    }
+
+    [Fact]
+    public void GetConfigureLocalHiveCommands_OverridesCliIdentity()
+    {
+        Assert.Equal(
+            [
+                "aspire config set channel local -g",
+                "SDK_VER=$(ls ~/.aspire/hives/local/packages/Aspire.Hosting.*.nupkg 2>/dev/null | head -1 | sed 's/.*Aspire\\.Hosting\\.//;s/\\.nupkg//') && aspire config set sdk.version \"$SDK_VER\" -g && export ASPIRE_CLI_CHANNEL=local ASPIRE_CLI_VERSION=\"$SDK_VER\" ASPIRE_CLI_PACKAGES=\"$HOME/.aspire/hives/local/packages\""
+            ],
+            AspireCliShellCommandHelpers.GetConfigureLocalHiveCommands());
     }
 
     [Fact]
@@ -330,6 +375,67 @@ public class CliInstallStrategyTests
         CliE2ETestHelpers.ConfigureDockerContainerSource(options, "/repo", CliE2ETestHelpers.DockerfileVariant.Polyglot);
 
         Assert.Equal(Path.Combine("/repo", "tests", "Shared", "Docker", "Dockerfile.e2e-polyglot-base"), options.DockerfilePath);
+        Assert.Equal("/repo", options.BuildContext);
+    }
+
+    [Fact]
+    public void ConfigureDockerContainerSource_UsesPolyglotGoImageWhenEnvironmentVariableIsSet()
+    {
+        using var environment = WithCleanCliE2ETestEnvironment(
+            (CliE2ETestHelpers.PolyglotGoImageEnvironmentVariableName, "aspire-cli-e2e-polyglot-go:prebuilt"),
+            (CliE2ETestHelpers.RequirePolyglotGoImageEnvironmentVariableName, "true"),
+            ("GITHUB_ACTIONS", "true"));
+        var options = new DockerContainerOptions();
+
+        CliE2ETestHelpers.ConfigureDockerContainerSource(options, "/repo", CliE2ETestHelpers.DockerfileVariant.PolyglotGo);
+
+        Assert.Equal("aspire-cli-e2e-polyglot-go:prebuilt", options.Image);
+        Assert.True(string.IsNullOrEmpty(options.DockerfilePath));
+        Assert.True(string.IsNullOrEmpty(options.BuildContext));
+    }
+
+    [Fact]
+    public void ConfigureDockerContainerSource_RequiresPolyglotGoImageWhenConfigured()
+    {
+        using var environment = WithCleanCliE2ETestEnvironment(
+            (CliE2ETestHelpers.PolyglotGoImageEnvironmentVariableName, null),
+            (CliE2ETestHelpers.RequirePolyglotGoImageEnvironmentVariableName, "true"),
+            ("GITHUB_ACTIONS", "true"));
+        var options = new DockerContainerOptions();
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            CliE2ETestHelpers.ConfigureDockerContainerSource(options, "/repo", CliE2ETestHelpers.DockerfileVariant.PolyglotGo));
+
+        Assert.Contains(CliE2ETestHelpers.PolyglotGoImageEnvironmentVariableName, exception.Message);
+    }
+
+    [Fact]
+    public void ConfigureDockerContainerSource_FallsBackToPolyglotGoDockerfileWhenImageIsNotRequired()
+    {
+        using var environment = WithCleanCliE2ETestEnvironment(
+            (CliE2ETestHelpers.PolyglotGoImageEnvironmentVariableName, null),
+            (CliE2ETestHelpers.RequirePolyglotGoImageEnvironmentVariableName, null),
+            ("GITHUB_ACTIONS", null));
+        var options = new DockerContainerOptions();
+
+        CliE2ETestHelpers.ConfigureDockerContainerSource(options, "/repo", CliE2ETestHelpers.DockerfileVariant.PolyglotGo);
+
+        Assert.Equal(Path.Combine("/repo", "tests", "Shared", "Docker", "Dockerfile.e2e-polyglot-go"), options.DockerfilePath);
+        Assert.Equal("/repo", options.BuildContext);
+    }
+
+    [Fact]
+    public void ConfigureDockerContainerSource_IgnoresPolyglotGoImageForPolyglotJavaVariant()
+    {
+        using var environment = WithCleanCliE2ETestEnvironment(
+            (CliE2ETestHelpers.PolyglotGoImageEnvironmentVariableName, "aspire-cli-e2e-polyglot-go:prebuilt"),
+            (CliE2ETestHelpers.RequirePolyglotGoImageEnvironmentVariableName, "true"),
+            ("GITHUB_ACTIONS", null));
+        var options = new DockerContainerOptions();
+
+        CliE2ETestHelpers.ConfigureDockerContainerSource(options, "/repo", CliE2ETestHelpers.DockerfileVariant.PolyglotJava);
+
+        Assert.Equal(Path.Combine("/repo", "tests", "Shared", "Docker", "Dockerfile.e2e-polyglot-java"), options.DockerfilePath);
         Assert.Equal("/repo", options.BuildContext);
     }
 
@@ -786,6 +892,28 @@ public class CliInstallStrategyTests
         }
     }
 
+    [Theory]
+    [InlineData("14.0.0-pr.20466.ga2bed197", "pr-20466")]
+    [InlineData("13.3.0-pr.1234.a1b2c3d4", "pr-1234")]
+    [InlineData("14.0.0-pr.20466.xyz", "local")]
+    [InlineData("14.0.0-ci", "local")]
+    public void FromLocalArchive_SelectsHiveMatchingPackageVersion(string version, string expectedHiveLabel)
+    {
+        var tempDir = Directory.CreateTempSubdirectory("cli-archives-test");
+        try
+        {
+            File.WriteAllText(Path.Combine(tempDir.FullName, $"Aspire.Cli.{version}.nupkg"), "");
+
+            var strategy = CliInstallStrategy.FromLocalArchive(tempDir.FullName);
+
+            Assert.Equal(expectedHiveLabel, strategy.LocalArchiveHiveLabel);
+        }
+        finally
+        {
+            tempDir.Delete(recursive: true);
+        }
+    }
+
     [Fact]
     public void FromLocalArchive_IgnoresRidSpecificCliNupkg()
     {
@@ -1000,6 +1128,8 @@ public class CliInstallStrategyTests
             (CliE2ETestHelpers.RequirePolyglotImageEnvironmentVariableName, null),
             (CliE2ETestHelpers.PolyglotJavaImageEnvironmentVariableName, null),
             (CliE2ETestHelpers.RequirePolyglotJavaImageEnvironmentVariableName, null),
+            (CliE2ETestHelpers.PolyglotGoImageEnvironmentVariableName, null),
+            (CliE2ETestHelpers.RequirePolyglotGoImageEnvironmentVariableName, null),
             ("GITHUB_ACTIONS", null),
         ];
 

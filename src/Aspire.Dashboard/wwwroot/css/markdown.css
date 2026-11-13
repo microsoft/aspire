@@ -31,7 +31,7 @@
 .markdown-container .code-block {
     background-color: var(--codeblock-background-color);
     border: 1px solid var(--codeblock-border-color);
-    border-radius: 6px;
+    border-radius: var(--aspire-radius-small);
     position: relative;
 }
 
@@ -39,7 +39,7 @@
     display: flex;
     background-color: var(--codeblock-header-background-color);
     border-bottom: 1px solid var(--codeblock-border-color);
-    border-radius: 5px 5px 0 0;
+    border-radius: var(--aspire-radius-small) var(--aspire-radius-small) 0 0;
     color: var(--code-language-foreground-color);
     height: 1.75rem;
     font-size: 13px;
@@ -75,11 +75,11 @@
 }
 
 .markdown-container code {
-    font-family: var(--aspire-font-mono);
+    font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
     color: unset;
-    background-color: var(--neutral-fill-secondary-focus);
+    background-color: var(--colorNeutralBackground1Selected);
     padding: .15rem .3rem;
-    border-radius: .25rem;
+    border-radius: var(--aspire-radius-small);
 }
 
 .markdown-container pre code {
@@ -101,7 +101,7 @@
 
 .markdown-container .code-copy-button {
     border: 0;
-    border-radius: 5px;
+    border-radius: var(--aspire-radius-small);
     background-color: transparent;
     color: var(--code-language-foreground-color);
     width: 28px;
@@ -109,7 +109,7 @@
 }
 
 .markdown-container .code-copy-button:hover {
-    background-color: var(--neutral-fill-stealth-hover);
+    background-color: var(--colorSubtleBackgroundHover);
 }
 
 .markdown-container .copy-icon,
@@ -129,47 +129,38 @@
 }
 
 .markdown-container table {
-    margin-bottom: calc(.25rem * 6);
-    margin-top: calc(.25rem * 3);
+    border-collapse: collapse;
+    margin: .75rem 0 1.5rem;
     width: 100%;
 }
 
-.markdown-container tr:last-child {
-    border-style: none;
+.markdown-container tbody tr:not(:last-child) {
+    border-bottom: var(--strokeWidthThin) solid var(--colorNeutralStroke3);
 }
 
-.markdown-container tr {
-    border-bottom: 1px solid var(--table-body-border-color);
-}
-
-.markdown-container th {
-    padding-right: calc(.25rem * 1);
-}
-
-.markdown-container th {
-    border-bottom: 1px solid var(--table-header-border-color);
-    padding-bottom: calc(.25rem * 1.5);
-    padding-top: calc(.25rem * 1);
-    font-weight: 600;
-}
-
+.markdown-container th,
 .markdown-container td {
-    padding-right: calc(.25rem * 1);
-    padding-block: calc(.25rem * 1.5);
+    padding: .375rem .25rem;
+}
+
+.markdown-container th {
+    border-bottom: var(--strokeWidthThin) solid var(--colorNeutralStroke1);
+    padding-top: .25rem;
+    font-weight: 600;
 }
 
 /* Markdown headings are modified to never be larger than h4 */
 .markdown-container h4 {
-    font-size: var(--type-ramp-plus-2-font-size);
-    line-height: var(--type-ramp-plus-2-line-height);
+    font-size: var(--fontSizeBase500);
+    line-height: var(--lineHeightBase500);
 }
 
 .markdown-container h5 {
-    font-size: var(--type-ramp-plus-1-font-size);
-    line-height: var(--type-ramp-plus-1-line-height);
+    font-size: var(--fontSizeBase400);
+    line-height: var(--lineHeightBase400);
 }
 
 .markdown-container h6 {
-    font-size: var(--type-ramp-base-font-size);
-    line-height: var(--type-ramp-base-line-height);
+    font-size: var(--fontSizeBase300);
+    line-height: var(--lineHeightBase300);
 }

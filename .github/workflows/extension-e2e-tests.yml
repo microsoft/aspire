@@ -2,20 +2,26 @@ name: VS Code extension E2E tests
 
 on:
   workflow_call:
+    inputs:
+      extensionVersionOverride:
+        required: false
+        type: string
+        default: ''
 
 jobs:
-  verify_extester_feed:
-    name: Verify ExTester internal feed availability
+  verify_prerequisites:
+    if: ${{ github.repository == 'microsoft/aspire' }}
+    name: Verify extension E2E prerequisites
     runs-on: ubuntu-latest
     env:
       NPM_REGISTRY: https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/
       COREPACK_ENABLE_DOWNLOAD_PROMPT: 0
     steps:
       - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Setup Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '22.x'
 
@@ -71,9 +77,52 @@ jobs:
         working-directory: extension
         run: node scripts/run-e2e.js --verify-extester-feed
 
+      # This job owns the VSIX installed by the matrix, so fan-out starts only
+      # after the package has been built, validated, and uploaded successfully.
+      - name: Override extension version for PR builds
+        if: ${{ inputs.extensionVersionOverride != '' }}
+        working-directory: extension
+        env:
+          EXTENSION_VERSION_OVERRIDE: ${{ inputs.extensionVersionOverride }}
+        run: corepack yarn version --new-version "$EXTENSION_VERSION_OVERRIDE" --no-git-tag-version
+
+      - name: Package VSIX
+        working-directory: extension
+        env:
+          ASPIRE_EXTENSION_E2E_INCLUDE_BRIDGE: "true"
+        run: |
+          # vsce opens the output file directly without creating its parent directory.
+          mkdir -p out
+          corepack yarn run vsce package --pre-release -o out/aspire-extension.vsix
+
+      - name: Assert E2E VSIX contains bridge
+        working-directory: extension
+        shell: pwsh
+        run: ../.github/scripts/assert-extension-e2e-bridge-vsix.ps1 -VsixPath out/aspire-extension.vsix -Expected Present
+
+      # Packaged separately because the E2E VSIX intentionally contains the bridge.
+      # No env override here reproduces the shipping build, where webpack stubs the
+      # bridge in production mode and step-scoped env values do not leak.
+      - name: Package production VSIX
+        working-directory: extension
+        run: corepack yarn run vsce package --pre-release -o out/aspire-extension-production.vsix
+
+      - name: Assert production VSIX excludes bridge
+        working-directory: extension
+        shell: pwsh
+        run: ../.github/scripts/assert-extension-e2e-bridge-vsix.ps1 -VsixPath out/aspire-extension-production.vsix -Expected Absent
+
+      - name: Upload VSIX
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: aspire-extension
+          path: extension/out/aspire-extension.vsix
+          if-no-files-found: error
+
   extension_e2e:
+    if: ${{ github.repository == 'microsoft/aspire' }}
     name: VS Code extension E2E (${{ matrix.name }}, ${{ matrix.shardName }})
-    needs: verify_extester_feed
+    needs: verify_prerequisites
     runs-on: ${{ matrix.runner }}
     # The Java AppHost shard imports a multi-project Gradle build and then runs the whole
     # application under a debugger, so it needs more than the shared budget.
@@ -216,6 +265,31 @@ jobs:
             archivePattern: aspire-cli-win-x64*.zip
             cliBinary: aspire.exe
             useXvfb: false
+          - name: Windows
+            shardName: winui-debug
+            spec: out/test-e2e/test-e2e/winUiDebug.e2e.test.js
+            runner: windows-latest
+            rid: win-x64
+            archivePattern: aspire-cli-win-x64*.zip
+            cliBinary: aspire.exe
+            useXvfb: false
+            installWinUI: true
+          - name: Linux
+            shardName: diagnostic-logs
+            spec: out/test-e2e/test-e2e/diagnosticLogs.e2e.test.js
+            runner: ubuntu-latest
+            rid: linux-x64
+            archivePattern: aspire-cli-linux-x64*.tar.gz
+            cliBinary: aspire
+            useXvfb: true
+          - name: Windows
+            shardName: diagnostic-logs
+            spec: out/test-e2e/test-e2e/diagnosticLogs.e2e.test.js
+            runner: windows-latest
+            rid: win-x64
+            archivePattern: aspire-cli-win-x64*.zip
+            cliBinary: aspire.exe
+            useXvfb: false
           - name: Linux
             shardName: debug-startup-timeout
             spec: out/test-e2e/test-e2e/debugStartupTimeout.e2e.test.js
@@ -266,6 +340,15 @@ jobs:
             archivePattern: aspire-cli-win-x64*.zip
             cliBinary: aspire.exe
             useXvfb: false
+          - name: Linux
+            shardName: resource-debug-tools
+            spec: out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js
+            runner: ubuntu-latest
+            rid: linux-x64
+            archivePattern: aspire-cli-linux-x64*.tar.gz
+            cliBinary: aspire
+            useXvfb: true
+            installResourceDebug: true
           - name: Linux
             shardName: java-apphost
             spec: out/test-e2e/test-e2e/javaAppHost.e2e.test.js
@@ -297,6 +380,16 @@ jobs:
             useXvfb: true
             installJava: true
           - name: Linux
+            shardName: java-starter-project-model
+            spec: out/test-e2e/test-e2e/javaStarterProjectModel.e2e.test.js
+            runner: ubuntu-latest
+            rid: linux-x64
+            archivePattern: aspire-cli-linux-x64*.tar.gz
+            cliBinary: aspire
+            useXvfb: true
+            installJava: true
+            timeoutMinutes: 110
+          - name: Linux
             shardName: workspace-target-proof
             spec: out/test-e2e/test-e2e/workspaceTargetProof.e2e.test.js
             runner: ubuntu-latest
@@ -314,15 +407,32 @@ jobs:
             useXvfb: true
           - name: Linux
             shardName: cli-path-rejection
-            spec: out/test-e2e/test-e2e/cliPathRejectionNotification.e2e.test.js
+            spec: out/test-e2e/test-e2e/{cliPathRejectionNotification,usefulnessSurvey}.e2e.test.js
             runner: ubuntu-latest
             rid: linux-x64
             archivePattern: aspire-cli-linux-x64*.tar.gz
             cliBinary: aspire
             useXvfb: true
+          - name: Windows
+            shardName: resource-debug-tools
+            spec: out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js
+            runner: windows-latest
+            rid: win-x64
+            archivePattern: aspire-cli-win-x64*.zip
+            cliBinary: aspire.exe
+            useXvfb: false
+            installResourceDebug: true
+          - name: Windows
+            shardName: resource-debug-tools-negative
+            spec: out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js
+            runner: windows-latest
+            rid: win-x64
+            archivePattern: aspire-cli-win-x64*.zip
+            cliBinary: aspire.exe
+            useXvfb: false
           - name: Windows
             shardName: cli-path-rejection
-            spec: out/test-e2e/test-e2e/cliPathRejectionNotification.e2e.test.js
+            spec: out/test-e2e/test-e2e/{cliPathRejectionNotification,usefulnessSurvey}.e2e.test.js
             runner: windows-latest
             rid: win-x64
             archivePattern: aspire-cli-win-x64*.zip
@@ -352,6 +462,7 @@ jobs:
             archivePattern: aspire-cli-linux-x64*.tar.gz
             cliBinary: aspire
             useXvfb: true
+            installDeno: true
           - name: Windows
             shardName: launch-profiles
             spec: out/test-e2e/test-e2e/launchProfiles.e2e.test.js
@@ -360,9 +471,49 @@ jobs:
             archivePattern: aspire-cli-win-x64*.zip
             cliBinary: aspire.exe
             useXvfb: false
+            installDeno: true
+          - name: Linux
+            shardName: coordinated-build
+            spec: out/test-e2e/test-e2e/coordinatedBuild.e2e.test.js
+            runner: ubuntu-latest
+            rid: linux-x64
+            archivePattern: aspire-cli-linux-x64*.tar.gz
+            cliBinary: aspire
+            useXvfb: true
+            installDotnetDebugger: true
+          - name: Windows
+            shardName: coordinated-build
+            spec: out/test-e2e/test-e2e/coordinatedBuild.e2e.test.js
+            runner: windows-latest
+            rid: win-x64
+            archivePattern: aspire-cli-win-x64*.zip
+            cliBinary: aspire.exe
+            useXvfb: false
+            installDotnetDebugger: true
+          - name: Linux
+            shardName: browser-debugger
+            advisoryIssue: https://github.com/microsoft/aspire/issues/20184
+            spec: out/test-e2e/test-e2e/browserDebugger.e2e.test.js
+            runner: ubuntu-latest
+            rid: linux-x64
+            archivePattern: aspire-cli-linux-x64*.tar.gz
+            cliBinary: aspire
+            useXvfb: true
+            browser: chrome
+            installDotnetDebugger: true
+          - name: Windows
+            shardName: browser-debugger
+            spec: out/test-e2e/test-e2e/browserDebugger.e2e.test.js
+            runner: windows-latest
+            rid: win-x64
+            archivePattern: aspire-cli-win-x64*.zip
+            cliBinary: aspire.exe
+            useXvfb: false
+            browser: msedge
+            installDotnetDebugger: true
           - name: Linux
             shardName: azure-functions
-            advisoryIssue: https://github.com/microsoft/aspire/issues/19151
+            advisoryIssue: https://github.com/microsoft/aspire/issues/19639
             spec: out/test-e2e/test-e2e/azureFunctions.e2e.test.js
             runner: ubuntu-latest
             rid: linux-x64
@@ -370,16 +521,51 @@ jobs:
             cliBinary: aspire
             useXvfb: true
             installAzureFunctions: true
+          - name: Linux
+            shardName: azure-functions-node
+            spec: out/test-e2e/test-e2e/azureFunctionsNode.e2e.test.js
+            runner: ubuntu-latest
+            rid: linux-x64
+            archivePattern: aspire-cli-linux-x64*.tar.gz
+            cliBinary: aspire
+            useXvfb: true
+            # The Node worker attaches through pwa-node directly. Installing vscode-azurefunctions
+            # would also register its Function Host Exceptions Debugger in the AppHost session.
+            installDotnetDebugger: true
+            installAzureFunctionsCoreTools: true
+          - name: Linux
+            shardName: deno-debugger
+            spec: out/test-e2e/test-e2e/denoDebugger.e2e.test.js
+            runner: ubuntu-latest
+            rid: linux-x64
+            archivePattern: aspire-cli-linux-x64*.tar.gz
+            cliBinary: aspire
+            useXvfb: true
+            installDeno: true
     defaults:
       run:
         shell: pwsh
 
     steps:
+      - name: Configure NuGet package cache (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Write-Output "NUGET_PACKAGES=${{ github.workspace }}/.nuget/packages" >> $env:GITHUB_ENV
+
       - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # Diagnostics only: samples CPU, memory, commit charge, page file, and disk pressure
+      # into the diagnostics artifact so slow or hung Windows shards can be correlated with
+      # machine load. https://github.com/microsoft/aspire/issues/21570
+      - name: Start resource monitor (Windows)
+        if: runner.os == 'Windows'
+        continue-on-error: true
+        shell: pwsh
+        run: ./eng/scripts/ci-resource-monitor.ps1 -Mode Start -OutputDirectory "${{ github.workspace }}/extension/.test-results/resource-monitor"
 
       - name: Setup Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '22.x'
 
@@ -423,9 +609,13 @@ jobs:
           corepack yarn --version
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           global-json-file: global.json
+
+      - name: Setup Deno
+        if: ${{ matrix.installDeno }}
+        uses: ./.github/actions/setup-deno
 
       - name: Download VSIX
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -475,8 +665,65 @@ jobs:
             Start-Sleep -Seconds $delay
           }
 
-      - name: Install Azure Functions E2E prerequisites
-        if: ${{ matrix.installAzureFunctions }}
+      - name: .NET debugger E2E prerequisites
+        if: ${{ matrix.installDotnetDebugger || matrix.installAzureFunctions || matrix.installResourceDebug }}
+        run: |
+          function Get-PinnedArtifact {
+            param(
+              [Parameter(Mandatory = $true)]
+              [string] $Uri,
+              [Parameter(Mandatory = $true)]
+              [string] $OutFile,
+              [Parameter(Mandatory = $true)]
+              [string] $ExpectedSha256
+            )
+
+            Invoke-WebRequest -Uri $Uri -OutFile $OutFile -MaximumRetryCount 3 -RetryIntervalSec 5
+            $actualSha256 = (Get-FileHash -Path $OutFile -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($actualSha256 -ne $ExpectedSha256) {
+              throw "Checksum verification failed for '$OutFile'. Expected '$ExpectedSha256', got '$actualSha256'."
+            }
+          }
+
+          $dotnetRuntimeVsix = Join-Path $env:RUNNER_TEMP 'vscode-dotnet-runtime-3.1.0.vsix'
+          Get-PinnedArtifact `
+            -Uri 'https://marketplace.visualstudio.com/_apis/public/gallery/publishers/ms-dotnettools/vsextensions/vscode-dotnet-runtime/3.1.0/vspackage' `
+            -OutFile $dotnetRuntimeVsix `
+            -ExpectedSha256 '8e675ffe5f3674430d63e28d2dc05ab40f36c8494e9549e79d3995d721b13f5a'
+
+          switch ($env:RUNNER_OS) {
+            'Linux' {
+              $csharpVsix = Join-Path $env:RUNNER_TEMP 'vscode-csharp-2.148.23-linux-x64.vsix'
+              $csharpUri = 'https://marketplace.visualstudio.com/_apis/public/gallery/publishers/ms-dotnettools/vsextensions/csharp/2.148.23/vspackage?targetPlatform=linux-x64'
+              $csharpSha256 = '18b503e614a979212762683b35a4fa1806688ba773d5fe93bf62c9f9346db23f'
+            }
+            'Windows' {
+              $csharpVsix = Join-Path $env:RUNNER_TEMP 'vscode-csharp-2.148.23-win32-x64.vsix'
+              $csharpUri = 'https://marketplace.visualstudio.com/_apis/public/gallery/publishers/ms-dotnettools/vsextensions/csharp/2.148.23/vspackage?targetPlatform=win32-x64'
+              $csharpSha256 = '27cf5f0fdcd677f7af61a6d43f2dc75bac7ca2cffa1f29e3262b615bbcabb952'
+            }
+            default {
+              throw "The .NET debugger E2E prerequisites do not support runner OS '$env:RUNNER_OS'."
+            }
+          }
+
+          Get-PinnedArtifact -Uri $csharpUri -OutFile $csharpVsix -ExpectedSha256 $csharpSha256
+          @(
+            "ASPIRE_EXTENSION_E2E_DOTNET_RUNTIME_VSIX=$dotnetRuntimeVsix"
+            "ASPIRE_EXTENSION_E2E_CSHARP_VSIX=$csharpVsix"
+          ) | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+          if ('${{ matrix.installResourceDebug }}' -eq 'true') {
+            $goVsix = Join-Path $env:RUNNER_TEMP 'vscode-go-0.56.0.vsix'
+            Get-PinnedArtifact `
+              -Uri 'https://marketplace.visualstudio.com/_apis/public/gallery/publishers/golang/vsextensions/Go/0.56.0/vspackage' `
+              -OutFile $goVsix `
+              -ExpectedSha256 '9f5959fb17ba0a8dbd804387ddda50975fcaa9dd5267aa33eaaa89912072aacb'
+            "ASPIRE_EXTENSION_E2E_GO_VSIX=$goVsix" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          }
+
+      - name: Azure Functions E2E prerequisites
+        if: ${{ matrix.installAzureFunctions || matrix.installAzureFunctionsCoreTools }}
         shell: bash
         run: |
           set -euo pipefail
@@ -495,28 +742,102 @@ jobs:
           export PATH="$core_tools_directory:$PATH"
           func --version
 
-          azure_resource_groups_vsix="$RUNNER_TEMP/vscode-azureresourcegroups-0.12.7.vsix"
-          curl --fail --location --compressed --retry 3 --retry-all-errors \
-            --output "$azure_resource_groups_vsix" \
-            'https://marketplace.visualstudio.com/_apis/public/gallery/publishers/ms-azuretools/vsextensions/vscode-azureresourcegroups/0.12.7/vspackage'
-          echo 'e4a2e7ab012de3777e1ac1781e2c25d65f150ad6f3770e8cfcc5a3d3658df35a  '"$azure_resource_groups_vsix" | sha256sum --check -
-
-          azure_functions_vsix="$RUNNER_TEMP/vscode-azurefunctions-1.22.0.vsix"
-          curl --fail --location --compressed --retry 3 --retry-all-errors \
-            --output "$azure_functions_vsix" \
-            'https://marketplace.visualstudio.com/_apis/public/gallery/publishers/ms-azuretools/vsextensions/vscode-azurefunctions/1.22.0/vspackage'
-          echo '146aede06f941b07a55c5aebd28c5e3df684d57b07cf6f9ebf90d7bb8ecd41a2  '"$azure_functions_vsix" | sha256sum --check -
-
           {
             echo 'ASPIRE_EXTENSION_E2E_ENABLE_AZURE_FUNCTIONS=true'
-            echo "ASPIRE_EXTENSION_E2E_AZURE_RESOURCE_GROUPS_VSIX=$azure_resource_groups_vsix"
-            echo "ASPIRE_EXTENSION_E2E_AZURE_FUNCTIONS_VSIX=$azure_functions_vsix"
             echo 'FUNCTIONS_CORE_TOOLS_TELEMETRY_OPTOUT=1'
+          } >> "$GITHUB_ENV"
+
+          if [ '${{ matrix.installAzureFunctions }}' = 'true' ]; then
+            azure_resource_groups_vsix="$RUNNER_TEMP/vscode-azureresourcegroups-0.12.7.vsix"
+            curl --fail --location --compressed --retry 3 --retry-all-errors \
+              --output "$azure_resource_groups_vsix" \
+              'https://marketplace.visualstudio.com/_apis/public/gallery/publishers/ms-azuretools/vsextensions/vscode-azureresourcegroups/0.12.7/vspackage'
+            echo 'e4a2e7ab012de3777e1ac1781e2c25d65f150ad6f3770e8cfcc5a3d3658df35a  '"$azure_resource_groups_vsix" | sha256sum --check -
+
+            azure_functions_vsix="$RUNNER_TEMP/vscode-azurefunctions-1.22.0.vsix"
+            curl --fail --location --compressed --retry 3 --retry-all-errors \
+              --output "$azure_functions_vsix" \
+              'https://marketplace.visualstudio.com/_apis/public/gallery/publishers/ms-azuretools/vsextensions/vscode-azurefunctions/1.22.0/vspackage'
+            echo '146aede06f941b07a55c5aebd28c5e3df684d57b07cf6f9ebf90d7bb8ecd41a2  '"$azure_functions_vsix" | sha256sum --check -
+
+            {
+              echo 'ASPIRE_EXTENSION_E2E_INSTALL_AZURE_FUNCTIONS_VSIX=true'
+              echo "ASPIRE_EXTENSION_E2E_AZURE_RESOURCE_GROUPS_VSIX=$azure_resource_groups_vsix"
+              echo "ASPIRE_EXTENSION_E2E_AZURE_FUNCTIONS_VSIX=$azure_functions_vsix"
+            } >> "$GITHUB_ENV"
+          fi
+
+      - name: Install resource debug E2E prerequisites
+        if: ${{ matrix.installResourceDebug }}
+        run: |
+          # Ubuntu's Yama default allows ptrace only when the debugger is an ancestor of the target.
+          # DCP launches the Go resource independently from Delve, so packaged attach needs this test-only policy.
+          if ($env:RUNNER_OS -eq 'Linux') {
+            sudo sysctl --write kernel.yama.ptrace_scope=0
+            if ($LASTEXITCODE -ne 0 -or (Get-Content /proc/sys/kernel/yama/ptrace_scope).Trim() -ne '0') {
+              throw 'Could not enable ptrace for Go resource attachment.'
+            }
+          }
+
+          $debuggerBin = Join-Path $env:RUNNER_TEMP 'resource-debug-bin'
+          New-Item -ItemType Directory -Path $debuggerBin -Force | Out-Null
+          $env:GOBIN = $debuggerBin
+          # Generated Go AppHosts require Go 1.26. Keep the CLI and Go extension on the same
+          # toolchain, and use Delve with Go 1.26 support instead of disabling its version check.
+          # https://github.com/go-delve/delve/blob/v1.27.2/pkg/goversion/compat.go
+          $env:GOTOOLCHAIN = 'go1.26.10'
+          go version
+          if ($LASTEXITCODE -ne 0) {
+            throw 'Could not provision Go 1.26.10 for AppHost debugging.'
+          }
+          "GOTOOLCHAIN=$env:GOTOOLCHAIN" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          go install github.com/go-delve/delve/cmd/dlv@v1.27.2
+          if ($LASTEXITCODE -ne 0) {
+            throw 'Could not install Delve for resource debugging.'
+          }
+          $debuggerBin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          $env:PATH = "$debuggerBin$([IO.Path]::PathSeparator)$env:PATH"
+          dlv version
+          if ($LASTEXITCODE -ne 0) {
+            throw 'Could not run Delve for resource debugging.'
+          }
+
+          'ASPIRE_EXTENSION_E2E_ENABLE_RESOURCE_DEBUG=true' | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Install WinUI E2E debugger prerequisites
+        if: ${{ matrix.installWinUI }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # The known failure reproduces with the standalone C# debugger; C# Dev Kit is not
+          # involved. Pin the exact debugger version so an upstream update cannot hide an
+          # Aspire regression, and install its runtime dependency for the offline E2E host.
+          # Raw Marketplace VSIX URLs are not Dependabot-managed. Rebaseline these pins
+          # manually only when host compatibility requires it or the fixture is deliberately
+          # moved; before changing C#, verify that the old TargetPath launch still reproduces
+          # https://github.com/microsoft/aspire/issues/19091 and the RunCommand launch passes.
+          dotnet_runtime_vsix="$RUNNER_TEMP/vscode-dotnet-runtime-3.1.0.vsix"
+          curl --fail --location --compressed --retry 3 --retry-all-errors \
+            --output "$dotnet_runtime_vsix" \
+            'https://marketplace.visualstudio.com/_apis/public/gallery/publishers/ms-dotnettools/vsextensions/vscode-dotnet-runtime/3.1.0/vspackage'
+          echo '8e675ffe5f3674430d63e28d2dc05ab40f36c8494e9549e79d3995d721b13f5a  '"$dotnet_runtime_vsix" | sha256sum --check -
+
+          csharp_vsix="$RUNNER_TEMP/vscode-csharp-2.140.9-win32-x64.vsix"
+          curl --fail --location --compressed --retry 3 --retry-all-errors \
+            --output "$csharp_vsix" \
+            'https://marketplace.visualstudio.com/_apis/public/gallery/publishers/ms-dotnettools/vsextensions/csharp/2.140.9/vspackage?targetPlatform=win32-x64'
+          echo 'ed7a3ca7775b0afa0c7c8e51e203eba0ca5e7366969509a3bbdd707888b8536a  '"$csharp_vsix" | sha256sum --check -
+
+          {
+            echo 'ASPIRE_EXTENSION_E2E_ENABLE_WINUI=true'
+            echo "ASPIRE_EXTENSION_E2E_DOTNET_RUNTIME_VSIX=$dotnet_runtime_vsix"
+            echo "ASPIRE_EXTENSION_E2E_CSHARP_VSIX=$csharp_vsix"
           } >> "$GITHUB_ENV"
 
       - name: Set up the JDK for the Java E2E specs
         if: ${{ matrix.installJava }}
-        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
           distribution: temurin
           # The CLI compiles a scaffolded Java AppHost with `javac --release 25`, because the AppHost
@@ -527,17 +848,29 @@ jobs:
 
       - name: Cache Java dependencies for the Java E2E specs
         if: ${{ matrix.installJava }}
-        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           # The Java specs launch real Spring Boot resources, so a cold runner otherwise downloads the
           # whole Spring dependency tree inside the test's readiness budget. Cache the user-level Maven
           # and Gradle stores rather than a per-project directory: the specs run out of a generated
           # workspace copied from the playground, so only the shared caches survive the copy.
+          #
+          # `~/.m2/wrapper` holds the Maven distribution itself, which `mvnw` downloads from
+          # repo.maven.apache.org into `${MAVEN_USER_HOME}/wrapper/dists` because these projects pin
+          # `distributionType=only-script`. Without it cached, every run re-fetched Maven from Maven
+          # Central, so a single outage there failed the shard - the `~/.gradle/wrapper` entry below
+          # already gave Gradle the equivalent protection.
           path: |
             ~/.m2/repository
+            ~/.m2/wrapper
             ~/.gradle/caches
             ~/.gradle/wrapper
-          key: java-e2e-${{ runner.os }}-${{ hashFiles('playground/JavaSpringBoot/**/pom.xml', 'playground/JavaSpringBoot/**/build.gradle*', 'playground/JavaSpringBoot/**/gradle-wrapper.properties') }}
+          # `maven-wrapper.properties` participates in the key for the same reason
+          # `gradle-wrapper.properties` does: it carries the pinned `distributionUrl`, so the entry has
+          # to rotate when the Maven version changes. Otherwise the key would still hit exactly after a
+          # version bump, actions/cache would skip the save, and the newly downloaded distribution would
+          # never make it into the cache.
+          key: java-e2e-${{ runner.os }}-${{ hashFiles('playground/JavaSpringBoot/**/pom.xml', 'playground/JavaSpringBoot/**/build.gradle*', 'playground/JavaSpringBoot/**/gradle-wrapper.properties', 'playground/JavaSpringBoot/**/maven-wrapper.properties', 'src/Aspire.Cli/Templating/Templates/java-starter/api/build.gradle', 'src/Aspire.Cli/Templating/Templates/java-starter/api/gradle/wrapper/gradle-wrapper.properties') }}
           restore-keys: |
             java-e2e-${{ runner.os }}-
 
@@ -554,6 +887,32 @@ jobs:
           #
           # A resolution failure must not fail the job - it only means the specs pay the download cost
           # they paid before this step existed.
+          #
+          # Retry before giving up, though. Both wrappers fetch their own distribution on a cold cache,
+          # and a failure there is not merely a slower run: it leaves no Maven on the runner at all, so
+          # the build inside the spec exits 1, the resource never starts, and the shard fails 15 minutes
+          # later as "Timed out after 900000ms waiting for an HTTP endpoint for resource 'catalog'"
+          # rather than as the download error it actually is.
+          warm() {
+            local description=$1
+            local directory=$2
+            shift 2
+
+            local attempt
+            for attempt in 1 2 3; do
+              if ( cd "$directory" && "$@" ); then
+                return 0
+              fi
+
+              if [ "$attempt" -lt 3 ]; then
+                echo "warning: pre-resolving $description failed (attempt $attempt/3), retrying"
+                sleep $((attempt * 15))
+              fi
+            done
+
+            echo "warning: could not pre-resolve $description"
+          }
+
           cd playground/JavaSpringBoot
           for maven_project in catalog worker; do
             # `dependency:go-offline` resolves the dependency tree but not every plugin a real build
@@ -562,11 +921,11 @@ jobs:
             # deliberately not reused: the specs copy the playground without `target/` so each run
             # builds clean, which is the same reason the Gradle project below is compiled rather than
             # only resolved.
-            (cd "$maven_project" && ./mvnw --batch-mode --no-transfer-progress -q dependency:go-offline compile) \
-              || echo "warning: could not pre-resolve Maven dependencies for $maven_project"
+            warm "Maven dependencies for $maven_project" "$maven_project" \
+              ./mvnw --batch-mode --no-transfer-progress -q dependency:go-offline compile
           done
-          (cd orders && ./gradlew --no-daemon --quiet compileJava) \
-            || echo 'warning: could not pre-resolve Gradle dependencies for orders'
+          warm "Gradle dependencies for orders" orders \
+            ./gradlew --no-daemon --quiet compileJava
 
       - name: Install Java E2E prerequisites
         if: ${{ matrix.installJava }}
@@ -693,6 +1052,7 @@ jobs:
             Get-ChildItem -Path $ridNugets -Recurse -File -Filter '*.nupkg' | Copy-Item -Destination $hiveDir -Force
           }
 
+          "ASPIRE_CLI_PACKAGES=$hiveDir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "ASPIRE_EXTENSION_E2E_CLI_PATH=$($cli.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "ASPIRE_EXTENSION_E2E_APPHOST_SDK_VERSION=$(($samplePackage.Name -replace '^Aspire\.Hosting\.AppHost\.', '') -replace '\.nupkg$', '')" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           & $cli.FullName --version
@@ -702,19 +1062,88 @@ jobs:
         run: |
           corepack yarn compile
           corepack yarn compile-e2e
-          if (-not (Test-Path '${{ matrix.spec }}')) {
-            throw "Compiled E2E shard spec was not found: ${{ matrix.spec }}"
+          # run-e2e.js validates compiled spec matches, including brace globs that
+          # PowerShell Test-Path does not expand.
+
+      - name: Install Deno
+        if: ${{ matrix.installDeno }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $target = if ('${{ runner.os }}' -eq 'Windows') {
+            'x86_64-pc-windows-msvc'
+          } else {
+            'x86_64-unknown-linux-gnu'
           }
+          $installDirectory = Join-Path $env:RUNNER_TEMP 'deno'
+          $archivePath = Join-Path $env:RUNNER_TEMP "deno-$target.zip"
+          New-Item -ItemType Directory -Path $installDirectory -Force | Out-Null
+          Invoke-WebRequest "https://github.com/denoland/deno/releases/download/v2.9.0/deno-$target.zip" -OutFile $archivePath
+          Expand-Archive -Path $archivePath -DestinationPath $installDirectory -Force
+          if ('${{ runner.os }}' -ne 'Windows') {
+            chmod +x (Join-Path $installDirectory 'deno')
+          }
+          $installDirectory | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          & (Join-Path $installDirectory '${{ runner.os == 'Windows' && 'deno.exe' || 'deno' }}') --version
 
       - name: Install E2E recorder
         if: ${{ matrix.useXvfb }}
         run: |
+          # ffmpeg only powers the diagnostic screen recordings, and run-e2e.js already skips
+          # recording with a warning when the binary is missing. So this step must never be able to
+          # fail or stall a shard: it is strictly a nice-to-have for debugging flakes after the fact.
+          #
+          # It used to call apt-get unguarded, which talks to the Azure Ubuntu mirrors. That is a
+          # network dependency with no timeout, and a degraded mirror has hung this step past the
+          # job timeout - taking down shards (including ones with no Java or recording relevance)
+          # that were otherwise healthy. Bound every call and give up quietly instead.
           if (Get-Command ffmpeg -ErrorAction SilentlyContinue) {
             ffmpeg -version | Select-Object -First 1
-          } else {
-            sudo apt-get update
-            sudo apt-get install -y --no-install-recommends ffmpeg
           }
+          else {
+            $installed = $false
+            $attempts = 2
+
+            for ($attempt = 1; $attempt -le $attempts; $attempt++) {
+              # `timeout` (coreutils) bounds a stalled child and exits 124, which is what converts an
+              # unresponsive mirror into a retryable failure rather than an open-ended wait.
+              # `--kill-after` matters: plain `timeout` only sends SIGTERM, and apt/dpkg block or
+              # defer signals around critical sections, so without the escalation to SIGKILL a
+              # wedged child could still outlive its own timeout.
+              sudo timeout --kill-after=30 180 apt-get update
+
+              # Only the install decides success: `apt-get update` can time out while the install
+              # still succeeds from the indices already on the runner image.
+              sudo timeout --kill-after=30 180 apt-get install -y --no-install-recommends ffmpeg
+              if ($LASTEXITCODE -eq 0) {
+                $installed = $true
+                break
+              }
+
+              if ($attempt -lt $attempts) {
+                Write-Host "::warning::Attempt $attempt to install ffmpeg failed; retrying."
+                Start-Sleep -Seconds 15
+              }
+            }
+
+            if (-not $installed) {
+              Write-Host '::warning::ffmpeg could not be installed; E2E screen recordings are disabled for this shard.'
+            }
+          }
+
+          # GitHub's pwsh wrapper appends `if ((Test-Path variable:/LASTEXITCODE)) { exit $LASTEXITCODE }`,
+          # so a failed apt-get would otherwise fail this step through the leftover exit code and take
+          # the shard down over a missing diagnostic recorder. Exit explicitly to hold the
+          # "this step must never fail the job" contract.
+          # https://docs.github.com/actions/reference/workflows-and-actions/workflow-syntax#exit-codes-and-error-action-preference
+          exit 0
+
+      - name: Pin container runtime to Docker (Windows)
+        # Prevents DCP from probing wslc.exe on every AppHost start. See the matching step in
+        # run-tests.yml and https://github.com/microsoft/aspire/issues/21570
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: '"ASPIRE_CONTAINER_RUNTIME=docker" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append'
 
       - name: Run extension E2E tests
         working-directory: extension
@@ -722,6 +1151,7 @@ jobs:
           ASPIRE_EXTENSION_E2E_VSIX: ${{ github.workspace }}/extension/out/aspire-extension.vsix
           ASPIRE_EXTENSION_E2E_SHARD: ${{ matrix.shardName }}
           ASPIRE_EXTENSION_E2E_SPEC: ${{ matrix.spec }}
+          ASPIRE_EXTENSION_E2E_BROWSER: ${{ matrix.browser }}
           ASPIRE_EXTENSION_E2E_ADVISORY_ISSUE: ${{ matrix.advisoryIssue }}
           ASPIRE_EXTENSION_E2E_UNSET_CLI_START_TIMEOUT: ${{ matrix.unsetCliStartTimeout }}
           # Linux E2E jobs run under Xvfb, where ffmpeg recordings are compact
@@ -734,22 +1164,24 @@ jobs:
             node scripts/run-e2e.js
           }
 
+      - name: Stop resource monitor (Windows)
+        if: ${{ always() && runner.os == 'Windows' }}
+        continue-on-error: true
+        shell: pwsh
+        run: ./eng/scripts/ci-resource-monitor.ps1 -Mode Stop -OutputDirectory "${{ github.workspace }}/extension/.test-results/resource-monitor"
+
       - name: Upload E2E diagnostics
         id: upload_e2e_diagnostics
         if: always()
         continue-on-error: true
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: extension-e2e-diagnostics-${{ matrix.rid }}-${{ matrix.shardName }}-attempt${{ github.run_attempt }}
+          # File selection belongs to the runner; these are prepared diagnostic directories.
           path: |
             extension/.test-results/**
-            extension/.test-storage/**/settings/User/**
-            extension/.test-storage/**/settings/logs/**
-            extension/.test-storage/**/screenshots/**
-            extension/.test-storage/**/aspire-home/logs/**
-            extension/.test-storage/**/aspire-home/cache/apphost-info/**
-            extension/.test-workspaces/**/.aspire/**
-            extension/.test-workspaces/**/*.log
+            extension/.test-storage/**
+            extension/.test-workspaces/**
             extension/.test-recordings/**
           if-no-files-found: ignore
           include-hidden-files: true

@@ -1,0 +1,11 @@
+﻿{
+  PromptDemo.txt:
+Name: PromptDemo
+Greeting: Hello from the terminal
+Kind: worker
+Features: web|worker
+,
+  README.txt:
+Optional template content.
+
+}

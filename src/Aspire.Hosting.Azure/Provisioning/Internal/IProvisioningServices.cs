@@ -8,9 +8,10 @@ using Azure.Core;
 using Azure.ResourceManager;
 using Azure.ResourceManager.Authorization;
 using Azure.ResourceManager.Authorization.Models;
-using Azure.ResourceManager.Resources;
-using Azure.ResourceManager.Resources.Models;
+using Azure.ResourceManager.Resources.Deployments;
+using Azure.ResourceManager.Resources.Deployments.Models;
 using Azure.Security.KeyVault.Secrets;
+using ResourceGroupData = Azure.ResourceManager.Resources.ResourceGroupData;
 
 namespace Aspire.Hosting.Azure.Provisioning.Internal;
 
@@ -103,12 +104,12 @@ internal interface IAzureProvisioningOptionsManager
 /// <summary>
 /// Azure provisioning option values supplied by a command.
 /// </summary>
-internal sealed record AzureProvisioningOptionsUpdate(string? SubscriptionId, string? ResourceGroup, string? Location, string? TenantId);
+internal sealed record AzureProvisioningOptionsUpdate(string? SubscriptionId, string? ResourceGroup, string? Location, string? TenantId, string? TenantResourceSuffix);
 
 /// <summary>
 /// The currently persisted Azure provisioning options.
 /// </summary>
-internal sealed record AzureProvisioningOptionsState(string? SubscriptionId, string? ResourceGroup, string? Location, string? TenantId);
+internal sealed record AzureProvisioningOptionsState(string? SubscriptionId, string? ResourceGroup, string? Location, string? TenantId, string? TenantResourceSuffix);
 
 /// <summary>
 /// No-op implementation used in publish mode where interactive provisioning options management is not needed.
@@ -117,10 +118,10 @@ internal sealed class NoOpAzureProvisioningOptionsManager : IAzureProvisioningOp
 {
     public Task<bool> EnsureProvisioningOptionsAsync(bool forcePrompt, CancellationToken cancellationToken = default) => Task.FromResult(false);
     public Task<AzureProvisioningOptionsState> GetProvisioningOptionsAsync(CancellationToken cancellationToken = default)
-        => Task.FromResult(new AzureProvisioningOptionsState(null, null, null, null));
+        => Task.FromResult(new AzureProvisioningOptionsState(null, null, null, null, null));
     public Task PersistProvisioningOptionsAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
     public Task<AzureProvisioningOptionsState> ApplyProvisioningOptionsAsync(AzureProvisioningOptionsUpdate options, CancellationToken cancellationToken = default)
-        => Task.FromResult(new AzureProvisioningOptionsState(options.SubscriptionId, options.ResourceGroup, options.Location, options.TenantId));
+        => Task.FromResult(new AzureProvisioningOptionsState(options.SubscriptionId, options.ResourceGroup, options.Location, options.TenantId, options.TenantResourceSuffix));
 }
 
 /// <summary>
@@ -368,12 +369,12 @@ internal interface ITenantResource
 }
 
 /// <summary>
-/// Provides user principal retrieval functionality.
+/// Provides Azure principal retrieval functionality.
 /// </summary>
-internal interface IUserPrincipalProvider
+internal interface IAzurePrincipalProvider
 {
     /// <summary>
-    /// Gets the user principal.
+    /// Gets the Azure principal that the running credential represents.
     /// </summary>
-    Task<UserPrincipal> GetUserPrincipalAsync(CancellationToken cancellationToken = default);
+    Task<AzurePrincipal> GetPrincipalAsync(CancellationToken cancellationToken = default);
 }

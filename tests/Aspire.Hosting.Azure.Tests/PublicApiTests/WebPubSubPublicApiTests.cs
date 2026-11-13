@@ -7,7 +7,7 @@ using static Aspire.Hosting.ApplicationModel.ReferenceExpression;
 
 namespace Aspire.Hosting.Azure.Tests.PublicApiTests;
 
-public class WebPubSubPublicApiTests
+public class WebPubSubPublicApiTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     public void AddAzureWebPubSubShouldThrowWhenBuilderIsNull()
@@ -26,7 +26,7 @@ public class WebPubSubPublicApiTests
     [InlineData(true)]
     public void AddAzureWebPubSubShouldThrowWhenNameIsNullOrEmpty(bool isNull)
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var name = isNull ? null! : string.Empty;
 
         var action = () => builder.AddAzureWebPubSub(name);
@@ -54,7 +54,7 @@ public class WebPubSubPublicApiTests
     [InlineData(true)]
     public void AddHubShouldThrowWhenHubNameIsNullOrEmpty(bool isNull)
     {
-        using var testBuilder = TestDistributedApplicationBuilder.Create();
+        using var testBuilder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var builder = testBuilder.AddAzureWebPubSub("web-pub-sub");
         var name = isNull ? null! : string.Empty;
 
@@ -93,7 +93,7 @@ public class WebPubSubPublicApiTests
     [InlineData(1, true)]
     public void AddEventHandlerShouldThrowWhenUserEventPatternIsNull(int overrideIndex, bool isNull)
     {
-        using var testBuilder = TestDistributedApplicationBuilder.Create();
+        using var testBuilder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var builder = testBuilder.AddAzureWebPubSub("web-pub-sub").AddHub("hub");
         var urlExpression = ReferenceExpression.Create($"host");
         var userEventPattern = isNull ? null! : string.Empty;
@@ -114,7 +114,7 @@ public class WebPubSubPublicApiTests
     [Fact]
     public void AddEventHandlerShouldThrowWhenUrlExpressionIsNull()
     {
-        using var testBuilder = TestDistributedApplicationBuilder.Create();
+        using var testBuilder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var builder = testBuilder.AddAzureWebPubSub("web-pub-sub").AddHub("hub");
         ReferenceExpression urlExpression = null!;
 

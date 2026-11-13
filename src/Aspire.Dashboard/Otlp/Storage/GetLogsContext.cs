@@ -13,6 +13,13 @@ public sealed class GetLogsContext
     public required List<TelemetryFilter> Filters { get; init; }
     public string[]? TextFragments { get; init; }
 
+    internal IReadOnlyList<long>? LogIds { get; init; }
+
+    /// <summary>
+    /// Gets the maximum number of the latest matching logs available for paging.
+    /// </summary>
+    internal int? LatestItemCount { get; init; }
+
     public static GetLogsContext ForResourceKey(ResourceKey resourceKey) => new()
     {
         ResourceKeys = [resourceKey],

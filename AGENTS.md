@@ -15,8 +15,8 @@ Instructions for GitHub Copilot and other AI coding agents working with the Aspi
 - **Project Templates**: Starter templates for new Aspire applications
 
 ### Technology Stack
-- .NET 10.0
-- C# 13 preview features
+- .NET SDK pinned in `global.json`; target frameworks defined in `eng/Versions.props`
+- C# language version configured in `Directory.Build.props`
 - xUnit SDK v3 with Microsoft.Testing.Platform for testing
 - Microsoft.DotNet.Arcade.Sdk for build infrastructure
 - Native AOT compilation for CLI tools
@@ -25,7 +25,7 @@ Instructions for GitHub Copilot and other AI coding agents working with the Aspi
 ## General
 
 * Make only high confidence suggestions when reviewing code changes.
-* Always use the latest version C#, currently C# 13 features.
+* Use the C# language version configured by the repository.
 * Never change global.json unless explicitly asked to.
 * Never change package.json or package-lock.json files unless explicitly asked to.
 * Never change NuGet.config files unless explicitly asked to.
@@ -36,7 +36,52 @@ Instructions for GitHub Copilot and other AI coding agents working with the Aspi
 
 ## Code Review Instructions
 
+### Conditional Test Selection
+
+When authoring or reviewing a change, check test-selection impact if it:
+
+* Adds, removes, or renames a test project.
+* Adds or changes a CI job, reusable workflow, or `run_*` selection gate.
+* Adds or changes a script, configuration file, or other loose input consumed by
+  CI or tests but not represented by an MSBuild project reference.
+* Adds, removes, or changes a runtime-only dependency on a repository-built
+  package, template, or fixture. Examples include packages loaded by `aspire
+  add`, generated AppHosts, package filters in E2E tests, and files copied into
+  an E2E workspace.
+* Adds, removes, or conditionally changes `QuarantinedTest`, `ActiveIssue`, or
+  `OuterloopTest` on an E2E scenario with runtime-only dependencies.
+
+For these changes, or changes to the map, selector, or changed-file filtering,
+read `.github/instructions/test-trigger-map.instructions.md` before deciding
+whether routing or its tests need to change. This includes changes outside the
+scoped paths that could leave a required map update missing.
+
+### Official Azure Pipelines validation
+
+When reviewing official Azure Pipelines YAML changes, validate them by running
+the internal `microsoft-aspire` pipeline (definition 1602 in `dnceng/internal`)
+and checking the relevant stage's timeline, logs, and artifacts. A green GitHub
+PR check or a test that asserts the YAML's exact command string does not prove
+the pipeline behavior. Keep non-obvious rationale next to the YAML change
+instead of duplicating it in exact-string tests. Use the `azdo-internal` skill
+for validation; explicitly record stages excluded by personal-branch gating
+(such as source indexing on main) as unvalidated, not passed.
+
+### Visual-only styling changes
+
+When reviewing a pull request, do not request automated tests solely for visual-only styling changes, including CSS selectors, colors, opacity, cursors, hover/focus/active appearance, or theme tokens. In particular, do not request Playwright assertions for computed styles or exact color values. Tests are appropriate when a styling change also affects functional interaction, DOM or accessibility semantics, state transitions, or whether a user can complete a workflow.
+
 ### API Files and Public API Surface
+
+`Aspire.Dashboard` and `Aspire.Cli` are applications, not reusable libraries.
+Their public C# types and members are implementation details, not supported
+public APIs. Do not flag breaking changes to those types or members, require
+compatibility overloads or deprecation shims, or flag missing XML documentation.
+XML documentation is optional for application code regardless of accessibility.
+Continue reviewing compatibility of user-visible behavior and external contracts,
+such as CLI commands, options, exit codes, machine-readable output, and dashboard
+endpoints and protocols. The library API guidance below does not apply to these
+application implementation details.
 
 The API files located in `*/api/*.cs` (e.g., `src/Aspire.Hosting/api/Aspire.Hosting.cs`) track the public API surface that has already been shipped in the latest release. These files are auto-generated and serve as a baseline for API compatibility checks.
 
@@ -66,6 +111,32 @@ When reviewing pull requests:
   - The packages be mirrored to an approved internal feed, or
   - Use existing internal feeds that already mirror public packages (like dotnet-public, dotnet-eng)
 * The wildcard pattern mappings (`<package pattern="*" />`) in dotnet-public and dotnet-eng feeds typically provide access to commonly-used public packages
+
+### Pinned GitHub Actions and the Actions Allow-List
+
+Third-party actions in `.github/workflows/**` are pinned to immutable commit SHAs
+(`owner/repo[/path]@<sha>`). The repository/enterprise GitHub Actions policy allows only
+specific SHAs, and that allow-list lives in repository/organization settings, outside git.
+A workflow that references a SHA missing from the allow-list fails at runtime with an
+"actions not allowed" error, even though the PR itself builds and reviews cleanly.
+
+When authoring or reviewing any change that modifies a pinned action SHA (including
+bulk regeneration such as gh-aw workflow updates):
+
+* Identify every changed `owner/repo[/path]@<sha>` reference in the diff.
+* Verify each newly introduced SHA is permitted by the repository/enterprise allowed-actions
+  policy. Verify by SHA, not by tag name.
+* Coordinate the allow-list update in repository/organization settings as part of the same
+  change, before merging. The PR cannot make that settings change itself, so the PR
+  description must call out which SHAs an admin needs to add.
+* Treat a changed pin without a confirmed matching allow-list update as a blocking review
+  issue.
+* Do not request allow-list changes when a pin is unchanged, or for first-party
+  `actions/*` actions already covered by policy.
+
+Example: PR #20209 bumped `dotnet/issue-labeler/*` from `46125e85e6a568dc712f358c39f35317366f5eed`
+(v2.0.0) to `160b6b1e1e8d36da09beb34ef1e4806d2c0520a3` (v2.2.0) without the corresponding
+allow-list update, which broke the labeler workflows (issue #20277).
 
 ## Formatting
 
@@ -215,7 +286,7 @@ var resources = new List<Resource>();
 - If temporarily introducing warnings during refactoring, add `/p:TreatWarningsAsErrors=false` to prevent build failure
 - **Important**: All warnings should be addressed before committing any final changes
 - Template engine warnings about "Missing generatorVersions" are expected and not errors
-- If build fails with SDK errors, run `./restore.sh` again to ensure correct .NET 10 RC is installed
+- If build fails with SDK errors, run `./restore.sh` again to install the SDK pinned in `global.json`
 - Build artifacts go to `./artifacts/` directory
 
 #### Visual Studio / VS Code Setup
@@ -263,26 +334,27 @@ kill <pid>
 * Do not leave newly-added tests commented out. All added tests should be building and passing.
 * Do not use Directory.SetCurrentDirectory in tests as it can cause side effects when tests execute concurrently.
 * Prefer using shared test service implementations (e.g., project-level `TestServices/` or `Helpers/` directories, or the cross-project `tests/Shared/` folder) rather than creating private implementation classes within individual test files. Reusing existing test fakes and helpers keeps tests consistent, reduces duplication, and makes maintenance easier. Do not create private test classes when a shared one already exists or can be extended.
-* MTP diagnostic args (hang dump, crash dump, exit code handling) are defined in `eng/Testing.props` via `MtpBaseArgs`. Do not hardcode these args in workflow YAML. See [docs/ci/mtp-args-pipeline.md](docs/ci/mtp-args-pipeline.md) for details.
+* MTP diagnostic args (hang dump, crash dump, exit code handling) are defined in `eng/Testing.targets` via `MtpBaseArgs`. Do not hardcode these args in workflow YAML. See [docs/ci/mtp-args-pipeline.md](docs/ci/mtp-args-pipeline.md) for details.
 * Use `Verify` (snapshot testing) for generated artifacts (files, serialized output, structured text). Prefer `await Verify(value, "ext")` over `Assert.Contains` / `Assert.DoesNotContain` / `Assert.Equal` on the same value. Run the test once to generate the `.received.` file, review it, then rename it to `.verified.` to accept it.
 * Avoid `Assert.DoesNotContain` as it is a weak assertion that easily goes out of date — it only proves something is absent without verifying what *is* present. Prefer `Assert.Equal` to check the entire string value, or `Assert.Collection` to verify the complete contents of a collection.
 
 ## Running tests
 
-(1) Build from the root with `./build.sh` (~3-5 minutes).
-(2) If that produces errors, fix those errors and build again. Repeat until the build is successful.
-(3) To run tests for a specific project: `dotnet test --project tests/ProjectName.Tests/ProjectName.Tests.csproj --no-build --no-launch-profile -- --filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true"`
+Run the smallest relevant test project; `dotnet test` builds it, so a full
+repository build is not a prerequisite:
 
-Note that tests for a project can be executed without first building from the root.
+```bash
+dotnet test --project tests/ProjectName.Tests/ProjectName.Tests.csproj --no-launch-profile -- --filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true"
+```
 
-(4) To run specific tests, include the filter after `--`:
+To run specific tests, include the filter after `--`:
 ```bash
 dotnet test --project tests/Aspire.Hosting.Testing.Tests/Aspire.Hosting.Testing.Tests.csproj --no-launch-profile -- --filter-method "*.TestingBuilderHasAllPropertiesFromRealBuilder" --filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true"
 ```
 
-(5) To apply a timeout for a specific test run use `--hangdump` and `--hangdump-timeout` options after `--`, for example:
+To apply a timeout for a specific test run use `--hangdump` and `--hangdump-timeout` options after `--`, for example:
 ```bash
-dotnet test --project tests/Aspire.Hosting.Testing.Tests/Aspire.Hosting.Testing.Tests.csproj --no-launch-profile -- --filter-method "*.TestingBuilderHasAllPropertiesFromRealBuilder" --hangdump --hangdump-timeout 2m
+dotnet test --project tests/Aspire.Hosting.Testing.Tests/Aspire.Hosting.Testing.Tests.csproj --no-launch-profile -- --filter-method "*.TestingBuilderHasAllPropertiesFromRealBuilder" --hangdump --hangdump-timeout 2m --filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true"
 ```
 You need both options (`--hangdump-timeout` does not work without `--hangdump`). Timeout can be expressed in minutes (e.g. `3m` for 3-minute timeout), or seconds (e.g. `30s` for 30-seconds timeout).
 
@@ -305,7 +377,9 @@ All test filtering must use MTP-native switches placed **after `--`**. See the f
 
 ### CRITICAL: Excluding Quarantined and Outerloop Tests
 
-When running tests in automated environments (including Copilot agent), **always exclude quarantined and outerloop tests** to avoid false negatives and long-running tests:
+For ordinary validation in automated environments (including Copilot agent),
+**exclude quarantined and outerloop tests** to avoid false negatives and
+long-running tests:
 
 ```bash
 # Correct - excludes quarantined and outerloop tests (use this in automation)
@@ -315,7 +389,10 @@ dotnet test --project tests/Project.Tests/Project.Tests.csproj --no-launch-profi
 dotnet test --project tests/Project.Tests/Project.Tests.csproj --no-launch-profile -- --filter-method "TestName" --filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true"
 ```
 
-Never run all tests without the quarantine and outerloop filters in automated environments, as this will include flaky tests that are known to fail intermittently and long-running tests that slow down CI.
+For an explicitly requested quarantine or outerloop reproduction, follow the
+relevant skill and opt in only to the targeted scenario. Remove only the
+exclusion that would suppress that scenario; keep unrelated tests excluded.
+Do not run an unfiltered suite to reproduce one test.
 
 Valid test filter switches include: --filter-class, --filter-not-class, --filter-method, --filter-not-method, --filter-namespace, --filter-not-namespace, --filter-not-trait, --filter-trait
 The switches `--filter-class` and `--filter-method` expect fully qualified names, unless a filter is used as a prefix like `--filter-class "*.SomeClassName"` or `--filter-method "*.SomeMethodName"`.
@@ -492,14 +569,12 @@ Do not manually edit `*.xlf` files. They are updated by the `UpdateXlf` MSBuild 
 
 ## Localization files
 * Files matching the pattern `*/localize/templatestrings.*.json` are localization files. Do not translate their content. It is done by a dedicated workflow.
-## Trust These Instructions
+## Use and Verify These Instructions
 
-These instructions are comprehensive and tested. Only search for additional information if:
-1. The instructions appear outdated or incorrect
-2. You encounter specific errors not covered here
-3. You need details about new features not yet documented
-
-For most development tasks, following these instructions should be sufficient to build, test, and validate changes successfully.
+Use these instructions as the starting point. Verify load-bearing external
+claims against primary sources, and inspect repository configuration when a
+version, command, or behavior matters to the change. Investigate missing or
+conflicting context rather than waiting for an error to reveal stale guidance.
 
 ## Typescript
 
@@ -525,15 +600,17 @@ The following specialized skills are available in `.agents/skills/`:
 - **dependency-update**: Guides dependency version updates by checking nuget.org, triggering the dotnet-migrate-package Azure DevOps pipeline, and monitoring runs
 - **api-review**: Reviews .NET API surface area PRs for design guideline violations, applies rules from .NET Framework Design Guidelines and Aspire conventions, and attributes findings to the author who introduced each API
 - **backport-pr**: Triggers the `/backport` bot on a source PR, waits for the bot-created backport PR, and fills in the shiproom template (Customer Impact, Testing, Risk, Regression?). Use when backporting a fix to a release branch.
-- **azdo-internal**: Triggers, monitors, and validates changes to the Aspire internal Azure DevOps pipeline (`microsoft-aspire`, definition 1602) on `dnceng/internal`. Use when asked to trigger an internal/AzDO build, check build status, push to the internal mirror, or validate `eng/` pipeline changes.
+- **azdo-internal**: Use when asked to trigger or inspect Aspire internal Azure DevOps builds, source indexing (`microsoft-aspire-source-index`, definition 1693), or release validation on `dnceng/internal`; push to the internal mirror; download logs or artifacts; or validate `eng/` pipeline changes.
 - **startup-perf**: Measures Aspire startup profiling with CLI self-profile capture and dashboard export traces
-- **reviewing-aspire-architecture**: Reviews PRs for Aspire-specific architectural patterns across 15 dimensions including API design, resource model, Azure provisioning, pattern conformance, dashboard UX, CLI behavior, and more. Complements the code-review skill with domain knowledge that generic review cannot catch.
+- **reviewing-aspire-architecture**: Use only when explicitly asked for deep architectural or pattern review of an existing PR or diff, or for a concrete Aspire-domain question escalated by a generic reviewer that cannot resolve it. Do not use for design or explanation requests, ordinary reviews, or based on changed file paths.
 - **vscode-extension**: Guide for developing, building, testing, and debugging the Aspire VS Code extension under `extension/`. Use when investigating an issue in, debugging, or working on a feature for the VS Code extension.
 - **deprecate-integration**: Soft-sunsets a shipped hosting integration: marks its API `[Obsolete]`, adds a README warning, hides the package from `aspire add`, removes integration-specific automation, suppresses the resulting warnings in first-party consumers, and ships one final obsolete release. Use when deprecating, sunsetting, or retiring an integration.
+- **create-video**: Produces narrated Aspire videos (feature walkthroughs, dashboard tours, integration overviews, pull request demos) with the aspire.dev branding: a chosen neural voice, captions, slight dynamic zooms on recorded demos, and renditions for GitHub, aspire.dev, YouTube or chat apps. Also makes silent or unbranded videos when asked.
 
 ## Pattern-Based Instructions
 
-Additional instructions are automatically applied when editing files matching specific patterns:
+Clients that support path-specific instructions apply the matching files below.
+Otherwise, read the relevant files before authoring or reviewing matching code.
 
 | Pattern | Instructions File |
 |---------|-------------------|
@@ -541,9 +618,13 @@ Additional instructions are automatically applied when editing files matching sp
 | `src/Aspire.Hosting/**/*.cs` | `.github/instructions/hosting-core.instructions.md` - Hosting core review patterns |
 | `src/Aspire.Hosting.Azure*/**/*.cs` | `.github/instructions/hosting-azure.instructions.md` - Hosting Azure review patterns |
 | `src/Aspire.Dashboard/**/*.{cs,razor,js}` | `.github/instructions/dashboard.instructions.md` - Dashboard review patterns |
+| `src/Aspire.Cli/**/*.cs` | `.github/instructions/cli.instructions.md` - CLI application review guidance |
 | `src/Components/**/*.cs` | `.github/instructions/components.instructions.md` - Client integration review patterns |
 | `src/Aspire.Hosting*/README.md` | `.github/instructions/hosting-readme.instructions.md` - Hosting integration READMEs |
 | `src/Components/**/README.md` | `.github/instructions/client-readme.instructions.md` - Client integration READMEs |
 | `tools/QuarantineTools/*` | `.github/instructions/quarantine.instructions.md` - QuarantineTools usage |
+| `**/*.cs` | `.github/instructions/temp-directory.instructions.md` - Temporary directory guidance |
 | `tests/**/*.cs` | `.github/instructions/test-review-guidelines.instructions.md` - Flaky test patterns and test review guidelines |
+| `tests/Infrastructure.Tests/**` | `.github/instructions/infrastructure-tests.instructions.md` - Behavioral infrastructure tests and build-time validation |
+| `eng/github-ci/**`, `tools/SelectTests/**`, `tests/Infrastructure.Tests/TestTriggerMap/**`, `.github/actions/select-tests/**` | `.github/instructions/test-trigger-map.instructions.md` - Test-selection routing and regression coverage |
 | `eng/scripts/get-aspire-cli*.sh`, `eng/scripts/get-aspire-cli*.ps1` | `.github/instructions/acquisition-tests.instructions.md` - CLI acquisition script tests |

@@ -19,11 +19,20 @@ namespace Aspire.Hosting;
 [AspireExport]
 public sealed class BlazorWasmAppResource(string name, string projectPath) : Resource(name), IResourceWithEnvironment, IResourceWithParent
 {
+    /// <inheritdoc/>
+    public override string ResourceTypeDisplayName => "Blazor WebAssembly";
+
     /// <summary>Fully-qualified path to the .csproj file.</summary>
     public string ProjectPath { get; } = projectPath;
 
     /// <summary>Directory containing the .csproj file.</summary>
     public string ProjectDirectory => Path.GetDirectoryName(ProjectPath)!;
+
+    /// <summary>
+    /// Gets the browser launched when starting a debug session for this app.
+    /// Defaults to <c>"msedge"</c>. Configure it with <see cref="BlazorGatewayExtensions.WithBlazorDebuggerBrowser"/>.
+    /// </summary>
+    public string DebuggerBrowser { get; internal set; } = "msedge";
 
     /// <summary>
     /// Gets the parent gateway resource whose lifecycle state is mirrored to this resource.

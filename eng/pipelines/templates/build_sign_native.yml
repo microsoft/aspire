@@ -45,15 +45,15 @@ jobs:
       jobs:
       - job: BuildNative_${{ replace(targetRid, '-', '_') }}
         displayName: ${{ replace(targetRid, '-', '_') }}
-        timeoutInMinutes: 60
+        # Signing and notarization can push successful macOS jobs close to an hour.
+        ${{ if eq(parameters.agentOs, 'macos') }}:
+          # The unified signed build also signs/notarizes the component payload.
+          timeoutInMinutes: ${{ iif(eq(parameters.codeSign, true), 120, 90) }}
+        ${{ else }}:
+          timeoutInMinutes: 60
 
         variables:
         - TeamName: ${{ parameters.teamName }}
-        - ${{ if eq(parameters.codeSign, true) }}:
-          - _buildArgs: '-sign'
-        - ${{ else }}:
-          - _buildArgs: ''
-
         - ${{ if eq(parameters.agentOs, 'windows') }}:
           - scriptName: build.cmd
           - dotnetScript: dotnet.cmd
@@ -184,89 +184,81 @@ jobs:
             name: computeCliChannel
             displayName: 🟣Determine Aspire CLI channel
 
-          # Build, publish, and sign aspire-managed before creating the bundle layout.
-          # This ensures aspire-managed is signed before CreateLayout packs it into the bundle archive.
-          # Step 1: dotnet publish produces the self-contained single-file binary.
-          # Step 2: build.sh -sign runs Arcade's signing (only when codeSign is enabled).
-          # Step 3: Bundle.proj creates the bundle layout and archive using the signed binary.
-          - script: >-
-              $(Build.SourcesDirectory)/$(dotnetScript)
-              publish
-              $(Build.SourcesDirectory)/src/Aspire.Managed/Aspire.Managed.csproj
-              -c $(_BuildConfig)
-              -r ${{ targetRid }}
-              --self-contained
-              /p:GenerateDocumentationFile=false
-              /p:EnforceCodeStyleInBuild=false
-              ${{ parameters.extraBuildArgs }}
-              /bl:$(Build.Arcade.LogsPath)PublishManaged.binlog
-            displayName: 🟣Prepare aspire-managed
-
-          # On macOS, ad-hoc codesign aspire-managed with JIT entitlements BEFORE Arcade signing.
-          # MicroBuild (MacDeveloperHardenWithNotarization) preserves entitlements from the prior
-          # ad-hoc signature when re-signing with the real certificate. Without this step,
-          # hardened runtime blocks CoreCLR JIT (W^X memory mapping) causing HRESULT: 0x80070008.
-          # This follows the same pattern used by dotnet/sdk for managed binaries (roslyn-entitlements.plist).
-          - ${{ if eq(parameters.agentOs, 'macos') }}:
-            - script: >-
-                codesign --sign - --force
-                --entitlements $(Build.SourcesDirectory)/eng/aspire-managed-entitlements.plist
-                $(Build.SourcesDirectory)/artifacts/bin/Aspire.Managed/Release/net10.0/${{ targetRid }}/publish/aspire-managed
-              displayName: 🟣Ad-hoc codesign aspire-managed with JIT entitlements
-
-          - ${{ if eq(parameters.codeSign, true) }}:
-            - script: >-
-                $(Build.SourcesDirectory)/$(scriptName)
-                -restore -sign
-                ${{ parameters.extraBuildArgs }}
-                -projects $(Build.SourcesDirectory)/src/Aspire.Managed/Aspire.Managed.csproj
-                /bl:$(Build.Arcade.LogsPath)SignManaged.binlog
-              displayName: 🟣Sign aspire-managed
-              env:
-                SYSTEM_ACCESSTOKEN: $(System.AccessToken)
-
-          # On macOS/Linux, restore the execute bit after Arcade signing.
-          # MicroBuild rewrites the binary file during signing, which resets permissions
-          # to the default umask (typically 644). The execute bit must be restored before
-          # CreateLayout packs the binary into the bundle archive.
-          - ${{ if and(eq(parameters.codeSign, true), ne(parameters.agentOs, 'windows')) }}:
-            - script: >-
-                chmod +x $(Build.SourcesDirectory)/artifacts/bin/Aspire.Managed/Release/net10.0/${{ targetRid }}/publish/aspire-managed
-              displayName: 🟣Restore execute permission on aspire-managed
-
           - task: NodeTool@0
             displayName: 🟣Install node.js
             inputs:
               versionSpec: '22.x'
 
+          # Keep signing credentials/plugin setup in the pipeline; Bundle.proj
+          # owns ordering and invokes fresh Arcade build/sign/pack processes.
           - script: >-
               $(Build.SourcesDirectory)/$(dotnetScript)
               msbuild
               $(Build.SourcesDirectory)/eng/Bundle.proj
-              "/t:_RestoreDcpPackage;_RunCreateLayout"
+              /t:Build
+              /p:BuildDistributionPackages=true
               /p:Configuration=$(_BuildConfig)
               /p:TargetRid=${{ targetRid }}
               /p:BundleVersion=ci-bundlepayload
               /p:ContinuousIntegrationBuild=true
-              /bl:$(Build.Arcade.LogsPath)BundleLayout.binlog
-            displayName: 🟣Create bundle layout
-
-          - script: >-
-              $(Build.SourcesDirectory)/$(scriptName)
-              -ci
-              -build
-              -pack
-              -restore
-              /p:SkipManagedBuild=true
-              /p:TargetRids=${{ targetRid }}
-              /p:BundlePayloadPath=$(Build.SourcesDirectory)/artifacts/bundle/aspire-ci-bundlepayload-${{ targetRid }}.tar.gz
               /p:AspireCliChannel=$(aspireCliChannel)
-              $(_buildArgs)
               ${{ parameters.extraBuildArgs }}
-              /bl:$(Build.Arcade.LogsPath)Build.binlog
-            displayName: 🟣Build native packages
+              /p:Sign=${{ iif(eq(parameters.codeSign, true), '$(_Sign)', 'false') }}
+              /p:DotNetSignType=${{ iif(eq(parameters.codeSign, true), '$(_SignType)', 'test') }}
+              /bl:$(Build.Arcade.LogsPath)BuildNativeBundle.binlog
+            displayName: 🟣Build native bundle and CLI packages
             env:
-              SYSTEM_ACCESSTOKEN: $(System.AccessToken) # Needed for the signing task
+              SYSTEM_ACCESSTOKEN: $(System.AccessToken)
+
+          # Bundle.proj builds the Dashboard ZIP under artifacts/DashboardArtifacts,
+          # but native_archives publishes only artifacts/packages. This copy stages
+          # the existing ZIP for upload and Assemble; it does not rebuild or repack it.
+          - pwsh: |
+              $ErrorActionPreference = 'Stop'
+              $source = "$(Build.SourcesDirectory)/artifacts/DashboardArtifacts/$(_BuildConfig)/${{ targetRid }}/aspire-dashboard-${{ targetRid }}.zip"
+              $destination = "$(Build.SourcesDirectory)/artifacts/packages/$(_BuildConfig)/DashboardArtifacts/${{ targetRid }}"
+              New-Item -ItemType Directory -Force -Path $destination | Out-Null
+              Copy-Item -LiteralPath $source -Destination $destination -Force
+            displayName: 🟣Stage Native AOT Dashboard artifact
+
+          - pwsh: |
+              $ErrorActionPreference = 'Stop'
+              $archive = "$(Build.SourcesDirectory)/artifacts/packages/$(_BuildConfig)/DashboardArtifacts/${{ targetRid }}/aspire-dashboard-${{ targetRid }}.zip"
+              $extractDirectory = Join-Path "$(Agent.TempDirectory)" "aspire-dashboard-${{ targetRid }}-$([guid]::NewGuid().ToString('N'))"
+              New-Item -ItemType Directory -Path $extractDirectory | Out-Null
+              try {
+                if ('${{ parameters.agentOs }}' -eq 'windows') {
+                  Expand-Archive -LiteralPath $archive -DestinationPath $extractDirectory
+                  $executable = Join-Path $extractDirectory 'Aspire.Dashboard.exe'
+                }
+                else {
+                  & unzip -q $archive -d $extractDirectory
+                  if ($LASTEXITCODE -ne 0) {
+                    throw "Failed to extract Native AOT Dashboard archive '$archive'."
+                  }
+                  $executable = Join-Path $extractDirectory 'Aspire.Dashboard'
+                }
+
+                & "$(Build.SourcesDirectory)/eng/scripts/test-native-dashboard.ps1" -DashboardPath $executable
+              }
+              finally {
+                Remove-Item -LiteralPath $extractDirectory -Recurse -Force -ErrorAction SilentlyContinue
+              }
+            displayName: 🟣Smoke test packaged Native AOT Dashboard (${{ targetRid }})
+            condition: and(succeeded(), eq(variables['Agent.OSArchitecture'], variables['_ridAgentArch']), not(contains('${{ targetRid }}', 'musl')))
+
+          - pwsh: >-
+              & "$(Build.SourcesDirectory)/eng/scripts/test-native-tray.ps1"
+              -ArchivePath "$(Build.SourcesDirectory)/artifacts/bundle/aspire-ci-bundlepayload-${{ targetRid }}.tar.gz"
+              -Rid "${{ targetRid }}"
+            displayName: 🟣Smoke test packaged native tray (${{ targetRid }})
+            condition: and(succeeded(), eq(variables['Agent.OSArchitecture'], variables['_ridAgentArch']), not(contains('${{ targetRid }}', 'musl')))
+
+          - pwsh: >-
+              & "$(Build.SourcesDirectory)/eng/scripts/test-native-terminalhost.ps1"
+              -TerminalHostPath "$(Build.SourcesDirectory)/artifacts/bundle/${{ targetRid }}/terminalhost/Aspire.TerminalHost${{ iif(eq(parameters.agentOs, 'windows'), '.exe', '') }}"
+            displayName: 🟣Smoke test bundled Native AOT TerminalHost
+            condition: and(succeeded(), eq(variables['Agent.OSArchitecture'], variables['_ridAgentArch']), not(contains('${{ targetRid }}', 'musl')))
 
           - pwsh: |
               $ErrorActionPreference = 'Stop'

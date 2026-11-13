@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   AzureDevOpsError,
+  azureCliEnvironment,
   azurePipelineIdFromRemovalKey,
   azurePipelineRemovalKey,
   discoverAzureDevOpsPipelines,
@@ -553,6 +554,20 @@ test("resolveAzureCliCommand finds the standard Windows az.cmd shim", async () =
   });
 
   assert.deepEqual(command, { path: python, prefixArgs: ["-IBm", "azure.cli"] });
+});
+
+test("Azure CLI environment excludes the Copilot agent session id", () => {
+  const environment = {
+    COPILOT_AGENT_SESSION_ID: "session-id",
+    AZURE_CONFIG_DIR: "C:\\Users\\test\\.azure",
+    PATH: "C:\\AzureCLI",
+  };
+
+  assert.deepEqual(azureCliEnvironment(environment), {
+    AZURE_CONFIG_DIR: "C:\\Users\\test\\.azure",
+    PATH: "C:\\AzureCLI",
+  });
+  assert.equal(environment.COPILOT_AGENT_SESSION_ID, "session-id");
 });
 
 test("unavailableAzureDevOpsHealth preserves an actionable provider error", () => {

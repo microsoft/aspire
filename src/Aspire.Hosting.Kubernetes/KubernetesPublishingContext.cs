@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREPIPELINES002
 #pragma warning disable ASPIRECOMPUTE002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
 using Aspire.Hosting.ApplicationModel;
@@ -185,18 +184,71 @@ internal sealed class KubernetesPublishingContext(
 
     private async Task AppendResourceContextToHelmValuesAsync(IResource resource, KubernetesResource resourceContext)
     {
-        await AddValuesToHelmSectionAsync(resource, resourceContext.Parameters, HelmExtensions.ParametersKey).ConfigureAwait(false);
+        var parameterItems = MergeHelmValueMappings(
+            resource,
+            HelmExtensions.ParametersKey,
+            (resourceContext.Parameters, "condition parameter"));
 
-        // Merge AdditionalConfigValues (e.g., branch parameters from if/else conditionals)
-        // into a combined dictionary for the config section of values.yaml.
-        var configItems = new Dictionary<string, KubernetesResource.HelmValue>(resourceContext.EnvironmentVariables);
-        foreach (var kvp in resourceContext.AdditionalConfigValues)
+        // Embedded parameters need values.yaml entries for their Helm references, but they must
+        // not become additional environment variables in the generated ConfigMap or Secret.
+        var configItems = MergeHelmValueMappings(
+            resource,
+            HelmExtensions.ConfigKey,
+            (resourceContext.EnvironmentVariables, "environment value"),
+            (resourceContext.AdditionalConfigValues, "embedded parameter"));
+        var secretItems = MergeHelmValueMappings(
+            resource,
+            HelmExtensions.SecretsKey,
+            (resourceContext.Secrets, "environment value"),
+            (resourceContext.AdditionalSecretValues, "embedded parameter"));
+
+        await AddValuesToHelmSectionAsync(resource, parameterItems, HelmExtensions.ParametersKey).ConfigureAwait(false);
+        await AddValuesToHelmSectionAsync(resource, configItems, HelmExtensions.ConfigKey).ConfigureAwait(false);
+        await AddValuesToHelmSectionAsync(resource, secretItems, HelmExtensions.SecretsKey).ConfigureAwait(false);
+    }
+
+    private static Dictionary<string, KubernetesResource.HelmValue> MergeHelmValueMappings(
+        IResource resource,
+        string helmKey,
+        params (IReadOnlyDictionary<string, KubernetesResource.HelmValue> Values, string OriginKind)[] mappingGroups)
+    {
+        var resourceKey = resource.Name.ToHelmValuesSectionName();
+        var result = new Dictionary<string, KubernetesResource.HelmValue>(StringComparer.Ordinal);
+        var origins = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        foreach (var (values, originKind) in mappingGroups)
         {
-            configItems.TryAdd(kvp.Key, kvp.Value);
+            foreach (var (key, value) in values)
+            {
+                var valuesKey = value.ValuesKey ?? key.ToHelmValuesSectionName();
+                var origin = $"{originKind} '{key}'";
+
+                if (!result.TryGetValue(valuesKey, out var existing))
+                {
+                    result.Add(valuesKey, value);
+                    origins.Add(valuesKey, origin);
+                    continue;
+                }
+
+                if (value.ParameterSource is not null &&
+                    ReferenceEquals(existing.ParameterSource, value.ParameterSource))
+                {
+                    if (value.IsEmbeddedParameter && !existing.IsEmbeddedParameter)
+                    {
+                        result[valuesKey] = value;
+                    }
+
+                    continue;
+                }
+
+                throw new InvalidOperationException(
+                    $"Resource '{resource.Name}' maps both {origins[valuesKey]} and {origin} " +
+                    $"to Helm values path '{helmKey}.{resourceKey}.{valuesKey}'. Rename one of them " +
+                    "so each value has a unique Helm path.");
+            }
         }
 
-        await AddValuesToHelmSectionAsync(resource, configItems, HelmExtensions.ConfigKey).ConfigureAwait(false);
-        await AddValuesToHelmSectionAsync(resource, resourceContext.Secrets, HelmExtensions.SecretsKey).ConfigureAwait(false);
+        return result;
     }
 
     private async Task AddValuesToHelmSectionAsync(
@@ -242,18 +294,29 @@ internal sealed class KubernetesPublishingContext(
                 if (parameter.Secret || parameter.Default is null)
                 {
                     // Don't resolve secrets or parameters without defaults during publish.
-                    // Write an empty placeholder and capture the mapping for deploy-time resolution.
                     value = string.Empty;
-                    environment?.CapturedHelmValues.Add(
+                }
+                else
+                {
+                    value = await parameter.GetValueAsync(cancellationToken).ConfigureAwait(false);
+                }
+
+                // Embedded parameters must participate in deploy-time lookup even when their
+                // published default is already present in values.yaml. Parent composite values
+                // are resolved from this lookup when writing the deploy override file.
+                if ((parameter.Secret || parameter.Default is null || helmExpressionWithValue.IsEmbeddedParameter) &&
+                    environment is not null &&
+                    !environment.CapturedHelmValues.Any(captured =>
+                        captured.Section == helmKey &&
+                        captured.ResourceKey == resource.Name.ToHelmValuesSectionName() &&
+                        captured.ValueKey == valuesKey))
+                {
+                    environment.CapturedHelmValues.Add(
                         new KubernetesEnvironmentResource.CapturedHelmValue(
                             helmKey,
                             resource.Name.ToHelmValuesSectionName(),
                             valuesKey,
                             parameter));
-                }
-                else
-                {
-                    value = await parameter.GetValueAsync(cancellationToken).ConfigureAwait(false);
                 }
             }
             else
@@ -278,18 +341,29 @@ internal sealed class KubernetesPublishingContext(
 
             paramValues[valuesKey] = value ?? string.Empty;
 
-            // Capture container image references for deploy-time registry resolution.
-            // During publish, the default image name (e.g., "server:latest") is written to values.yaml.
-            // During deploy, the ContainerImageReference resolves the full registry-prefixed name
-            // (e.g., "myregistry.azurecr.io/server:latest") and writes it to the override file.
-            if (helmExpressionWithValue.ImageResource is not null)
+            if (helmExpressionWithValue.ImageResource is { } imageResource)
             {
+                var registry = imageResource.TryGetLastAnnotation<ContainerRegistryReferenceAnnotation>(out var registryReference)
+                    ? registryReference.Registry
+                    : imageResource.GetDeploymentTargetAnnotation()?.ContainerRegistry;
+
+                // Do not evaluate missing parameters, secrets, or provisioned outputs during publish.
+                // Deployment resolves these references again after the registry is available.
+                if (registry is not null &&
+                    CanResolveDuringPublish(registry.Endpoint) &&
+                    (registry.Repository is null || CanResolveDuringPublish(registry.Repository)))
+                {
+                    IValueProvider imageReference = new ContainerImageReference(imageResource);
+                    paramValues[valuesKey] = await imageReference.GetValueAsync(cancellationToken).ConfigureAwait(false)
+                        ?? throw new InvalidOperationException($"Container image for resource '{imageResource.Name}' could not be resolved during publish.");
+                }
+
                 environment?.CapturedHelmImageReferences.Add(
                     new KubernetesEnvironmentResource.CapturedHelmImageReference(
                         helmKey,
                         resource.Name.ToHelmValuesSectionName(),
                         valuesKey,
-                        helmExpressionWithValue.ImageResource));
+                        imageResource));
             }
         }
 
@@ -299,14 +373,28 @@ internal sealed class KubernetesPublishingContext(
         }
     }
 
+    private static bool CanResolveDuringPublish(ReferenceExpression expression)
+    {
+        return !expression.IsConditional && expression.ValueProviders.All(provider => provider switch
+        {
+            ParameterResource parameter => !parameter.Secret && parameter.Default is not null,
+            ReferenceExpression nested => CanResolveDuringPublish(nested),
+            _ => false
+        });
+    }
+
     private async Task WriteKubernetesTemplatesForResource(IResource resource, IEnumerable<BaseKubernetesResource> templatedItems)
     {
         var templatesFolder = Path.Combine(OutputPath, "templates", resource.Name);
         Directory.CreateDirectory(templatesFolder);
 
+        // Different kinds may legitimately share a name (e.g. a Service and a ServiceExport targeting it),
+        // so make file names unique rather than letting a later template silently overwrite an earlier one.
+        var usedFileNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
         foreach (var templatedItem in templatedItems)
         {
-            var fileName = GetFilename(resource.Name, templatedItem);
+            var fileName = GetUniqueFilename(GetFilename(resource.Name, templatedItem), templatedItem, usedFileNames);
             var outputFile = Path.Combine(templatesFolder, fileName);
             var yaml = _serializer.Serialize(templatedItem);
 
@@ -314,6 +402,28 @@ internal sealed class KubernetesPublishingContext(
             await writer.WriteLineAsync(HelmExtensions.TemplateFileSeparator).ConfigureAwait(false);
             await writer.WriteAsync(yaml).ConfigureAwait(false);
         }
+    }
+
+    private static string GetUniqueFilename(string fileName, BaseKubernetesResource templatedItem, HashSet<string> usedFileNames)
+    {
+        if (usedFileNames.Add(fileName))
+        {
+            return fileName;
+        }
+
+        var baseName = Path.GetFileNameWithoutExtension(fileName);
+        if (!string.IsNullOrWhiteSpace(templatedItem.Kind))
+        {
+            baseName = $"{baseName}-{templatedItem.Kind.ToLowerInvariant()}";
+        }
+
+        var candidate = $"{baseName}.yaml";
+        for (var i = 2; !usedFileNames.Add(candidate); i++)
+        {
+            candidate = $"{baseName}-{i}.yaml";
+        }
+
+        return candidate;
     }
 
     private static string GetFilename(string baseName, BaseKubernetesResource templatedItem)

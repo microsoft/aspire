@@ -35,18 +35,56 @@ internal static class RadiusResourceTypes
     // --- Radius.Data ---
 
     public const string RedisCaches = "Radius.Data/redisCaches";
-    public const string SqlDatabases = "Radius.Data/sqlDatabases";
+
+    /// <summary>
+    /// The SQL Server UDT registered by <c>resource-types-contrib</c>. Note the name: there is no
+    /// <c>Radius.Data/sqlDatabases</c> UDT — that spelling belongs to the legacy
+    /// <see cref="LegacySqlDatabases"/> portable type, and emitting it as a <c>Radius.*</c> type
+    /// fails type resolution at deploy time.
+    /// See <see href="https://github.com/radius-project/resource-types-contrib/blob/main/Data/sqlServerDatabases/sqlServerDatabases.yaml"/>.
+    /// </summary>
+    /// <remarks>
+    /// Not emitted as of Radius 0.60: the type ships in the Bicep extension, but no Kubernetes
+    /// recipe is published for it (<c>kube-recipes/sqlserverdatabases</c> does not exist), so the
+    /// mapper still emits <see cref="LegacySqlDatabases"/>. The blocker is the missing recipe, not
+    /// a missing type.
+    /// </remarks>
+    public const string SqlServerDatabases = "Radius.Data/sqlServerDatabases";
+
     public const string PostgreSqlDatabases = "Radius.Data/postgreSqlDatabases";
+
+    /// <summary>
+    /// The MongoDB UDT registered by <c>resource-types-contrib</c>.
+    /// </summary>
+    /// <remarks>
+    /// Not emitted as of Radius 0.60: the type ships in the Bicep extension, but no Kubernetes
+    /// recipe is published for it (<c>kube-recipes/mongodatabases</c> does not exist), so the
+    /// mapper still emits <see cref="LegacyMongoDatabases"/>. The blocker is the missing recipe,
+    /// not a missing type.
+    /// </remarks>
     public const string MongoDatabases = "Radius.Data/mongoDatabases";
 
     // --- Radius.Messaging ---
 
-    public const string RabbitMQQueues = "Radius.Messaging/rabbitMQQueues";
+    /// <summary>
+    /// The RabbitMQ UDT. Note the name: Radius 0.60 spells this <c>rabbitMQ</c>, not
+    /// <c>rabbitMQQueues</c> — the latter is the legacy portable type
+    /// (<see cref="LegacyRabbitMQQueues"/>) and emitting it under the <c>Radius.*</c> namespace
+    /// fails type resolution at deploy time.
+    /// </summary>
+    public const string RabbitMQ = "Radius.Messaging/rabbitMQ";
 
-    // --- Radius.Dapr ---
+    // --- Radius.Security ---
 
-    public const string DaprStateStores = "Radius.Dapr/stateStores";
-    public const string DaprPubSubBrokers = "Radius.Dapr/pubSubBrokers";
+    /// <summary>
+    /// The <c>Radius.*</c> UDT replacement for <c>Applications.Core/secretStores</c>. Used to hold
+    /// credentials that a UDT backing resource consumes by resource ID.
+    /// </summary>
+    public const string SecuritySecrets = "Radius.Security/secrets";
+
+    // Deliberately absent: a Radius.Dapr/* namespace. No such namespace exists in Radius 0.60;
+    // Dapr building blocks are still modelled by the legacy Applications.Dapr/* portable types
+    // below, which is what ResourceTypeMapper emits for them.
 
     // --- Legacy Applications.* fallback types ---
     // These portable resource types are being replaced by user-defined types (UDTs)
@@ -64,9 +102,19 @@ internal static class RadiusResourceTypes
 
     public const string LegacyEnvironments = "Applications.Core/environments";
 
+    // LegacyRedisCaches and LegacyRabbitMQQueues are no longer emitted: Radius 0.60 ships UDT
+    // equivalents with published Kubernetes recipes, so ResourceTypeMapper maps Redis and RabbitMQ
+    // straight to Radius.Data/redisCaches and Radius.Messaging/rabbitMQ with no legacy fallback.
+    // They are kept deliberately because the pre-0.60 spellings still appear in artifacts and docs
+    // in the wild, and because LegacyRabbitMQQueues is what distinguishes the legacy portable type
+    // from the UDT in the RabbitMQ remarks above — a distinction that fails type resolution at
+    // deploy time when it is confused. Neither has a row in RadiusBackingConnections.s_schemas,
+    // which ConnectionSchemaTable_DescribesOnlyEmittedBackingTypes enforces.
     public const string LegacyRedisCaches = "Applications.Datastores/redisCaches";
 
     public const string LegacyMongoDatabases = "Applications.Datastores/mongoDatabases";
+
+    public const string LegacySqlDatabases = "Applications.Datastores/sqlDatabases";
 
     public const string LegacyRabbitMQQueues = "Applications.Messaging/rabbitMQQueues";
 

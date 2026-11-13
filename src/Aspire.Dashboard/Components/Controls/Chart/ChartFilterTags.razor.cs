@@ -21,15 +21,10 @@ public partial class ChartFilterTags : IDisposable
     [Parameter, EditorRequired]
     public required EventCallback<DimensionFilterViewModel> OnSelectionChanged { get; set; }
 
-    // Prevent magic string for dictionary keys
-    private const string KeyForDimensionValue = "dimensionValue";
-    private const string KeyForIsIncludedInFilters = "isIncludedInFilters";
+    [Parameter, EditorRequired]
+    public required EventCallback<DimensionFilterViewModel> OnShowPopover { get; set; }
 
-    // Maximum number of tags to render in the FluentOverflow. The visible area fits ~5-7 tags;
-    // rendering 20 gives FluentOverflow enough items to measure correctly. Items beyond this
-    // limit are treated as pre-overflowed and counted in the "+N" badge without being added to
-    // the DOM, avoiding hundreds of elements triggering an expensive forced reflow.
-    private const int MaxRenderedTags = 20;
+    private const int MaxRenderedOverflowItems = 20;
 
     protected override void OnInitialized()
     {
@@ -62,11 +57,7 @@ public partial class ChartFilterTags : IDisposable
         await OnSelectionChanged.InvokeAsync(Filter);
     }
 
-    private void ShowPopover()
-    {
-        Filter.PopupVisible = true;
-        Filter.NotifyStateChanged?.Invoke();
-    }
+    private Task ShowPopoverAsync() => OnShowPopover.InvokeAsync(Filter);
 
     /// <summary>
     /// Orders dimension values numerically if all values are parsable as doubles;

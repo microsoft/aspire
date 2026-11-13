@@ -1,43 +1,43 @@
 ﻿@description('The location for the resource(s) to be deployed.')
 param location string = resourceGroup().location
 
-resource storage 'Microsoft.Storage/storageAccounts@2024-01-01' = {
+resource storage 'Microsoft.Storage/storageAccounts@2026-06-01' = {
   name: take('storage${uniqueString(resourceGroup().id)}', 24)
-  kind: 'StorageV2'
-  location: location
-  sku: {
-    name: 'Standard_GRS'
+  tags: {
+    'aspire-resource-name': 'storage'
   }
+  location: location
   properties: {
-    accessTier: 'Hot'
-    allowSharedKeyAccess: false
     isHnsEnabled: false
     minimumTlsVersion: 'TLS1_2'
+    allowSharedKeyAccess: false
+    accessTier: 'Hot'
     networkAcls: {
       defaultAction: 'Allow'
     }
   }
-  tags: {
-    'aspire-resource-name': 'storage'
+  sku: {
+    name: 'Standard_GRS'
   }
+  kind: 'StorageV2'
 }
 
-resource blobs 'Microsoft.Storage/storageAccounts/blobServices@2024-01-01' = {
+resource blobs 'Microsoft.Storage/storageAccounts/blobServices@2026-06-01' = {
   name: 'default'
   parent: storage
 }
 
-resource myContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2024-01-01' = {
+resource myContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2026-06-01' = {
   name: 'my-blob-container'
   parent: blobs
 }
 
-resource queues 'Microsoft.Storage/storageAccounts/queueServices@2024-01-01' = {
+resource queues 'Microsoft.Storage/storageAccounts/queueServices@2026-06-01' = {
   name: 'default'
   parent: storage
 }
 
-resource myqueue 'Microsoft.Storage/storageAccounts/queueServices/queues@2024-01-01' = {
+resource myqueue 'Microsoft.Storage/storageAccounts/queueServices/queues@2026-06-01' = {
   name: 'my-queue'
   parent: queues
 }

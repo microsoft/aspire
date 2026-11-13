@@ -5,11 +5,15 @@
 
 using System.Text.Json;
 using Aspire.Hosting.Radius.Publishing;
+using Microsoft.Extensions.Time.Testing;
+using Xunit.Sdk;
 
 namespace Aspire.Hosting.Radius.Tests.Secrets;
 
 public class SealedSecretApplyStepTests
 {
+    private static readonly TimeSpan s_hangGuard = TimeSpan.FromSeconds(30);
+
     [Fact]
     public void BuildApplyArgs_WithContext_PassesContextExplicitly()
     {
@@ -36,6 +40,69 @@ public class SealedSecretApplyStepTests
     {
         var args = SealedSecretApplyStep.BuildApplyArgs(null, "app");
         Assert.Equal(new[] { "apply", "-f", "-", "-o", "json", "-n", "app" }, args);
+    }
+
+    /// <summary>
+    /// `rad` has no configuration environment variable — the config is chosen with the global
+    /// `--config` flag — so reading &lt;home&gt;/.rad/config.yaml describes the workspace only when
+    /// `rad` runs with its default config. Asking `rad` instead means the answer comes from the
+    /// same executable, PATH and config the deploy will use, including through a wrapper shim.
+    /// </summary>
+    [Fact]
+    public async Task TryResolve_PrefersTheContextRadItselfReports()
+    {
+        var context = await RadiusWorkspaceKubeContext.TryResolveAsync(
+            (fileName, arguments, _, _) =>
+            {
+                Assert.Equal("rad", fileName);
+                Assert.Equal(["workspace", "show", "--output", "json"], arguments);
+                return Task.FromResult<ProcessRunResult?>(new ProcessRunResult(
+                    0,
+                    """{"name":"default","connection":{"kind":"kubernetes","context":"shimmed-cluster"},"scope":"/planes/radius/local/resourceGroups/default"}"""));
+            },
+            CancellationToken.None);
+
+        Assert.Equal("shimmed-cluster", context);
+    }
+
+    /// <summary>
+    /// Every payload that does not name a kubecontext has to fall through to the config file rather
+    /// than resolve to something invented: a non-kubernetes connection, a failed or missing `rad`,
+    /// and output that is not the expected object at all.
+    /// </summary>
+    [Theory]
+    [InlineData("""{"name":"default","connection":{"kind":"kubernetes","context":"kind-radius"}}""", "kind-radius")]
+    [InlineData("""{"name":"default","connection":{"kind":"kubernetes","context":"  spaced  "}}""", "spaced")]
+    [InlineData("""{"name":"default","connection":{"kind":"kubernetes","context":""}}""", null)]
+    // A workspace that is not backed by a Kubernetes cluster carries no kubecontext.
+    [InlineData("""{"name":"default","connection":{"kind":"other"}}""", null)]
+    [InlineData("""{"name":"default"}""", null)]
+    [InlineData("[]", null)]
+    [InlineData("not json", null)]
+    [InlineData("", null)]
+    public void ParseWorkspaceConnectionContext_ReadsOnlyAKubecontext(string json, string? expected)
+    {
+        Assert.Equal(expected, RadiusWorkspaceKubeContext.ParseWorkspaceConnectionContext(json));
+    }
+
+    /// <summary>
+    /// When `rad` cannot answer, the config file is still read — preserving the previous behavior
+    /// for the ordinary default-config case rather than trading one blind spot for another.
+    /// </summary>
+    [Fact]
+    public async Task TryResolve_WhenRadCannotAnswer_FallsBackToTheConfigFile()
+    {
+        foreach (var unusable in new ProcessRunResult?[] { null, new ProcessRunResult(1, ""), new ProcessRunResult(0, ""), new ProcessRunResult(0, "not json") })
+        {
+            // The real home almost certainly has no rad config in CI, so the fallback resolves to
+            // null. What is being pinned is that the fallback is *reached* rather than the command
+            // result being trusted blindly.
+            var context = await RadiusWorkspaceKubeContext.TryResolveAsync(
+                (_, _, _, _) => Task.FromResult(unusable),
+                CancellationToken.None);
+
+            Assert.Null(context);
+        }
     }
 
     [Fact]
@@ -253,6 +320,7 @@ public class SealedSecretApplyStepTests
                             """, StdErr: ""));
                 }),
             secretExists: _ => Task.FromResult(true),
+            timeProvider: TimeProvider.System,
             cancellationToken: default);
 
         Assert.Equal(2, statusProbeCalls);
@@ -410,6 +478,7 @@ public class SealedSecretApplyStepTests
                 secretCalls++;
                 return Task.FromResult(secretCalls >= 2);
             },
+            timeProvider: TimeProvider.System,
             cancellationToken: default);
 
         Assert.True(statusCalls >= 3);
@@ -430,6 +499,7 @@ public class SealedSecretApplyStepTests
                     4,
                     [new SealedSecretApplyStep.SealedSecretCondition("Synced", "False", "no key could decrypt secret")])),
                 secretExists: _ => Task.FromResult(false),
+                timeProvider: TimeProvider.System,
                 cancellationToken: default));
 
         Assert.Contains("ASPIRERADIUS058", ex.Message);
@@ -447,6 +517,7 @@ public class SealedSecretApplyStepTests
                 interval: TimeSpan.FromMilliseconds(1),
                 getStatus: _ => Task.FromResult(new SealedSecretApplyStep.SealedSecretStatusSnapshot(4, 3, [])),
                 secretExists: _ => Task.FromResult(false),
+                timeProvider: TimeProvider.System,
                 cancellationToken: default));
 
         Assert.Contains("ASPIRERADIUS058", ex.Message);
@@ -472,45 +543,55 @@ public class SealedSecretApplyStepTests
                 5,
                 [new SealedSecretApplyStep.SealedSecretCondition("Synced", "True", null)])),
             secretExists: _ => Task.FromResult(true),
+            timeProvider: TimeProvider.System,
             cancellationToken: default);
     }
 
     [Fact]
     public async Task WaitForSealedSecretSynced_StatusMatchesButSecretAbsent_KeepsWaitingThenTimesOut()
     {
+        // The budget is driven by a FakeTimeProvider rather than the wall clock. A wall-clock budget
+        // (previously 10ms, then 250ms) was flaky under CI load: a slow first iteration (cold JIT,
+        // thread-pool starvation) could consume the whole budget before the second poll, so the
+        // loop timed out after observing the absent Secret only once. With fake time, the budget only
+        // elapses when the test advances it, after the loop has demonstrably kept waiting.
+        var timeProvider = new FakeTimeProvider();
+        var budget = TimeSpan.FromMilliseconds(250);
+        var secondProbeStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var secretCalls = 0;
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            SealedSecretApplyStep.WaitForSealedSecretSyncedAsync(
-                "db-creds", "app", "db-creds", appliedGeneration: 4,
-                // Use a comfortable timeout (not a tiny wall-clock budget) and drive the timeout
-                // deterministically from the probe. A previous 10ms budget was flaky under CI load:
-                // a slow cold-JIT first iteration could consume the whole budget before a second
-                // poll, so 'secretCalls > 1' occasionally saw only one call. Here the first probe
-                // reports the Secret absent (so the loop keeps waiting past one iteration), then the
-                // second probe hangs until the remaining-budget guard cancels it and surfaces the
-                // ASPIRERADIUS058 timeout — guaranteeing at least two polls regardless of runner speed.
-                deadline: DateTimeOffset.UtcNow + TimeSpan.FromMilliseconds(250),
-                timeout: TimeSpan.FromMilliseconds(250),
-                interval: TimeSpan.FromMilliseconds(1),
-                getStatus: _ => Task.FromResult(new SealedSecretApplyStep.SealedSecretStatusSnapshot(
-                    4,
-                    4,
-                    [new SealedSecretApplyStep.SealedSecretCondition("Synced", "True", null)])),
-                secretExists: async ct =>
+
+        var waitTask = SealedSecretApplyStep.WaitForSealedSecretSyncedAsync(
+            "db-creds", "app", "db-creds", appliedGeneration: 4,
+            deadline: timeProvider.GetUtcNow() + budget,
+            timeout: budget,
+            interval: TimeSpan.Zero,
+            getStatus: _ => Task.FromResult(new SealedSecretApplyStep.SealedSecretStatusSnapshot(
+                4,
+                4,
+                [new SealedSecretApplyStep.SealedSecretCondition("Synced", "True", null)])),
+            secretExists: async ct =>
+            {
+                if (Interlocked.Increment(ref secretCalls) == 1)
                 {
-                    secretCalls++;
-                    if (secretCalls == 1)
-                    {
-                        return false;
-                    }
-
-                    await Task.Delay(Timeout.Infinite, ct).ConfigureAwait(false);
                     return false;
-                },
-                cancellationToken: default));
+                }
 
+                secondProbeStarted.TrySetResult();
+                await Task.Delay(Timeout.Infinite, ct).ConfigureAwait(false);
+                return false;
+            },
+            timeProvider: timeProvider,
+            cancellationToken: default);
+
+        await secondProbeStarted.Task.WaitAsync(s_hangGuard);
+        Assert.False(waitTask.IsCompleted);
+
+        // Exhausting the budget cancels the hanging probe and surfaces the ASPIRERADIUS058 timeout.
+        timeProvider.Advance(budget);
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => waitTask.WaitAsync(s_hangGuard));
         Assert.Contains("ASPIRERADIUS058", ex.Message);
-        Assert.True(secretCalls > 1);
+        Assert.Equal(2, Volatile.Read(ref secretCalls));
     }
 
     [Fact]
@@ -529,6 +610,7 @@ public class SealedSecretApplyStepTests
                     return new SealedSecretApplyStep.SealedSecretStatusSnapshot(4, null, []);
                 },
                 secretExists: _ => Task.FromResult(false),
+                timeProvider: TimeProvider.System,
                 cancellationToken: default));
 
         stopwatch.Stop();
@@ -550,6 +632,7 @@ public class SealedSecretApplyStepTests
                 interval: TimeSpan.FromMilliseconds(1),
                 getStatus: _ => Task.FromResult(new SealedSecretApplyStep.SealedSecretStatusSnapshot(4, null, [])),
                 secretExists: _ => Task.FromResult(false),
+                timeProvider: TimeProvider.System,
                 cancellationToken: cts.Token));
     }
 
@@ -804,6 +887,7 @@ public class SealedSecretApplyStepTests
                     return 0;
                 },
                 remaining: TimeSpan.FromMilliseconds(50),
+                timeProvider: TimeProvider.System,
                 cancellationToken: default,
                 createTimeoutException: () => SealedSecretApplyStep.CreateOperationTimeoutException(
                     "db-creds", "app", "db-creds", "apply", TimeSpan.FromMilliseconds(50))));
@@ -830,6 +914,7 @@ public class SealedSecretApplyStepTests
                     return 0;
                 },
                 remaining: TimeSpan.FromSeconds(5),
+                timeProvider: TimeProvider.System,
                 cancellationToken: cts.Token,
                 createTimeoutException: () => SealedSecretApplyStep.CreateOperationTimeoutException(
                     "db-creds", "app", "db-creds", "verify", TimeSpan.FromSeconds(5))));

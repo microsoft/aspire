@@ -30,3 +30,4 @@ Aspire.Hosting.MySql/withHostPort(port: number) -> Aspire.Hosting.MySql/Aspire.H
 Aspire.Hosting.MySql/withInitFiles(source: string) -> Aspire.Hosting.MySql/Aspire.Hosting.ApplicationModel.MySqlServerResource
 Aspire.Hosting.MySql/withPassword(password: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource) -> Aspire.Hosting.MySql/Aspire.Hosting.ApplicationModel.MySqlServerResource
 Aspire.Hosting.MySql/withPhpMyAdmin(configureContainer?: callback, containerName?: string) -> Aspire.Hosting.MySql/Aspire.Hosting.ApplicationModel.MySqlServerResource
+Aspire.Hosting.MySql/withRepl() -> Aspire.Hosting.MySql/Aspire.Hosting.ApplicationModel.MySqlServerResource

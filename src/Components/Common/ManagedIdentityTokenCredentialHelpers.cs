@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Buffers.Text;
 using System.Text.Json;
 using Azure.Core;
 using Npgsql;
@@ -77,14 +78,11 @@ internal static class ManagedIdentityTokenCredentialHelpers
                 return false;
             }
 
-            // The payload is the second part, Base64Url encoded
+            // The payload is the second part, Base64Url encoded without padding (https://datatracker.ietf.org/doc/html/rfc7515#section-2).
+            // It can contain '-' and '_', which Convert.FromBase64String rejects, so it must be decoded as Base64Url.
             var payload = tokenParts[1];
 
-            // Add padding if necessary
-            payload = AddBase64Padding(payload);
-
-            // Decode the payload from Base64Url
-            var decodedBytes = Convert.FromBase64String(payload);
+            var decodedBytes = Base64Url.DecodeFromChars(payload);
 
             // Parse the decoded payload as JSON
             var reader = new Utf8JsonReader(decodedBytes);
@@ -138,11 +136,4 @@ internal static class ManagedIdentityTokenCredentialHelpers
 
         return principalName.ToString();
     }
-
-    private static string AddBase64Padding(string base64) => (base64.Length % 4) switch
-    {
-        2 => base64 + "==",
-        3 => base64 + "=",
-        _ => base64,
-    };
 }

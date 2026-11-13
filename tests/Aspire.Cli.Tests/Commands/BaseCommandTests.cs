@@ -22,9 +22,16 @@ public class BaseCommandTests(ITestOutputHelper outputHelper)
     [Theory]
     [InlineData("ps", false)]
     [InlineData("ps --format json", true)]
+    [InlineData("resources --format mermaid", true)]
+    [InlineData("describe --format=Mermaid", true)]
+    [InlineData("describe --format json", true)]
+    [InlineData("describe --format table", false)]
     [InlineData("ps --format table", false)]
     [InlineData("ps --format invalid", false)]
     [InlineData("docs --format json", false)]
+    [InlineData("do --list-steps --format json", true)]
+    [InlineData("do --list-steps --format=json", true)]
+    [InlineData("do --list-steps", false)]
     public async Task BaseCommand_FormatOption_SetsConsoleOutputCorrectly(string args, bool expectErrorConsole)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -191,6 +198,9 @@ public class BaseCommandTests(ITestOutputHelper outputHelper)
     [InlineData("run --format json", false)]
     [InlineData("run", true)]
     [InlineData("docs", false)]
+    [InlineData("do --list-steps --format json", false)]
+    [InlineData("do --list-steps --format=json", false)]
+    [InlineData("do --list-steps --format table", true)]
     public async Task BaseCommand_UpdateNotification_RespectJsonFormat(string args, bool expectNotifyCalled)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -289,6 +299,85 @@ public class BaseCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task BaseCommand_OnFailure_WithMessageActions_CombinesErrorAndDiagnosticLogs()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var cliLogPath = Path.Combine(workspace.WorkspaceRoot.FullName, "current-cli.log");
+        var appHostLogPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost-cli.log");
+        var backchannelMonitor = new TestAuxiliaryBackchannelMonitor
+        {
+            ScanAsyncCallback = _ => throw new InvalidOperationException("Something went wrong")
+        };
+        (string? ErrorMessage, string CliLogPath, string? AppHostLogPath)? capturedFailure = null;
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ExtensionBackchannelFactory = _ => new TestExtensionBackchannel();
+            options.InteractionServiceFactory = serviceProvider => new TestExtensionInteractionService(serviceProvider)
+            {
+                TryDisplayCommandFailureAsyncCallback = (errorMessage, capturedCliLogPath, capturedAppHostLogPath, allowMarkup, _) =>
+                {
+                    Assert.False(allowMarkup);
+                    capturedFailure = (errorMessage, capturedCliLogPath, capturedAppHostLogPath);
+                    return Task.FromResult(true);
+                }
+            };
+            options.AuxiliaryBackchannelMonitorFactory = _ => backchannelMonitor;
+            options.CliExecutionContextFactory = _ =>
+            {
+                var context = workspace.CreateExecutionContext(logFilePath: cliLogPath);
+                context.AppHostCliLogFilePath = appHostLogPath;
+                return context;
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var interactionService = Assert.IsType<TestExtensionInteractionService>(provider.GetRequiredService<IInteractionService>());
+        var result = provider.GetRequiredService<RootCommand>().Parse("ps");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+        Assert.NotNull(capturedFailure);
+        Assert.Contains("Something went wrong", capturedFailure.Value.ErrorMessage);
+        Assert.Equal(cliLogPath, capturedFailure.Value.CliLogPath);
+        Assert.Equal(appHostLogPath, capturedFailure.Value.AppHostLogPath);
+        Assert.Empty(interactionService.DisplayedErrors);
+        Assert.Empty(interactionService.DisplayedMessages);
+    }
+
+    [Fact]
+    public async Task BaseCommand_OnFailure_WithoutMessageActions_PreservesLegacyNotifications()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var cliLogPath = Path.Combine(workspace.WorkspaceRoot.FullName, "current-cli.log");
+        var backchannelMonitor = new TestAuxiliaryBackchannelMonitor
+        {
+            ScanAsyncCallback = _ => throw new InvalidOperationException("Something went wrong")
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ExtensionBackchannelFactory = _ => new TestExtensionBackchannel();
+            options.InteractionServiceFactory = serviceProvider => new TestExtensionInteractionService(serviceProvider);
+            options.AuxiliaryBackchannelMonitorFactory = _ => backchannelMonitor;
+            options.CliExecutionContextFactory = _ => workspace.CreateExecutionContext(logFilePath: cliLogPath);
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var interactionService = Assert.IsType<TestExtensionInteractionService>(provider.GetRequiredService<IInteractionService>());
+        var result = provider.GetRequiredService<RootCommand>().Parse("ps");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+        Assert.Single(interactionService.DisplayedErrors);
+        Assert.Empty(interactionService.DisplayedErrorsWithActions);
+        var logMessage = Assert.Single(interactionService.DisplayedMessages);
+        Assert.Contains(cliLogPath, logMessage.Message);
+    }
+
+    [Fact]
     public async Task BaseCommand_OnCancellationWithErrorExitCode_DisplaysCancellationMessageOnStderr()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -349,8 +438,93 @@ public class BaseCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, exitCode);
 
         var cancellation = Assert.Single(testInteractionService.DisplayedCancellations);
-        Assert.Null(cancellation.Message);
+        Assert.Equal(InteractionServiceStrings.StoppingAspire, cancellation.Message);
         Assert.Null(cancellation.ConsoleOverride);
+    }
+
+    [Theory]
+    [InlineData("publish", false)]
+    [InlineData("publish", true)]
+    [InlineData("deploy", false)]
+    [InlineData("deploy", true)]
+    [InlineData("destroy --yes", false)]
+    [InlineData("destroy --yes", true)]
+    [InlineData("do test-step", false)]
+    [InlineData("do test-step", true)]
+    public async Task BaseCommand_OnPipelineCancellation_DisplaysCancellationMessageOnceWithoutError(string commandArgs, bool slowShutdown)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var testInteractionService = new TestInteractionService();
+        var handlerEnteredTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var stoppingMessageDisplayedTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var shutdownTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        testInteractionService.DisplayCancellationMessageCallback = (_, _) => stoppingMessageDisplayedTcs.TrySetResult();
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = async (_, _, _, cancellationToken) =>
+            {
+                handlerEnteredTcs.TrySetResult();
+                try
+                {
+                    await AsyncTestHelpers.WaitForCancellationAsync(cancellationToken);
+                }
+                catch (OperationCanceledException)
+                {
+                    if (slowShutdown)
+                    {
+                        await shutdownTcs.Task;
+                    }
+
+                    throw;
+                }
+
+                return new AppHostProjectSearchResult(null, []);
+            }
+        };
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => testInteractionService;
+            options.ProjectLocatorFactory = _ => projectLocator;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse(commandArgs);
+        using var cts = new CancellationTokenSource();
+        var pendingRun = result.InvokeAsync(cancellationToken: cts.Token);
+
+        await handlerEnteredTcs.Task.DefaultTimeout();
+        await cts.CancelAsync();
+
+        if (slowShutdown)
+        {
+            try
+            {
+                var firstCompletedTask = await Task.WhenAny(stoppingMessageDisplayedTcs.Task, pendingRun).DefaultTimeout();
+                Assert.Same(stoppingMessageDisplayedTcs.Task, firstCompletedTask);
+            }
+            finally
+            {
+                shutdownTcs.TrySetResult();
+            }
+        }
+
+        var exitCode = await pendingRun.DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.FailedToBuildArtifacts, exitCode);
+        Assert.Empty(testInteractionService.DisplayedErrors);
+        var cancellation = Assert.Single(testInteractionService.DisplayedCancellations);
+        string? expectedMessage = commandArgs switch
+        {
+            "publish" => null,
+            "deploy" => DeployCommandStrings.DeploymentCanceled,
+            "destroy --yes" => DestroyCommandStrings.DestroyCanceled,
+            "do test-step" => DoCommandStrings.OperationCanceled,
+            _ => throw new ArgumentOutOfRangeException(nameof(commandArgs))
+        };
+        Assert.Equal(expectedMessage, cancellation.Message);
+        ConsoleOutput? expectedConsoleOverride = slowShutdown ? null : ConsoleOutput.Error;
+        Assert.Equal(expectedConsoleOverride, cancellation.ConsoleOverride);
     }
 
     [Fact]

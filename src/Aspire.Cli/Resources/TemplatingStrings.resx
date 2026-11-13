@@ -186,6 +186,46 @@
   <data name="None" xml:space="preserve">
     <value>None</value>
   </data>
+  <data name="Skip" xml:space="preserve">
+    <value>Skip</value>
+  </data>
+  <data name="InvalidTemplateHostConfiguration" xml:space="preserve">
+    <value>Could not load template host configuration '{0}': {1}</value>
+    <comment>{0} is the host configuration path; {1} is the validation error.</comment>
+  </data>
+  <data name="InvalidTemplateHostConfigurationFormat" xml:space="preserve">
+    <value>Expected a JSON object. 'createNuGetConfig' must be a Boolean, and 'symbolInfo' must be an object. Symbol entries must be objects, 'isHidden' must be true or false, and 'displayName' must be a string.</value>
+  </data>
+  <data name="InvalidTemplateValueSource" xml:space="preserve">
+    <value>Computed value '{0}' must target a non-reserved string parameter and specify kind 'nugetPackageVersion', a valid 'packageId' and 'versionRange', an optional Boolean 'allowPrerelease', and an optional output-relative 'workingDirectory'.</value>
+    <comment>{0} is the template parameter name.</comment>
+  </data>
+  <data name="InvalidTemplatePromptDefault" xml:space="preserve">
+    <value>Prompt default '{0}' must target an optional, empty-default string parameter and reference its native coalesce symbol, depending only on the project name and regex/coalesce symbols. It cannot also specify a computed value source.</value>
+    <comment>{0} is the template parameter name.</comment>
+  </data>
+  <data name="ComputedTemplateParameterCondition" xml:space="preserve">
+    <value>Parameter '{0}' uses a NuGet-computed value in a prompting condition. Computed values are resolved after prompting and cannot control parameter conditions.</value>
+    <comment>{0} is the template parameter name.</comment>
+  </data>
+  <data name="TemplatePackageVersionLookupFailed" xml:space="preserve">
+    <value>Could not query the effective NuGet sources for package '{0}' to compute parameter '{1}'. Check the NuGet configuration, connectivity, and credentials.</value>
+    <comment>{0} is the package ID; {1} is the template parameter name.</comment>
+  </data>
+  <data name="TemplatePackageVersionNotFound" xml:space="preserve">
+    <value>No version of package '{0}' matches range '{1}' with allowPrerelease={2} in the effective NuGet sources for parameter '{3}'.</value>
+    <comment>{0} is the package ID; {1} is the version range; {2} is the prerelease Boolean; {3} is the template parameter name.</comment>
+  </data>
+  <data name="TemplateNuGetConfigurationChanged" xml:space="preserve">
+    <value>A computed value changed the generated NuGet configuration. NuGet-computed values must not control configuration contents, locations, or whether configuration files are generated.</value>
+  </data>
+  <data name="TemplateValueSourceWorkingDirectoryInvalid" xml:space="preserve">
+    <value>The computed value working directory '{0}' must name an existing directory within the generated output.</value>
+    <comment>{0} is the relative working directory.</comment>
+  </data>
+  <data name="TemplateStagingLinkNotSupported" xml:space="preserve">
+    <value>Templates with NuGet-computed values cannot generate symbolic links.</value>
+  </data>
   <data name="Unknown" xml:space="preserve">
     <value>Unknown</value>
   </data>
@@ -219,12 +259,14 @@
     <value>Project created successfully in {0}.</value>
     <comment>{0} is a path</comment>
   </data>
-  <data name="CertificateTrustError" xml:space="preserve">
-    <value>An error occurred while trusting the certificates: {0}</value>
-    <comment>{0} is an exception message</comment>
-  </data>
   <data name="SearchingForAvailableTemplateVersions" xml:space="preserve">
     <value>Searching for available project template versions...</value>
+  </data>
+  <data name="NoMatchingLocalTemplatePackage" xml:space="preserve">
+    <value>No matching local Aspire.ProjectTemplates package was found for Aspire CLI version '{0}'. Build and stage matching packages with localhive.sh (macOS/Linux) or localhive.ps1 (Windows), set ASPIRE_CLI_PACKAGES to a directory containing the package, or explicitly choose feed-backed templates with --channel, --source, or --version.</value>
+  </data>
+  <data name="TemplateVersionNotFound" xml:space="preserve">
+    <value>Template version '{0}' was not found.</value>
   </data>
   <data name="NoTemplateVersionsFound" xml:space="preserve">
     <value>No template versions were found. Please check your internet connection or NuGet source configuration.</value>

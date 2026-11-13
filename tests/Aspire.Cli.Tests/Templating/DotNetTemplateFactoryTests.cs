@@ -9,6 +9,7 @@ using Aspire.Cli.Certificates;
 using Aspire.Cli.Commands;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Templating;
 using Aspire.Cli.Tests.Telemetry;
@@ -16,7 +17,6 @@ using Aspire.Cli.Tests.TestServices;
 using Microsoft.Extensions.Logging.Abstractions;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
-using Aspire.Shared;
 using Spectre.Console;
 using Spectre.Console.Rendering;
 
@@ -41,11 +41,10 @@ public class DotNetTemplateFactoryTests
     }
 
     /// <summary>
-    /// Test that simulates the path comparison logic by testing NuGetConfigMerger behavior
-    /// directly, which is what PromptToCreateOrUpdateNuGetConfigAsync will ultimately call.
+    /// Verifies .NET configuration persistence into an existing workspace.
     /// </summary>
     [Fact]
-    public async Task NuGetConfigMerger_InPlaceCreation_WithoutExistingConfig_CreatesInWorkingDirectory()
+    public async Task DotNetConfigurationPersistence_InPlaceCreation_WithoutExistingConfig_CreatesInWorkingDirectory()
     {
         // Arrange
         using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
@@ -58,7 +57,7 @@ public class DotNetTemplateFactoryTests
         var channel = CreateExplicitChannel(mappings);
 
         // Act - Simulate in-place creation: output directory same as working directory
-        await NuGetConfigMerger.CreateOrUpdateAsync(workingDir, channel).DefaultTimeout();
+        await DotNetAppHostNuGetConfigTestHelper.CreateOrUpdateAsync(workingDir, channel).DefaultTimeout();
 
         // Assert
         var nugetConfigPath = Path.Combine(workingDir.FullName, "nuget.config");
@@ -66,7 +65,7 @@ public class DotNetTemplateFactoryTests
     }
 
     [Fact]
-    public async Task NuGetConfigMerger_InPlaceCreation_WithExistingConfig_UpdatesWorkingDirectoryConfig()
+    public async Task DotNetConfigurationPersistence_InPlaceCreation_WithExistingConfig_UpdatesWorkingDirectoryConfig()
     {
         // Arrange
         using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
@@ -90,7 +89,7 @@ public class DotNetTemplateFactoryTests
         var channel = CreateExplicitChannel(mappings);
 
         // Act - Simulate in-place creation: output directory same as working directory
-        await NuGetConfigMerger.CreateOrUpdateAsync(workingDir, channel).DefaultTimeout();
+        await DotNetAppHostNuGetConfigTestHelper.CreateOrUpdateAsync(workingDir, channel).DefaultTimeout();
 
         // Assert
         var nugetConfigPath = Path.Combine(workingDir.FullName, "nuget.config");
@@ -101,7 +100,7 @@ public class DotNetTemplateFactoryTests
     }
 
     [Fact]
-    public async Task NuGetConfigMerger_SubdirectoryCreation_WithParentConfig_IgnoresParentAndCreatesInOutputDirectory()
+    public async Task DotNetConfigurationPersistence_SubdirectoryCreation_WithParentConfig_PreservesParentAndCreatesInOutputDirectory()
     {
         // Arrange
         using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
@@ -127,7 +126,7 @@ public class DotNetTemplateFactoryTests
         var channel = CreateExplicitChannel(mappings);
 
         // Act - Simulate subdirectory creation: output directory different from working directory
-        await NuGetConfigMerger.CreateOrUpdateAsync(outputDir, channel).DefaultTimeout();
+        await DotNetAppHostNuGetConfigTestHelper.CreateOrUpdateAsync(outputDir, channel).DefaultTimeout();
 
         // Assert
         // Parent nuget.config should remain unchanged
@@ -145,7 +144,7 @@ public class DotNetTemplateFactoryTests
     }
 
     [Fact]
-    public async Task NuGetConfigMerger_SubdirectoryCreation_WithExistingConfigInOutputDirectory_MergesInOutputDirectory()
+    public async Task DotNetConfigurationPersistence_SubdirectoryCreation_WithExistingConfigInOutputDirectory_MergesInOutputDirectory()
     {
         // Arrange
         using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
@@ -170,7 +169,7 @@ public class DotNetTemplateFactoryTests
         var channel = CreateExplicitChannel(mappings);
 
         // Act - Simulate subdirectory creation: merge into existing config in output directory
-        await NuGetConfigMerger.CreateOrUpdateAsync(outputDir, channel).DefaultTimeout();
+        await DotNetAppHostNuGetConfigTestHelper.CreateOrUpdateAsync(outputDir, channel).DefaultTimeout();
 
         // Assert
         var outputConfigPath = Path.Combine(outputDir.FullName, "nuget.config");
@@ -182,7 +181,7 @@ public class DotNetTemplateFactoryTests
     }
 
     [Fact]
-    public async Task NuGetConfigMerger_SubdirectoryCreation_WithoutAnyConfig_CreatesInOutputDirectory()
+    public async Task DotNetConfigurationPersistence_SubdirectoryCreation_WithoutAnyConfig_CreatesInOutputDirectory()
     {
         // Arrange
         using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
@@ -196,7 +195,7 @@ public class DotNetTemplateFactoryTests
         var channel = CreateExplicitChannel(mappings);
 
         // Act - Simulate subdirectory creation: create new config in output directory
-        await NuGetConfigMerger.CreateOrUpdateAsync(outputDir, channel).DefaultTimeout();
+        await DotNetAppHostNuGetConfigTestHelper.CreateOrUpdateAsync(outputDir, channel).DefaultTimeout();
 
         // Assert
         // No nuget.config should exist in working directory
@@ -212,7 +211,7 @@ public class DotNetTemplateFactoryTests
     }
 
     [Fact]
-    public async Task NuGetConfigMerger_ImplicitChannel_DoesNothing()
+    public async Task DotNetConfigurationPersistence_ImplicitChannel_DoesNothing()
     {
         // Arrange
         using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
@@ -222,7 +221,7 @@ public class DotNetTemplateFactoryTests
         var channel = PackageChannel.CreateImplicitChannel(new FakeNuGetPackageCache(), new TestFeatures(), NullLogger.Instance);
 
         // Act
-        await NuGetConfigMerger.CreateOrUpdateAsync(outputDir, channel).DefaultTimeout();
+        await DotNetAppHostNuGetConfigTestHelper.CreateOrUpdateAsync(outputDir, channel).DefaultTimeout();
 
         // Assert
         // No nuget.config should be created anywhere
@@ -233,7 +232,7 @@ public class DotNetTemplateFactoryTests
     }
 
     [Fact]
-    public async Task NuGetConfigMerger_ExplicitChannelWithoutMappings_DoesNothing()
+    public async Task DotNetConfigurationPersistence_ExplicitChannelWithoutMappings_DoesNothing()
     {
         // Arrange
         using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
@@ -243,7 +242,7 @@ public class DotNetTemplateFactoryTests
         var channel = CreateExplicitChannel([]); // No mappings
 
         // Act
-        await NuGetConfigMerger.CreateOrUpdateAsync(outputDir, channel).DefaultTimeout();
+        await DotNetAppHostNuGetConfigTestHelper.CreateOrUpdateAsync(outputDir, channel).DefaultTimeout();
 
         // Assert
         // No nuget.config should be created anywhere
@@ -261,7 +260,7 @@ public class DotNetTemplateFactoryTests
         var factory = CreateTemplateFactory(features);
 
         // Act
-        var templates = (await factory.GetTemplatesAsync()).ToList();
+        var templates = (await factory.GetTemplatesAsync(null)).ToList();
 
         // Assert
         var templateNames = templates.Select(t => t.Name).ToList();
@@ -280,7 +279,7 @@ public class DotNetTemplateFactoryTests
         var factory = CreateTemplateFactory(features);
 
         // Act
-        var templates = (await factory.GetTemplatesAsync()).ToList();
+        var templates = (await factory.GetTemplatesAsync(null)).ToList();
 
         // Assert
         var templateNames = templates.Select(t => t.Name).ToList();
@@ -299,7 +298,7 @@ public class DotNetTemplateFactoryTests
         var factory = CreateTemplateFactory(features);
 
         // Act
-        var templates = (await factory.GetTemplatesAsync()).ToList();
+        var templates = (await factory.GetTemplatesAsync(null)).ToList();
 
         // Assert
         var templateNames = templates.Select(t => t.Name).ToList();
@@ -334,7 +333,7 @@ public class DotNetTemplateFactoryTests
         var factory = CreateTemplateFactory(features, sdkInstaller: sdkInstaller);
 
         // Act
-        var templates = await factory.GetTemplatesAsync();
+        var templates = await factory.GetTemplatesAsync(null);
 
         // Assert
         Assert.Empty(templates);
@@ -352,7 +351,7 @@ public class DotNetTemplateFactoryTests
         sdkInstaller ??= new TestDotNetSdkInstaller();
         var telemetry = TestTelemetryHelper.CreateInitializedTelemetry();
         var hostEnvironment = new FakeCliHostEnvironment(nonInteractive);
-        var templateNuGetConfigService = new TemplateNuGetConfigService(interactionService, executionContext, packagingService, prompter, hostEnvironment);
+        var templateNuGetConfigService = new TemplateNuGetConfigService(interactionService, executionContext, packagingService, prompter, hostEnvironment, NuGetTestHelper.CreateService());
 
         return new DotNetTemplateFactory(
             interactionService,
@@ -379,10 +378,10 @@ public class DotNetTemplateFactoryTests
         public Task<IReadOnlyList<T>> PromptForSelectionsAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, IEnumerable<T>? preSelected = null, bool optional = false, PromptBinding<string?>? binding = null, bool echoSelected = true, IEnumerable<T>? bindingChoices = null, CancellationToken cancellationToken = default) where T : notnull
             => throw new NotImplementedException();
 
-        public Task<string> PromptForStringAsync(string promptText, Func<string, ValidationResult>? validator = null, bool isSecret = false, bool required = false, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default)
+        public Task<string> PromptForStringAsync(string promptText, Func<string, ValidationResult>? validator = null, bool isSecret = false, bool required = false, PromptBinding<string?>? binding = null, bool logResponse = true, CancellationToken cancellationToken = default)
             => throw new NotImplementedException();
 
-        public Task<string> PromptForFilePathAsync(string promptText, Func<string, ValidationResult>? validator = null, bool directory = false, bool required = false, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default)
+        public Task<string> PromptForFilePathAsync(string promptText, Func<string, ValidationResult>? validator = null, bool directory = false, bool required = false, PromptBinding<string?>? binding = null, bool retryOnValidationFailure = false, CancellationToken cancellationToken = default)
             => throw new NotImplementedException();
 
         public Task<bool> PromptConfirmAsync(string prompt, PromptBinding<bool>? binding = null, CancellationToken cancellationToken = default)
@@ -432,6 +431,9 @@ public class DotNetTemplateFactoryTests
         public Task<int> BuildAsync(FileInfo projectFile, bool noRestore, ProcessInvocationOptions options, CancellationToken cancellationToken)
             => throw new NotImplementedException();
 
+        public Task<int> BuildAsync(FileInfo projectFile, bool noRestore, IDictionary<string, string>? env, ProcessInvocationOptions options, CancellationToken cancellationToken)
+            => throw new NotImplementedException();
+
         public Task<int> AddPackageAsync(FileInfo projectFile, string packageName, string version, string? packageSourceUrl, bool noRestore, ProcessInvocationOptions options, CancellationToken cancellationToken)
             => throw new NotImplementedException();
 
@@ -444,7 +446,7 @@ public class DotNetTemplateFactoryTests
         public Task<int> AddProjectReferenceAsync(FileInfo projectFile, FileInfo referencedProjectFile, ProcessInvocationOptions options, CancellationToken cancellationToken)
             => throw new NotImplementedException();
 
-        public Task<(int ExitCode, NuGetPackageCli[]? Packages)> SearchPackagesAsync(DirectoryInfo workingDirectory, string query, bool exactMatch, bool prerelease, int take, int skip, FileInfo? nugetConfigFile, bool useCache, ProcessInvocationOptions options, CancellationToken cancellationToken)
+        public Task<DotNetPackageSearchResult> SearchPackagesAsync(DirectoryInfo workingDirectory, string query, bool exactMatch, bool prerelease, int take, int skip, FileInfo? nugetConfigFile, bool useCache, ProcessInvocationOptions options, INuGetClient nuGetClient, CancellationToken cancellationToken)
             => throw new NotImplementedException();
 
         public Task<(int ExitCode, bool IsAspireHost, string? AspireHostingVersion)> GetAppHostInformationAsync(FileInfo projectFile, ProcessInvocationOptions options, CancellationToken cancellationToken)

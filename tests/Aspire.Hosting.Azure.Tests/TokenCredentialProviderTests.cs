@@ -7,12 +7,12 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Azure.Tests;
 
-public class TokenCredentialProviderTests
+public class TokenCredentialProviderTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     public void AddAzureProvisioning_RegistersITokenCredentialProvider()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         builder.AddAzureProvisioning();
 
         using var app = builder.Build();
@@ -26,7 +26,7 @@ public class TokenCredentialProviderTests
     [Fact]
     public void AddAzureProvisioning_RegistersITokenCredentialProviderAsSingleton()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         builder.AddAzureProvisioning();
 
         using var app = builder.Build();
@@ -42,7 +42,7 @@ public class TokenCredentialProviderTests
     public void AddingAzureResource_RegistersITokenCredentialProvider()
     {
         // AddAzureProvisioning is invoked indirectly when an Azure resource is added.
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         builder.AddAzureInfrastructure("infra", _ => { });
 
         using var app = builder.Build();
@@ -60,7 +60,7 @@ public class TokenCredentialProviderTests
         var customCredential = new TestTokenCredential();
         var customProvider = new CustomTokenCredentialProvider(customCredential);
 
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         builder.AddAzureProvisioning();
         builder.Services.AddSingleton<ITokenCredentialProvider>(customProvider);
 

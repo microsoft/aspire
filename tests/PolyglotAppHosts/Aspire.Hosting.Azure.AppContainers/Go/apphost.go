@@ -9,14 +9,23 @@ import (
 func main() {
 	builder, err := aspire.CreateBuilder()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	// === Azure Container App Environment ===
 	// Test AddAzureContainerAppEnvironment factory method
 	env := builder.AddAzureContainerAppEnvironment("myenv")
+	env.ConfigureInfrastructure(func(infrastructure aspire.AzureResourceInfrastructure) {
+		environment := infrastructure.GetContainerAppManagedEnvironment()
+		if err := environment.SetIsZoneRedundant(false).Err(); err != nil {
+			log.Fatal(aspire.FormatError(err))
+		}
+		if _, err := environment.IsZoneRedundant(); err != nil {
+			log.Fatal(aspire.FormatError(err))
+		}
+	})
 	if err := env.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	// Test fluent chaining on AzureContainerAppEnvironmentResource
@@ -25,20 +34,20 @@ func main() {
 		WithDashboard(&aspire.WithDashboardOptions{Enable: aspire.BoolPtr(true)}).
 		WithHttpsUpgrade(&aspire.WithHttpsUpgradeOptions{Upgrade: aspire.BoolPtr(false)})
 	if err := env.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	// Test WithDashboard with no args (uses default)
 	env2 := builder.AddAzureContainerAppEnvironment("myenv2")
 	env2.WithDashboard()
 	if err := env2.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	// Test WithHttpsUpgrade with no args (uses default)
 	env2.WithHttpsUpgrade()
 	if err := env2.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	// === WithAzureLogAnalyticsWorkspace ===
@@ -47,7 +56,7 @@ func main() {
 	env3 := builder.AddAzureContainerAppEnvironment("myenv3").
 		WithAzureLogAnalyticsWorkspace(laws)
 	if err := env3.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 	customDomain := builder.AddParameter("customDomain")
 	certificateName := builder.AddParameter("certificateName")
@@ -55,14 +64,25 @@ func main() {
 	// === PublishAsAzureContainerApp ===
 	// Test PublishAsAzureContainerApp on a container resource with callback
 	web := builder.AddContainer("web", "myregistry/web:latest")
-	web.PublishAsAzureContainerApp(func(_ aspire.AzureResourceInfrastructure, app aspire.ContainerApp) {
+	web.PublishAsAzureContainerApp(func(infrastructure aspire.AzureResourceInfrastructure, app aspire.ContainerApp) {
+		provisionedApp := infrastructure.GetContainerAppByIdentifier("web")
+		if err := provisionedApp.SetWorkloadProfileName("consumption").Err(); err != nil {
+			log.Fatal(aspire.FormatError(err))
+		}
+		if _, err := provisionedApp.WorkloadProfileName(); err != nil {
+			log.Fatal(aspire.FormatError(err))
+		}
+		// Outbound addresses are service outputs, not writable configuration.
+		if count, err := provisionedApp.OutboundIPAddressList().Count(); err != nil || count != 0 {
+			log.Fatalf("Unprovisioned container app outbound address count = %v, error = %v; want 0", count, err)
+		}
 		err := app.ConfigureCustomDomain(customDomain, certificateName)
 		if err != nil {
-			log.Fatalf(aspire.FormatError(err))
+			log.Fatal(aspire.FormatError(err))
 		}
 
-		if err := app.ConfigureScale(&aspire.AzureContainerAppScaleConfig{MinReplicas: aspire.Float64Ptr(1)}); err != nil {
-			log.Fatalf(aspire.FormatError(err))
+		if err := app.ConfigureScale(&aspire.AzureContainerAppScaleConfig{MinReplicas: aspire.IntPtr(1)}); err != nil {
+			log.Fatal(aspire.FormatError(err))
 		}
 	})
 
@@ -70,7 +90,7 @@ func main() {
 	api := builder.AddExecutable("api", "dotnet", ".", []string{"run"}).
 		PublishAsAzureContainerAppJob()
 	if err := api.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	// === PublishAsAzureContainerAppJob ===
@@ -78,25 +98,33 @@ func main() {
 	worker := builder.AddContainer("worker", "myregistry/worker:latest").
 		PublishAsAzureContainerAppJob()
 	if err := worker.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	// Test PublishAsAzureContainerAppJob (with callback)
 	processor := builder.AddContainer("processor", "myregistry/processor:latest").
 		PublishAsAzureContainerAppJob(
 			&aspire.PublishAsAzureContainerAppJobOptions{
-				Configure: func(_ aspire.AzureResourceInfrastructure, _ aspire.ContainerAppJob) {
+				Configure: func(infrastructure aspire.AzureResourceInfrastructure, _ aspire.ContainerAppJob) {
+					provisionedJob := infrastructure.GetContainerAppJobByIdentifier("processor")
+					configuration := provisionedJob.Configuration()
+					if err := configuration.SetReplicaTimeout(float64(300)).Err(); err != nil {
+						log.Fatal(aspire.FormatError(err))
+					}
+					if _, err := configuration.ReplicaTimeout(); err != nil {
+						log.Fatal(aspire.FormatError(err))
+					}
 				},
 			})
 	if err := processor.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	// Test publishAsScheduledAzureContainerAppJob (simple - no callback)
 	scheduler := builder.AddContainer("scheduler", "myregistry/scheduler:latest").
 		PublishAsScheduledAzureContainerAppJob("0 0 * * *")
 	if err := scheduler.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	// Test PublishAsScheduledAzureContainerAppJob (with callback)
@@ -107,14 +135,14 @@ func main() {
 				},
 			})
 	if err := reporter.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	app, err := builder.Build()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 	if err := app.Run(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 }

@@ -1,16 +1,17 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable CS0618 // Type or member is obsolete
-#pragma warning disable ASPIREPIPELINES001
+#pragma warning disable CS0618 // Covers legacy AddProject/AddCSharpApp behavior and compatibility contracts.
 #pragma warning disable ASPIREPIPELINES003
 #pragma warning disable ASPIRECONTAINERRUNTIME001
-#pragma warning disable ASPIRECSHARPAPPS001
 #pragma warning disable ASPIREEXTENSION001
 
+using System.Diagnostics.CodeAnalysis;
+using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
 using Aspire.Hosting.Ats;
+using Aspire.Hosting.Dcp.Process;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Publishing;
 using Aspire.Hosting.Testing;
@@ -144,6 +145,11 @@ public class ProjectResourceTests(ITestOutputHelper outputHelper)
             },
             env =>
             {
+                Assert.Equal("DOTNET_CLI_TELEMETRY_OPTOUT", env.Key);
+                Assert.Equal("true", env.Value);
+            },
+            env =>
+            {
                 Assert.Equal("OTEL_DOTNET_EXPERIMENTAL_ASPNETCORE_DISABLE_URL_QUERY_REDACTION", env.Key);
                 Assert.Equal("true", env.Value);
             },
@@ -219,6 +225,50 @@ public class ProjectResourceTests(ITestOutputHelper outputHelper)
                 Assert.Equal("LOGGING__CONSOLE__FORMATTERNAME", env.Key);
                 Assert.Equal("simple", env.Value);
             });
+    }
+
+    [Theory]
+    [InlineData("aspire-dashboard", false)]
+    [InlineData("projectName", true)]
+    public async Task AddProjectAddsOtlpExporterEnvironmentVariablesBasedOnResourceName(string resourceName, bool expectedOtlpExporter)
+    {
+        var appBuilder = CreateBuilder(args: ["--environment", "Development", $"{KnownConfigNames.DashboardOtlpGrpcEndpointUrl}=http://localhost:18889"],
+            DistributedApplicationOperation.Run);
+
+        appBuilder.AddProject<TestProject>(resourceName, launchProfileName: null);
+        using var app = appBuilder.Build();
+
+        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var resource = Assert.Single(appModel.GetProjectResources());
+
+        Assert.Equal(expectedOtlpExporter, resource.Annotations.OfType<OtlpExporterAnnotation>().Any());
+
+        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance).DefaultTimeout();
+
+        Assert.Equal(expectedOtlpExporter, config.ContainsKey(KnownOtelConfigNames.ExporterOtlpEndpoint));
+    }
+
+    [Fact]
+    public async Task AddProjectWithResourceAttributesKeepsServiceInstanceId()
+    {
+        var appBuilder = CreateBuilder(operation: DistributedApplicationOperation.Run);
+
+        // AddProject registers the OTLP exporter callback before any call made here, so this value is applied
+        // after the one that carries service.instance.id. The dashboard needs that id to match the telemetry of
+        // each replica to its resource.
+        appBuilder.AddProject<TestProject>("api", launchProfileName: null)
+            .WithReplicas(2)
+            .WithEnvironment("OTEL_RESOURCE_ATTRIBUTES", "deployment.environment=dev");
+        using var app = appBuilder.Build();
+
+        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var resource = Assert.Single(appModel.GetProjectResources());
+
+        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance).DefaultTimeout();
+
+        Assert.Equal(
+            "deployment.environment=dev,service.instance.id={{- index .Annotations \"otel-service-instance-id\" -}}",
+            config["OTEL_RESOURCE_ATTRIBUTES"]);
     }
 
     [Theory]
@@ -887,7 +937,10 @@ public class ProjectResourceTests(ITestOutputHelper outputHelper)
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: "build-projectName");
         builder.Services.AddSingleton<IContainerRuntime, FakeContainerRuntime>();
         builder.Services.AddSingleton<IContainerRuntimeResolver>(sp => (IContainerRuntimeResolver)sp.GetRequiredService<IContainerRuntime>());
-        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        var processRunner = new TestProcessRunner();
+        processRunner.EnqueueResult();
+        processRunner.EnqueueResult(output: ["/app"]);
+        builder.Services.AddSingleton<IProcessRunner>(processRunner);
 
         // Create a test container resource that implements IResourceWithContainerFiles
         var sourceContainerResource = new TestContainerFilesResource("source");
@@ -917,11 +970,12 @@ public class ProjectResourceTests(ITestOutputHelper outputHelper)
         await app.StartAsync();
         await app.WaitForShutdownAsync();
 
-        var mockImageBuilder = (MockImageBuilder)app.Services.GetRequiredService<IResourceContainerImageManager>();
-        Assert.True(mockImageBuilder.BuildImageCalled);
-        var builtImage = Assert.Single(mockImageBuilder.BuildImageResources);
-        Assert.Equal("projectName", builtImage.Name);
-        Assert.False(mockImageBuilder.PushImageCalled);
+        Assert.Collection(
+            processRunner.ProcessSpecs,
+            publish => Assert.Equal("publish", publish.ArgumentList![0]),
+            workingDirectory => Assert.Contains(
+                "-getProperty:ContainerWorkingDirectory",
+                workingDirectory.ArgumentList!));
 
         Assert.True(fakeContainerRuntime.WasTagImageCalled);
         var tagCall = Assert.Single(fakeContainerRuntime.TagImageCalls);
@@ -940,6 +994,33 @@ public class ProjectResourceTests(ITestOutputHelper outputHelper)
         var removeCall = Assert.Single(fakeContainerRuntime.RemoveImageCalls);
         Assert.StartsWith("projectname:temp-", removeCall);
         Assert.Equal(tagCall.targetImageName, removeCall);
+    }
+
+    [Fact]
+    public async Task ProjectResourceWithContainerFilesAndCustomImageManagerDelegatesCompleteBuild()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: "build-projectName");
+        var containerRuntime = new FakeContainerRuntime(isRunning: false);
+        builder.Services.AddSingleton<IContainerRuntime>(containerRuntime);
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(sp => (IContainerRuntimeResolver)sp.GetRequiredService<IContainerRuntime>());
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+
+        var sourceContainer = builder.AddResource(new TestContainerFilesResource("source"))
+            .WithImage("myimage")
+            .WithAnnotation(new ContainerFilesSourceAnnotation { SourcePath = "/app/dist" });
+        builder.AddProject<TestProject>("projectName", launchProfileName: null)
+            .PublishWithContainerFiles(sourceContainer, "./wwwroot");
+
+        using var app = builder.Build();
+        await app.StartAsync();
+        await app.WaitForShutdownAsync();
+
+        var imageManager = (MockImageBuilder)app.Services.GetRequiredService<IResourceContainerImageManager>();
+        Assert.True(imageManager.BuildImageCalled);
+        Assert.Equal("projectName", Assert.Single(imageManager.BuildImageResources).Name);
+        Assert.False(containerRuntime.WasHealthCheckCalled);
+        Assert.False(containerRuntime.WasTagImageCalled);
+        Assert.False(containerRuntime.WasBuildImageCalled);
     }
 
     [Fact]
@@ -965,6 +1046,56 @@ public class ProjectResourceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void AddProjectIsObsoleteNotExperimental()
+    {
+        var methods = typeof(ProjectResourceBuilderExtensions)
+            .GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)
+            .Where(method => method.Name is nameof(ProjectResourceBuilderExtensions.AddProject)
+                or nameof(ProjectResourceBuilderExtensions.AddProjectForPolyglot))
+            .ToArray();
+
+        Assert.Equal(6, methods.Count(method => method.IsPublic));
+        Assert.Single(methods, method => !method.IsPublic);
+        Assert.All(methods, method =>
+        {
+            var obsolete = method.GetCustomAttribute<ObsoleteAttribute>();
+            Assert.NotNull(obsolete);
+            Assert.False(obsolete.IsError);
+            Assert.Equal(
+                method.IsPublic
+                    ? "Use AddDotnetProject from the Aspire.Hosting.Dotnet package instead."
+                    : "Use addDotnetProject from the Aspire.Hosting.Dotnet package instead.",
+                obsolete.Message);
+            Assert.Null(method.GetCustomAttribute<ExperimentalAttribute>());
+            Assert.Equal(typeof(IResourceBuilder<ProjectResource>), method.ReturnType);
+        });
+    }
+
+    [Fact]
+    public void AddCSharpAppIsObsoleteNotExperimental()
+    {
+        var methods = typeof(ProjectResourceBuilderExtensions)
+            .GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)
+            .Where(method => method.Name is nameof(ProjectResourceBuilderExtensions.AddCSharpApp)
+                or nameof(ProjectResourceBuilderExtensions.AddCSharpAppForPolyglot))
+            .ToArray();
+
+        Assert.Equal(3, methods.Length);
+        Assert.All(methods, method =>
+        {
+            var obsolete = method.GetCustomAttribute<ObsoleteAttribute>();
+            Assert.NotNull(obsolete);
+            Assert.False(obsolete.IsError);
+            Assert.Equal(
+                method.IsPublic
+                    ? "Use AddDotnetProject from the Aspire.Hosting.Dotnet package instead."
+                    : "Use addDotnetProject from the Aspire.Hosting.Dotnet package instead.",
+                obsolete.Message);
+            Assert.Null(method.GetCustomAttribute<ExperimentalAttribute>());
+        });
+    }
+
+    [Fact]
     public void AddCSharpAppAddsSupportsDebuggingAnnotationInRunMode()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
@@ -973,6 +1104,37 @@ public class ProjectResourceTests(ITestOutputHelper outputHelper)
         var annotation = app.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().SingleOrDefault();
         Assert.NotNull(annotation);
         Assert.Equal("project", annotation.LaunchConfigurationType);
+    }
+
+    [Theory]
+    [InlineData("9.0.100", true)]
+    [InlineData("10.0.100-preview.1", false)]
+    [InlineData(null, false)]
+    public async Task AddCSharpAppValidatesSelectedSdkVersion(string? version, bool expectFailure)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        builder.Services.AddSingleton<IDotnetSdkVersionProvider>(
+            new TestDotnetSdkVersionProvider(version));
+        var appResource = builder.AddCSharpApp(
+            "app",
+            Path.Combine(builder.AppHostDirectory, "app.cs"),
+            options => options.ExcludeLaunchProfile = true);
+        await using var app = builder.Build();
+
+        var publishTask = builder.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(appResource.Resource, app.Services),
+            TestContext.Current.CancellationToken);
+
+        if (expectFailure)
+        {
+            var exception = await Assert.ThrowsAsync<DistributedApplicationException>(
+                () => publishTask);
+            Assert.Contains("only supported on .NET 10 or later", exception.Message);
+        }
+        else
+        {
+            await publishTask;
+        }
     }
 
     [Fact]

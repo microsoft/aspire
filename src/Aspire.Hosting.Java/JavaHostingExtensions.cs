@@ -1,10 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREDOCKERFILEBUILDER001
-
 #pragma warning disable ASPIRECERTIFICATES001
-#pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIREPIPELINES003
 #pragma warning disable ASPIREEXTENSION001 // WithDebugSupport and WithLaunchToolArgs are experimental but used internally for debug support.
 
@@ -1500,6 +1497,14 @@ public static partial class JavaHostingExtensions
         // removes that quote and the last one on the line, mangling everything in between.
         var relativeWrapperPath = Path.GetRelativePath(workingDirectory, wrapperPath);
 
+        // A bare "mvnw.cmd" is only found in the working directory while cmd.exe searches it, and
+        // NoDefaultCurrentDirectoryInExePath=1 (a common hardening setting) turns that search off, which
+        // fails with "'mvnw.cmd' is not recognized". A "." segment makes it a path rather than a name.
+        if (!Path.IsPathRooted(relativeWrapperPath))
+        {
+            relativeWrapperPath = Path.Combine(".", relativeWrapperPath);
+        }
+
         // "call" makes that unreachable rather than merely unlikely. A wrapper reached through a
         // directory with a space in its name — WithWrapperPath("../build tools/mvnw.cmd") — is quoted
         // when the command line is built, and quoting the first token is exactly what triggers the
@@ -1760,6 +1765,7 @@ public static partial class JavaHostingExtensions
                 return new JavaLaunchConfiguration
                 {
                     Mode = mode,
+                    JavaExec = TryResolveJavaExecutableForIde(builder.Resource),
                     WorkingDirectory = builder.Resource.WorkingDirectory,
                     MainClass = mainClass,
                     ClassPaths = classPaths,
@@ -1786,6 +1792,30 @@ public static partial class JavaHostingExtensions
                 };
             },
             "java");
+    }
+
+    private static string? TryResolveJavaExecutableForIde(JavaAppResource resource)
+    {
+        if (resource.HasAnnotationOfType<JavaBuildToolAnnotation>()
+            || resource.HasAnnotationOfType<JavaDetectedBuildToolAnnotation>())
+        {
+            return null;
+        }
+
+        return IsFullyQualifiedJavaExecutable(resource.Command) ? resource.Command : null;
+    }
+
+    private static bool IsFullyQualifiedJavaExecutable(string command)
+    {
+        if (!Path.IsPathFullyQualified(command))
+        {
+            return false;
+        }
+
+        var fileName = Path.GetFileName(command);
+        return string.Equals(fileName, "java", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(fileName, "java.exe", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(fileName, "java.com", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -2208,5 +2238,3 @@ public static partial class JavaHostingExtensions
 }
 
 #pragma warning restore ASPIREPIPELINES003
-#pragma warning restore ASPIREPIPELINES001
-#pragma warning restore ASPIREDOCKERFILEBUILDER001

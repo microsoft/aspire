@@ -1,0 +1,519 @@
+// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+
+using System.Diagnostics;
+using System.Text.Json;
+using System.Xml.Linq;
+using Xunit;
+using YamlDotNet.RepresentationModel;
+
+namespace Infrastructure.Tests;
+
+public sealed class Hex1bNativePublishingTests : IDisposable
+{
+    private readonly TemporaryWorkspace _workspace;
+    private readonly ITestOutputHelper _output;
+
+    public Hex1bNativePublishingTests(ITestOutputHelper output)
+    {
+        _output = output;
+        _workspace = new TemporaryWorkspace(output, Directory.CreateDirectory(
+            Path.Combine(RepoRoot.Path, "artifacts", "tests", nameof(Hex1bNativePublishingTests), Guid.NewGuid().ToString("N"))));
+    }
+
+    public void Dispose() => _workspace.Dispose();
+
+    [Theory]
+    [InlineData("Aspire.TerminalHost", "Debug", false, false, false)]
+    [InlineData("Aspire.TerminalHost", "Debug", false, true, false)]
+    [InlineData("Aspire.TerminalHost", "Debug", true, false, false)]
+    [InlineData("Aspire.TerminalHost", "Debug", true, true, false)]
+    [InlineData("Aspire.TerminalHost", "Release", false, true, true)]
+    [InlineData("Aspire.TerminalHost", "Release", true, true, true)]
+    [InlineData("Aspire.Dashboard", "Debug", false, false, false)]
+    [InlineData("Aspire.Dashboard", "Debug", false, true, false)]
+    [InlineData("Aspire.Dashboard", "Debug", true, false, false)]
+    [InlineData("Aspire.Dashboard", "Debug", true, true, false)]
+    [InlineData("Aspire.Dashboard", "Release", false, true, true)]
+    [InlineData("Aspire.Dashboard", "Release", true, true, true)]
+    public async Task TerminalPipelineUsesConfigurationOptimizationDefaults(
+        string projectName, string configuration, bool publishing, bool native, bool optimized)
+    {
+        var project = Path.Combine(RepoRoot.Path, "src", projectName, $"{projectName}.csproj");
+        var result = await RunMSBuildQueryAsync(
+            ["msbuild", project, "-nologo", $"-p:Configuration={configuration}",
+             $"-p:_IsPublishing={publishing}", $"-p:PublishAot={native}",
+             "-getProperty:Optimize,ServerGarbageCollection"]);
+        Assert.True(result.ExitCode == 0, result.Output);
+
+        using var document = JsonDocument.Parse(result.QueryResult);
+        var properties = document.RootElement.GetProperty("Properties");
+        Assert.Equal(optimized ? "true" : "false", properties.GetProperty("Optimize").GetString());
+        Assert.Equal(projectName == "Aspire.Dashboard" ? "true" : string.Empty, properties.GetProperty("ServerGarbageCollection").GetString());
+    }
+
+    [Fact]
+    public async Task NativeArchivesUseReleaseWithOptimizedComponentsWhileLocalBundlesDefaultToDebug()
+    {
+        var yaml = new YamlStream();
+        using var reader = File.OpenText(Path.Combine(RepoRoot.Path, ".github", "workflows", "build-cli-native-archives.yml"));
+        yaml.Load(reader);
+        var root = Assert.IsType<YamlMappingNode>(yaml.Documents[0].RootNode);
+        var triggers = Assert.IsType<YamlMappingNode>(root.Children[new YamlScalarNode("on")]);
+        var workflowCall = Assert.IsType<YamlMappingNode>(triggers.Children[new YamlScalarNode("workflow_call")]);
+        var inputs = Assert.IsType<YamlMappingNode>(workflowCall.Children[new YamlScalarNode("inputs")]);
+        var configurationInput = Assert.IsType<YamlMappingNode>(inputs.Children[new YamlScalarNode("configuration")]);
+        var configuration = configurationInput.Children[new YamlScalarNode("default")].ToString();
+        Assert.Equal("Release", configuration);
+
+        var bundle = await RunMSBuildQueryAsync(
+            ["msbuild", Path.Combine(RepoRoot.Path, "eng", "Bundle.proj"), "-nologo", "-getProperty:Configuration"]);
+        Assert.True(bundle.ExitCode == 0, bundle.Output);
+        Assert.Equal("Debug", bundle.QueryResult.Trim());
+
+        foreach (var projectName in new[] { "Aspire.Cli", "Aspire.Dashboard", "Aspire.TerminalHost" })
+        {
+            var project = Path.Combine(RepoRoot.Path, "src", projectName, $"{projectName}.csproj");
+            var result = await RunMSBuildQueryAsync(
+                ["msbuild", project, "-nologo", $"-p:Configuration={configuration}",
+                 "-p:_IsPublishing=true", "-p:RuntimeIdentifier=osx-arm64", "-getProperty:Optimize,PublishAot"]);
+            Assert.True(result.ExitCode == 0, result.Output);
+
+            using var document = JsonDocument.Parse(result.QueryResult);
+            var properties = document.RootElement.GetProperty("Properties");
+            Assert.Equal("true", properties.GetProperty("PublishAot").GetString());
+            Assert.Equal("true", properties.GetProperty("Optimize").GetString());
+        }
+    }
+
+    [Theory]
+    [InlineData("Debug", false, true)]
+    [InlineData("Debug", true, false)]
+    [InlineData("Custom", true, false)]
+    [InlineData("Release", true, true)]
+    public async Task CiBundlesRequireRelease(string configuration, bool ci, bool succeeds)
+    {
+        var result = await RunDotNetAsync(
+            ["msbuild", Path.Combine(RepoRoot.Path, "eng", "Bundle.proj"), "-nologo", "-t:_ShowBanner",
+             $"-p:Configuration={configuration}", $"-p:ContinuousIntegrationBuild={ci}",
+             $"-p:_ArtifactsLogDir={Path.Combine(_workspace.Path, "logs")}"]);
+
+        Assert.Equal(succeeds, result.ExitCode == 0);
+        if (!succeeds)
+        {
+            Assert.Contains("CI native bundles must use Configuration=Release.", result.Output);
+        }
+    }
+
+    [Fact]
+    public async Task RepositoryTerminalHostMetadataMatchesItsTargetFramework()
+    {
+        var result = await RunMSBuildQueryAsync(
+            ["msbuild", Path.Combine(RepoRoot.Path, "src", "Aspire.TerminalHost", "Aspire.TerminalHost.csproj"),
+             "-nologo", "-p:Configuration=Debug", "-getProperty:TargetFramework,AspireTerminalHostDir"]);
+        Assert.True(result.ExitCode == 0, result.Output);
+
+        using var document = JsonDocument.Parse(result.QueryResult);
+        var properties = document.RootElement.GetProperty("Properties");
+        var framework = properties.GetProperty("TargetFramework").GetString();
+        Assert.Equal("net11.0", framework);
+        Assert.Equal(
+            Path.GetFullPath(Path.Combine(RepoRoot.Path, "artifacts", "bin", "Aspire.TerminalHost", "Debug", framework!)),
+            Path.GetFullPath(properties.GetProperty("AspireTerminalHostDir").GetString()!).TrimEnd(Path.DirectorySeparatorChar));
+    }
+
+    [Theory]
+    [InlineData("win-x64", false)]
+    [InlineData("win-x64", true)]
+    [InlineData("win-arm64", false)]
+    [InlineData("win-arm64", true)]
+    [InlineData("", false)]
+    [InlineData("linux-x64", true)]
+    public Task NativeAssetsKeepTheirLayoutAndContents(string rid, bool singleFile)
+        => VerifyNativeAssetsAsync(rid, singleFile);
+
+    [Fact]
+    public async Task NativeAssetsIgnoreMSBuildServerFallbackDiagnostics()
+    {
+        // Under CI load the dotnet CLI can fail to reach the MSBuild server and prints a fallback
+        // diagnostic to standard output after the -getItem JSON. Inject that exact line so the
+        // item query is verified independently of whatever else the CLI writes to its streams.
+        var dotnet = await MSBuildServerFallbackDiagnostic.CreateDotNetWrapperAsync(_workspace.Path, GetDotNetPath());
+
+        var result = await VerifyNativeAssetsAsync("win-x64", singleFile: false, dotnet);
+
+        Assert.Contains(MSBuildServerFallbackDiagnostic.Message, result.StandardOutput);
+    }
+
+    private async Task<(int ExitCode, string StandardOutput, string Output, string QueryResult)> VerifyNativeAssetsAsync(
+        string rid, bool singleFile, string? dotnet = null)
+    {
+        var project = CreatePublishProject(rid, singleFile, duplicateUnrelatedAsset: false);
+        var result = await RunMSBuildQueryAsync(["msbuild", project, "-nologo", "-t:CopyTestFiles", "-getItem:NativeCopyLocalItems,ResolvedFileToPublish"], dotnet);
+        Assert.True(result.ExitCode == 0, result.Output);
+
+        using var document = JsonDocument.Parse(result.QueryResult);
+        var items = document.RootElement.GetProperty("Items");
+        var published = items.GetProperty("ResolvedFileToPublish").EnumerateArray().ToArray();
+        var expected = GetNativePaths(rid).Append("other/OpenConsole.exe").Order(StringComparer.Ordinal).ToArray();
+        Assert.Equal(expected, published.Select(item => item.GetProperty("RelativePath").GetString()).Order(StringComparer.Ordinal));
+
+        foreach (var item in published)
+        {
+            var pathInPackage = item.GetProperty("PathInPackage").GetString()!;
+            var relativePath = item.GetProperty("RelativePath").GetString()!;
+            var source = item.GetProperty("Identity").GetString()!;
+            var destination = Path.Combine(_workspace.Path, "publish", relativePath);
+            Assert.True(File.ReadAllBytes(source).SequenceEqual(File.ReadAllBytes(destination)), relativePath);
+
+            var isWindowsPty = pathInPackage.StartsWith("runtimes/win-", StringComparison.Ordinal);
+            Assert.Equal(isWindowsPty, item.TryGetProperty("ExcludeFromSingleFile", out var excluded) && excluded.GetString() == "true");
+        }
+
+        var built = items.GetProperty("NativeCopyLocalItems").EnumerateArray()
+            .Select(item => item.GetProperty("DestinationSubPath").GetString()).Order(StringComparer.Ordinal);
+        Assert.Equal(rid.Length == 0 ? [] : GetNativePaths(rid).Order(StringComparer.Ordinal), built);
+        return result;
+    }
+
+    [Fact]
+    public async Task UnrelatedPublishCollisionsStillFail()
+    {
+        var project = CreatePublishProject("win-x64", singleFile: false, duplicateUnrelatedAsset: true);
+        var result = await RunDotNetAsync(["msbuild", project, "-nologo", "-t:CopyTestFiles"]);
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("NETSDK1152", result.Output);
+    }
+
+    [Theory]
+    [InlineData("win-x64", null)]
+    [InlineData("win-arm64", null)]
+    [InlineData("linux-x64", null)]
+    [InlineData("linux-arm64", null)]
+    [InlineData("linux-musl-x64", null)]
+    [InlineData("osx-x64", null)]
+    [InlineData("osx-arm64", null)]
+    [InlineData("win-x64", "arm64/OpenConsole.exe")]
+    [InlineData("win-x64", "conpty.dll")]
+    [InlineData("win-x64", "x64/OpenConsole.exe")]
+    [InlineData("win-arm64", "hex1bpty.exe")]
+    [InlineData("win-arm64", "conpty.dll")]
+    [InlineData("win-arm64", "arm64/OpenConsole.exe")]
+    public async Task BundlePreservesPtyLayoutAndRejectsMissingSidecars(string rid, string? missingSidecar)
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows() && (rid is "linux-x64" or "linux-arm64"),
+            "Linux tray bundles must be assembled on Unix to preserve executable permissions.");
+        var artifacts = Path.Combine(_workspace.Path, "artifacts");
+        var publish = Path.Combine(artifacts, "bin", "Aspire.Managed", "Release", "net10.0", rid, "publish");
+        var executable = rid.StartsWith("win-", StringComparison.Ordinal) ? "aspire-managed.exe" : "aspire-managed";
+        var files = new List<string> { executable };
+        foreach (var file in files.Append("Aspire.TerminalHost.exe"))
+        {
+            if (file != missingSidecar)
+            {
+                WriteFile(Path.Combine(publish, file), file);
+            }
+        }
+
+        var serverPublish = Path.Combine(artifacts, "bin", "Aspire.Hosting.Native.Server", "Release", "net11.0", rid, "publish");
+        var serverFiles = new[]
+        {
+            rid.StartsWith("win-", StringComparison.Ordinal) ? "Aspire.Hosting.Native.Server.exe" : "Aspire.Hosting.Native.Server",
+            "ats-contract.json"
+        };
+        foreach (var file in serverFiles)
+        {
+            WriteFile(Path.Combine(serverPublish, file), file);
+        }
+
+        var terminalPublish = Path.Combine(artifacts, "bin", "Aspire.TerminalHost", "Release", "net11.0", rid, "publish");
+        var terminalFiles = Aspire.Shared.TerminalHostPayload.GetRequiredFiles(rid);
+        foreach (var file in terminalFiles)
+        {
+            if (file != missingSidecar)
+            {
+                WriteFile(Path.Combine(terminalPublish, file), file);
+            }
+        }
+
+        var dashboardPublish = Path.Combine(artifacts, "bin", "Aspire.Dashboard", rid, "Release", "net11.0", rid, "publish");
+        var dashboardFiles = new[]
+        {
+            rid.StartsWith("win-", StringComparison.Ordinal) ? "Aspire.Dashboard.exe" : "Aspire.Dashboard",
+            "wwwroot/index.html",
+            "wwwroot/_framework/blazor.web.js",
+            rid.StartsWith("win-", StringComparison.Ordinal)
+                ? "e_sqlite3.dll"
+                : rid.StartsWith("osx-", StringComparison.Ordinal) ? "libe_sqlite3.dylib" : "libe_sqlite3.so"
+        };
+        foreach (var file in dashboardFiles)
+        {
+            WriteFile(Path.Combine(dashboardPublish, file), file);
+        }
+
+        var packageRid = rid switch
+        {
+            "win-x64" => "windows-amd64",
+            "win-arm64" => "windows-arm64",
+            "linux-x64" => "linux-amd64",
+            "linux-arm64" => "linux-arm64",
+            "linux-musl-x64" => "linux-musl-amd64",
+            "osx-x64" => "darwin-amd64",
+            "osx-arm64" => "darwin-arm64",
+            _ => throw new InvalidOperationException($"Unknown runtime identifier '{rid}'.")
+        };
+        var packages = Path.Combine(_workspace.Path, "packages");
+        WriteFile(Path.Combine(packages, $"microsoft.developercontrolplane.{packageRid}", "1.0.0", "tools", "dcp"), "dcp");
+        var layout = Path.Combine(_workspace.Path, "layout");
+        var testAssembly = typeof(Hex1bNativePublishingTests).Assembly.Location;
+        List<string> arguments =
+            ["exec", "--runtimeconfig", Path.ChangeExtension(testAssembly, ".runtimeconfig.json"),
+             "--depsfile", Path.ChangeExtension(testAssembly, ".deps.json"),
+             typeof(Aspire.Tools.CreateLayout.Program).Assembly.Location,
+             "--output", layout, "--artifacts", artifacts, "--rid", rid, "--configuration", "Release"];
+        // Layout assembly requires the native tray payload for desktop RIDs, even
+        // when the scenario focuses on the managed bundle's PTY sidecars.
+        if (rid.StartsWith("win-", StringComparison.Ordinal))
+        {
+            var tray = Path.Combine(_workspace.Path, "windows-tray");
+            WindowsTrayTestPayload.Create(tray, rid);
+            arguments.AddRange(["--tray-dir", tray]);
+        }
+        else if (rid.StartsWith("osx-", StringComparison.Ordinal))
+        {
+            arguments.AddRange(["--tray-dir", MacTrayTestPayload.Create(_workspace.Path)]);
+        }
+        else if (rid is "linux-x64" or "linux-arm64")
+        {
+            var tray = Path.Combine(_workspace.Path, "linux-tray");
+            LinuxTrayTestPayload.Create(tray, rid);
+            arguments.AddRange(["--tray-dir", tray]);
+        }
+
+        var result = await RunDotNetAsync(
+            [.. arguments],
+            packages);
+        if (missingSidecar is not null)
+        {
+            Assert.NotEqual(0, result.ExitCode);
+            Assert.Contains(Path.GetFileName(missingSidecar), result.Output);
+            return;
+        }
+
+        Assert.True(result.ExitCode == 0, result.Output);
+
+        string[] windowsPtyFiles = rid switch
+        {
+            "win-x64" => ["hex1bpty.exe", "conpty.dll", "x64/OpenConsole.exe", "arm64/OpenConsole.exe"],
+            "win-arm64" => ["hex1bpty.exe", "conpty.dll", "arm64/OpenConsole.exe"],
+            _ => []
+        };
+        var managed = Path.Combine(layout, "managed");
+        Assert.Equal(files.Concat(windowsPtyFiles).Order(StringComparer.Ordinal), Directory.GetFiles(managed, "*", SearchOption.AllDirectories)
+            .Select(path => Path.GetRelativePath(managed, path).Replace('\\', '/')).Order(StringComparer.Ordinal));
+        foreach (var file in files)
+        {
+            Assert.True(File.ReadAllBytes(Path.Combine(publish, file)).SequenceEqual(File.ReadAllBytes(Path.Combine(managed, file))), file);
+        }
+        foreach (var file in windowsPtyFiles)
+        {
+            Assert.Equal(File.ReadAllBytes(Path.Combine(terminalPublish, file)), File.ReadAllBytes(Path.Combine(managed, file)));
+        }
+
+        var terminal = Path.Combine(layout, "terminalhost");
+        Assert.Equal(terminalFiles.Order(StringComparer.Ordinal), Directory.GetFiles(terminal, "*", SearchOption.AllDirectories)
+            .Select(path => Path.GetRelativePath(terminal, path).Replace('\\', '/')).Order(StringComparer.Ordinal));
+        foreach (var file in terminalFiles)
+        {
+            Assert.Equal(File.ReadAllBytes(Path.Combine(terminalPublish, file)), File.ReadAllBytes(Path.Combine(terminal, file)));
+        }
+
+        var server = Path.Combine(layout, "apphost-server");
+        foreach (var file in serverFiles)
+        {
+            var bundledFile = file.StartsWith("Aspire.Hosting.Native.Server", StringComparison.Ordinal)
+                ? rid.StartsWith("win-", StringComparison.Ordinal) ? "aspire-apphost-server.exe" : "aspire-apphost-server"
+                : file;
+            Assert.Equal(File.ReadAllBytes(Path.Combine(serverPublish, file)), File.ReadAllBytes(Path.Combine(server, bundledFile)));
+        }
+
+        var dashboard = Path.Combine(layout, "dashboard");
+        Assert.Equal(dashboardFiles.Order(StringComparer.Ordinal), Directory.GetFiles(dashboard, "*", SearchOption.AllDirectories)
+            .Select(path => Path.GetRelativePath(dashboard, path).Replace('\\', '/')).Order(StringComparer.Ordinal));
+        foreach (var file in dashboardFiles)
+        {
+            Assert.True(File.ReadAllBytes(Path.Combine(dashboardPublish, file)).SequenceEqual(File.ReadAllBytes(Path.Combine(dashboard, file))), file);
+        }
+    }
+
+    [Theory]
+    [InlineData("win-x86", false)]
+    [InlineData("win-x86", true)]
+    [InlineData("win-unknown", true)]
+    [InlineData("linux-x86", true)]
+    public async Task BundleRejectsUnsupportedRidBeforeChangingOutput(string rid, bool existingOutput)
+    {
+        var layout = Path.Combine(_workspace.Path, "layout");
+        var marker = Path.Combine(layout, "existing.txt");
+        if (existingOutput)
+        {
+            WriteFile(marker, "Keep the existing layout.");
+        }
+
+        var testAssembly = typeof(Hex1bNativePublishingTests).Assembly.Location;
+        var result = await RunDotNetAsync(
+            ["exec", "--runtimeconfig", Path.ChangeExtension(testAssembly, ".runtimeconfig.json"),
+             "--depsfile", Path.ChangeExtension(testAssembly, ".deps.json"),
+             typeof(Aspire.Tools.CreateLayout.Program).Assembly.Location,
+             "--output", layout, "--artifacts", Path.Combine(_workspace.Path, "missing-artifacts"), "--rid", rid, "--configuration", "Release"]);
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Equal(existingOutput, Directory.Exists(layout));
+        if (existingOutput)
+        {
+            Assert.Equal([marker], Directory.GetFiles(layout, "*", SearchOption.AllDirectories));
+            Assert.Equal("Keep the existing layout.", File.ReadAllText(marker));
+        }
+        Assert.Contains($"'{rid}'", result.Output);
+        Assert.Contains("win-x64", result.Output);
+        Assert.Contains("win-arm64", result.Output);
+    }
+
+    private string CreatePublishProject(string rid, bool singleFile, bool duplicateUnrelatedAsset)
+    {
+        var nativeItems = new XElement("ItemGroup");
+        foreach (var relativePath in GetNativePaths(rid))
+        {
+            var pathInPackage = rid.Length == 0 ? relativePath : $"runtimes/{rid}/native/{relativePath}";
+            var source = Path.Combine(_workspace.Path, "package", pathInPackage);
+            WriteFile(source, pathInPackage);
+            nativeItems.Add(new XElement(rid.Length == 0 ? "RuntimeTargetsCopyLocalItems" : "NativeCopyLocalItems",
+                new XAttribute("Include", source),
+                new XElement("NuGetPackageId", "Hex1b"),
+                new XElement("PathInPackage", pathInPackage),
+                new XElement("DestinationSubPath", rid.Length == 0 ? pathInPackage : Path.GetFileName(pathInPackage)),
+                new XElement("DestinationSubDirectory", rid.Length == 0 ? pathInPackage[..(pathInPackage.LastIndexOf('/') + 1)] : "")));
+        }
+
+        var unrelatedSource = Path.Combine(_workspace.Path, "other", "OpenConsole.exe");
+        WriteFile(unrelatedSource, "unrelated");
+        var unrelatedItem = new XElement("ResolvedFileToPublish",
+            new XAttribute("Include", unrelatedSource),
+            new XElement("NuGetPackageId", "OtherPackage"),
+            new XElement("PathInPackage", "native/OpenConsole.exe"),
+            new XElement("RelativePath", "other/OpenConsole.exe"));
+        var publishItems = new XElement("ItemGroup",
+            new XElement("ResolvedFileToPublish",
+                new XAttribute("Include", "@(_ResolvedCopyLocalPublishAssets);@(RuntimeTargetsCopyLocalItems)"),
+                new XElement("RelativePath", "%(DestinationSubDirectory)%(Filename)%(Extension)")),
+            unrelatedItem);
+        if (duplicateUnrelatedAsset)
+        {
+            publishItems.Add(new XElement("ResolvedFileToPublish",
+                new XAttribute("Include", Path.Combine(_workspace.Path, "duplicate", "OpenConsole.exe")),
+                new XElement("RelativePath", "other/OpenConsole.exe")));
+        }
+
+        // The SDK produces flattened native items for RID builds but full runtimes/<rid>/native
+        // paths for portable builds. Seed those shapes without restoring a synthetic NuGet package;
+        // retain the SDK's real duplicate-output check and exercise the production target hooks.
+        var project = new XDocument(new XElement("Project",
+            new XElement("PropertyGroup",
+                new XElement("ImportDirectoryBuildProps", "false"),
+                new XElement("ImportDirectoryBuildTargets", "false")),
+            new XElement("Import", new XAttribute("Project", "Sdk.props"), new XAttribute("Sdk", "Microsoft.NET.Sdk")),
+            new XElement("PropertyGroup",
+                new XElement("TargetFramework", "net11.0"),
+                new XElement("RuntimeIdentifier", rid),
+                new XElement("PublishSingleFile", singleFile),
+                new XElement("IncludeNativeLibrariesForSelfExtract", "true")),
+            new XElement("Import", new XAttribute("Project", "Sdk.targets"), new XAttribute("Sdk", "Microsoft.NET.Sdk")),
+            new XElement("Import", new XAttribute("Project", Path.Combine(RepoRoot.Path, "src", "Aspire.Hosting", "buildTransitive", "Aspire.Hosting.targets"))),
+            new XElement("Target", new XAttribute("Name", "ResolvePackageAssets"), nativeItems),
+            new XElement("Target", new XAttribute("Name", "_ResolveCopyLocalAssetsForPublish"),
+                new XAttribute("DependsOnTargets", "ResolvePackageAssets"),
+                new XElement("ItemGroup", new XElement("_ResolvedCopyLocalPublishAssets",
+                    new XAttribute("Include", "@(NativeCopyLocalItems)"),
+                    new XElement("DestinationSubPath", "%(Filename)%(Extension)"),
+                    new XElement("DestinationSubDirectory", "")))),
+            new XElement("Target", new XAttribute("Name", "ComputeResolvedFilesToPublishList"),
+                new XAttribute("DependsOnTargets", "_ResolveCopyLocalAssetsForPublish"), publishItems),
+            new XElement("Target", new XAttribute("Name", "ComputeFilesToPublish"),
+                new XAttribute("DependsOnTargets", "ComputeResolvedFilesToPublishList")),
+            new XElement("Target", new XAttribute("Name", "CopyTestFiles"),
+                new XAttribute("DependsOnTargets", "ComputeFilesToPublish"),
+                new XElement("Copy", new XAttribute("SourceFiles", "@(ResolvedFileToPublish)"),
+                    new XAttribute("DestinationFiles", "@(ResolvedFileToPublish->'$(MSBuildProjectDirectory)/publish/%(RelativePath)')")))));
+        var projectPath = Path.Combine(_workspace.Path, "Publish.proj");
+        project.Save(projectPath);
+        return projectPath;
+    }
+
+    private static string[] GetNativePaths(string rid) => rid switch
+    {
+        "win-x64" => ["arm64/OpenConsole.exe", "conpty.dll", "hex1bpty.exe", "x64/OpenConsole.exe"],
+        "win-arm64" => ["arm64/OpenConsole.exe", "conpty.dll", "hex1bpty.exe"],
+        "" => GetNativePaths("win-x64").Select(path => $"runtimes/win-x64/native/{path}")
+            .Concat(GetNativePaths("win-arm64").Select(path => $"runtimes/win-arm64/native/{path}"))
+            .Append("runtimes/linux-x64/native/libhex1binterop.so").ToArray(),
+        _ => ["libhex1binterop.so"]
+    };
+
+    private static void WriteFile(string path, string contents)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, contents);
+    }
+
+    // MSBuild writes -getProperty/-getItem results to this file, separate from diagnostics such as the
+    // CLI's "MSBuild server unavailable" fallback message that can appear on standard output.
+    private async Task<(int ExitCode, string StandardOutput, string Output, string QueryResult)> RunMSBuildQueryAsync(
+        string[] arguments, string? dotnet = null)
+    {
+        var resultPath = Path.Combine(_workspace.Path, $"msbuild-result-{Guid.NewGuid():N}.json");
+        var result = await RunDotNetAsync([.. arguments, $"-getResultOutputFile:{resultPath}"], dotnet: dotnet);
+        var queryResult = result.ExitCode == 0 ? await File.ReadAllTextAsync(resultPath) : string.Empty;
+        return (result.ExitCode, result.StandardOutput, result.Output, queryResult);
+    }
+
+    private static string GetDotNetPath() => Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") ?? "dotnet";
+
+    private async Task<(int ExitCode, string StandardOutput, string StandardError, string Output)> RunDotNetAsync(
+        string[] arguments, string? packages = null, string? dotnet = null)
+    {
+        var startInfo = new ProcessStartInfo
+        {
+            WorkingDirectory = _workspace.Path,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false
+        };
+        // The regression test's Windows wrapper is a .cmd file, which must run through cmd.exe.
+        ProcessStartInfoHelper.SetCommand(startInfo, dotnet ?? GetDotNetPath(), arguments, OperatingSystem.IsWindows());
+        if (packages is not null)
+        {
+            startInfo.Environment["NUGET_PACKAGES"] = packages;
+        }
+
+        using var process = Process.Start(startInfo)!;
+        var stdout = process.StandardOutput.ReadToEndAsync();
+        var stderr = process.StandardError.ReadToEndAsync();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(2));
+        try
+        {
+            await process.WaitForExitAsync(timeout.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            process.Kill(entireProcessTree: true);
+            throw;
+        }
+
+        var standardOutput = await stdout;
+        var standardError = await stderr;
+        var output = standardOutput + standardError;
+        _output.WriteLine(output);
+        return (process.ExitCode, standardOutput, standardError, output);
+    }
+}

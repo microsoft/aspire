@@ -147,6 +147,12 @@
   <data name="SourceArgumentDescription" xml:space="preserve">
     <value>The NuGet source to use for the integration</value>
   </data>
+  <data name="IntegrationSourceExplanation" xml:space="preserve">
+    <value>One or more integration sources are configured. An integration source lets an organization share integrations to customize your development experience.</value>
+  </data>
+  <data name="SourceWithCredentialsNotSupported" xml:space="preserve">
+    <value>The --source URL includes credentials, a query string, or a fragment. Configure credentials with NuGet credential providers or user-level NuGet configuration, then pass the feed URL without embedded secrets.</value>
+  </data>
   <data name="AllArgumentDescription" xml:space="preserve">
     <value>Include all integrations, even those not marked compatible with the AppHost language</value>
   </data>
@@ -240,6 +246,9 @@
   <data name="NonInteractiveRequiresExactPackageMatch" xml:space="preserve">
     <value>No exact match was found for '{0}'. In non-interactive mode the integration name must exactly match a package id or friendly name; fuzzy fallback is disabled to prevent silently selecting the wrong package.</value>
     <comment>{0} is the integration name provided by the user.</comment>
+  </data>
+  <data name="NonInteractiveRequiresIntegrationName" xml:space="preserve">
+    <value>An integration name is required in non-interactive mode. Specify an exact package ID or friendly name, for example 'aspire add redis'.</value>
   </data>
   <data name="UsePrereleasePackages" xml:space="preserve">
     <value>Use pre-release packages</value>

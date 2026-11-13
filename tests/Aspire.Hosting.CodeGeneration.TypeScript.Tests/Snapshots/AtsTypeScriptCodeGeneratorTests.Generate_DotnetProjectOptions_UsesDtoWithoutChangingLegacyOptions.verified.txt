@@ -1,0 +1,39 @@
+﻿{
+  ProjectV2Options:
+export interface DotnetProjectOptions {
+    /** The launch profile to use. If omitted or null, the default launch profile is used. */
+    launchProfileName?: string | null;
+    /** Whether to disable launch profiles. When true, the launch profile name is ignored. */
+    excludeLaunchProfile?: boolean;
+    /** Whether to ignore endpoints from Kestrel configuration. */
+    excludeKestrelEndpoints?: boolean;
+},
+  LegacyOptions:
+export interface ProjectResourceOptions {
+    toJSON(): MarshalledHandle;
+    /** The launch profile to use. If `null` then the default launch profile will be used. */
+    launchProfileName: {
+        get: () => Promise<string | null>;
+        set: (value: string | null) => Promise<void>;
+    };
+    /** If set, no launch profile will be used, and LaunchProfileName will be ignored. */
+    excludeLaunchProfile: {
+        get: () => Promise<boolean>;
+        set: (value: boolean) => Promise<void>;
+    };
+    /** If set, ignore endpoints coming from Kestrel configuration. */
+    excludeKestrelEndpoints: {
+        get: () => Promise<boolean>;
+        set: (value: boolean) => Promise<void>;
+    };
+},
+  LegacyAddOptions:
+export interface AddProjectOptions {
+    launchProfileOrOptions?: string | ProjectResourceOptions | Awaitable<ProjectResourceOptions>;
+},
+  BuilderMethods: [
+    addCSharpApp(name: string, path: string, options?: AddCSharpAppOptions): CSharpAppResourcePromise;,
+    addDotnetProject(name: string, path: string, options?: DotnetProjectOptions): DotnetProjectResourcePromise;,
+    addProject(name: string, projectPath: string, options?: AddProjectOptions): ProjectResourcePromise;
+  ]
+}

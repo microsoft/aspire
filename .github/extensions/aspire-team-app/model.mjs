@@ -126,12 +126,15 @@ function isCommunityAuthor(author, authorType) {
 export function isCommunityPullRequest(pr) {
   return !pr.isMine && !pr.repoPrivate && isCommunityAuthor(pr.author, pr.authorType) && !isCommunityToolkitPullRequest(pr);
 }
+export function reviewAgeStartedAt(pr) {
+  return pr.readyForReviewAt ?? pr.createdAt;
+}
 export function isAgedOutCommunityPullRequest(pr) {
   return isCommunityPullRequest(pr) && ageMs(pr.updatedAt) > focusAgeLimitMs;
 }
 function isCommunityWaiting(pr) {
   return !pr.isMine && !pr.repoPrivate && isCommunityAuthor(pr.author, pr.authorType) && (
-    (pr.review.state === "waiting" && ageMs(pr.createdAt) >= communityWaitMs) ||
+    (pr.review.state === "waiting" && ageMs(reviewAgeStartedAt(pr)) >= communityWaitMs) ||
     (pr.review.state === "reviewed" && isIdle(pr))
   );
 }
@@ -357,7 +360,7 @@ function reviewSignal(pr, bucketLabel) {
     case "Docs": return "generated docs";
     case "Community Toolkit": return "CommunityToolkit/Aspire";
     case "Bots / automation": return "bot";
-    case "Community": return isCommunityWaiting(pr) ? `Community · waiting ${formatAge(pr.createdAt)}` : "community";
+    case "Community": return isCommunityWaiting(pr) ? `Community · waiting ${formatAge(reviewAgeStartedAt(pr))}` : "community";
     case agedOutCommunityBucketLabel: return agedOutCommunityBucketLabel;
     case "Quick wins": return reviewFootprint(pr);
     case "Needs review": return "No reviews";
@@ -465,9 +468,10 @@ export function createAttentionSignals(item) {
     signals.push(ageSignal);
   }
 
+  const reviewAgeAt = reviewAgeStartedAt(pullRequest);
   signals.push({
-    label: `open ${formatAge(pullRequest.createdAt)}`,
-    tone: Date.now() - new Date(pullRequest.createdAt).getTime() >= 7 * dayMs ? "warning" : "muted",
+    label: `open ${formatAge(reviewAgeAt)}`,
+    tone: ageMs(reviewAgeAt) >= 7 * dayMs ? "warning" : "muted",
   });
 
   if (progress && !prioritizeProgress) {
@@ -536,7 +540,7 @@ function oldFirstSignal(pullRequest) {
   // Route through isReviewDebt so the emitted signal and the focus-retention predicate share one
   // definition (notably its approved-PR exclusion) and cannot drift.
   if (isReviewDebt(pullRequest)) {
-    return { label: reviewDebtSignalLabel, tone: "danger" };
+    return { label: reviewDebtSignalLabel, tone: "accent" };
   }
   if (activityAge >= 7 * dayMs) {
     return { label: "old first", tone: "warning" };
@@ -760,6 +764,15 @@ function prKey(pr) {
   return `${prHost(pr)}\n${pr.repository.toLowerCase()}#${pr.number}`;
 }
 
+function compareFirstReadiness(a, b) {
+  const timeOrder = Date.parse(a.firstReadyForReviewAt) - Date.parse(b.firstReadyForReviewAt);
+  if (timeOrder) return timeOrder;
+  // Ordinal host/repository order is independent of locale and fetch completion.
+  const aRepo = `${prHost(a)}\n${a.repository.toLowerCase()}`;
+  const bRepo = `${prHost(b)}\n${b.repository.toLowerCase()}`;
+  return (aRepo < bRepo ? -1 : aRepo > bRepo ? 1 : 0) || a.number - b.number;
+}
+
 export function computeFocusItems(buckets) {
   const blocked = new Set(
     buckets.filter((b) => disqualifyingFocusBucketLabels.has(b.label))
@@ -802,7 +815,8 @@ export function computeFocusItems(buckets) {
     .filter((i) => isWithinFocusAgeLimit(i.pullRequest, i.bucketLabel) || isReviewDebt(i.pullRequest))
     .filter((i) => !isCommunityPullRequest(i.pullRequest))
     .filter((i) => !isChecksFailing(i.pullRequest))
-    .sort((a, b) => new Date(b.pullRequest.updatedAt) - new Date(a.pullRequest.updatedAt));
+    .filter((i) => i.pullRequest.firstReadyForReviewAt !== null)
+    .sort((a, b) => compareFirstReadiness(a.pullRequest, b.pullRequest));
 }
 
 export function computeCommunityItems(prs) {
@@ -837,13 +851,14 @@ function focusExclusionReason(pr, bucketLabels) {
   if (isCommunityPullRequest(pr) && !isAgedOutCommunityPullRequest(pr)) return { kind: "community-list", label: "Community list", detail: "Active external-contributor PRs show in the Community list.", tone: "accent" };
   const specialized = bucketLabels.find((l) => specializedFocusBucketLabels.has(l));
   if (specialized) return { kind: "specialized-lane", label: `${specialized} lane`, detail: `Routed to the ${specialized} lane instead of Needs attention.`, tone: "accent" };
+  if (pr.firstReadyForReviewAt === null) return { kind: "readiness-unavailable", label: "Readiness unavailable", detail: "First-readiness history could not be loaded. Refresh to retry.", tone: "warning" };
   const candidate = [...bucketLabels].filter((l) => !excludedFocusBucketLabels.has(l)).sort((a, b) => focusBucketRank(a) - focusBucketRank(b))[0] ?? null;
   if (candidate && !isWithinFocusAgeLimit(pr, candidate)) return { kind: "stale-activity", label: "Stale activity", detail: "Its actionable lane has not had fresh activity in 14 days.", tone: "warning" };
   if (bucketLabels.includes("Stalled")) return { kind: "stalled-only", label: "Stalled only", detail: "It has gone quiet with no fresher actionable lane.", tone: "warning" };
   return { kind: "outside-queue", label: "Outside queue", detail: "It does not currently match a focused, actionable lane.", tone: "muted" };
 }
 function exReasonRank(kind) {
-  return ["ci-failing", "merge-conflicts", "unresolved-feedback", "held-by-label", "author-response", "stale-activity", "community-list", "specialized-lane", "stalled-only", "outside-queue"].indexOf(kind);
+  return ["ci-failing", "merge-conflicts", "unresolved-feedback", "held-by-label", "author-response", "readiness-unavailable", "stale-activity", "community-list", "specialized-lane", "stalled-only", "outside-queue"].indexOf(kind);
 }
 
 // A PR with requested changes is waiting on its author, not the focused queue. Once the
@@ -919,12 +934,12 @@ function pickScore(item) {
   if (st === "reviewed") score += 25;
   if (st === "approved") score += 5;
   if (isBotAuthor(item.pullRequest.author, item.pullRequest.authorType)) score -= 120;
-  return score + Math.min(3, Math.floor(ageMs(item.pullRequest.createdAt) / dayMs)) +
+  return score + Math.min(3, Math.floor(ageMs(reviewAgeStartedAt(item.pullRequest)) / dayMs)) +
     Math.min(1, Math.floor(ageMs(item.pullRequest.updatedAt) / dayMs));
 }
 
 function pickReason(pr) {
-  const signals = [`open ${formatAge(pr.createdAt)}`];
+  const signals = [`open ${formatAge(reviewAgeStartedAt(pr))}`];
   if (pr.review.approvalCount > 0) signals.push(formatCount(pr.review.approvalCount, "approval"));
   else if (pr.review.reviewerCount > 0) signals.push(`${formatCount(pr.review.reviewerCount, "reviewer")} · 0 approvals`);
   else signals.push("no reviews");
@@ -1086,7 +1101,7 @@ export function createIssueSignals(issue) {
   }
 
   for (const label of (issue.labels || []).slice(0, 2)) {
-    signals.push({ label, tone: "accent" });
+    signals.push({ label, tone: "accent", kind: "repo-label" });
   }
 
   if (isBotAuthor(issue.author, issue.authorType)) {

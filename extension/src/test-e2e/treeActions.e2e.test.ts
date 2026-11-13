@@ -1,9 +1,12 @@
 import * as assert from 'assert';
+import * as fs from 'fs';
 import * as path from 'path';
-import { findResource, getCommandInvocationCount, getTerminalCommandCount, waitForAppHostLaunching, waitForCommandOutcome, waitForDashboardUrl, waitForExtensionState, waitForHttpText, waitForNoRunningAppHost, waitForRepositoryIdle, waitForResource, waitForResourceState, waitForRunningAppHost, waitForTerminalCommand, waitForWorkspaceAppHost } from './helpers/assertions';
-import { assertClipboardMatchesLastExpectationForE2E, executeE2eControlCommand, restoreClipboardSnapshotForE2E, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setTerminalCommandExecutionSuppressedForE2E, snapshotClipboardForE2E, stopPrimaryAppHostIfRunning } from './helpers/fixtures';
-import { getPrimaryAppHostProjectPath } from './helpers/paths';
-import { answerActiveInput, chooseActiveQuickPick, getActiveQuickPickLabels, openAspireView, waitForChildTreeItem, waitForTreeItem, waitForWorkbenchTextAfterIntegratedBrowserNavigation } from './helpers/vscode';
+import { findResource, getCommandInvocationCount, getDebugLaunchCount, getTerminalCommandCount, getTreeAppHostLabel, isSamePath, waitForAppHostLaunching, waitForCommandOutcome, waitForDashboardUrl, waitForDebugConsoleOutput, waitForDebugLaunch, waitForExtensionState, waitForHttpText, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForResource, waitForResourceState, waitForRunningAppHost, waitForRunningResourceWithUrl, waitForSelectedWorkspaceAppHost, waitForTerminalCommand, waitForWorkspaceAppHost, waitForWorkspaceAppHostCandidate } from './helpers/assertions';
+import { assertClipboardMatchesLastExpectationForE2E, clearWorkspaceFolderCliPathsForE2E, createAdditionalAppHostCandidate, executeE2eControlCommand, removeAdditionalAppHostCandidate, restoreClipboardSnapshotForE2E, restoreE2eCliPathForE2E, restoreWorkspaceCliPath, restoreWorkspaceFoldersForE2E, runE2eTeardown, setCliUnavailableForE2E, setDebugLaunchSuppressedForE2E, setE2eCliPathForE2E, setTerminalCommandExecutionSuppressedForE2E, setWorkspaceFolderCliPathForE2E, setWorkspaceFoldersForE2E, snapshotClipboardForE2E, stopPrimaryAppHostIfRunning, writeBaselineActionCliWrapper, writeGatedDeployActionCliWrapper, writeLegacyPipelineActionCliWrapper } from './helpers/fixtures';
+import { getCliPath, getPrimaryAppHostProjectPath, getRunRoot, getWorkspaceRoot } from './helpers/paths';
+import { readExtensionLogs } from './helpers/logs';
+import { answerActiveInput, answerActiveInputByMessage, cancelActiveInput, chooseActiveQuickPick, dismissAllNotifications, executeCommandFromPalette, getActiveQuickPickLabels, getNotificationMessages, openAspireView, waitForChildTreeItem, waitForExplorerSelection, waitForNotificationMessage, waitForTreeItem, waitForTreeItemDescription, waitForWorkbenchText, waitForWorkbenchTextAfterIntegratedBrowserNavigation } from './helpers/vscode';
+import { VSBrowser } from './helpers/extester';
 
 interface ActiveEditorInfo {
     uri?: string;
@@ -18,11 +21,299 @@ suite('Aspire tree action command E2E', function () {
         await runE2eTeardown([
             () => restoreClipboardSnapshotForE2E(),
             () => setCliUnavailableForE2E(false),
+            () => setDebugLaunchSuppressedForE2E(false),
             () => setTerminalCommandExecutionSuppressedForE2E(false),
+            () => clearWorkspaceFolderCliPathsForE2E(),
+            () => restoreE2eCliPathForE2E(),
+            () => restoreWorkspaceFoldersForE2E(),
             () => restoreWorkspaceCliPath(),
+            () => removeAdditionalAppHostCandidate('AspireE2E.SecondaryActions'),
+            async () => {
+                if (fs.existsSync(path.join(getWorkspaceRoot(), 'AspireE2E.MissingGoDebugger'))) {
+                    removeAdditionalAppHostCandidate('AspireE2E.MissingGoDebugger');
+                    // Discovery can select the temporary Go AppHost. Restore the selected
+                    // primary before the next test derives workspace folders from that state.
+                    await executeE2eControlCommand({ name: 'refreshAppHosts' });
+                    await waitForSelectedWorkspaceAppHost();
+                }
+            },
+            () => executeE2eControlCommand({ name: 'stopDebugging' }),
+            () => waitForNoDebugSessions().catch(() => undefined),
             () => stopPrimaryAppHostIfRunning(),
             () => waitForNoRunningAppHost(),
         ], 'Tree action E2E teardown failed.');
+    });
+
+    test('canceling Go debugger setup through the public Debug command does not report a launch failure', async () => {
+        await openAspireView();
+        await waitForRepositoryIdle();
+        const extensionIds = (await executeE2eControlCommand({ name: 'getVisibleExtensionIds' })).result as string[];
+        assert.strictEqual(extensionIds.some(id => id.toLowerCase() === 'golang.go'), false,
+            'The tree-action shard must run without the Go debugger to exercise its setup prompt.');
+        const fixtureRoot = path.join(getWorkspaceRoot(), 'AspireE2E.MissingGoDebugger');
+        const appHostPath = path.join(fixtureRoot, 'apphost.go');
+        fs.mkdirSync(fixtureRoot, { recursive: true });
+        fs.writeFileSync(appHostPath, 'package main\nimport "apphost/modules/aspire"\nfunc main() { builder, _ := aspire.CreateBuilder(); _ = builder }\n');
+        fs.writeFileSync(path.join(fixtureRoot, 'go.mod'), 'module apphost\n\ngo 1.26\n');
+        fs.writeFileSync(path.join(fixtureRoot, 'aspire.config.json'), JSON.stringify({
+            appHost: { path: 'apphost.go', language: 'go' },
+        }));
+        await executeE2eControlCommand({ name: 'refreshAppHosts' });
+        await waitForWorkspaceAppHostCandidate(appHostPath);
+        await dismissAllNotifications();
+
+        const before = getCommandInvocationCount('aspire-vscode.debugAppHost');
+        const setupBefore = getCommandInvocationCount('aspire-vscode.installDebuggerExtension');
+        await executeE2eControlCommand({ name: 'debugAppHost', appHostPath }, { waitFor: 'started' });
+        const prompt = await waitForNotificationMessage('Set up Go debugging support before debugging this AppHost.');
+        await prompt.dismiss();
+
+        await waitForCommandOutcome('aspire-vscode.debugAppHost', 'canceled', 60000, before);
+        const state = await waitForNoDebugSessions();
+        assert.strictEqual(state.state.launchingPaths.some(candidate => isSamePath(candidate, appHostPath)), false);
+        assert.strictEqual(getCommandInvocationCount('aspire-vscode.installDebuggerExtension'), setupBefore);
+        assert.deepStrictEqual(await getNotificationMessages(), []);
+        await waitForNoRunningAppHost(30000, appHostPath);
+    });
+
+    test('routes all AppHost actions to the exact secondary AppHost and owning CLI target', async () => {
+        await openAspireView();
+        await waitForRepositoryIdle();
+        const primaryAppHostPath = (await waitForWorkspaceAppHost()).state.workspaceAppHostPath ?? getPrimaryAppHostProjectPath();
+        const primaryFolderPath = path.dirname(primaryAppHostPath);
+        const secondaryAppHostPath = createAdditionalAppHostCandidate('AspireE2E.SecondaryActions', 'single-file');
+        const secondaryFolderPath = path.dirname(secondaryAppHostPath);
+        const secondaryCliPath = writeBaselineActionCliWrapper('aspire-secondary-actions');
+
+        await setE2eCliPathForE2E(undefined);
+        const workspaceFolders = await setWorkspaceFoldersForE2E([
+            { folderPath: primaryFolderPath, name: 'primary' },
+            { folderPath: secondaryFolderPath, name: 'secondary' },
+        ]);
+        const secondaryFolder = workspaceFolders.find(folder => isSamePath(folder.fileName, secondaryFolderPath));
+        assert.ok(secondaryFolder, `Expected secondary workspace folder in ${JSON.stringify(workspaceFolders)}.`);
+        const expectedCliTargetKey = `workspaceFolder:${secondaryFolder.uri}`;
+        const secondaryCliConfiguration = await setWorkspaceFolderCliPathForE2E(secondaryFolderPath, secondaryCliPath);
+        assert.strictEqual(secondaryCliConfiguration.targetKey, expectedCliTargetKey);
+        assert.ok(isSamePath(secondaryCliConfiguration.cliPath, secondaryCliPath));
+        const refreshBefore = getCommandInvocationCount('aspire-vscode.refreshAppHosts');
+        await executeE2eControlCommand({ name: 'refreshAppHosts' });
+        await waitForCommandOutcome('aspire-vscode.refreshAppHosts', 'success', 60000, refreshBefore);
+        await waitForWorkspaceAppHostCandidate(secondaryAppHostPath);
+        assert.ok(!isSamePath(primaryAppHostPath, secondaryAppHostPath));
+
+        await setDebugLaunchSuppressedForE2E(true);
+
+        await assertAppHostActionLaunch(
+            { name: 'deployAppHostAction', appHostPath: secondaryAppHostPath },
+            'aspire-vscode.deployAppHost',
+            secondaryAppHostPath,
+            secondaryCliPath,
+            expectedCliTargetKey,
+            'deploy',
+            false);
+        await assertAppHostActionLaunch(
+            { name: 'publishAppHostAction', appHostPath: secondaryAppHostPath },
+            'aspire-vscode.publishAppHost',
+            secondaryAppHostPath,
+            secondaryCliPath,
+            expectedCliTargetKey,
+            'publish',
+            false);
+        await assertAppHostActionLaunch(
+            { name: 'runPipelineStepAppHostAction', appHostPath: secondaryAppHostPath },
+            'aspire-vscode.runPipelineStepAppHost',
+            secondaryAppHostPath,
+            secondaryCliPath,
+            expectedCliTargetKey,
+            'do',
+            true,
+            'secondary-run-step');
+        await assertAppHostActionLaunch(
+            { name: 'debugPipelineStepAppHostAction', appHostPath: secondaryAppHostPath },
+            'aspire-vscode.debugPipelineStepAppHost',
+            secondaryAppHostPath,
+            secondaryCliPath,
+            expectedCliTargetKey,
+            'do',
+            false,
+            'secondary-debug-step');
+    });
+
+    test('uses the legacy pipeline input fallback for trimmed, invalid, and canceled input', async () => {
+        await openAspireView();
+        await waitForRepositoryIdle();
+        const appHostPath = (await waitForWorkspaceAppHost()).state.workspaceAppHostPath ?? getPrimaryAppHostProjectPath();
+        await setE2eCliPathForE2E(writeLegacyPipelineActionCliWrapper('aspire-legacy-pipeline-actions'));
+        const refreshBefore = getCommandInvocationCount('aspire-vscode.refreshAppHosts');
+        await executeE2eControlCommand({ name: 'refreshAppHosts' });
+        await waitForCommandOutcome('aspire-vscode.refreshAppHosts', 'success', 60000, refreshBefore);
+        await waitForRepositoryIdle();
+        await waitForWorkspaceAppHost();
+        await setDebugLaunchSuppressedForE2E(true);
+
+        const validLaunchBefore = getDebugLaunchCount();
+        const validInvocationBefore = getCommandInvocationCount('aspire-vscode.runPipelineStepAppHost');
+        await executeE2eControlCommand({ name: 'runPipelineStepAppHostAction', appHostPath }, { waitFor: 'started' });
+        await answerActiveInput('  legacy-step  ', 'deploy');
+        await waitForCommandOutcome('aspire-vscode.runPipelineStepAppHost', 'success', 60000, validInvocationBefore);
+        const validLaunch = await waitForDebugLaunch(
+            event => event.command === 'do' && event.doStep === 'legacy-step',
+            'trimmed legacy pipeline launch',
+            60000,
+            validLaunchBefore);
+        assert.strictEqual(validLaunch.noDebug, true);
+
+        const whitespaceLaunchBefore = getDebugLaunchCount();
+        const whitespaceInvocationBefore = getCommandInvocationCount('aspire-vscode.runPipelineStepAppHost');
+        await executeE2eControlCommand({ name: 'runPipelineStepAppHostAction', appHostPath }, { waitFor: 'started' });
+        await answerActiveInput('   ', 'deploy');
+        await waitForWorkbenchText('Enter a pipeline step name.');
+        assert.strictEqual(getDebugLaunchCount(), whitespaceLaunchBefore);
+        await cancelActiveInput();
+        await waitForCommandOutcome('aspire-vscode.runPipelineStepAppHost', 'canceled', 60000, whitespaceInvocationBefore);
+        assert.strictEqual(getDebugLaunchCount(), whitespaceLaunchBefore);
+
+        const canceledLaunchBefore = getDebugLaunchCount();
+        const canceledInvocationBefore = getCommandInvocationCount('aspire-vscode.debugPipelineStepAppHost');
+        await executeE2eControlCommand({ name: 'debugPipelineStepAppHostAction', appHostPath }, { waitFor: 'started' });
+        await cancelActiveInput();
+        await waitForCommandOutcome('aspire-vscode.debugPipelineStepAppHost', 'canceled', 60000, canceledInvocationBefore);
+        assert.strictEqual(getDebugLaunchCount(), canceledLaunchBefore);
+    });
+
+    test('lets the current CLI select and execute run and debug pipeline steps with exact final args', async function () {
+        if (process.env.ASPIRE_EXTENSION_E2E_SKIP_CURRENT_CLI_REGRESSIONS === 'true') {
+            return;
+        }
+
+        this.timeout(600000);
+        await openAspireView();
+        await waitForRepositoryIdle();
+        const appHostPath = (await waitForWorkspaceAppHost()).state.workspaceAppHostPath ?? getPrimaryAppHostProjectPath();
+        await restoreE2eCliPathForE2E();
+        const refreshBefore = getCommandInvocationCount('aspire-vscode.refreshAppHosts');
+        await executeE2eControlCommand({ name: 'refreshAppHosts' });
+        await waitForCommandOutcome('aspire-vscode.refreshAppHosts', 'success', 60000, refreshBefore);
+        await waitForRepositoryIdle();
+        await waitForWorkspaceAppHost();
+
+        const runLaunchBefore = getDebugLaunchCount();
+        const runInvocationBefore = getCommandInvocationCount('aspire-vscode.runPipelineStepAppHost');
+        await executeE2eControlCommand({ name: 'runPipelineStepAppHostAction', appHostPath }, { waitFor: 'started' });
+        await answerActiveInput('e2e-run-action-step', 'Select a pipeline step to execute', 120000);
+        await waitForCommandOutcome('aspire-vscode.runPipelineStepAppHost', 'success', 60000, runInvocationBefore);
+        const runLaunch = await waitForDebugLaunch(
+            event => event.command === 'do' && event.noDebug && event.doStep === 'e2e-run-action-step',
+            'current CLI run pipeline launch',
+            60000,
+            runLaunchBefore);
+        assert.strictEqual(runLaunch.cliPath, getCliPath());
+        await waitForDebugConsoleOutput('E2E run action pipeline step completed', appHostPath, 180000);
+        await waitForNoDebugSessions(180000);
+
+        const debugLaunchBefore = getDebugLaunchCount();
+        const debugInvocationBefore = getCommandInvocationCount('aspire-vscode.debugPipelineStepAppHost');
+        await executeE2eControlCommand({ name: 'debugPipelineStepAppHostAction', appHostPath }, { waitFor: 'started' });
+        await answerActiveInput('e2e-debug-action-step', 'Select a pipeline step to execute', 120000);
+        await waitForCommandOutcome('aspire-vscode.debugPipelineStepAppHost', 'success', 60000, debugInvocationBefore);
+        const debugLaunch = await waitForDebugLaunch(
+            event => event.command === 'do' && !event.noDebug && event.doStep === 'e2e-debug-action-step',
+            'current CLI debug pipeline launch',
+            60000,
+            debugLaunchBefore);
+        assert.strictEqual(debugLaunch.cliPath, getCliPath());
+        await waitForDebugConsoleOutput('E2E debug action pipeline step completed', appHostPath, 180000);
+        await waitForNoDebugSessions(180000);
+
+        const spawnLines = readExtensionLogs()
+            .split(/\r?\n/)
+            .filter(line => line.includes('Spawning Aspire CLI process:') && line.includes(` do `) && line.includes(`--apphost ${appHostPath}`));
+        assert.ok(
+            spawnLines.some(line => line.includes(' do e2e-run-action-step --nologo ') && !line.includes('--start-debug-session')),
+            `Expected run pipeline args without --start-debug-session. Spawn lines: ${JSON.stringify(spawnLines)}`);
+        assert.ok(
+            spawnLines.some(line => line.includes(' do e2e-debug-action-step --start-debug-session --nologo ')),
+            `Expected debug pipeline args with --start-debug-session. Spawn lines: ${JSON.stringify(spawnLines)}`);
+    });
+
+    test('does not duplicate an AppHost launch while the same AppHost is reserved', async () => {
+        await openAspireView();
+        await waitForRepositoryIdle();
+        const appHostPath = (await waitForWorkspaceAppHost()).state.workspaceAppHostPath ?? getPrimaryAppHostProjectPath();
+        await restoreE2eCliPathForE2E();
+
+        const runInvocationBefore = getCommandInvocationCount('aspire-vscode.runAppHost');
+        await executeE2eControlCommand({ name: 'runAppHost', appHostPath }, { waitFor: 'started' });
+        await waitForAppHostLaunching(appHostPath);
+        await waitForCommandOutcome('aspire-vscode.runAppHost', 'success', 120000, runInvocationBefore);
+
+        const launchesBeforeDuplicate = getDebugLaunchCount();
+        const deployInvocationBefore = getCommandInvocationCount('aspire-vscode.deployAppHost');
+        await executeE2eControlCommand({ name: 'deployAppHostAction', appHostPath });
+        await waitForCommandOutcome('aspire-vscode.deployAppHost', 'canceled', 60000, deployInvocationBefore);
+        assert.strictEqual(getDebugLaunchCount(), launchesBeforeDuplicate);
+    });
+
+    test('keeps one durable operation per AppHost while a deploy session is in flight', async () => {
+        const section = await openAspireView();
+        await waitForRepositoryIdle();
+        const discovered = await waitForWorkspaceAppHost();
+        const appHostPath = discovered.state.workspaceAppHostPath ?? getPrimaryAppHostProjectPath();
+        const appHostLabel = getTreeAppHostLabel(discovered.state);
+        const gatedCli = writeGatedDeployActionCliWrapper('aspire-gated-deploy-actions');
+        try {
+            await setE2eCliPathForE2E(gatedCli.cliPath);
+            const refreshBefore = getCommandInvocationCount('aspire-vscode.refreshAppHosts');
+            await executeE2eControlCommand({ name: 'refreshAppHosts' });
+            await waitForCommandOutcome('aspire-vscode.refreshAppHosts', 'success', 60000, refreshBefore);
+            await waitForRepositoryIdle();
+            await waitForWorkspaceAppHost();
+
+            // A durable operation only exists while a real launch owns the AppHost, so this test
+            // deliberately does not suppress the debug launch. The gated CLI blocks inside `deploy`
+            // until it is released, which holds the operation open without any timing assumption.
+            const launchBefore = getDebugLaunchCount();
+            const deployBefore = getCommandInvocationCount('aspire-vscode.deployAppHost');
+            await executeE2eControlCommand({ name: 'deployAppHostAction', appHostPath }, { waitFor: 'started' });
+            await waitForCommandOutcome('aspire-vscode.deployAppHost', 'success', 120000, deployBefore);
+            await gatedCli.waitForDeployRequest();
+            await waitForTreeItemDescription(section, appHostLabel, 'Deploying...', 60000);
+
+            const duplicateDeployBefore = getCommandInvocationCount('aspire-vscode.deployAppHost');
+            await executeE2eControlCommand({ name: 'deployAppHostAction', appHostPath });
+            await waitForCommandOutcome('aspire-vscode.deployAppHost', 'canceled', 60000, duplicateDeployBefore);
+
+            const duplicatePublishBefore = getCommandInvocationCount('aspire-vscode.publishAppHost');
+            await executeE2eControlCommand({ name: 'publishAppHostAction', appHostPath });
+            await waitForCommandOutcome('aspire-vscode.publishAppHost', 'canceled', 60000, duplicatePublishBefore);
+            assert.strictEqual(getDebugLaunchCount(), launchBefore + 1);
+
+            gatedCli.releaseDeploy();
+            await waitForNoDebugSessions(120000);
+
+            // The operation is owned by its session, so a deploy accepted after that session ends
+            // proves the durable state was released rather than leaked onto the AppHost.
+            const releasedDeployBefore = getCommandInvocationCount('aspire-vscode.deployAppHost');
+            const releasedLaunchBefore = getDebugLaunchCount();
+            await executeE2eControlCommand({ name: 'deployAppHostAction', appHostPath }, { waitFor: 'started' });
+            await waitForCommandOutcome('aspire-vscode.deployAppHost', 'success', 120000, releasedDeployBefore);
+            await waitForDebugLaunch(
+                event => event.command === 'deploy',
+                'deploy launch after the durable operation ended',
+                60000,
+                releasedLaunchBefore);
+            await waitForNoDebugSessions(120000);
+        }
+        finally {
+            try {
+                gatedCli.releaseDeploy();
+            }
+            finally {
+                gatedCli.cleanup();
+            }
+            await waitForNoDebugSessions(120000);
+        }
     });
 
     test('routes view, copy, endpoint, log, and resource commands through tree handlers', async () => {
@@ -51,13 +342,18 @@ suite('Aspire tree action command E2E', function () {
         await waitForAppHostLaunching(appHostPath);
         await waitForCommandOutcome('aspire-vscode.runAppHost', 'success', 120000, before);
         await waitForRunningAppHost();
-        const runningResources = await waitForResourceState('e2e-worker', ['Running'], 180000);
+        // The first Running snapshot can precede DCP activating the worker's endpoint, and the backchannel omits
+        // inactive URLs, so wait for the URL-bearing snapshot this test later reads the endpoint from.
+        const runningResources = await waitForRunningResourceWithUrl('e2e-worker', 'http:', 180000);
         const workerResource = findResource(runningResources.state, 'e2e-worker');
         assert.ok(workerResource, 'Expected e2e-worker to be present after AppHost startup.');
         const workerResourceName = workerResource.name;
         await waitForDashboardUrl();
 
-        const commandState = await waitForResource('e2e-worker');
+        const commandState = await waitForExtensionState(
+            file => findResource(file.state, 'e2e-worker')?.commands?.['disabled-e2e-command']?.state === 'Disabled',
+            'e2e-worker command metadata',
+            120000);
         const commands = findResource(commandState.state, 'e2e-worker')?.commands;
         assert.ok(commands, 'Expected e2e-worker commands in the E2E state snapshot.');
         assert.ok(commands['echo-arguments'], 'Expected enabled echo-arguments command.');
@@ -80,6 +376,86 @@ suite('Aspire tree action command E2E', function () {
         const noCommandsResource = await waitForTreeItem(section, 'e2e-no-commands', 60000);
         await noCommandsResource.expand();
         assert.strictEqual(await noCommandsResource.findChildItem('Commands'), undefined);
+
+        for (const resourceName of ['e2e-image-source', 'e2e-tool-source', 'e2e-suppressed-source', 'e2e-display-source']) {
+            await waitForResource(resourceName);
+            const sourceItem = await waitForTreeItem(section, resourceName, 60000);
+            const sourceMenu = await sourceItem.openContextMenu();
+            try {
+                assert.strictEqual(await sourceMenu.hasItem('Open resource source'), false, `Unexpected source action for ${resourceName}.`);
+                await VSBrowser.instance.takeScreenshot(`resource-go-to-source-hidden-${resourceName}`);
+            } finally {
+                // A resource refresh can dismiss the menu before cleanup; Escape targets the stable workbench.
+                await VSBrowser.instance.driver.actions().sendKeys('\uE00C').perform();
+            }
+        }
+
+        before = getCommandInvocationCount('aspire-vscode.openResourceSource');
+        const missingSourceItem = await waitForTreeItem(section, 'e2e-missing-source', 60000);
+        const missingSourceMenu = await missingSourceItem.openContextMenu();
+        await missingSourceMenu.select('Open resource source');
+        await waitForCommandOutcome('aspire-vscode.openResourceSource', 'success', 60000, before);
+        const missingSourcePath = path.join(getWorkspaceRoot(), 'AspireE2E.Worker', 'AspireE2E.Worker.missing.csproj');
+        const missingSourceMessage = `Failed to open resource source: ${missingSourcePath}`;
+        const missingSourceNotification = await waitForNotificationMessage(missingSourceMessage);
+        assert.strictEqual(await missingSourceNotification.getMessage(), missingSourceMessage);
+        // The toast's hover-only dismiss button is not reliably visible on Linux.
+        await executeCommandFromPalette('Notifications: Clear All Notifications');
+
+        before = getCommandInvocationCount('aspire-vscode.openResourceSource');
+        section = await openAspireView();
+        const outsideWorkspaceSourceItem = await waitForTreeItem(section, 'e2e-outside-workspace-source', 60000);
+        const outsideWorkspaceSourceMenu = await outsideWorkspaceSourceItem.openContextMenu();
+        await outsideWorkspaceSourceMenu.select('Open resource source');
+        await waitForCommandOutcome('aspire-vscode.openResourceSource', 'success', 60000, before);
+        const runRoot = getRunRoot();
+        assert.ok(runRoot, 'Expected the owned E2E runtime directory.');
+        const outsideWorkspaceSourcePath = path.join(runRoot, 'e2e-outside-workspace-source');
+        const outsideWorkspaceSourceMessage = `Resource source is outside the current workspace: ${outsideWorkspaceSourcePath}. Add its folder to the workspace to reveal it in Explorer.`;
+        const outsideWorkspaceSourceNotification = await waitForNotificationMessage(outsideWorkspaceSourceMessage);
+        assert.strictEqual(await outsideWorkspaceSourceNotification.getMessage(), outsideWorkspaceSourceMessage);
+        await executeCommandFromPalette('Notifications: Clear All Notifications');
+
+        before = getCommandInvocationCount('aspire-vscode.openResourceSource');
+        section = await openAspireView();
+        const directorySourceItem = await waitForTreeItem(section, 'e2e-directory-source', 60000);
+        const directorySourceMenu = await directorySourceItem.openContextMenu();
+        await directorySourceMenu.select('Open resource source');
+        await waitForCommandOutcome('aspire-vscode.openResourceSource', 'success', 60000, before);
+        await waitForExplorerSelection(['AspireE2E.Worker']);
+
+        for (const language of ['python', 'java']) {
+            const resourceName = `e2e-${language}-source`;
+            before = getCommandInvocationCount('aspire-vscode.openResourceSource');
+            section = await openAspireView();
+            await waitForResource(resourceName);
+            const languageSourceItem = await waitForTreeItem(section, resourceName, 60000);
+            const languageSourceMenu = await languageSourceItem.openContextMenu();
+            await languageSourceMenu.select('Open resource source');
+            await waitForCommandOutcome('aspire-vscode.openResourceSource', 'success', 60000, before);
+            await waitForExplorerSelection(['AspireE2E.AppHost', resourceName]);
+            await VSBrowser.instance.takeScreenshot(`resource-${language}-source-directory`);
+        }
+
+        before = getCommandInvocationCount('aspire-vscode.openResourceSource');
+        section = await openAspireView();
+        const sourceWorkerItem = await waitForTreeItem(section, 'e2e-worker', 60000);
+        const resourceContextMenu = await sourceWorkerItem.openContextMenu();
+        await VSBrowser.instance.takeScreenshot('resource-go-to-source-context-menu');
+        // Selecting the action dismisses the menu and transfers focus to the source.
+        await resourceContextMenu.select('Open resource source');
+        await waitForCommandOutcome('aspire-vscode.openResourceSource', 'success', 60000, before);
+        const workerSourcePath = path.join(getWorkspaceRoot(), 'AspireE2E.Worker', 'AspireE2E.Worker.csproj');
+        await VSBrowser.instance.driver.wait(async () => {
+            const editor = (await executeE2eControlCommand({ name: 'getActiveEditor' })).result as ActiveEditorInfo;
+            return isSamePath(editor.fileName ?? '', workerSourcePath)
+                && editor.uri?.startsWith('file:')
+                && editor.text?.includes('<Project');
+        }, 30000, `Expected resource source '${workerSourcePath}' to open in the editor.`);
+        await VSBrowser.instance.driver.wait(
+            () => VSBrowser.instance.driver.executeScript<boolean>('return Boolean(document.activeElement?.closest(".monaco-editor"));'),
+            30000, 'Expected the resource source editor to have keyboard focus.');
+        await VSBrowser.instance.takeScreenshot('resource-source-editor');
 
         await snapshotClipboardForE2E();
         await executeE2eControlCommand({ name: 'copyAppHostPath', appHostPath });
@@ -137,11 +513,8 @@ suite('Aspire tree action command E2E', function () {
                 60000,
                 terminalBefore);
 
-            // e2e-terminal is registered with .WithTerminal(), so the real Aspire CLI surfaces
-            // terminal.enabled and terminal.replicaIndex over the backchannel. Opening its terminal
-            // must therefore append --replica derived from that metadata, unlike e2e-worker above
-            // which has no terminal annotation and emits no --replica. This proves the terminal
-            // properties flow end-to-end through a real CLI process and drive the Open terminal action.
+            // A terminal-enabled resource uses its exact snapshot instance ID. The CLI capability
+            // controls whether the extension must also pass the legacy replica-index option.
             const terminalResourceState = await waitForResourceState('e2e-terminal', ['Running'], 180000);
             const terminalResource = findResource(terminalResourceState.state, 'e2e-terminal');
             assert.ok(terminalResource, 'Expected e2e-terminal to be present after AppHost startup.');
@@ -150,13 +523,22 @@ suite('Aspire tree action command E2E', function () {
             before = getCommandInvocationCount('aspire-vscode.openResourceTerminal');
             await executeE2eControlCommand({ name: 'openResourceTerminal', appHostPath, resourceName: terminalResourceName });
             await waitForCommandOutcome('aspire-vscode.openResourceTerminal', 'success', 60000, before);
-            await waitForTerminalCommand(
+            const terminalCommand = await waitForTerminalCommand(
                 event => event.subcommand.includes(`terminal attach ${quoteExpectedShellArg(terminalResourceName)}`)
-                    && event.subcommand.includes('--replica')
                     && event.executionSuppressed,
                 'open terminal-enabled resource terminal command',
                 60000,
                 terminalBefore);
+            if (process.env.ASPIRE_EXTENSION_E2E_SKIP_CURRENT_CLI_REGRESSIONS !== 'true') {
+                const commandPrefix = `terminal attach ${quoteExpectedShellArg(terminalResourceName)} --apphost `;
+                assert.ok(terminalCommand.subcommand.startsWith(commandPrefix));
+                const appHostArgument = terminalCommand.subcommand.slice(commandPrefix.length);
+                const expectedAppHostArgument = quoteExpectedShellArg(appHostPath);
+                // VS Code URIs and CLI discovery can use different casing for Windows paths.
+                assert.strictEqual(
+                    process.platform === 'win32' ? appHostArgument.toLowerCase() : appHostArgument,
+                    process.platform === 'win32' ? expectedAppHostArgument.toLowerCase() : expectedAppHostArgument);
+            }
         } finally {
             await setTerminalCommandExecutionSuppressedForE2E(false);
         }
@@ -170,21 +552,21 @@ suite('Aspire tree action command E2E', function () {
         // a visible terminal command, and the resulting resource state transitions.
         terminalBefore = getTerminalCommandCount();
         before = getCommandInvocationCount('aspire-vscode.stopResource');
-        await executeE2eControlCommand({ name: 'stopResource', appHostPath, resourceName: workerResourceName });
+        await executeE2eControlCommand({ name: 'stopResource', appHostPath, resourceName: workerResourceName }, { waitFor: 'started' });
         await waitForCommandOutcome('aspire-vscode.stopResource', 'success', 60000, before);
         assert.strictEqual(getTerminalCommandCount(), terminalBefore);
         await waitForResourceState(workerResourceName, ['Exited', 'Finished', 'Stopped'], 90000);
 
         terminalBefore = getTerminalCommandCount();
         before = getCommandInvocationCount('aspire-vscode.startResource');
-        await executeE2eControlCommand({ name: 'startResource', appHostPath, resourceName: workerResourceName });
+        await executeE2eControlCommand({ name: 'startResource', appHostPath, resourceName: workerResourceName }, { waitFor: 'started' });
         await waitForCommandOutcome('aspire-vscode.startResource', 'success', 60000, before);
         assert.strictEqual(getTerminalCommandCount(), terminalBefore);
         await waitForResourceState(workerResourceName, ['Running'], 90000);
 
         terminalBefore = getTerminalCommandCount();
         before = getCommandInvocationCount('aspire-vscode.restartResource');
-        await executeE2eControlCommand({ name: 'restartResource', appHostPath, resourceName: workerResourceName });
+        await executeE2eControlCommand({ name: 'restartResource', appHostPath, resourceName: workerResourceName }, { waitFor: 'started' });
         await waitForCommandOutcome('aspire-vscode.restartResource', 'success', 60000, before);
         assert.strictEqual(getTerminalCommandCount(), terminalBefore);
         await waitForResourceState(workerResourceName, ['Running'], 90000);
@@ -250,6 +632,42 @@ suite('Aspire tree action command E2E', function () {
         assert.notStrictEqual(codeLensEditor.text, commandPaletteEditor.text);
     });
 });
+
+type AppHostActionControlCommand =
+    | { name: 'deployAppHostAction'; appHostPath: string }
+    | { name: 'publishAppHostAction'; appHostPath: string }
+    | { name: 'runPipelineStepAppHostAction'; appHostPath: string }
+    | { name: 'debugPipelineStepAppHostAction'; appHostPath: string };
+
+async function assertAppHostActionLaunch(
+    controlCommand: AppHostActionControlCommand,
+    commandId: string,
+    appHostPath: string,
+    cliPath: string,
+    cliTargetKey: string,
+    expectedCommand: 'deploy' | 'publish' | 'do',
+    expectedNoDebug: boolean,
+    pipelineStep?: string,
+): Promise<void> {
+    const launchBefore = getDebugLaunchCount();
+    const invocationBefore = getCommandInvocationCount(commandId);
+    await executeE2eControlCommand(controlCommand, { waitFor: 'started' });
+    if (pipelineStep) {
+        await answerActiveInput(`  ${pipelineStep}  `, 'deploy');
+    }
+    await waitForCommandOutcome(commandId, 'success', 60000, invocationBefore);
+    const launch = await waitForDebugLaunch(
+        event => event.command === expectedCommand
+            && event.noDebug === expectedNoDebug
+            && event.doStep === pipelineStep,
+        `${commandId} launch for secondary AppHost`,
+        60000,
+        launchBefore);
+
+    assert.ok(isSamePath(launch.appHostPath, appHostPath), `Expected ${commandId} to target '${appHostPath}', got '${launch.appHostPath}'.`);
+    assert.ok(isSamePath(launch.cliPath ?? '', cliPath), `Expected ${commandId} to use CLI '${cliPath}', got '${launch.cliPath}'.`);
+    assert.strictEqual(launch.cliTargetKey, cliTargetKey);
+}
 
 async function waitForResourceCommandOutputEditor(resourceName: string, commandName: string, expectedText: string, timeoutMs = 60000): Promise<ActiveEditorInfo> {
     const started = Date.now();

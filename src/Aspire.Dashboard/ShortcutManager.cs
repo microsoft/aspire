@@ -22,6 +22,21 @@ public sealed class ShortcutManager(ILoggerFactory loggerFactory) : IDisposable
         _keydownListenerComponents.Remove(listener, out _);
     }
 
+    public bool IsShortcutAvailable(AspireKeyboardShortcut shortcut)
+    {
+        // Panel shortcuts remain discoverable even when no panel is currently listening for them.
+        if (shortcut is AspireKeyboardShortcut.ToggleOrientation
+            or AspireKeyboardShortcut.ClosePanel
+            or AspireKeyboardShortcut.ResetPanelSize
+            or AspireKeyboardShortcut.IncreasePanelSize
+            or AspireKeyboardShortcut.DecreasePanelSize)
+        {
+            return true;
+        }
+
+        return _keydownListenerComponents.Values.Any(component => component.SubscribedShortcuts.Contains(shortcut));
+    }
+
     [JSInvokable]
     public Task OnGlobalKeyDown(AspireKeyboardShortcut shortcut)
     {

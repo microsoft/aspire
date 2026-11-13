@@ -1,6 +1,8 @@
 ﻿services:
   my-service:
     image: "my-image:latest"
+    environment:
+      DATA_PATH: "/container/volume-data"
     volumes:
       - type: "volume"
         target: "/container/volume-data"

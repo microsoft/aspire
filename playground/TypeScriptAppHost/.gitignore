@@ -1,4 +1,5 @@
 !.aspire/
 .aspire/dcp/
 .aspire/modules/
+.aspire/NuGet.Config
 .modules/

@@ -5,7 +5,7 @@ import { load } from 'js-yaml';
 
 import { removeDirectorySafely } from './testHelpers';
 /**
- * The E2E suite runs one spec per workflow matrix row. This unit test is the signal for a spec that
+ * The E2E suite runs one or more specs per workflow matrix row. This unit test is the signal for a spec that
  * has no row, because an E2E shard cannot report that a different shard was never scheduled.
  */
 suite('E2E shard matrix', () => {
@@ -19,8 +19,9 @@ suite('E2E shard matrix', () => {
     // would make the assertion vacuous. Keys are `name|shardName|spec` and values are tracking issues.
     const expectedAdvisoryRows = new Map<string, string>([
         ['Linux|apphost-tree|out/test-e2e/test-e2e/appHostTree.e2e.test.js', 'https://github.com/microsoft/aspire/issues/19282'],
+        ['Linux|azure-functions|out/test-e2e/test-e2e/azureFunctions.e2e.test.js', 'https://github.com/microsoft/aspire/issues/19639'],
+        ['Linux|browser-debugger|out/test-e2e/test-e2e/browserDebugger.e2e.test.js', 'https://github.com/microsoft/aspire/issues/20184'],
         ['Windows|discovery-configuration|out/test-e2e/test-e2e/discoveryConfiguration.e2e.test.js', 'https://github.com/microsoft/aspire/issues/19282'],
-        ['Linux|azure-functions|out/test-e2e/test-e2e/azureFunctions.e2e.test.js', 'https://github.com/microsoft/aspire/issues/19151'],
         ['Windows|debug-dashboard|out/test-e2e/test-e2e/debugDashboard.e2e.test.js', 'https://github.com/microsoft/aspire/issues/19282'],
     ]);
 
@@ -62,6 +63,11 @@ suite('E2E shard matrix', () => {
                 shardName: optionalString(row, 'shardName', index),
                 spec: optionalString(row, 'spec', index),
                 advisoryIssue: optionalString(row, 'advisoryIssue', index),
+                runner: optionalString(row, 'runner', index),
+                browser: optionalString(row, 'browser', index),
+                installDotnetDebugger: optionalBoolean(row, 'installDotnetDebugger', index),
+                installAzureFunctions: optionalBoolean(row, 'installAzureFunctions', index),
+                installAzureFunctionsCoreTools: optionalBoolean(row, 'installAzureFunctionsCoreTools', index),
             };
         });
     }
@@ -88,6 +94,16 @@ suite('E2E shard matrix', () => {
         return value as string;
     }
 
+    function optionalBoolean(row: Record<string, unknown>, key: string, index: number): boolean | undefined {
+        const value = row[key];
+        if (value === undefined) {
+            return undefined;
+        }
+
+        assert.strictEqual(typeof value, 'boolean', `Expected extension_e2e matrix row ${index + 1} field '${key}' to be a boolean.`);
+        return value as boolean;
+    }
+
     function assertNoLegacyFields(row: Record<string, unknown>, index: number): void {
         for (const key of ['allowFailure', 'disabledIssue']) {
             assert.ok(
@@ -96,10 +112,23 @@ suite('E2E shard matrix', () => {
         }
     }
 
+    function expandSpecAlternatives(spec: string): string[] {
+        // Combined shards use explicit alternatives, e.g. "{first,second}.e2e.test.js".
+        // Expand the names rather than filtering existing files by the glob so a misspelled
+        // alternative still fails the exact coverage assertion instead of silently disappearing.
+        const match = /^([^{}]*)\{([^{}]*)\}(.*)$/.exec(spec);
+        if (!match) {
+            return [spec];
+        }
+
+        return match[2].split(',').flatMap(alternative =>
+            expandSpecAlternatives(match[3]).map(suffix => `${match[1]}${alternative}${suffix}`));
+    }
+
     function matrixSpecPaths(workflow: string): string[] {
-        return [...new Set(matrixRows(workflow).map(row => {
+        return [...new Set(matrixRows(workflow).flatMap(row => {
             assert.ok(row.spec, 'E2E matrix rows must include a non-empty spec.');
-            return row.spec;
+            return expandSpecAlternatives(row.spec);
         }))].sort();
     }
 
@@ -160,6 +189,74 @@ suite('E2E shard matrix', () => {
         assertAdvisoryRowsAreTracked(workflow, expectedAdvisoryRows);
     });
 
+    test('schedules the Node Functions proof independently with Functions prerequisites', () => {
+        const workflow = fs.readFileSync(workflowPath, 'utf8');
+        const rows = matrixRows(workflow).filter(row => row.shardName === 'azure-functions-node');
+
+        assert.strictEqual(rows.length, 1);
+        assert.strictEqual(rows[0].name, 'Linux');
+        assert.strictEqual(rows[0].runner, 'ubuntu-latest');
+        assert.strictEqual(rows[0].spec, 'out/test-e2e/test-e2e/azureFunctionsNode.e2e.test.js');
+        assert.strictEqual(rows[0].installDotnetDebugger, true);
+        assert.strictEqual(rows[0].installAzureFunctionsCoreTools, true);
+        assert.strictEqual(rows[0].installAzureFunctions, undefined);
+        assert.strictEqual(rows[0].advisoryIssue, undefined);
+        assert.ok(!fs.readFileSync(path.join(specDirectory, 'azureFunctions.e2e.test.ts'), 'utf8').includes('azureFunctionsNode.e2e.test'));
+    });
+
+    test('schedules browser debugger proofs on Chrome and Edge with debugger prerequisites', () => {
+        const workflow = fs.readFileSync(workflowPath, 'utf8');
+        const browserDebuggerRows = matrixRows(workflow)
+            .filter(row => row.shardName === 'browser-debugger')
+            .map(row => ({
+                name: row.name,
+                runner: row.runner,
+                spec: row.spec,
+                browser: row.browser,
+                installDotnetDebugger: row.installDotnetDebugger,
+                installAzureFunctions: row.installAzureFunctions,
+                advisoryIssue: row.advisoryIssue,
+            }));
+
+        assert.deepStrictEqual(browserDebuggerRows, [
+            {
+                name: 'Linux',
+                runner: 'ubuntu-latest',
+                spec: 'out/test-e2e/test-e2e/browserDebugger.e2e.test.js',
+                browser: 'chrome',
+                installDotnetDebugger: true,
+                installAzureFunctions: undefined,
+                advisoryIssue: 'https://github.com/microsoft/aspire/issues/20184',
+            },
+            {
+                name: 'Windows',
+                runner: 'windows-latest',
+                spec: 'out/test-e2e/test-e2e/browserDebugger.e2e.test.js',
+                browser: 'msedge',
+                installDotnetDebugger: true,
+                installAzureFunctions: undefined,
+                advisoryIssue: undefined,
+            },
+        ]);
+    });
+
+    test('schedules resource Run/Debug proofs with the .NET debugger on both coordinated-build platforms', () => {
+        const workflow = fs.readFileSync(workflowPath, 'utf8');
+        const rows = matrixRows(workflow).filter(row =>
+            row.spec === 'out/test-e2e/test-e2e/coordinatedBuild.e2e.test.js');
+
+        assert.deepStrictEqual(rows.map(row => ({
+            name: row.name,
+            runner: row.runner,
+            installDotnetDebugger: row.installDotnetDebugger,
+            installAzureFunctions: row.installAzureFunctions,
+            advisoryIssue: row.advisoryIssue,
+        })), [
+            { name: 'Linux', runner: 'ubuntu-latest', installDotnetDebugger: true, installAzureFunctions: undefined, advisoryIssue: undefined },
+            { name: 'Windows', runner: 'windows-latest', installDotnetDebugger: true, installAzureFunctions: undefined, advisoryIssue: undefined },
+        ]);
+    });
+
     test('rejects a spec that has no matrix row', () => {
         const workflow = workflowWithRows(
             '- name: Linux\n  shardName: edge-cases\n  spec: out/test-e2e/test-e2e/edgeCases.e2e.test.js');
@@ -204,6 +301,33 @@ suite('E2E shard matrix', () => {
             `- { name: Windows, shardName: edge-cases, spec: ${spec} }`);
 
         assertMatrixMatchesSpecs(workflow, ['edgeCases.e2e.test.ts']);
+    });
+
+    test('accepts explicit spec alternatives on multiple platform rows', () => {
+        const spec = 'out/test-e2e/test-e2e/{cliPathRejectionNotification,usefulnessSurvey}.e2e.test.js';
+        const workflow = workflowWithRows(
+            `- name: Linux\n  shardName: notifications\n  spec: ${spec}`,
+            `- name: Windows\n  shardName: notifications\n  spec: ${spec}`);
+
+        assertMatrixMatchesSpecs(workflow, ['cliPathRejectionNotification.e2e.test.ts', 'usefulnessSurvey.e2e.test.ts']);
+    });
+
+    test('rejects a spec omitted from a combined shard', () => {
+        const workflow = workflowWithRows(
+            '- name: Linux\n  shardName: notifications\n  spec: out/test-e2e/test-e2e/{cliPathRejectionNotification,usefulnessSurvey}.e2e.test.js');
+
+        assert.throws(
+            () => assertMatrixMatchesSpecs(workflow, ['cliPathRejectionNotification.e2e.test.ts', 'usefulnessSurvey.e2e.test.ts', 'appHostTree.e2e.test.ts']),
+            assert.AssertionError);
+    });
+
+    test('rejects a nonexistent alternative even when every spec is otherwise scheduled', () => {
+        const workflow = workflowWithRows(
+            '- name: Linux\n  shardName: notifications\n  spec: out/test-e2e/test-e2e/{cliPathRejectionNotification,usefulnessSurvey,missing}.e2e.test.js');
+
+        assert.throws(
+            () => assertMatrixMatchesSpecs(workflow, ['cliPathRejectionNotification.e2e.test.ts', 'usefulnessSurvey.e2e.test.ts']),
+            assert.AssertionError);
     });
 
     test('does not treat nested or unrelated spec fields as matrix.spec', () => {
@@ -306,4 +430,9 @@ interface MatrixRow {
     shardName?: string;
     spec?: string;
     advisoryIssue?: string;
+    runner?: string;
+    browser?: string;
+    installDotnetDebugger?: boolean;
+    installAzureFunctions?: boolean;
+    installAzureFunctionsCoreTools?: boolean;
 }

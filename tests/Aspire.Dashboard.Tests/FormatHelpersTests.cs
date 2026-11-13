@@ -135,6 +135,15 @@ public class FormatHelpersTests
     [InlineData("", 5, "")]
     [InlineData("abcdef", 5, "abcd" + FormatHelpers.Ellipsis)]
     [InlineData("abcdef", 10, "abcdef")]
+    [InlineData("abcdef", 6, "abcdef")]
+    [InlineData("abcdef", 1, FormatHelpers.Ellipsis)]
+    [InlineData("\U0001F600", 2, "\U0001F600")]
+    [InlineData("ab\U0001F600", 4, "ab\U0001F600")]
+    [InlineData("ab\U0001F600tail", 4, "ab" + FormatHelpers.Ellipsis)]
+    [InlineData("a\U0001F600tail", 4, "a\U0001F600" + FormatHelpers.Ellipsis)]
+    [InlineData("ab\U0001F600tail", 3, "ab" + FormatHelpers.Ellipsis)]
+    [InlineData("\U0001F600tail", 2, FormatHelpers.Ellipsis)]
+    [InlineData("\U0001F600tail", 1, FormatHelpers.Ellipsis)]
     public void TruncateText(string? initialText, int maxLength, string expected)
     {
         Assert.Equal(expected, FormatHelpers.TruncateText(initialText, maxLength: maxLength));
@@ -173,6 +182,17 @@ public class FormatHelpersTests
         provider.SetConfiguredTimeFormat(format);
 
         Assert.Equal(expected, FormatHelpers.FormatDateTime(provider, date, MillisecondsDisplay.None, CultureInfo.GetCultureInfo("en-US")), ignoreWhiteSpaceDifferences: true);
+    }
+
+    [Theory]
+    [InlineData("2025-12-20T13:45:30.0000000Z", "1:45:30 PM")]
+    [InlineData("2025-12-19T13:45:30.0000000Z", "12/19/2025 1:45:30 PM")]
+    public void FormatTimeWithOptionalDate_UsesTimeProviderCurrentDate(string value, string expected)
+    {
+        var provider = new FixedTimeProvider(new DateTimeOffset(2025, 12, 20, 23, 59, 59, TimeSpan.Zero));
+        var date = DateTime.Parse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind);
+
+        Assert.Equal(expected, FormatHelpers.FormatTimeWithOptionalDate(provider, date, cultureInfo: CultureInfo.GetCultureInfo("en-US")), ignoreWhiteSpaceDifferences: true);
     }
 
     [Theory]
@@ -265,5 +285,12 @@ public class FormatHelpersTests
     private static BrowserTimeProvider CreateTimeProvider()
     {
         return new BrowserTimeProvider(NullLoggerFactory.Instance);
+    }
+
+    private sealed class FixedTimeProvider(DateTimeOffset utcNow) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => utcNow;
+
+        public override TimeZoneInfo LocalTimeZone => TimeZoneInfo.Utc;
     }
 }

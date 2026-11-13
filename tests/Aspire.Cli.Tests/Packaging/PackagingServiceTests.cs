@@ -160,10 +160,10 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
             aspireMapping.Source);
 
         var packages = (await stagingChannel.GetIntegrationPackagesAsync(tempDir, CancellationToken.None).DefaultTimeout())
-            .OrderBy(package => package.Id, StringComparer.Ordinal)
+            .Packages.OrderBy(package => package.Id, StringComparer.Ordinal)
             .ToArray();
         var polyglotPackageIds = (await stagingChannel.GetPolyglotCompatiblePackageIdsAsync(tempDir, CancellationToken.None).DefaultTimeout())
-            .OrderBy(id => id, StringComparer.Ordinal)
+            .Packages.OrderBy(id => id, StringComparer.Ordinal)
             .ToArray();
 
         Assert.Collection(
@@ -797,18 +797,10 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
     }
 
     /// <summary>
-    /// Locks in the structural invariant that <c>aspire init</c> and <c>aspire new</c> depend
-    /// on: the <c>stable</c> channel is always <see cref="PackageChannelType.Explicit"/> with a
-    /// non-empty <see cref="PackageChannel.Mappings"/> array containing a <see cref="PackageMapping.AllPackages"/>
-    /// pattern. <c>TemplateNuGetConfigService.CreateOrUpdateNuGetConfigWithoutPromptAsync</c>
-    /// short-circuits if the matching channel is not explicit or has no mappings, so a future
-    /// refactor that flipped stable to implicit / removed its mappings would silently turn the
-    /// workspace-NuGet.config write into a no-op for every stable-channel CLI user. The
-    /// InitCommand-level tests use a fake stable channel and cannot catch this regression at the
-    /// real <see cref="PackagingService"/> layer.
+    /// Stable remains an explicit channel selection even when its sources are ambient.
     /// </summary>
     [Fact]
-    public async Task GetChannelsAsync_StableChannel_IsExplicitWithAllPackagesMappingToNuGetOrg()
+    public async Task GetChannelsAsync_StableChannel_IsExplicitWithAmbientSourcePolicy()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
@@ -823,11 +815,89 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
 
         var stableChannel = channels.First(c => c.Name == PackageChannelNames.Stable);
         Assert.Equal(PackageChannelType.Explicit, stableChannel.Type);
-        Assert.NotNull(stableChannel.Mappings);
-        Assert.NotEmpty(stableChannel.Mappings!);
-        Assert.Contains(stableChannel.Mappings!, m =>
-            m.PackageFilter == PackageMapping.AllPackages &&
-            m.Source == PackageSources.NuGetOrg);
+        Assert.Null(stableChannel.Mappings);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("https://mirror.example/v3/index.json")]
+    public async Task GetChannelsAsync_ChannelsDoNotDeclareDefaultPackageSources(string? integrationSourceOverride)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var hives = workspace.CreateDirectory("hives");
+        hives.CreateSubdirectory("local/packages");
+        hives.CreateSubdirectory("pr-1234/packages");
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(
+            workspace.WorkspaceRoot, identityChannel: PackageChannelNames.Stable,
+            hivesDirectory: hives, nugetServiceIndexOverride: integrationSourceOverride);
+        var features = new TestFeatures();
+        features.SetFeature(KnownFeatures.StagingChannelEnabled, true);
+        const string stagingSource = "https://staging.example/v3/index.json";
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            [PackagingService.OverrideStagingFeedConfigKey] = stagingSource
+        }).Build();
+        var service = new PackagingService(
+            executionContext, new FakeNuGetPackageCache(), features, configuration, NullLogger<PackagingService>.Instance);
+
+        var channels = (await service.GetChannelsAsync(TestContext.Current.CancellationToken)).ToArray();
+
+        var stable = Assert.Single(channels, static channel => channel.Name == PackageChannelNames.Stable);
+        Assert.Equal(PackageChannelType.Explicit, stable.Type);
+        if (integrationSourceOverride is null)
+        {
+            Assert.Null(stable.Mappings);
+        }
+        else
+        {
+            var mapping = Assert.Single(stable.Mappings!);
+            Assert.Equal("Aspire*", mapping.PackageFilter);
+            Assert.Equal(integrationSourceOverride, mapping.Source);
+        }
+        foreach (var name in new[] { PackageChannelNames.Daily, PackageChannelNames.Staging, PackageChannelNames.Local, "pr-1234" })
+        {
+            var channel = Assert.Single(channels, channel => channel.Name == name);
+            var mapping = Assert.Single(channel.Mappings!);
+            Assert.Equal("Aspire*", mapping.PackageFilter);
+        }
+    }
+
+    [Fact]
+    public async Task GetChannelsAsync_DailyDiscoveryDoesNotReenableAmbientDefaultSource()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var configPath = Path.Combine(workspace.Path, "nuget.config");
+        const string original = """
+            <configuration>
+              <packageSources>
+                <clear />
+                <add key="company" value="https://company.example/v3/index.json" />
+                <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
+              </packageSources>
+              <disabledPackageSources><add key="nuget.org" value="true" /></disabledPackageSources>
+              <packageSourceMapping><packageSource key="company"><package pattern="*" /></packageSource></packageSourceMapping>
+            </configuration>
+            """;
+        await File.WriteAllTextAsync(configPath, original);
+        var executionContext = workspace.CreateExecutionContext(identityChannel: PackageChannelNames.Stable);
+        var packagingService = new PackagingService(
+            executionContext, new FakeNuGetPackageCache(), new TestFeatures(),
+            new ConfigurationBuilder().Build(), NullLogger<PackagingService>.Instance);
+        var channels = await packagingService.GetChannelsAsync(TestContext.Current.CancellationToken);
+        var daily = Assert.Single(channels, static channel => channel.Name == PackageChannelNames.Daily);
+        var nugetService = NuGetTestHelper.CreateService();
+        var configuration = nugetService.BuildChannelConfiguration(
+            workspace.WorkspaceRoot, "test", daily, packageSourceOverride: null, nugetServiceIndexOverride: null,
+            TestContext.Current.CancellationToken);
+
+        using var preview = await nugetService.CreateConfigurationPreviewAsync(
+            workspace.WorkspaceRoot, configuration, globalPackagesFolder: null, TestContext.Current.CancellationToken);
+
+        var settings = nugetService.GetNuGetSettings(preview.EffectiveWorkingDirectory.FullName, TestContext.Current.CancellationToken);
+        Assert.False(Assert.Single(settings.Sources, static source => source.Name == "nuget.org").IsEnabled);
+        Assert.Equal(["https://company.example/v3/index.json"],
+            NuGetTestHelper.GetEligiblePackageSources(preview.EffectiveWorkingDirectory.FullName, "Example.Dependency"));
+        Assert.Equal(original, await File.ReadAllTextAsync(configPath));
     }
 
     [Fact]
@@ -864,13 +934,9 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         Assert.True(stagingChannel.ConfigureGlobalPackagesFolder);
         Assert.NotNull(stagingChannel.Mappings);
         
-        var aspireMapping = stagingChannel.Mappings!.FirstOrDefault(m => m.PackageFilter == "Aspire*");
-        Assert.NotNull(aspireMapping);
+        var aspireMapping = Assert.Single(stagingChannel.Mappings!);
+        Assert.Equal("Aspire*", aspireMapping.PackageFilter);
         Assert.Equal(testFeedUrl, aspireMapping.Source);
-        
-        var nugetMapping = stagingChannel.Mappings!.FirstOrDefault(m => m.PackageFilter == "*");
-        Assert.NotNull(nugetMapping);
-        Assert.Equal(PackageSources.NuGetOrg, nugetMapping.Source);
     }
 
     [Fact]
@@ -1088,7 +1154,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task NuGetConfigMerger_WhenChannelRequiresGlobalPackagesFolder_AddsGlobalPackagesFolderConfiguration()
+    public async Task DotNetConfigurationPersistence_WhenChannelRequiresGlobalPackagesFolder_AddsGlobalPackagesFolderConfiguration()
     {
         // Arrange
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -1115,7 +1181,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         var stagingChannel = channels.First(c => c.Name == "staging");
 
         // Act
-        await NuGetConfigMerger.CreateOrUpdateAsync(tempDir, stagingChannel).DefaultTimeout();
+        await DotNetAppHostNuGetConfigTestHelper.CreateOrUpdateAsync(tempDir, stagingChannel).DefaultTimeout();
 
         // Assert
         var nugetConfigPath = Path.Combine(tempDir.FullName, "nuget.config");
@@ -1342,7 +1408,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task NuGetConfigMerger_WhenStagingUsesSharedFeed_DoesNotAddGlobalPackagesFolder()
+    public async Task DotNetConfigurationPersistence_WhenStagingUsesSharedFeed_DoesNotAddGlobalPackagesFolder()
     {
         // Arrange
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -1370,7 +1436,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         var stagingChannel = channels.First(c => c.Name == "staging");
 
         // Act
-        await NuGetConfigMerger.CreateOrUpdateAsync(tempDir, stagingChannel).DefaultTimeout();
+        await DotNetAppHostNuGetConfigTestHelper.CreateOrUpdateAsync(tempDir, stagingChannel).DefaultTimeout();
 
         // Assert
         var nugetConfigPath = Path.Combine(tempDir.FullName, "nuget.config");
@@ -1886,7 +1952,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         var integrationPackages = await stagingChannel.GetIntegrationPackagesAsync(tempDir, CancellationToken.None).DefaultTimeout();
 
         // Assert - should discover both packages but with pinned version
-        var packageList = integrationPackages.ToList();
+        var packageList = integrationPackages.Packages.ToList();
         outputHelper.WriteLine($"Integration packages returned: {packageList.Count}");
         foreach (var p in packageList)
         {
@@ -2053,7 +2119,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         var integrationPackages = await localChannel.GetIntegrationPackagesAsync(tempDir, CancellationToken.None).DefaultTimeout();
 
         // Assert
-        var packageList = integrationPackages.ToList();
+        var packageList = integrationPackages.Packages.ToList();
         Assert.Equal(2, packageList.Count);
         Assert.All(packageList, p => Assert.Equal(localVersion, p.Version));
         Assert.Contains(packageList, p => p.Id == "Aspire.Hosting.Redis");
@@ -2082,15 +2148,12 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         var localChannel = channels.First(c => c.Name == PackageChannelNames.Local);
 
         Assert.NotNull(localChannel.Mappings);
-        var aspireMapping = localChannel.Mappings!.FirstOrDefault(m => m.PackageFilter == "Aspire*");
-        Assert.NotNull(aspireMapping);
+        var aspireMapping = Assert.Single(localChannel.Mappings!);
+        Assert.Equal("Aspire*", aspireMapping.PackageFilter);
         var expectedLocalPath = localPackagesDir.FullName.Replace('\\', '/');
         Assert.Equal(expectedLocalPath, aspireMapping.Source);
         Assert.False(UrlHelper.IsHttpUrl(aspireMapping.Source), "Local hive Aspire* mapping must be a filesystem path, not an HTTP feed.");
 
-        var fallbackMapping = localChannel.Mappings!.FirstOrDefault(m => m.PackageFilter == PackageMapping.AllPackages);
-        Assert.NotNull(fallbackMapping);
-        Assert.Equal(PackageSources.NuGetOrg, fallbackMapping.Source);
     }
 
     [Fact]
@@ -2320,7 +2383,22 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
 
     private sealed class FakeNuGetPackageCacheWithPackages(List<Aspire.Shared.NuGetPackageCli> packages) : INuGetPackageCache
     {
-        public Task<IEnumerable<Aspire.Shared.NuGetPackageCli>> GetTemplatePackagesAsync(DirectoryInfo workingDirectory, bool prerelease, FileInfo? nugetConfigFile, CancellationToken cancellationToken)
+        public Task<NuGetPackageOperationConfiguration> CreateChannelConfigurationAsync(
+            DirectoryInfo workingDirectory,
+            IReadOnlyList<PackageMapping>? channelMappings,
+            CancellationToken cancellationToken)
+            => Task.FromResult(NuGetPackageOperationConfiguration.Ambient(workingDirectory, cacheIdentity: "ambient"));
+
+        public Task<NuGetPackageOperationConfiguration> CreateSourceRestrictedConfigurationAsync(
+            DirectoryInfo workingDirectory,
+            PackageMapping[] mappings,
+            CancellationToken cancellationToken)
+            => Task.FromResult(NuGetPackageOperationConfiguration.Ambient(workingDirectory, cacheIdentity: "source-restricted"));
+
+        public Task<IEnumerable<Aspire.Shared.NuGetPackageCli>> GetTemplatePackagesAsync(
+            NuGetPackageOperationConfiguration configuration,
+            bool prerelease,
+            CancellationToken cancellationToken)
         {
             // Simulate what the real cache does: filter by prerelease flag
             var filtered = prerelease
@@ -2329,16 +2407,33 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
             return Task.FromResult<IEnumerable<Aspire.Shared.NuGetPackageCli>>(filtered.ToList());
         }
 
-        public Task<IEnumerable<Aspire.Shared.NuGetPackageCli>> GetIntegrationPackagesAsync(DirectoryInfo workingDirectory, bool prerelease, FileInfo? nugetConfigFile, CancellationToken cancellationToken)
-            => GetTemplatePackagesAsync(workingDirectory, prerelease, nugetConfigFile, cancellationToken);
+        public async Task<PackageSearchResult<Aspire.Shared.NuGetPackageCli>> GetIntegrationPackagesAsync(
+            NuGetPackageOperationConfiguration configuration,
+            bool prerelease,
+            CancellationToken cancellationToken)
+            => new((await GetTemplatePackagesAsync(configuration, prerelease, cancellationToken)).ToArray(), LimitReached: false, FailedSources: []);
 
-        public Task<IEnumerable<Aspire.Shared.NuGetPackageCli>> GetCliPackagesAsync(DirectoryInfo workingDirectory, bool prerelease, FileInfo? nugetConfigFile, CancellationToken cancellationToken)
+        public Task<IEnumerable<Aspire.Shared.NuGetPackageCli>> GetCliPackagesAsync(
+            NuGetPackageOperationConfiguration configuration,
+            bool prerelease,
+            CancellationToken cancellationToken)
             => Task.FromResult<IEnumerable<Aspire.Shared.NuGetPackageCli>>([]);
 
-        public Task<IEnumerable<Aspire.Shared.NuGetPackageCli>> GetPackagesAsync(DirectoryInfo workingDirectory, string packageId, Func<string, bool>? filter, bool prerelease, FileInfo? nugetConfigFile, bool useCache, CancellationToken cancellationToken)
-            => GetTemplatePackagesAsync(workingDirectory, prerelease, nugetConfigFile, cancellationToken);
+        public async Task<PackageSearchResult<Aspire.Shared.NuGetPackageCli>> GetPackagesAsync(
+            NuGetPackageOperationConfiguration configuration,
+            string packageId,
+            Func<string, bool>? filter,
+            bool prerelease,
+            bool useCache,
+            CancellationToken cancellationToken)
+            => new((await GetTemplatePackagesAsync(configuration, prerelease, cancellationToken)).ToArray(), LimitReached: false, FailedSources: []);
 
-        public Task<IEnumerable<Aspire.Shared.NuGetPackageCli>> GetPackageVersionsAsync(DirectoryInfo workingDirectory, string exactPackageId, bool prerelease, FileInfo? nugetConfigFile, bool useCache, CancellationToken cancellationToken)
-            => GetTemplatePackagesAsync(workingDirectory, prerelease, nugetConfigFile, cancellationToken);
+        public Task<IEnumerable<Aspire.Shared.NuGetPackageCli>> GetPackageVersionsAsync(
+            NuGetPackageOperationConfiguration configuration,
+            string exactPackageId,
+            bool prerelease,
+            bool useCache,
+            CancellationToken cancellationToken)
+            => GetTemplatePackagesAsync(configuration, prerelease, cancellationToken);
     }
 }

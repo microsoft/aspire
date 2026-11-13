@@ -3,8 +3,11 @@
 
 #pragma warning disable ASPIREPIPELINES003
 #pragma warning disable ASPIRECONTAINERRUNTIME001
-#pragma warning disable ASPIREFILESYSTEM001
+#pragma warning disable ASPIREPROJECTS001
 
+using System.Text.Json;
+using System.Text.RegularExpressions;
+using Aspire.Hosting.Dcp.Process;
 using Aspire.Hosting.Publishing;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
@@ -30,7 +33,9 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
             logging.AddXunit(output);
         });
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource SDK image and container publishing behavior.
         var servicea = builder.AddProject<Projects.ServiceA>("servicea");
+#pragma warning restore CS0618
 
         using var app = builder.Build();
 
@@ -48,6 +53,116 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
     }
 
     [Fact]
+    [RequiresFeature(TestFeature.ContainerImageBuild)]
+    public async Task CanBuildArchiveFromFileBasedCSharpApp()
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+        var appPath = Path.Combine(workspace.WorkspaceRoot.FullName, "app.cs");
+        await File.WriteAllTextAsync(appPath, """
+            #:property PublishAot=false
+
+            Console.WriteLine("file app");
+            """);
+        var archivePath = Path.Combine(workspace.WorkspaceRoot.FullName, "app.tar.gz");
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+#pragma warning disable CS0618 // Verify publishing compatibility for legacy CSharpApp resources.
+        var resource = builder.AddCSharpApp("file-app", appPath, options => options.ExcludeLaunchProfile = true)
+            .WithContainerBuildOptions(context =>
+            {
+                context.Destination = ContainerImageDestination.Archive;
+                context.ImageFormat = ContainerImageFormat.Docker;
+                context.OutputPath = archivePath;
+                context.TargetPlatform = ContainerTargetPlatform.LinuxAmd64;
+            });
+#pragma warning restore CS0618
+        using var app = builder.Build();
+        var imageBuilder = app.Services.GetRequiredService<IResourceContainerImageManager>();
+
+        await imageBuilder.BuildImageAsync(resource.Resource, TestContext.Current.CancellationToken);
+
+        Assert.True(File.Exists(archivePath));
+        Assert.True(new FileInfo(archivePath).Length > 0);
+    }
+
+    [Theory]
+    [RequiresFeature(TestFeature.ContainerImageBuild)]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public async Task CanBuildMultiPlatformArchiveFromFileBasedCSharpApp(bool withBuildEnvironment, bool withProjectRuntimeIdentifiers)
+    {
+        using var workspace = TemporaryWorkspace.Create(output);
+        var appPath = Path.Combine(workspace.WorkspaceRoot.FullName, "app.cs");
+        // Project-defined singular RIDs take precedence over the plural lists unless publishing clears them.
+        var runtimeIdentifierDirectives = withProjectRuntimeIdentifiers
+            ? """
+              #:property RuntimeIdentifier=linux-x64
+              #:property ContainerRuntimeIdentifier=linux-x64
+
+              """
+            : string.Empty;
+        await File.WriteAllTextAsync(appPath, $"""
+            #:property PublishAot=false
+            {runtimeIdentifierDirectives}
+            Console.WriteLine("file app");
+            """);
+        var archivePath = Path.Combine(workspace.WorkspaceRoot.FullName, "app.tar");
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.Services.AddLogging(logging => logging.AddXunit(output));
+#pragma warning disable CS0618 // Verify publishing compatibility for legacy CSharpApp resources.
+        var resource = builder.AddCSharpApp("file-app", appPath, options => options.ExcludeLaunchProfile = true)
+            .WithContainerBuildOptions(context =>
+            {
+                context.Destination = ContainerImageDestination.Archive;
+                context.ImageFormat = ContainerImageFormat.Oci;
+                context.OutputPath = archivePath;
+                context.TargetPlatform = ContainerTargetPlatform.AllLinux;
+            });
+#pragma warning restore CS0618
+        if (withBuildEnvironment)
+        {
+            // A build environment passes properties through a response file, which the file-based app CLI parses itself.
+            resource.WithDotnetProgramBuildEnvironment(context =>
+            {
+                context.EnvironmentVariables["AspireBuildEnvironmentProbe"] = "value with spaces";
+                return Task.CompletedTask;
+            });
+        }
+        using var app = builder.Build();
+        var imageBuilder = app.Services.GetRequiredService<IResourceContainerImageManager>();
+
+        await imageBuilder.BuildImageAsync(resource.Resource, TestContext.Current.CancellationToken);
+
+        Assert.Equal(["linux/amd64", "linux/arm64"], ReadOciArchivePlatforms(archivePath).Order());
+    }
+
+    private static List<string> ReadOciArchivePlatforms(string archivePath)
+    {
+        var platforms = new List<string>();
+        var pending = new Queue<string>(["index.json"]);
+        while (pending.TryDequeue(out var indexEntryName))
+        {
+            using var index = JsonDocument.Parse(TestContainerImageArchive.ReadEntryText(archivePath, indexEntryName));
+            foreach (var manifest in index.RootElement.GetProperty("manifests").EnumerateArray())
+            {
+                if (manifest.GetProperty("mediaType").GetString() == "application/vnd.oci.image.index.v1+json")
+                {
+                    pending.Enqueue("blobs/" + manifest.GetProperty("digest").GetString()!.Replace(':', '/'));
+                }
+                else if (manifest.TryGetProperty("platform", out var platform))
+                {
+                    // A single-platform image can record an empty platform, so keep it in the result for the assertion.
+                    var os = platform.TryGetProperty("os", out var osElement) ? osElement.GetString() : null;
+                    var architecture = platform.TryGetProperty("architecture", out var architectureElement) ? architectureElement.GetString() : null;
+                    platforms.Add($"{os}/{architecture}");
+                }
+            }
+        }
+
+        return platforms;
+    }
+
+    [Fact]
     [RequiresFeature(TestFeature.ContainerRuntime | TestFeature.ContainerImageBuild)]
     public async Task CanBuildImageFromProjectResourceWithCustomBaseImage()
     {
@@ -59,10 +174,10 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
             logging.AddXunit(output);
         });
 
-#pragma warning disable ASPIREDOCKERFILEBUILDER001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+#pragma warning disable CS0618 // Retain legacy ProjectResource SDK image and container publishing behavior.
         var servicea = builder.AddProject<Projects.ServiceA>("servicea")
-            .WithDockerfileBaseImage(runtimeImage: "mcr.microsoft.com/dotnet/sdk:8.0-alpine");
-#pragma warning restore ASPIREDOCKERFILEBUILDER001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+#pragma warning restore CS0618
+            .WithDockerfileBaseImage(runtimeImage: "mcr.microsoft.com/dotnet/sdk:10.0-alpine");
 
         using var app = builder.Build();
 
@@ -76,7 +191,7 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
 
         // Check for success logs
         Assert.Contains(logs, log => log.Message.Contains("Building container image for resource servicea"));
-        Assert.Contains(logs, log => log.Message.Contains("/p:ContainerBaseImage=\"mcr.microsoft.com/dotnet/sdk:8.0-alpine\""));
+        Assert.Contains(logs, log => log.Message.Contains("--property:ContainerBaseImage=mcr.microsoft.com/dotnet/sdk:10.0-alpine"));
         Assert.Contains(logs, log => log.Message.Contains(".NET CLI completed with exit code: 0"));
     }
 
@@ -126,7 +241,9 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
             logging.AddXunit(output);
         });
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource SDK image and container publishing behavior.
         var servicea = builder.AddProject<Projects.ServiceA>("servicea")
+#pragma warning restore CS0618
             .WithContainerBuildOptions(ctx =>
             {
                 ctx.ImageFormat = ContainerImageFormat.Oci;
@@ -165,7 +282,9 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
             logging.AddXunit(output);
         });
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource SDK image and container publishing behavior.
         var servicea = builder.AddProject<Projects.ServiceA>("servicea")
+#pragma warning restore CS0618
             .WithContainerBuildOptions(ctx => ctx.ImageFormat = ContainerImageFormat.Docker);
 
         using var app = builder.Build();
@@ -195,7 +314,9 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
             logging.AddXunit(output);
         });
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource SDK image and container publishing behavior.
         var servicea = builder.AddProject<Projects.ServiceA>("servicea")
+#pragma warning restore CS0618
             .WithContainerBuildOptions(ctx => ctx.TargetPlatform = ContainerTargetPlatform.LinuxArm64);
 
         using var app = builder.Build();
@@ -314,7 +435,9 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
             logging.AddXunit(output);
         });
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource SDK image and container publishing behavior.
         var servicea = builder.AddProject<Projects.ServiceA>("servicea")
+#pragma warning restore CS0618
             .WithContainerBuildOptions(ctx => ctx.ImageFormat = imageFormat);
 
         using var app = builder.Build();
@@ -346,7 +469,9 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
             logging.AddXunit(output);
         });
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource SDK image and container publishing behavior.
         var servicea = builder.AddProject<Projects.ServiceA>("servicea")
+#pragma warning restore CS0618
             .WithContainerBuildOptions(ctx => ctx.TargetPlatform = targetPlatform);
 
         using var app = builder.Build();
@@ -376,7 +501,9 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
             logging.AddXunit(output);
         });
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource SDK image and container publishing behavior.
         var servicea = builder.AddProject<Projects.ServiceA>("servicea");
+#pragma warning restore CS0618
 
         using var app = builder.Build();
 
@@ -510,7 +637,9 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
         var fakeContainerRuntime = new FakeContainerRuntime(shouldFail: true);
         builder.Services.AddFakeContainerRuntime(fakeContainerRuntime);
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource SDK image and container publishing behavior.
         var servicea = builder.AddProject<Projects.ServiceA>("servicea")
+#pragma warning restore CS0618
             .WithContainerBuildOptions(ctx =>
             {
                 ctx.ImageFormat = ContainerImageFormat.Oci;
@@ -674,6 +803,32 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public async Task BuildImageAsync_DotnetArchiveRequiresOutputPath()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var workspace = TemporaryWorkspace.Create(output);
+        var processRunner = new TestProcessRunner();
+        builder.Services.AddSingleton<IProcessRunner>(processRunner);
+        var containerRuntime = new FakeContainerRuntime();
+        builder.Services.AddFakeContainerRuntime(containerRuntime);
+        var project = builder.AddResource(new ProjectResource("program"))
+            .WithAnnotation(new TestProjectMetadata(Path.Combine(workspace.WorkspaceRoot.FullName, "program.csproj")))
+            .WithContainerBuildOptions(context => context.Destination = ContainerImageDestination.Archive);
+        using var app = builder.Build();
+        var imageBuilder = app.Services.GetRequiredService<IResourceContainerImageManager>();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => imageBuilder.BuildImageAsync(project.Resource));
+
+        Assert.Equal(
+            "Resource 'program' has Destination set to Archive but OutputPath is not configured. " +
+            "Please set the OutputPath in the container build options.",
+            exception.Message);
+        Assert.Empty(processRunner.ProcessSpecs);
+        Assert.False(containerRuntime.WasHealthCheckCalled);
+    }
+
+    [Fact]
     public async Task BuildImageAsync_ProjectBuildPassesResolvedContainerRuntimeAsLocalRegistry()
     {
         using var builder = TestDistributedApplicationBuilder.Create(output);
@@ -709,7 +864,590 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
         var collector = app.Services.GetFakeLogCollector();
         var logs = collector.GetSnapshot();
 
-        Assert.Contains(logs, log => log.Message.Contains("/p:LocalRegistry=\"Podman\""));
+        Assert.Contains(logs, log => log.Message.Contains("--property:LocalRegistry=Podman"));
+    }
+
+    [Theory]
+    [InlineData("ContainerRepository")]
+    [InlineData("ContainerImageTag")]
+    [InlineData("ContainerImageTags")]
+    [InlineData("ContainerRegistry")]
+    [InlineData("ContainerImageName")]
+    [InlineData("PublishImageTag")]
+    [InlineData("AutoGenerateImageTag")]
+    [InlineData("RegistryUrl")]
+    [InlineData("ContainerArchiveOutputPath")]
+    [InlineData("ContainerImageFormat")]
+    [InlineData("LocalRegistry")]
+    [InlineData("RuntimeIdentifier")]
+    [InlineData("RuntimeIdentifiers")]
+    [InlineData("ContainerRuntimeIdentifier")]
+    [InlineData("ContainerRuntimeIdentifiers")]
+    public async Task BuildImageAsync_DotnetProgramRejectsContainerArtifactBuildEnvironmentProperties(string propertyName)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var workspace = TemporaryWorkspace.Create(output);
+        var processRunner = new TestProcessRunner();
+        builder.Services.AddSingleton<IProcessRunner>(processRunner);
+        builder.Services.AddFakeContainerRuntime(new FakeContainerRuntime());
+
+        var resource = builder.AddResource(new ProjectResource("program"))
+            .WithAnnotation(new TestProjectMetadata(Path.Combine(workspace.WorkspaceRoot.FullName, "program.csproj")))
+            .WithDotnetProgramBuildEnvironment(context =>
+            {
+                context.EnvironmentVariables[propertyName] = "override";
+                return Task.CompletedTask;
+            })
+            .WithContainerBuildOptions(context =>
+            {
+                context.Destination = ContainerImageDestination.Archive;
+                context.ImageFormat = ContainerImageFormat.Oci;
+                context.OutputPath = Path.Combine(workspace.WorkspaceRoot.FullName, "program.tar");
+            });
+        using var app = builder.Build();
+        var imageBuilder = app.Services.GetRequiredService<IResourceContainerImageManager>();
+
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(
+            () => imageBuilder.BuildImageAsync(resource.Resource, TestContext.Current.CancellationToken));
+
+        Assert.Equal(
+            $"The build environment property '{propertyName}' for .NET program resource 'program' " +
+            "is reserved by Aspire container publishing because it controls the image artifact used by downstream steps. " +
+            "Configure container publishing with WithContainerBuildOptions instead.",
+            exception.Message);
+        Assert.Empty(processRunner.ProcessSpecs);
+    }
+
+    [Fact]
+    public async Task BuildImageAsync_DotnetProgramBuildEnvironmentIsScopedToEachBuild()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var workspace = TemporaryWorkspace.Create(output);
+        var processRunner = new TestProcessRunner();
+        processRunner.EnqueueResult();
+        processRunner.EnqueueResult();
+        builder.Services.AddSingleton<IProcessRunner>(processRunner);
+        builder.Services.AddFakeContainerRuntime(new FakeContainerRuntime());
+
+        var callbackCount = 0;
+        var projectPath = Path.Combine(workspace.WorkspaceRoot.FullName, "program.csproj");
+        var resource = builder.AddResource(new ProjectResource("program"))
+            .WithAnnotation(new TestProjectMetadata(projectPath))
+            .WithDotnetProgramBuildEnvironment(context =>
+            {
+                callbackCount++;
+                context.EnvironmentVariables["BUILD_FLAVOR"] = $"value-{callbackCount}";
+                return Task.CompletedTask;
+            })
+            .WithContainerBuildOptions(context =>
+            {
+                context.Destination = ContainerImageDestination.Archive;
+                context.ImageFormat = ContainerImageFormat.Oci;
+                context.OutputPath = Path.Combine(workspace.WorkspaceRoot.FullName, "program.tar");
+            });
+        using var app = builder.Build();
+        var imageBuilder = app.Services.GetRequiredService<IResourceContainerImageManager>();
+
+        await imageBuilder.BuildImageAsync(resource.Resource);
+        await imageBuilder.BuildImageAsync(resource.Resource);
+
+        Assert.Equal(2, callbackCount);
+        Assert.Collection(
+            processRunner.ProcessSpecs,
+            first => AssertPublishProcess(first, "value-1"),
+            second => AssertPublishProcess(second, "value-2"));
+
+        static void AssertPublishProcess(ProcessSpec processSpec, string expectedValue)
+        {
+            Assert.Equal(Path.GetDirectoryName(processSpec.ArgumentList![1]), processSpec.WorkingDirectory);
+            Assert.Equal(expectedValue, processSpec.EnvironmentVariables["BUILD_FLAVOR"]);
+            var responseFileArgument = Assert.Single(
+                processSpec.ArgumentList,
+                static argument => argument.StartsWith('@'));
+            Assert.False(File.Exists(responseFileArgument[1..]));
+        }
+    }
+
+    [Theory]
+    [InlineData("program", "latest")]
+    [InlineData("registry.example.com:5000/team/program", "release")]
+    public async Task BuildImageAsync_DotnetProgramWithContainerFilesLayersExplicitArchive(string imageName, string imageTag)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var workspace = TemporaryWorkspace.Create(output);
+        var processRunner = new TestProcessRunner();
+        processRunner.EnqueueResult();
+        processRunner.EnqueueResult(output: ["/app"]);
+        builder.Services.AddSingleton<IProcessRunner>(processRunner);
+        var containerRuntime = new FakeContainerRuntime(name: "Docker");
+        builder.Services.AddFakeContainerRuntime(containerRuntime);
+
+        var source = builder.AddContainer("assets", "assets-image")
+            .WithAnnotation(new ContainerFilesSourceAnnotation { SourcePath = "/assets" });
+        var archivePath = Path.Combine(workspace.WorkspaceRoot.FullName, "program.tar.gz");
+        File.WriteAllText(archivePath, "previous archive");
+        var projectPath = Path.Combine(workspace.WorkspaceRoot.FullName, "program.csproj");
+        var resource = builder.AddResource(new ProjectResource("program"))
+            .WithAnnotation(new TestProjectMetadata(projectPath))
+            .WithAnnotation(new ContainerFilesDestinationAnnotation
+            {
+                Source = source.Resource,
+                DestinationPath = "/app/assets"
+            })
+            .WithContainerBuildOptions(context =>
+            {
+                context.Destination = ContainerImageDestination.Archive;
+                context.ImageFormat = ContainerImageFormat.Docker;
+                context.OutputPath = archivePath;
+                context.TargetPlatform = ContainerTargetPlatform.LinuxAmd64;
+                context.LocalImageName = imageName;
+                context.LocalImageTag = imageTag;
+            });
+        containerRuntime.BuildImageAsyncCallback = (contextPath, _, options, _, _, _, _) =>
+        {
+            Assert.Equal(workspace.WorkspaceRoot.FullName, contextPath);
+            Assert.NotNull(options);
+            Assert.Equal(ContainerImageDestination.Archive, options.Destination);
+            Assert.Equal(ContainerImageFormat.Docker, options.ImageFormat);
+            Assert.NotEqual(archivePath, options.OutputPath);
+            Assert.True(Directory.Exists(options.OutputPath));
+            Assert.True(options.RequiresLocalImageStore);
+            Assert.Equal(imageName, options.ImageName);
+            Assert.StartsWith("aspire-layered-", options.Tag);
+
+            var stagedArchivePath = ResourceExtensions.GetContainerImageArchivePath(
+                options.OutputPath!,
+                options.ImageName!,
+                options.Tag);
+            TestContainerImageArchive.WriteDockerArchive(stagedArchivePath, $"{options.ImageName}:{options.Tag}", "archive");
+            return Task.CompletedTask;
+        };
+        using var app = builder.Build();
+        var imageBuilder = app.Services.GetRequiredService<IResourceContainerImageManager>();
+
+        await imageBuilder.BuildImageAsync(resource.Resource);
+
+        Assert.True(File.Exists(archivePath));
+        Assert.Equal<byte>([0x1f, 0x8b], File.ReadAllBytes(archivePath)[..2]);
+        Assert.Equal([$"{imageName}:{imageTag}"], TestContainerImageArchive.ReadDockerImageReferences(archivePath));
+        Assert.Equal("archive", TestContainerImageArchive.ReadLayerContents(archivePath));
+        IValueProvider imageReference = new ContainerImageReference(resource.Resource);
+        var resolvedArchivePath = await imageReference.GetValueAsync(
+            new ValueProviderContext
+            {
+                ExecutionContext = app.Services.GetRequiredService<DistributedApplicationExecutionContext>()
+            },
+            CancellationToken.None);
+        Assert.Equal(archivePath, resolvedArchivePath);
+        Assert.Collection(
+            processRunner.ProcessSpecs,
+            publish => Assert.DoesNotContain(
+                publish.ArgumentList!,
+                static argument => argument.StartsWith("--property:ContainerArchiveOutputPath=", StringComparison.Ordinal)),
+            workingDirectory => Assert.Contains(
+                "-getProperty:ContainerWorkingDirectory",
+                workingDirectory.ArgumentList!));
+        var sdkTagArgument = Assert.Single(
+            processRunner.ProcessSpecs[0].ArgumentList!,
+            static argument => argument.StartsWith("--property:ContainerImageTag=", StringComparison.Ordinal));
+        Assert.StartsWith("--property:ContainerImageTag=aspire-sdk-", sdkTagArgument);
+        var sdkTag = sdkTagArgument["--property:ContainerImageTag=".Length..];
+        var layeredOptions = Assert.Single(containerRuntime.BuildImageCalls).options!;
+        Assert.Equal(
+            new[] { $"{imageName}:{sdkTag}", $"{imageName}:{layeredOptions.Tag}" }.Order(StringComparer.Ordinal),
+            containerRuntime.RemoveImageCalls.Order(StringComparer.Ordinal));
+        Assert.Empty(containerRuntime.TagImageCalls);
+        Assert.False(Directory.Exists(layeredOptions.OutputPath));
+    }
+
+    [Fact]
+    public async Task BuildImageAsync_FailedArchiveCompressionPreservesExistingArchive()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var workspace = TemporaryWorkspace.Create(output);
+        var processRunner = new TestProcessRunner();
+        processRunner.EnqueueResult();
+        processRunner.EnqueueResult(output: ["/app"]);
+        builder.Services.AddSingleton<IProcessRunner>(processRunner);
+        builder.Services.AddFakeContainerRuntime(new FakeContainerRuntime(name: "Docker"));
+
+        var source = builder.AddContainer("assets", "assets-image")
+            .WithAnnotation(new ContainerFilesSourceAnnotation { SourcePath = "/assets" });
+        var archivePath = Path.Combine(workspace.WorkspaceRoot.FullName, "program.tar.gz");
+        await File.WriteAllTextAsync(archivePath, "previous archive");
+        var resource = builder.AddResource(new ProjectResource("program"))
+            .WithAnnotation(new TestProjectMetadata(Path.Combine(workspace.WorkspaceRoot.FullName, "program.csproj")))
+            .WithAnnotation(new ContainerFilesDestinationAnnotation
+            {
+                Source = source.Resource,
+                DestinationPath = "/app/assets"
+            })
+            .WithContainerBuildOptions(context =>
+            {
+                context.Destination = ContainerImageDestination.Archive;
+                context.ImageFormat = ContainerImageFormat.Docker;
+                context.OutputPath = archivePath;
+                context.TargetPlatform = ContainerTargetPlatform.LinuxAmd64;
+            });
+        using var app = builder.Build();
+        var imageBuilder = app.Services.GetRequiredService<IResourceContainerImageManager>();
+
+        await Assert.ThrowsAsync<FileNotFoundException>(
+            () => imageBuilder.BuildImageAsync(resource.Resource));
+
+        Assert.Equal("previous archive", await File.ReadAllTextAsync(archivePath));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task BuildImageAsync_CrossOperatingSystemFileAppAotFailureAddsGuidance(bool truncateDiagnostic)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var workspace = TemporaryWorkspace.Create(output);
+        var processRunner = new TestProcessRunner();
+        var outputEvents = new List<TestProcessOutput>
+        {
+            new(IsError: true, "error : Cross-OS native compilation is not supported.")
+        };
+        if (truncateDiagnostic)
+        {
+            outputEvents.AddRange(Enumerable.Range(0, ProcessSpec.DefaultRetainedOutputLineCount)
+                .Select(index => new TestProcessOutput(IsError: false, $"Build output {index}")));
+        }
+
+        processRunner.EnqueueResult(exitCode: 1, outputEvents: outputEvents);
+        builder.Services.AddSingleton<IProcessRunner>(processRunner);
+        builder.Services.AddFakeContainerRuntime(new FakeContainerRuntime());
+
+        var targetPlatform = OperatingSystem.IsWindows()
+            ? ContainerTargetPlatform.LinuxAmd64
+            : ContainerTargetPlatform.WindowsAmd64;
+        var resource = builder.AddResource(new ProjectResource("file-app"))
+            .WithAnnotation(new TestProjectMetadata(Path.Combine(workspace.WorkspaceRoot.FullName, "app.cs")))
+            .WithContainerBuildOptions(context =>
+            {
+                context.Destination = ContainerImageDestination.Archive;
+                context.ImageFormat = ContainerImageFormat.Oci;
+                context.OutputPath = Path.Combine(workspace.WorkspaceRoot.FullName, "app.tar");
+                context.TargetPlatform = targetPlatform;
+            });
+        using var app = builder.Build();
+        var imageBuilder = app.Services.GetRequiredService<IResourceContainerImageManager>();
+
+        var exception = await Assert.ThrowsAsync<ProcessFailedException>(
+            () => imageBuilder.BuildImageAsync(resource.Resource));
+
+        Assert.Contains("File-based apps enable PublishAot by default.", exception.Message);
+        Assert.Contains("#:property PublishAot=false", exception.Message);
+        Assert.Equal(
+            outputEvents.TakeLast(ProcessSpec.DefaultRetainedOutputLineCount).Select(static line => line.Value),
+            exception.ProcessOutput);
+        Assert.Equal(outputEvents.Count, exception.TotalProcessOutputLineCount);
+        Assert.Single(processRunner.ProcessSpecs);
+    }
+
+    [Theory]
+    [InlineData(true, true, "error NU1301: Unable to load the service index.")]
+    [InlineData(true, true, "error CS1002: ; expected")]
+    [InlineData(false, true, "error : Cross-OS native compilation is not supported.")]
+    [InlineData(true, false, "error : Cross-OS native compilation is not supported.")]
+    public async Task BuildImageAsync_DoesNotInferAotFailure(bool fileBased, bool crossOperatingSystem, string error)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var workspace = TemporaryWorkspace.Create(output);
+        var processRunner = new TestProcessRunner();
+        processRunner.EnqueueResult(exitCode: 42, error: [error]);
+        builder.Services.AddSingleton<IProcessRunner>(processRunner);
+        builder.Services.AddFakeContainerRuntime(new FakeContainerRuntime());
+
+        ContainerTargetPlatform? targetPlatform = crossOperatingSystem
+            ? OperatingSystem.IsWindows() ? ContainerTargetPlatform.LinuxAmd64 : ContainerTargetPlatform.WindowsAmd64
+            : OperatingSystem.IsWindows() ? ContainerTargetPlatform.WindowsAmd64
+                : OperatingSystem.IsLinux() ? ContainerTargetPlatform.LinuxAmd64 : null;
+        var projectPath = Path.Combine(workspace.WorkspaceRoot.FullName, fileBased ? "app.cs" : "app.csproj");
+        var resource = builder.AddResource(new ProjectResource("program"))
+            .WithAnnotation(new TestProjectMetadata(projectPath))
+            .WithContainerBuildOptions(context =>
+            {
+                context.Destination = ContainerImageDestination.Archive;
+                context.OutputPath = Path.Combine(workspace.WorkspaceRoot.FullName, "app.tar");
+                context.TargetPlatform = targetPlatform;
+            });
+        using var app = builder.Build();
+        var imageBuilder = app.Services.GetRequiredService<IResourceContainerImageManager>();
+
+        var exception = await Assert.ThrowsAsync<ProcessFailedException>(
+            () => imageBuilder.BuildImageAsync(resource.Resource));
+
+        Assert.Equal(42, exception.ExitCode);
+        Assert.Equal([error], exception.ProcessOutput);
+        Assert.Equal(
+            $"Failed to build container image for resource 'program' from project '{projectPath}' with exit code 42." +
+            Environment.NewLine + exception.GetFormattedOutput(),
+            exception.Message);
+        Assert.Single(processRunner.ProcessSpecs);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task BuildImageAsync_ContainerFilesUseReleaseWorkingDirectory(bool fileBased)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var workspace = TemporaryWorkspace.Create(output);
+        var processRunner = new TestProcessRunner();
+        processRunner.EnqueueResult();
+        processRunner.EnqueueResult(output: ["/release-app"]);
+        builder.Services.AddSingleton<IProcessRunner>(processRunner);
+        var containerRuntime = new FakeContainerRuntime(name: "Docker");
+        builder.Services.AddFakeContainerRuntime(containerRuntime);
+
+        var source = builder.AddContainer("assets", "assets-image")
+            .WithAnnotation(new ContainerFilesSourceAnnotation { SourcePath = "/assets" });
+        var projectPath = Path.Combine(workspace.WorkspaceRoot.FullName, fileBased ? "app.cs" : "app.csproj");
+        var resource = builder.AddResource(new ProjectResource("program"))
+            .WithAnnotation(new TestProjectMetadata(projectPath))
+            .WithAnnotation(new ContainerFilesDestinationAnnotation
+            {
+                Source = source.Resource,
+                DestinationPath = "wwwroot"
+            });
+        string? dockerfile = null;
+        containerRuntime.BuildImageAsyncCallback = async (_, dockerfilePath, _, _, _, _, cancellationToken) =>
+        {
+            dockerfile = await File.ReadAllTextAsync(dockerfilePath, cancellationToken);
+        };
+        using var app = builder.Build();
+        var imageBuilder = app.Services.GetRequiredService<IResourceContainerImageManager>();
+
+        await imageBuilder.BuildImageAsync(resource.Resource);
+
+        Assert.Collection(
+            processRunner.ProcessSpecs,
+            publish => Assert.Equal(
+                [
+                    "publish", projectPath, "--configuration", "Release", "/t:PublishContainer",
+                    "--property:ContainerRepository=program", "--property:ContainerImageTag=latest",
+                    "--property:LocalRegistry=Docker", "--property:RuntimeIdentifier=linux-x64",
+                    "--property:ContainerRuntimeIdentifier=linux-x64"
+                ],
+                publish.ArgumentList),
+            query =>
+            {
+                Assert.Equal(Path.GetDirectoryName(projectPath), query.WorkingDirectory);
+                Assert.Equal(
+                    [
+                        fileBased ? "build" : "msbuild", projectPath, "-p:Configuration=Release",
+                        "-getProperty:ContainerWorkingDirectory", "-v:q",
+                        "--property:RuntimeIdentifier=linux-x64", "--property:ContainerRuntimeIdentifier=linux-x64"
+                    ],
+                    query.ArgumentList);
+            });
+        Assert.Single(containerRuntime.BuildImageCalls);
+        Assert.NotNull(dockerfile);
+        await Verify(dockerfile)
+            .UseParameters(fileBased)
+            .ScrubLinesWithReplace(line => Regex.Replace(line, "FROM program:temp-.*", "FROM program:temp-"));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task BuildImageAsync_MultiPlatformArgumentsSurviveMsBuildParsing(bool fileBased)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var workspace = TemporaryWorkspace.Create(output);
+        var processRunner = new TestProcessRunner();
+        processRunner.EnqueueResult();
+        processRunner.EnqueueResult(output: ["/release-app"]);
+        builder.Services.AddSingleton<IProcessRunner>(processRunner);
+        builder.Services.AddFakeContainerRuntime(new FakeContainerRuntime(name: "Docker"));
+
+        var source = builder.AddContainer("assets", "assets-image")
+            .WithAnnotation(new ContainerFilesSourceAnnotation { SourcePath = "/assets" });
+        var projectPath = Path.Combine(workspace.WorkspaceRoot.FullName, fileBased ? "app.cs" : "app.csproj");
+        var resource = builder.AddResource(new ProjectResource("program"))
+            .WithAnnotation(new TestProjectMetadata(projectPath))
+            .WithAnnotation(new ContainerFilesDestinationAnnotation
+            {
+                Source = source.Resource,
+                DestinationPath = "wwwroot"
+            })
+            .WithContainerBuildOptions(context => context.TargetPlatform = ContainerTargetPlatform.AllLinux);
+        using var app = builder.Build();
+        var imageBuilder = app.Services.GetRequiredService<IResourceContainerImageManager>();
+
+        await imageBuilder.BuildImageAsync(resource.Resource, TestContext.Current.CancellationToken);
+
+        // MSBuild splits unquoted property switches on ';', but the .NET CLI parses them for file-based apps
+        // and keeps quotes literally, so each path needs a different list form.
+        var runtimeIdentifierList = fileBased ? "linux-x64;linux-arm64" : "\"linux-x64;linux-arm64\"";
+        var runtimeIdentifiersArgument = $"--property:RuntimeIdentifiers={runtimeIdentifierList}";
+        var containerRuntimeIdentifiersArgument = $"--property:ContainerRuntimeIdentifiers={runtimeIdentifierList}";
+        string[] targetPlatformArguments =
+        [
+            "--property:RuntimeIdentifier=", "--property:ContainerRuntimeIdentifier=",
+            runtimeIdentifiersArgument, containerRuntimeIdentifiersArgument
+        ];
+        Assert.Collection(
+            processRunner.ProcessSpecs,
+            publish => Assert.Equal(
+                [
+                    "publish", projectPath, "--configuration", "Release", "/t:PublishContainer",
+                    "--property:ContainerRepository=program", "--property:ContainerImageTag=latest",
+                    "--property:LocalRegistry=Docker", .. targetPlatformArguments
+                ],
+                publish.ArgumentList),
+            query => Assert.Equal(
+                [
+                    fileBased ? "build" : "msbuild", projectPath, "-p:Configuration=Release",
+                    "-getProperty:ContainerWorkingDirectory", "-v:q",
+                    .. targetPlatformArguments
+                ],
+                query.ArgumentList));
+
+        // A fake runner cannot detect the CLI or MSBuild splitting a single argv entry on ';'.
+        // Round-trip each command's emitted properties through the same command-line parser as the real build.
+        // The SDK expands RID lists into items, so an escaped ';' must not turn the list into one RID.
+        // Project-defined singular RIDs must be cleared because the SDK prefers them over the lists.
+        const string probeContent = """
+            <Project>
+              <PropertyGroup>
+                <RuntimeIdentifier>linux-x64</RuntimeIdentifier>
+                <ContainerRuntimeIdentifier>linux-x64</ContainerRuntimeIdentifier>
+              </PropertyGroup>
+              <PropertyGroup>
+                <ContainerWorkingDirectory Condition="'$(RuntimeIdentifiers)' == 'linux-x64;linux-arm64' and '$(ContainerRuntimeIdentifiers)' == 'linux-x64;linux-arm64'">/release-app</ContainerWorkingDirectory>
+              </PropertyGroup>
+              <ItemGroup>
+                <ProbeRuntimeIdentifier Include="$(RuntimeIdentifiers)" />
+                <ProbeContainerRuntimeIdentifier Include="$(ContainerRuntimeIdentifiers)" />
+              </ItemGroup>
+            </Project>
+            """;
+        string[] probeCommand;
+        if (fileBased)
+        {
+            // "dotnet build app.cs" evaluates the virtual project, which imports Directory.Build.props.
+            await File.WriteAllTextAsync(projectPath, "Console.WriteLine();", TestContext.Current.CancellationToken);
+            await File.WriteAllTextAsync(
+                Path.Combine(workspace.WorkspaceRoot.FullName, "Directory.Build.props"),
+                probeContent,
+                TestContext.Current.CancellationToken);
+            probeCommand = ["build", projectPath];
+        }
+        else
+        {
+            // Use a project with no SDK or restore.
+            var probePath = Path.Combine(workspace.WorkspaceRoot.FullName, "properties.proj");
+            await File.WriteAllTextAsync(probePath, probeContent, TestContext.Current.CancellationToken);
+            probeCommand = ["msbuild", probePath];
+        }
+
+        foreach (var command in processRunner.ProcessSpecs)
+        {
+            var propertyArguments = command.ArgumentList!
+                .Where(static argument => argument.StartsWith("--property:", StringComparison.Ordinal));
+            var probe = new ProcessSpec(DotnetFileAppProcess.ResolvedExecutablePath)
+            {
+                ArgumentList =
+                [
+                    .. probeCommand, "-nologo",
+                    "-getProperty:RuntimeIdentifier,ContainerRuntimeIdentifier,RuntimeIdentifiers,ContainerRuntimeIdentifiers,ContainerWorkingDirectory",
+                    "-getItem:ProbeRuntimeIdentifier,ProbeContainerRuntimeIdentifier",
+                    .. propertyArguments
+                ],
+                WorkingDirectory = workspace.WorkspaceRoot.FullName,
+                ThrowOnNonZeroReturnCode = true
+            };
+            var (pendingResult, processDisposable) = ProcessUtil.Run(probe);
+            await using (processDisposable)
+            {
+                var result = await pendingResult.WaitAsync(TestContext.Current.CancellationToken).DefaultTimeout();
+                Assert.Equal(0, result.ExitCode);
+                using var document = JsonDocument.Parse(string.Join(Environment.NewLine, result.ProcessOutput));
+                var properties = document.RootElement.GetProperty("Properties");
+                Assert.Equal(string.Empty, properties.GetProperty("RuntimeIdentifier").GetString());
+                Assert.Equal(string.Empty, properties.GetProperty("ContainerRuntimeIdentifier").GetString());
+                Assert.Equal("linux-x64;linux-arm64", properties.GetProperty("RuntimeIdentifiers").GetString());
+                Assert.Equal("linux-x64;linux-arm64", properties.GetProperty("ContainerRuntimeIdentifiers").GetString());
+                Assert.Equal("/release-app", properties.GetProperty("ContainerWorkingDirectory").GetString());
+                var items = document.RootElement.GetProperty("Items");
+                foreach (var itemType in new[] { "ProbeRuntimeIdentifier", "ProbeContainerRuntimeIdentifier" })
+                {
+                    Assert.Equal(
+                        ["linux-x64", "linux-arm64"],
+                        items.GetProperty(itemType).EnumerateArray().Select(static item => item.GetProperty("Identity").GetString()));
+                }
+            }
+        }
+    }
+
+    [Fact]
+    public async Task BuildImageAsync_DynamicPropertiesSurviveMsBuildParsing()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var workspace = TemporaryWorkspace.Create(output);
+        var processRunner = new TestProcessRunner();
+        processRunner.EnqueueResult();
+        builder.Services.AddSingleton<IProcessRunner>(processRunner);
+        builder.Services.AddFakeContainerRuntime(new FakeContainerRuntime(name: "Docker"));
+
+        var projectPath = Path.Combine(workspace.WorkspaceRoot.FullName, "app.csproj");
+        var outputPath = Path.Combine(workspace.WorkspaceRoot.FullName, "archive;100%.tar");
+        var resource = builder.AddResource(new ProjectResource("program"))
+            .WithAnnotation(new TestProjectMetadata(projectPath))
+            .WithContainerBuildOptions(context =>
+            {
+                context.Destination = ContainerImageDestination.Archive;
+                context.OutputPath = outputPath;
+                context.TargetPlatform = ContainerTargetPlatform.LinuxAmd64;
+            });
+        using var app = builder.Build();
+        var imageBuilder = app.Services.GetRequiredService<IResourceContainerImageManager>();
+
+        await imageBuilder.BuildImageAsync(resource.Resource, TestContext.Current.CancellationToken);
+
+        var publish = Assert.Single(processRunner.ProcessSpecs);
+        var propertyArguments = publish.ArgumentList!
+            .Where(static argument => argument.StartsWith("--property:", StringComparison.Ordinal))
+            .ToArray();
+        var outputArgument = Assert.Single(
+            propertyArguments,
+            static argument => argument.StartsWith("--property:ContainerArchiveOutputPath=", StringComparison.Ordinal));
+        Assert.Contains("%3B", outputArgument);
+        Assert.Contains("%25", outputArgument);
+
+        // MSBuild performs a second parsing pass over property switches. Use a project with no SDK
+        // or restore to verify that every emitted value survives that pass unchanged.
+        var probePath = Path.Combine(workspace.WorkspaceRoot.FullName, "properties.proj");
+        await File.WriteAllTextAsync(probePath, "<Project />", TestContext.Current.CancellationToken);
+        var probe = new ProcessSpec(DotnetFileAppProcess.ResolvedExecutablePath)
+        {
+            ArgumentList =
+            [
+                "msbuild", probePath, "-nologo",
+                "-getProperty:ContainerRepository,ContainerImageTag,LocalRegistry,ContainerArchiveOutputPath,RuntimeIdentifier,ContainerRuntimeIdentifier",
+                .. propertyArguments
+            ],
+            WorkingDirectory = workspace.WorkspaceRoot.FullName,
+            ThrowOnNonZeroReturnCode = true
+        };
+        var (pendingResult, processDisposable) = ProcessUtil.Run(probe);
+        await using (processDisposable)
+        {
+            var result = await pendingResult.WaitAsync(TestContext.Current.CancellationToken).DefaultTimeout();
+            Assert.Equal(0, result.ExitCode);
+            using var document = JsonDocument.Parse(string.Join(Environment.NewLine, result.ProcessOutput));
+            var properties = document.RootElement.GetProperty("Properties");
+            Assert.Equal("program", properties.GetProperty("ContainerRepository").GetString());
+            Assert.Equal("latest", properties.GetProperty("ContainerImageTag").GetString());
+            Assert.Equal("Docker", properties.GetProperty("LocalRegistry").GetString());
+            Assert.Equal(outputPath, properties.GetProperty("ContainerArchiveOutputPath").GetString());
+            Assert.Equal("linux-x64", properties.GetProperty("RuntimeIdentifier").GetString());
+            Assert.Equal("linux-x64", properties.GetProperty("ContainerRuntimeIdentifier").GetString());
+        }
     }
 
     [Fact]
@@ -986,46 +1724,46 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public void BuildSecretsStringFormatsEnvSecretCorrectly()
+    public void BuildSecretsFormatsEnvSecretCorrectly()
     {
         var secrets = new Dictionary<string, BuildImageSecretValue>
         {
             ["MY_SECRET"] = new BuildImageSecretValue("secret-value", BuildImageSecretType.Environment)
         };
 
-        var result = ContainerRuntimeBase<DockerContainerRuntime>.BuildSecretsString(secrets);
+        var result = ContainerRuntimeBase<DockerContainerRuntime>.BuildSecrets(secrets, useCsv: true);
 
-        Assert.Equal(" --secret \"id=MY_SECRET,type=env,env=MY_SECRET\"", result);
+        Assert.Equal(["--secret", "id=MY_SECRET,type=env,env=MY_SECRET"], result);
     }
 
     [Fact]
-    public void BuildSecretsStringFormatsFileSecretCorrectly()
+    public void BuildSecretsFormatsFileSecretCorrectly()
     {
         var secrets = new Dictionary<string, BuildImageSecretValue>
         {
             ["npmrc"] = new BuildImageSecretValue("/path/to/.npmrc", BuildImageSecretType.File)
         };
 
-        var result = ContainerRuntimeBase<DockerContainerRuntime>.BuildSecretsString(secrets);
+        var result = ContainerRuntimeBase<DockerContainerRuntime>.BuildSecrets(secrets, useCsv: true);
 
-        Assert.Equal(" --secret \"id=npmrc,type=file,src=/path/to/.npmrc\"", result);
+        Assert.Equal(["--secret", "id=npmrc,type=file,src=/path/to/.npmrc"], result);
     }
 
     [Fact]
-    public void BuildSecretsStringFormatsNullEnvSecretWithRequireValue()
+    public void BuildSecretsFormatsNullEnvSecretWithRequireValue()
     {
         var secrets = new Dictionary<string, BuildImageSecretValue>
         {
             ["MY_SECRET"] = new BuildImageSecretValue(null, BuildImageSecretType.Environment)
         };
 
-        var result = ContainerRuntimeBase<DockerContainerRuntime>.BuildSecretsString(secrets, requireValue: true);
+        var result = ContainerRuntimeBase<DockerContainerRuntime>.BuildSecrets(secrets, useCsv: false, requireValue: true);
 
-        Assert.Equal(" --secret \"id=MY_SECRET,type=env\"", result);
+        Assert.Equal(["--secret", "id=MY_SECRET,type=env"], result);
     }
 
     [Fact]
-    public void BuildSecretsStringFormatsMixedSecretTypes()
+    public void BuildSecretsFormatsMixedSecretTypes()
     {
         var secrets = new Dictionary<string, BuildImageSecretValue>
         {
@@ -1033,9 +1771,9 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
             ["npmrc"] = new BuildImageSecretValue("/app/.npmrc", BuildImageSecretType.File)
         };
 
-        var result = ContainerRuntimeBase<DockerContainerRuntime>.BuildSecretsString(secrets);
+        var result = ContainerRuntimeBase<DockerContainerRuntime>.BuildSecrets(secrets, useCsv: true);
 
-        Assert.Equal(" --secret \"id=ENV_TOKEN,type=env,env=ENV_TOKEN\" --secret \"id=npmrc,type=file,src=/app/.npmrc\"", result);
+        Assert.Equal(["--secret", "id=ENV_TOKEN,type=env,env=ENV_TOKEN", "--secret", "id=npmrc,type=file,src=/app/.npmrc"], result);
     }
 
     [Fact]
@@ -1049,7 +1787,9 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
             logging.AddXunit(output);
         });
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource SDK image and container publishing behavior.
         var servicea = builder.AddProject<Projects.ServiceA>("servicea")
+#pragma warning restore CS0618
             .WithAnnotation(new ContainerBuildOptionsCallbackAnnotation(ctx =>
             {
                 ctx.LocalImageName = "first-name";
@@ -1086,7 +1826,9 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
             logging.AddXunit(output);
         });
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource SDK image and container publishing behavior.
         var servicea = builder.AddProject<Projects.ServiceA>("servicea")
+#pragma warning restore CS0618
             .WithAnnotation(new ContainerBuildOptionsCallbackAnnotation(ctx =>
             {
                 ctx.LocalImageName = "first-name";
@@ -1125,7 +1867,9 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
             logging.AddXunit(output);
         });
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource SDK image and container publishing behavior.
         var servicea = builder.AddProject<Projects.ServiceA>("servicea");
+#pragma warning restore CS0618
 
         using var app = builder.Build();
 
@@ -1261,7 +2005,9 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
             logging.AddXunit(output);
         });
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource SDK image and container publishing behavior.
         var servicea = builder.AddProject<Projects.ServiceA>("servicea")
+#pragma warning restore CS0618
             .WithAnnotation(new ContainerBuildOptionsCallbackAnnotation(async ctx =>
             {
                 await Task.Delay(1);
@@ -1295,7 +2041,9 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
         IResource? capturedResource = null;
         IServiceProvider? capturedServices = null;
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource SDK image and container publishing behavior.
         var servicea = builder.AddProject<Projects.ServiceA>("servicea")
+#pragma warning restore CS0618
             .WithContainerBuildOptions(ctx =>
             {
                 capturedResource = ctx.Resource;
@@ -1333,7 +2081,9 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
 
         using var workspace = TemporaryWorkspace.Create(output);
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource SDK image and container publishing behavior.
         var servicea = builder.AddProject<Projects.ServiceA>("servicea")
+#pragma warning restore CS0618
             .WithContainerBuildOptions(ctx =>
             {
                 ctx.Destination = ContainerImageDestination.Archive;
@@ -1383,7 +2133,9 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
         var fakeContainerRuntime = new FakeContainerRuntime(shouldFail: false, isRunning: false);
         builder.Services.AddFakeContainerRuntime(fakeContainerRuntime);
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource SDK image and container publishing behavior.
         var servicea = builder.AddProject<Projects.ServiceA>("servicea")
+#pragma warning restore CS0618
             .WithContainerBuildOptions(ctx =>
             {
                 ctx.Destination = ContainerImageDestination.Registry;
@@ -1457,7 +2209,9 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
         using var workspace = TemporaryWorkspace.Create(output);
 
         // Add two projects: one with Archive destination, one without
+#pragma warning disable CS0618 // Retain legacy ProjectResource SDK image and container publishing behavior.
         var servicea = builder.AddProject<Projects.ServiceA>("servicea")
+#pragma warning restore CS0618
             .WithContainerBuildOptions(ctx =>
             {
                 ctx.Destination = ContainerImageDestination.Archive;
@@ -1465,7 +2219,9 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
                 ctx.ImageFormat = ContainerImageFormat.Oci;
             });
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource SDK image and container publishing behavior.
         var serviceb = builder.AddProject<Projects.ServiceB>("serviceb");
+#pragma warning restore CS0618
 
         using var app = builder.Build();
 
@@ -1498,7 +2254,9 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
         builder.Services.AddFakeContainerRuntime(fakeContainerRuntime);
 
         // Project without any destination set should default to requiring Docker
+#pragma warning disable CS0618 // Retain legacy ProjectResource SDK image and container publishing behavior.
         var servicea = builder.AddProject<Projects.ServiceA>("servicea");
+#pragma warning restore CS0618
 
         using var app = builder.Build();
 
@@ -1587,6 +2345,4 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
 file sealed class TestProjectMetadata(string projectPath) : IProjectMetadata
 {
     public string ProjectPath { get; } = projectPath;
-
-    public LaunchSettings LaunchSettings { get; } = new();
 }

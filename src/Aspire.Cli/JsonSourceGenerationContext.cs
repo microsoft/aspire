@@ -14,8 +14,9 @@ using Aspire.Cli.Documentation.ApiDocs;
 using Aspire.Cli.Documentation.Docs;
 using Aspire.Cli.Mcp.Tools;
 using Aspire.Cli.Projects;
-using Aspire.Cli.Telemetry;
+using Aspire.Shared;
 using Aspire.Cli.Utils.EnvironmentChecker;
+using Aspire.Cli.Backchannel;
 
 namespace Aspire.Cli;
 
@@ -36,6 +37,11 @@ namespace Aspire.Cli;
 [JsonSerializable(typeof(DoctorCheckSummary))]
 [JsonSerializable(typeof(AspireJsonConfiguration))]
 [JsonSerializable(typeof(AspireConfigFile))]
+[JsonSerializable(typeof(ConfigSource))]
+[JsonSerializable(typeof(ConfigSourceMetadata))]
+[JsonSerializable(typeof(ConfigSourceCheckMetadata))]
+[JsonSerializable(typeof(PackageEntry))]
+[JsonSerializable(typeof(Dictionary<string, PackageEntry>))]
 [JsonSerializable(typeof(List<DevCertInfo>))]
 [JsonSerializable(typeof(ConfigInfo))]
 [JsonSerializable(typeof(FeatureInfo))]
@@ -57,7 +63,7 @@ namespace Aspire.Cli;
 [JsonSerializable(typeof(InstallationInfo))]
 [JsonSerializable(typeof(AppHostInfoCacheEntry))]
 [JsonSerializable(typeof(AppHostProjectInspectionOutput))]
-[JsonSerializable(typeof(InternalMicrosoftDetectorCacheEntry))]
+[JsonSerializable(typeof(PipelineStepInfo[]))]
 internal partial class JsonSourceGenerationContext : JsonSerializerContext
 {
     private static JsonSourceGenerationContext? s_relaxedEscaping;

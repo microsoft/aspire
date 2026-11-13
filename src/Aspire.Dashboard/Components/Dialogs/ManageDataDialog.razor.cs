@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Concurrent;
+using Aspire.Dashboard.Components.Controls.Grid;
 using Aspire.Dashboard.Extensions;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.ManageData;
@@ -18,7 +19,7 @@ using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
 namespace Aspire.Dashboard.Components.Dialogs;
 
-public partial class ManageDataDialog : IDialogContentComponent, IAsyncDisposable
+public partial class ManageDataDialog : IAsyncDisposable
 {
     [Inject]
     public required BrowserTimeProvider TimeProvider { get; init; }
@@ -30,7 +31,12 @@ public partial class ManageDataDialog : IDialogContentComponent, IAsyncDisposabl
     public required NavigationManager NavigationManager { get; init; }
 
     [Inject]
-    public required TelemetryRepository TelemetryRepository { get; init; }
+    public required DashboardDataSource DataSource { get; init; }
+
+    public ITelemetryRepository TelemetryRepository => DataSource.TelemetryRepository;
+
+    [Inject]
+    public required ITelemetryRepositoryWriter TelemetryRepositoryWriter { get; init; }
 
     [Inject]
     public required IDashboardClient DashboardClient { get; init; }
@@ -62,7 +68,7 @@ public partial class ManageDataDialog : IDialogContentComponent, IAsyncDisposabl
     private readonly HashSet<(string ResourceName, AspireDataType DataType)> _selectedRows = [];
     private readonly CancellationTokenSource _cts = new();
     private Task? _resourceSubscriptionTask;
-    private FluentDataGrid<ManageDataGridItem>? _dataGrid;
+    private AspireFluentDataGrid<ManageDataGridItem>? _dataGrid;
     private bool _isExporting;
     private bool _isRemoving;
     private string? _errorMessage;
@@ -89,13 +95,8 @@ public partial class ManageDataDialog : IDialogContentComponent, IAsyncDisposabl
         await InvokeAsync(async () =>
         {
             UpdateData();
-
-            if (_dataGrid is not null)
-            {
-                await _dataGrid.SafeRefreshDataAsync();
-            }
-
             StateHasChanged();
+            await _dataGrid.SafeRefreshDataAsync();
         });
     }
 
@@ -150,7 +151,7 @@ public partial class ManageDataDialog : IDialogContentComponent, IAsyncDisposabl
 
     private async Task SubscribeResourcesAsync()
     {
-        var (snapshot, subscription) = await DashboardClient.SubscribeResourcesAsync(_cts.Token);
+        var (snapshot, subscription) = await DataSource.ResourceRepository.SubscribeResourcesAsync(_cts.Token);
 
         // Apply snapshot.
         foreach (var resource in snapshot)
@@ -192,11 +193,8 @@ public partial class ManageDataDialog : IDialogContentComponent, IAsyncDisposabl
 
                 await InvokeAsync(async () =>
                 {
-                    if (_dataGrid is not null)
-                    {
-                        await _dataGrid.SafeRefreshDataAsync();
-                    }
                     StateHasChanged();
+                    await _dataGrid.SafeRefreshDataAsync();
                 });
             }
         });
@@ -206,8 +204,11 @@ public partial class ManageDataDialog : IDialogContentComponent, IAsyncDisposabl
     {
         var data = new List<TelemetryDataRow>();
 
-        // Add resource details for resources with ResourceViewModel
-        data.Add(CreateTelemetryDataRow(AspireDataType.ResourceDetails, resource.Name));
+        // Add resource details for resources with ResourceViewModel. The previous experience keeps main's query-based
+        // resource URL, which its resources page supports.
+        data.Add(DashboardExperienceComponents.IsLegacyLocation(NavigationManager)
+            ? new TelemetryDataRow { DataType = AspireDataType.ResourceDetails, Icon = new Icons.Regular.Size16.ContentView(), Url = DashboardUrls.ResourcesUrl(resource: resource.Name) }
+            : CreateTelemetryDataRow(AspireDataType.ResourceDetails, resource.Name));
 
         // Add console logs for resources with ResourceViewModel
         data.Add(CreateTelemetryDataRow(AspireDataType.ConsoleLogs, resource.Name));
@@ -264,7 +265,7 @@ public partial class ManageDataDialog : IDialogContentComponent, IAsyncDisposabl
     {
         return dataType switch
         {
-            AspireDataType.ResourceDetails => new TelemetryDataRow { DataType = AspireDataType.ResourceDetails, Icon = new Icons.Regular.Size16.ContentView(), Url = DashboardUrls.ResourcesUrl(resource: resourceName) },
+            AspireDataType.ResourceDetails => new TelemetryDataRow { DataType = AspireDataType.ResourceDetails, Icon = new Icons.Regular.Size16.ContentView(), Url = DashboardUrls.ResourceOverviewUrl(resourceName) },
             AspireDataType.ConsoleLogs => new TelemetryDataRow { DataType = AspireDataType.ConsoleLogs, Icon = new Icons.Regular.Size16.SlideText(), Url = DashboardUrls.ConsoleLogsUrl(resource: resourceName) },
             AspireDataType.StructuredLogs => new TelemetryDataRow { DataType = AspireDataType.StructuredLogs, Icon = new Icons.Regular.Size16.SlideTextSparkle(), Url = DashboardUrls.StructuredLogsUrl(resource: resourceName) },
             AspireDataType.Traces => new TelemetryDataRow { DataType = AspireDataType.Traces, Icon = new Icons.Regular.Size16.GanttChart(), Url = DashboardUrls.TracesUrl(resource: resourceName) },
@@ -273,7 +274,7 @@ public partial class ManageDataDialog : IDialogContentComponent, IAsyncDisposabl
         };
     }
 
-    private IQueryable<ManageDataGridItem> GetGridItems()
+    private List<ManageDataGridItem> GetGridItems()
     {
         var items = new List<ManageDataGridItem>();
 
@@ -302,7 +303,7 @@ public partial class ManageDataDialog : IDialogContentComponent, IAsyncDisposabl
             }
         }
 
-        return items.AsQueryable();
+        return items;
     }
 
     private void OnRowClicked(FluentDataGridRow<ManageDataGridItem> row)
@@ -545,29 +546,31 @@ public partial class ManageDataDialog : IDialogContentComponent, IAsyncDisposabl
 
         _isRemoving = true;
         _errorMessage = null;
-        StateHasChanged();
 
         try
         {
             var selectedResources = GetSelectedResourcesAndDataTypes();
 
             // Clear telemetry signals via repository
-            TelemetryRepository.ClearSelectedSignals(selectedResources);
+            DataSource.EnsureWritable();
+            await TelemetryRepositoryWriter.ClearSelectedSignalsAsync(selectedResources);
 
-            // Handle console logs filtering separately (not stored in TelemetryRepository)
-            // Console logs are only available when the dashboard client is enabled
+            // Console logs are stored by the resource repository and are only available when the dashboard client is enabled.
             if (DashboardClient.IsEnabled)
             {
-                var consoleLogResourcesToFilter = selectedResources
+                var consoleLogResourceNames = selectedResources
                     .Where(kvp => kvp.Value.Contains(AspireDataType.ConsoleLogs))
                     .Select(kvp => kvp.Key)
                     .ToList();
 
-                if (consoleLogResourcesToFilter.Count > 0)
+                if (consoleLogResourceNames.Count > 0)
                 {
                     var filterDate = TimeProvider.GetUtcNow().UtcDateTime;
+                    await DataSource.ResourceRepository.ClearConsoleLogsAsync(consoleLogResourceNames, filterDate);
+
+                    // Keep the filter to suppress console logs already buffered by the live AppHost.
                     var filters = ConsoleLogsManager.Filters;
-                    foreach (var resourceName in consoleLogResourcesToFilter)
+                    foreach (var resourceName in consoleLogResourceNames)
                     {
                         filters = filters.WithResourceCleared(resourceName, filterDate);
                     }
@@ -619,7 +622,6 @@ public partial class ManageDataDialog : IDialogContentComponent, IAsyncDisposabl
         finally
         {
             _isImporting = false;
-            StateHasChanged();
         }
     }
 
@@ -632,7 +634,6 @@ public partial class ManageDataDialog : IDialogContentComponent, IAsyncDisposabl
 
         _isExporting = true;
         _errorMessage = null;
-        StateHasChanged();
 
         try
         {
@@ -650,7 +651,6 @@ public partial class ManageDataDialog : IDialogContentComponent, IAsyncDisposabl
         finally
         {
             _isExporting = false;
-            StateHasChanged();
         }
     }
 

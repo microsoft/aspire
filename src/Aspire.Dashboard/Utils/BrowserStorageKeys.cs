@@ -1,7 +1,6 @@
-// Licensed to the .NET Foundation under one or more agreements.
+﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Text;
 using Microsoft.FluentUI.AspNetCore.Components;
 
 namespace Aspire.Dashboard.Utils;
@@ -10,12 +9,19 @@ internal static class BrowserStorageKeys
 {
     public const string UnsecuredTelemetryMessageDismissedKey = "Aspire_Telemetry_UnsecuredMessageDismissed";
     public const string UnsecuredEndpointMessageDismissedKey = "Aspire_Security_UnsecuredEndpointMessageDismissed";
+    public const string DashboardFeedbackPromptDismissed = "Aspire_DashboardFeedback_PromptDismissed";
+    public const string DashboardFeedbackPromptDismissedForSession = "Aspire_DashboardFeedback_PromptDismissedForSession";
     public const string TimeFormat = "Aspire_TimeFormat";
+    public const string NavMenuExpanded = "Aspire_NavMenu_Expanded";
 
     public const string TracesPageState = "Aspire_PageState_Traces";
     public const string StructuredLogsPageState = "Aspire_PageState_StructuredLogs";
     public const string MetricsPageState = "Aspire_PageState_Metrics";
+    public const string MetricsOrganize = "Aspire_Metrics_Organize";
     public const string ConsoleLogsPageState = "Aspire_PageState_ConsoleLogs";
+    public const string ParametersPageState = "Aspire_PageState_Parameters";
+    public const string GraphPageState = "Aspire_PageState_Graph";
+    public const string TerminalsPageState = "Aspire_PageState_Terminals";
     public const string ResourcesPageState = "Resources_PageState";
     public const string ConsoleLogConsoleSettings = "Aspire_ConsoleLog_ConsoleSettings";
     public const string ConsoleLogFilters = "Aspire_ConsoleLog_Filters";
@@ -23,29 +29,47 @@ internal static class BrowserStorageKeys
     public const string ResourcesShowResourceTypes = "Aspire_Resources_ShowResourceTypes";
 
     public const string DashboardTelemetrySettings = "Aspire_Settings_DashboardTelemetry";
+    public const string SelectedDashboardRunId = "Aspire_Settings_SelectedDashboardRunId";
     public const string ResourcesShowHiddenResources = "Aspire_Resources_ShowHiddenResources";
 
-    public const string NavMenuExpanded = "Aspire_NavMenu_Expanded";
+    public const string ResourcePaneCollapsed = "Aspire_ResourcePane_Collapsed";
+    public const string ResourcePaneWidth = "Aspire_ResourcePane_Width";
+    public const string ResourcePaneMode = "Aspire_ResourcePane_Mode";
+    public const string ResourcePaneGrouping = "Aspire_ResourcePane_Grouping";
+    public const string ResourcePaneKinds = "Aspire_ResourcePane_Kinds";
+    public const string ResourceListDensity = "Aspire_ResourcePane_Density";
+    public const string GroupOverview = "Aspire_ResourceOverview_GroupView";
+    public const string RecordingsStyle = "Aspire_Header_RecordingsStyle";
+    public const string LastSelectedResources = "Aspire_ResourcePane_LastSelectedResources";
+    public const string ResourceContentOpen = "Aspire_ResourcePane_ContentOpen";
 
     public const string CollapsedResourceNamesKeyPrefix = "Aspire_Resources_CollapsedResourceNames_";
+    public const string ResourceTagsKeyPrefix = "Aspire_Resources_Tags_";
+    public const string ResourceOrderKeyPrefix = "Aspire_Resources_Order_";
+    public const string MetricPinsKeyPrefix = "Aspire_Metrics_Pins_";
     public const string SplitterOrientationKeyPrefix = "Aspire_SplitterOrientation_";
     public const string SplitterSizeKeyPrefix = "Aspire_SplitterSize_";
 
     public static string CollapsedResourceNamesKey(string applicationName)
     {
-        ArgumentNullException.ThrowIfNull(applicationName);
+        return $"{CollapsedResourceNamesKeyPrefix}{DashboardApplicationNameKey.Create(applicationName)}";
+    }
 
-        var builder = new StringBuilder(applicationName.Length);
+    // Tags, order and pins describe the application, so each application has its own key. Different apps can be served
+    // from the same dashboard origin, for example the standalone dashboard's default port.
+    public static string ResourceTagsKey(string applicationName)
+    {
+        return $"{ResourceTagsKeyPrefix}{DashboardApplicationNameKey.Create(applicationName)}";
+    }
 
-        foreach (var c in applicationName)
-        {
-            if (char.IsLetterOrDigit(c))
-            {
-                builder.Append(c);
-            }
-        }
+    public static string ResourceOrderKey(string applicationName)
+    {
+        return $"{ResourceOrderKeyPrefix}{DashboardApplicationNameKey.Create(applicationName)}";
+    }
 
-        return $"{CollapsedResourceNamesKeyPrefix}{builder.ToString()}";
+    public static string MetricPinsKey(string applicationName)
+    {
+        return $"{MetricPinsKeyPrefix}{DashboardApplicationNameKey.Create(applicationName)}";
     }
 
     public static string SplitterOrientationKey(string viewKey)

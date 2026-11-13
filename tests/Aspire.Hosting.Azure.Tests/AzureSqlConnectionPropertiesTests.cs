@@ -6,12 +6,12 @@ using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Azure.Tests;
 
-public class AzureSqlConnectionPropertiesTests
+public class AzureSqlConnectionPropertiesTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     public void AzureSqlServerResourceGetConnectionPropertiesReturnsExpectedValues()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
         var sql = builder.AddAzureSqlServer("sql");
 
         var resource = Assert.Single(builder.Resources.OfType<AzureSqlServerResource>());

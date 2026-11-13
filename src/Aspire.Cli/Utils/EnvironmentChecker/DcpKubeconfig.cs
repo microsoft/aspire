@@ -4,6 +4,7 @@
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using Aspire.Cli.Resources;
+using Aspire.Shared;
 
 namespace Aspire.Cli.Utils.EnvironmentChecker;
 
@@ -42,12 +43,6 @@ internal sealed class DcpKubeconfig : IDisposable
 
     public static DcpKubeconfig Parse(string content)
     {
-        string? server = null;
-        string? token = null;
-        string? certificateAuthorityData = null;
-        string? clientCertificateData = null;
-        string? clientKeyData = null;
-
         // DCP emits a compact kubeconfig in this shape:
         //   clusters:
         //   - name: dcp
@@ -61,14 +56,8 @@ internal sealed class DcpKubeconfig : IDisposable
         //       client-key-data: <base64 PEM>
         // The doctor probe only needs connection material, so parse the scalar fields directly
         // instead of adding a YAML dependency to the NativeAOT CLI.
-        foreach (var line in content.Split('\n'))
-        {
-            server ??= TryReadScalar(line, "server");
-            token ??= TryReadScalar(line, "token");
-            certificateAuthorityData ??= TryReadScalar(line, "certificate-authority-data");
-            clientCertificateData ??= TryReadScalar(line, "client-certificate-data");
-            clientKeyData ??= TryReadScalar(line, "client-key-data");
-        }
+        var data = DcpKubeconfigData.Parse(content);
+        var server = data.Server;
 
         if (string.IsNullOrWhiteSpace(server) || !Uri.TryCreate(server, UriKind.Absolute, out var serverUri))
         {
@@ -78,12 +67,12 @@ internal sealed class DcpKubeconfig : IDisposable
         return new DcpKubeconfig
         {
             Server = serverUri,
-            Token = token,
-            CertificateAuthorityCertificates = certificateAuthorityData is null
+            Token = data.Token,
+            CertificateAuthorityCertificates = data.CertificateAuthorityData is null
                 ? []
-                : LoadCertificates(certificateAuthorityData),
-            ClientCertificate = clientCertificateData is not null && clientKeyData is not null
-                ? LoadClientCertificate(clientCertificateData, clientKeyData)
+                : LoadCertificates(data.CertificateAuthorityData),
+            ClientCertificate = data.ClientCertificateData is not null && data.ClientKeyData is not null
+                ? LoadClientCertificate(data.ClientCertificateData, data.ClientKeyData)
                 : null
         };
     }
@@ -96,36 +85,6 @@ internal sealed class DcpKubeconfig : IDisposable
         }
 
         ClientCertificate?.Dispose();
-    }
-
-    private static string? TryReadScalar(string line, string key)
-    {
-        var trimmed = line.Trim();
-        if (trimmed.Length == 0 || trimmed[0] == '#')
-        {
-            return null;
-        }
-
-        var prefix = key + ":";
-        if (!trimmed.StartsWith(prefix, StringComparison.Ordinal))
-        {
-            return null;
-        }
-
-        var value = trimmed[prefix.Length..].Trim();
-        if (value.Length == 0)
-        {
-            return null;
-        }
-
-        return TrimYamlQuotes(value);
-    }
-
-    private static string TrimYamlQuotes(string value)
-    {
-        return value.Length >= 2 && ((value[0] == '"' && value[^1] == '"') || (value[0] == '\'' && value[^1] == '\''))
-            ? value[1..^1]
-            : value;
     }
 
     private static List<X509Certificate2> LoadCertificates(string base64Data)

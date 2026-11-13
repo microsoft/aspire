@@ -1,5 +1,4 @@
-#:sdk Aspire.AppHost.Sdk@{{aspireVersion}}
-#:property AspireUseCliBundle=true
+{{appHostDirectives}}
 
 var builder = DistributedApplication.CreateBuilder(args);
 

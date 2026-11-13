@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.RegularExpressions;
+using System.Xml.Linq;
 using Aspire.Hosting;
 using Aspire.TestUtilities;
 using Xunit;
@@ -69,7 +70,8 @@ public partial class BuildAndRunTemplateTests : TemplateTestsBase
 
             var projectContents = File.ReadAllText(projectName);
 
-            var match = ProjectSdkVersionRegex().Match(projectContents);
+            var match = AppHostVersionRegex().Match(projectContents);
+            Assert.True(match.Success, projectContents);
 
             File.WriteAllText(
                 projectName,
@@ -90,6 +92,21 @@ public partial class BuildAndRunTemplateTests : TemplateTestsBase
 
         static void CreateCPMFile(AspireProject project, string version)
         {
+            var appHostProject = Directory.GetFiles(project.AppHostProjectDirectory, "*.csproj").Single();
+            var document = XDocument.Load(appHostProject, LoadOptions.PreserveWhitespace);
+            var versions = new List<XElement>();
+            foreach (var reference in document.Descendants("PackageReference"))
+            {
+                if (reference.Attribute("Version") is { } versionAttribute)
+                {
+                    versions.Add(new XElement("PackageVersion",
+                        new XAttribute("Include", reference.Attribute("Include")!.Value),
+                        new XAttribute("Version", versionAttribute.Value)));
+                    versionAttribute.Remove();
+                }
+            }
+            document.Save(appHostProject);
+
             var cpmFilePath = Path.Combine(project.RootDir, "Directory.Packages.props");
             var cpmContent = $"""
                 <Project>
@@ -99,6 +116,7 @@ public partial class BuildAndRunTemplateTests : TemplateTestsBase
                     <NoWarn>NU1507;$(NoWarn)</NoWarn>
                   </PropertyGroup>
                   <ItemGroup>
+                    {string.Join(Environment.NewLine, versions)}
                     <PackageVersion Include="Aspire.Hosting.Redis" Version="{version}" />
                   </ItemGroup>
                 </Project>
@@ -133,31 +151,21 @@ public partial class BuildAndRunTemplateTests : TemplateTestsBase
 
             var projectContents = File.ReadAllText(projectName);
 
-            var match = ProjectSdkVersionRegex().Match(projectContents);
+            var match = AppHostVersionRegex().Match(projectContents);
+            Assert.True(match.Success, projectContents);
             var version = match.Groups[1].Value;
-            Assert.NotNull(version);
-
-            File.WriteAllText(
-                projectName,
-                ProjectSdkVersionRegex().Replace(projectContents,
-                $"""
-                <Project Sdk="Microsoft.NET.Sdk">
-                  <Sdk Name="Aspire.AppHost.Sdk" Version="{version}" />
-                """)
-            );
-
-            if (addPackageRef)
+            var document = XDocument.Parse(projectContents, LoadOptions.PreserveWhitespace);
+            document.Root!.AddFirst(new XElement("Sdk",
+                new XAttribute("Name", "Aspire.AppHost.Sdk"), new XAttribute("Version", version)));
+            document.Root.AddFirst(new XElement("PropertyGroup",
+                new XElement("SuppressAspireAppHostSdkObsoleteWarning", "true")));
+            if (!addPackageRef)
             {
-                File.WriteAllText(
-                    projectName,
-                    ProjectClosingTagRegex().Replace(projectContents,
-                    $"""
-                      <ItemGroup>
-                        <PackageReference Include="Aspire.Hosting.AppHost" Version="{version}" />
-                      </ItemGroup>
-                    </Project>
-                    """));
+                document.Descendants("PackageReference")
+                    .Where(reference => reference.Attribute("Include")?.Value == "Aspire.Hosting.AppHost")
+                    .Remove();
             }
+            document.Save(projectName);
         }
     }
 
@@ -245,6 +253,4 @@ public partial class BuildAndRunTemplateTests : TemplateTestsBase
     [GeneratedRegex(@"</Project>")]
     private static partial Regex ProjectClosingTagRegex();
 
-    [GeneratedRegex(@"<Project\s+Sdk=""Aspire\.AppHost\.Sdk\/([^""]+)"">")]
-    private static partial Regex ProjectSdkVersionRegex();
 }

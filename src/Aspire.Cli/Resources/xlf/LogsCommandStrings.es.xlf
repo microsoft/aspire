@@ -4,27 +4,27 @@
     <body>
       <trans-unit id="Description">
         <source>Display logs from resources in a running AppHost</source>
-        <target state="needs-review-translation">Muestra los registros de los recursos en un host de aplicaciones Aspire en ejecución.</target>
+        <target state="translated">Mostrar registros de recursos en un AppHost en ejecución</target>
         <note />
       </trans-unit>
       <trans-unit id="FollowOptionDescription">
         <source>Stream logs in real-time as they are written</source>
-        <target state="needs-review-translation">Transmita los registros en tiempo real a medida que se escriben.</target>
+        <target state="translated">Transmitir registros en tiempo real a medida que se escriben</target>
         <note />
       </trans-unit>
       <trans-unit id="IncludeHiddenOptionDescription">
         <source>Include hidden resources in the output</source>
-        <target state="new">Include hidden resources in the output</target>
+        <target state="translated">Incluir recursos ocultos en la salida</target>
         <note />
       </trans-unit>
       <trans-unit id="JsonOptionDescription">
         <source>Output format (Table or Json)</source>
-        <target state="needs-review-translation">Registros de salida en formato JSON (NDJSON).</target>
+        <target state="translated">Formato de salida (Tabla o JSON)</target>
         <note />
       </trans-unit>
       <trans-unit id="NoLogsFound">
         <source>No logs found.</source>
-        <target state="new">No logs found.</target>
+        <target state="translated">No se encontraron registros.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoResourcesFound">
@@ -34,7 +34,7 @@
       </trans-unit>
       <trans-unit id="ResourceArgumentDescription">
         <source>The name of the resource to get logs for. If not specified, logs from all resources are shown.</source>
-        <target state="needs-review-translation">Nombre del recurso para el que se van a obtener registros. Si no se especifica, se muestran los registros de todos los recursos.</target>
+        <target state="translated">Nombre del recurso para el que se van a obtener registros. Si no se especifica, se muestran los registros de todos los recursos.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceNotFound">
@@ -49,7 +49,7 @@
       </trans-unit>
       <trans-unit id="SearchOptionDescription">
         <source>Full-text search to filter log content. See https://aka.ms/aspire/cli-search for more details</source>
-        <target state="new">Full-text search to filter log content. See https://aka.ms/aspire/cli-search for more details</target>
+        <target state="translated">Búsqueda de texto completo para filtrar el contenido del registro. Consulte https://aka.ms/aspire/cli-search para obtener más detalles</target>
         <note />
       </trans-unit>
       <trans-unit id="SelectAppHostAction">
@@ -64,7 +64,7 @@
       </trans-unit>
       <trans-unit id="TailOptionDescription">
         <source>Number of lines to show from the end of logs (default: all)</source>
-        <target state="needs-review-translation">Número de líneas que se mostrarán desde el final de los registros (valor predeterminado: todos).</target>
+        <target state="translated">Número de líneas que se mostrarán desde el final de los registros (valor predeterminado: todos)</target>
         <note />
       </trans-unit>
       <trans-unit id="TailRequiresResource">
@@ -74,7 +74,7 @@
       </trans-unit>
       <trans-unit id="TimestampsOptionDescription">
         <source>Show timestamps for each log line</source>
-        <target state="new">Show timestamps for each log line</target>
+        <target state="translated">Mostrar marcas de tiempo para cada línea de registro</target>
         <note />
       </trans-unit>
       <trans-unit id="GettingLogs">

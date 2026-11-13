@@ -7,6 +7,7 @@ name: Auto rerun outerloop failures
 
 on:
   workflow_run:
+    # zizmor: ignore[dangerous-triggers] - the job excludes PR runs and operates only on existing runs in microsoft/aspire
     workflows: ["Outerloop Tests"]
     types:
       - completed
@@ -30,7 +31,7 @@ jobs:
     # them would mask genuine breakage in exactly the PRs that change outerloop CI.
     if: >-
       ${{
-          github.repository_owner == 'microsoft' &&
+          github.repository == 'microsoft/aspire' &&
           github.event.workflow_run.event != 'pull_request' &&
           github.event.workflow_run.conclusion == 'failure' &&
           github.event.workflow_run.run_attempt <= 3

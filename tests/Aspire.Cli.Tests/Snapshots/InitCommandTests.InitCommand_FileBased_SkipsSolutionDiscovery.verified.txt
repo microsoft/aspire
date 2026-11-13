@@ -1,0 +1,8 @@
+﻿#:package Aspire.Hosting.AppHost@<sdk-version>
+#:package Aspire.Hosting.Dotnet@<sdk-version>
+
+var builder = DistributedApplication.CreateBuilder(args);
+
+// The aspireify skill will wire up your projects here.
+
+builder.Build().Run();

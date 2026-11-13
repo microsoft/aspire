@@ -73,6 +73,20 @@ public class OtlpApiKeyAuthenticationHandlerTests
         Assert.Equal(success, result.Failure == null);
     }
 
+    [Fact]
+    public async Task AuthenticateAsync_EmptyHeader_Failure()
+    {
+        // Arrange
+        var handler = await CreateAuthHandlerAsync(primaryApiKey: "abc", secondaryApiKey: "", otlpApiKeyHeader: "").DefaultTimeout();
+
+        // Act
+        var result = await handler.AuthenticateAsync().DefaultTimeout();
+
+        // Assert
+        Assert.NotNull(result.Failure);
+        Assert.Equal($"API key from '{OtlpApiKeyAuthenticationHandler.ApiKeyHeaderName}' header is empty.", result.Failure.Message);
+    }
+
     private static async Task<OtlpApiKeyAuthenticationHandler> CreateAuthHandlerAsync(string primaryApiKey, string? secondaryApiKey, string? otlpApiKeyHeader)
     {
         var options = new DashboardOptions

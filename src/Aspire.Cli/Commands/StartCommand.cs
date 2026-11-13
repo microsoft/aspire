@@ -4,6 +4,7 @@
 using System.CommandLine;
 using System.Globalization;
 using Aspire.Cli.Backchannel;
+using Aspire.Cli.Profiling;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
@@ -17,10 +18,13 @@ internal sealed class StartCommand : BaseCommand
 
     protected override bool UpdateNotificationsEnabled => true;
 
+    protected override string CancellationMessage => InteractionServiceStrings.StoppingAspire;
+
     protected override bool RejectsUnknownOptionsBeforeDoubleDash => true;
 
     private readonly AppHostLauncher _appHostLauncher;
     private readonly IConfiguration _configuration;
+    private readonly ProfileCaptureState _profileCaptureState;
 
     private static readonly Option<bool> s_noBuildOption = new("--no-build")
     {
@@ -30,12 +34,14 @@ internal sealed class StartCommand : BaseCommand
     public StartCommand(
         AppHostLauncher appHostLauncher,
         IConfiguration configuration,
+        ProfileCaptureState profileCaptureState,
         CommonCommandServices services)
         : base("start", StartCommandStrings.Description,
                services)
     {
         _appHostLauncher = appHostLauncher;
         _configuration = configuration;
+        _profileCaptureState = profileCaptureState;
 
         Options.Add(s_noBuildOption);
         AppHostLauncher.AddLaunchOptions(this);
@@ -47,7 +53,8 @@ internal sealed class StartCommand : BaseCommand
     {
         var passedAppHostProjectFile = parseResult.GetValue(AppHostLauncher.s_appHostOption);
         var format = parseResult.GetValue(AppHostLauncher.s_formatOption);
-        var isolated = parseResult.GetValue(AppHostLauncher.s_isolatedOption);
+        var explicitIsolated = AppHostLauncher.GetExplicitIsolated(parseResult);
+        var launchProfile = parseResult.GetValue(AppHostLauncher.s_launchProfileOption);
 
         var noBuild = parseResult.GetValue(s_noBuildOption);
         // The detached start path is always user-initiated. When invoked from the
@@ -56,7 +63,8 @@ internal sealed class StartCommand : BaseCommand
         var isExtensionHost = false;
         var waitForDebugger = parseResult.GetValue(RootCommand.WaitForDebuggerOption);
         var globalArgs = RootCommand.GetChildProcessArgs(parseResult);
-        var additionalArgs = parseResult.UnmatchedTokens.ToList();
+        var appHostArgs = parseResult.UnmatchedTokens;
+        var additionalArgs = new List<string>();
         var captureProfile = parseResult.GetValue(RootCommand.CaptureProfileOption);
         var stopAfterLaunchDelay = captureProfile
             ? TimeSpan.FromSeconds(parseResult.GetValue(RootCommand.CaptureProfileDelayOption))
@@ -73,42 +81,13 @@ internal sealed class StartCommand : BaseCommand
             && string.IsNullOrEmpty(_configuration[KnownConfigNames.ExtensionDebugSessionId]))
         {
             var startDebugSession = parseResult.GetValue(RootCommand.StartDebugSessionOption);
-            var debugSessionArgs = new List<string>();
-            if (isolated)
-            {
-                debugSessionArgs.Add("--isolated");
-            }
-
-            if (noBuild)
-            {
-                debugSessionArgs.Add("--no-build");
-            }
-
-            debugSessionArgs.AddRange(globalArgs);
-
-            if (captureProfile)
-            {
-                debugSessionArgs.Add("--capture-profile");
-
-                if (parseResult.GetValue(RootCommand.CaptureProfileOutputOption) is { } captureProfileOutput)
-                {
-                    debugSessionArgs.Add("--capture-profile-output");
-                    debugSessionArgs.Add(captureProfileOutput.FullName);
-                }
-
-                if (parseResult.GetResult(RootCommand.CaptureProfileDelayOption) is { Implicit: false })
-                {
-                    debugSessionArgs.Add("--capture-profile-delay");
-                    debugSessionArgs.Add(parseResult.GetValue(RootCommand.CaptureProfileDelayOption).ToString(CultureInfo.InvariantCulture));
-                }
-            }
-
-            if (additionalArgs.Count > 0)
-            {
-                debugSessionArgs.Add("--");
-                debugSessionArgs.AddRange(additionalArgs);
-            }
-
+            var debugSessionArguments = ParseResultHelper.GetForwardedArguments(
+                parseResult,
+                AppHostLauncher.s_appHostOption.InnerOption,
+                AppHostLauncher.s_appHostOption.LegacyOption,
+                AppHostLauncher.s_formatOption,
+                RootCommand.StartDebugSessionOption,
+                RootCommand.NonInteractiveOption);
             extensionInteractionService.DisplayConsolePlainText(string.Format(CultureInfo.CurrentCulture, startDebugSession ? RunCommandStrings.StartingDebugSessionInExtension : RunCommandStrings.StartingRunSessionInExtension, "start"));
             await extensionInteractionService.StartDebugSessionAsync(
                 ExecutionContext.WorkingDirectory.FullName,
@@ -117,10 +96,30 @@ internal sealed class StartCommand : BaseCommand
                 new DebugSessionOptions
                 {
                     Command = "run",
-                    Args = debugSessionArgs.Count > 0 ? [.. debugSessionArgs] : null
+                    Args = [.. debugSessionArguments.Tokens],
+                    AppHostSelectionOrigin = passedAppHostProjectFile is not null
+                        ? DebugSessionOptions.ExplicitCliAppHostSelectionOrigin
+                        : DebugSessionOptions.DefaultDiscoveryAppHostSelectionOrigin
                 });
+            _profileCaptureState.MarkTransferred();
 
             return CommandResult.Success();
+        }
+
+        if (noBuild)
+        {
+            additionalArgs.Add("--no-build");
+        }
+
+        if (!string.IsNullOrEmpty(launchProfile))
+        {
+            additionalArgs.Add($"{AppHostLauncher.s_launchProfileOption.Name}={launchProfile}");
+        }
+
+        if (appHostArgs.Count > 0)
+        {
+            additionalArgs.Add("--");
+            additionalArgs.AddRange(appHostArgs);
         }
 
         if (!AppHostStartupTimeout.TryGetTimeoutSeconds(_configuration, InteractionService, out var timeoutSeconds))
@@ -131,8 +130,8 @@ internal sealed class StartCommand : BaseCommand
         return await _appHostLauncher.LaunchDetachedAsync(
             passedAppHostProjectFile,
             format,
-            isolated,
-            noBuild,
+            explicitIsolated,
+            launchProfile,
             isExtensionHost,
             waitForDebugger,
             timeoutSeconds,

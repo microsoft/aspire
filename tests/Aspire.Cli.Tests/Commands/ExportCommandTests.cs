@@ -204,7 +204,7 @@ public class ExportCommandTests(ITestOutputHelper outputHelper)
                 new ResourceSnapshot { Name = "other-resource", DisplayName = "other-resource", ResourceType = "Project", State = "Running" },
             ]
         };
-        monitor.AddConnection("hash-other", "socket.hash-other", outOfScopeConnection);
+        monitor.AddConnection("socket.hash-other", outOfScopeConnection);
 
         // Connection 2 – the only in-scope connection, should be auto-selected
         var targetConnection = new TestAppHostAuxiliaryBackchannel
@@ -231,7 +231,7 @@ public class ExportCommandTests(ITestOutputHelper outputHelper)
                 new ResourceLogLine { ResourceName = "target-resource", LineNumber = 1, Content = "Target resource log" },
             ]
         };
-        monitor.AddConnection("hash-target", "socket.hash-target", targetConnection);
+        monitor.AddConnection("socket.hash-target", targetConnection);
 
         var resourcesJson = JsonSerializer.Serialize(
             new[] { new ResourceInfoJson { Name = "target-resource", InstanceId = null } },
@@ -892,7 +892,7 @@ public class ExportCommandTests(ITestOutputHelper outputHelper)
             ResourceSnapshots = resourceSnapshots,
             LogLines = logLines
         };
-        monitor.AddConnection("hash1", "socket.hash1", connection);
+        monitor.AddConnection("socket.hash1", connection);
 
         var handler = new MockHttpMessageHandler(request =>
         {

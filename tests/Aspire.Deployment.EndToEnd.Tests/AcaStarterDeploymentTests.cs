@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Net;
+using System.Text.Json;
 using Aspire.Deployment.EndToEnd.Tests.Helpers;
 using Hex1b.Automation;
 using Xunit;
@@ -24,10 +26,10 @@ public sealed class AcaStarterDeploymentTests(ITestOutputHelper output)
             cts.Token, TestContext.Current.CancellationToken);
         var cancellationToken = linkedCts.Token;
 
-        await DeployStarterTemplateToAzureContainerAppsCore(cancellationToken);
+        await DeployStarterTemplateToAzureContainerAppsCore(false, nameof(DeployStarterTemplateToAzureContainerApps), cancellationToken);
     }
 
-    private async Task DeployStarterTemplateToAzureContainerAppsCore(CancellationToken cancellationToken)
+    internal async Task DeployStarterTemplateToAzureContainerAppsCore(bool useDotnetProject, string testName, CancellationToken cancellationToken)
     {
         // Validate prerequisites
         var subscriptionId = AzureAuthenticationHelpers.TryGetSubscriptionId();
@@ -48,15 +50,15 @@ public sealed class AcaStarterDeploymentTests(ITestOutputHelper output)
             }
         }
 
-        var workspace = TemporaryWorkspace.Create(output);
+        using var workspace = TemporaryWorkspace.Create(output);
         var startTime = DateTime.UtcNow;
         var deploymentUrls = new Dictionary<string, string>();
         // Generate a unique resource group name with pattern: e2e-[testcasename]-[runid]-[attempt]
-        var resourceGroupName = DeploymentE2ETestHelpers.GenerateResourceGroupName("starter");
+        var resourceGroupName = DeploymentE2ETestHelpers.GenerateResourceGroupName(useDotnetProject ? "starter-v2" : "starter");
         // Project name can be simpler since resource group is explicitly set
         var projectName = "AcaStarter";
 
-        output.WriteLine($"Test: {nameof(DeployStarterTemplateToAzureContainerApps)}");
+        output.WriteLine($"Test: {testName}");
         output.WriteLine($"Project Name: {projectName}");
         output.WriteLine($"Resource Group: {resourceGroupName}");
         output.WriteLine($"Subscription: {subscriptionId[..8]}...");
@@ -64,7 +66,7 @@ public sealed class AcaStarterDeploymentTests(ITestOutputHelper output)
 
         try
         {
-            using var terminal = DeploymentE2ETestHelpers.CreateTestTerminal();
+            using var terminal = DeploymentE2ETestHelpers.CreateTestTerminal(testName: testName);
             var pendingRun = terminal.RunAsync(cancellationToken);
 
             var counter = new SequenceCounter();
@@ -115,8 +117,59 @@ builder.AddAzureContainerAppEnvironment("infra");
 builder.Build().Run();
 """;
 
-            content = content.Replace(buildRunPattern, replacement);
+            content = DotnetProjectDeploymentHelpers.ReplaceExactlyOnce(content, buildRunPattern, replacement);
+            if (!useDotnetProject)
+            {
+                // Exercise ProjectResource separately from the AddDotnetProject scenario.
+                foreach (var (suffix, resource) in new[] { ("ApiService", "apiservice"), ("Web", "webfrontend") })
+                {
+                    content = DotnetProjectDeploymentHelpers.ReplaceExactlyOnce(content,
+                        $"AddDotnetProject(\"{resource}\", \"../{projectName}.{suffix}/{projectName}.{suffix}.csproj\")",
+                        $"AddProject(\"{resource}\", \"../{projectName}.{suffix}/{projectName}.{suffix}.csproj\")");
+                }
+
+                content = "#pragma warning disable CS0618 // Retain legacy project deployment alongside the modern scenario.\n"
+                    + content + "\n#pragma warning restore CS0618\n";
+            }
+
+            // Keep the frontend endpoint structured until ACA supplies its public HTTPS address.
+            var frontendDeclaration = useDotnetProject
+                ? "builder.AddDotnetProject(\"webfrontend\","
+                : "builder.AddProject(\"webfrontend\",";
+            content = DotnetProjectDeploymentHelpers.ReplaceExactlyOnce(content, frontendDeclaration, $"var webfrontend = {frontendDeclaration}");
+            content = DotnetProjectDeploymentHelpers.ReplaceExactlyOnce(content, buildRunPattern, """
+                apiService.WithExternalHttpEndpoints()
+                    .WithEnvironment("BROWSER_ORIGINS", webfrontend.GetEndpoint("http").BrowserOrigins)
+                    .WithEnvironment("PRIMARY_BROWSER_ORIGIN", webfrontend.GetEndpoint("http").PrimaryBrowserOrigin);
+
+                builder.Build().Run();
+                """);
             File.WriteAllText(appHostFilePath, content);
+            var marker = $"aca-{Guid.NewGuid():N}";
+            var apiProgramPath = Path.Combine(projectDir, $"{projectName}.ApiService", "Program.cs");
+            DotnetProjectDeploymentHelpers.ReplaceInFile(apiProgramPath, "var app = builder.Build();", """
+                var browserOrigins = builder.Configuration["BROWSER_ORIGINS"]
+                    ?? throw new InvalidOperationException("The deployed browser origins are missing.");
+                var primaryBrowserOrigin = builder.Configuration["PRIMARY_BROWSER_ORIGIN"]
+                    ?? throw new InvalidOperationException("The deployed primary browser origin is missing.");
+                var allowedOrigins = browserOrigins.Split(',', StringSplitOptions.RemoveEmptyEntries);
+                builder.Services.AddCors(options => options.AddDefaultPolicy(policy =>
+                    policy.WithOrigins(allowedOrigins).WithMethods("GET")));
+                var app = builder.Build();
+                app.UseCors();
+                """);
+            DotnetProjectDeploymentHelpers.ReplaceInFile(apiProgramPath,
+                "app.Run();", $$"""
+                app.MapGet("/deployment-marker", () => "{{marker}}");
+                app.MapGet("/browser-origins", () => new { origins = browserOrigins, primaryOrigin = primaryBrowserOrigin });
+                app.Run();
+                """);
+            DotnetProjectDeploymentHelpers.ReplaceInFile(Path.Combine(projectDir, $"{projectName}.Web", "Program.cs"),
+                "app.Run();", $$"""
+                app.MapGet("/deployment-marker", async (IHttpClientFactory clients, CancellationToken cancellationToken) =>
+                    "web:" + await clients.CreateClient().GetStringAsync("https+http://apiservice/deployment-marker", cancellationToken));
+                app.Run();
+                """);
 
             output.WriteLine($"Modified AppHost.cs at: {appHostFilePath}");
 
@@ -130,7 +183,7 @@ builder.Build().Run();
             // - Unset ASPIRE_PLAYGROUND to avoid conflicts
             // - Set Azure location
             // - Set AZURE__RESOURCEGROUP to use our unique resource group name
-            await auto.TypeAsync($"unset ASPIRE_PLAYGROUND && export AZURE__LOCATION=westus3 && export AZURE__RESOURCEGROUP={resourceGroupName}");
+            await auto.TypeAsync($"unset ASPIRE_PLAYGROUND && export AZURE__LOCATION=westus3 AZURE__RESOURCEGROUP={resourceGroupName} AZURE__SUBSCRIPTIONID={subscriptionId}");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter);
 
@@ -143,30 +196,57 @@ builder.Build().Run();
             await auto.WaitForPipelineSuccessAsync(timeout: TimeSpan.FromMinutes(30));
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
 
-            // Step 10: Extract deployment URLs and verify endpoints with retry
-            // Retry each endpoint for up to 3 minutes (18 attempts * 10 seconds)
-            output.WriteLine("Step 8: Verifying deployed endpoints...");
-            await auto.TypeAsync(
-                $"RG_NAME=\"{resourceGroupName}\" && " +
-                "echo \"Resource group: $RG_NAME\" && " +
-                "if ! az group show -n \"$RG_NAME\" &>/dev/null; then echo \"❌ Resource group not found\"; exit 1; fi && " +
-                // Get external endpoints only (exclude .internal. which are not publicly accessible)
-                "urls=$(az containerapp list -g \"$RG_NAME\" --query \"[].properties.configuration.ingress.fqdn\" -o tsv 2>/dev/null | grep -v '\\.internal\\.') && " +
-                "if [ -z \"$urls\" ]; then echo \"❌ No external container app endpoints found\"; exit 1; fi && " +
-                "failed=0 && " +
-                "for url in $urls; do " +
-                "echo \"Checking https://$url...\"; " +
-                "success=0; " +
-                "for i in $(seq 1 18); do " +
-                "STATUS=$(curl -s -o /dev/null -w \"%{http_code}\" \"https://$url\" --max-time 10 2>/dev/null); " +
-                "if [ \"$STATUS\" = \"200\" ] || [ \"$STATUS\" = \"302\" ]; then echo \"  ✅ $STATUS (attempt $i)\"; success=1; break; fi; " +
-                "echo \"  Attempt $i: $STATUS, retrying in 10s...\"; sleep 10; " +
-                "done; " +
-                "if [ \"$success\" -eq 0 ]; then echo \"  ❌ Failed after 18 attempts\"; failed=1; fi; " +
-                "done && " +
-                "if [ \"$failed\" -ne 0 ]; then echo \"❌ One or more endpoint checks failed\"; exit 1; fi");
-            await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(5));
+            // A fresh source marker traverses both .NET images and the template's service-discovery reference.
+            // Checking arbitrary ingress URLs also reaches the dashboard and cannot prove this path works.
+            var frontendUrlFile = Path.Combine(projectDir, "frontend-url.txt");
+            var apiUrlFile = Path.Combine(projectDir, "api-url.txt");
+            await DotnetProjectDeploymentHelpers.RunScriptAsync(auto, counter, $$"""
+                set -euo pipefail
+                az() { command az "$@" --subscription {{subscriptionId}}; }
+                for resource in apiservice webfrontend; do
+                    app=$(az containerapp list -g {{resourceGroupName}} --query "[?starts_with(name, '$resource')].name" -o tsv)
+                    [ "$(printf '%s\n' "$app" | wc -l)" -eq 1 ] && [ -n "$app" ]
+                    revision=$(az containerapp show -g {{resourceGroupName}} -n "$app" --query properties.latestRevisionName -o tsv)
+                    ready=""
+                    for attempt in $(seq 1 18); do
+                        ready=$(az containerapp show -g {{resourceGroupName}} -n "$app" --query properties.latestReadyRevisionName -o tsv)
+                        [ -n "$revision" ] && [ "$revision" = "$ready" ] && break
+                        sleep 10
+                    done
+                    [ -n "$revision" ] && [ "$revision" = "$ready" ]
+                    image=$(az containerapp show -g {{resourceGroupName}} -n "$app" --query "properties.template.containers[0].image" -o tsv)
+                    running_image=$(az containerapp revision show -g {{resourceGroupName}} -n "$app" --revision "$revision" --query "properties.template.containers[0].image" -o tsv)
+                    case "$image" in *.azurecr.io/*) ;; *) exit 1;; esac
+                    [ "$image" = "$running_image" ]
+                    echo "$resource: $revision $running_image"
+                    if [ "$resource" = webfrontend ]; then
+                        az containerapp show -g {{resourceGroupName}} -n "$app" --query properties.configuration.ingress.fqdn -o tsv > {{AspireCliShellCommandHelpers.QuoteBashArg(frontendUrlFile)}}
+                    else
+                        az containerapp show -g {{resourceGroupName}} -n "$app" --query properties.configuration.ingress.fqdn -o tsv > {{AspireCliShellCommandHelpers.QuoteBashArg(apiUrlFile)}}
+                    fi
+                done
+                """, TimeSpan.FromMinutes(9));
+            var frontendUrl = $"https://{File.ReadAllText(frontendUrlFile).Trim()}";
+            await DotnetProjectDeploymentHelpers.VerifyResponseAsync($"{frontendUrl}/deployment-marker", $"web:{marker}", cancellationToken);
+            var apiUrl = $"https://{File.ReadAllText(apiUrlFile).Trim()}";
+            await DotnetProjectDeploymentHelpers.VerifyResponseAsync($"{apiUrl}/deployment-marker", marker, cancellationToken);
+            using (var handler = new HttpClientHandler { AllowAutoRedirect = false })
+            using (var http = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(30) })
+            {
+                using var originsResponse = await http.GetAsync($"{apiUrl}/browser-origins", cancellationToken);
+                originsResponse.EnsureSuccessStatusCode();
+                using var received = JsonDocument.Parse(await originsResponse.Content.ReadAsStringAsync(cancellationToken));
+                Assert.Equal(frontendUrl, received.RootElement.GetProperty("origins").GetString());
+                Assert.Equal(frontendUrl, received.RootElement.GetProperty("primaryOrigin").GetString());
+
+                using var preflight = new HttpRequestMessage(HttpMethod.Options, $"{apiUrl}/browser-origins");
+                preflight.Headers.Add("Origin", frontendUrl);
+                preflight.Headers.Add("Access-Control-Request-Method", "GET");
+                using var preflightResponse = await http.SendAsync(preflight, cancellationToken);
+                Assert.Equal(HttpStatusCode.NoContent, preflightResponse.StatusCode);
+                Assert.Equal(frontendUrl, Assert.Single(preflightResponse.Headers.GetValues("Access-Control-Allow-Origin")));
+            }
+            deploymentUrls["webfrontend"] = frontendUrl;
 
             // Step 11: Exit terminal
             await auto.TypeAsync("exit");
@@ -179,7 +259,7 @@ builder.Build().Run();
 
             // Report success
             DeploymentReporter.ReportDeploymentSuccess(
-                nameof(DeployStarterTemplateToAzureContainerApps),
+                testName,
                 resourceGroupName,
                 deploymentUrls,
                 duration);
@@ -192,7 +272,7 @@ builder.Build().Run();
             output.WriteLine($"❌ Test failed after {duration}: {ex.Message}");
 
             DeploymentReporter.ReportDeploymentFailure(
-                nameof(DeployStarterTemplateToAzureContainerApps),
+                testName,
                 resourceGroupName,
                 ex.Message,
                 ex.StackTrace);
@@ -203,40 +283,7 @@ builder.Build().Run();
         {
             // Clean up the resource group we created
             output.WriteLine($"Triggering cleanup of resource group: {resourceGroupName}");
-            TriggerCleanupResourceGroup(resourceGroupName, output);
-            DeploymentReporter.ReportCleanupStatus(resourceGroupName, success: true, "Cleanup triggered (fire-and-forget)");
-        }
-    }
-
-    /// <summary>
-    /// Triggers cleanup of a specific resource group.
-    /// This is fire-and-forget - the hourly cleanup workflow handles any missed resources.
-    /// </summary>
-    private static void TriggerCleanupResourceGroup(string resourceGroupName, ITestOutputHelper output)
-    {
-        // Fire and forget - trigger deletion of the specific resource group created by this test
-        // The cleanup workflow will handle any that don't get deleted
-        var process = new System.Diagnostics.Process
-        {
-            StartInfo = new System.Diagnostics.ProcessStartInfo
-            {
-                FileName = "az",
-                Arguments = $"group delete --name {resourceGroupName} --yes --no-wait",
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            }
-        };
-
-        try
-        {
-            process.Start();
-            output.WriteLine($"Cleanup triggered for resource group: {resourceGroupName}");
-        }
-        catch (Exception ex)
-        {
-            output.WriteLine($"Failed to trigger cleanup: {ex.Message}");
+            await DotnetProjectDeploymentHelpers.CleanupAsync(resourceGroupName, subscriptionId, output);
         }
     }
 }

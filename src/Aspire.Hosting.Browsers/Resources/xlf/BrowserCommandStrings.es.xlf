@@ -4,167 +4,167 @@
     <body>
       <trans-unit id="CaptureScreenshotDescription">
         <source>Capture a screenshot from the active tracked browser session and save it as a PNG artifact.</source>
-        <target state="new">Capture a screenshot from the active tracked browser session and save it as a PNG artifact.</target>
+        <target state="translated">Capture una imagen de la pantalla de la sesión activa del navegador supervisado y guárdala como un artefacto PNG.</target>
         <note />
       </trans-unit>
       <trans-unit id="CaptureScreenshotName">
         <source>Capture screenshot</source>
-        <target state="new">Capture screenshot</target>
+        <target state="translated">Captura de pantalla</target>
         <note />
       </trans-unit>
       <trans-unit id="ConfigureTrackedBrowserApplied">
         <source>Applied tracked browser settings for {0}.</source>
-        <target state="new">Applied tracked browser settings for {0}.</target>
+        <target state="translated">Se aplicó la configuración del explorador con seguimiento para {0}.</target>
         <note>{0} is the resource name or scope that the settings apply to</note>
       </trans-unit>
       <trans-unit id="ConfigureTrackedBrowserBrowserDescription">
         <source>Choose an installed Chromium-based browser or enter an executable path.</source>
-        <target state="new">Choose an installed Chromium-based browser or enter an executable path.</target>
+        <target state="translated">Elija un explorador basado en Chromium instalado o escriba una ruta de acceso ejecutable.</target>
         <note />
       </trans-unit>
       <trans-unit id="ConfigureTrackedBrowserBrowserLabel">
         <source>Browser</source>
-        <target state="new">Browser</target>
+        <target state="translated">Explorador</target>
         <note />
       </trans-unit>
       <trans-unit id="ConfigureTrackedBrowserBrowserRequired">
         <source>Browser is required.</source>
-        <target state="new">Browser is required.</target>
+        <target state="translated">El explorador es obligatorio.</target>
         <note />
       </trans-unit>
       <trans-unit id="ConfigureTrackedBrowserChromeOption">
         <source>Google Chrome (chrome)</source>
-        <target state="new">Google Chrome (chrome)</target>
+        <target state="translated">Google Chrome (chrome)</target>
         <note />
       </trans-unit>
       <trans-unit id="ConfigureTrackedBrowserChromiumOption">
         <source>Chromium (chromium)</source>
-        <target state="new">Chromium (chromium)</target>
+        <target state="translated">Chromium (chromium)</target>
         <note />
       </trans-unit>
       <trans-unit id="ConfigureTrackedBrowserDefaultProfileOption">
         <source>Browser default profile</source>
-        <target state="new">Browser default profile</target>
+        <target state="translated">Perfil predeterminado del explorador</target>
         <note />
       </trans-unit>
       <trans-unit id="ConfigureTrackedBrowserDescription">
         <source>Choose the browser, profile, user data mode, and scope used by tracked browser sessions.</source>
-        <target state="new">Choose the browser, profile, user data mode, and scope used by tracked browser sessions.</target>
+        <target state="translated">Elija el explorador, el perfil, el modo de datos de usuario y el ámbito que usan las sesiones del explorador con seguimiento.</target>
         <note />
       </trans-unit>
       <trans-unit id="ConfigureTrackedBrowserEdgeOption">
         <source>Microsoft Edge (msedge)</source>
-        <target state="new">Microsoft Edge (msedge)</target>
+        <target state="translated">Microsoft Edge (msedge)</target>
         <note />
       </trans-unit>
       <trans-unit id="ConfigureTrackedBrowserGlobalScopeOption">
         <source>All BrowserLogs resources</source>
-        <target state="new">All BrowserLogs resources</target>
+        <target state="translated">Todos los recursos de BrowserLogs</target>
         <note />
       </trans-unit>
       <trans-unit id="ConfigureTrackedBrowserGlobalScopeResult">
         <source>all BrowserLogs resources</source>
-        <target state="new">all BrowserLogs resources</target>
+        <target state="translated">todos los recursos de BrowserLogs</target>
         <note />
       </trans-unit>
       <trans-unit id="ConfigureTrackedBrowserInteractionUnavailable">
         <source>Tracked browser settings cannot be configured because dashboard interactions are not available.</source>
-        <target state="new">Tracked browser settings cannot be configured because dashboard interactions are not available.</target>
+        <target state="translated">No se puede configurar la configuración del explorador con seguimiento porque las interacciones del panel no están disponibles.</target>
         <note />
       </trans-unit>
       <trans-unit id="ConfigureTrackedBrowserName">
         <source>Configure tracked browser</source>
-        <target state="new">Configure tracked browser</target>
+        <target state="translated">Configuración del explorador con seguimiento</target>
         <note />
       </trans-unit>
       <trans-unit id="ConfigureTrackedBrowserProfileDescription">
         <source>Choose a Chromium profile from the Aspire-managed browser hive, or enter a profile directory/name.</source>
-        <target state="new">Choose a Chromium profile from the Aspire-managed browser hive, or enter a profile directory/name.</target>
+        <target state="translated">Elija un perfil de Chromium del subárbol del navegador administrado por Aspire o escribe el directorio o nombre del perfil.</target>
         <note />
       </trans-unit>
       <trans-unit id="ConfigureTrackedBrowserProfileLabel">
         <source>Profile</source>
-        <target state="new">Profile</target>
+        <target state="translated">Perfil</target>
         <note />
       </trans-unit>
       <trans-unit id="ConfigureTrackedBrowserProfileOptionWithDisplayName">
         <source>{0} ({1})</source>
-        <target state="new">{0} ({1})</target>
+        <target state="translated">{0} ({1})</target>
         <note>{0} is the Chromium profile directory name, {1} is the Chromium profile display name</note>
       </trans-unit>
       <trans-unit id="ConfigureTrackedBrowserProfileRequiresShared">
         <source>Profiles can only be selected when user data mode is Shared.</source>
-        <target state="new">Profiles can only be selected when user data mode is Shared.</target>
+        <target state="translated">Los perfiles solo se pueden seleccionar cuando el modo de datos de usuario es Compartido.</target>
         <note />
       </trans-unit>
       <trans-unit id="ConfigureTrackedBrowserPromptMessage">
         <source>Choose tracked browser settings. Resource-specific settings override global BrowserLogs settings.</source>
-        <target state="new">Choose tracked browser settings. Resource-specific settings override global BrowserLogs settings.</target>
+        <target state="translated">Elija la configuración del explorador con seguimiento. La configuración específica del recurso invalida la configuración global de BrowserLogs.</target>
         <note />
       </trans-unit>
       <trans-unit id="ConfigureTrackedBrowserResourceScopeOption">
         <source>This resource only ({0})</source>
-        <target state="new">This resource only ({0})</target>
+        <target state="translated">Solo este recurso ({0})</target>
         <note>{0} is the Aspire resource name</note>
       </trans-unit>
       <trans-unit id="ConfigureTrackedBrowserSaveButton">
         <source>Apply</source>
-        <target state="new">Apply</target>
+        <target state="translated">Aplicar</target>
         <note />
       </trans-unit>
       <trans-unit id="ConfigureTrackedBrowserSaveFailed">
         <source>Tracked browser settings could not be saved to user secrets for key '{0}'.</source>
-        <target state="new">Tracked browser settings could not be saved to user secrets for key '{0}'.</target>
+        <target state="translated">No se pudo guardar la configuración del explorador con seguimiento en los secretos de usuario para la clave '{0}'.</target>
         <note>{0} is the user secrets configuration key</note>
       </trans-unit>
       <trans-unit id="ConfigureTrackedBrowserSaveToUserSecretsDescriptionConfigured">
         <source>Save these settings to [user secrets](https://aka.ms/aspire/user-secrets) so future AppHost runs use them.</source>
-        <target state="new">Save these settings to [user secrets](https://aka.ms/aspire/user-secrets) so future AppHost runs use them.</target>
+        <target state="translated">Guarde esta configuración en [secretos de usuario](https://aka.ms/aspire/user-secrets) para que las futuras ejecuciones de AppHost las usen.</target>
         <note />
       </trans-unit>
       <trans-unit id="ConfigureTrackedBrowserSaveToUserSecretsDescriptionNotConfigured">
         <source>User secrets are not configured for this AppHost, so settings can only apply to this running AppHost.</source>
-        <target state="new">User secrets are not configured for this AppHost, so settings can only apply to this running AppHost.</target>
+        <target state="translated">Los secretos de usuario no están configurados para este AppHost, por lo que la configuración solo se puede aplicar a este AppHost en ejecución.</target>
         <note />
       </trans-unit>
       <trans-unit id="ConfigureTrackedBrowserSaveToUserSecretsLabel">
         <source>Save to AppHost user secrets</source>
-        <target state="new">Save to AppHost user secrets</target>
+        <target state="translated">Guardar en secretos de usuario de AppHost</target>
         <note />
       </trans-unit>
       <trans-unit id="ConfigureTrackedBrowserSaved">
         <source>Saved tracked browser settings for {0}.</source>
-        <target state="new">Saved tracked browser settings for {0}.</target>
+        <target state="translated">Se guardó la configuración del explorador de seguimiento para {0}.</target>
         <note>{0} is the resource name or scope that the settings apply to</note>
       </trans-unit>
       <trans-unit id="ConfigureTrackedBrowserScopeLabel">
         <source>Scope</source>
-        <target state="new">Scope</target>
+        <target state="translated">Ámbito</target>
         <note />
       </trans-unit>
       <trans-unit id="ConfigureTrackedBrowserUserDataModeLabel">
         <source>User data mode</source>
-        <target state="new">User data mode</target>
+        <target state="translated">Modo de datos de usuario</target>
         <note />
       </trans-unit>
       <trans-unit id="ConfigureTrackedBrowserUserDataModeRequired">
         <source>User data mode must be Shared or Isolated.</source>
-        <target state="new">User data mode must be Shared or Isolated.</target>
+        <target state="translated">El modo de datos de usuario debe ser Compartido o Aislado.</target>
         <note />
       </trans-unit>
       <trans-unit id="ConfigureTrackedBrowserUserSecretsUnavailable">
         <source>Tracked browser settings cannot be saved because the AppHost does not have user secrets configured.</source>
-        <target state="new">Tracked browser settings cannot be saved because the AppHost does not have user secrets configured.</target>
+        <target state="translated">No se puede guardar la configuración del navegador supervisado porque AppHost no tiene configurados los secretos de usuario.</target>
         <note />
       </trans-unit>
       <trans-unit id="OpenTrackedBrowserDescription">
         <source>Open the app in a tracked browser session and stream browser logs to this resource.</source>
-        <target state="new">Open the app in a tracked browser session and stream browser logs to this resource.</target>
+        <target state="translated">Abra la aplicación en una sesión de explorador con seguimiento y transmita los registros del explorador a este recurso.</target>
         <note />
       </trans-unit>
       <trans-unit id="OpenTrackedBrowserName">
         <source>Open tracked browser</source>
-        <target state="new">Open tracked browser</target>
+        <target state="translated">Abrir explorador con seguimiento</target>
         <note />
       </trans-unit>
     </body>

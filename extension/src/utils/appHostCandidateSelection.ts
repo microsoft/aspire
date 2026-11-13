@@ -63,7 +63,7 @@ export function getWorkspaceAppHostProjectSearchResult(workspaceFolder: vscode.W
     };
 }
 
-export function isBuildableAppHostCandidate(candidate: AppHostCandidate): boolean {
+export function isBuildableAppHostCandidate(candidate: Pick<AppHostCandidate, 'status'>): boolean {
     return candidate.status === 'buildable';
 }
 

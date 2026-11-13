@@ -1,0 +1,25 @@
+{
+    "exclude": [
+        "**/.*",
+        "**/__editable__.*",
+        "**/node_modules",
+        "**/__pycache__",
+        ".dotnet",
+        "artifacts",
+        "**/.gradle",
+        "**/.venv",
+        "**/.vscode-test",
+        "**/bin",
+        "**/obj",
+        "**/target",
+        "extension/.corepack-cache",
+        "extension/.test-artifacts",
+        "extension/.test-extensions",
+        "extension/.test-results",
+        "extension/.test-storage",
+        "extension/.test-workspace",
+        "extension/.test-workspaces",
+        "extension/dist",
+        "extension/out"
+    ]
+}

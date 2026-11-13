@@ -9,7 +9,7 @@ import (
 func main() {
 	builder, err := aspire.CreateBuilder()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	tunnel := builder.AddDevTunnel("mytunnel")
@@ -21,32 +21,32 @@ func main() {
 	builder.AddDevTunnel("anon-tunnel").WithAnonymousAccess()
 
 	web := builder.AddContainer("web", "nginx")
-	web.WithHttpEndpoint(&aspire.WithHttpEndpointOptions{Port: aspire.Float64Ptr(80)})
+	web.WithHttpEndpoint(&aspire.WithHttpEndpointOptions{Port: aspire.IntPtr(80)})
 
 	webEndpoint := web.GetEndpoint("http")
 	tunnel.WithTunnelReference(webEndpoint)
 	if err = tunnel.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	web2 := builder.AddContainer("web2", "nginx")
-	web2.WithHttpEndpoint(&aspire.WithHttpEndpointOptions{Port: aspire.Float64Ptr(8080)})
+	web2.WithHttpEndpoint(&aspire.WithHttpEndpointOptions{Port: aspire.IntPtr(8080)})
 	web2Endpoint := web2.GetEndpoint("http")
 	tunnel2.WithTunnelReferenceAnonymous(web2Endpoint, true)
 	if err = tunnel2.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	tunnel3 := builder.AddDevTunnel("all-endpoints-tunnel")
 	web3 := builder.AddContainer("web3", "nginx")
-	web3.WithHttpEndpoint(&aspire.WithHttpEndpointOptions{Port: aspire.Float64Ptr(80)})
+	web3.WithHttpEndpoint(&aspire.WithHttpEndpointOptions{Port: aspire.IntPtr(80)})
 	tunnel3.WithTunnelReferenceAll(web3, false)
 	if err = tunnel3.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	web4 := builder.AddContainer("web4", "nginx")
-	web4.WithHttpEndpoint(&aspire.WithHttpEndpointOptions{Port: aspire.Float64Ptr(80)})
+	web4.WithHttpEndpoint(&aspire.WithHttpEndpointOptions{Port: aspire.IntPtr(80)})
 	web4Endpoint := web4.GetEndpoint("http")
 	tunnel4 := builder.AddDevTunnel("get-endpoint-tunnel")
 	tunnel4.WithTunnelReference(web4Endpoint)
@@ -59,17 +59,24 @@ func main() {
 		Labels:         []string{"validation", "polyglot"},
 	})
 	web5 := builder.AddContainer("web5", "nginx")
-	web5.WithHttpEndpoint(&aspire.WithHttpEndpointOptions{Port: aspire.Float64Ptr(9090)})
+	web5.WithHttpEndpoint(&aspire.WithHttpEndpointOptions{Port: aspire.IntPtr(9090)})
 	web5Endpoint := web5.GetEndpoint("http")
 	tunnel5.WithTunnelReferenceAnonymous(web5Endpoint, true)
 
 	builder.AddDevTunnel("chained-tunnel").WithAnonymousAccess()
 
+	expiringTunnel := builder.AddDevTunnel("expiring-tunnel").
+		WithExpiration(24).
+		WithTunnelReferenceAll(web, false)
+	if err = expiringTunnel.Err(); err != nil {
+		log.Fatal(aspire.FormatError(err))
+	}
+
 	app, err := builder.Build()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 	if err := app.Run(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 }

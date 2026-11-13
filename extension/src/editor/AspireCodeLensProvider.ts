@@ -3,6 +3,7 @@ import { AppHostResourceParser, getParserForDocument } from './parsers/AppHostRe
 import { filterActiveOffsetsInPlainText } from './parsers/plainTextInactiveOffsets';
 // Import parsers to trigger self-registration
 import './parsers/csharpAppHostParser';
+import './parsers/goAppHostParser';
 import './parsers/javaAppHostParser';
 import './parsers/jsTsAppHostParser';
 import './parsers/rustAppHostParser';
@@ -47,7 +48,10 @@ import {
     codeLensSpringBootDashboardBypassesAspire,
     codeLensSpringBootDashboardBypassesAspireTooltip,
     codeLensResourceValueMissing,
+    codeLensSetUpDebugger,
+    debuggerSetupNotification,
 } from '../loc/strings';
+import { DebuggerInstallHint, getDebuggerInstallHintForResource } from '../debugger/debuggerInstallHints';
 
 /**
  * Extension that contributes the Spring Boot Dashboard view. Its Run/Debug buttons start the
@@ -150,7 +154,8 @@ export class AspireCodeLensProvider implements vscode.CodeLensProvider {
     ) {
         // Re-compute lenses whenever the polling data changes
         this._disposables.push(
-            _treeProvider.onDidChangeTreeData(() => this._onDidChangeCodeLenses.fire())
+            _treeProvider.onDidChangeTreeData(() => this._onDidChangeCodeLenses.fire()),
+            vscode.extensions.onDidChange(() => this._onDidChangeCodeLenses.fire()),
         );
     }
 
@@ -179,9 +184,8 @@ export class AspireCodeLensProvider implements vscode.CodeLensProvider {
         }
 
         if (!parser) {
-            // Python and Go AppHosts have no resource parser, so none of the state or action
-            // lenses apply. The Spring Boot warning still does: it is about the Java resource being
-            // declared, not about the language declaring it.
+            // Keep the Spring Boot warning available for conventional AppHost files even when
+            // no resource parser recognises the document, such as an incomplete Go AppHost.
             if (!isParserlessAppHostDocument(document)) {
                 return [];
             }
@@ -257,6 +261,10 @@ export class AspireCodeLensProvider implements vscode.CodeLensProvider {
                         ?? findWorkspace(resource.name);
                     if (match) {
                         this._addStateLenses(lenses, lineRange, match.resource, match.appHost);
+                        const debuggerInstallHint = getDebuggerInstallHintForResource(match.resource);
+                        if (match.resource.state === ResourceState.Running && debuggerInstallHint) {
+                            this._addDebuggerInstallHintLens(lenses, lineRange, debuggerInstallHint);
+                        }
                     }
                 }
             }
@@ -271,6 +279,15 @@ export class AspireCodeLensProvider implements vscode.CodeLensProvider {
             command: 'aspire-vscode.codeLensDebugPipelineStep',
             tooltip: codeLensDebugPipelineStep,
             arguments: [stepName],
+        }));
+    }
+
+    private _addDebuggerInstallHintLens(lenses: vscode.CodeLens[], range: vscode.Range, hint: DebuggerInstallHint): void {
+        lenses.push(new vscode.CodeLens(range, {
+            title: codeLensSetUpDebugger(hint.debuggerName),
+            command: 'aspire-vscode.installDebuggerExtension',
+            tooltip: debuggerSetupNotification(hint.debuggerName),
+            arguments: [hint],
         }));
     }
 

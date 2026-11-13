@@ -1,0 +1,14 @@
+﻿{
+      "connect": {
+        "state": "Enabled",
+        "argument_inputs": [
+          {
+            "name": "password",
+            "input_type": "SecretText",
+            "required": false,
+            "allow_custom_choice": false,
+            "disabled": false
+          }
+        ]
+      }
+    }

@@ -23,8 +23,9 @@ public static class AzureContainerAppProjectExtensions
     /// This method adds the necessary infrastructure for container apps to the application builder
     /// and applies the specified configuration to the container app.
     /// <example>
+    /// This example uses the legacy <see cref="ProjectResource"/> overload.
     /// <code>
-    /// builder.AddProject&lt;Projects.Api&gt;.PublishAsAzureContainerApp((infrastructure, app) =>
+    /// builder.AddProject&lt;Projects.Api&gt;("api").PublishAsAzureContainerApp((infrastructure, app) =>
     /// {
     ///     // Configure the container app here
     /// });

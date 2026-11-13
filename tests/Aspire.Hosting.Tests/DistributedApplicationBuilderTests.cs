@@ -1,29 +1,35 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREUSERSECRETS001
-
-#pragma warning disable ASPIREPIPELINES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-#pragma warning disable ASPIREPIPELINES004 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+#pragma warning disable ASPIREEXTENSION001
 
 using System.Reflection;
 using System.Reflection.Emit;
+using System.Security.Cryptography;
+using System.Text;
+using Aspire.Hosting.Ats;
+using Aspire.Hosting.Backchannel;
 using Aspire.Hosting.Dashboard;
 using Aspire.Hosting.Dcp;
 using Aspire.Hosting.Devcontainers;
 using Aspire.Hosting.Lifecycle;
 using Aspire.Hosting.Pipelines;
+using Aspire.Hosting.Pipelines.Internal;
+using Aspire.Hosting.Tests.Utils;
+using Aspire.Hosting.Utils;
 using Aspire.Shared.UserSecrets;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Configuration.EnvironmentVariables;
 using Microsoft.Extensions.Configuration.UserSecrets;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Testing;
 using Microsoft.Extensions.Options;
 
 namespace Aspire.Hosting.Tests;
 
 [Trait("Partition", "5")]
-public class DistributedApplicationBuilderTests
+public class DistributedApplicationBuilderTests(ITestOutputHelper outputHelper)
 {
     private static readonly ConstructorInfo s_userSecretsIdAttrCtor = typeof(UserSecretsIdAttribute).GetConstructor([typeof(string)])!;
 
@@ -58,6 +64,7 @@ public class DistributedApplicationBuilderTests
             s => Assert.IsType<DashboardEventHandlers>(s),
             s => Assert.IsType<DevcontainerPortForwardingEventingSubscriber>(s),
             s => Assert.IsType<RequiredCommandValidationEventingSubscriber>(s),
+            s => Assert.IsType<DotnetBuildCommandEventingSubscriber>(s),
             s => Assert.IsType<TerminalHostEventingSubscriber>(s)
         );
 
@@ -107,6 +114,160 @@ public class DistributedApplicationBuilderTests
 
         var config = app.Services.GetRequiredService<IConfiguration>();
         Assert.Equal(appHostDirectory, config["AppHost:Directory"]);
+    }
+
+    [Fact]
+    public async Task PolyglotBuilderLoadsAppSettingsFromProjectDirectory()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var projectDirectory = workspace.WorkspaceRoot.FullName;
+
+        await File.WriteAllTextAsync(
+            Path.Combine(projectDirectory, "appsettings.json"),
+            """
+            {
+              "Validation": {
+                "BaseOnly": "base",
+                "Override": "base"
+              },
+              "Logging": {
+                "LogLevel": {
+                  "Microsoft.AspNetCore": "Debug",
+                  "Aspire.Hosting.Dcp": "Trace"
+                }
+              }
+            }
+            """);
+        await File.WriteAllTextAsync(
+            Path.Combine(projectDirectory, "appsettings.PolyglotTest.json"),
+            """
+            {
+              "Validation": {
+                "Override": "environment"
+              }
+            }
+            """);
+
+        var appBuilder = DistributedApplication.CreateBuilder(new CreateBuilderOptions
+        {
+            Args = ["--environment", "PolyglotTest"],
+            ProjectDirectory = projectDirectory,
+            AppHostFilePath = Path.Combine(projectDirectory, "apphost.mts")
+        });
+
+        Assert.Equal(projectDirectory, appBuilder.Environment.ContentRootPath);
+        Assert.Equal("base", appBuilder.Configuration["Validation:BaseOnly"]);
+        Assert.Equal("environment", appBuilder.Configuration["Validation:Override"]);
+        Assert.Equal("Debug", appBuilder.Configuration["Logging:LogLevel:Microsoft.AspNetCore"]);
+        Assert.Equal("Trace", appBuilder.Configuration["Logging:LogLevel:Aspire.Hosting.Dcp"]);
+    }
+
+    [Fact]
+    public async Task PolyglotBuilderPreservesManagedLoggingDefaultsAndAllowsAppSettingsOverrides()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var projectDirectory = workspace.WorkspaceRoot.FullName;
+
+        await File.WriteAllTextAsync(
+            Path.Combine(projectDirectory, "appsettings.json"),
+            """
+            {
+              "Logging": {
+                "LogLevel": {
+                  "Aspire.Hosting.Dcp": "Trace"
+                }
+              }
+            }
+            """);
+
+        var appBuilder = DistributedApplication.CreateBuilder(new CreateBuilderOptions
+        {
+            ProjectDirectory = projectDirectory,
+            AppHostFilePath = Path.Combine(projectDirectory, "apphost.mts")
+        });
+        using var app = appBuilder.Build();
+        var filterOptions = app.Services.GetRequiredService<IOptions<LoggerFilterOptions>>().Value;
+
+        Assert.Equal(
+            [LogLevel.Warning, LogLevel.Warning],
+            filterOptions.Rules
+                .Where(rule => rule.ProviderName is null && rule.CategoryName == "Microsoft.AspNetCore")
+                .Select(rule => rule.LogLevel));
+        Assert.Equal(
+            [LogLevel.Trace, LogLevel.Trace],
+            filterOptions.Rules
+                .Where(rule => rule.ProviderName is null && rule.CategoryName == "Aspire.Hosting.Dcp")
+                .Select(rule => rule.LogLevel));
+    }
+
+    [Fact]
+    public async Task PolyglotBuilderDoesNotApplyAppHostServerBuildConfigurationToProjects()
+    {
+        // In a guest (TypeScript, Python, ...) AppHost, the entry assembly is the prebuilt AppHost server.
+        // Its build configuration (Release when shipped) must not be passed to the user's .NET projects.
+        var entryAssemblyConfiguration = Assembly.GetEntryAssembly()?.GetCustomAttribute<AssemblyConfigurationAttribute>()?.Configuration;
+        Assert.False(string.IsNullOrEmpty(entryAssemblyConfiguration));
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var projectDirectory = workspace.WorkspaceRoot.FullName;
+        var projectPath = Path.Combine(projectDirectory, "api", "Api.csproj");
+        Directory.CreateDirectory(Path.GetDirectoryName(projectPath)!);
+        await File.WriteAllTextAsync(projectPath, "<Project Sdk=\"Microsoft.NET.Sdk.Web\" />");
+
+        var appBuilder = DistributedApplication.CreateBuilder(new CreateBuilderOptions
+        {
+            ProjectDirectory = projectDirectory,
+            AppHostFilePath = Path.Combine(projectDirectory, "apphost.mts")
+        });
+#pragma warning disable CS0618 // AddProject is obsolete but is still the TypeScript addProject export.
+        var project = appBuilder.AddProject("api", projectPath, options => options.ExcludeLaunchProfile = true);
+#pragma warning restore CS0618
+        using var app = appBuilder.Build();
+
+        var launchConfiguration = Assert.IsType<ProjectLaunchConfiguration>(
+            await project.Resource.CreateLaunchConfigurationAsync(
+                LaunchConfigurationTestHelpers.CreateCallbackContext(project.Resource, ExecutableLaunchMode.NoDebug)));
+        Assert.Null(launchConfiguration.BuildConfiguration);
+        Assert.Null(appBuilder.Configuration["AppHost:BuildConfiguration"]);
+        Assert.Null(app.Services.GetRequiredService<DistributedApplicationOptions>().Configuration);
+    }
+
+    [Theory]
+    [InlineData("omitted")]
+    [InlineData("args")]
+    [InlineData("options")]
+    public void PolyglotCreateBuilderDoesNotApplyAppHostServerBuildConfiguration(string form)
+    {
+        // Every form accepted by the createBuilder export is a guest AppHost, whose entry assembly is the
+        // prebuilt AppHost server.
+        Assert.False(string.IsNullOrEmpty(Assembly.GetEntryAssembly()?.GetCustomAttribute<AssemblyConfigurationAttribute>()?.Configuration));
+
+        object? argsOrOptions = form switch
+        {
+            "omitted" => null,
+            "args" => Array.Empty<string>(),
+            _ => new CreateBuilderOptions()
+        };
+
+        var appBuilder = DistributedApplication.CreateBuilderForPolyglot(argsOrOptions);
+        using var app = appBuilder.Build();
+
+        Assert.Null(appBuilder.Configuration["AppHost:BuildConfiguration"]);
+        Assert.Null(app.Services.GetRequiredService<DistributedApplicationOptions>().Configuration);
+    }
+
+    [Fact]
+    public void BuilderPublishesAppHostAssemblyBuildConfiguration()
+    {
+        var appBuilder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
+        {
+            AssemblyName = typeof(DistributedApplicationBuilderTests).Assembly.GetName().Name
+        });
+        using var app = appBuilder.Build();
+
+        var expected = typeof(DistributedApplicationBuilderTests).Assembly.GetCustomAttribute<AssemblyConfigurationAttribute>()?.Configuration;
+        Assert.False(string.IsNullOrEmpty(expected));
+        Assert.Equal(expected, appBuilder.Configuration["AppHost:BuildConfiguration"]);
     }
 
     [Fact]
@@ -170,24 +331,108 @@ public class DistributedApplicationBuilderTests
     }
 
     [Fact]
+    public void HttpClientFactoryDebugLogsAreFilteredFromAllProviders()
+    {
+        var testSink = new TestSink();
+        var appBuilder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
+        {
+            Args = [$"{KnownConfigNames.AspireLogLevel}=Trace"],
+            DisableDashboard = true
+        });
+        appBuilder.Services.AddSingleton<ILoggerProvider>(new TestLoggerProvider(testSink));
+        using var app = appBuilder.Build();
+
+        var factory = app.Services.GetRequiredService<ILoggerFactory>();
+        factory.CreateLogger("Microsoft.Extensions.Http.DefaultHttpClientFactory").LogDebug("HTTP cleanup");
+        factory.CreateLogger("Microsoft.Extensions.Http.DefaultHttpClientFactory").LogWarning("HTTP warning");
+        factory.CreateLogger("Microsoft.Extensions.Http.DefaultHttpClientFactory.Handlers").LogInformation("HTTP nested");
+        factory.CreateLogger("Microsoft.Extensions.Http.DefaultHttpClientFactory").LogError("HTTP error");
+        factory.CreateLogger("Microsoft.Extensions.Http.OtherCategory").LogDebug("Other HTTP debug");
+
+        var backchannel = app.Services.GetRequiredService<BackchannelLoggerProvider>();
+        var (entries, subscriberId, _) = backchannel.Subscribe();
+        backchannel.Unsubscribe(subscriberId);
+
+        Assert.Collection(entries,
+            entry => Assert.Equal("HTTP warning", entry.Message),
+            entry => Assert.Equal("HTTP nested", entry.Message),
+            entry => Assert.Equal("HTTP error", entry.Message),
+            entry => Assert.Equal("Other HTTP debug", entry.Message));
+        Assert.Equal(
+            ["HTTP warning", "HTTP nested", "HTTP error", "Other HTTP debug"],
+            testSink.Writes
+                .Select(write => write.Message)
+                .Where(message => message is "HTTP cleanup" or "HTTP warning" or "HTTP nested" or "HTTP error" or "Other HTTP debug"));
+    }
+
+    [Fact]
     public void PolyglotAppHostUsesAspireUserSecretsIdForUserSecretsManager()
     {
         var userSecretsId = Guid.NewGuid().ToString("N");
-        var userSecretsPath = UserSecretsPathHelper.GetSecretsPathFromSecretsId(userSecretsId);
+        var legacyUserSecretsPath = UserSecretsPathHelper.GetSecretsPathFromSecretsId(userSecretsId);
+        var aspireSecretsPath = AspireSecretsPathHelper.GetSecretsFilePath(
+            AspireSecretsPathHelper.GetDefaultHomeDirectory(),
+            userSecretsId,
+            "Production");
 
-        if (File.Exists(userSecretsPath))
+        DeleteUserSecretsFile(legacyUserSecretsPath);
+        DeleteFileIfExists(aspireSecretsPath);
+
+        try
         {
-            File.Delete(userSecretsPath);
+            var appBuilder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
+            {
+                Args = [$"{KnownConfigNames.AspireUserSecretsId}={userSecretsId}"],
+                DisableDashboard = true,
+            });
+
+            Assert.True(appBuilder.UserSecretsManager.IsAvailable);
+            Assert.Equal(aspireSecretsPath, appBuilder.UserSecretsManager.FilePath);
         }
-
-        var appBuilder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
+        finally
         {
-            Args = [$"{KnownConfigNames.AspireUserSecretsId}={userSecretsId}"],
-            DisableDashboard = true,
-        });
+            DeleteFileIfExists(aspireSecretsPath);
+        }
+    }
 
-        Assert.True(appBuilder.UserSecretsManager.IsAvailable);
-        Assert.Equal(userSecretsPath, appBuilder.UserSecretsManager.FilePath);
+    [Fact]
+    public void UserSecretsManagerDoesNotDeleteLegacyUserSecretsOutsideDevelopment()
+    {
+        var userSecretsId = Guid.NewGuid().ToString("N");
+        var legacyUserSecretsPath = UserSecretsPathHelper.GetSecretsPathFromSecretsId(userSecretsId);
+        var aspireSecretsPath = AspireSecretsPathHelper.GetSecretsFilePath(
+            AspireSecretsPathHelper.GetDefaultHomeDirectory(),
+            userSecretsId,
+            "Production");
+
+        DeleteUserSecretsFile(legacyUserSecretsPath);
+        DeleteFileIfExists(aspireSecretsPath);
+
+        File.WriteAllText(legacyUserSecretsPath, """
+            {
+              "LegacyOnly": "legacy"
+            }
+            """);
+
+        try
+        {
+            var appBuilder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
+            {
+                Args = [$"{KnownConfigNames.AspireUserSecretsId}={userSecretsId}"],
+                DisableDashboard = true,
+            });
+
+            Assert.Equal(aspireSecretsPath, appBuilder.UserSecretsManager.FilePath);
+            Assert.True(appBuilder.UserSecretsManager.TryDeleteSecret("LegacyOnly"));
+
+            var legacyJson = File.ReadAllText(legacyUserSecretsPath);
+            Assert.Contains("LegacyOnly", legacyJson, StringComparison.Ordinal);
+        }
+        finally
+        {
+            DeleteFileIfExists(legacyUserSecretsPath);
+            DeleteFileIfExists(aspireSecretsPath);
+        }
     }
 
     [Fact]
@@ -257,6 +502,370 @@ public class DistributedApplicationBuilderTests
     }
 
     [Theory]
+    [InlineData(KnownConfigNames.AspireSecretsFile, "SECRETS_FILE")]
+    [InlineData(KnownConfigNames.AspireUserSecretsId, "USER_SECRETS_ID")]
+    public void AspirePrefixedConfigurationValueReadsOnlyCapturedEnvironmentProvider(string key, string strippedKey)
+    {
+        var provider = new TestEnvironmentVariablesConfigurationProvider(
+            new Dictionary<string, string?> { [strippedKey] = "from-aspire-environment" });
+        provider.Load();
+        var configuration = new ConfigurationManager
+        {
+            [strippedKey] = "unrelated-value"
+        };
+
+        Assert.Equal("from-aspire-environment", DistributedApplicationBuilder.GetAspirePrefixedConfigurationValue(configuration, key, provider));
+    }
+
+    [Theory]
+    [InlineData(KnownConfigNames.AspireSecretsFile, "SECRETS_FILE")]
+    [InlineData(KnownConfigNames.AspireUserSecretsId, "USER_SECRETS_ID")]
+    public void AspirePrefixedConfigurationValuePrefersExactConfigurationKey(string key, string strippedKey)
+    {
+        var provider = new TestEnvironmentVariablesConfigurationProvider(
+            new Dictionary<string, string?> { [strippedKey] = "from-aspire-environment" });
+        provider.Load();
+        var configuration = new ConfigurationManager
+        {
+            [strippedKey] = "unrelated-value",
+            [key] = "from-exact-key"
+        };
+
+        Assert.Equal("from-exact-key", DistributedApplicationBuilder.GetAspirePrefixedConfigurationValue(configuration, key, provider));
+    }
+
+    [Theory]
+    [InlineData("json")]
+    [InlineData("command-line")]
+    [InlineData("in-memory")]
+    public void AspirePrefixedConfigurationValueIgnoresUnrelatedStrippedKeys(string source)
+    {
+        var configuration = new ConfigurationManager();
+        var values = new Dictionary<string, string?>
+        {
+            ["SECRETS_FILE"] = "unrelated-file",
+            ["USER_SECRETS_ID"] = "unrelated-id"
+        };
+        using var json = new MemoryStream(System.Text.Encoding.UTF8.GetBytes("""
+            {
+              "SECRETS_FILE": "unrelated-file",
+              "USER_SECRETS_ID": "unrelated-id"
+            }
+            """));
+        switch (source)
+        {
+            case "json":
+                configuration.AddJsonStream(json);
+                break;
+            case "command-line":
+                configuration.AddCommandLine(["SECRETS_FILE=unrelated-file", "USER_SECRETS_ID=unrelated-id"]);
+                break;
+            case "in-memory":
+                configuration.AddInMemoryCollection(values);
+                break;
+        }
+
+        var provider = new TestEnvironmentVariablesConfigurationProvider(new Dictionary<string, string?>());
+        provider.Load();
+        Assert.Equal("unrelated-file", configuration["SECRETS_FILE"]);
+        Assert.Equal("unrelated-id", configuration["USER_SECRETS_ID"]);
+        Assert.Null(DistributedApplicationBuilder.GetAspirePrefixedConfigurationValue(configuration, KnownConfigNames.AspireSecretsFile, provider));
+        Assert.Null(DistributedApplicationBuilder.GetAspirePrefixedConfigurationValue(configuration, KnownConfigNames.AspireUserSecretsId, provider));
+        Assert.Null(DistributedApplicationBuilder.ResolveUserSecretsId(null, configuration, provider));
+    }
+
+    [Fact]
+    public void AspireUserSecretsIdReadsCapturedEnvironmentProvider()
+    {
+        var configuration = new ConfigurationManager
+        {
+            ["USER_SECRETS_ID"] = "unrelated-id"
+        };
+        var provider = new TestEnvironmentVariablesConfigurationProvider(
+            new Dictionary<string, string?> { ["USER_SECRETS_ID"] = "aspire-id" });
+        provider.Load();
+
+        Assert.Equal("aspire-id", DistributedApplicationBuilder.ResolveUserSecretsId(null, configuration, provider));
+    }
+
+    [Fact]
+    public void UnrelatedSecretsFileDoesNotAffectAppHostStartup()
+    {
+        var tempDirectory = Directory.CreateTempSubdirectory();
+        try
+        {
+            var unrelatedFile = Path.Combine(tempDirectory.FullName, "unrelated.json");
+            File.WriteAllText(unrelatedFile, "not JSON");
+
+            var appBuilder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
+            {
+                Args = [$"SECRETS_FILE={unrelatedFile}"],
+                DisableDashboard = true,
+            });
+
+            Assert.Equal(unrelatedFile, appBuilder.Configuration["SECRETS_FILE"]);
+            Assert.NotEqual(unrelatedFile, appBuilder.UserSecretsManager.FilePath);
+        }
+        finally
+        {
+            tempDirectory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void AspireSecretsFileLoadsInProduction()
+    {
+        var tempDirectory = Directory.CreateTempSubdirectory();
+        try
+        {
+            var secretsFile = Path.Combine(tempDirectory.FullName, "Production.json");
+            File.WriteAllText(secretsFile, """
+                {
+                  "Parameters:api_key": "from-secret"
+                }
+                """);
+
+            var appBuilder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
+            {
+                Args = [$"{KnownConfigNames.AspireSecretsFile}={secretsFile}"],
+                DisableDashboard = true,
+            });
+
+            Assert.Equal("Production", appBuilder.Environment.EnvironmentName);
+            Assert.Equal("from-secret", appBuilder.Configuration["Parameters:api_key"]);
+        }
+        finally
+        {
+            tempDirectory.Delete(recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData("Development")]
+    [InlineData("Staging")]
+    [InlineData("Production")]
+    [InlineData("development")]
+    [InlineData("STAGING")]
+    [InlineData("production")]
+    public void AspireSecretsIdentityUsesFinalHostEnvironment(string environment)
+    {
+        var userSecretsId = Guid.NewGuid().ToString("N");
+        var homeDirectory = AspireSecretsPathHelper.GetDefaultHomeDirectory();
+        var secretsDirectory = AspireSecretsPathHelper.GetSecretsDirectoryPath(homeDirectory, userSecretsId);
+        try
+        {
+            foreach (var name in new[] { "Development", "Staging", "Production" })
+            {
+                var store = new SecretsStore(AspireSecretsPathHelper.GetSecretsFilePath(homeDirectory, userSecretsId, name));
+                store.Set("Parameters:api_key", $"{name}-secret");
+                store.Save();
+            }
+
+            var appBuilder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
+            {
+                Args = [$"{KnownConfigNames.AspireUserSecretsId}={userSecretsId}", "--environment", environment],
+                DisableDashboard = true,
+            });
+
+            var storedEnvironment = new[] { "Development", "Staging", "Production" }
+                .Single(name => name.Equals(environment, StringComparison.OrdinalIgnoreCase));
+            Assert.Equal(environment, appBuilder.Environment.EnvironmentName);
+            Assert.Equal($"{storedEnvironment}-secret", appBuilder.Configuration["Parameters:api_key"]);
+            Assert.Equal(AspireSecretsPathHelper.GetSecretsFilePath(homeDirectory, userSecretsId, storedEnvironment),
+                appBuilder.UserSecretsManager.FilePath);
+        }
+        finally
+        {
+            Directory.Delete(secretsDirectory, recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData("prod/eu")]
+    [InlineData("Production.")]
+    [InlineData("CON")]
+    [InlineData("Local Development")]
+    public void AspireSecretsIdentitySkipsUnsupportedEnvironmentNames(string environment)
+    {
+        var userSecretsId = Guid.NewGuid().ToString("N");
+        Assert.Null(DistributedApplicationBuilder.ResolveAspireSecretsFilePath(null, userSecretsId, environment));
+        var appBuilder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
+        {
+            Args = [$"{KnownConfigNames.AspireUserSecretsId}={userSecretsId}", "--environment", environment],
+            DisableDashboard = true,
+        });
+        Assert.Equal(environment, appBuilder.Environment.EnvironmentName);
+        Assert.False(appBuilder.UserSecretsManager.IsAvailable);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("set")]
+    [InlineData("delete")]
+    public async Task UserSecretsStatePreservesJsonTypesAcrossReload(string? secretOperation)
+    {
+        var directory = Directory.CreateTempSubdirectory();
+        try
+        {
+            var path = Path.Combine(directory.FullName, "state.json");
+            var builder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
+            {
+                Args = [$"{KnownConfigNames.AspireSecretsFile}={path}", "--environment", "QA.EU"],
+                DisableDashboard = true,
+            });
+            var state = System.Text.Json.Nodes.JsonNode.Parse("""
+                {
+                  "Parameters:Target": "original",
+                  "Resource": {
+                    "Count": 42,
+                    "Enabled": true,
+                    "Ratio": 1.25,
+                    "Missing": null,
+                    "Text": "value"
+                  }
+                }
+                """)!.AsObject();
+            await builder.UserSecretsManager.SaveStateAsync(state);
+
+            if (secretOperation == "set")
+            {
+                Assert.True(builder.UserSecretsManager.TrySetSecret("parameters:TARGET", "updated"));
+            }
+            else if (secretOperation == "delete")
+            {
+                Assert.True(builder.UserSecretsManager.TryDeleteSecret("parameters:TARGET"));
+            }
+
+            var manager = new Aspire.Hosting.Pipelines.Internal.UserSecretsDeploymentStateManager(
+                Microsoft.Extensions.Logging.Abstractions.NullLogger<Aspire.Hosting.Pipelines.Internal.UserSecretsDeploymentStateManager>.Instance,
+                builder.UserSecretsManager);
+            var section = await manager.AcquireSectionAsync("Resource");
+            Assert.Equal(42, section.Data["Count"]!.GetValue<int>());
+            Assert.True(section.Data["Enabled"]!.GetValue<bool>());
+            Assert.Equal(1.25, section.Data["Ratio"]!.GetValue<double>());
+            Assert.True(section.Data.ContainsKey("Missing"));
+            Assert.Null(section.Data["Missing"]);
+            Assert.Equal("value", section.Data["Text"]!.GetValue<string>());
+            Assert.Equal(path, builder.UserSecretsManager.FilePath);
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task LegacyDevelopmentImportPreservesDeploymentStateTypes()
+    {
+        var directory = Directory.CreateTempSubdirectory();
+        try
+        {
+            var legacyPath = Path.Combine(directory.FullName, "legacy.json");
+            var aspirePath = Path.Combine(directory.FullName, "Development.json");
+            const string legacyJson = """
+                {
+                  "Resource": {
+                    "Count": 42,
+                    "Enabled": true,
+                    "Ratio": 1.25,
+                    "Missing": null,
+                    "Text": "value"
+                  }
+                }
+                """;
+            await File.WriteAllTextAsync(legacyPath, legacyJson);
+
+            DistributedApplicationBuilder.ImportLegacyUserSecretsIfNeeded(legacyPath, aspirePath, isDevelopment: true);
+
+            var builder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
+            {
+                Args = [$"{KnownConfigNames.AspireSecretsFile}={aspirePath}", "--environment", "Development"],
+                DisableDashboard = true,
+            });
+            var manager = new Aspire.Hosting.Pipelines.Internal.UserSecretsDeploymentStateManager(
+                Microsoft.Extensions.Logging.Abstractions.NullLogger<Aspire.Hosting.Pipelines.Internal.UserSecretsDeploymentStateManager>.Instance,
+                builder.UserSecretsManager);
+            var section = await manager.AcquireSectionAsync("Resource");
+            Assert.Equal(42, section.Data["Count"]!.GetValue<int>());
+            Assert.True(section.Data["Enabled"]!.GetValue<bool>());
+            Assert.Equal(1.25, section.Data["Ratio"]!.GetValue<double>());
+            Assert.True(section.Data.ContainsKey("Missing"));
+            Assert.Null(section.Data["Missing"]);
+            Assert.Equal("value", section.Data["Text"]!.GetValue<string>());
+            Assert.Equal(legacyJson, await File.ReadAllTextAsync(legacyPath));
+
+            await File.WriteAllTextAsync(legacyPath, """{"Resource:Count":0}""");
+            DistributedApplicationBuilder.ImportLegacyUserSecretsIfNeeded(legacyPath, aspirePath, isDevelopment: true);
+            Assert.Equal(42, System.Text.Json.Nodes.JsonNode.Parse(await File.ReadAllTextAsync(aspirePath))!["Resource:Count"]!.GetValue<int>());
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void CommandLineOverridesAspireSecretsFile()
+    {
+        var tempDirectory = Directory.CreateTempSubdirectory();
+        try
+        {
+            var secretsFile = Path.Combine(tempDirectory.FullName, "Production.json");
+            File.WriteAllText(secretsFile, """
+                {
+                  "Parameters:api_key": "from-secret"
+                }
+                """);
+
+            var appBuilder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
+            {
+                Args =
+                [
+                    $"{KnownConfigNames.AspireSecretsFile}={secretsFile}",
+                    "Parameters:api_key=from-command-line"
+                ],
+                DisableDashboard = true,
+            });
+
+            Assert.Equal("from-command-line", appBuilder.Configuration["Parameters:api_key"]);
+        }
+        finally
+        {
+            tempDirectory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void EnvironmentVariableOverridesAspireSecretsFile()
+    {
+        var tempDirectory = Directory.CreateTempSubdirectory();
+        try
+        {
+            var secretsFile = Path.Combine(tempDirectory.FullName, "Production.json");
+            File.WriteAllText(secretsFile, """
+                {
+                  "Parameters:api_key": "from-secret"
+                }
+                """);
+
+            var configuration = new ConfigurationManager();
+            configuration.Sources.Add(new TestEnvironmentVariablesConfigurationSource(
+                new Dictionary<string, string?>
+                {
+                    ["Parameters:api_key"] = "from-environment"
+                }));
+
+            DistributedApplicationBuilder.AddConfiguredAspireSecretsFile(configuration, secretsFile);
+
+            Assert.Equal("from-environment", configuration["Parameters:api_key"]);
+        }
+        finally
+        {
+            tempDirectory.Delete(recursive: true);
+        }
+    }
+
+    [Theory]
     [InlineData(KnownConfigNames.DashboardUnsecuredAllowAnonymous)]
     [InlineData(KnownConfigNames.Legacy.DashboardUnsecuredAllowAnonymous)]
     public void ResourceServiceConfig_Unsecured(string dashboardUnsecuredAllowAnonymousKey)
@@ -271,15 +880,37 @@ public class DistributedApplicationBuilderTests
 
     private static void DeleteUserSecretsFile(string userSecretsPath)
     {
-        if (File.Exists(userSecretsPath))
-        {
-            File.Delete(userSecretsPath);
-        }
+        DeleteFileIfExists(userSecretsPath);
 
         var directory = Path.GetDirectoryName(userSecretsPath);
         if (!string.IsNullOrEmpty(directory))
         {
             Directory.CreateDirectory(directory);
+        }
+    }
+
+    private static void DeleteFileIfExists(string path)
+    {
+        if (File.Exists(path))
+        {
+            File.Delete(path);
+        }
+    }
+
+    private sealed class TestEnvironmentVariablesConfigurationSource(IReadOnlyDictionary<string, string?> values) : EnvironmentVariablesConfigurationSource, IConfigurationSource
+    {
+        IConfigurationProvider IConfigurationSource.Build(IConfigurationBuilder builder) =>
+            new TestEnvironmentVariablesConfigurationProvider(values);
+    }
+
+    private sealed class TestEnvironmentVariablesConfigurationProvider(IReadOnlyDictionary<string, string?> values) : ConfigurationProvider
+    {
+        public override void Load()
+        {
+            foreach (var (key, value) in values)
+            {
+                Data[key] = value;
+            }
         }
     }
 
@@ -306,20 +937,20 @@ public class DistributedApplicationBuilderTests
     }
 
     [Fact]
-    public void PathShaAndProjectNameShaBothAvailable()
+    public void AppHostIdentitiesAreAvailable()
     {
         var appBuilder = DistributedApplication.CreateBuilder();
 
         var pathSha = appBuilder.Configuration["AppHost:PathSha256"];
+        var deploymentStatePathSha = appBuilder.Configuration["AppHost:DeploymentStatePathSha256"];
         var projectNameSha = appBuilder.Configuration["AppHost:ProjectNameSha256"];
         var legacySha = appBuilder.Configuration["AppHost:Sha256"];
 
-        // Verify all three SHA values are available
         Assert.NotNull(pathSha);
+        Assert.NotNull(deploymentStatePathSha);
         Assert.NotNull(projectNameSha);
         Assert.NotNull(legacySha);
 
-        // In run mode, legacy SHA should equal PathSha
         Assert.False(appBuilder.ExecutionContext.IsPublishMode);
         Assert.Equal(pathSha, legacySha);
     }
@@ -354,6 +985,450 @@ public class DistributedApplicationBuilderTests
 
         // ProjectNameSha should be the same for same project name
         Assert.Equal(projectNameSha1, projectNameSha2);
+    }
+
+    [Fact]
+    public void DeploymentStatePathShaDiffersForPolyglotAppHostFilesInSameDirectory()
+    {
+        var options1 = new DistributedApplicationOptions
+        {
+            ProjectDirectory = "/home/user/project",
+            ProjectName = "Aspire.Hosting.RemoteHost",
+            AppHostFilePath = "/home/user/project/first.ts",
+            Args = []
+        };
+
+        var options2 = new DistributedApplicationOptions
+        {
+            ProjectDirectory = "/home/user/project",
+            ProjectName = "Aspire.Hosting.RemoteHost",
+            AppHostFilePath = "/home/user/project/second.ts",
+            Args = []
+        };
+
+        var builder1 = (DistributedApplicationBuilder)DistributedApplication.CreateBuilder(options1);
+        var builder2 = (DistributedApplicationBuilder)DistributedApplication.CreateBuilder(options2);
+
+        Assert.Equal(
+            builder1.Configuration["AppHost:PathSha256"],
+            builder2.Configuration["AppHost:PathSha256"]);
+        Assert.NotEqual(
+            builder1.Configuration["AppHost:DeploymentStatePathSha256"],
+            builder2.Configuration["AppHost:DeploymentStatePathSha256"]);
+        Assert.Equal(
+            builder1.Configuration["AppHost:LegacyDeploymentStatePathSha256"],
+            builder2.Configuration["AppHost:LegacyDeploymentStatePathSha256"]);
+        Assert.NotNull(builder1.Configuration["AppHost:LegacyDeploymentStatePathSha256"]);
+        Assert.Equal(
+            builder1.Configuration["AppHost:ProjectNameSha256"],
+            builder2.Configuration["AppHost:ProjectNameSha256"]);
+        Assert.Equal(
+            builder1.Configuration["AppHost:PathSha256"],
+            builder1.Configuration["AppHost:Sha256"]);
+        Assert.Equal(
+            builder1.Configuration["AppHost:LegacyDeploymentStatePathSha256"],
+            builder1.Configuration["AppHost:Sha256"]);
+    }
+
+    [Fact]
+    public void PolyglotAppHostPathIdentityPreservesFilesystemCaseSemantics()
+    {
+        var projectDirectory = Directory.CreateTempSubdirectory("aspire-path-case-");
+        try
+        {
+            var appHostPath = Path.Combine(projectDirectory.FullName, "apphost.ts");
+            File.WriteAllText(appHostPath, string.Empty);
+            var lowerCaseOptions = new DistributedApplicationOptions
+            {
+                ProjectDirectory = projectDirectory.FullName,
+                ProjectName = "Aspire.Hosting.RemoteHost",
+                AppHostFilePath = appHostPath,
+                Args = []
+            };
+            var upperCaseOptions = new DistributedApplicationOptions
+            {
+                ProjectDirectory = projectDirectory.FullName,
+                ProjectName = "Aspire.Hosting.RemoteHost",
+                AppHostFilePath = Path.Combine(projectDirectory.FullName, "AppHost.ts"),
+                Args = []
+            };
+
+            var lowerCaseBuilder = (DistributedApplicationBuilder)DistributedApplication.CreateBuilder(lowerCaseOptions);
+            var upperCaseBuilder = (DistributedApplicationBuilder)DistributedApplication.CreateBuilder(upperCaseOptions);
+
+            if (File.Exists(upperCaseOptions.AppHostFilePath))
+            {
+                Assert.Equal(
+                    lowerCaseBuilder.Configuration["AppHost:DeploymentStatePathSha256"],
+                    upperCaseBuilder.Configuration["AppHost:DeploymentStatePathSha256"]);
+            }
+            else
+            {
+                Assert.NotEqual(
+                    lowerCaseBuilder.Configuration["AppHost:DeploymentStatePathSha256"],
+                    upperCaseBuilder.Configuration["AppHost:DeploymentStatePathSha256"]);
+            }
+        }
+        finally
+        {
+            projectDirectory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void PolyglotAppHostDeploymentStateIdentityDoesNotResolveSymlinks()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(),
+            "Unix-only: unprivileged symlink creation is not reliable on Windows.");
+
+        var projectDirectory = Directory.CreateTempSubdirectory("aspire-deployment-path-");
+        try
+        {
+            var realDirectory = projectDirectory.CreateSubdirectory("real");
+            var appHostPath = Path.Combine(realDirectory.FullName, "apphost.ts");
+            File.WriteAllText(appHostPath, string.Empty);
+
+            var symlinkDirectory = Path.Combine(projectDirectory.FullName, "link");
+            Directory.CreateSymbolicLink(symlinkDirectory, realDirectory.FullName);
+            var appHostPathViaSymlink = Path.Combine(symlinkDirectory, "apphost.ts");
+
+            var options = new DistributedApplicationOptions
+            {
+                ProjectDirectory = projectDirectory.FullName,
+                ProjectName = "Aspire.Hosting.RemoteHost",
+                AppHostFilePath = appHostPathViaSymlink,
+                Args = []
+            };
+
+            var builder = (DistributedApplicationBuilder)DistributedApplication.CreateBuilder(options);
+            var previousIdentityPath = PathNormalizer.ResolvePathCasing(Path.GetFullPath(appHostPathViaSymlink));
+            var expectedSha = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(previousIdentityPath)));
+
+            Assert.NotEqual(PathNormalizer.ResolveToFilesystemPath(appHostPathViaSymlink), previousIdentityPath);
+            Assert.Equal(expectedSha, builder.Configuration["AppHost:DeploymentStatePathSha256"]);
+        }
+        finally
+        {
+            projectDirectory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void PolyglotAppHostLoadsLegacyDeploymentConfiguration()
+    {
+        var projectDirectory = Directory.CreateTempSubdirectory("aspire-polyglot-");
+        const string projectName = "Aspire.Hosting.RemoteHost";
+        var legacyAppHostPath = Path.GetFullPath(Path.Join(projectDirectory.FullName, projectName));
+        var legacySha = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(legacyAppHostPath.ToLowerInvariant())));
+        const string environment = "production";
+        var legacyDirectory = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            ".aspire",
+            "deployments",
+            legacySha);
+        var legacyStatePath = Path.Combine(legacyDirectory, $"{environment}.json");
+        string? canonicalDirectory = null;
+
+        try
+        {
+            Directory.CreateDirectory(legacyDirectory);
+            File.WriteAllText(legacyStatePath, """{"MigratedValue":"loaded"}""");
+
+            var options = new DistributedApplicationOptions
+            {
+                ProjectDirectory = projectDirectory.FullName,
+                ProjectName = projectName,
+                AppHostFilePath = Path.Combine(projectDirectory.FullName, "apphost.ts"),
+                Args = ["--publisher", "manifest"]
+            };
+
+            var builder = (DistributedApplicationBuilder)DistributedApplication.CreateBuilder(options);
+            canonicalDirectory = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                ".aspire",
+                "deployments",
+                builder.Configuration["AppHost:DeploymentStatePathSha256"]!);
+
+            Assert.True(builder.ExecutionContext.IsPublishMode);
+            Assert.Equal(legacySha, builder.Configuration["AppHost:LegacyDeploymentStatePathSha256"]);
+            Assert.Equal("loaded", builder.Configuration["MigratedValue"]);
+        }
+        finally
+        {
+            if (File.Exists(legacyStatePath))
+            {
+                File.Delete(legacyStatePath);
+            }
+            if (Directory.Exists(legacyDirectory) && !Directory.EnumerateFileSystemEntries(legacyDirectory).Any())
+            {
+                Directory.Delete(legacyDirectory);
+            }
+            if (canonicalDirectory is not null &&
+                Directory.Exists(canonicalDirectory) &&
+                !Directory.EnumerateFileSystemEntries(canonicalDirectory).Any())
+            {
+                Directory.Delete(canonicalDirectory);
+            }
+            projectDirectory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void SourceAppHostWithInvalidEnvironmentNameDoesNotThrowInPublishMode()
+    {
+        var projectDirectory = Directory.CreateTempSubdirectory("aspire-invalid-env-");
+        try
+        {
+            // An environment name outside [a-zA-Z0-9_-] makes deployment-state path resolution throw
+            // ArgumentException. Best-effort state loading must swallow that so publish-mode builder
+            // construction succeeds instead of failing outright.
+            var options = new DistributedApplicationOptions
+            {
+                ProjectDirectory = projectDirectory.FullName,
+                ProjectName = "Aspire.Hosting.RemoteHost",
+                AppHostFilePath = Path.Combine(projectDirectory.FullName, "apphost.ts"),
+                Args = ["--publisher", "manifest", "--environment", "Invalid.Env"]
+            };
+
+            var builder = (DistributedApplicationBuilder)DistributedApplication.CreateBuilder(options);
+
+            Assert.True(builder.ExecutionContext.IsPublishMode);
+            Assert.Equal("Invalid.Env", builder.Environment.EnvironmentName);
+        }
+        finally
+        {
+            projectDirectory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void PolyglotAppHostDoesNotLoadLegacyDeploymentConfigurationAfterClear()
+    {
+        var projectDirectory = Directory.CreateTempSubdirectory("aspire-polyglot-");
+        const string projectName = "Aspire.Hosting.RemoteHost";
+        const string environment = "production";
+        var options = new DistributedApplicationOptions
+        {
+            ProjectDirectory = projectDirectory.FullName,
+            ProjectName = projectName,
+            AppHostFilePath = Path.Combine(projectDirectory.FullName, "apphost.ts"),
+            Args = ["--publisher", "manifest"]
+        };
+        var probeBuilder = (DistributedApplicationBuilder)DistributedApplication.CreateBuilder(options);
+        var currentSha = probeBuilder.Configuration["AppHost:DeploymentStatePathSha256"]!;
+        var legacySha = probeBuilder.Configuration["AppHost:LegacyDeploymentStatePathSha256"]!;
+        var deploymentsDirectory = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            ".aspire",
+            "deployments");
+        var currentDirectory = Path.Combine(deploymentsDirectory, currentSha);
+        var legacyDirectory = Path.Combine(deploymentsDirectory, legacySha);
+        var currentStatePath = Path.Combine(currentDirectory, $"{environment}.json");
+        var legacyStatePath = Path.Combine(legacyDirectory, $"{environment}.json");
+        var migrationStatePath = FileDeploymentStateManager.GetMigrationStatePath(currentStatePath);
+
+        try
+        {
+            Directory.CreateDirectory(currentDirectory);
+            Directory.CreateDirectory(legacyDirectory);
+            File.WriteAllText(legacyStatePath, """{"MigratedValue":"loaded"}""");
+            File.WriteAllText(migrationStatePath, """{"LegacyFallbackDisabled":true}""");
+
+            var builder = (DistributedApplicationBuilder)DistributedApplication.CreateBuilder(options);
+
+            Assert.Null(builder.Configuration["MigratedValue"]);
+        }
+        finally
+        {
+            if (File.Exists(migrationStatePath))
+            {
+                File.Delete(migrationStatePath);
+            }
+            if (File.Exists(legacyStatePath))
+            {
+                File.Delete(legacyStatePath);
+            }
+            if (Directory.Exists(currentDirectory) && !Directory.EnumerateFileSystemEntries(currentDirectory).Any())
+            {
+                Directory.Delete(currentDirectory);
+            }
+            if (Directory.Exists(legacyDirectory) && !Directory.EnumerateFileSystemEntries(legacyDirectory).Any())
+            {
+                Directory.Delete(legacyDirectory);
+            }
+            projectDirectory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void PolyglotAppHostLoadsEffectiveDeploymentConfigurationAfterCanonicalSave()
+    {
+        var projectDirectory = Directory.CreateTempSubdirectory("aspire-polyglot-");
+        const string projectName = "Aspire.Hosting.RemoteHost";
+        const string environment = "production";
+        var options = new DistributedApplicationOptions
+        {
+            ProjectDirectory = projectDirectory.FullName,
+            ProjectName = projectName,
+            AppHostFilePath = Path.Combine(projectDirectory.FullName, "apphost.ts"),
+            Args = ["--publisher", "manifest"]
+        };
+        var probeBuilder = (DistributedApplicationBuilder)DistributedApplication.CreateBuilder(options);
+        var currentSha = probeBuilder.Configuration["AppHost:DeploymentStatePathSha256"]!;
+        var legacySha = probeBuilder.Configuration["AppHost:LegacyDeploymentStatePathSha256"]!;
+        var deploymentsDirectory = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            ".aspire",
+            "deployments");
+        var currentDirectory = Path.Combine(deploymentsDirectory, currentSha);
+        var legacyDirectory = Path.Combine(deploymentsDirectory, legacySha);
+        var currentStatePath = Path.Combine(currentDirectory, $"{environment}.json");
+        var legacyStatePath = Path.Combine(legacyDirectory, $"{environment}.json");
+
+        try
+        {
+            Directory.CreateDirectory(currentDirectory);
+            Directory.CreateDirectory(legacyDirectory);
+            File.WriteAllText(currentStatePath, """{"CurrentValue":"current"}""");
+            File.WriteAllText(legacyStatePath, """{"LegacyValue":"legacy"}""");
+
+            var builder = (DistributedApplicationBuilder)DistributedApplication.CreateBuilder(options);
+
+            Assert.Equal("current", builder.Configuration["CurrentValue"]);
+            Assert.Equal("legacy", builder.Configuration["LegacyValue"]);
+        }
+        finally
+        {
+            if (File.Exists(currentStatePath))
+            {
+                File.Delete(currentStatePath);
+            }
+            if (File.Exists(legacyStatePath))
+            {
+                File.Delete(legacyStatePath);
+            }
+            if (Directory.Exists(currentDirectory) && !Directory.EnumerateFileSystemEntries(currentDirectory).Any())
+            {
+                Directory.Delete(currentDirectory);
+            }
+            if (Directory.Exists(legacyDirectory) && !Directory.EnumerateFileSystemEntries(legacyDirectory).Any())
+            {
+                Directory.Delete(legacyDirectory);
+            }
+            projectDirectory.Delete(recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData("[]")]
+    [InlineData("""{"LegacyFallbackDisabled":"invalid"}""")]
+    [InlineData("""{"LegacyState":"invalid"}""")]
+    [InlineData("""{"ClaimedSections":"null"}""")]
+    [InlineData("""{"ClaimedSections":"[null]"}""")]
+    public void PolyglotAppHostIgnoresLegacyDeploymentConfigurationWhenMigrationStateIsMalformed(string migrationState)
+    {
+        var projectDirectory = Directory.CreateTempSubdirectory("aspire-polyglot-");
+        const string projectName = "Aspire.Hosting.RemoteHost";
+        const string environment = "production";
+        var options = new DistributedApplicationOptions
+        {
+            ProjectDirectory = projectDirectory.FullName,
+            ProjectName = projectName,
+            AppHostFilePath = Path.Combine(projectDirectory.FullName, "apphost.ts"),
+            Args = ["--publisher", "manifest"]
+        };
+        var probeBuilder = (DistributedApplicationBuilder)DistributedApplication.CreateBuilder(options);
+        var currentSha = probeBuilder.Configuration["AppHost:DeploymentStatePathSha256"]!;
+        var legacySha = probeBuilder.Configuration["AppHost:LegacyDeploymentStatePathSha256"]!;
+        var deploymentsDirectory = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            ".aspire",
+            "deployments");
+        var currentDirectory = Path.Combine(deploymentsDirectory, currentSha);
+        var legacyDirectory = Path.Combine(deploymentsDirectory, legacySha);
+        var currentStatePath = Path.Combine(currentDirectory, $"{environment}.json");
+        var legacyStatePath = Path.Combine(legacyDirectory, $"{environment}.json");
+        var migrationStatePath = FileDeploymentStateManager.GetMigrationStatePath(currentStatePath);
+
+        try
+        {
+            Directory.CreateDirectory(currentDirectory);
+            Directory.CreateDirectory(legacyDirectory);
+            File.WriteAllText(legacyStatePath, """{"MigratedValue":"loaded"}""");
+            File.WriteAllText(migrationStatePath, migrationState);
+
+            var builder = (DistributedApplicationBuilder)DistributedApplication.CreateBuilder(options);
+
+            Assert.Null(builder.Configuration["MigratedValue"]);
+        }
+        finally
+        {
+            if (File.Exists(migrationStatePath))
+            {
+                File.Delete(migrationStatePath);
+            }
+            if (File.Exists(legacyStatePath))
+            {
+                File.Delete(legacyStatePath);
+            }
+            if (Directory.Exists(currentDirectory) && !Directory.EnumerateFileSystemEntries(currentDirectory).Any())
+            {
+                Directory.Delete(currentDirectory);
+            }
+            if (Directory.Exists(legacyDirectory) && !Directory.EnumerateFileSystemEntries(legacyDirectory).Any())
+            {
+                Directory.Delete(legacyDirectory);
+            }
+            projectDirectory.Delete(recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData("null")]
+    [InlineData("[]")]
+    [InlineData("""{"Key":"one","key":"two"}""")]
+    public void PolyglotAppHostIgnoresInvalidDeploymentConfiguration(string deploymentState)
+    {
+        var projectDirectory = Directory.CreateTempSubdirectory("aspire-polyglot-");
+        const string projectName = "Aspire.Hosting.RemoteHost";
+        const string environment = "production";
+        var options = new DistributedApplicationOptions
+        {
+            ProjectDirectory = projectDirectory.FullName,
+            ProjectName = projectName,
+            AppHostFilePath = Path.Combine(projectDirectory.FullName, "apphost.ts"),
+            Args = ["--publisher", "manifest"]
+        };
+        var probeBuilder = (DistributedApplicationBuilder)DistributedApplication.CreateBuilder(options);
+        var currentSha = probeBuilder.Configuration["AppHost:DeploymentStatePathSha256"]!;
+        var currentDirectory = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            ".aspire",
+            "deployments",
+            currentSha);
+        var currentStatePath = Path.Combine(currentDirectory, $"{environment}.json");
+
+        try
+        {
+            Directory.CreateDirectory(currentDirectory);
+            File.WriteAllText(currentStatePath, deploymentState);
+
+            var builder = (DistributedApplicationBuilder)DistributedApplication.CreateBuilder(options);
+
+            Assert.Null(builder.Configuration["MigratedValue"]);
+        }
+        finally
+        {
+            if (File.Exists(currentStatePath))
+            {
+                File.Delete(currentStatePath);
+            }
+            if (Directory.Exists(currentDirectory) && !Directory.EnumerateFileSystemEntries(currentDirectory).Any())
+            {
+                Directory.Delete(currentDirectory);
+            }
+            projectDirectory.Delete(recursive: true);
+        }
     }
 
     [Fact]

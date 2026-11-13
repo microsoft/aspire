@@ -11,6 +11,7 @@ import os
 import base64
 import sys
 import json
+import copy
 import logging
 import secrets
 import signal
@@ -25,6 +26,9 @@ from functools import cached_property as _cached_property
 from contextlib import AbstractContextManager
 
 _logger = logging.getLogger(__name__)
+
+# Optional parameters with non-null defaults use this sentinel so omission remains distinct from explicit None.
+_ASPIRE_UNSET = object()
 
 # Maximum allowed message size (64 MB) to prevent memory exhaustion from malicious Content-Length
 _MAX_MESSAGE_SIZE = 64 * 1024 * 1024
@@ -352,10 +356,17 @@ def _register_handle_wrapper(type_id: str, factory: _HandleWrapperFactory) -> No
     _handle_wrapper_registry[type_id] = factory
 
 
-def _wrap_if_handle(value: typing.Any, client: AspireClient | None = None, kwargs: typing.Mapping[str, typing.Any] | None = None) -> typing.Any:
+def _wrap_if_handle(
+    value: typing.Any,
+    client: AspireClient | None = None,
+    kwargs: typing.Mapping[str, typing.Any] | None = None,
+    fallback_type_id: str | None = None
+) -> typing.Any:
     '''
     Checks if a value is a marshalled handle and wraps it appropriately.
-    Uses the wrapper registry to create typed wrapper instances when available.
+    Uses the wrapper registry to create typed wrapper instances when available. The fallback
+    type ID lets callbacks use their generated parameter type when .NET marshals a handle
+    using its declared generic builder type.
     '''
     if isinstance(value, dict) and _is_marshalled_handle(value):
         handle = Handle(value)
@@ -364,6 +375,8 @@ def _wrap_if_handle(value: typing.Any, client: AspireClient | None = None, kwarg
         # Try to find a registered wrapper factory for this type
         if type_id and client:
             factory = _handle_wrapper_registry.get(type_id)
+            if factory is None and fallback_type_id:
+                factory = _handle_wrapper_registry.get(fallback_type_id)
             if factory:
                 if kwargs:
                     return factory(handle, client, **kwargs)
@@ -519,6 +532,38 @@ class _AspireJSONEncoder(json.JSONEncoder):
         except AttributeError:
             pass
         return super().default(o)
+
+
+class _CallbackDto(dict[str, typing.Any]):
+    def __init__(self, value: dict[str, typing.Any]) -> None:
+        super().__init__(value)
+        self._original = copy.deepcopy(value)
+        self._assigned: set[str] = set()
+
+    def __setitem__(self, key: str, value: typing.Any) -> None:
+        super().__setitem__(key, value)
+        self._assigned.add(key)
+
+    def update(self, *args, **kwargs) -> None:
+        for key, value in dict(*args, **kwargs).items():
+            self[key] = value
+
+    def setdefault(self, key: str, default: typing.Any = None) -> typing.Any:
+        if key not in self:
+            self[key] = default
+        return self[key]
+
+    def __ior__(self, other):
+        self.update(other)
+        return self
+
+    def changes(self) -> dict[str, typing.Any]:
+        # Preserve nested dictionary/list mutations as well as explicit top-level
+        # assignments. Equality alone loses assignments equal to the original value.
+        return {
+            key: value for key, value in self.items()
+            if key in self._assigned or key not in self._original or value != self._original[key]
+        }
 
 
 class AspireClient:
@@ -1004,13 +1049,21 @@ class AspireClient:
             if thread.is_alive():
                 thread.join(timeout=1.0)
 
-    def register_callback(self, callback: typing.Callable[..., typing.Any] | None) -> str | None:
+    def register_callback(
+        self,
+        callback: typing.Callable[..., typing.Any] | None,
+        parameter_type_ids: typing.Sequence[str | None] | None = None,
+        *,
+        dto_writeback: bool = False
+    ) -> str | None:
         '''
         Register a callback function that can be invoked from the .NET side.
         Returns a callback ID that should be passed to methods accepting callbacks.
 
         .NET passes arguments as an object with positional keys: { p0: value0, p1: value1, ... }
-        This function automatically extracts positional parameters and wraps handles.
+        This function automatically extracts positional parameters and wraps handles. Generated
+        callback parameter type IDs provide a fallback when the marshalled handle uses a declared
+        generic type ID instead of the concrete type registered by the Python SDK.
         '''
         if callback is None:
             return None
@@ -1027,13 +1080,31 @@ class AspireClient:
                 while True:
                     key = f"p{i}"
                     if key in args:
-                        arg_array.append(_wrap_if_handle(args[key], client))
+                        fallback_type_id = (
+                            parameter_type_ids[i]
+                            if parameter_type_ids is not None and i < len(parameter_type_ids)
+                            else None
+                        )
+                        value = _wrap_if_handle(args[key], client, fallback_type_id=fallback_type_id)
+                        if dto_writeback and isinstance(value, dict):
+                            value = _CallbackDto(value)
+                        arg_array.append(value)
                         i += 1
                     else:
                         break
 
                 if arg_array:
-                    return callback(*arg_array)
+                    result = callback(*arg_array)
+                    # A no-op returns {"p0": {}}, while assigning even a default
+                    # value returns {"p0": {"columns": 132}}. Unchanged setters
+                    # must not run on the host just because the DTO was round-tripped.
+                    # Opt in only for these callbacks so nullable callback results stay null.
+                    if dto_writeback:
+                        return {
+                            f"p{index}": value.changes() if isinstance(value, _CallbackDto) else args[f"p{index}"]
+                            for index, value in enumerate(arg_array)
+                        }
+                    return result
 
             # No args or null
             if args is None:
@@ -1454,7 +1525,7 @@ def _validate_type(arg: typing.Any, expected_type: typing.Any) -> bool:
                 return False
             if not _validate_type(value, value_type):
                 return False
-    elif typing.get_origin(expected_type) is typing.Callable:
+    elif typing.get_origin(expected_type) is typing.get_origin(typing.Callable):
         return callable(arg)
     elif isinstance(arg, (tuple, typing.Mapping)):
         return False
@@ -1520,7 +1591,7 @@ ContainerTargetPlatform = typing.Literal["LinuxAmd64", "LinuxArm64", "AllLinux",
 
 DistributedApplicationOperation = typing.Literal["Run", "Publish"]
 
-EndpointProperty = typing.Literal["Url", "Host", "IPV4Host", "Port", "Scheme", "TargetPort", "HostAndPort", "TlsEnabled"]
+EndpointProperty = typing.Literal["Url", "Host", "IPV4Host", "Port", "Scheme", "TargetPort", "HostAndPort", "TlsEnabled", "BrowserOrigins", "PrimaryBrowserOrigin"]
 
 HealthStatus = typing.Literal["Unhealthy", "Degraded", "Healthy"]
 
@@ -1584,7 +1655,7 @@ class ProcessCommandFactoryParameters(typing.TypedDict, total=False):
 
 
 class HiddenOnCompletionParameters(typing.TypedDict, total=False):
-    exit_code: int
+    exit_code: int | None
     exit_codes: typing.Iterable[int]
 
 
@@ -1612,7 +1683,7 @@ class MergeLoggingParameters(typing.TypedDict, total=False):
     log_level: typing.Required[str]
     log_path: str
     enable_console: bool
-    max_files: int
+    max_files: int | None
 
 
 class MergeRouteParameters(typing.TypedDict, total=False):
@@ -1696,35 +1767,35 @@ class HttpsEndpointCallbackParameters(typing.TypedDict, total=False):
 
 
 class EndpointParameters(typing.TypedDict, total=False):
-    port: int
-    target_port: int
+    port: int | None
+    target_port: int | None
     scheme: str
     name: str
     env: str
-    is_proxied: bool
-    is_external: bool
-    protocol: ProtocolType
+    is_proxied: bool | None
+    is_external: bool | None
+    protocol: ProtocolType | None
 
 
 class HttpEndpointParameters(typing.TypedDict, total=False):
-    port: int
-    target_port: int
+    port: int | None
+    target_port: int | None
     name: str
     env: str
-    is_proxied: bool
+    is_proxied: bool | None
 
 
 class HttpsEndpointParameters(typing.TypedDict, total=False):
-    port: int
-    target_port: int
+    port: int | None
+    target_port: int | None
     name: str
     env: str
-    is_proxied: bool
+    is_proxied: bool | None
 
 
 class HttpHealthCheckParameters(typing.TypedDict, total=False):
     path: str
-    status_code: int
+    status_code: int | None
     endpoint_name: str
 
 
@@ -1737,17 +1808,38 @@ class HttpCommandParameters(typing.TypedDict, total=False):
 class HttpProbeParameters(typing.TypedDict, total=False):
     probe_type: typing.Required[ProbeType]
     path: str
-    initial_delay_seconds: int
-    period_seconds: int
-    timeout_seconds: int
-    failure_threshold: int
-    success_threshold: int
+    initial_delay_seconds: int | None
+    period_seconds: int | None
+    timeout_seconds: int | None
+    failure_threshold: int | None
+    success_threshold: int | None
     endpoint_name: str
 
 
 class VolumeParameters(typing.TypedDict, total=False):
     target: typing.Required[str]
     name: str
+    is_read_only: bool
+
+
+class ProjectVolumeParameters(typing.TypedDict, total=False):
+    target: typing.Required[str]
+    name: typing.Required[str]
+    env: typing.Required[str]
+    is_read_only: bool
+
+
+class ExecutableDebugSupportParameters(typing.TypedDict, total=False):
+    launch_config_type: typing.Required[str]
+    script_path: typing.Required[str]
+    runtime_executable: str
+    launch_method: str
+
+
+class ExecutableVolumeParameters(typing.TypedDict, total=False):
+    target: typing.Required[str]
+    name: typing.Required[str]
+    env: typing.Required[str]
     is_read_only: bool
 
 
@@ -1760,286 +1852,291 @@ class DataVolumeParameters(typing.TypedDict, total=False):
 # ============================================================================
 
 class AddContainerOptions(typing.TypedDict, total=False):
-    Image: str
-    Tag: str | None
+    image: str
+    tag: str | None
 
 class BoolInteractionResult(typing.TypedDict, total=False):
-    Canceled: bool
-    Value: bool
+    canceled: bool
+    value: bool
 
 class CertificateTrustExecutionConfigurationContext(typing.TypedDict, total=False):
-    CertificateBundlePath: ReferenceExpression
-    CertificateDirectoriesPath: ReferenceExpression
-    RootCertificatesPath: str
-    IsContainer: bool
+    certificateBundlePath: ReferenceExpression
+    certificateDirectoriesPath: ReferenceExpression
+    rootCertificatesPath: str
+    isContainer: bool
 
 class CertificateTrustExecutionConfigurationExportData(typing.TypedDict, total=False):
-    Scope: CertificateTrustScope
-    CertificateSubjects: typing.Iterable[str]
-    CustomBundlePaths: typing.Iterable[str]
+    scope: CertificateTrustScope
+    certificateSubjects: typing.Iterable[str]
+    customBundlePaths: typing.Iterable[str]
 
 class CommandOptions(typing.TypedDict, total=False):
-    Description: str | None
-    Parameter: typing.Any
-    Arguments: typing.Iterable[InteractionInput]
-    ValidateArguments: typing.Callable[[InputsDialogValidationContext], None]
-    Visibility: ResourceCommandVisibility
-    ConfirmationMessage: str | None
-    IconName: str | None
-    IconVariant: IconVariant | None
-    IsHighlighted: bool
-    UpdateState: typing.Callable[[UpdateCommandStateContext], ResourceCommandState]
-    Progress: CommandProgressOptions
+    description: str | None
+    parameter: typing.Any
+    arguments: typing.Iterable[InteractionInput]
+    validateArguments: typing.Callable[[InputsDialogValidationContext], None]
+    visibility: ResourceCommandVisibility
+    confirmationMessage: str | None
+    iconName: str | None
+    iconVariant: IconVariant | None
+    isHighlighted: bool
+    updateState: typing.Callable[[UpdateCommandStateContext], ResourceCommandState]
+    progress: CommandProgressOptions
 
 class CommandProgressOptions(typing.TypedDict, total=False):
-    Message: str | None
-    Title: str | None
-    HideCancelButton: bool
+    message: str | None
+    title: str | None
+    hideCancelButton: bool
 
 class CommandResultData(typing.TypedDict, total=False):
-    Value: str
-    Format: CommandResultFormat
-    DisplayImmediately: bool
+    value: str
+    format: CommandResultFormat
+    displayImmediately: bool
 
 class ContainerFilesOptions(typing.TypedDict, total=False):
-    DefaultOwner: int | None
-    DefaultGroup: int | None
-    Umask: int | None
+    defaultOwner: int | None
+    defaultGroup: int | None
+    umask: int | None
 
 class CreateBuilderOptions(typing.TypedDict, total=False):
-    Args: typing.Iterable[str]
-    ProjectDirectory: str | None
-    AppHostFilePath: str | None
-    ContainerRegistryOverride: str | None
-    DisableDashboard: bool
-    DashboardApplicationName: str | None
-    AllowUnsecuredTransport: bool
-    EnableResourceLogging: bool
+    args: typing.Iterable[str]
+    projectDirectory: str | None
+    appHostFilePath: str | None
+    containerRegistryOverride: str | None
+    disableDashboard: bool
+    dashboardApplicationName: str | None
+    allowUnsecuredTransport: bool
+    enableResourceLogging: bool
 
 class CreateInteractionInputOptions(typing.TypedDict, total=False):
-    Label: str | None
-    Description: str | None
-    EnableDescriptionMarkdown: bool | None
-    Required: bool | None
-    Placeholder: str | None
-    Value: str | None
-    AllowCustomChoice: bool | None
-    Disabled: bool | None
-    MaxLength: int | None
-    MaxFileSize: int | None
-    AllowMultipleFiles: bool | None
-    FileFilter: str | None
+    label: str | None
+    description: str | None
+    enableDescriptionMarkdown: bool | None
+    required: bool | None
+    placeholder: str | None
+    value: str | None
+    allowCustomChoice: bool | None
+    disabled: bool | None
+    maxLength: int | None
+    maxFileSize: int | None
+    allowMultipleFiles: bool | None
+    fileFilter: str | None
 
 class DynamicLoadingOptions(typing.TypedDict, total=False):
-    AlwaysLoadOnStart: bool | None
-    DependsOnInputs: typing.Iterable[str]
+    alwaysLoadOnStart: bool | None
+    dependsOnInputs: typing.Iterable[str]
 
 class ExecuteCommandResult(typing.TypedDict, total=False):
-    Success: bool
-    Canceled: bool
-    ErrorMessage: str | None
-    Message: str | None
-    Data: CommandResultData
+    success: bool
+    canceled: bool
+    errorMessage: str | None
+    message: str | None
+    data: CommandResultData
 
 class GenerateParameterDefault(typing.TypedDict, total=False):
-    MinLength: int
-    Lower: bool
-    Upper: bool
-    Numeric: bool
-    Special: bool
-    MinLower: int
-    MinUpper: int
-    MinNumeric: int
-    MinSpecial: int
+    minLength: int
+    lower: bool
+    upper: bool
+    numeric: bool
+    special: bool
+    minLower: int
+    minUpper: int
+    minNumeric: int
+    minSpecial: int
 
 class HealthCheckResult(typing.TypedDict, total=False):
-    Status: HealthStatus
-    Description: str | None
-    Data: typing.Mapping[str, str]
+    status: HealthStatus
+    description: str | None
+    data: typing.Mapping[str, str]
 
 class HttpCommandExportOptions(typing.TypedDict, total=False):
-    CommandOptions: CommandOptions
-    Description: str | None
-    ConfirmationMessage: str | None
-    IconName: str | None
-    IconVariant: IconVariant | None
-    IsHighlighted: bool
-    CommandName: str | None
-    EndpointName: str | None
-    MethodName: str | None
-    PrepareRequest: typing.Callable[[HttpCommandPrepareRequestContext], HttpCommandRequestExportData]
-    ResultMode: HttpCommandResultMode
+    commandOptions: CommandOptions
+    description: str | None
+    confirmationMessage: str | None
+    iconName: str | None
+    iconVariant: IconVariant | None
+    isHighlighted: bool
+    commandName: str | None
+    endpointName: str | None
+    methodName: str | None
+    prepareRequest: typing.Callable[[HttpCommandPrepareRequestContext], HttpCommandRequestExportData]
+    resultMode: HttpCommandResultMode
 
 class HttpCommandRequestExportData(typing.TypedDict, total=False):
-    MethodName: str | None
-    Headers: typing.Mapping[str, str]
-    Content: str | None
-    ContentType: str | None
+    methodName: str | None
+    headers: typing.Mapping[str, str]
+    content: str | None
+    contentType: str | None
 
 class HttpsCertificateExecutionConfigurationContext(typing.TypedDict, total=False):
-    CertificatePath: ReferenceExpression
-    KeyPath: ReferenceExpression
-    CertificateWithKeyPath: ReferenceExpression
-    PfxPath: ReferenceExpression
+    certificatePath: ReferenceExpression
+    keyPath: ReferenceExpression
+    certificateWithKeyPath: ReferenceExpression
+    pfxPath: ReferenceExpression
 
 class HttpsCertificateExecutionConfigurationExportData(typing.TypedDict, total=False):
-    Subject: str
-    Thumbprint: str | None
-    KeyPathExpression: str
-    PfxPathExpression: str
-    IsKeyPathReferenced: bool
-    IsCertificateWithKeyPathReferenced: bool
-    IsPfxPathReferenced: bool
-    Password: str | None
+    subject: str
+    thumbprint: str | None
+    keyPathExpression: str
+    pfxPathExpression: str
+    isKeyPathReferenced: bool
+    isCertificateWithKeyPathReferenced: bool
+    isPfxPathReferenced: bool
+    password: str | None
 
 class HttpsCertificateInfo(typing.TypedDict, total=False):
-    Subject: str
-    Issuer: str
-    Thumbprint: str | None
+    subject: str
+    issuer: str
+    thumbprint: str | None
 
 class InputInteractionResult(typing.TypedDict, total=False):
-    Canceled: bool
-    Input: InteractionInput
+    canceled: bool
+    input: InteractionInput
 
 class InteractionChoiceOption(typing.TypedDict, total=False):
-    Value: str
-    Label: str
+    value: str
+    label: str
 
 class InteractionInput(typing.TypedDict, total=False):
-    Name: str
-    Label: str | None
-    Description: str | None
-    EnableDescriptionMarkdown: bool
-    InputType: InputType
-    Required: bool
-    Options: typing.Iterable[typing.Any]
-    Value: str | None
-    Placeholder: str | None
-    AllowCustomChoice: bool
-    Disabled: bool
-    MaxLength: int | None
-    AllowMultipleFiles: bool
-    FileFilter: str | None
-    MaxFileSize: int | None
+    name: str
+    label: str | None
+    description: str | None
+    enableDescriptionMarkdown: bool
+    inputType: InputType
+    required: bool
+    options: typing.Iterable[typing.Any]
+    value: str | None
+    placeholder: str | None
+    allowCustomChoice: bool
+    disabled: bool
+    maxLength: int | None
+    allowMultipleFiles: bool
+    fileFilter: str | None
+    maxFileSize: int | None
 
 class InteractionInputsDialogOptions(typing.TypedDict, total=False):
-    PrimaryButtonText: str | None
-    SecondaryButtonText: str | None
-    ShowSecondaryButton: bool | None
-    ShowDismiss: bool | None
-    EnableMessageMarkdown: bool | None
-    ValidationCallback: typing.Callable[[InputsDialogValidationContext], None]
+    primaryButtonText: str | None
+    secondaryButtonText: str | None
+    showSecondaryButton: bool | None
+    showDismiss: bool | None
+    enableMessageMarkdown: bool | None
+    validationCallback: typing.Callable[[InputsDialogValidationContext], None]
 
 class InteractionMessageBoxOptions(typing.TypedDict, total=False):
-    PrimaryButtonText: str | None
-    SecondaryButtonText: str | None
-    ShowSecondaryButton: bool | None
-    ShowDismiss: bool | None
-    EnableMessageMarkdown: bool | None
-    Intent: MessageIntent | None
+    primaryButtonText: str | None
+    secondaryButtonText: str | None
+    showSecondaryButton: bool | None
+    showDismiss: bool | None
+    enableMessageMarkdown: bool | None
+    intent: MessageIntent | None
 
 class InteractionNotificationOptions(typing.TypedDict, total=False):
-    PrimaryButtonText: str | None
-    SecondaryButtonText: str | None
-    ShowSecondaryButton: bool | None
-    ShowDismiss: bool | None
-    EnableMessageMarkdown: bool | None
-    Intent: MessageIntent | None
-    LinkText: str | None
-    LinkUrl: str | None
+    primaryButtonText: str | None
+    secondaryButtonText: str | None
+    showSecondaryButton: bool | None
+    showDismiss: bool | None
+    enableMessageMarkdown: bool | None
+    intent: MessageIntent | None
+    linkText: str | None
+    linkUrl: str | None
 
 class InteractionProgressOptions(typing.TypedDict, total=False):
-    Title: str | None
-    PrimaryButtonText: str | None
-    EnableMessageMarkdown: bool | None
-    Work: typing.Callable[[ProgressContext], None]
+    title: str | None
+    primaryButtonText: str | None
+    enableMessageMarkdown: bool | None
+    work: typing.Callable[[ProgressContext], None]
 
 class ParameterCustomInputOptions(typing.TypedDict, total=False):
-    InputType: InputType | None
-    Label: str | None
-    Description: str | None
-    EnableDescriptionMarkdown: bool | None
-    Options: typing.Mapping[str, str]
-    Value: str | None
-    Placeholder: str | None
-    AllowCustomChoice: bool | None
-    Disabled: bool | None
-    MaxLength: int | None
+    inputType: InputType | None
+    label: str | None
+    description: str | None
+    enableDescriptionMarkdown: bool | None
+    options: typing.Mapping[str, str]
+    value: str | None
+    placeholder: str | None
+    allowCustomChoice: bool | None
+    disabled: bool | None
+    maxLength: int | None
 
 class ProcessCommandExportOptions(typing.TypedDict, total=False):
-    ExecutablePath: str | None
-    Arguments: typing.Iterable[str]
-    WorkingDirectory: str | None
-    EnvironmentVariables: typing.Mapping[str, str]
-    InheritEnvironmentVariables: bool | None
-    StandardInputContent: str | None
-    KillEntireProcessTree: bool | None
-    CreateProcessSpec: typing.Callable[[ExecuteCommandContext], ProcessCommandSpecExportData]
-    CommandOptions: CommandOptions
-    MaxOutputLineCount: int | None
-    DisplayImmediately: bool | None
-    SuccessExitCodes: typing.Iterable[int]
+    executablePath: str | None
+    arguments: typing.Iterable[str]
+    workingDirectory: str | None
+    environmentVariables: typing.Mapping[str, str]
+    inheritEnvironmentVariables: bool | None
+    standardInputContent: str | None
+    killEntireProcessTree: bool | None
+    createProcessSpec: typing.Callable[[ExecuteCommandContext], ProcessCommandSpecExportData]
+    commandOptions: CommandOptions
+    maxOutputLineCount: int | None
+    displayImmediately: bool | None
+    successExitCodes: typing.Iterable[int]
 
 class ProcessCommandResultExportOptions(typing.TypedDict, total=False):
-    CommandOptions: CommandOptions
-    MaxOutputLineCount: int | None
-    DisplayImmediately: bool | None
-    SuccessExitCodes: typing.Iterable[int]
+    commandOptions: CommandOptions
+    maxOutputLineCount: int | None
+    displayImmediately: bool | None
+    successExitCodes: typing.Iterable[int]
 
 class ProcessCommandSpecExportData(typing.TypedDict, total=False):
-    ExecutablePath: str | None
-    Arguments: typing.Iterable[str]
-    WorkingDirectory: str | None
-    EnvironmentVariables: typing.Mapping[str, str]
-    InheritEnvironmentVariables: bool | None
-    StandardInputContent: str | None
-    KillEntireProcessTree: bool | None
+    executablePath: str | None
+    arguments: typing.Iterable[str]
+    workingDirectory: str | None
+    environmentVariables: typing.Mapping[str, str]
+    inheritEnvironmentVariables: bool | None
+    standardInputContent: str | None
+    killEntireProcessTree: bool | None
 
 class ReferenceEnvironmentInjectionOptions(typing.TypedDict, total=False):
-    ConnectionString: bool
-    ConnectionProperties: bool
-    ServiceDiscovery: bool
-    Endpoints: bool
+    connectionString: bool
+    connectionProperties: bool
+    serviceDiscovery: bool
+    endpoints: bool
 
 class ResourceEventDto(typing.TypedDict, total=False):
-    ResourceName: str
-    ResourceId: str
-    State: str | None
-    StateStyle: str | None
-    HealthStatus: str | None
-    ExitCode: int | None
+    resourceName: str
+    resourceId: str
+    state: str | None
+    stateStyle: str | None
+    healthStatus: str | None
+    exitCode: int | None
 
 class ResourceUrlAnnotation(typing.TypedDict, total=False):
-    Url: str
-    DisplayText: str | None
-    Endpoint: EndpointReference
-    DisplayLocation: UrlDisplayLocation
+    url: str
+    displayText: str | None
+    endpoint: EndpointReference
+    displayOrder: int | None
+    displayLocation: UrlDisplayLocation
 
 class RunConfiguration(typing.TypedDict, total=False):
-    WatchEnabled: bool
+    watchEnabled: bool
+
+class TerminalOptions(typing.TypedDict, total=False):
+    columns: int
+    rows: int
 
 class TestConfigDto(typing.TypedDict, total=False):
-    Name: str
-    Port: int
-    Enabled: bool
-    OptionalField: str | None
+    name: str
+    port: int
+    enabled: bool
+    optionalField: str | None
 
 class TestDeeplyNestedDto(typing.TypedDict, total=False):
-    NestedData: typing.Mapping[str, typing.Iterable[TestConfigDto]]
-    MetadataArray: typing.Iterable[typing.Mapping[str, str]]
+    nestedData: typing.Mapping[str, typing.Iterable[TestConfigDto]]
+    metadataArray: typing.Iterable[typing.Mapping[str, str]]
 
 class TestNestedDto(typing.TypedDict, total=False):
-    Id: str
-    Config: TestConfigDto
-    Tags: typing.Iterable[str]
-    Counts: typing.Mapping[str, int]
+    id: str
+    config: TestConfigDto
+    tags: typing.Iterable[str]
+    counts: typing.Mapping[str, int]
 
 class UpdateCommandStateResourceSnapshot(typing.TypedDict, total=False):
-    ResourceType: str
-    State: str | None
-    StateStyle: str | None
-    HealthStatus: HealthStatus | None
-    ExitCode: int | None
+    resourceType: str
+    state: str | None
+    stateStyle: str | None
+    healthStatus: HealthStatus | None
+    exitCode: int | None
 
 
 # ============================================================================
@@ -2047,10 +2144,10 @@ class UpdateCommandStateResourceSnapshot(typing.TypedDict, total=False):
 # ============================================================================
 
 TestConfigs = types.SimpleNamespace()
-TestConfigs.Default = typing.cast(TestConfigDto, { "Name": "default", "Port": 6379, "Enabled": True, "OptionalField": "cache" })
+TestConfigs.Default = typing.cast(TestConfigDto, { "name": "default", "port": 6379, "enabled": True, "optionalField": "cache" })
 TestConfigs.Profiles = types.SimpleNamespace()
-TestConfigs.Profiles.Development = typing.cast(TestConfigDto, { "Name": "development", "Port": 5001, "Enabled": False, "OptionalField": None })
-TestConfigs.Secure = typing.cast(TestConfigDto, { "Name": "secure", "Port": 6380, "Enabled": True, "OptionalField": None })
+TestConfigs.Profiles.Development = typing.cast(TestConfigDto, { "name": "development", "port": 5001, "enabled": False, "optionalField": None })
+TestConfigs.Secure = typing.cast(TestConfigDto, { "name": "secure", "port": 6380, "enabled": True, "optionalField": None })
 TestConfigs.UnicodeGreeting = "你好こんにちは"
 
 WellKnownPipelineSteps = types.SimpleNamespace()
@@ -2151,7 +2248,7 @@ class AbstractConfiguration:
         """The underlying object reference handle."""
         return self._handle
 
-    def get_config_value(self, key: str) -> str:
+    def get_config_value(self, key: str) -> str | None:
         """Gets a configuration value by key."""
         rpc_args: dict[str, typing.Any] = {'configuration': self._handle}
         rpc_args['key'] = key
@@ -2161,7 +2258,7 @@ class AbstractConfiguration:
         )
         return result
 
-    def get_connection_string(self, name: str) -> str:
+    def get_connection_string(self, name: str) -> str | None:
         """Gets a connection string by name."""
         rpc_args: dict[str, typing.Any] = {'configuration': self._handle}
         rpc_args['name'] = name
@@ -2395,7 +2492,7 @@ class DistributedApplicationBuilder:
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['name'] = name
         rpc_args['contextPath'] = context_path
-        rpc_args['dockerfileFactory'] = self._client.register_callback(dockerfile_factory)
+        rpc_args['dockerfileFactory'] = self._client.register_callback(dockerfile_factory, ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.DockerfileFactoryContext",))
         if stage is not None:
             rpc_args['stage'] = stage
         result = self._client.invoke_capability(
@@ -2410,7 +2507,7 @@ class DistributedApplicationBuilder:
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['name'] = name
         rpc_args['contextPath'] = context_path
-        rpc_args['callback'] = self._client.register_callback(callback)
+        rpc_args['callback'] = self._client.register_callback(callback, ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.DockerfileBuilderCallbackContext",))
         if stage is not None:
             rpc_args['stage'] = stage
         result = self._client.invoke_capability(
@@ -2517,6 +2614,21 @@ class DistributedApplicationBuilder:
         )
         return typing.cast(AbstractResourceWithConnectionString, result)
 
+    def with_output_diffing(self, *, target_step: str = "publish", diff_step_name: str | None = None, description: str | None = None) -> typing.Self:
+        """Adds an opt-in target that checks for stale generated pipeline output."""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        if target_step is not None:
+            rpc_args['targetStep'] = target_step
+        if diff_step_name is not None:
+            rpc_args['diffStepName'] = diff_step_name
+        if description is not None:
+            rpc_args['description'] = description
+        self._client.invoke_capability(
+            'Aspire.Hosting/withOutputDiffing',
+            rpc_args
+        )
+        return self
+
     def add_project(self, name: str, project_path: str, *, launch_profile_or_options: str | ProjectResourceOptions | None = None, **kwargs: typing.Unpack["ProjectResourceKwargs"]) -> ProjectResource:  # type: ignore
         """Adds a .NET project resource"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
@@ -2557,7 +2669,7 @@ class DistributedApplicationBuilder:
     def subscribe_before_start(self, callback: typing.Callable[[BeforeStartEvent], None]) -> DistributedApplicationEventSubscription:
         """Subscribes to the BeforeStart event, which fires before the application starts."""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
-        rpc_args['callback'] = self._client.register_callback(callback)
+        rpc_args['callback'] = self._client.register_callback(callback, ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.BeforeStartEvent",))
         result = self._client.invoke_capability(
             'Aspire.Hosting/subscribeBeforeStart',
             rpc_args,
@@ -2567,7 +2679,7 @@ class DistributedApplicationBuilder:
     def subscribe_before_publish(self, callback: typing.Callable[[BeforePublishEvent], None]) -> DistributedApplicationEventSubscription:
         """Subscribes to the BeforePublish event, which fires before the application is published."""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
-        rpc_args['callback'] = self._client.register_callback(callback)
+        rpc_args['callback'] = self._client.register_callback(callback, ("Aspire.Hosting/Aspire.Hosting.Publishing.BeforePublishEvent",))
         result = self._client.invoke_capability(
             'Aspire.Hosting/subscribeBeforePublish',
             rpc_args,
@@ -2577,7 +2689,7 @@ class DistributedApplicationBuilder:
     def subscribe_after_publish(self, callback: typing.Callable[[AfterPublishEvent], None]) -> DistributedApplicationEventSubscription:
         """Subscribes to the AfterPublish event, which fires after the application is published."""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
-        rpc_args['callback'] = self._client.register_callback(callback)
+        rpc_args['callback'] = self._client.register_callback(callback, ("Aspire.Hosting/Aspire.Hosting.Publishing.AfterPublishEvent",))
         result = self._client.invoke_capability(
             'Aspire.Hosting/subscribeAfterPublish',
             rpc_args,
@@ -2587,7 +2699,7 @@ class DistributedApplicationBuilder:
     def subscribe_after_resources_created(self, callback: typing.Callable[[AfterResourcesCreatedEvent], None]) -> DistributedApplicationEventSubscription:
         """Subscribes to the AfterResourcesCreated event, which fires after all resources are created."""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
-        rpc_args['callback'] = self._client.register_callback(callback)
+        rpc_args['callback'] = self._client.register_callback(callback, ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.AfterResourcesCreatedEvent",))
         result = self._client.invoke_capability(
             'Aspire.Hosting/subscribeAfterResourcesCreated',
             rpc_args,
@@ -2597,7 +2709,7 @@ class DistributedApplicationBuilder:
     def add_eventing_subscriber(self, subscribe: typing.Callable[[EventingSubscriberRegistrationContext], None]) -> None:
         """Adds an ATS-friendly eventing subscriber callback to the distributed-application builder."""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
-        rpc_args['subscribe'] = self._client.register_callback(subscribe)
+        rpc_args['subscribe'] = self._client.register_callback(subscribe, ("Aspire.Hosting/Aspire.Hosting.Ats.EventingSubscriberRegistrationContext",))
         self._client.invoke_capability(
             'Aspire.Hosting/addEventingSubscriber',
             rpc_args
@@ -2606,7 +2718,7 @@ class DistributedApplicationBuilder:
     def try_add_eventing_subscriber(self, subscribe: typing.Callable[[EventingSubscriberRegistrationContext], None]) -> None:
         """Attempts to add an ATS-friendly eventing subscriber callback to the distributed-application builder."""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
-        rpc_args['subscribe'] = self._client.register_callback(subscribe)
+        rpc_args['subscribe'] = self._client.register_callback(subscribe, ("Aspire.Hosting/Aspire.Hosting.Ats.EventingSubscriberRegistrationContext",))
         self._client.invoke_capability(
             'Aspire.Hosting/tryAddEventingSubscriber',
             rpc_args
@@ -2635,16 +2747,15 @@ class DistributedApplicationBuilder:
         )
         return typing.cast(TestRedisResource, result)
 
-    def add_test_vault(self, name: str, **kwargs: typing.Unpack["TestVaultResourceKwargs"]) -> TestVaultResource:  # type: ignore
+    def add_test_vault(self, name: str) -> AbstractTestVaultResource:
         """Adds a test vault resource"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['name'] = name
         result = self._client.invoke_capability(
             'Aspire.Hosting.CodeGeneration.Python.Tests/addTestVault',
             rpc_args,
-            kwargs,
         )
-        return typing.cast(TestVaultResource, result)
+        return typing.cast(AbstractTestVaultResource, result)
 
 
 class AbstractDistributedApplicationEvent(abc.ABC):
@@ -2703,7 +2814,7 @@ class AbstractDistributedApplicationPipeline:
         """Adds an application-level pipeline step in a TypeScript-friendly shape."""
         rpc_args: dict[str, typing.Any] = {'pipeline': self._handle}
         rpc_args['stepName'] = step_name
-        rpc_args['callback'] = self._client.register_callback(callback)
+        rpc_args['callback'] = self._client.register_callback(callback, ("Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineStepContext",))
         if depends_on is not None:
             rpc_args['dependsOn'] = depends_on
         if required_by is not None:
@@ -2716,7 +2827,7 @@ class AbstractDistributedApplicationPipeline:
     def configure(self, callback: typing.Callable[[PipelineConfigurationContext], None]) -> None:
         """Registers a pipeline configuration callback in a TypeScript-friendly shape."""
         rpc_args: dict[str, typing.Any] = {'pipeline': self._handle}
-        rpc_args['callback'] = self._client.register_callback(callback)
+        rpc_args['callback'] = self._client.register_callback(callback, ("Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineConfigurationContext",))
         self._client.invoke_capability(
             'Aspire.Hosting/configure',
             rpc_args
@@ -3799,6 +3910,14 @@ class CommandLineArgsEditor:
         """The underlying object reference handle."""
         return self._handle
 
+    def clear(self) -> None:
+        """Clears all command-line arguments."""
+        rpc_args: dict[str, typing.Any] = {'context': self._handle}
+        self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/clear',
+            rpc_args
+        )
+
     def add(self, value: str | ReferenceExpression | EndpointReference | ParameterResource | AbstractResourceWithConnectionString | AbstractExpressionValue) -> None:
         """Adds a command-line argument."""
         rpc_args: dict[str, typing.Any] = {'context': self._handle}
@@ -4823,6 +4942,24 @@ class EndpointReference:
         return typing.cast(str, result)
 
     @_cached_property
+    def browser_origins(self) -> EndpointReferenceExpression:
+        """Gets a deferred comma-separated list of browser-facing origins associated with this endpoint."""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/EndpointReference.browserOrigins',
+            {'context': self._handle}
+        )
+        return typing.cast(EndpointReferenceExpression, result)
+
+    @_cached_property
+    def primary_browser_origin(self) -> EndpointReferenceExpression:
+        """Gets the deferred primary browser-facing origin associated with this endpoint."""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/EndpointReference.primaryBrowserOrigin',
+            {'context': self._handle}
+        )
+        return typing.cast(EndpointReferenceExpression, result)
+
+    @_cached_property
     def error_message(self) -> str | None:
         """Gets or sets a custom error message to be thrown when the endpoint annotation is not found."""
         result = self._client.invoke_capability(
@@ -4939,7 +5076,7 @@ class EndpointReference:
         )
         return typing.cast(str, result)
 
-    def get_value(self, *, timeout: int | None = None) -> str:
+    def get_value(self, *, timeout: int | None = None) -> str | None:
         """Gets the URL of the endpoint asynchronously. Waits for the endpoint to be allocated if necessary."""
         rpc_args: dict[str, typing.Any] = {'context': self._handle}
         if timeout is not None:
@@ -5323,7 +5460,7 @@ class EventingSubscriberRegistrationContext:
     def on_before_start(self, callback: typing.Callable[[BeforeStartEvent], None]) -> DistributedApplicationEventSubscription:
         """Subscribes to the BeforeStart event from an eventing subscriber registration context."""
         rpc_args: dict[str, typing.Any] = {'context': self._handle}
-        rpc_args['callback'] = self._client.register_callback(callback)
+        rpc_args['callback'] = self._client.register_callback(callback, ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.BeforeStartEvent",))
         result = self._client.invoke_capability(
             'Aspire.Hosting/eventingSubscriberOnBeforeStart',
             rpc_args,
@@ -5333,7 +5470,7 @@ class EventingSubscriberRegistrationContext:
     def on_before_publish(self, callback: typing.Callable[[BeforePublishEvent], None]) -> DistributedApplicationEventSubscription:
         """Subscribes to the BeforePublish event from an eventing subscriber registration context."""
         rpc_args: dict[str, typing.Any] = {'context': self._handle}
-        rpc_args['callback'] = self._client.register_callback(callback)
+        rpc_args['callback'] = self._client.register_callback(callback, ("Aspire.Hosting/Aspire.Hosting.Publishing.BeforePublishEvent",))
         result = self._client.invoke_capability(
             'Aspire.Hosting/eventingSubscriberOnBeforePublish',
             rpc_args,
@@ -5343,7 +5480,7 @@ class EventingSubscriberRegistrationContext:
     def on_after_publish(self, callback: typing.Callable[[AfterPublishEvent], None]) -> DistributedApplicationEventSubscription:
         """Subscribes to the AfterPublish event from an eventing subscriber registration context."""
         rpc_args: dict[str, typing.Any] = {'context': self._handle}
-        rpc_args['callback'] = self._client.register_callback(callback)
+        rpc_args['callback'] = self._client.register_callback(callback, ("Aspire.Hosting/Aspire.Hosting.Publishing.AfterPublishEvent",))
         result = self._client.invoke_capability(
             'Aspire.Hosting/eventingSubscriberOnAfterPublish',
             rpc_args,
@@ -5353,7 +5490,7 @@ class EventingSubscriberRegistrationContext:
     def on_after_resources_created(self, callback: typing.Callable[[AfterResourcesCreatedEvent], None]) -> DistributedApplicationEventSubscription:
         """Subscribes to the AfterResourcesCreated event from an eventing subscriber registration context."""
         rpc_args: dict[str, typing.Any] = {'context': self._handle}
-        rpc_args['callback'] = self._client.register_callback(callback)
+        rpc_args['callback'] = self._client.register_callback(callback, ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.AfterResourcesCreatedEvent",))
         result = self._client.invoke_capability(
             'Aspire.Hosting/eventingSubscriberOnAfterResourcesCreated',
             rpc_args,
@@ -5801,10 +5938,18 @@ class InteractionInputBuilder:
         )
         return typing.cast(InteractionInputBuilder, result)
 
+    def release_files(self) -> None:
+        """Releases uploaded files associated with the input."""
+        rpc_args: dict[str, typing.Any] = {'context': self._handle}
+        self._client.invoke_capability(
+            'Aspire.Hosting.Ats/releaseFiles',
+            rpc_args
+        )
+
     def with_dynamic_loading(self, callback: typing.Callable[[InteractionInputLoadContext], None], *, options: DynamicLoadingOptions | None = None) -> InteractionInputBuilder:
         """Attaches a callback that dynamically loads or updates the input after the prompt starts."""
         rpc_args: dict[str, typing.Any] = {'context': self._handle}
-        rpc_args['callback'] = self._client.register_callback(callback)
+        rpc_args['callback'] = self._client.register_callback(callback, ("Aspire.Hosting/Aspire.Hosting.Ats.InteractionInputLoadContext",))
         if options is not None:
             rpc_args['options'] = options
         result = self._client.invoke_capability(
@@ -5842,7 +5987,7 @@ class InteractionInputCollection:
         """Get the input with the specified name, or None if no input matches."""
         lookup_name = name.lower()
         for interaction_input in self.to_array():
-            input_name = interaction_input.get("Name")
+            input_name = interaction_input.get("name")
             if input_name is not None and input_name.lower() == lookup_name:
                 return interaction_input
         return None
@@ -5859,11 +6004,11 @@ class InteractionInputCollection:
         interaction_input = self.get(name)
         if interaction_input is None:
             return ""
-        return interaction_input.get("Value") or ""
+        return interaction_input.get("value") or ""
 
     def required_value(self, name: str) -> str:
         """Get the input value with the specified name, or raise ValueError if no input matches."""
-        return self.required(name).get("Value") or ""
+        return self.required(name).get("value") or ""
 
 
 class InteractionInputLoadContext:
@@ -7282,6 +7427,130 @@ class TestResourceContext:
         return result
 
 
+class TestReturnValueContext:
+    """Type class for TestReturnValueContext."""
+
+    def __init__(self, handle: Handle, client: AspireClient) -> None:
+        self._handle = handle
+        self._client = client
+
+    def __repr__(self) -> str:
+        return f"TestReturnValueContext(handle={self._handle.handle_id})"
+
+    @_uncached_property
+    def handle(self) -> Handle:
+        """The underlying object reference handle."""
+        return self._handle
+
+    def get_nullable_string(self) -> str | None:
+        """Invokes the GetNullableString method"""
+        rpc_args: dict[str, typing.Any] = {'context': self._handle}
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getNullableString',
+            rpc_args,
+        )
+        return result
+
+    def get_nullable_string_task(self) -> str | None:
+        """Invokes the GetNullableStringTaskAsync method"""
+        rpc_args: dict[str, typing.Any] = {'context': self._handle}
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getNullableStringTaskAsync',
+            rpc_args,
+        )
+        return result
+
+    def get_nullable_string_value_task(self) -> str | None:
+        """Invokes the GetNullableStringValueTaskAsync method"""
+        rpc_args: dict[str, typing.Any] = {'context': self._handle}
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getNullableStringValueTaskAsync',
+            rpc_args,
+        )
+        return result
+
+    def get_string(self) -> str:
+        """Invokes the GetString method"""
+        rpc_args: dict[str, typing.Any] = {'context': self._handle}
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getString',
+            rpc_args,
+        )
+        return result
+
+    def get_string_task(self) -> str:
+        """Invokes the GetStringTaskAsync method"""
+        rpc_args: dict[str, typing.Any] = {'context': self._handle}
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getStringTaskAsync',
+            rpc_args,
+        )
+        return result
+
+    def get_string_value_task(self) -> str:
+        """Invokes the GetStringValueTaskAsync method"""
+        rpc_args: dict[str, typing.Any] = {'context': self._handle}
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getStringValueTaskAsync',
+            rpc_args,
+        )
+        return result
+
+    def get_nullable_int(self) -> int | None:
+        """Invokes the GetNullableInt method"""
+        rpc_args: dict[str, typing.Any] = {'context': self._handle}
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getNullableInt',
+            rpc_args,
+        )
+        return result
+
+    def get_nullable_int_task(self) -> int | None:
+        """Invokes the GetNullableIntTaskAsync method"""
+        rpc_args: dict[str, typing.Any] = {'context': self._handle}
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getNullableIntTaskAsync',
+            rpc_args,
+        )
+        return result
+
+    def get_nullable_int_value_task(self) -> int | None:
+        """Invokes the GetNullableIntValueTaskAsync method"""
+        rpc_args: dict[str, typing.Any] = {'context': self._handle}
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getNullableIntValueTaskAsync',
+            rpc_args,
+        )
+        return result
+
+    def get_int(self) -> int:
+        """Invokes the GetInt method"""
+        rpc_args: dict[str, typing.Any] = {'context': self._handle}
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getInt',
+            rpc_args,
+        )
+        return result
+
+    def get_int_task(self) -> int:
+        """Invokes the GetIntTaskAsync method"""
+        rpc_args: dict[str, typing.Any] = {'context': self._handle}
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getIntTaskAsync',
+            rpc_args,
+        )
+        return result
+
+    def get_int_value_task(self) -> int:
+        """Invokes the GetIntValueTaskAsync method"""
+        rpc_args: dict[str, typing.Any] = {'context': self._handle}
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestReturnValueContext.getIntValueTaskAsync',
+            rpc_args,
+        )
+        return result
+
+
 class UpdateCommandStateContext:
     """Type class for UpdateCommandStateContext."""
 
@@ -7356,6 +7625,18 @@ class AbstractResource(abc.ABC):
         """Configures a resource to use a persistent lifetime that ends when a parent process exits."""
 
     @abc.abstractmethod
+    def with_serialized_annotation(self, annotation_id: str, json: str) -> AbstractResource:
+        """Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID."""
+
+    @abc.abstractmethod
+    def get_serialized_annotation(self, annotation_id: str) -> str:
+        """Gets a serialized ATS annotation payload from a resource."""
+
+    @abc.abstractmethod
+    def has_serialized_annotation(self, annotation_id: str) -> bool:
+        """Determines whether a resource has a serialized ATS annotation with the specified ID."""
+
+    @abc.abstractmethod
     def with_urls(self, callback: typing.Callable[[ResourceUrlsCallbackContext], None]) -> typing.Self:
         """Registers a callback to customize the URLs displayed for the resource."""
 
@@ -7408,6 +7689,10 @@ class AbstractResource(abc.ABC):
         """Sets a child relationship"""
 
     @abc.abstractmethod
+    def with_resource_type_display_name(self, resource_type_display_name: str) -> typing.Self:
+        """Overrides the human-readable resource type label."""
+
+    @abc.abstractmethod
     def with_icon_name(self, icon_name: str, *, icon_variant: IconVariant = "Filled") -> typing.Self:
         """Specifies the icon to use when displaying the resource in the dashboard."""
 
@@ -7424,8 +7709,20 @@ class AbstractResource(abc.ABC):
         """Hides the resource from default resource lists after successful completion"""
 
     @abc.abstractmethod
-    def with_terminal(self) -> typing.Self:
-        """Adds an interactive terminal session to a resource using the default terminal options."""
+    def with_trait(self, name: str, value: str) -> typing.Self:
+        """Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values."""
+
+    @abc.abstractmethod
+    def with_tags(self, tags: typing.Iterable[str]) -> typing.Self:
+        """Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags."""
+
+    @abc.abstractmethod
+    def with_display_order(self, order: int) -> typing.Self:
+        """Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order."""
+
+    @abc.abstractmethod
+    def with_terminal(self, *, configure: typing.Callable[[TerminalOptions], None] | None = None) -> typing.Self:
+        """Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions."""
 
     @abc.abstractmethod
     def with_pipeline_step_factory(self, step_name: str, callback: typing.Callable[[PipelineStepContext], None], *, depends_on: typing.Iterable[str] | None = None, required_by: typing.Iterable[str] | None = None, tags: typing.Iterable[str] | None = None, description: str | None = None) -> typing.Self:
@@ -7568,6 +7865,10 @@ class AbstractContainerFilesDestinationResource(AbstractResource):
         """Configures the resource to copy container files from the specified source resource during publishing."""
 
 
+class AbstractDotnetProgramResource(AbstractResource):
+    """Abstract base class for AbstractDotnetProgramResource interface."""
+
+
 class AbstractResourceWithArgs(AbstractResource):
     """Abstract base class for AbstractResourceWithArgs interface."""
 
@@ -7578,6 +7879,14 @@ class AbstractResourceWithArgs(AbstractResource):
     @abc.abstractmethod
     def with_args_callback(self, callback: typing.Callable[[CommandLineArgsCallbackContext], None]) -> typing.Self:
         """Adds a callback to be executed with a list of command-line arguments when a resource is started."""
+
+    @abc.abstractmethod
+    def with_args_replace(self, args: typing.Iterable[str]) -> typing.Self:
+        """Replaces the arguments to be passed to a resource that supports arguments when it is launched."""
+
+    @abc.abstractmethod
+    def with_certificate_trust_env(self, certificate_bundle_env_var: str, *, certificate_directories_env_var: str | None = None) -> typing.Self:
+        """Configures environment variables that point to Aspire-managed certificate trust paths."""
 
 
 class AbstractResourceWithConnectionString(AbstractResource, AbstractExpressionValue, AbstractValueWithReferences):
@@ -7756,6 +8065,30 @@ class AbstractResourceWithWaitSupport(AbstractResource):
         """Waits for the dependency resource to enter the Exited or Finished state before starting the resource."""
 
 
+class AbstractTestMutablePromiseCollisionResource(AbstractResource):
+    """Abstract base class for AbstractTestMutablePromiseCollisionResource interface."""
+
+    @_uncached_property
+    def value(self) -> str:
+        """Gets or sets the test value."""
+
+    @value.setter
+    def value(self, value: str) -> None:
+        """Sets the Value property"""
+
+
+class AbstractTestMutablePromiseCollisionResourcePromise(AbstractResource):
+    """Abstract base class for AbstractTestMutablePromiseCollisionResourcePromise interface."""
+
+
+class AbstractTestPromiseCollisionResource(AbstractResource):
+    """Abstract base class for AbstractTestPromiseCollisionResource interface."""
+
+
+class AbstractTestPromiseCollisionResourcePromise(AbstractResource):
+    """Abstract base class for AbstractTestPromiseCollisionResourcePromise interface."""
+
+
 class AbstractTestVaultResource(AbstractResource):
     """Abstract base class for AbstractTestVaultResource interface."""
 
@@ -7792,11 +8125,15 @@ class _BaseResourceKwargs(typing.TypedDict, total=False):
     relationship: tuple[AbstractResource, str]
     parent_relationship: AbstractResource
     child_relationship: AbstractResource
+    resource_type_display_name: str
     icon_name: str | tuple[str, IconVariant]
     exclude_from_mcp: typing.Literal[True]
     hidden: typing.Literal[True]
     hidden_on_completion: HiddenOnCompletionParameters | typing.Literal[True]
-    terminal: typing.Literal[True]
+    trait: tuple[str, str]
+    tags: typing.Iterable[str]
+    display_order: int
+    terminal: typing.Callable[[TerminalOptions], None] | typing.Literal[True]
     pipeline_step_factory: tuple[str, typing.Callable[[PipelineStepContext], None]] | PipelineStepFactoryParameters
     pipeline_config: typing.Callable[[PipelineConfigurationContext], None]
     on_before_resource_started: typing.Callable[[BeforeResourceStartedEvent], None]
@@ -7878,7 +8215,7 @@ class _BaseResource(AbstractResource):
         """Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start, with custom validation logic."""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['command'] = command
-        rpc_args['validationCallback'] = self._client.register_callback(validation_callback)
+        rpc_args['validationCallback'] = self._client.register_callback(validation_callback, ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.RequiredCommandValidationContext",))
         if help_link is not None:
             rpc_args['helpLink'] = help_link
         result = self._client.invoke_capability(
@@ -7930,10 +8267,41 @@ class _BaseResource(AbstractResource):
         self._handle = self._wrap_builder(result)
         return self
 
+    def with_serialized_annotation(self, annotation_id: str, json: str) -> AbstractResource:
+        """Stores a serialized ATS annotation payload on a resource, replacing any existing annotation with the same ID."""
+        rpc_args: dict[str, typing.Any] = {'resource': self._handle}
+        rpc_args['annotationId'] = annotation_id
+        rpc_args['json'] = json
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withSerializedAnnotation',
+            rpc_args,
+        )
+        return typing.cast(AbstractResource, result)
+
+    def get_serialized_annotation(self, annotation_id: str) -> str:
+        """Gets a serialized ATS annotation payload from a resource."""
+        rpc_args: dict[str, typing.Any] = {'resource': self._handle}
+        rpc_args['annotationId'] = annotation_id
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/getSerializedAnnotation',
+            rpc_args,
+        )
+        return typing.cast(str, result)
+
+    def has_serialized_annotation(self, annotation_id: str) -> bool:
+        """Determines whether a resource has a serialized ATS annotation with the specified ID."""
+        rpc_args: dict[str, typing.Any] = {'resource': self._handle}
+        rpc_args['annotationId'] = annotation_id
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/hasSerializedAnnotation',
+            rpc_args,
+        )
+        return typing.cast(bool, result)
+
     def with_urls(self, callback: typing.Callable[[ResourceUrlsCallbackContext], None]) -> typing.Self:
         """Registers a callback to customize the URLs displayed for the resource."""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
-        rpc_args['callback'] = self._client.register_callback(callback)
+        rpc_args['callback'] = self._client.register_callback(callback, ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceUrlsCallbackContext",))
         result = self._client.invoke_capability(
             'Aspire.Hosting/withUrls',
             rpc_args,
@@ -7958,7 +8326,7 @@ class _BaseResource(AbstractResource):
         """Registers a callback to update the URL displayed for the endpoint with the specified name."""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['endpointName'] = endpoint_name
-        rpc_args['callback'] = self._client.register_callback(callback)
+        rpc_args['callback'] = self._client.register_callback(callback, dto_writeback=True)
         result = self._client.invoke_capability(
             'Aspire.Hosting/withUrlForEndpoint',
             rpc_args,
@@ -8002,7 +8370,7 @@ class _BaseResource(AbstractResource):
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['name'] = name
         rpc_args['displayName'] = display_name
-        rpc_args['executeCommand'] = self._client.register_callback(execute_command)
+        rpc_args['executeCommand'] = self._client.register_callback(execute_command, ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecuteCommandContext",))
         if command_options is not None:
             rpc_args['commandOptions'] = command_options
         result = self._client.invoke_capability(
@@ -8030,7 +8398,7 @@ class _BaseResource(AbstractResource):
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['commandName'] = command_name
         rpc_args['displayName'] = display_name
-        rpc_args['createProcessSpec'] = self._client.register_callback(create_process_spec)
+        rpc_args['createProcessSpec'] = self._client.register_callback(create_process_spec, ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecuteCommandContext",))
         if options is not None:
             rpc_args['options'] = options
         result = self._client.invoke_capability(
@@ -8043,7 +8411,7 @@ class _BaseResource(AbstractResource):
     def subscribe_https_endpoints_update(self, callback: typing.Callable[[HttpsEndpointUpdateCallbackContext], None]) -> typing.Self:
         """Subscribes to the `BeforeStartEvent` and invokes the specified callback when an HTTPS certificate is determined to be available for the resource. This is used to conditionally update endpoint URI schemes or perform other HTTPS-related configuration at startup."""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
-        rpc_args['callback'] = self._client.register_callback(callback)
+        rpc_args['callback'] = self._client.register_callback(callback, ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.HttpsEndpointUpdateCallbackContext",))
         result = self._client.invoke_capability(
             'Aspire.Hosting/subscribeHttpsEndpointsUpdate',
             rpc_args,
@@ -8080,6 +8448,17 @@ class _BaseResource(AbstractResource):
         rpc_args['child'] = child
         result = self._client.invoke_capability(
             'Aspire.Hosting/withBuilderChildRelationship',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
+    def with_resource_type_display_name(self, resource_type_display_name: str) -> typing.Self:
+        """Overrides the human-readable resource type label."""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['resourceTypeDisplayName'] = resource_type_display_name
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withResourceTypeDisplayName',
             rpc_args,
         )
         self._handle = self._wrap_builder(result)
@@ -8132,9 +8511,45 @@ class _BaseResource(AbstractResource):
         self._handle = self._wrap_builder(result)
         return self
 
-    def with_terminal(self) -> typing.Self:
-        """Adds an interactive terminal session to a resource using the default terminal options."""
+    def with_trait(self, name: str, value: str) -> typing.Self:
+        """Adds immutable, non-sensitive metadata to a resource. Repeated names add multiple values."""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['name'] = name
+        rpc_args['value'] = value
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withTrait',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
+    def with_tags(self, tags: typing.Iterable[str]) -> typing.Self:
+        """Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags."""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['tags'] = tags
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withTags',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
+    def with_display_order(self, order: int) -> typing.Self:
+        """Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order."""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['order'] = order
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withDisplayOrder',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
+    def with_terminal(self, *, configure: typing.Callable[[TerminalOptions], None] | None = None) -> typing.Self:
+        """Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions."""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        if configure is not None:
+            rpc_args['configure'] = self._client.register_callback(configure, dto_writeback=True)
         result = self._client.invoke_capability(
             'Aspire.Hosting/withTerminal',
             rpc_args,
@@ -8146,7 +8561,7 @@ class _BaseResource(AbstractResource):
         """Adds a pipeline step to the resource that will be executed during deployment."""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['stepName'] = step_name
-        rpc_args['callback'] = self._client.register_callback(callback)
+        rpc_args['callback'] = self._client.register_callback(callback, ("Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineStepContext",))
         if depends_on is not None:
             rpc_args['dependsOn'] = depends_on
         if required_by is not None:
@@ -8165,7 +8580,7 @@ class _BaseResource(AbstractResource):
     def with_pipeline_config(self, callback: typing.Callable[[PipelineConfigurationContext], None]) -> typing.Self:
         """Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships."""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
-        rpc_args['callback'] = self._client.register_callback(callback)
+        rpc_args['callback'] = self._client.register_callback(callback, ("Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineConfigurationContext",))
         result = self._client.invoke_capability(
             'Aspire.Hosting/withPipelineConfiguration',
             rpc_args,
@@ -8185,7 +8600,7 @@ class _BaseResource(AbstractResource):
     def on_before_resource_started(self, callback: typing.Callable[[BeforeResourceStartedEvent], None]) -> typing.Self:
         """Subscribes to the BeforeResourceStarted event."""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
-        rpc_args['callback'] = self._client.register_callback(callback)
+        rpc_args['callback'] = self._client.register_callback(callback, ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.BeforeResourceStartedEvent",))
         result = self._client.invoke_capability(
             'Aspire.Hosting/onBeforeResourceStarted',
             rpc_args,
@@ -8196,7 +8611,7 @@ class _BaseResource(AbstractResource):
     def on_resource_stopped(self, callback: typing.Callable[[ResourceStoppedEvent], None]) -> typing.Self:
         """Subscribes to the ResourceStopped event."""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
-        rpc_args['callback'] = self._client.register_callback(callback)
+        rpc_args['callback'] = self._client.register_callback(callback, ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceStoppedEvent",))
         result = self._client.invoke_capability(
             'Aspire.Hosting/onResourceStopped',
             rpc_args,
@@ -8207,7 +8622,7 @@ class _BaseResource(AbstractResource):
     def on_initialize_resource(self, callback: typing.Callable[[InitializeResourceEvent], None]) -> typing.Self:
         """Subscribes to the InitializeResource event."""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
-        rpc_args['callback'] = self._client.register_callback(callback)
+        rpc_args['callback'] = self._client.register_callback(callback, ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.InitializeResourceEvent",))
         result = self._client.invoke_capability(
             'Aspire.Hosting/onInitializeResource',
             rpc_args,
@@ -8218,7 +8633,7 @@ class _BaseResource(AbstractResource):
     def on_resource_ready(self, callback: typing.Callable[[ResourceReadyEvent], None]) -> typing.Self:
         """Subscribes to the ResourceReady event."""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
-        rpc_args['callback'] = self._client.register_callback(callback)
+        rpc_args['callback'] = self._client.register_callback(callback, ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceReadyEvent",))
         result = self._client.invoke_capability(
             'Aspire.Hosting/onResourceReady',
             rpc_args,
@@ -8238,7 +8653,7 @@ class _BaseResource(AbstractResource):
     def with_container_build_options(self, callback: typing.Callable[[ContainerBuildOptionsCallbackContext], None]) -> typing.Self:
         """Configures container build options for a compute resource using an async callback."""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
-        rpc_args['callback'] = self._client.register_callback(callback)
+        rpc_args['callback'] = self._client.register_callback(callback, ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerBuildOptionsCallbackContext",))
         result = self._client.invoke_capability(
             'Aspire.Hosting/withContainerBuildOptions',
             rpc_args,
@@ -8308,7 +8723,7 @@ class _BaseResource(AbstractResource):
         """Configures with optional callback"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         if callback is not None:
-            rpc_args['callback'] = self._client.register_callback(callback)
+            rpc_args['callback'] = self._client.register_callback(callback, ("Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestCallbackContext",))
         result = self._client.invoke_capability(
             'Aspire.Hosting.CodeGeneration.Python.Tests/withOptionalCallback',
             rpc_args,
@@ -8341,7 +8756,7 @@ class _BaseResource(AbstractResource):
     def with_validator(self, validator: typing.Callable[[TestResourceContext], bool]) -> typing.Self:
         """Adds validation callback"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
-        rpc_args['validator'] = self._client.register_callback(validator)
+        rpc_args['validator'] = self._client.register_callback(validator, ("Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestResourceContext",))
         result = self._client.invoke_capability(
             'Aspire.Hosting.CodeGeneration.Python.Tests/withValidator',
             rpc_args,
@@ -8469,14 +8884,14 @@ class _BaseResource(AbstractResource):
         return self
 
     def __init__(self, handle: Handle, client: AspireClient, **kwargs: typing.Unpack[_BaseResourceKwargs]) -> None:
-        if _container_registry := kwargs.pop("container_registry", None):
+        if (_container_registry := kwargs.pop("container_registry", None)) is not None:
             if _validate_type(_container_registry, AbstractResource):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["registry"] = typing.cast(AbstractResource, _container_registry)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withContainerRegistry', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'container_registry'. Expected: AbstractResource")
-        if _dockerfile_base_image := kwargs.pop("dockerfile_base_image", None):
+        if (_dockerfile_base_image := kwargs.pop("dockerfile_base_image", None)) is not None and _dockerfile_base_image is not False:
             if _validate_dict_types(_dockerfile_base_image, DockerfileBaseImageParameters):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["buildImage"] = typing.cast(DockerfileBaseImageParameters, _dockerfile_base_image).get("build_image")
@@ -8487,7 +8902,7 @@ class _BaseResource(AbstractResource):
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withDockerfileBaseImage', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'dockerfile_base_image'. Expected: DockerfileBaseImageParameters or Literal[True]")
-        if _required_command := kwargs.pop("required_command", None):
+        if (_required_command := kwargs.pop("required_command", None)) is not None:
             if _validate_type(_required_command, str):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["command"] = typing.cast(str, _required_command)
@@ -8499,16 +8914,16 @@ class _BaseResource(AbstractResource):
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withRequiredCommand', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'required_command'. Expected: str or (str, str)")
-        if _required_command_validation := kwargs.pop("required_command_validation", None):
+        if (_required_command_validation := kwargs.pop("required_command_validation", None)) is not None:
             if _validate_tuple_types(_required_command_validation, (str, typing.Callable[[RequiredCommandValidationContext], RequiredCommandValidationResult])):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["command"] = typing.cast(tuple[str, typing.Callable[[RequiredCommandValidationContext], RequiredCommandValidationResult]], _required_command_validation)[0]
-                rpc_args["validationCallback"] = client.register_callback(typing.cast(tuple[str, typing.Callable[[RequiredCommandValidationContext], RequiredCommandValidationResult]], _required_command_validation)[1])
+                rpc_args["validationCallback"] = client.register_callback(typing.cast(tuple[str, typing.Callable[[RequiredCommandValidationContext], RequiredCommandValidationResult]], _required_command_validation)[1], ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.RequiredCommandValidationContext",))
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withRequiredCommandValidation', rpc_args))
             elif _validate_dict_types(_required_command_validation, RequiredCommandValidationParameters):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["command"] = typing.cast(RequiredCommandValidationParameters, _required_command_validation)["command"]
-                rpc_args["validationCallback"] = client.register_callback(typing.cast(RequiredCommandValidationParameters, _required_command_validation)["validation_callback"])
+                rpc_args["validationCallback"] = client.register_callback(typing.cast(RequiredCommandValidationParameters, _required_command_validation)["validation_callback"], ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.RequiredCommandValidationContext",))
                 rpc_args["helpLink"] = typing.cast(RequiredCommandValidationParameters, _required_command_validation).get("help_link")
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withRequiredCommandValidation', rpc_args))
             else:
@@ -8525,28 +8940,28 @@ class _BaseResource(AbstractResource):
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withPersistentLifetime', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'persistent_lifetime'. Expected: Literal[True]")
-        if _lifetime_of := kwargs.pop("lifetime_of", None):
+        if (_lifetime_of := kwargs.pop("lifetime_of", None)) is not None:
             if _validate_type(_lifetime_of, AbstractResource):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["sourceBuilder"] = typing.cast(AbstractResource, _lifetime_of)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withLifetimeOf', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'lifetime_of'. Expected: AbstractResource")
-        if _parent_process_lifetime := kwargs.pop("parent_process_lifetime", None):
+        if (_parent_process_lifetime := kwargs.pop("parent_process_lifetime", None)) is not None:
             if _validate_type(_parent_process_lifetime, int):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["parentProcessId"] = typing.cast(int, _parent_process_lifetime)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withParentProcessLifetime', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'parent_process_lifetime'. Expected: int")
-        if _urls := kwargs.pop("urls", None):
+        if (_urls := kwargs.pop("urls", None)) is not None:
             if _validate_type(_urls, typing.Callable[[ResourceUrlsCallbackContext], None]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[ResourceUrlsCallbackContext], None], _urls))
+                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[ResourceUrlsCallbackContext], None], _urls), ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceUrlsCallbackContext",))
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withUrls', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'urls'. Expected: Callable[[ResourceUrlsCallbackContext], None]")
-        if _url := kwargs.pop("url", None):
+        if (_url := kwargs.pop("url", None)) is not None:
             if _validate_type(_url, str | ReferenceExpression):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["url"] = typing.cast(str | ReferenceExpression, _url)
@@ -8558,11 +8973,11 @@ class _BaseResource(AbstractResource):
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withUrl', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'url'. Expected: str | ReferenceExpression or (str | ReferenceExpression, str)")
-        if _url_for_endpoint := kwargs.pop("url_for_endpoint", None):
+        if (_url_for_endpoint := kwargs.pop("url_for_endpoint", None)) is not None:
             if _validate_tuple_types(_url_for_endpoint, (str, typing.Callable[[ResourceUrlAnnotation], None])):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["endpointName"] = typing.cast(tuple[str, typing.Callable[[ResourceUrlAnnotation], None]], _url_for_endpoint)[0]
-                rpc_args["callback"] = client.register_callback(typing.cast(tuple[str, typing.Callable[[ResourceUrlAnnotation], None]], _url_for_endpoint)[1])
+                rpc_args["callback"] = client.register_callback(typing.cast(tuple[str, typing.Callable[[ResourceUrlAnnotation], None]], _url_for_endpoint)[1], dto_writeback=True)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withUrlForEndpoint', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'url_for_endpoint'. Expected: (str, Callable[[ResourceUrlAnnotation], None])")
@@ -8578,30 +8993,30 @@ class _BaseResource(AbstractResource):
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withExplicitStart', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'explicit_start'. Expected: Literal[True]")
-        if _health_check := kwargs.pop("health_check", None):
+        if (_health_check := kwargs.pop("health_check", None)) is not None:
             if _validate_type(_health_check, str):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["key"] = typing.cast(str, _health_check)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHealthCheck', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'health_check'. Expected: str")
-        if _command := kwargs.pop("command", None):
+        if (_command := kwargs.pop("command", None)) is not None:
             if _validate_tuple_types(_command, (str, str, typing.Callable[[ExecuteCommandContext], ExecuteCommandResult])):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["name"] = typing.cast(tuple[str, str, typing.Callable[[ExecuteCommandContext], ExecuteCommandResult]], _command)[0]
                 rpc_args["displayName"] = typing.cast(tuple[str, str, typing.Callable[[ExecuteCommandContext], ExecuteCommandResult]], _command)[1]
-                rpc_args["executeCommand"] = client.register_callback(typing.cast(tuple[str, str, typing.Callable[[ExecuteCommandContext], ExecuteCommandResult]], _command)[2])
+                rpc_args["executeCommand"] = client.register_callback(typing.cast(tuple[str, str, typing.Callable[[ExecuteCommandContext], ExecuteCommandResult]], _command)[2], ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecuteCommandContext",))
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withCommand', rpc_args))
             elif _validate_dict_types(_command, CommandParameters):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["name"] = typing.cast(CommandParameters, _command)["name"]
                 rpc_args["displayName"] = typing.cast(CommandParameters, _command)["display_name"]
-                rpc_args["executeCommand"] = client.register_callback(typing.cast(CommandParameters, _command)["execute_command"])
+                rpc_args["executeCommand"] = client.register_callback(typing.cast(CommandParameters, _command)["execute_command"], ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecuteCommandContext",))
                 rpc_args["commandOptions"] = typing.cast(CommandParameters, _command).get("command_options")
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withCommand', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'command'. Expected: (str, str, Callable[[ExecuteCommandContext], ExecuteCommandResult]) or CommandParameters")
-        if _process_command := kwargs.pop("process_command", None):
+        if (_process_command := kwargs.pop("process_command", None)) is not None:
             if _validate_tuple_types(_process_command, (str, str, ProcessCommandExportOptions)):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["commandName"] = typing.cast(tuple[str, str, ProcessCommandExportOptions], _process_command)[0]
@@ -8610,30 +9025,30 @@ class _BaseResource(AbstractResource):
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withProcessCommand', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'process_command'. Expected: (str, str, ProcessCommandExportOptions)")
-        if _process_command_factory := kwargs.pop("process_command_factory", None):
+        if (_process_command_factory := kwargs.pop("process_command_factory", None)) is not None:
             if _validate_tuple_types(_process_command_factory, (str, str, typing.Callable[[ExecuteCommandContext], ProcessCommandSpecExportData])):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["commandName"] = typing.cast(tuple[str, str, typing.Callable[[ExecuteCommandContext], ProcessCommandSpecExportData]], _process_command_factory)[0]
                 rpc_args["displayName"] = typing.cast(tuple[str, str, typing.Callable[[ExecuteCommandContext], ProcessCommandSpecExportData]], _process_command_factory)[1]
-                rpc_args["createProcessSpec"] = client.register_callback(typing.cast(tuple[str, str, typing.Callable[[ExecuteCommandContext], ProcessCommandSpecExportData]], _process_command_factory)[2])
+                rpc_args["createProcessSpec"] = client.register_callback(typing.cast(tuple[str, str, typing.Callable[[ExecuteCommandContext], ProcessCommandSpecExportData]], _process_command_factory)[2], ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecuteCommandContext",))
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withProcessCommandFactory', rpc_args))
             elif _validate_dict_types(_process_command_factory, ProcessCommandFactoryParameters):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["commandName"] = typing.cast(ProcessCommandFactoryParameters, _process_command_factory)["command_name"]
                 rpc_args["displayName"] = typing.cast(ProcessCommandFactoryParameters, _process_command_factory)["display_name"]
-                rpc_args["createProcessSpec"] = client.register_callback(typing.cast(ProcessCommandFactoryParameters, _process_command_factory)["create_process_spec"])
+                rpc_args["createProcessSpec"] = client.register_callback(typing.cast(ProcessCommandFactoryParameters, _process_command_factory)["create_process_spec"], ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecuteCommandContext",))
                 rpc_args["options"] = typing.cast(ProcessCommandFactoryParameters, _process_command_factory).get("options")
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withProcessCommandFactory', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'process_command_factory'. Expected: (str, str, Callable[[ExecuteCommandContext], ProcessCommandSpecExportData]) or ProcessCommandFactoryParameters")
-        if _subscribe_https_endpoints_update := kwargs.pop("subscribe_https_endpoints_update", None):
+        if (_subscribe_https_endpoints_update := kwargs.pop("subscribe_https_endpoints_update", None)) is not None:
             if _validate_type(_subscribe_https_endpoints_update, typing.Callable[[HttpsEndpointUpdateCallbackContext], None]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[HttpsEndpointUpdateCallbackContext], None], _subscribe_https_endpoints_update))
+                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[HttpsEndpointUpdateCallbackContext], None], _subscribe_https_endpoints_update), ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.HttpsEndpointUpdateCallbackContext",))
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/subscribeHttpsEndpointsUpdate', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'subscribe_https_endpoints_update'. Expected: Callable[[HttpsEndpointUpdateCallbackContext], None]")
-        if _relationship := kwargs.pop("relationship", None):
+        if (_relationship := kwargs.pop("relationship", None)) is not None:
             if _validate_tuple_types(_relationship, (AbstractResource, str)):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["resourceBuilder"] = typing.cast(tuple[AbstractResource, str], _relationship)[0]
@@ -8641,21 +9056,28 @@ class _BaseResource(AbstractResource):
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withBuilderRelationship', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'relationship'. Expected: (AbstractResource, str)")
-        if _parent_relationship := kwargs.pop("parent_relationship", None):
+        if (_parent_relationship := kwargs.pop("parent_relationship", None)) is not None:
             if _validate_type(_parent_relationship, AbstractResource):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["parent"] = typing.cast(AbstractResource, _parent_relationship)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withBuilderParentRelationship', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'parent_relationship'. Expected: AbstractResource")
-        if _child_relationship := kwargs.pop("child_relationship", None):
+        if (_child_relationship := kwargs.pop("child_relationship", None)) is not None:
             if _validate_type(_child_relationship, AbstractResource):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["child"] = typing.cast(AbstractResource, _child_relationship)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withBuilderChildRelationship', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'child_relationship'. Expected: AbstractResource")
-        if _icon_name := kwargs.pop("icon_name", None):
+        if (_resource_type_display_name := kwargs.pop("resource_type_display_name", None)) is not None:
+            if _validate_type(_resource_type_display_name, str):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["resourceTypeDisplayName"] = typing.cast(str, _resource_type_display_name)
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withResourceTypeDisplayName', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'resource_type_display_name'. Expected: str")
+        if (_icon_name := kwargs.pop("icon_name", None)) is not None:
             if _validate_type(_icon_name, str):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["iconName"] = typing.cast(str, _icon_name)
@@ -8679,7 +9101,7 @@ class _BaseResource(AbstractResource):
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHidden', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'hidden'. Expected: Literal[True]")
-        if _hidden_on_completion := kwargs.pop("hidden_on_completion", None):
+        if (_hidden_on_completion := kwargs.pop("hidden_on_completion", None)) is not None and _hidden_on_completion is not False:
             if _validate_dict_types(_hidden_on_completion, HiddenOnCompletionParameters):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["exitCode"] = typing.cast(HiddenOnCompletionParameters, _hidden_on_completion).get("exit_code")
@@ -8690,22 +9112,48 @@ class _BaseResource(AbstractResource):
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHiddenOnCompletion', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'hidden_on_completion'. Expected: HiddenOnCompletionParameters or Literal[True]")
-        if _terminal := kwargs.pop("terminal", None):
-            if _terminal is True:
+        if (_trait := kwargs.pop("trait", None)) is not None:
+            if _validate_tuple_types(_trait, (str, str)):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["name"] = typing.cast(tuple[str, str], _trait)[0]
+                rpc_args["value"] = typing.cast(tuple[str, str], _trait)[1]
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withTrait', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'trait'. Expected: (str, str)")
+        if (_tags := kwargs.pop("tags", None)) is not None:
+            if _validate_type(_tags, typing.Iterable[str]):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["tags"] = typing.cast(typing.Iterable[str], _tags)
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withTags', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'tags'. Expected: Iterable[str]")
+        if (_display_order := kwargs.pop("display_order", None)) is not None:
+            if _validate_type(_display_order, int):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["order"] = typing.cast(int, _display_order)
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withDisplayOrder', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'display_order'. Expected: int")
+        if (_terminal := kwargs.pop("terminal", None)) is not None and _terminal is not False:
+            if _validate_type(_terminal, typing.Callable[[TerminalOptions], None]):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["configure"] = client.register_callback(typing.cast(typing.Callable[[TerminalOptions], None], _terminal), dto_writeback=True)
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withTerminal', rpc_args))
+            elif _terminal is True:
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withTerminal', rpc_args))
             else:
-                raise TypeError("Invalid type for option 'terminal'. Expected: Literal[True]")
-        if _pipeline_step_factory := kwargs.pop("pipeline_step_factory", None):
+                raise TypeError("Invalid type for option 'terminal'. Expected: Callable[[TerminalOptions], None] or Literal[True]")
+        if (_pipeline_step_factory := kwargs.pop("pipeline_step_factory", None)) is not None:
             if _validate_tuple_types(_pipeline_step_factory, (str, typing.Callable[[PipelineStepContext], None])):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["stepName"] = typing.cast(tuple[str, typing.Callable[[PipelineStepContext], None]], _pipeline_step_factory)[0]
-                rpc_args["callback"] = client.register_callback(typing.cast(tuple[str, typing.Callable[[PipelineStepContext], None]], _pipeline_step_factory)[1])
+                rpc_args["callback"] = client.register_callback(typing.cast(tuple[str, typing.Callable[[PipelineStepContext], None]], _pipeline_step_factory)[1], ("Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineStepContext",))
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withPipelineStepFactory', rpc_args))
             elif _validate_dict_types(_pipeline_step_factory, PipelineStepFactoryParameters):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["stepName"] = typing.cast(PipelineStepFactoryParameters, _pipeline_step_factory)["step_name"]
-                rpc_args["callback"] = client.register_callback(typing.cast(PipelineStepFactoryParameters, _pipeline_step_factory)["callback"])
+                rpc_args["callback"] = client.register_callback(typing.cast(PipelineStepFactoryParameters, _pipeline_step_factory)["callback"], ("Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineStepContext",))
                 rpc_args["dependsOn"] = typing.cast(PipelineStepFactoryParameters, _pipeline_step_factory).get("depends_on")
                 rpc_args["requiredBy"] = typing.cast(PipelineStepFactoryParameters, _pipeline_step_factory).get("required_by")
                 rpc_args["tags"] = typing.cast(PipelineStepFactoryParameters, _pipeline_step_factory).get("tags")
@@ -8713,49 +9161,49 @@ class _BaseResource(AbstractResource):
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withPipelineStepFactory', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'pipeline_step_factory'. Expected: (str, Callable[[PipelineStepContext], None]) or PipelineStepFactoryParameters")
-        if _pipeline_config := kwargs.pop("pipeline_config", None):
+        if (_pipeline_config := kwargs.pop("pipeline_config", None)) is not None:
             if _validate_type(_pipeline_config, typing.Callable[[PipelineConfigurationContext], None]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[PipelineConfigurationContext], None], _pipeline_config))
+                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[PipelineConfigurationContext], None], _pipeline_config), ("Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineConfigurationContext",))
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withPipelineConfiguration', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'pipeline_config'. Expected: Callable[[PipelineConfigurationContext], None]")
-        if _on_before_resource_started := kwargs.pop("on_before_resource_started", None):
+        if (_on_before_resource_started := kwargs.pop("on_before_resource_started", None)) is not None:
             if _validate_type(_on_before_resource_started, typing.Callable[[BeforeResourceStartedEvent], None]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[BeforeResourceStartedEvent], None], _on_before_resource_started))
+                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[BeforeResourceStartedEvent], None], _on_before_resource_started), ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.BeforeResourceStartedEvent",))
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/onBeforeResourceStarted', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'on_before_resource_started'. Expected: Callable[[BeforeResourceStartedEvent], None]")
-        if _on_resource_stopped := kwargs.pop("on_resource_stopped", None):
+        if (_on_resource_stopped := kwargs.pop("on_resource_stopped", None)) is not None:
             if _validate_type(_on_resource_stopped, typing.Callable[[ResourceStoppedEvent], None]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[ResourceStoppedEvent], None], _on_resource_stopped))
+                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[ResourceStoppedEvent], None], _on_resource_stopped), ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceStoppedEvent",))
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/onResourceStopped', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'on_resource_stopped'. Expected: Callable[[ResourceStoppedEvent], None]")
-        if _on_initialize_resource := kwargs.pop("on_initialize_resource", None):
+        if (_on_initialize_resource := kwargs.pop("on_initialize_resource", None)) is not None:
             if _validate_type(_on_initialize_resource, typing.Callable[[InitializeResourceEvent], None]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[InitializeResourceEvent], None], _on_initialize_resource))
+                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[InitializeResourceEvent], None], _on_initialize_resource), ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.InitializeResourceEvent",))
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/onInitializeResource', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'on_initialize_resource'. Expected: Callable[[InitializeResourceEvent], None]")
-        if _on_resource_ready := kwargs.pop("on_resource_ready", None):
+        if (_on_resource_ready := kwargs.pop("on_resource_ready", None)) is not None:
             if _validate_type(_on_resource_ready, typing.Callable[[ResourceReadyEvent], None]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[ResourceReadyEvent], None], _on_resource_ready))
+                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[ResourceReadyEvent], None], _on_resource_ready), ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceReadyEvent",))
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/onResourceReady', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'on_resource_ready'. Expected: Callable[[ResourceReadyEvent], None]")
-        if _container_build_options := kwargs.pop("container_build_options", None):
+        if (_container_build_options := kwargs.pop("container_build_options", None)) is not None:
             if _validate_type(_container_build_options, typing.Callable[[ContainerBuildOptionsCallbackContext], None]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[ContainerBuildOptionsCallbackContext], None], _container_build_options))
+                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[ContainerBuildOptionsCallbackContext], None], _container_build_options), ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerBuildOptionsCallbackContext",))
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withContainerBuildOptions', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'container_build_options'. Expected: Callable[[ContainerBuildOptionsCallbackContext], None]")
-        if _optional_string := kwargs.pop("optional_string", None):
+        if (_optional_string := kwargs.pop("optional_string", None)) is not None and _optional_string is not False:
             if _validate_dict_types(_optional_string, OptionalStringParameters):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["value"] = typing.cast(OptionalStringParameters, _optional_string).get("value")
@@ -8766,101 +9214,101 @@ class _BaseResource(AbstractResource):
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting.CodeGeneration.Python.Tests/withOptionalString', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'optional_string'. Expected: OptionalStringParameters or Literal[True]")
-        if _config := kwargs.pop("config", None):
+        if (_config := kwargs.pop("config", None)) is not None:
             if _validate_type(_config, TestConfigDto):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["config"] = typing.cast(TestConfigDto, _config)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting.CodeGeneration.Python.Tests/withConfig', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'config'. Expected: TestConfigDto")
-        if _created_at := kwargs.pop("created_at", None):
+        if (_created_at := kwargs.pop("created_at", None)) is not None:
             if _validate_type(_created_at, datetime.datetime):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["createdAt"] = typing.cast(datetime.datetime, _created_at)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting.CodeGeneration.Python.Tests/withCreatedAt', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'created_at'. Expected: datetime.datetime")
-        if _modified_at := kwargs.pop("modified_at", None):
+        if (_modified_at := kwargs.pop("modified_at", None)) is not None:
             if _validate_type(_modified_at, datetime.datetime):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["modifiedAt"] = typing.cast(datetime.datetime, _modified_at)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting.CodeGeneration.Python.Tests/withModifiedAt', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'modified_at'. Expected: datetime.datetime")
-        if _correlation_id := kwargs.pop("correlation_id", None):
+        if (_correlation_id := kwargs.pop("correlation_id", None)) is not None:
             if _validate_type(_correlation_id, str):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["correlationId"] = typing.cast(str, _correlation_id)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting.CodeGeneration.Python.Tests/withCorrelationId', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'correlation_id'. Expected: str")
-        if _optional_callback := kwargs.pop("optional_callback", None):
+        if (_optional_callback := kwargs.pop("optional_callback", None)) is not None and _optional_callback is not False:
             if _validate_type(_optional_callback, typing.Callable[[TestCallbackContext], None]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[TestCallbackContext], None], _optional_callback))
+                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[TestCallbackContext], None], _optional_callback), ("Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestCallbackContext",))
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting.CodeGeneration.Python.Tests/withOptionalCallback', rpc_args))
             elif _optional_callback is True:
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting.CodeGeneration.Python.Tests/withOptionalCallback', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'optional_callback'. Expected: Callable[[TestCallbackContext], None] or Literal[True]")
-        if _status := kwargs.pop("status", None):
+        if (_status := kwargs.pop("status", None)) is not None:
             if _validate_type(_status, TestResourceStatus):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["status"] = typing.cast(TestResourceStatus, _status)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting.CodeGeneration.Python.Tests/withStatus', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'status'. Expected: TestResourceStatus")
-        if _nested_config := kwargs.pop("nested_config", None):
+        if (_nested_config := kwargs.pop("nested_config", None)) is not None:
             if _validate_type(_nested_config, TestNestedDto):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["config"] = typing.cast(TestNestedDto, _nested_config)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting.CodeGeneration.Python.Tests/withNestedConfig', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'nested_config'. Expected: TestNestedDto")
-        if _validator := kwargs.pop("validator", None):
+        if (_validator := kwargs.pop("validator", None)) is not None:
             if _validate_type(_validator, typing.Callable[[TestResourceContext], bool]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["validator"] = client.register_callback(typing.cast(typing.Callable[[TestResourceContext], bool], _validator))
+                rpc_args["validator"] = client.register_callback(typing.cast(typing.Callable[[TestResourceContext], bool], _validator), ("Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestResourceContext",))
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting.CodeGeneration.Python.Tests/withValidator', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'validator'. Expected: Callable[[TestResourceContext], bool]")
-        if _test_wait_for := kwargs.pop("test_wait_for", None):
+        if (_test_wait_for := kwargs.pop("test_wait_for", None)) is not None:
             if _validate_type(_test_wait_for, AbstractResource):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["dependency"] = typing.cast(AbstractResource, _test_wait_for)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting.CodeGeneration.Python.Tests/testWaitFor', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'test_wait_for'. Expected: AbstractResource")
-        if _dependency := kwargs.pop("dependency", None):
+        if (_dependency := kwargs.pop("dependency", None)) is not None:
             if _validate_type(_dependency, AbstractResourceWithConnectionString):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["dependency"] = typing.cast(AbstractResourceWithConnectionString, _dependency)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting.CodeGeneration.Python.Tests/withDependency', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'dependency'. Expected: AbstractResourceWithConnectionString")
-        if _union_dependency := kwargs.pop("union_dependency", None):
+        if (_union_dependency := kwargs.pop("union_dependency", None)) is not None:
             if _validate_type(_union_dependency, str | AbstractResourceWithConnectionString):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["dependency"] = typing.cast(str | AbstractResourceWithConnectionString, _union_dependency)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting.CodeGeneration.Python.Tests/withUnionDependency', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'union_dependency'. Expected: str | AbstractResourceWithConnectionString")
-        if _endpoints := kwargs.pop("endpoints", None):
+        if (_endpoints := kwargs.pop("endpoints", None)) is not None:
             if _validate_type(_endpoints, typing.Iterable[str]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["endpoints"] = typing.cast(typing.Iterable[str], _endpoints)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting.CodeGeneration.Python.Tests/withEndpoints', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'endpoints'. Expected: Iterable[str]")
-        if _cancellable_operation := kwargs.pop("cancellable_operation", None):
+        if (_cancellable_operation := kwargs.pop("cancellable_operation", None)) is not None:
             if _validate_type(_cancellable_operation, typing.Callable[[CancellationToken], None]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["operation"] = client.register_callback(typing.cast(typing.Callable[[CancellationToken], None], _cancellable_operation))
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting.CodeGeneration.Python.Tests/withCancellableOperation', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'cancellable_operation'. Expected: Callable[[CancellationToken], None]")
-        if _merge_label := kwargs.pop("merge_label", None):
+        if (_merge_label := kwargs.pop("merge_label", None)) is not None:
             if _validate_type(_merge_label, str):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["label"] = typing.cast(str, _merge_label)
@@ -8872,7 +9320,7 @@ class _BaseResource(AbstractResource):
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting.CodeGeneration.Python.Tests/withMergeLabelCategorized', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'merge_label'. Expected: str or (str, str)")
-        if _merge_endpoint := kwargs.pop("merge_endpoint", None):
+        if (_merge_endpoint := kwargs.pop("merge_endpoint", None)) is not None:
             if _validate_tuple_types(_merge_endpoint, (str, int)):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["endpointName"] = typing.cast(tuple[str, int], _merge_endpoint)[0]
@@ -8887,7 +9335,7 @@ class _BaseResource(AbstractResource):
                 handle = self._wrap_builder(client.invoke_capability(capability_id, rpc_args))
             else:
                 raise TypeError("Invalid type for option 'merge_endpoint'. Expected: (str, int) or MergeEndpointParameters")
-        if _merge_logging := kwargs.pop("merge_logging", None):
+        if (_merge_logging := kwargs.pop("merge_logging", None)) is not None:
             if _validate_type(_merge_logging, str):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["logLevel"] = typing.cast(str, _merge_logging)
@@ -8902,7 +9350,7 @@ class _BaseResource(AbstractResource):
                 handle = self._wrap_builder(client.invoke_capability(capability_id, rpc_args))
             else:
                 raise TypeError("Invalid type for option 'merge_logging'. Expected: str or MergeLoggingParameters")
-        if _merge_route := kwargs.pop("merge_route", None):
+        if (_merge_route := kwargs.pop("merge_route", None)) is not None:
             if _validate_dict_types(_merge_route, MergeRouteParameters):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["path"] = typing.cast(MergeRouteParameters, _merge_route)["path"]
@@ -8958,12 +9406,13 @@ class ContainerResourceKwargs(_BaseResourceKwargs, total=False):
     dockerfile_builder: tuple[str, typing.Callable[[DockerfileBuilderCallbackContext], None]] | DockerfileBuilderParameters
     container_network_alias: str
     mcp_server: McpServerParameters | typing.Literal[True]
-    otlp_exporter: OtlpProtocol | typing.Literal[True]
+    otlp_exporter: OtlpProtocol | None | typing.Literal[True]
     publish_as_connection_string: typing.Literal[True]
     env: tuple[str, str | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | AbstractResourceWithConnectionString | AbstractExpressionValue]
     env_callback: typing.Callable[[EnvironmentCallbackContext], None]
     args: typing.Iterable[str]
     args_callback: typing.Callable[[CommandLineArgsCallbackContext], None]
+    args_replace: typing.Iterable[str]
     reference_env: ReferenceEnvironmentInjectionOptions
     reference: AbstractResource | EndpointReference | str | ReferenceParameters
     endpoint_callback: tuple[str, typing.Callable[[EndpointUpdateContext], None]] | EndpointCallbackParameters
@@ -8975,13 +9424,14 @@ class ContainerResourceKwargs(_BaseResourceKwargs, total=False):
     https_endpoint: HttpsEndpointParameters | typing.Literal[True]
     external_http_endpoints: typing.Literal[True]
     as_http2_service: typing.Literal[True]
-    wait_for: AbstractResource | tuple[AbstractResource, WaitBehavior]
-    wait_for_start: AbstractResource | tuple[AbstractResource, WaitBehavior]
+    wait_for: AbstractResource | tuple[AbstractResource, WaitBehavior | None]
+    wait_for_start: AbstractResource | tuple[AbstractResource, WaitBehavior | None]
     wait_for_completion: AbstractResource | tuple[AbstractResource, int]
     http_health_check: HttpHealthCheckParameters | typing.Literal[True]
     http_command: tuple[str, str] | HttpCommandParameters
     developer_certificate_trust: bool
     certificate_trust_scope: CertificateTrustScope
+    certificate_trust_env: str | tuple[str, str]
     https_developer_certificate: ParameterResource | typing.Literal[True]
     without_https_certificate: typing.Literal[True]
     https_certificate_config: typing.Callable[[HttpsCertificateConfigurationCallbackAnnotationContext], None]
@@ -9134,7 +9584,7 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
         """Builds the specified container image from a Dockerfile generated by an asynchronous factory function."""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['contextPath'] = context_path
-        rpc_args['dockerfileFactory'] = self._client.register_callback(dockerfile_factory)
+        rpc_args['dockerfileFactory'] = self._client.register_callback(dockerfile_factory, ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.DockerfileFactoryContext",))
         if stage is not None:
             rpc_args['stage'] = stage
         result = self._client.invoke_capability(
@@ -9213,7 +9663,7 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
         """Creates or updates files and/or folders at the destination path in the container using entries produced by a callback."""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['destinationPath'] = destination_path
-        rpc_args['callback'] = self._client.register_callback(callback)
+        rpc_args['callback'] = self._client.register_callback(callback, ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerFileSystemCallbackContext", None))
         if options is not None:
             rpc_args['options'] = options
         result = self._client.invoke_capability(
@@ -9227,7 +9677,7 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
         """Configures the resource to use a programmatically generated Dockerfile"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['contextPath'] = context_path
-        rpc_args['callback'] = self._client.register_callback(callback)
+        rpc_args['callback'] = self._client.register_callback(callback, ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.DockerfileBuilderCallbackContext",))
         if stage is not None:
             rpc_args['stage'] = stage
         result = self._client.invoke_capability(
@@ -9299,7 +9749,7 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
     def with_env_callback(self, callback: typing.Callable[[EnvironmentCallbackContext], None]) -> typing.Self:
         """Allows for the population of environment variables on a resource."""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
-        rpc_args['callback'] = self._client.register_callback(callback)
+        rpc_args['callback'] = self._client.register_callback(callback, ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EnvironmentCallbackContext",))
         result = self._client.invoke_capability(
             'Aspire.Hosting/withEnvironmentCallback',
             rpc_args,
@@ -9321,9 +9771,20 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
     def with_args_callback(self, callback: typing.Callable[[CommandLineArgsCallbackContext], None]) -> typing.Self:
         """Adds a callback to be executed with a list of command-line arguments when a resource is started."""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
-        rpc_args['callback'] = self._client.register_callback(callback)
+        rpc_args['callback'] = self._client.register_callback(callback, ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandLineArgsCallbackContext",))
         result = self._client.invoke_capability(
             'Aspire.Hosting/withArgsCallback',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
+    def with_args_replace(self, args: typing.Iterable[str]) -> typing.Self:
+        """Replaces the arguments to be passed to a resource that supports arguments when it is launched."""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['args'] = args
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withArgsReplace',
             rpc_args,
         )
         self._handle = self._wrap_builder(result)
@@ -9361,7 +9822,7 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
         """Updates a named endpoint via callback"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['endpointName'] = endpoint_name
-        rpc_args['callback'] = self._client.register_callback(callback)
+        rpc_args['callback'] = self._client.register_callback(callback, ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointUpdateContext",))
         if create_if_not_exists is not None:
             rpc_args['createIfNotExists'] = create_if_not_exists
         result = self._client.invoke_capability(
@@ -9374,7 +9835,7 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
     def with_http_endpoint_callback(self, callback: typing.Callable[[EndpointUpdateContext], None], *, name: str | None = None, create_if_not_exists: bool = True) -> typing.Self:
         """Updates an HTTP endpoint via callback"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
-        rpc_args['callback'] = self._client.register_callback(callback)
+        rpc_args['callback'] = self._client.register_callback(callback, ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointUpdateContext",))
         if name is not None:
             rpc_args['name'] = name
         if create_if_not_exists is not None:
@@ -9389,7 +9850,7 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
     def with_https_endpoint_callback(self, callback: typing.Callable[[EndpointUpdateContext], None], *, name: str | None = None, create_if_not_exists: bool = True) -> typing.Self:
         """Updates an HTTPS endpoint via callback"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
-        rpc_args['callback'] = self._client.register_callback(callback)
+        rpc_args['callback'] = self._client.register_callback(callback, ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointUpdateContext",))
         if name is not None:
             rpc_args['name'] = name
         if create_if_not_exists is not None:
@@ -9599,6 +10060,19 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
         self._handle = self._wrap_builder(result)
         return self
 
+    def with_certificate_trust_env(self, certificate_bundle_env_var: str, *, certificate_directories_env_var: str | None = None) -> typing.Self:
+        """Configures environment variables that point to Aspire-managed certificate trust paths."""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['certificateBundleEnvironmentVariable'] = certificate_bundle_env_var
+        if certificate_directories_env_var is not None:
+            rpc_args['certificateDirectoriesEnvironmentVariable'] = certificate_directories_env_var
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withCertificateTrustEnvironment',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
     def with_https_developer_certificate(self, *, password: ParameterResource | None = None) -> typing.Self:
         """Indicates that a resource should use the developer certificate key pair for HTTPS endpoints at run time. Currently this indicates use of the ASP.NET Core developer certificate. The developer certificate will only be used when running in local development scenarios; in publish mode resources will use their default certificate configuration."""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
@@ -9624,7 +10098,7 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
     def with_https_certificate_config(self, callback: typing.Callable[[HttpsCertificateConfigurationCallbackAnnotationContext], None]) -> typing.Self:
         """Adds a callback that allows configuring the resource to use a specific HTTPS/TLS certificate key pair for server authentication."""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
-        rpc_args['callback'] = self._client.register_callback(callback)
+        rpc_args['callback'] = self._client.register_callback(callback, ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.HttpsCertificateConfigurationCallbackAnnotationContext",))
         result = self._client.invoke_capability(
             'Aspire.Hosting/withHttpsCertificateConfiguration',
             rpc_args,
@@ -9671,7 +10145,7 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
     def with_image_push_options(self, callback: typing.Callable[[ContainerImagePushOptionsCallbackContext], None]) -> typing.Self:
         """Adds an asynchronous callback to configure container image push options for the resource."""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
-        rpc_args['callback'] = self._client.register_callback(callback)
+        rpc_args['callback'] = self._client.register_callback(callback, ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerImagePushOptionsCallbackContext",))
         result = self._client.invoke_capability(
             'Aspire.Hosting/withImagePushOptions',
             rpc_args,
@@ -9719,7 +10193,7 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
     def on_resource_endpoints_allocated(self, callback: typing.Callable[[ResourceEndpointsAllocatedEvent], None]) -> typing.Self:
         """Subscribes to the ResourceEndpointsAllocated event."""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
-        rpc_args['callback'] = self._client.register_callback(callback)
+        rpc_args['callback'] = self._client.register_callback(callback, ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceEndpointsAllocatedEvent",))
         result = self._client.invoke_capability(
             'Aspire.Hosting/onResourceEndpointsAllocated',
             rpc_args,
@@ -9730,7 +10204,7 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
     def test_with_env_callback(self, callback: typing.Callable[[TestEnvironmentContext], None]) -> typing.Self:
         """Configures environment with callback (test version)"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
-        rpc_args['callback'] = self._client.register_callback(callback)
+        rpc_args['callback'] = self._client.register_callback(callback, ("Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestEnvironmentContext",))
         result = self._client.invoke_capability(
             'Aspire.Hosting.CodeGeneration.Python.Tests/testWithEnvironmentCallback',
             rpc_args,
@@ -9750,7 +10224,7 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
         return self
 
     def __init__(self, handle: Handle, client: AspireClient, **kwargs: typing.Unpack[ContainerResourceKwargs]) -> None:
-        if _bind_mount := kwargs.pop("bind_mount", None):
+        if (_bind_mount := kwargs.pop("bind_mount", None)) is not None:
             if _validate_tuple_types(_bind_mount, (str, str)):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["source"] = typing.cast(tuple[str, str], _bind_mount)[0]
@@ -9764,28 +10238,28 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withBindMount', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'bind_mount'. Expected: (str, str) or BindMountParameters")
-        if _entrypoint := kwargs.pop("entrypoint", None):
+        if (_entrypoint := kwargs.pop("entrypoint", None)) is not None:
             if _validate_type(_entrypoint, str):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["entrypoint"] = typing.cast(str, _entrypoint)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withEntrypoint', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'entrypoint'. Expected: str")
-        if _image_tag := kwargs.pop("image_tag", None):
+        if (_image_tag := kwargs.pop("image_tag", None)) is not None:
             if _validate_type(_image_tag, str):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["tag"] = typing.cast(str, _image_tag)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withImageTag', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'image_tag'. Expected: str")
-        if _image_registry := kwargs.pop("image_registry", None):
+        if (_image_registry := kwargs.pop("image_registry", None)) is not None:
             if _validate_type(_image_registry, str):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["registry"] = typing.cast(str, _image_registry)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withImageRegistry', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'image_registry'. Expected: str")
-        if _image := kwargs.pop("image", None):
+        if (_image := kwargs.pop("image", None)) is not None:
             if _validate_type(_image, str):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["image"] = typing.cast(str, _image)
@@ -9797,28 +10271,28 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withImage', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'image'. Expected: str or (str, str)")
-        if _image_sha256 := kwargs.pop("image_sha256", None):
+        if (_image_sha256 := kwargs.pop("image_sha256", None)) is not None:
             if _validate_type(_image_sha256, str):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["sha256"] = typing.cast(str, _image_sha256)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withImageSHA256', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'image_sha256'. Expected: str")
-        if _container_runtime_args := kwargs.pop("container_runtime_args", None):
+        if (_container_runtime_args := kwargs.pop("container_runtime_args", None)) is not None:
             if _validate_type(_container_runtime_args, typing.Iterable[str]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["args"] = typing.cast(typing.Iterable[str], _container_runtime_args)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withContainerRuntimeArgs', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'container_runtime_args'. Expected: Iterable[str]")
-        if _lifetime := kwargs.pop("lifetime", None):
+        if (_lifetime := kwargs.pop("lifetime", None)) is not None:
             if _validate_type(_lifetime, ContainerLifetime):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["lifetime"] = typing.cast(ContainerLifetime, _lifetime)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withLifetime', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'lifetime'. Expected: ContainerLifetime")
-        if _image_pull_policy := kwargs.pop("image_pull_policy", None):
+        if (_image_pull_policy := kwargs.pop("image_pull_policy", None)) is not None:
             if _validate_type(_image_pull_policy, ImagePullPolicy):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["pullPolicy"] = typing.cast(ImagePullPolicy, _image_pull_policy)
@@ -9831,7 +10305,7 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/publishAsContainer', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'publish_as_container'. Expected: Literal[True]")
-        if _dockerfile := kwargs.pop("dockerfile", None):
+        if (_dockerfile := kwargs.pop("dockerfile", None)) is not None:
             if _validate_type(_dockerfile, str):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["contextPath"] = typing.cast(str, _dockerfile)
@@ -9844,28 +10318,28 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withDockerfile', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'dockerfile'. Expected: str or DockerfileParameters")
-        if _dockerfile_factory := kwargs.pop("dockerfile_factory", None):
+        if (_dockerfile_factory := kwargs.pop("dockerfile_factory", None)) is not None:
             if _validate_tuple_types(_dockerfile_factory, (str, typing.Callable[[DockerfileFactoryContext], str])):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["contextPath"] = typing.cast(tuple[str, typing.Callable[[DockerfileFactoryContext], str]], _dockerfile_factory)[0]
-                rpc_args["dockerfileFactory"] = client.register_callback(typing.cast(tuple[str, typing.Callable[[DockerfileFactoryContext], str]], _dockerfile_factory)[1])
+                rpc_args["dockerfileFactory"] = client.register_callback(typing.cast(tuple[str, typing.Callable[[DockerfileFactoryContext], str]], _dockerfile_factory)[1], ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.DockerfileFactoryContext",))
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withDockerfileFactory', rpc_args))
             elif _validate_dict_types(_dockerfile_factory, DockerfileFactoryParameters):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["contextPath"] = typing.cast(DockerfileFactoryParameters, _dockerfile_factory)["context_path"]
-                rpc_args["dockerfileFactory"] = client.register_callback(typing.cast(DockerfileFactoryParameters, _dockerfile_factory)["dockerfile_factory"])
+                rpc_args["dockerfileFactory"] = client.register_callback(typing.cast(DockerfileFactoryParameters, _dockerfile_factory)["dockerfile_factory"], ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.DockerfileFactoryContext",))
                 rpc_args["stage"] = typing.cast(DockerfileFactoryParameters, _dockerfile_factory).get("stage")
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withDockerfileFactory', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'dockerfile_factory'. Expected: (str, Callable[[DockerfileFactoryContext], str]) or DockerfileFactoryParameters")
-        if _container_name := kwargs.pop("container_name", None):
+        if (_container_name := kwargs.pop("container_name", None)) is not None:
             if _validate_type(_container_name, str):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["name"] = typing.cast(str, _container_name)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withContainerName', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'container_name'. Expected: str")
-        if _build_arg := kwargs.pop("build_arg", None):
+        if (_build_arg := kwargs.pop("build_arg", None)) is not None:
             if _validate_tuple_types(_build_arg, (str, str | ParameterResource)):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["name"] = typing.cast(tuple[str, str | ParameterResource], _build_arg)[0]
@@ -9873,7 +10347,7 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withBuildArg', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'build_arg'. Expected: (str, str | ParameterResource)")
-        if _build_secret := kwargs.pop("build_secret", None):
+        if (_build_secret := kwargs.pop("build_secret", None)) is not None:
             if _validate_tuple_types(_build_secret, (str, ParameterResource)):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["name"] = typing.cast(tuple[str, ParameterResource], _build_secret)[0]
@@ -9881,7 +10355,7 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withParameterBuildSecret', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'build_secret'. Expected: (str, ParameterResource)")
-        if _container_certificate_paths := kwargs.pop("container_certificate_paths", None):
+        if (_container_certificate_paths := kwargs.pop("container_certificate_paths", None)) is not None and _container_certificate_paths is not False:
             if _validate_dict_types(_container_certificate_paths, ContainerCertificatePathsParameters):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["customCertificatesDestination"] = typing.cast(ContainerCertificatePathsParameters, _container_certificate_paths).get("custom_certificates_destination")
@@ -9893,7 +10367,7 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withContainerCertificatePaths', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'container_certificate_paths'. Expected: ContainerCertificatePathsParameters or Literal[True]")
-        if _container_files := kwargs.pop("container_files", None):
+        if (_container_files := kwargs.pop("container_files", None)) is not None:
             if _validate_tuple_types(_container_files, (str, str)):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["destinationPath"] = typing.cast(tuple[str, str], _container_files)[0]
@@ -9907,42 +10381,42 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withContainerFiles', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'container_files'. Expected: (str, str) or ContainerFilesParameters")
-        if _container_files_callback := kwargs.pop("container_files_callback", None):
+        if (_container_files_callback := kwargs.pop("container_files_callback", None)) is not None:
             if _validate_tuple_types(_container_files_callback, (str, typing.Callable[[ContainerFileSystemCallbackContext, CancellationToken], typing.Iterable[ContainerFileSystemItem]])):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["destinationPath"] = typing.cast(tuple[str, typing.Callable[[ContainerFileSystemCallbackContext, CancellationToken], typing.Iterable[ContainerFileSystemItem]]], _container_files_callback)[0]
-                rpc_args["callback"] = client.register_callback(typing.cast(tuple[str, typing.Callable[[ContainerFileSystemCallbackContext, CancellationToken], typing.Iterable[ContainerFileSystemItem]]], _container_files_callback)[1])
+                rpc_args["callback"] = client.register_callback(typing.cast(tuple[str, typing.Callable[[ContainerFileSystemCallbackContext, CancellationToken], typing.Iterable[ContainerFileSystemItem]]], _container_files_callback)[1], ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerFileSystemCallbackContext", None))
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withContainerFilesCallback', rpc_args))
             elif _validate_dict_types(_container_files_callback, ContainerFilesCallbackParameters):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["destinationPath"] = typing.cast(ContainerFilesCallbackParameters, _container_files_callback)["destination_path"]
-                rpc_args["callback"] = client.register_callback(typing.cast(ContainerFilesCallbackParameters, _container_files_callback)["callback"])
+                rpc_args["callback"] = client.register_callback(typing.cast(ContainerFilesCallbackParameters, _container_files_callback)["callback"], ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerFileSystemCallbackContext", None))
                 rpc_args["options"] = typing.cast(ContainerFilesCallbackParameters, _container_files_callback).get("options")
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withContainerFilesCallback', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'container_files_callback'. Expected: (str, Callable[[ContainerFileSystemCallbackContext, CancellationToken], Iterable[ContainerFileSystemItem]]) or ContainerFilesCallbackParameters")
-        if _dockerfile_builder := kwargs.pop("dockerfile_builder", None):
+        if (_dockerfile_builder := kwargs.pop("dockerfile_builder", None)) is not None:
             if _validate_tuple_types(_dockerfile_builder, (str, typing.Callable[[DockerfileBuilderCallbackContext], None])):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["contextPath"] = typing.cast(tuple[str, typing.Callable[[DockerfileBuilderCallbackContext], None]], _dockerfile_builder)[0]
-                rpc_args["callback"] = client.register_callback(typing.cast(tuple[str, typing.Callable[[DockerfileBuilderCallbackContext], None]], _dockerfile_builder)[1])
+                rpc_args["callback"] = client.register_callback(typing.cast(tuple[str, typing.Callable[[DockerfileBuilderCallbackContext], None]], _dockerfile_builder)[1], ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.DockerfileBuilderCallbackContext",))
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withDockerfileBuilder', rpc_args))
             elif _validate_dict_types(_dockerfile_builder, DockerfileBuilderParameters):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["contextPath"] = typing.cast(DockerfileBuilderParameters, _dockerfile_builder)["context_path"]
-                rpc_args["callback"] = client.register_callback(typing.cast(DockerfileBuilderParameters, _dockerfile_builder)["callback"])
+                rpc_args["callback"] = client.register_callback(typing.cast(DockerfileBuilderParameters, _dockerfile_builder)["callback"], ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.DockerfileBuilderCallbackContext",))
                 rpc_args["stage"] = typing.cast(DockerfileBuilderParameters, _dockerfile_builder).get("stage")
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withDockerfileBuilder', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'dockerfile_builder'. Expected: (str, Callable[[DockerfileBuilderCallbackContext], None]) or DockerfileBuilderParameters")
-        if _container_network_alias := kwargs.pop("container_network_alias", None):
+        if (_container_network_alias := kwargs.pop("container_network_alias", None)) is not None:
             if _validate_type(_container_network_alias, str):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["alias"] = typing.cast(str, _container_network_alias)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withContainerNetworkAlias', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'container_network_alias'. Expected: str")
-        if _mcp_server := kwargs.pop("mcp_server", None):
+        if (_mcp_server := kwargs.pop("mcp_server", None)) is not None and _mcp_server is not False:
             if _validate_dict_types(_mcp_server, McpServerParameters):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["path"] = typing.cast(McpServerParameters, _mcp_server).get("path")
@@ -9953,23 +10427,23 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withMcpServer', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'mcp_server'. Expected: McpServerParameters or Literal[True]")
-        if _otlp_exporter := kwargs.pop("otlp_exporter", None):
-            if _validate_type(_otlp_exporter, OtlpProtocol):
+        if (_otlp_exporter := kwargs.pop("otlp_exporter", None)) is not None and _otlp_exporter is not False:
+            if _validate_type(_otlp_exporter, OtlpProtocol | None):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["protocol"] = typing.cast(OtlpProtocol, _otlp_exporter)
+                rpc_args["protocol"] = typing.cast(OtlpProtocol | None, _otlp_exporter)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withOtlpExporter', rpc_args))
             elif _otlp_exporter is True:
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withOtlpExporter', rpc_args))
             else:
-                raise TypeError("Invalid type for option 'otlp_exporter'. Expected: OtlpProtocol or Literal[True]")
+                raise TypeError("Invalid type for option 'otlp_exporter'. Expected: OtlpProtocol | None or Literal[True]")
         if _publish_as_connection_string := kwargs.pop("publish_as_connection_string", None):
             if _publish_as_connection_string is True:
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/publishAsConnectionString', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'publish_as_connection_string'. Expected: Literal[True]")
-        if _env := kwargs.pop("env", None):
+        if (_env := kwargs.pop("env", None)) is not None:
             if _validate_tuple_types(_env, (str, str | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | AbstractResourceWithConnectionString | AbstractExpressionValue)):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["name"] = typing.cast(tuple[str, str | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | AbstractResourceWithConnectionString | AbstractExpressionValue], _env)[0]
@@ -9977,35 +10451,42 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withEnvironment', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'env'. Expected: (str, str | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | AbstractResourceWithConnectionString | AbstractExpressionValue)")
-        if _env_callback := kwargs.pop("env_callback", None):
+        if (_env_callback := kwargs.pop("env_callback", None)) is not None:
             if _validate_type(_env_callback, typing.Callable[[EnvironmentCallbackContext], None]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[EnvironmentCallbackContext], None], _env_callback))
+                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[EnvironmentCallbackContext], None], _env_callback), ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EnvironmentCallbackContext",))
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withEnvironmentCallback', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'env_callback'. Expected: Callable[[EnvironmentCallbackContext], None]")
-        if _args := kwargs.pop("args", None):
+        if (_args := kwargs.pop("args", None)) is not None:
             if _validate_type(_args, typing.Iterable[str]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["args"] = typing.cast(typing.Iterable[str], _args)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withArgs', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'args'. Expected: Iterable[str]")
-        if _args_callback := kwargs.pop("args_callback", None):
+        if (_args_callback := kwargs.pop("args_callback", None)) is not None:
             if _validate_type(_args_callback, typing.Callable[[CommandLineArgsCallbackContext], None]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[CommandLineArgsCallbackContext], None], _args_callback))
+                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[CommandLineArgsCallbackContext], None], _args_callback), ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandLineArgsCallbackContext",))
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withArgsCallback', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'args_callback'. Expected: Callable[[CommandLineArgsCallbackContext], None]")
-        if _reference_env := kwargs.pop("reference_env", None):
+        if (_args_replace := kwargs.pop("args_replace", None)) is not None:
+            if _validate_type(_args_replace, typing.Iterable[str]):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["args"] = typing.cast(typing.Iterable[str], _args_replace)
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withArgsReplace', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'args_replace'. Expected: Iterable[str]")
+        if (_reference_env := kwargs.pop("reference_env", None)) is not None:
             if _validate_type(_reference_env, ReferenceEnvironmentInjectionOptions):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["options"] = typing.cast(ReferenceEnvironmentInjectionOptions, _reference_env)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withReferenceEnvironment', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'reference_env'. Expected: ReferenceEnvironmentInjectionOptions")
-        if _reference := kwargs.pop("reference", None):
+        if (_reference := kwargs.pop("reference", None)) is not None:
             if _validate_type(_reference, AbstractResource | EndpointReference | str):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["source"] = typing.cast(AbstractResource | EndpointReference | str, _reference)
@@ -10019,47 +10500,47 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withReference', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'reference'. Expected: AbstractResource | EndpointReference | str or ReferenceParameters")
-        if _endpoint_callback := kwargs.pop("endpoint_callback", None):
+        if (_endpoint_callback := kwargs.pop("endpoint_callback", None)) is not None:
             if _validate_tuple_types(_endpoint_callback, (str, typing.Callable[[EndpointUpdateContext], None])):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["endpointName"] = typing.cast(tuple[str, typing.Callable[[EndpointUpdateContext], None]], _endpoint_callback)[0]
-                rpc_args["callback"] = client.register_callback(typing.cast(tuple[str, typing.Callable[[EndpointUpdateContext], None]], _endpoint_callback)[1])
+                rpc_args["callback"] = client.register_callback(typing.cast(tuple[str, typing.Callable[[EndpointUpdateContext], None]], _endpoint_callback)[1], ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointUpdateContext",))
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withEndpointCallback', rpc_args))
             elif _validate_dict_types(_endpoint_callback, EndpointCallbackParameters):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["endpointName"] = typing.cast(EndpointCallbackParameters, _endpoint_callback)["endpoint_name"]
-                rpc_args["callback"] = client.register_callback(typing.cast(EndpointCallbackParameters, _endpoint_callback)["callback"])
+                rpc_args["callback"] = client.register_callback(typing.cast(EndpointCallbackParameters, _endpoint_callback)["callback"], ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointUpdateContext",))
                 rpc_args["createIfNotExists"] = typing.cast(EndpointCallbackParameters, _endpoint_callback).get("create_if_not_exists")
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withEndpointCallback', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'endpoint_callback'. Expected: (str, Callable[[EndpointUpdateContext], None]) or EndpointCallbackParameters")
-        if _http_endpoint_callback := kwargs.pop("http_endpoint_callback", None):
+        if (_http_endpoint_callback := kwargs.pop("http_endpoint_callback", None)) is not None:
             if _validate_type(_http_endpoint_callback, typing.Callable[[EndpointUpdateContext], None]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[EndpointUpdateContext], None], _http_endpoint_callback))
+                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[EndpointUpdateContext], None], _http_endpoint_callback), ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointUpdateContext",))
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHttpEndpointCallback', rpc_args))
             elif _validate_dict_types(_http_endpoint_callback, HttpEndpointCallbackParameters):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["callback"] = client.register_callback(typing.cast(HttpEndpointCallbackParameters, _http_endpoint_callback)["callback"])
+                rpc_args["callback"] = client.register_callback(typing.cast(HttpEndpointCallbackParameters, _http_endpoint_callback)["callback"], ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointUpdateContext",))
                 rpc_args["name"] = typing.cast(HttpEndpointCallbackParameters, _http_endpoint_callback).get("name")
                 rpc_args["createIfNotExists"] = typing.cast(HttpEndpointCallbackParameters, _http_endpoint_callback).get("create_if_not_exists")
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHttpEndpointCallback', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'http_endpoint_callback'. Expected: Callable[[EndpointUpdateContext], None] or HttpEndpointCallbackParameters")
-        if _https_endpoint_callback := kwargs.pop("https_endpoint_callback", None):
+        if (_https_endpoint_callback := kwargs.pop("https_endpoint_callback", None)) is not None:
             if _validate_type(_https_endpoint_callback, typing.Callable[[EndpointUpdateContext], None]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[EndpointUpdateContext], None], _https_endpoint_callback))
+                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[EndpointUpdateContext], None], _https_endpoint_callback), ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointUpdateContext",))
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHttpsEndpointCallback', rpc_args))
             elif _validate_dict_types(_https_endpoint_callback, HttpsEndpointCallbackParameters):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["callback"] = client.register_callback(typing.cast(HttpsEndpointCallbackParameters, _https_endpoint_callback)["callback"])
+                rpc_args["callback"] = client.register_callback(typing.cast(HttpsEndpointCallbackParameters, _https_endpoint_callback)["callback"], ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointUpdateContext",))
                 rpc_args["name"] = typing.cast(HttpsEndpointCallbackParameters, _https_endpoint_callback).get("name")
                 rpc_args["createIfNotExists"] = typing.cast(HttpsEndpointCallbackParameters, _https_endpoint_callback).get("create_if_not_exists")
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHttpsEndpointCallback', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'https_endpoint_callback'. Expected: Callable[[EndpointUpdateContext], None] or HttpsEndpointCallbackParameters")
-        if _endpoint := kwargs.pop("endpoint", None):
+        if (_endpoint := kwargs.pop("endpoint", None)) is not None and _endpoint is not False:
             if _validate_dict_types(_endpoint, EndpointParameters):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["port"] = typing.cast(EndpointParameters, _endpoint).get("port")
@@ -10076,14 +10557,14 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withEndpoint', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'endpoint'. Expected: EndpointParameters or Literal[True]")
-        if _endpoint_proxy_support := kwargs.pop("endpoint_proxy_support", None):
+        if (_endpoint_proxy_support := kwargs.pop("endpoint_proxy_support", None)) is not None:
             if _validate_type(_endpoint_proxy_support, bool):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["proxyEnabled"] = typing.cast(bool, _endpoint_proxy_support)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withEndpointProxySupport', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'endpoint_proxy_support'. Expected: bool")
-        if _http_endpoint := kwargs.pop("http_endpoint", None):
+        if (_http_endpoint := kwargs.pop("http_endpoint", None)) is not None and _http_endpoint is not False:
             if _validate_dict_types(_http_endpoint, HttpEndpointParameters):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["port"] = typing.cast(HttpEndpointParameters, _http_endpoint).get("port")
@@ -10097,7 +10578,7 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHttpEndpoint', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'http_endpoint'. Expected: HttpEndpointParameters or Literal[True]")
-        if _https_endpoint := kwargs.pop("https_endpoint", None):
+        if (_https_endpoint := kwargs.pop("https_endpoint", None)) is not None and _https_endpoint is not False:
             if _validate_dict_types(_https_endpoint, HttpsEndpointParameters):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["port"] = typing.cast(HttpsEndpointParameters, _https_endpoint).get("port")
@@ -10123,31 +10604,31 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/asHttp2Service', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'as_http2_service'. Expected: Literal[True]")
-        if _wait_for := kwargs.pop("wait_for", None):
+        if (_wait_for := kwargs.pop("wait_for", None)) is not None:
             if _validate_type(_wait_for, AbstractResource):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["dependency"] = typing.cast(AbstractResource, _wait_for)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/waitFor', rpc_args))
-            elif _validate_tuple_types(_wait_for, (AbstractResource, WaitBehavior)):
+            elif _validate_tuple_types(_wait_for, (AbstractResource, WaitBehavior | None)):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["dependency"] = typing.cast(tuple[AbstractResource, WaitBehavior], _wait_for)[0]
-                rpc_args["waitBehavior"] = typing.cast(tuple[AbstractResource, WaitBehavior], _wait_for)[1]
+                rpc_args["dependency"] = typing.cast(tuple[AbstractResource, WaitBehavior | None], _wait_for)[0]
+                rpc_args["waitBehavior"] = typing.cast(tuple[AbstractResource, WaitBehavior | None], _wait_for)[1]
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/waitFor', rpc_args))
             else:
-                raise TypeError("Invalid type for option 'wait_for'. Expected: AbstractResource or (AbstractResource, WaitBehavior)")
-        if _wait_for_start := kwargs.pop("wait_for_start", None):
+                raise TypeError("Invalid type for option 'wait_for'. Expected: AbstractResource or (AbstractResource, WaitBehavior | None)")
+        if (_wait_for_start := kwargs.pop("wait_for_start", None)) is not None:
             if _validate_type(_wait_for_start, AbstractResource):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["dependency"] = typing.cast(AbstractResource, _wait_for_start)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/waitForStart', rpc_args))
-            elif _validate_tuple_types(_wait_for_start, (AbstractResource, WaitBehavior)):
+            elif _validate_tuple_types(_wait_for_start, (AbstractResource, WaitBehavior | None)):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["dependency"] = typing.cast(tuple[AbstractResource, WaitBehavior], _wait_for_start)[0]
-                rpc_args["waitBehavior"] = typing.cast(tuple[AbstractResource, WaitBehavior], _wait_for_start)[1]
+                rpc_args["dependency"] = typing.cast(tuple[AbstractResource, WaitBehavior | None], _wait_for_start)[0]
+                rpc_args["waitBehavior"] = typing.cast(tuple[AbstractResource, WaitBehavior | None], _wait_for_start)[1]
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/waitForStart', rpc_args))
             else:
-                raise TypeError("Invalid type for option 'wait_for_start'. Expected: AbstractResource or (AbstractResource, WaitBehavior)")
-        if _wait_for_completion := kwargs.pop("wait_for_completion", None):
+                raise TypeError("Invalid type for option 'wait_for_start'. Expected: AbstractResource or (AbstractResource, WaitBehavior | None)")
+        if (_wait_for_completion := kwargs.pop("wait_for_completion", None)) is not None:
             if _validate_type(_wait_for_completion, AbstractResource):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["dependency"] = typing.cast(AbstractResource, _wait_for_completion)
@@ -10159,7 +10640,7 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/waitForResourceCompletion', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'wait_for_completion'. Expected: AbstractResource or (AbstractResource, int)")
-        if _http_health_check := kwargs.pop("http_health_check", None):
+        if (_http_health_check := kwargs.pop("http_health_check", None)) is not None and _http_health_check is not False:
             if _validate_dict_types(_http_health_check, HttpHealthCheckParameters):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["path"] = typing.cast(HttpHealthCheckParameters, _http_health_check).get("path")
@@ -10171,7 +10652,7 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHttpHealthCheck', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'http_health_check'. Expected: HttpHealthCheckParameters or Literal[True]")
-        if _http_command := kwargs.pop("http_command", None):
+        if (_http_command := kwargs.pop("http_command", None)) is not None:
             if _validate_tuple_types(_http_command, (str, str)):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["path"] = typing.cast(tuple[str, str], _http_command)[0]
@@ -10185,21 +10666,33 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHttpCommand', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'http_command'. Expected: (str, str) or HttpCommandParameters")
-        if _developer_certificate_trust := kwargs.pop("developer_certificate_trust", None):
+        if (_developer_certificate_trust := kwargs.pop("developer_certificate_trust", None)) is not None:
             if _validate_type(_developer_certificate_trust, bool):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["trust"] = typing.cast(bool, _developer_certificate_trust)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withDeveloperCertificateTrust', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'developer_certificate_trust'. Expected: bool")
-        if _certificate_trust_scope := kwargs.pop("certificate_trust_scope", None):
+        if (_certificate_trust_scope := kwargs.pop("certificate_trust_scope", None)) is not None:
             if _validate_type(_certificate_trust_scope, CertificateTrustScope):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["scope"] = typing.cast(CertificateTrustScope, _certificate_trust_scope)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withCertificateTrustScope', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'certificate_trust_scope'. Expected: CertificateTrustScope")
-        if _https_developer_certificate := kwargs.pop("https_developer_certificate", None):
+        if (_certificate_trust_env := kwargs.pop("certificate_trust_env", None)) is not None:
+            if _validate_type(_certificate_trust_env, str):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["certificateBundleEnvironmentVariable"] = typing.cast(str, _certificate_trust_env)
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withCertificateTrustEnvironment', rpc_args))
+            elif _validate_tuple_types(_certificate_trust_env, (str, str)):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["certificateBundleEnvironmentVariable"] = typing.cast(tuple[str, str], _certificate_trust_env)[0]
+                rpc_args["certificateDirectoriesEnvironmentVariable"] = typing.cast(tuple[str, str], _certificate_trust_env)[1]
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withCertificateTrustEnvironment', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'certificate_trust_env'. Expected: str or (str, str)")
+        if (_https_developer_certificate := kwargs.pop("https_developer_certificate", None)) is not None and _https_developer_certificate is not False:
             if _validate_type(_https_developer_certificate, ParameterResource):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["password"] = typing.cast(ParameterResource, _https_developer_certificate)
@@ -10215,21 +10708,21 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withoutHttpsCertificate', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'without_https_certificate'. Expected: Literal[True]")
-        if _https_certificate_config := kwargs.pop("https_certificate_config", None):
+        if (_https_certificate_config := kwargs.pop("https_certificate_config", None)) is not None:
             if _validate_type(_https_certificate_config, typing.Callable[[HttpsCertificateConfigurationCallbackAnnotationContext], None]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[HttpsCertificateConfigurationCallbackAnnotationContext], None], _https_certificate_config))
+                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[HttpsCertificateConfigurationCallbackAnnotationContext], None], _https_certificate_config), ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.HttpsCertificateConfigurationCallbackAnnotationContext",))
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHttpsCertificateConfiguration', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'https_certificate_config'. Expected: Callable[[HttpsCertificateConfigurationCallbackAnnotationContext], None]")
-        if _compute_env := kwargs.pop("compute_env", None):
+        if (_compute_env := kwargs.pop("compute_env", None)) is not None:
             if _validate_type(_compute_env, AbstractComputeEnvironmentResource):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["computeEnvironmentResource"] = typing.cast(AbstractComputeEnvironmentResource, _compute_env)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withComputeEnvironment', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'compute_env'. Expected: AbstractComputeEnvironmentResource")
-        if _http_probe := kwargs.pop("http_probe", None):
+        if (_http_probe := kwargs.pop("http_probe", None)) is not None:
             if _validate_type(_http_probe, ProbeType):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["probeType"] = typing.cast(ProbeType, _http_probe)
@@ -10247,28 +10740,28 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHttpProbe', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'http_probe'. Expected: ProbeType or HttpProbeParameters")
-        if _image_push_options := kwargs.pop("image_push_options", None):
+        if (_image_push_options := kwargs.pop("image_push_options", None)) is not None:
             if _validate_type(_image_push_options, typing.Callable[[ContainerImagePushOptionsCallbackContext], None]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[ContainerImagePushOptionsCallbackContext], None], _image_push_options))
+                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[ContainerImagePushOptionsCallbackContext], None], _image_push_options), ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerImagePushOptionsCallbackContext",))
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withImagePushOptions', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'image_push_options'. Expected: Callable[[ContainerImagePushOptionsCallbackContext], None]")
-        if _remote_image_name := kwargs.pop("remote_image_name", None):
+        if (_remote_image_name := kwargs.pop("remote_image_name", None)) is not None:
             if _validate_type(_remote_image_name, str):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["remoteImageName"] = typing.cast(str, _remote_image_name)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withRemoteImageName', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'remote_image_name'. Expected: str")
-        if _remote_image_tag := kwargs.pop("remote_image_tag", None):
+        if (_remote_image_tag := kwargs.pop("remote_image_tag", None)) is not None:
             if _validate_type(_remote_image_tag, str):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["remoteImageTag"] = typing.cast(str, _remote_image_tag)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withRemoteImageTag', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'remote_image_tag'. Expected: str")
-        if _volume := kwargs.pop("volume", None):
+        if (_volume := kwargs.pop("volume", None)) is not None:
             if _validate_type(_volume, str):
                 rpc_args: dict[str, typing.Any] = {"resource": handle}
                 rpc_args["target"] = typing.cast(str, _volume)
@@ -10281,21 +10774,21 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withVolume', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'volume'. Expected: str or VolumeParameters")
-        if _on_resource_endpoints_allocated := kwargs.pop("on_resource_endpoints_allocated", None):
+        if (_on_resource_endpoints_allocated := kwargs.pop("on_resource_endpoints_allocated", None)) is not None:
             if _validate_type(_on_resource_endpoints_allocated, typing.Callable[[ResourceEndpointsAllocatedEvent], None]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[ResourceEndpointsAllocatedEvent], None], _on_resource_endpoints_allocated))
+                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[ResourceEndpointsAllocatedEvent], None], _on_resource_endpoints_allocated), ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceEndpointsAllocatedEvent",))
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/onResourceEndpointsAllocated', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'on_resource_endpoints_allocated'. Expected: Callable[[ResourceEndpointsAllocatedEvent], None]")
-        if _test_with_env_callback := kwargs.pop("test_with_env_callback", None):
+        if (_test_with_env_callback := kwargs.pop("test_with_env_callback", None)) is not None:
             if _validate_type(_test_with_env_callback, typing.Callable[[TestEnvironmentContext], None]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[TestEnvironmentContext], None], _test_with_env_callback))
+                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[TestEnvironmentContext], None], _test_with_env_callback), ("Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestEnvironmentContext",))
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting.CodeGeneration.Python.Tests/testWithEnvironmentCallback', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'test_with_env_callback'. Expected: Callable[[TestEnvironmentContext], None]")
-        if _env_vars := kwargs.pop("env_vars", None):
+        if (_env_vars := kwargs.pop("env_vars", None)) is not None:
             if _validate_type(_env_vars, typing.Mapping[str, str]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["variables"] = typing.cast(typing.Mapping[str, str], _env_vars)
@@ -10309,7 +10802,7 @@ class ProjectResourceKwargs(_BaseResourceKwargs, total=False):
     """ProjectResource options."""
 
     mcp_server: McpServerParameters | typing.Literal[True]
-    otlp_exporter: OtlpProtocol | typing.Literal[True]
+    otlp_exporter: OtlpProtocol | None | typing.Literal[True]
     replicas: int
     disable_forwarded_headers: typing.Literal[True]
     publish_as_docker_file: typing.Callable[[ContainerResource], None] | typing.Literal[True]
@@ -10317,6 +10810,7 @@ class ProjectResourceKwargs(_BaseResourceKwargs, total=False):
     env_callback: typing.Callable[[EnvironmentCallbackContext], None]
     args: typing.Iterable[str]
     args_callback: typing.Callable[[CommandLineArgsCallbackContext], None]
+    args_replace: typing.Iterable[str]
     reference_env: ReferenceEnvironmentInjectionOptions
     reference: AbstractResource | EndpointReference | str | ReferenceParameters
     endpoint_callback: tuple[str, typing.Callable[[EndpointUpdateContext], None]] | EndpointCallbackParameters
@@ -10329,13 +10823,14 @@ class ProjectResourceKwargs(_BaseResourceKwargs, total=False):
     external_http_endpoints: typing.Literal[True]
     as_http2_service: typing.Literal[True]
     publish_with_container_files: tuple[AbstractResourceWithContainerFiles, str]
-    wait_for: AbstractResource | tuple[AbstractResource, WaitBehavior]
-    wait_for_start: AbstractResource | tuple[AbstractResource, WaitBehavior]
+    wait_for: AbstractResource | tuple[AbstractResource, WaitBehavior | None]
+    wait_for_start: AbstractResource | tuple[AbstractResource, WaitBehavior | None]
     wait_for_completion: AbstractResource | tuple[AbstractResource, int]
     http_health_check: HttpHealthCheckParameters | typing.Literal[True]
     http_command: tuple[str, str] | HttpCommandParameters
     developer_certificate_trust: bool
     certificate_trust_scope: CertificateTrustScope
+    certificate_trust_env: str | tuple[str, str]
     https_developer_certificate: ParameterResource | typing.Literal[True]
     without_https_certificate: typing.Literal[True]
     https_certificate_config: typing.Callable[[HttpsCertificateConfigurationCallbackAnnotationContext], None]
@@ -10344,12 +10839,13 @@ class ProjectResourceKwargs(_BaseResourceKwargs, total=False):
     image_push_options: typing.Callable[[ContainerImagePushOptionsCallbackContext], None]
     remote_image_name: str
     remote_image_tag: str
+    volume: tuple[str, str, str] | ProjectVolumeParameters
     endpoints_in_env: typing.Iterable[str]
     on_resource_endpoints_allocated: typing.Callable[[ResourceEndpointsAllocatedEvent], None]
     test_with_env_callback: typing.Callable[[TestEnvironmentContext], None]
     env_vars: typing.Mapping[str, str]
 
-class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractResourceWithArgs, AbstractResourceWithServiceDiscovery, AbstractResourceWithWaitSupport, AbstractResourceWithProbes, AbstractComputeResource, AbstractContainerFilesDestinationResource):
+class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractResourceWithArgs, AbstractResourceWithServiceDiscovery, AbstractResourceWithWaitSupport, AbstractResourceWithProbes, AbstractComputeResource, AbstractContainerFilesDestinationResource, AbstractDotnetProgramResource):
     """ProjectResource resource."""
 
     def __repr__(self) -> str:
@@ -10406,7 +10902,7 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
         """Publishes a project as a Docker file with optional container configuration"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         if configure is not None:
-            rpc_args['configure'] = self._client.register_callback(configure)
+            rpc_args['configure'] = self._client.register_callback(configure, ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource",))
         result = self._client.invoke_capability(
             'Aspire.Hosting/publishProjectAsDockerFileWithConfigure',
             rpc_args,
@@ -10429,7 +10925,7 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
     def with_env_callback(self, callback: typing.Callable[[EnvironmentCallbackContext], None]) -> typing.Self:
         """Allows for the population of environment variables on a resource."""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
-        rpc_args['callback'] = self._client.register_callback(callback)
+        rpc_args['callback'] = self._client.register_callback(callback, ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EnvironmentCallbackContext",))
         result = self._client.invoke_capability(
             'Aspire.Hosting/withEnvironmentCallback',
             rpc_args,
@@ -10451,9 +10947,20 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
     def with_args_callback(self, callback: typing.Callable[[CommandLineArgsCallbackContext], None]) -> typing.Self:
         """Adds a callback to be executed with a list of command-line arguments when a resource is started."""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
-        rpc_args['callback'] = self._client.register_callback(callback)
+        rpc_args['callback'] = self._client.register_callback(callback, ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandLineArgsCallbackContext",))
         result = self._client.invoke_capability(
             'Aspire.Hosting/withArgsCallback',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
+    def with_args_replace(self, args: typing.Iterable[str]) -> typing.Self:
+        """Replaces the arguments to be passed to a resource that supports arguments when it is launched."""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['args'] = args
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withArgsReplace',
             rpc_args,
         )
         self._handle = self._wrap_builder(result)
@@ -10491,7 +10998,7 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
         """Updates a named endpoint via callback"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['endpointName'] = endpoint_name
-        rpc_args['callback'] = self._client.register_callback(callback)
+        rpc_args['callback'] = self._client.register_callback(callback, ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointUpdateContext",))
         if create_if_not_exists is not None:
             rpc_args['createIfNotExists'] = create_if_not_exists
         result = self._client.invoke_capability(
@@ -10504,7 +11011,7 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
     def with_http_endpoint_callback(self, callback: typing.Callable[[EndpointUpdateContext], None], *, name: str | None = None, create_if_not_exists: bool = True) -> typing.Self:
         """Updates an HTTP endpoint via callback"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
-        rpc_args['callback'] = self._client.register_callback(callback)
+        rpc_args['callback'] = self._client.register_callback(callback, ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointUpdateContext",))
         if name is not None:
             rpc_args['name'] = name
         if create_if_not_exists is not None:
@@ -10519,7 +11026,7 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
     def with_https_endpoint_callback(self, callback: typing.Callable[[EndpointUpdateContext], None], *, name: str | None = None, create_if_not_exists: bool = True) -> typing.Self:
         """Updates an HTTPS endpoint via callback"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
-        rpc_args['callback'] = self._client.register_callback(callback)
+        rpc_args['callback'] = self._client.register_callback(callback, ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointUpdateContext",))
         if name is not None:
             rpc_args['name'] = name
         if create_if_not_exists is not None:
@@ -10741,6 +11248,19 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
         self._handle = self._wrap_builder(result)
         return self
 
+    def with_certificate_trust_env(self, certificate_bundle_env_var: str, *, certificate_directories_env_var: str | None = None) -> typing.Self:
+        """Configures environment variables that point to Aspire-managed certificate trust paths."""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['certificateBundleEnvironmentVariable'] = certificate_bundle_env_var
+        if certificate_directories_env_var is not None:
+            rpc_args['certificateDirectoriesEnvironmentVariable'] = certificate_directories_env_var
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withCertificateTrustEnvironment',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
     def with_https_developer_certificate(self, *, password: ParameterResource | None = None) -> typing.Self:
         """Indicates that a resource should use the developer certificate key pair for HTTPS endpoints at run time. Currently this indicates use of the ASP.NET Core developer certificate. The developer certificate will only be used when running in local development scenarios; in publish mode resources will use their default certificate configuration."""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
@@ -10766,7 +11286,7 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
     def with_https_certificate_config(self, callback: typing.Callable[[HttpsCertificateConfigurationCallbackAnnotationContext], None]) -> typing.Self:
         """Adds a callback that allows configuring the resource to use a specific HTTPS/TLS certificate key pair for server authentication."""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
-        rpc_args['callback'] = self._client.register_callback(callback)
+        rpc_args['callback'] = self._client.register_callback(callback, ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.HttpsCertificateConfigurationCallbackAnnotationContext",))
         result = self._client.invoke_capability(
             'Aspire.Hosting/withHttpsCertificateConfiguration',
             rpc_args,
@@ -10813,7 +11333,7 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
     def with_image_push_options(self, callback: typing.Callable[[ContainerImagePushOptionsCallbackContext], None]) -> typing.Self:
         """Adds an asynchronous callback to configure container image push options for the resource."""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
-        rpc_args['callback'] = self._client.register_callback(callback)
+        rpc_args['callback'] = self._client.register_callback(callback, ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerImagePushOptionsCallbackContext",))
         result = self._client.invoke_capability(
             'Aspire.Hosting/withImagePushOptions',
             rpc_args,
@@ -10843,6 +11363,21 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
         self._handle = self._wrap_builder(result)
         return self
 
+    def with_volume(self, target: str, name: str, env: str, *, is_read_only: bool = False) -> typing.Self:
+        """Adds a volume to a project resource."""
+        rpc_args: dict[str, typing.Any] = {'resource': self._handle}
+        rpc_args['target'] = target
+        rpc_args['name'] = name
+        rpc_args['env'] = env
+        if is_read_only is not None:
+            rpc_args['isReadOnly'] = is_read_only
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withProjectVolume',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
     def with_endpoints_in_env(self, endpoint_names: typing.Iterable[str]) -> typing.Self:
         """Includes only the specified project endpoint names in environment-variable injection."""
         rpc_args: dict[str, typing.Any] = {'resource': self._handle}
@@ -10857,7 +11392,7 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
     def on_resource_endpoints_allocated(self, callback: typing.Callable[[ResourceEndpointsAllocatedEvent], None]) -> typing.Self:
         """Subscribes to the ResourceEndpointsAllocated event."""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
-        rpc_args['callback'] = self._client.register_callback(callback)
+        rpc_args['callback'] = self._client.register_callback(callback, ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceEndpointsAllocatedEvent",))
         result = self._client.invoke_capability(
             'Aspire.Hosting/onResourceEndpointsAllocated',
             rpc_args,
@@ -10868,7 +11403,7 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
     def test_with_env_callback(self, callback: typing.Callable[[TestEnvironmentContext], None]) -> typing.Self:
         """Configures environment with callback (test version)"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
-        rpc_args['callback'] = self._client.register_callback(callback)
+        rpc_args['callback'] = self._client.register_callback(callback, ("Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestEnvironmentContext",))
         result = self._client.invoke_capability(
             'Aspire.Hosting.CodeGeneration.Python.Tests/testWithEnvironmentCallback',
             rpc_args,
@@ -10888,7 +11423,7 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
         return self
 
     def __init__(self, handle: Handle, client: AspireClient, **kwargs: typing.Unpack[ProjectResourceKwargs]) -> None:
-        if _mcp_server := kwargs.pop("mcp_server", None):
+        if (_mcp_server := kwargs.pop("mcp_server", None)) is not None and _mcp_server is not False:
             if _validate_dict_types(_mcp_server, McpServerParameters):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["path"] = typing.cast(McpServerParameters, _mcp_server).get("path")
@@ -10899,17 +11434,17 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withMcpServer', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'mcp_server'. Expected: McpServerParameters or Literal[True]")
-        if _otlp_exporter := kwargs.pop("otlp_exporter", None):
-            if _validate_type(_otlp_exporter, OtlpProtocol):
+        if (_otlp_exporter := kwargs.pop("otlp_exporter", None)) is not None and _otlp_exporter is not False:
+            if _validate_type(_otlp_exporter, OtlpProtocol | None):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["protocol"] = typing.cast(OtlpProtocol, _otlp_exporter)
+                rpc_args["protocol"] = typing.cast(OtlpProtocol | None, _otlp_exporter)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withOtlpExporter', rpc_args))
             elif _otlp_exporter is True:
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withOtlpExporter', rpc_args))
             else:
-                raise TypeError("Invalid type for option 'otlp_exporter'. Expected: OtlpProtocol or Literal[True]")
-        if _replicas := kwargs.pop("replicas", None):
+                raise TypeError("Invalid type for option 'otlp_exporter'. Expected: OtlpProtocol | None or Literal[True]")
+        if (_replicas := kwargs.pop("replicas", None)) is not None:
             if _validate_type(_replicas, int):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["replicas"] = typing.cast(int, _replicas)
@@ -10922,17 +11457,17 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/disableForwardedHeaders', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'disable_forwarded_headers'. Expected: Literal[True]")
-        if _publish_as_docker_file := kwargs.pop("publish_as_docker_file", None):
+        if (_publish_as_docker_file := kwargs.pop("publish_as_docker_file", None)) is not None and _publish_as_docker_file is not False:
             if _validate_type(_publish_as_docker_file, typing.Callable[[ContainerResource], None]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["configure"] = client.register_callback(typing.cast(typing.Callable[[ContainerResource], None], _publish_as_docker_file))
+                rpc_args["configure"] = client.register_callback(typing.cast(typing.Callable[[ContainerResource], None], _publish_as_docker_file), ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource",))
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/publishProjectAsDockerFileWithConfigure', rpc_args))
             elif _publish_as_docker_file is True:
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/publishProjectAsDockerFileWithConfigure', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'publish_as_docker_file'. Expected: Callable[[ContainerResource], None] or Literal[True]")
-        if _env := kwargs.pop("env", None):
+        if (_env := kwargs.pop("env", None)) is not None:
             if _validate_tuple_types(_env, (str, str | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | AbstractResourceWithConnectionString | AbstractExpressionValue)):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["name"] = typing.cast(tuple[str, str | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | AbstractResourceWithConnectionString | AbstractExpressionValue], _env)[0]
@@ -10940,35 +11475,42 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withEnvironment', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'env'. Expected: (str, str | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | AbstractResourceWithConnectionString | AbstractExpressionValue)")
-        if _env_callback := kwargs.pop("env_callback", None):
+        if (_env_callback := kwargs.pop("env_callback", None)) is not None:
             if _validate_type(_env_callback, typing.Callable[[EnvironmentCallbackContext], None]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[EnvironmentCallbackContext], None], _env_callback))
+                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[EnvironmentCallbackContext], None], _env_callback), ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EnvironmentCallbackContext",))
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withEnvironmentCallback', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'env_callback'. Expected: Callable[[EnvironmentCallbackContext], None]")
-        if _args := kwargs.pop("args", None):
+        if (_args := kwargs.pop("args", None)) is not None:
             if _validate_type(_args, typing.Iterable[str]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["args"] = typing.cast(typing.Iterable[str], _args)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withArgs', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'args'. Expected: Iterable[str]")
-        if _args_callback := kwargs.pop("args_callback", None):
+        if (_args_callback := kwargs.pop("args_callback", None)) is not None:
             if _validate_type(_args_callback, typing.Callable[[CommandLineArgsCallbackContext], None]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[CommandLineArgsCallbackContext], None], _args_callback))
+                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[CommandLineArgsCallbackContext], None], _args_callback), ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandLineArgsCallbackContext",))
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withArgsCallback', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'args_callback'. Expected: Callable[[CommandLineArgsCallbackContext], None]")
-        if _reference_env := kwargs.pop("reference_env", None):
+        if (_args_replace := kwargs.pop("args_replace", None)) is not None:
+            if _validate_type(_args_replace, typing.Iterable[str]):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["args"] = typing.cast(typing.Iterable[str], _args_replace)
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withArgsReplace', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'args_replace'. Expected: Iterable[str]")
+        if (_reference_env := kwargs.pop("reference_env", None)) is not None:
             if _validate_type(_reference_env, ReferenceEnvironmentInjectionOptions):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["options"] = typing.cast(ReferenceEnvironmentInjectionOptions, _reference_env)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withReferenceEnvironment', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'reference_env'. Expected: ReferenceEnvironmentInjectionOptions")
-        if _reference := kwargs.pop("reference", None):
+        if (_reference := kwargs.pop("reference", None)) is not None:
             if _validate_type(_reference, AbstractResource | EndpointReference | str):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["source"] = typing.cast(AbstractResource | EndpointReference | str, _reference)
@@ -10982,47 +11524,47 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withReference', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'reference'. Expected: AbstractResource | EndpointReference | str or ReferenceParameters")
-        if _endpoint_callback := kwargs.pop("endpoint_callback", None):
+        if (_endpoint_callback := kwargs.pop("endpoint_callback", None)) is not None:
             if _validate_tuple_types(_endpoint_callback, (str, typing.Callable[[EndpointUpdateContext], None])):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["endpointName"] = typing.cast(tuple[str, typing.Callable[[EndpointUpdateContext], None]], _endpoint_callback)[0]
-                rpc_args["callback"] = client.register_callback(typing.cast(tuple[str, typing.Callable[[EndpointUpdateContext], None]], _endpoint_callback)[1])
+                rpc_args["callback"] = client.register_callback(typing.cast(tuple[str, typing.Callable[[EndpointUpdateContext], None]], _endpoint_callback)[1], ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointUpdateContext",))
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withEndpointCallback', rpc_args))
             elif _validate_dict_types(_endpoint_callback, EndpointCallbackParameters):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["endpointName"] = typing.cast(EndpointCallbackParameters, _endpoint_callback)["endpoint_name"]
-                rpc_args["callback"] = client.register_callback(typing.cast(EndpointCallbackParameters, _endpoint_callback)["callback"])
+                rpc_args["callback"] = client.register_callback(typing.cast(EndpointCallbackParameters, _endpoint_callback)["callback"], ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointUpdateContext",))
                 rpc_args["createIfNotExists"] = typing.cast(EndpointCallbackParameters, _endpoint_callback).get("create_if_not_exists")
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withEndpointCallback', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'endpoint_callback'. Expected: (str, Callable[[EndpointUpdateContext], None]) or EndpointCallbackParameters")
-        if _http_endpoint_callback := kwargs.pop("http_endpoint_callback", None):
+        if (_http_endpoint_callback := kwargs.pop("http_endpoint_callback", None)) is not None:
             if _validate_type(_http_endpoint_callback, typing.Callable[[EndpointUpdateContext], None]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[EndpointUpdateContext], None], _http_endpoint_callback))
+                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[EndpointUpdateContext], None], _http_endpoint_callback), ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointUpdateContext",))
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHttpEndpointCallback', rpc_args))
             elif _validate_dict_types(_http_endpoint_callback, HttpEndpointCallbackParameters):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["callback"] = client.register_callback(typing.cast(HttpEndpointCallbackParameters, _http_endpoint_callback)["callback"])
+                rpc_args["callback"] = client.register_callback(typing.cast(HttpEndpointCallbackParameters, _http_endpoint_callback)["callback"], ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointUpdateContext",))
                 rpc_args["name"] = typing.cast(HttpEndpointCallbackParameters, _http_endpoint_callback).get("name")
                 rpc_args["createIfNotExists"] = typing.cast(HttpEndpointCallbackParameters, _http_endpoint_callback).get("create_if_not_exists")
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHttpEndpointCallback', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'http_endpoint_callback'. Expected: Callable[[EndpointUpdateContext], None] or HttpEndpointCallbackParameters")
-        if _https_endpoint_callback := kwargs.pop("https_endpoint_callback", None):
+        if (_https_endpoint_callback := kwargs.pop("https_endpoint_callback", None)) is not None:
             if _validate_type(_https_endpoint_callback, typing.Callable[[EndpointUpdateContext], None]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[EndpointUpdateContext], None], _https_endpoint_callback))
+                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[EndpointUpdateContext], None], _https_endpoint_callback), ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointUpdateContext",))
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHttpsEndpointCallback', rpc_args))
             elif _validate_dict_types(_https_endpoint_callback, HttpsEndpointCallbackParameters):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["callback"] = client.register_callback(typing.cast(HttpsEndpointCallbackParameters, _https_endpoint_callback)["callback"])
+                rpc_args["callback"] = client.register_callback(typing.cast(HttpsEndpointCallbackParameters, _https_endpoint_callback)["callback"], ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointUpdateContext",))
                 rpc_args["name"] = typing.cast(HttpsEndpointCallbackParameters, _https_endpoint_callback).get("name")
                 rpc_args["createIfNotExists"] = typing.cast(HttpsEndpointCallbackParameters, _https_endpoint_callback).get("create_if_not_exists")
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHttpsEndpointCallback', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'https_endpoint_callback'. Expected: Callable[[EndpointUpdateContext], None] or HttpsEndpointCallbackParameters")
-        if _endpoint := kwargs.pop("endpoint", None):
+        if (_endpoint := kwargs.pop("endpoint", None)) is not None and _endpoint is not False:
             if _validate_dict_types(_endpoint, EndpointParameters):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["port"] = typing.cast(EndpointParameters, _endpoint).get("port")
@@ -11039,14 +11581,14 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withEndpoint', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'endpoint'. Expected: EndpointParameters or Literal[True]")
-        if _endpoint_proxy_support := kwargs.pop("endpoint_proxy_support", None):
+        if (_endpoint_proxy_support := kwargs.pop("endpoint_proxy_support", None)) is not None:
             if _validate_type(_endpoint_proxy_support, bool):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["proxyEnabled"] = typing.cast(bool, _endpoint_proxy_support)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withEndpointProxySupport', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'endpoint_proxy_support'. Expected: bool")
-        if _http_endpoint := kwargs.pop("http_endpoint", None):
+        if (_http_endpoint := kwargs.pop("http_endpoint", None)) is not None and _http_endpoint is not False:
             if _validate_dict_types(_http_endpoint, HttpEndpointParameters):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["port"] = typing.cast(HttpEndpointParameters, _http_endpoint).get("port")
@@ -11060,7 +11602,7 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHttpEndpoint', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'http_endpoint'. Expected: HttpEndpointParameters or Literal[True]")
-        if _https_endpoint := kwargs.pop("https_endpoint", None):
+        if (_https_endpoint := kwargs.pop("https_endpoint", None)) is not None and _https_endpoint is not False:
             if _validate_dict_types(_https_endpoint, HttpsEndpointParameters):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["port"] = typing.cast(HttpsEndpointParameters, _https_endpoint).get("port")
@@ -11086,7 +11628,7 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/asHttp2Service', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'as_http2_service'. Expected: Literal[True]")
-        if _publish_with_container_files := kwargs.pop("publish_with_container_files", None):
+        if (_publish_with_container_files := kwargs.pop("publish_with_container_files", None)) is not None:
             if _validate_tuple_types(_publish_with_container_files, (AbstractResourceWithContainerFiles, str)):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["source"] = typing.cast(tuple[AbstractResourceWithContainerFiles, str], _publish_with_container_files)[0]
@@ -11094,31 +11636,31 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/publishWithContainerFilesFromResource', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'publish_with_container_files'. Expected: (AbstractResourceWithContainerFiles, str)")
-        if _wait_for := kwargs.pop("wait_for", None):
+        if (_wait_for := kwargs.pop("wait_for", None)) is not None:
             if _validate_type(_wait_for, AbstractResource):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["dependency"] = typing.cast(AbstractResource, _wait_for)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/waitFor', rpc_args))
-            elif _validate_tuple_types(_wait_for, (AbstractResource, WaitBehavior)):
+            elif _validate_tuple_types(_wait_for, (AbstractResource, WaitBehavior | None)):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["dependency"] = typing.cast(tuple[AbstractResource, WaitBehavior], _wait_for)[0]
-                rpc_args["waitBehavior"] = typing.cast(tuple[AbstractResource, WaitBehavior], _wait_for)[1]
+                rpc_args["dependency"] = typing.cast(tuple[AbstractResource, WaitBehavior | None], _wait_for)[0]
+                rpc_args["waitBehavior"] = typing.cast(tuple[AbstractResource, WaitBehavior | None], _wait_for)[1]
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/waitFor', rpc_args))
             else:
-                raise TypeError("Invalid type for option 'wait_for'. Expected: AbstractResource or (AbstractResource, WaitBehavior)")
-        if _wait_for_start := kwargs.pop("wait_for_start", None):
+                raise TypeError("Invalid type for option 'wait_for'. Expected: AbstractResource or (AbstractResource, WaitBehavior | None)")
+        if (_wait_for_start := kwargs.pop("wait_for_start", None)) is not None:
             if _validate_type(_wait_for_start, AbstractResource):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["dependency"] = typing.cast(AbstractResource, _wait_for_start)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/waitForStart', rpc_args))
-            elif _validate_tuple_types(_wait_for_start, (AbstractResource, WaitBehavior)):
+            elif _validate_tuple_types(_wait_for_start, (AbstractResource, WaitBehavior | None)):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["dependency"] = typing.cast(tuple[AbstractResource, WaitBehavior], _wait_for_start)[0]
-                rpc_args["waitBehavior"] = typing.cast(tuple[AbstractResource, WaitBehavior], _wait_for_start)[1]
+                rpc_args["dependency"] = typing.cast(tuple[AbstractResource, WaitBehavior | None], _wait_for_start)[0]
+                rpc_args["waitBehavior"] = typing.cast(tuple[AbstractResource, WaitBehavior | None], _wait_for_start)[1]
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/waitForStart', rpc_args))
             else:
-                raise TypeError("Invalid type for option 'wait_for_start'. Expected: AbstractResource or (AbstractResource, WaitBehavior)")
-        if _wait_for_completion := kwargs.pop("wait_for_completion", None):
+                raise TypeError("Invalid type for option 'wait_for_start'. Expected: AbstractResource or (AbstractResource, WaitBehavior | None)")
+        if (_wait_for_completion := kwargs.pop("wait_for_completion", None)) is not None:
             if _validate_type(_wait_for_completion, AbstractResource):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["dependency"] = typing.cast(AbstractResource, _wait_for_completion)
@@ -11130,7 +11672,7 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/waitForResourceCompletion', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'wait_for_completion'. Expected: AbstractResource or (AbstractResource, int)")
-        if _http_health_check := kwargs.pop("http_health_check", None):
+        if (_http_health_check := kwargs.pop("http_health_check", None)) is not None and _http_health_check is not False:
             if _validate_dict_types(_http_health_check, HttpHealthCheckParameters):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["path"] = typing.cast(HttpHealthCheckParameters, _http_health_check).get("path")
@@ -11142,7 +11684,7 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHttpHealthCheck', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'http_health_check'. Expected: HttpHealthCheckParameters or Literal[True]")
-        if _http_command := kwargs.pop("http_command", None):
+        if (_http_command := kwargs.pop("http_command", None)) is not None:
             if _validate_tuple_types(_http_command, (str, str)):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["path"] = typing.cast(tuple[str, str], _http_command)[0]
@@ -11156,21 +11698,33 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHttpCommand', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'http_command'. Expected: (str, str) or HttpCommandParameters")
-        if _developer_certificate_trust := kwargs.pop("developer_certificate_trust", None):
+        if (_developer_certificate_trust := kwargs.pop("developer_certificate_trust", None)) is not None:
             if _validate_type(_developer_certificate_trust, bool):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["trust"] = typing.cast(bool, _developer_certificate_trust)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withDeveloperCertificateTrust', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'developer_certificate_trust'. Expected: bool")
-        if _certificate_trust_scope := kwargs.pop("certificate_trust_scope", None):
+        if (_certificate_trust_scope := kwargs.pop("certificate_trust_scope", None)) is not None:
             if _validate_type(_certificate_trust_scope, CertificateTrustScope):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["scope"] = typing.cast(CertificateTrustScope, _certificate_trust_scope)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withCertificateTrustScope', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'certificate_trust_scope'. Expected: CertificateTrustScope")
-        if _https_developer_certificate := kwargs.pop("https_developer_certificate", None):
+        if (_certificate_trust_env := kwargs.pop("certificate_trust_env", None)) is not None:
+            if _validate_type(_certificate_trust_env, str):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["certificateBundleEnvironmentVariable"] = typing.cast(str, _certificate_trust_env)
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withCertificateTrustEnvironment', rpc_args))
+            elif _validate_tuple_types(_certificate_trust_env, (str, str)):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["certificateBundleEnvironmentVariable"] = typing.cast(tuple[str, str], _certificate_trust_env)[0]
+                rpc_args["certificateDirectoriesEnvironmentVariable"] = typing.cast(tuple[str, str], _certificate_trust_env)[1]
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withCertificateTrustEnvironment', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'certificate_trust_env'. Expected: str or (str, str)")
+        if (_https_developer_certificate := kwargs.pop("https_developer_certificate", None)) is not None and _https_developer_certificate is not False:
             if _validate_type(_https_developer_certificate, ParameterResource):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["password"] = typing.cast(ParameterResource, _https_developer_certificate)
@@ -11186,21 +11740,21 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withoutHttpsCertificate', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'without_https_certificate'. Expected: Literal[True]")
-        if _https_certificate_config := kwargs.pop("https_certificate_config", None):
+        if (_https_certificate_config := kwargs.pop("https_certificate_config", None)) is not None:
             if _validate_type(_https_certificate_config, typing.Callable[[HttpsCertificateConfigurationCallbackAnnotationContext], None]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[HttpsCertificateConfigurationCallbackAnnotationContext], None], _https_certificate_config))
+                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[HttpsCertificateConfigurationCallbackAnnotationContext], None], _https_certificate_config), ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.HttpsCertificateConfigurationCallbackAnnotationContext",))
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHttpsCertificateConfiguration', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'https_certificate_config'. Expected: Callable[[HttpsCertificateConfigurationCallbackAnnotationContext], None]")
-        if _compute_env := kwargs.pop("compute_env", None):
+        if (_compute_env := kwargs.pop("compute_env", None)) is not None:
             if _validate_type(_compute_env, AbstractComputeEnvironmentResource):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["computeEnvironmentResource"] = typing.cast(AbstractComputeEnvironmentResource, _compute_env)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withComputeEnvironment', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'compute_env'. Expected: AbstractComputeEnvironmentResource")
-        if _http_probe := kwargs.pop("http_probe", None):
+        if (_http_probe := kwargs.pop("http_probe", None)) is not None:
             if _validate_type(_http_probe, ProbeType):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["probeType"] = typing.cast(ProbeType, _http_probe)
@@ -11218,49 +11772,65 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHttpProbe', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'http_probe'. Expected: ProbeType or HttpProbeParameters")
-        if _image_push_options := kwargs.pop("image_push_options", None):
+        if (_image_push_options := kwargs.pop("image_push_options", None)) is not None:
             if _validate_type(_image_push_options, typing.Callable[[ContainerImagePushOptionsCallbackContext], None]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[ContainerImagePushOptionsCallbackContext], None], _image_push_options))
+                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[ContainerImagePushOptionsCallbackContext], None], _image_push_options), ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerImagePushOptionsCallbackContext",))
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withImagePushOptions', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'image_push_options'. Expected: Callable[[ContainerImagePushOptionsCallbackContext], None]")
-        if _remote_image_name := kwargs.pop("remote_image_name", None):
+        if (_remote_image_name := kwargs.pop("remote_image_name", None)) is not None:
             if _validate_type(_remote_image_name, str):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["remoteImageName"] = typing.cast(str, _remote_image_name)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withRemoteImageName', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'remote_image_name'. Expected: str")
-        if _remote_image_tag := kwargs.pop("remote_image_tag", None):
+        if (_remote_image_tag := kwargs.pop("remote_image_tag", None)) is not None:
             if _validate_type(_remote_image_tag, str):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["remoteImageTag"] = typing.cast(str, _remote_image_tag)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withRemoteImageTag', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'remote_image_tag'. Expected: str")
-        if _endpoints_in_env := kwargs.pop("endpoints_in_env", None):
+        if (_volume := kwargs.pop("volume", None)) is not None:
+            if _validate_tuple_types(_volume, (str, str, str)):
+                rpc_args: dict[str, typing.Any] = {"resource": handle}
+                rpc_args["target"] = typing.cast(tuple[str, str, str], _volume)[0]
+                rpc_args["name"] = typing.cast(tuple[str, str, str], _volume)[1]
+                rpc_args["env"] = typing.cast(tuple[str, str, str], _volume)[2]
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withProjectVolume', rpc_args))
+            elif _validate_dict_types(_volume, ProjectVolumeParameters):
+                rpc_args: dict[str, typing.Any] = {"resource": handle}
+                rpc_args["target"] = typing.cast(ProjectVolumeParameters, _volume)["target"]
+                rpc_args["name"] = typing.cast(ProjectVolumeParameters, _volume)["name"]
+                rpc_args["env"] = typing.cast(ProjectVolumeParameters, _volume)["env"]
+                rpc_args["isReadOnly"] = typing.cast(ProjectVolumeParameters, _volume).get("is_read_only")
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withProjectVolume', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'volume'. Expected: (str, str, str) or ProjectVolumeParameters")
+        if (_endpoints_in_env := kwargs.pop("endpoints_in_env", None)) is not None:
             if _validate_type(_endpoints_in_env, typing.Iterable[str]):
                 rpc_args: dict[str, typing.Any] = {"resource": handle}
                 rpc_args["endpointNames"] = typing.cast(typing.Iterable[str], _endpoints_in_env)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withEndpointsInEnvironment', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'endpoints_in_env'. Expected: Iterable[str]")
-        if _on_resource_endpoints_allocated := kwargs.pop("on_resource_endpoints_allocated", None):
+        if (_on_resource_endpoints_allocated := kwargs.pop("on_resource_endpoints_allocated", None)) is not None:
             if _validate_type(_on_resource_endpoints_allocated, typing.Callable[[ResourceEndpointsAllocatedEvent], None]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[ResourceEndpointsAllocatedEvent], None], _on_resource_endpoints_allocated))
+                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[ResourceEndpointsAllocatedEvent], None], _on_resource_endpoints_allocated), ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceEndpointsAllocatedEvent",))
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/onResourceEndpointsAllocated', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'on_resource_endpoints_allocated'. Expected: Callable[[ResourceEndpointsAllocatedEvent], None]")
-        if _test_with_env_callback := kwargs.pop("test_with_env_callback", None):
+        if (_test_with_env_callback := kwargs.pop("test_with_env_callback", None)) is not None:
             if _validate_type(_test_with_env_callback, typing.Callable[[TestEnvironmentContext], None]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[TestEnvironmentContext], None], _test_with_env_callback))
+                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[TestEnvironmentContext], None], _test_with_env_callback), ("Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestEnvironmentContext",))
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting.CodeGeneration.Python.Tests/testWithEnvironmentCallback', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'test_with_env_callback'. Expected: Callable[[TestEnvironmentContext], None]")
-        if _env_vars := kwargs.pop("env_vars", None):
+        if (_env_vars := kwargs.pop("env_vars", None)) is not None:
             if _validate_type(_env_vars, typing.Mapping[str, str]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["variables"] = typing.cast(typing.Mapping[str, str], _env_vars)
@@ -11291,11 +11861,12 @@ class ExecutableResourceKwargs(_BaseResourceKwargs, total=False):
     executable_command: str
     working_dir: str
     mcp_server: McpServerParameters | typing.Literal[True]
-    otlp_exporter: OtlpProtocol | typing.Literal[True]
+    otlp_exporter: OtlpProtocol | None | typing.Literal[True]
     env: tuple[str, str | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | AbstractResourceWithConnectionString | AbstractExpressionValue]
     env_callback: typing.Callable[[EnvironmentCallbackContext], None]
     args: typing.Iterable[str]
     args_callback: typing.Callable[[CommandLineArgsCallbackContext], None]
+    args_replace: typing.Iterable[str]
     reference_env: ReferenceEnvironmentInjectionOptions
     reference: AbstractResource | EndpointReference | str | ReferenceParameters
     endpoint_callback: tuple[str, typing.Callable[[EndpointUpdateContext], None]] | EndpointCallbackParameters
@@ -11307,21 +11878,24 @@ class ExecutableResourceKwargs(_BaseResourceKwargs, total=False):
     https_endpoint: HttpsEndpointParameters | typing.Literal[True]
     external_http_endpoints: typing.Literal[True]
     as_http2_service: typing.Literal[True]
-    wait_for: AbstractResource | tuple[AbstractResource, WaitBehavior]
-    wait_for_start: AbstractResource | tuple[AbstractResource, WaitBehavior]
+    wait_for: AbstractResource | tuple[AbstractResource, WaitBehavior | None]
+    wait_for_start: AbstractResource | tuple[AbstractResource, WaitBehavior | None]
     wait_for_completion: AbstractResource | tuple[AbstractResource, int]
     http_health_check: HttpHealthCheckParameters | typing.Literal[True]
     http_command: tuple[str, str] | HttpCommandParameters
     developer_certificate_trust: bool
     certificate_trust_scope: CertificateTrustScope
+    certificate_trust_env: str | tuple[str, str]
     https_developer_certificate: ParameterResource | typing.Literal[True]
     without_https_certificate: typing.Literal[True]
     https_certificate_config: typing.Callable[[HttpsCertificateConfigurationCallbackAnnotationContext], None]
     compute_env: AbstractComputeEnvironmentResource
+    executable_debug_support: tuple[str, str] | ExecutableDebugSupportParameters
     http_probe: ProbeType | HttpProbeParameters
     image_push_options: typing.Callable[[ContainerImagePushOptionsCallbackContext], None]
     remote_image_name: str
     remote_image_tag: str
+    volume: tuple[str, str, str] | ExecutableVolumeParameters
     on_resource_endpoints_allocated: typing.Callable[[ResourceEndpointsAllocatedEvent], None]
     test_with_env_callback: typing.Callable[[TestEnvironmentContext], None]
     env_vars: typing.Mapping[str, str]
@@ -11335,7 +11909,7 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
     def publish_as_docker_file(self, configure: typing.Callable[[ContainerResource], None]) -> typing.Self:
         """Publishes an executable as a Docker file"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
-        rpc_args['configure'] = self._client.register_callback(configure)
+        rpc_args['configure'] = self._client.register_callback(configure, ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource",))
         result = self._client.invoke_capability(
             'Aspire.Hosting/publishAsDockerFile',
             rpc_args,
@@ -11406,7 +11980,7 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
     def with_env_callback(self, callback: typing.Callable[[EnvironmentCallbackContext], None]) -> typing.Self:
         """Allows for the population of environment variables on a resource."""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
-        rpc_args['callback'] = self._client.register_callback(callback)
+        rpc_args['callback'] = self._client.register_callback(callback, ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EnvironmentCallbackContext",))
         result = self._client.invoke_capability(
             'Aspire.Hosting/withEnvironmentCallback',
             rpc_args,
@@ -11428,9 +12002,20 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
     def with_args_callback(self, callback: typing.Callable[[CommandLineArgsCallbackContext], None]) -> typing.Self:
         """Adds a callback to be executed with a list of command-line arguments when a resource is started."""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
-        rpc_args['callback'] = self._client.register_callback(callback)
+        rpc_args['callback'] = self._client.register_callback(callback, ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandLineArgsCallbackContext",))
         result = self._client.invoke_capability(
             'Aspire.Hosting/withArgsCallback',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
+    def with_args_replace(self, args: typing.Iterable[str]) -> typing.Self:
+        """Replaces the arguments to be passed to a resource that supports arguments when it is launched."""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['args'] = args
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withArgsReplace',
             rpc_args,
         )
         self._handle = self._wrap_builder(result)
@@ -11468,7 +12053,7 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
         """Updates a named endpoint via callback"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['endpointName'] = endpoint_name
-        rpc_args['callback'] = self._client.register_callback(callback)
+        rpc_args['callback'] = self._client.register_callback(callback, ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointUpdateContext",))
         if create_if_not_exists is not None:
             rpc_args['createIfNotExists'] = create_if_not_exists
         result = self._client.invoke_capability(
@@ -11481,7 +12066,7 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
     def with_http_endpoint_callback(self, callback: typing.Callable[[EndpointUpdateContext], None], *, name: str | None = None, create_if_not_exists: bool = True) -> typing.Self:
         """Updates an HTTP endpoint via callback"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
-        rpc_args['callback'] = self._client.register_callback(callback)
+        rpc_args['callback'] = self._client.register_callback(callback, ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointUpdateContext",))
         if name is not None:
             rpc_args['name'] = name
         if create_if_not_exists is not None:
@@ -11496,7 +12081,7 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
     def with_https_endpoint_callback(self, callback: typing.Callable[[EndpointUpdateContext], None], *, name: str | None = None, create_if_not_exists: bool = True) -> typing.Self:
         """Updates an HTTPS endpoint via callback"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
-        rpc_args['callback'] = self._client.register_callback(callback)
+        rpc_args['callback'] = self._client.register_callback(callback, ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointUpdateContext",))
         if name is not None:
             rpc_args['name'] = name
         if create_if_not_exists is not None:
@@ -11706,6 +12291,19 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
         self._handle = self._wrap_builder(result)
         return self
 
+    def with_certificate_trust_env(self, certificate_bundle_env_var: str, *, certificate_directories_env_var: str | None = None) -> typing.Self:
+        """Configures environment variables that point to Aspire-managed certificate trust paths."""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['certificateBundleEnvironmentVariable'] = certificate_bundle_env_var
+        if certificate_directories_env_var is not None:
+            rpc_args['certificateDirectoriesEnvironmentVariable'] = certificate_directories_env_var
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withCertificateTrustEnvironment',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
     def with_https_developer_certificate(self, *, password: ParameterResource | None = None) -> typing.Self:
         """Indicates that a resource should use the developer certificate key pair for HTTPS endpoints at run time. Currently this indicates use of the ASP.NET Core developer certificate. The developer certificate will only be used when running in local development scenarios; in publish mode resources will use their default certificate configuration."""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
@@ -11731,7 +12329,7 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
     def with_https_certificate_config(self, callback: typing.Callable[[HttpsCertificateConfigurationCallbackAnnotationContext], None]) -> typing.Self:
         """Adds a callback that allows configuring the resource to use a specific HTTPS/TLS certificate key pair for server authentication."""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
-        rpc_args['callback'] = self._client.register_callback(callback)
+        rpc_args['callback'] = self._client.register_callback(callback, ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.HttpsCertificateConfigurationCallbackAnnotationContext",))
         result = self._client.invoke_capability(
             'Aspire.Hosting/withHttpsCertificateConfiguration',
             rpc_args,
@@ -11745,6 +12343,22 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
         rpc_args['computeEnvironmentResource'] = compute_env_resource
         result = self._client.invoke_capability(
             'Aspire.Hosting/withComputeEnvironment',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
+    def with_executable_debug_support(self, launch_config_type: str, script_path: str, *, runtime_executable: str | None = None, launch_method: str | None = None) -> typing.Self:
+        """Adds VS Code-compatible debug metadata for an executable resource."""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['launchConfigurationType'] = launch_config_type
+        rpc_args['scriptPath'] = script_path
+        if runtime_executable is not None:
+            rpc_args['runtimeExecutable'] = runtime_executable
+        if launch_method is not None:
+            rpc_args['launchMethod'] = launch_method
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withExecutableDebugSupport',
             rpc_args,
         )
         self._handle = self._wrap_builder(result)
@@ -11778,7 +12392,7 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
     def with_image_push_options(self, callback: typing.Callable[[ContainerImagePushOptionsCallbackContext], None]) -> typing.Self:
         """Adds an asynchronous callback to configure container image push options for the resource."""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
-        rpc_args['callback'] = self._client.register_callback(callback)
+        rpc_args['callback'] = self._client.register_callback(callback, ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerImagePushOptionsCallbackContext",))
         result = self._client.invoke_capability(
             'Aspire.Hosting/withImagePushOptions',
             rpc_args,
@@ -11808,10 +12422,25 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
         self._handle = self._wrap_builder(result)
         return self
 
+    def with_volume(self, target: str, name: str, env: str, *, is_read_only: bool = False) -> typing.Self:
+        """Adds a volume to an executable resource."""
+        rpc_args: dict[str, typing.Any] = {'resource': self._handle}
+        rpc_args['target'] = target
+        rpc_args['name'] = name
+        rpc_args['env'] = env
+        if is_read_only is not None:
+            rpc_args['isReadOnly'] = is_read_only
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withExecutableVolume',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
     def on_resource_endpoints_allocated(self, callback: typing.Callable[[ResourceEndpointsAllocatedEvent], None]) -> typing.Self:
         """Subscribes to the ResourceEndpointsAllocated event."""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
-        rpc_args['callback'] = self._client.register_callback(callback)
+        rpc_args['callback'] = self._client.register_callback(callback, ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceEndpointsAllocatedEvent",))
         result = self._client.invoke_capability(
             'Aspire.Hosting/onResourceEndpointsAllocated',
             rpc_args,
@@ -11822,7 +12451,7 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
     def test_with_env_callback(self, callback: typing.Callable[[TestEnvironmentContext], None]) -> typing.Self:
         """Configures environment with callback (test version)"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
-        rpc_args['callback'] = self._client.register_callback(callback)
+        rpc_args['callback'] = self._client.register_callback(callback, ("Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestEnvironmentContext",))
         result = self._client.invoke_capability(
             'Aspire.Hosting.CodeGeneration.Python.Tests/testWithEnvironmentCallback',
             rpc_args,
@@ -11842,28 +12471,28 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
         return self
 
     def __init__(self, handle: Handle, client: AspireClient, **kwargs: typing.Unpack[ExecutableResourceKwargs]) -> None:
-        if _publish_as_docker_file := kwargs.pop("publish_as_docker_file", None):
+        if (_publish_as_docker_file := kwargs.pop("publish_as_docker_file", None)) is not None:
             if _validate_type(_publish_as_docker_file, typing.Callable[[ContainerResource], None]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["configure"] = client.register_callback(typing.cast(typing.Callable[[ContainerResource], None], _publish_as_docker_file))
+                rpc_args["configure"] = client.register_callback(typing.cast(typing.Callable[[ContainerResource], None], _publish_as_docker_file), ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource",))
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/publishAsDockerFile', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'publish_as_docker_file'. Expected: Callable[[ContainerResource], None]")
-        if _executable_command := kwargs.pop("executable_command", None):
+        if (_executable_command := kwargs.pop("executable_command", None)) is not None:
             if _validate_type(_executable_command, str):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["command"] = typing.cast(str, _executable_command)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withExecutableCommand', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'executable_command'. Expected: str")
-        if _working_dir := kwargs.pop("working_dir", None):
+        if (_working_dir := kwargs.pop("working_dir", None)) is not None:
             if _validate_type(_working_dir, str):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["workingDirectory"] = typing.cast(str, _working_dir)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withWorkingDirectory', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'working_dir'. Expected: str")
-        if _mcp_server := kwargs.pop("mcp_server", None):
+        if (_mcp_server := kwargs.pop("mcp_server", None)) is not None and _mcp_server is not False:
             if _validate_dict_types(_mcp_server, McpServerParameters):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["path"] = typing.cast(McpServerParameters, _mcp_server).get("path")
@@ -11874,17 +12503,17 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withMcpServer', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'mcp_server'. Expected: McpServerParameters or Literal[True]")
-        if _otlp_exporter := kwargs.pop("otlp_exporter", None):
-            if _validate_type(_otlp_exporter, OtlpProtocol):
+        if (_otlp_exporter := kwargs.pop("otlp_exporter", None)) is not None and _otlp_exporter is not False:
+            if _validate_type(_otlp_exporter, OtlpProtocol | None):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["protocol"] = typing.cast(OtlpProtocol, _otlp_exporter)
+                rpc_args["protocol"] = typing.cast(OtlpProtocol | None, _otlp_exporter)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withOtlpExporter', rpc_args))
             elif _otlp_exporter is True:
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withOtlpExporter', rpc_args))
             else:
-                raise TypeError("Invalid type for option 'otlp_exporter'. Expected: OtlpProtocol or Literal[True]")
-        if _env := kwargs.pop("env", None):
+                raise TypeError("Invalid type for option 'otlp_exporter'. Expected: OtlpProtocol | None or Literal[True]")
+        if (_env := kwargs.pop("env", None)) is not None:
             if _validate_tuple_types(_env, (str, str | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | AbstractResourceWithConnectionString | AbstractExpressionValue)):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["name"] = typing.cast(tuple[str, str | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | AbstractResourceWithConnectionString | AbstractExpressionValue], _env)[0]
@@ -11892,35 +12521,42 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withEnvironment', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'env'. Expected: (str, str | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | AbstractResourceWithConnectionString | AbstractExpressionValue)")
-        if _env_callback := kwargs.pop("env_callback", None):
+        if (_env_callback := kwargs.pop("env_callback", None)) is not None:
             if _validate_type(_env_callback, typing.Callable[[EnvironmentCallbackContext], None]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[EnvironmentCallbackContext], None], _env_callback))
+                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[EnvironmentCallbackContext], None], _env_callback), ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EnvironmentCallbackContext",))
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withEnvironmentCallback', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'env_callback'. Expected: Callable[[EnvironmentCallbackContext], None]")
-        if _args := kwargs.pop("args", None):
+        if (_args := kwargs.pop("args", None)) is not None:
             if _validate_type(_args, typing.Iterable[str]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["args"] = typing.cast(typing.Iterable[str], _args)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withArgs', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'args'. Expected: Iterable[str]")
-        if _args_callback := kwargs.pop("args_callback", None):
+        if (_args_callback := kwargs.pop("args_callback", None)) is not None:
             if _validate_type(_args_callback, typing.Callable[[CommandLineArgsCallbackContext], None]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[CommandLineArgsCallbackContext], None], _args_callback))
+                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[CommandLineArgsCallbackContext], None], _args_callback), ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandLineArgsCallbackContext",))
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withArgsCallback', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'args_callback'. Expected: Callable[[CommandLineArgsCallbackContext], None]")
-        if _reference_env := kwargs.pop("reference_env", None):
+        if (_args_replace := kwargs.pop("args_replace", None)) is not None:
+            if _validate_type(_args_replace, typing.Iterable[str]):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["args"] = typing.cast(typing.Iterable[str], _args_replace)
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withArgsReplace', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'args_replace'. Expected: Iterable[str]")
+        if (_reference_env := kwargs.pop("reference_env", None)) is not None:
             if _validate_type(_reference_env, ReferenceEnvironmentInjectionOptions):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["options"] = typing.cast(ReferenceEnvironmentInjectionOptions, _reference_env)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withReferenceEnvironment', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'reference_env'. Expected: ReferenceEnvironmentInjectionOptions")
-        if _reference := kwargs.pop("reference", None):
+        if (_reference := kwargs.pop("reference", None)) is not None:
             if _validate_type(_reference, AbstractResource | EndpointReference | str):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["source"] = typing.cast(AbstractResource | EndpointReference | str, _reference)
@@ -11934,47 +12570,47 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withReference', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'reference'. Expected: AbstractResource | EndpointReference | str or ReferenceParameters")
-        if _endpoint_callback := kwargs.pop("endpoint_callback", None):
+        if (_endpoint_callback := kwargs.pop("endpoint_callback", None)) is not None:
             if _validate_tuple_types(_endpoint_callback, (str, typing.Callable[[EndpointUpdateContext], None])):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["endpointName"] = typing.cast(tuple[str, typing.Callable[[EndpointUpdateContext], None]], _endpoint_callback)[0]
-                rpc_args["callback"] = client.register_callback(typing.cast(tuple[str, typing.Callable[[EndpointUpdateContext], None]], _endpoint_callback)[1])
+                rpc_args["callback"] = client.register_callback(typing.cast(tuple[str, typing.Callable[[EndpointUpdateContext], None]], _endpoint_callback)[1], ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointUpdateContext",))
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withEndpointCallback', rpc_args))
             elif _validate_dict_types(_endpoint_callback, EndpointCallbackParameters):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["endpointName"] = typing.cast(EndpointCallbackParameters, _endpoint_callback)["endpoint_name"]
-                rpc_args["callback"] = client.register_callback(typing.cast(EndpointCallbackParameters, _endpoint_callback)["callback"])
+                rpc_args["callback"] = client.register_callback(typing.cast(EndpointCallbackParameters, _endpoint_callback)["callback"], ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointUpdateContext",))
                 rpc_args["createIfNotExists"] = typing.cast(EndpointCallbackParameters, _endpoint_callback).get("create_if_not_exists")
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withEndpointCallback', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'endpoint_callback'. Expected: (str, Callable[[EndpointUpdateContext], None]) or EndpointCallbackParameters")
-        if _http_endpoint_callback := kwargs.pop("http_endpoint_callback", None):
+        if (_http_endpoint_callback := kwargs.pop("http_endpoint_callback", None)) is not None:
             if _validate_type(_http_endpoint_callback, typing.Callable[[EndpointUpdateContext], None]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[EndpointUpdateContext], None], _http_endpoint_callback))
+                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[EndpointUpdateContext], None], _http_endpoint_callback), ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointUpdateContext",))
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHttpEndpointCallback', rpc_args))
             elif _validate_dict_types(_http_endpoint_callback, HttpEndpointCallbackParameters):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["callback"] = client.register_callback(typing.cast(HttpEndpointCallbackParameters, _http_endpoint_callback)["callback"])
+                rpc_args["callback"] = client.register_callback(typing.cast(HttpEndpointCallbackParameters, _http_endpoint_callback)["callback"], ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointUpdateContext",))
                 rpc_args["name"] = typing.cast(HttpEndpointCallbackParameters, _http_endpoint_callback).get("name")
                 rpc_args["createIfNotExists"] = typing.cast(HttpEndpointCallbackParameters, _http_endpoint_callback).get("create_if_not_exists")
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHttpEndpointCallback', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'http_endpoint_callback'. Expected: Callable[[EndpointUpdateContext], None] or HttpEndpointCallbackParameters")
-        if _https_endpoint_callback := kwargs.pop("https_endpoint_callback", None):
+        if (_https_endpoint_callback := kwargs.pop("https_endpoint_callback", None)) is not None:
             if _validate_type(_https_endpoint_callback, typing.Callable[[EndpointUpdateContext], None]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[EndpointUpdateContext], None], _https_endpoint_callback))
+                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[EndpointUpdateContext], None], _https_endpoint_callback), ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointUpdateContext",))
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHttpsEndpointCallback', rpc_args))
             elif _validate_dict_types(_https_endpoint_callback, HttpsEndpointCallbackParameters):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["callback"] = client.register_callback(typing.cast(HttpsEndpointCallbackParameters, _https_endpoint_callback)["callback"])
+                rpc_args["callback"] = client.register_callback(typing.cast(HttpsEndpointCallbackParameters, _https_endpoint_callback)["callback"], ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointUpdateContext",))
                 rpc_args["name"] = typing.cast(HttpsEndpointCallbackParameters, _https_endpoint_callback).get("name")
                 rpc_args["createIfNotExists"] = typing.cast(HttpsEndpointCallbackParameters, _https_endpoint_callback).get("create_if_not_exists")
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHttpsEndpointCallback', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'https_endpoint_callback'. Expected: Callable[[EndpointUpdateContext], None] or HttpsEndpointCallbackParameters")
-        if _endpoint := kwargs.pop("endpoint", None):
+        if (_endpoint := kwargs.pop("endpoint", None)) is not None and _endpoint is not False:
             if _validate_dict_types(_endpoint, EndpointParameters):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["port"] = typing.cast(EndpointParameters, _endpoint).get("port")
@@ -11991,14 +12627,14 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withEndpoint', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'endpoint'. Expected: EndpointParameters or Literal[True]")
-        if _endpoint_proxy_support := kwargs.pop("endpoint_proxy_support", None):
+        if (_endpoint_proxy_support := kwargs.pop("endpoint_proxy_support", None)) is not None:
             if _validate_type(_endpoint_proxy_support, bool):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["proxyEnabled"] = typing.cast(bool, _endpoint_proxy_support)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withEndpointProxySupport', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'endpoint_proxy_support'. Expected: bool")
-        if _http_endpoint := kwargs.pop("http_endpoint", None):
+        if (_http_endpoint := kwargs.pop("http_endpoint", None)) is not None and _http_endpoint is not False:
             if _validate_dict_types(_http_endpoint, HttpEndpointParameters):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["port"] = typing.cast(HttpEndpointParameters, _http_endpoint).get("port")
@@ -12012,7 +12648,7 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHttpEndpoint', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'http_endpoint'. Expected: HttpEndpointParameters or Literal[True]")
-        if _https_endpoint := kwargs.pop("https_endpoint", None):
+        if (_https_endpoint := kwargs.pop("https_endpoint", None)) is not None and _https_endpoint is not False:
             if _validate_dict_types(_https_endpoint, HttpsEndpointParameters):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["port"] = typing.cast(HttpsEndpointParameters, _https_endpoint).get("port")
@@ -12038,31 +12674,31 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/asHttp2Service', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'as_http2_service'. Expected: Literal[True]")
-        if _wait_for := kwargs.pop("wait_for", None):
+        if (_wait_for := kwargs.pop("wait_for", None)) is not None:
             if _validate_type(_wait_for, AbstractResource):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["dependency"] = typing.cast(AbstractResource, _wait_for)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/waitFor', rpc_args))
-            elif _validate_tuple_types(_wait_for, (AbstractResource, WaitBehavior)):
+            elif _validate_tuple_types(_wait_for, (AbstractResource, WaitBehavior | None)):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["dependency"] = typing.cast(tuple[AbstractResource, WaitBehavior], _wait_for)[0]
-                rpc_args["waitBehavior"] = typing.cast(tuple[AbstractResource, WaitBehavior], _wait_for)[1]
+                rpc_args["dependency"] = typing.cast(tuple[AbstractResource, WaitBehavior | None], _wait_for)[0]
+                rpc_args["waitBehavior"] = typing.cast(tuple[AbstractResource, WaitBehavior | None], _wait_for)[1]
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/waitFor', rpc_args))
             else:
-                raise TypeError("Invalid type for option 'wait_for'. Expected: AbstractResource or (AbstractResource, WaitBehavior)")
-        if _wait_for_start := kwargs.pop("wait_for_start", None):
+                raise TypeError("Invalid type for option 'wait_for'. Expected: AbstractResource or (AbstractResource, WaitBehavior | None)")
+        if (_wait_for_start := kwargs.pop("wait_for_start", None)) is not None:
             if _validate_type(_wait_for_start, AbstractResource):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["dependency"] = typing.cast(AbstractResource, _wait_for_start)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/waitForStart', rpc_args))
-            elif _validate_tuple_types(_wait_for_start, (AbstractResource, WaitBehavior)):
+            elif _validate_tuple_types(_wait_for_start, (AbstractResource, WaitBehavior | None)):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["dependency"] = typing.cast(tuple[AbstractResource, WaitBehavior], _wait_for_start)[0]
-                rpc_args["waitBehavior"] = typing.cast(tuple[AbstractResource, WaitBehavior], _wait_for_start)[1]
+                rpc_args["dependency"] = typing.cast(tuple[AbstractResource, WaitBehavior | None], _wait_for_start)[0]
+                rpc_args["waitBehavior"] = typing.cast(tuple[AbstractResource, WaitBehavior | None], _wait_for_start)[1]
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/waitForStart', rpc_args))
             else:
-                raise TypeError("Invalid type for option 'wait_for_start'. Expected: AbstractResource or (AbstractResource, WaitBehavior)")
-        if _wait_for_completion := kwargs.pop("wait_for_completion", None):
+                raise TypeError("Invalid type for option 'wait_for_start'. Expected: AbstractResource or (AbstractResource, WaitBehavior | None)")
+        if (_wait_for_completion := kwargs.pop("wait_for_completion", None)) is not None:
             if _validate_type(_wait_for_completion, AbstractResource):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["dependency"] = typing.cast(AbstractResource, _wait_for_completion)
@@ -12074,7 +12710,7 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/waitForResourceCompletion', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'wait_for_completion'. Expected: AbstractResource or (AbstractResource, int)")
-        if _http_health_check := kwargs.pop("http_health_check", None):
+        if (_http_health_check := kwargs.pop("http_health_check", None)) is not None and _http_health_check is not False:
             if _validate_dict_types(_http_health_check, HttpHealthCheckParameters):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["path"] = typing.cast(HttpHealthCheckParameters, _http_health_check).get("path")
@@ -12086,7 +12722,7 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHttpHealthCheck', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'http_health_check'. Expected: HttpHealthCheckParameters or Literal[True]")
-        if _http_command := kwargs.pop("http_command", None):
+        if (_http_command := kwargs.pop("http_command", None)) is not None:
             if _validate_tuple_types(_http_command, (str, str)):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["path"] = typing.cast(tuple[str, str], _http_command)[0]
@@ -12100,21 +12736,33 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHttpCommand', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'http_command'. Expected: (str, str) or HttpCommandParameters")
-        if _developer_certificate_trust := kwargs.pop("developer_certificate_trust", None):
+        if (_developer_certificate_trust := kwargs.pop("developer_certificate_trust", None)) is not None:
             if _validate_type(_developer_certificate_trust, bool):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["trust"] = typing.cast(bool, _developer_certificate_trust)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withDeveloperCertificateTrust', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'developer_certificate_trust'. Expected: bool")
-        if _certificate_trust_scope := kwargs.pop("certificate_trust_scope", None):
+        if (_certificate_trust_scope := kwargs.pop("certificate_trust_scope", None)) is not None:
             if _validate_type(_certificate_trust_scope, CertificateTrustScope):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["scope"] = typing.cast(CertificateTrustScope, _certificate_trust_scope)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withCertificateTrustScope', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'certificate_trust_scope'. Expected: CertificateTrustScope")
-        if _https_developer_certificate := kwargs.pop("https_developer_certificate", None):
+        if (_certificate_trust_env := kwargs.pop("certificate_trust_env", None)) is not None:
+            if _validate_type(_certificate_trust_env, str):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["certificateBundleEnvironmentVariable"] = typing.cast(str, _certificate_trust_env)
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withCertificateTrustEnvironment', rpc_args))
+            elif _validate_tuple_types(_certificate_trust_env, (str, str)):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["certificateBundleEnvironmentVariable"] = typing.cast(tuple[str, str], _certificate_trust_env)[0]
+                rpc_args["certificateDirectoriesEnvironmentVariable"] = typing.cast(tuple[str, str], _certificate_trust_env)[1]
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withCertificateTrustEnvironment', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'certificate_trust_env'. Expected: str or (str, str)")
+        if (_https_developer_certificate := kwargs.pop("https_developer_certificate", None)) is not None and _https_developer_certificate is not False:
             if _validate_type(_https_developer_certificate, ParameterResource):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["password"] = typing.cast(ParameterResource, _https_developer_certificate)
@@ -12130,21 +12778,36 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withoutHttpsCertificate', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'without_https_certificate'. Expected: Literal[True]")
-        if _https_certificate_config := kwargs.pop("https_certificate_config", None):
+        if (_https_certificate_config := kwargs.pop("https_certificate_config", None)) is not None:
             if _validate_type(_https_certificate_config, typing.Callable[[HttpsCertificateConfigurationCallbackAnnotationContext], None]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[HttpsCertificateConfigurationCallbackAnnotationContext], None], _https_certificate_config))
+                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[HttpsCertificateConfigurationCallbackAnnotationContext], None], _https_certificate_config), ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.HttpsCertificateConfigurationCallbackAnnotationContext",))
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHttpsCertificateConfiguration', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'https_certificate_config'. Expected: Callable[[HttpsCertificateConfigurationCallbackAnnotationContext], None]")
-        if _compute_env := kwargs.pop("compute_env", None):
+        if (_compute_env := kwargs.pop("compute_env", None)) is not None:
             if _validate_type(_compute_env, AbstractComputeEnvironmentResource):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["computeEnvironmentResource"] = typing.cast(AbstractComputeEnvironmentResource, _compute_env)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withComputeEnvironment', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'compute_env'. Expected: AbstractComputeEnvironmentResource")
-        if _http_probe := kwargs.pop("http_probe", None):
+        if (_executable_debug_support := kwargs.pop("executable_debug_support", None)) is not None:
+            if _validate_tuple_types(_executable_debug_support, (str, str)):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["launchConfigurationType"] = typing.cast(tuple[str, str], _executable_debug_support)[0]
+                rpc_args["scriptPath"] = typing.cast(tuple[str, str], _executable_debug_support)[1]
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withExecutableDebugSupport', rpc_args))
+            elif _validate_dict_types(_executable_debug_support, ExecutableDebugSupportParameters):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["launchConfigurationType"] = typing.cast(ExecutableDebugSupportParameters, _executable_debug_support)["launch_config_type"]
+                rpc_args["scriptPath"] = typing.cast(ExecutableDebugSupportParameters, _executable_debug_support)["script_path"]
+                rpc_args["runtimeExecutable"] = typing.cast(ExecutableDebugSupportParameters, _executable_debug_support).get("runtime_executable")
+                rpc_args["launchMethod"] = typing.cast(ExecutableDebugSupportParameters, _executable_debug_support).get("launch_method")
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withExecutableDebugSupport', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'executable_debug_support'. Expected: (str, str) or ExecutableDebugSupportParameters")
+        if (_http_probe := kwargs.pop("http_probe", None)) is not None:
             if _validate_type(_http_probe, ProbeType):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["probeType"] = typing.cast(ProbeType, _http_probe)
@@ -12162,42 +12825,58 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHttpProbe', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'http_probe'. Expected: ProbeType or HttpProbeParameters")
-        if _image_push_options := kwargs.pop("image_push_options", None):
+        if (_image_push_options := kwargs.pop("image_push_options", None)) is not None:
             if _validate_type(_image_push_options, typing.Callable[[ContainerImagePushOptionsCallbackContext], None]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[ContainerImagePushOptionsCallbackContext], None], _image_push_options))
+                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[ContainerImagePushOptionsCallbackContext], None], _image_push_options), ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerImagePushOptionsCallbackContext",))
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withImagePushOptions', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'image_push_options'. Expected: Callable[[ContainerImagePushOptionsCallbackContext], None]")
-        if _remote_image_name := kwargs.pop("remote_image_name", None):
+        if (_remote_image_name := kwargs.pop("remote_image_name", None)) is not None:
             if _validate_type(_remote_image_name, str):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["remoteImageName"] = typing.cast(str, _remote_image_name)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withRemoteImageName', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'remote_image_name'. Expected: str")
-        if _remote_image_tag := kwargs.pop("remote_image_tag", None):
+        if (_remote_image_tag := kwargs.pop("remote_image_tag", None)) is not None:
             if _validate_type(_remote_image_tag, str):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["remoteImageTag"] = typing.cast(str, _remote_image_tag)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withRemoteImageTag', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'remote_image_tag'. Expected: str")
-        if _on_resource_endpoints_allocated := kwargs.pop("on_resource_endpoints_allocated", None):
+        if (_volume := kwargs.pop("volume", None)) is not None:
+            if _validate_tuple_types(_volume, (str, str, str)):
+                rpc_args: dict[str, typing.Any] = {"resource": handle}
+                rpc_args["target"] = typing.cast(tuple[str, str, str], _volume)[0]
+                rpc_args["name"] = typing.cast(tuple[str, str, str], _volume)[1]
+                rpc_args["env"] = typing.cast(tuple[str, str, str], _volume)[2]
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withExecutableVolume', rpc_args))
+            elif _validate_dict_types(_volume, ExecutableVolumeParameters):
+                rpc_args: dict[str, typing.Any] = {"resource": handle}
+                rpc_args["target"] = typing.cast(ExecutableVolumeParameters, _volume)["target"]
+                rpc_args["name"] = typing.cast(ExecutableVolumeParameters, _volume)["name"]
+                rpc_args["env"] = typing.cast(ExecutableVolumeParameters, _volume)["env"]
+                rpc_args["isReadOnly"] = typing.cast(ExecutableVolumeParameters, _volume).get("is_read_only")
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withExecutableVolume', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'volume'. Expected: (str, str, str) or ExecutableVolumeParameters")
+        if (_on_resource_endpoints_allocated := kwargs.pop("on_resource_endpoints_allocated", None)) is not None:
             if _validate_type(_on_resource_endpoints_allocated, typing.Callable[[ResourceEndpointsAllocatedEvent], None]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[ResourceEndpointsAllocatedEvent], None], _on_resource_endpoints_allocated))
+                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[ResourceEndpointsAllocatedEvent], None], _on_resource_endpoints_allocated), ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceEndpointsAllocatedEvent",))
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/onResourceEndpointsAllocated', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'on_resource_endpoints_allocated'. Expected: Callable[[ResourceEndpointsAllocatedEvent], None]")
-        if _test_with_env_callback := kwargs.pop("test_with_env_callback", None):
+        if (_test_with_env_callback := kwargs.pop("test_with_env_callback", None)) is not None:
             if _validate_type(_test_with_env_callback, typing.Callable[[TestEnvironmentContext], None]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[TestEnvironmentContext], None], _test_with_env_callback))
+                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[TestEnvironmentContext], None], _test_with_env_callback), ("Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestEnvironmentContext",))
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting.CodeGeneration.Python.Tests/testWithEnvironmentCallback', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'test_with_env_callback'. Expected: Callable[[TestEnvironmentContext], None]")
-        if _env_vars := kwargs.pop("env_vars", None):
+        if (_env_vars := kwargs.pop("env_vars", None)) is not None:
             if _validate_type(_env_vars, typing.Mapping[str, str]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["variables"] = typing.cast(typing.Mapping[str, str], _env_vars)
@@ -12287,14 +12966,14 @@ class DotnetToolResource(ExecutableResource):
         return self
 
     def __init__(self, handle: Handle, client: AspireClient, **kwargs: typing.Unpack[DotnetToolResourceKwargs]) -> None:
-        if _tool_package := kwargs.pop("tool_package", None):
+        if (_tool_package := kwargs.pop("tool_package", None)) is not None:
             if _validate_type(_tool_package, str):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["packageId"] = typing.cast(str, _tool_package)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withToolPackage', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'tool_package'. Expected: str")
-        if _tool_version := kwargs.pop("tool_version", None):
+        if (_tool_version := kwargs.pop("tool_version", None)) is not None:
             if _validate_type(_tool_version, str):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["version"] = typing.cast(str, _tool_version)
@@ -12307,7 +12986,7 @@ class DotnetToolResource(ExecutableResource):
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withToolPrerelease', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'tool_prerelease'. Expected: Literal[True]")
-        if _tool_source := kwargs.pop("tool_source", None):
+        if (_tool_source := kwargs.pop("tool_source", None)) is not None:
             if _validate_type(_tool_source, str):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["source"] = typing.cast(str, _tool_source)
@@ -12357,7 +13036,7 @@ class ExternalServiceResource(_BaseResource):
         return self
 
     def __init__(self, handle: Handle, client: AspireClient, **kwargs: typing.Unpack[ExternalServiceResourceKwargs]) -> None:
-        if _http_health_check := kwargs.pop("http_health_check", None):
+        if (_http_health_check := kwargs.pop("http_health_check", None)) is not None and _http_health_check is not False:
             if _validate_dict_types(_http_health_check, HttpHealthCheckParameters):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["path"] = typing.cast(HttpHealthCheckParameters, _http_health_check).get("path")
@@ -12376,6 +13055,8 @@ class ParameterResourceKwargs(_BaseResourceKwargs, total=False):
     """ParameterResource options."""
 
     description: str | tuple[str, bool]
+    optional: typing.Literal[True]
+    required: bool | typing.Literal[True]
     custom_input: ParameterCustomInputOptions
 
 class ParameterResource(_BaseResource, AbstractExpressionValue):
@@ -12397,6 +13078,28 @@ class ParameterResource(_BaseResource, AbstractExpressionValue):
         self._handle = self._wrap_builder(result)
         return self
 
+    def with_optional(self) -> typing.Self:
+        """Marks the parameter resource as optional."""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withOptional',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
+    def with_required(self, *, required: bool = True) -> typing.Self:
+        """Sets whether the parameter resource requires a value."""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        if required is not None:
+            rpc_args['required'] = required
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withRequired',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
     def with_custom_input(self, options: ParameterCustomInputOptions) -> typing.Self:
         """Sets a custom input for the parameter resource from a polyglot app host."""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
@@ -12408,8 +13111,29 @@ class ParameterResource(_BaseResource, AbstractExpressionValue):
         self._handle = self._wrap_builder(result)
         return self
 
+    def try_get_current_value(self) -> str | None:
+        """Gets the current value for this parameter without waiting for unresolved input."""
+        rpc_args: dict[str, typing.Any] = {'context': self._handle}
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/ParameterResource.tryGetCurrentValue',
+            rpc_args,
+        )
+        return typing.cast(str | None, result)
+
+    def set_value(self, *, value: str | None = None, timeout: int | None = None) -> None:
+        """Sets or replaces the value for this parameter."""
+        rpc_args: dict[str, typing.Any] = {'context': self._handle}
+        if value is not None:
+            rpc_args['value'] = value
+        if timeout is not None:
+            rpc_args['cancellationToken'] = self._client.register_cancellation_token(timeout)
+        self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/ParameterResource.setValueAsync',
+            rpc_args
+        )
+
     def __init__(self, handle: Handle, client: AspireClient, **kwargs: typing.Unpack[ParameterResourceKwargs]) -> None:
-        if _description := kwargs.pop("description", None):
+        if (_description := kwargs.pop("description", None)) is not None:
             if _validate_type(_description, str):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["description"] = typing.cast(str, _description)
@@ -12421,7 +13145,23 @@ class ParameterResource(_BaseResource, AbstractExpressionValue):
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withDescription', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'description'. Expected: str or (str, bool)")
-        if _custom_input := kwargs.pop("custom_input", None):
+        if _optional := kwargs.pop("optional", None):
+            if _optional is True:
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withOptional', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'optional'. Expected: Literal[True]")
+        if (_required := kwargs.pop("required", None)) is not None:
+            if _validate_type(_required, bool):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["required"] = typing.cast(bool, _required)
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withRequired', rpc_args))
+            elif _required is True:
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withRequired', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'required'. Expected: bool or Literal[True]")
+        if (_custom_input := kwargs.pop("custom_input", None)) is not None:
             if _validate_type(_custom_input, ParameterCustomInputOptions):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["options"] = typing.cast(ParameterCustomInputOptions, _custom_input)
@@ -12450,12 +13190,16 @@ class TestRedisResourceKwargs(ContainerResourceKwargs, total=False):
 
     connection_property: tuple[str, str | ReferenceExpression]
     on_connection_string_available: typing.Callable[[ConnectionStringAvailableEvent], None]
+    promise_collision_resources: tuple[AbstractTestPromiseCollisionResource, AbstractTestPromiseCollisionResourcePromise]
+    mutable_promise_collision_resources: tuple[AbstractTestMutablePromiseCollisionResource, AbstractTestMutablePromiseCollisionResourcePromise]
     persistence: TestPersistenceMode | typing.Literal[True]
     connection_string: ReferenceExpression
     connection_string_direct: str
     redis_specific: str
     multi_param_handle_callback: typing.Callable[[TestCallbackContext, TestEnvironmentContext], None]
     data_volume: DataVolumeParameters | typing.Literal[True]
+    concrete_vault_resource: TestVaultResource
+    python_builder_callback: typing.Callable[[TestRedisResource], None]
 
 class TestRedisResource(ContainerResource, AbstractResourceWithConnectionString):
     """TestRedisResource resource."""
@@ -12488,9 +13232,33 @@ class TestRedisResource(ContainerResource, AbstractResourceWithConnectionString)
     def on_connection_string_available(self, callback: typing.Callable[[ConnectionStringAvailableEvent], None]) -> typing.Self:
         """Subscribes to the ConnectionStringAvailable event."""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
-        rpc_args['callback'] = self._client.register_callback(callback)
+        rpc_args['callback'] = self._client.register_callback(callback, ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ConnectionStringAvailableEvent",))
         result = self._client.invoke_capability(
             'Aspire.Hosting/onConnectionStringAvailable',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
+    def with_promise_collision_resources(self, resource: AbstractTestPromiseCollisionResource, resource_promise: AbstractTestPromiseCollisionResourcePromise) -> typing.Self:
+        """Configures a Redis resource with parameter-only resources whose generated names collide."""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['resource'] = resource
+        rpc_args['resourcePromise'] = resource_promise
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.CodeGeneration.Python.Tests/withPromiseCollisionResources',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
+    def with_mutable_promise_collision_resources(self, resource: AbstractTestMutablePromiseCollisionResource, resource_promise: AbstractTestMutablePromiseCollisionResourcePromise) -> typing.Self:
+        """Configures a Redis resource with mutable-property and parameter-only resources whose generated names collide."""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['resource'] = resource
+        rpc_args['resourcePromise'] = resource_promise
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.CodeGeneration.Python.Tests/withMutablePromiseCollisionResources',
             rpc_args,
         )
         self._handle = self._wrap_builder(result)
@@ -12605,7 +13373,7 @@ class TestRedisResource(ContainerResource, AbstractResourceWithConnectionString)
     def with_multi_param_handle_callback(self, callback: typing.Callable[[TestCallbackContext, TestEnvironmentContext], None]) -> typing.Self:
         """Tests multi-param callback destructuring"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
-        rpc_args['callback'] = self._client.register_callback(callback)
+        rpc_args['callback'] = self._client.register_callback(callback, ("Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestCallbackContext", "Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestEnvironmentContext"))
         result = self._client.invoke_capability(
             'Aspire.Hosting.CodeGeneration.Python.Tests/withMultiParamHandleCallback',
             rpc_args,
@@ -12627,8 +13395,30 @@ class TestRedisResource(ContainerResource, AbstractResourceWithConnectionString)
         self._handle = self._wrap_builder(result)
         return self
 
+    def with_concrete_vault_resource(self, resource: TestVaultResource) -> typing.Self:
+        """Configures a Redis resource with the concrete vault resource as a parameter."""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['resource'] = resource
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.CodeGeneration.Python.Tests/withConcreteVaultResource',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
+    def with_python_builder_callback(self, configure: typing.Callable[[TestRedisResource], None]) -> typing.Self:
+        """Configures a test resource through a resource builder callback."""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['configure'] = self._client.register_callback(configure, ("Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestRedisResource",))
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.CodeGeneration.Python.Tests/withPythonBuilderCallback',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
     def __init__(self, handle: Handle, client: AspireClient, **kwargs: typing.Unpack[TestRedisResourceKwargs]) -> None:
-        if _connection_property := kwargs.pop("connection_property", None):
+        if (_connection_property := kwargs.pop("connection_property", None)) is not None:
             if _validate_tuple_types(_connection_property, (str, str | ReferenceExpression)):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["name"] = typing.cast(tuple[str, str | ReferenceExpression], _connection_property)[0]
@@ -12636,14 +13426,30 @@ class TestRedisResource(ContainerResource, AbstractResourceWithConnectionString)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withConnectionProperty', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'connection_property'. Expected: (str, str | ReferenceExpression)")
-        if _on_connection_string_available := kwargs.pop("on_connection_string_available", None):
+        if (_on_connection_string_available := kwargs.pop("on_connection_string_available", None)) is not None:
             if _validate_type(_on_connection_string_available, typing.Callable[[ConnectionStringAvailableEvent], None]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[ConnectionStringAvailableEvent], None], _on_connection_string_available))
+                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[ConnectionStringAvailableEvent], None], _on_connection_string_available), ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ConnectionStringAvailableEvent",))
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/onConnectionStringAvailable', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'on_connection_string_available'. Expected: Callable[[ConnectionStringAvailableEvent], None]")
-        if _persistence := kwargs.pop("persistence", None):
+        if (_promise_collision_resources := kwargs.pop("promise_collision_resources", None)) is not None:
+            if _validate_tuple_types(_promise_collision_resources, (AbstractTestPromiseCollisionResource, AbstractTestPromiseCollisionResourcePromise)):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["resource"] = typing.cast(tuple[AbstractTestPromiseCollisionResource, AbstractTestPromiseCollisionResourcePromise], _promise_collision_resources)[0]
+                rpc_args["resourcePromise"] = typing.cast(tuple[AbstractTestPromiseCollisionResource, AbstractTestPromiseCollisionResourcePromise], _promise_collision_resources)[1]
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting.CodeGeneration.Python.Tests/withPromiseCollisionResources', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'promise_collision_resources'. Expected: (AbstractTestPromiseCollisionResource, AbstractTestPromiseCollisionResourcePromise)")
+        if (_mutable_promise_collision_resources := kwargs.pop("mutable_promise_collision_resources", None)) is not None:
+            if _validate_tuple_types(_mutable_promise_collision_resources, (AbstractTestMutablePromiseCollisionResource, AbstractTestMutablePromiseCollisionResourcePromise)):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["resource"] = typing.cast(tuple[AbstractTestMutablePromiseCollisionResource, AbstractTestMutablePromiseCollisionResourcePromise], _mutable_promise_collision_resources)[0]
+                rpc_args["resourcePromise"] = typing.cast(tuple[AbstractTestMutablePromiseCollisionResource, AbstractTestMutablePromiseCollisionResourcePromise], _mutable_promise_collision_resources)[1]
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting.CodeGeneration.Python.Tests/withMutablePromiseCollisionResources', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'mutable_promise_collision_resources'. Expected: (AbstractTestMutablePromiseCollisionResource, AbstractTestMutablePromiseCollisionResourcePromise)")
+        if (_persistence := kwargs.pop("persistence", None)) is not None and _persistence is not False:
             if _validate_type(_persistence, TestPersistenceMode):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["mode"] = typing.cast(TestPersistenceMode, _persistence)
@@ -12653,35 +13459,35 @@ class TestRedisResource(ContainerResource, AbstractResourceWithConnectionString)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting.CodeGeneration.Python.Tests/withPersistence', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'persistence'. Expected: TestPersistenceMode or Literal[True]")
-        if _connection_string := kwargs.pop("connection_string", None):
+        if (_connection_string := kwargs.pop("connection_string", None)) is not None:
             if _validate_type(_connection_string, ReferenceExpression):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["connectionString"] = typing.cast(ReferenceExpression, _connection_string)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting.CodeGeneration.Python.Tests/withConnectionString', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'connection_string'. Expected: ReferenceExpression")
-        if _connection_string_direct := kwargs.pop("connection_string_direct", None):
+        if (_connection_string_direct := kwargs.pop("connection_string_direct", None)) is not None:
             if _validate_type(_connection_string_direct, str):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["connectionString"] = typing.cast(str, _connection_string_direct)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting.CodeGeneration.Python.Tests/withConnectionStringDirect', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'connection_string_direct'. Expected: str")
-        if _redis_specific := kwargs.pop("redis_specific", None):
+        if (_redis_specific := kwargs.pop("redis_specific", None)) is not None:
             if _validate_type(_redis_specific, str):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["option"] = typing.cast(str, _redis_specific)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting.CodeGeneration.Python.Tests/withRedisSpecific', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'redis_specific'. Expected: str")
-        if _multi_param_handle_callback := kwargs.pop("multi_param_handle_callback", None):
+        if (_multi_param_handle_callback := kwargs.pop("multi_param_handle_callback", None)) is not None:
             if _validate_type(_multi_param_handle_callback, typing.Callable[[TestCallbackContext, TestEnvironmentContext], None]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[TestCallbackContext, TestEnvironmentContext], None], _multi_param_handle_callback))
+                rpc_args["callback"] = client.register_callback(typing.cast(typing.Callable[[TestCallbackContext, TestEnvironmentContext], None], _multi_param_handle_callback), ("Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestCallbackContext", "Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestEnvironmentContext"))
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting.CodeGeneration.Python.Tests/withMultiParamHandleCallback', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'multi_param_handle_callback'. Expected: Callable[[TestCallbackContext, TestEnvironmentContext], None]")
-        if _data_volume := kwargs.pop("data_volume", None):
+        if (_data_volume := kwargs.pop("data_volume", None)) is not None and _data_volume is not False:
             if _validate_dict_types(_data_volume, DataVolumeParameters):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["name"] = typing.cast(DataVolumeParameters, _data_volume).get("name")
@@ -12692,6 +13498,20 @@ class TestRedisResource(ContainerResource, AbstractResourceWithConnectionString)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting.CodeGeneration.Python.Tests/withDataVolume', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'data_volume'. Expected: DataVolumeParameters or Literal[True]")
+        if (_concrete_vault_resource := kwargs.pop("concrete_vault_resource", None)) is not None:
+            if _validate_type(_concrete_vault_resource, TestVaultResource):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["resource"] = typing.cast(TestVaultResource, _concrete_vault_resource)
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting.CodeGeneration.Python.Tests/withConcreteVaultResource', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'concrete_vault_resource'. Expected: TestVaultResource")
+        if (_python_builder_callback := kwargs.pop("python_builder_callback", None)) is not None:
+            if _validate_type(_python_builder_callback, typing.Callable[[TestRedisResource], None]):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["configure"] = client.register_callback(typing.cast(typing.Callable[[TestRedisResource], None], _python_builder_callback), ("Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestRedisResource",))
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting.CodeGeneration.Python.Tests/withPythonBuilderCallback', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'python_builder_callback'. Expected: Callable[[TestRedisResource], None]")
         super().__init__(handle, client, **kwargs)
 
 
@@ -12718,7 +13538,7 @@ class TestVaultResource(ContainerResource, AbstractTestVaultResource):
         return self
 
     def __init__(self, handle: Handle, client: AspireClient, **kwargs: typing.Unpack[TestVaultResourceKwargs]) -> None:
-        if _vault_direct := kwargs.pop("vault_direct", None):
+        if (_vault_direct := kwargs.pop("vault_direct", None)) is not None:
             if _validate_type(_vault_direct, str):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["option"] = typing.cast(str, _vault_direct)
@@ -12726,6 +13546,19 @@ class TestVaultResource(ContainerResource, AbstractTestVaultResource):
             else:
                 raise TypeError("Invalid type for option 'vault_direct'. Expected: str")
         super().__init__(handle, client, **kwargs)
+
+
+# ============================================================================
+# Entry Point Functions
+# ============================================================================
+
+def get_static_nullable_string(client: AspireClient) -> str | None:
+    rpc_args: dict[str, typing.Any] = {}
+    result = client.invoke_capability(
+        'Aspire.Hosting.CodeGeneration.Python.Tests/getStaticNullableStringAsync',
+        rpc_args
+    )
+    return result
 
 
 # ============================================================================
@@ -12803,29 +13636,29 @@ def create_builder(
     # Default args and project_directory if not provided
     effective_options = options or CreateBuilderOptions()
     if args is not None:
-        effective_options['Args'] = args
-    elif not effective_options.get('Args'):
-        effective_options['Args'] = sys.argv[1:]
+        effective_options['args'] = args
+    elif not effective_options.get('args'):
+        effective_options['args'] = sys.argv[1:]
     if project_directory is not None:
-        effective_options['ProjectDirectory'] = project_directory
-    elif not effective_options.get('ProjectDirectory'):
-        effective_options['ProjectDirectory'] = os.environ.get('ASPIRE_PROJECT_DIRECTORY', os.getcwd())
+        effective_options['projectDirectory'] = project_directory
+    elif not effective_options.get('projectDirectory'):
+        effective_options['projectDirectory'] = os.environ.get('ASPIRE_PROJECT_DIRECTORY', os.getcwd())
     if app_host_file_path is not None:
-        effective_options['AppHostFilePath'] = app_host_file_path
-    elif not effective_options.get('AppHostFilePath'):
+        effective_options['appHostFilePath'] = app_host_file_path
+    elif not effective_options.get('appHostFilePath'):
         app_host_file_path = os.environ.get('ASPIRE_APPHOST_FILEPATH')
         if app_host_file_path:
-            effective_options['AppHostFilePath'] = app_host_file_path
+            effective_options['appHostFilePath'] = app_host_file_path
     if container_registry_override is not None:
-        effective_options['ContainerRegistryOverride'] = container_registry_override
+        effective_options['containerRegistryOverride'] = container_registry_override
     if disable_dashboard is not None:
-        effective_options['DisableDashboard'] = disable_dashboard
+        effective_options['disableDashboard'] = disable_dashboard
     if dashboard_application_name is not None:
-        effective_options['DashboardApplicationName'] = dashboard_application_name
+        effective_options['dashboardApplicationName'] = dashboard_application_name
     if allow_unsecured_transport is not None:
-        effective_options['AllowUnsecuredTransport'] = allow_unsecured_transport
+        effective_options['allowUnsecuredTransport'] = allow_unsecured_transport
     if enable_resource_logging is not None:
-        effective_options['EnableResourceLogging'] = enable_resource_logging
+        effective_options['enableResourceLogging'] = enable_resource_logging
 
     return DistributedApplicationBuilder(client, effective_options)
 
@@ -12922,6 +13755,7 @@ _register_handle_wrapper("Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Host
 _register_handle_wrapper("Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestEnvironmentContext", TestEnvironmentContext)
 _register_handle_wrapper("Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestMutableCollectionContext", TestMutableCollectionContext)
 _register_handle_wrapper("Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestResourceContext", TestResourceContext)
+_register_handle_wrapper("Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestReturnValueContext", TestReturnValueContext)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.UpdateCommandStateContext", UpdateCommandStateContext)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.Resource", _BaseResource)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerRegistryResource", ContainerRegistryResource)

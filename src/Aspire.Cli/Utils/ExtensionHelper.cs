@@ -32,23 +32,45 @@ internal static class KnownCapabilities
     public const string DevKit = "devkit";
     public const string Project = "project";
     public const string Node = "node";
+    public const string Deno = "deno.v1";
     public const string BuildDotnetUsingCli = "build-dotnet-using-cli";
     public const string Baseline = "baseline.v1";
     public const string SecretPrompts = "secret-prompts.v1";
     public const string FilePickers = "file-pickers.v1";
     public const string Pipelines = "pipelines";
+    public const string PipelineStepListJson = "pipeline-step-list-json.v1";
+    public const string MessageActions = "message-actions.v1";
 
     // Advertised so tooling (e.g. the VS Code extension) can detect that `aspire describe`
     // understands the hidden `--include-disabled-commands` flag without having to optimistically
     // pass it and parse (localized) error output when an older CLI rejects it.
     public const string DescribeIncludeDisabledCommands = "describe-include-disabled-commands.v1";
 
+    // Advertised so tooling can bind `aspire describe` to one same-path AppHost process.
+    public const string DescribeAppHostPid = "describe-apphost-pid.v1";
+
     // Advertised so tooling can detect that `aspire ls --format json --stream` is supported
     // before opting into newline-delimited JSON candidate discovery.
     public const string LsJsonStream = "ls-json-stream.v1";
 
+    public const string AppHostLogOutput = "apphost-log-output.v1";
+
+    // Advertised so tooling can pass `aspire run --isolated` only to CLIs that understand it.
+    public const string IsolatedLaunch = "isolated-launch.v1";
+
+    // Advertised so tooling can detect that `aspire agent mcp` is supported before automatically
+    // registering the CLI as a pinned MCP server. Older CLIs that don't advertise this token must
+    // not be assumed to support the command.
+    public const string AgentMcp = "agent-mcp.v1";
+
+    // Advertised so tooling can pass `aspire run --launch-profile` only to CLIs that understand it.
+    public const string LaunchProfile = "launch-profile.v1";
+
+    // Tooling must omit the legacy --replica option when terminal commands select by instance ID.
+    public const string TerminalInstanceSelection = "terminal-instance-selection.v1";
+
     /// <summary>
     /// Gets the set of capabilities this CLI advertises to extensions.
     /// </summary>
-    public static string[] GetAdvertisedCapabilities() => [DevKit, Project, BuildDotnetUsingCli, Baseline, SecretPrompts, FilePickers, Pipelines, DescribeIncludeDisabledCommands, LsJsonStream];
+    public static string[] GetAdvertisedCapabilities() => [DevKit, Project, BuildDotnetUsingCli, Baseline, SecretPrompts, FilePickers, Pipelines, PipelineStepListJson, DescribeIncludeDisabledCommands, DescribeAppHostPid, LsJsonStream, IsolatedLaunch, AgentMcp, LaunchProfile, TerminalInstanceSelection];
 }

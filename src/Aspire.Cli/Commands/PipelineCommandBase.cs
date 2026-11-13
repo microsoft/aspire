@@ -13,12 +13,15 @@ using Aspire.Cli.Exceptions;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
+using Aspire.Cli.Secrets;
+using Aspire.Shared.UserSecrets;
 using Aspire.Cli.Utils;
 using Aspire.Cli.Utils.Markdown;
 using Aspire.Dashboard.Utils;
 using Aspire.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Semver;
 using Spectre.Console;
 using StreamJsonRpc;
 
@@ -29,6 +32,14 @@ internal abstract class PipelineCommandBase : BaseCommand
     protected override bool UpdateNotificationsEnabled => true;
 
     private const string CustomChoiceValue = "__CUSTOM_CHOICE";
+    private const string ListStepsCapability = "pipeline-steps.v2";
+    private const string InvalidListStepsFormatMessage = "The --format option requires either 'table' or 'json'.";
+    private const string LegacyInspectOperationError = "Invalid operation specified. Valid operations are 'publish' or 'run'.";
+    private const string ListStepsIncompatibleMessage = "The AppHost does not support --list-steps. Update the AppHost to a newer version of Aspire.";
+    private const int MinimumHostingMajorVersionForListSteps = 13;
+    private const int MinimumHostingMinorVersionForListSteps = 6;
+
+    private bool _terminalProgressBarStarted;
 
     protected readonly IDotNetCliRunner _runner;
     protected readonly IProjectLocator _projectLocator;
@@ -37,6 +48,8 @@ internal abstract class PipelineCommandBase : BaseCommand
     private readonly IConfiguration _configuration;
     private readonly IFeatures _features;
     private readonly ICliHostEnvironment _hostEnvironment;
+    private readonly AspireSecretsStoreResolver _aspireSecretsStoreResolver;
+    private readonly IEnvironment _environment;
     private readonly ILogger _logger;
     private readonly IAnsiConsole _ansiConsole;
 
@@ -66,7 +79,25 @@ internal abstract class PipelineCommandBase : BaseCommand
 
     protected static readonly Option<bool> s_listStepsOption = new("--list-steps")
     {
-        Description = "List the pipeline steps that would be executed, without running them."
+        Description = SharedCommandStrings.PipelineListStepsOptionDescription
+    };
+
+    protected static readonly Option<OutputFormat> s_listStepsFormatOption = new("--format")
+    {
+        Description = SharedCommandStrings.PipelineFormatOptionDescription,
+        CustomParser = result =>
+        {
+            // Enum binding also accepts numbers ("1") and composite names ("table,json").
+            // Use the same name-only parsing as forwarding commands' unmatched --format tokens.
+            if (result.Tokens.Count != 1 ||
+                !TryExtractListStepsFormat(["--format", result.Tokens[0].Value], out var format, out _))
+            {
+                result.AddError(InvalidListStepsFormatMessage);
+                return OutputFormat.Table;
+            }
+
+            return format;
+        }
     };
 
     protected abstract string OperationCompletedPrefix { get; }
@@ -81,7 +112,7 @@ internal abstract class PipelineCommandBase : BaseCommand
     private static bool IsCompletionStateWarning(string completionState) =>
         completionState == CompletionStates.CompletedWithWarning;
 
-    protected PipelineCommandBase(string name, string description, IDotNetCliRunner runner, IProjectLocator projectLocator, IFeatures features, ICliHostEnvironment hostEnvironment, IAppHostProjectFactory projectFactory, IConfiguration configuration, ILogger logger, IAnsiConsole ansiConsole, CommonCommandServices services)
+    protected PipelineCommandBase(string name, string description, IDotNetCliRunner runner, IProjectLocator projectLocator, IFeatures features, ICliHostEnvironment hostEnvironment, IAppHostProjectFactory projectFactory, IConfiguration configuration, IEnvironment environment, AspireSecretsStoreResolver aspireSecretsStoreResolver, ILogger logger, IAnsiConsole ansiConsole, CommonCommandServices services)
         : base(name, description, services)
     {
         _runner = runner;
@@ -90,6 +121,8 @@ internal abstract class PipelineCommandBase : BaseCommand
         _configuration = configuration;
         _features = features;
         _projectFactory = projectFactory;
+        _aspireSecretsStoreResolver = aspireSecretsStoreResolver;
+        _environment = environment;
         _logger = logger;
         _ansiConsole = ansiConsole;
 
@@ -112,13 +145,12 @@ internal abstract class PipelineCommandBase : BaseCommand
     }
 
     protected abstract string GetOutputPathDescription();
-    protected abstract Task<string[]> GetRunArgumentsAsync(string? fullyQualifiedOutputPath, string[] unmatchedTokens, ParseResult parseResult, CancellationToken cancellationToken);
-    protected abstract string GetCanceledMessage();
+    protected abstract Task<string[]> GetRunArgumentsAsync(string? fullyQualifiedOutputPath, string[] unmatchedTokens, string? targetStep, ParseResult parseResult, CancellationToken cancellationToken);
     protected abstract string GetProgressMessage(ParseResult parseResult);
 
     /// <summary>
-    /// Gets the target pipeline step name for this command, used for --list-steps filtering.
-    /// Returns null to show all steps.
+    /// Gets the target pipeline step name for this invocation.
+    /// In list mode, a null target shows all steps.
     /// </summary>
     protected virtual string? GetTargetStepName(ParseResult parseResult) => null;
 
@@ -129,13 +161,32 @@ internal abstract class PipelineCommandBase : BaseCommand
     /// </summary>
     protected virtual string[] GetCommandArgs(ParseResult parseResult) => [];
 
+    protected override bool IsJsonFormatRequested(ParseResult parseResult)
+    {
+        return base.IsJsonFormatRequested(parseResult) ||
+            (parseResult.GetValue(s_listStepsOption) &&
+             TryResolveListStepsInvocation(parseResult, out var outputFormat, out _, out _) &&
+             outputFormat is OutputFormat.Json);
+    }
+
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         // If running in the extension context (Aspire terminal) without a debug session,
         // intercept and tell VS Code to start a proper debug session for this command.
         var passedAppHostProjectFile = parseResult.GetValue(s_appHostOption);
+        var explicitAppHost = passedAppHostProjectFile is not null;
+        var listSteps = parseResult.GetValue(s_listStepsOption);
+        var unmatchedTokens = parseResult.UnmatchedTokens.ToArray();
+        var targetStep = GetTargetStepName(parseResult);
+        var outputFormat = OutputFormat.Table;
+        if (listSteps && !TryResolveListStepsInvocation(parseResult, out outputFormat, out targetStep, out unmatchedTokens))
+        {
+            return CommandResult.Failure(CliExitCodes.InvalidCommand, InvalidListStepsFormatMessage);
+        }
+
         if (ExtensionHelper.IsExtensionHost(InteractionService, out var extensionInteractionService, out _)
-            && string.IsNullOrEmpty(_configuration[KnownConfigNames.ExtensionDebugSessionId]))
+            && string.IsNullOrEmpty(_configuration[KnownConfigNames.ExtensionDebugSessionId])
+            && !listSteps)
         {
             // Resolve the apphost project interactively before starting the debug session,
             // so the user is prompted if needed and we can pass it along.
@@ -161,6 +212,9 @@ internal abstract class PipelineCommandBase : BaseCommand
                 {
                     Command = Name,
                     Args = commandArgs.Length > 0 ? commandArgs : null,
+                    AppHostSelectionOrigin = explicitAppHost
+                        ? DebugSessionOptions.ExplicitCliAppHostSelectionOrigin
+                        : DebugSessionOptions.DefaultDiscoveryAppHostSelectionOrigin,
                     EnvironmentVariables = new Dictionary<string, string>
                     {
                         [KnownConfigNames.AspireHome] = ExecutionContext.AspireHomeDirectory.FullName
@@ -177,8 +231,11 @@ internal abstract class PipelineCommandBase : BaseCommand
         Task<int>? pendingRun = null;
         PublishContext? publishContext = null;
 
-        // Send terminal infinite progress bar start sequence
-        StartTerminalProgressBar();
+        // Machine-readable output must not contain terminal control sequences.
+        if (!listSteps || outputFormat is not OutputFormat.Json)
+        {
+            StartTerminalProgressBar();
+        }
 
         try
         {
@@ -195,6 +252,17 @@ internal abstract class PipelineCommandBase : BaseCommand
             }
 
             var project = _projectFactory.GetProject(effectiveAppHostFile);
+            if (listSteps)
+            {
+                var aspireHostingVersion = await project.GetAspireHostingVersionAsync(effectiveAppHostFile, cancellationToken);
+                if (IsKnownIncompatibleWithListSteps(aspireHostingVersion))
+                {
+                    throw new AppHostIncompatibleException(
+                        ListStepsIncompatibleMessage,
+                        ListStepsCapability,
+                        aspireHostingVersion);
+                }
+            }
 
             var env = new Dictionary<string, string>
             {
@@ -217,7 +285,13 @@ internal abstract class PipelineCommandBase : BaseCommand
 
             var backchannelCompletionSource = new TaskCompletionSource<IAppHostCliBackchannel>();
 
-            var unmatchedTokens = parseResult.UnmatchedTokens.ToArray();
+            var runArguments = await GetRunArgumentsAsync(fullyQualifiedOutputPath, unmatchedTokens, targetStep, parseResult, cancellationToken);
+
+            if (listSteps)
+            {
+                runArguments = [.. runArguments, "--operation", "inspect", "--list-steps", "true"];
+            }
+            await AddAspireSecretsFileEnvironmentVariableAsync(effectiveAppHostFile, project, env, runArguments, cancellationToken);
 
             // Create the publish context and delegate to IAppHostProject
             publishContext = new PublishContext
@@ -225,7 +299,7 @@ internal abstract class PipelineCommandBase : BaseCommand
                 AppHostFile = effectiveAppHostFile,
                 OutputPath = fullyQualifiedOutputPath,
                 EnvironmentVariables = env,
-                Arguments = await GetRunArgumentsAsync(fullyQualifiedOutputPath, unmatchedTokens, parseResult, cancellationToken),
+                Arguments = runArguments,
                 BackchannelCompletionSource = backchannelCompletionSource,
                 WorkingDirectory = ExecutionContext.WorkingDirectory,
                 Debug = debugMode,
@@ -273,27 +347,46 @@ internal abstract class PipelineCommandBase : BaseCommand
             }), emoji: KnownEmojis.HammerAndWrench);
 
             // If --list-steps was specified, get pipeline steps and print them instead of executing
-            var listSteps = parseResult.GetValue(s_listStepsOption);
             if (listSteps)
             {
                 StopTerminalProgressBar();
+                int inspectionExitCode;
 
-                // Check that the AppHost supports this capability before calling
-                var capabilities = await backchannel.GetCapabilitiesAsync(cancellationToken);
-                if (!capabilities.Contains("pipeline-steps.v1"))
+                try
                 {
-                    throw new AppHostIncompatibleException(
-                        "The AppHost does not support --list-steps. Update the AppHost to a newer version of Aspire.",
-                        "pipeline-steps.v1");
+                    // Check that the AppHost supports this capability before calling
+                    var capabilities = await backchannel.GetCapabilitiesAsync(cancellationToken);
+                    if (!capabilities.Contains(ListStepsCapability))
+                    {
+                        throw new AppHostIncompatibleException(
+                            ListStepsIncompatibleMessage,
+                            ListStepsCapability);
+                    }
+
+                    var response = await backchannel.GetPipelineStepsAsync(targetStep, cancellationToken);
+                    if (outputFormat is OutputFormat.Json)
+                    {
+                        var json = JsonSerializer.Serialize(response.Steps, JsonSourceGenerationContext.RelaxedEscaping.PipelineStepInfoArray);
+                        InteractionService.DisplayRawText(json, ConsoleOutput.Standard);
+                    }
+                    else
+                    {
+                        PrintPipelineSteps(response.Steps);
+                    }
+                }
+                finally
+                {
+                    try
+                    {
+                        await backchannel.RequestStopAsync(CancellationToken.None).ConfigureAwait(false);
+                    }
+                    finally
+                    {
+                        inspectionExitCode = await pendingRun;
+                    }
                 }
 
-                var targetStep = GetTargetStepName(parseResult);
-                var response = await backchannel.GetPipelineStepsAsync(targetStep, cancellationToken);
-                PrintPipelineSteps(response.Steps);
-
-                await backchannel.RequestStopAsync(cancellationToken).ConfigureAwait(false);
-                await pendingRun;
-                return CommandResult.Success();
+                return CommandResult.FromExitCode(inspectionExitCode);
             }
 
             var publishingActivities = backchannel.GetPublishingActivitiesAsync(cancellationToken);
@@ -336,14 +429,19 @@ internal abstract class PipelineCommandBase : BaseCommand
             // Both apphost exit code and backchannel indicate success
             return CommandResult.Success();
         }
+        catch (ExtensionOperationCanceledException)
+        {
+            // BaseCommand handles extension prompt dismissal without displaying an error notification.
+            StopTerminalProgressBar();
+            throw;
+        }
         catch (OperationCanceledException ex)
         {
             // Send terminal progress bar stop sequence on cancellation
             StopTerminalProgressBar();
             _logger.LogDebug(ex, "Operation was cancelled.");
-            var canceledMessage = GetCanceledMessage();
-            Telemetry.RecordError(canceledMessage, ex);
-            return CommandResult.Failure(CliExitCodes.FailedToBuildArtifacts, canceledMessage);
+            // Pipeline cancellation uses the build-artifact failure exit code for compatibility.
+            return CommandResult.Cancelled(CliExitCodes.FailedToBuildArtifacts);
         }
         catch (ProjectLocatorException ex)
         {
@@ -363,6 +461,12 @@ internal abstract class PipelineCommandBase : BaseCommand
             StopTerminalProgressBar();
             Telemetry.RecordError($"AppHost is incompatible. Required capability: {ex.RequiredCapability}", ex);
             return CommandResult.Failure(CliExitCodes.AppHostIncompatible, ex.Message);
+        }
+        catch (Exception ex) when (listSteps && HasLegacyInspectOperationError(publishContext?.OutputCollector))
+        {
+            StopTerminalProgressBar();
+            Telemetry.RecordError($"AppHost is incompatible. Required capability: {ListStepsCapability}", ex);
+            return CommandResult.Failure(CliExitCodes.AppHostIncompatible, ListStepsIncompatibleMessage);
         }
         catch (FailedToConnectBackchannelConnection ex)
         {
@@ -404,6 +508,172 @@ internal abstract class PipelineCommandBase : BaseCommand
             return CommandResult.Failure(CliExitCodes.FailedToBuildArtifacts);
         }
     }
+
+    private async Task AddAspireSecretsFileEnvironmentVariableAsync(
+        FileInfo appHostFile,
+        IAppHostProject project,
+        IDictionary<string, string> environmentVariables,
+        string[] args,
+        CancellationToken cancellationToken)
+    {
+        // Pipeline commands run deployment-oriented operations, so default to Production while still
+        // honoring environment values supplied by the command line or ambient process. This keeps the
+        // CLI-selected Aspire secrets file aligned with the environment the AppHost will observe.
+        var effectiveEnvironment = AppHostEnvironmentDefaults.ResolveEffectiveEnvironment(
+            environmentVariables,
+            AppHostEnvironmentDefaults.ProductionEnvironmentName,
+            _environment.GetEnvironmentVariables().ToDictionary(pair => pair.Name, pair => pair.Value),
+            args);
+
+        // Keep existing custom host environments working, even if secret commands
+        // cannot address them. An explicit file also takes precedence over automatic selection.
+        environmentVariables.TryGetValue(KnownConfigNames.AspireSecretsFile, out var explicitSecretsFile);
+        explicitSecretsFile ??= _environment.GetEnvironmentVariable(KnownConfigNames.AspireSecretsFile);
+        if (!string.IsNullOrWhiteSpace(explicitSecretsFile))
+        {
+            environmentVariables[KnownConfigNames.AspireSecretsFile] = explicitSecretsFile;
+            return;
+        }
+
+        if (!AspireSecretsPathHelper.IsValidEnvironmentName(effectiveEnvironment))
+        {
+            return;
+        }
+
+        var result = await _aspireSecretsStoreResolver.ResolveAsync(appHostFile, project, effectiveEnvironment, cancellationToken);
+        if (result is not null)
+        {
+            // The secrets file may not exist yet; deployment parameter prompts can create it later.
+            // Passing the path up front lets the AppHost and any deployment steps share the same store.
+            environmentVariables[KnownConfigNames.AspireSecretsFile] = result.AspireSecretsFilePath;
+        }
+    }
+
+    private static bool IsKnownIncompatibleWithListSteps(string? aspireHostingVersion)
+    {
+        if (string.IsNullOrWhiteSpace(aspireHostingVersion) ||
+            !SemVersion.TryParse(aspireHostingVersion, SemVersionStyles.Any, out var version))
+        {
+            return false;
+        }
+
+        return version.Major < MinimumHostingMajorVersionForListSteps ||
+            (version.Major == MinimumHostingMajorVersionForListSteps &&
+             version.Minor < MinimumHostingMinorVersionForListSteps);
+    }
+
+    private static bool TryExtractListStepsFormat(
+        IReadOnlyList<string> unmatchedTokens,
+        out OutputFormat format,
+        out string[] remainingTokens)
+    {
+        format = OutputFormat.Table;
+        var remaining = new List<string>(unmatchedTokens.Count);
+
+        for (var i = 0; i < unmatchedTokens.Count; i++)
+        {
+            var token = unmatchedTokens[i];
+            string value;
+
+            if (token == "--format")
+            {
+                if (++i >= unmatchedTokens.Count)
+                {
+                    remainingTokens = [];
+                    return false;
+                }
+
+                value = unmatchedTokens[i];
+            }
+            else if (token.StartsWith("--format=", StringComparison.Ordinal))
+            {
+                value = token["--format=".Length..];
+            }
+            else
+            {
+                remaining.Add(token);
+                continue;
+            }
+
+            if (value.Equals("json", StringComparison.OrdinalIgnoreCase))
+            {
+                format = OutputFormat.Json;
+            }
+            else if (value.Equals("table", StringComparison.OrdinalIgnoreCase))
+            {
+                format = OutputFormat.Table;
+            }
+            else
+            {
+                remainingTokens = [];
+                return false;
+            }
+        }
+
+        remainingTokens = [.. remaining];
+        return true;
+    }
+
+    private bool TryResolveListStepsInvocation(
+        ParseResult parseResult,
+        out OutputFormat outputFormat,
+        out string? targetStep,
+        out string[] unmatchedTokens)
+    {
+        targetStep = GetTargetStepName(parseResult);
+        unmatchedTokens = parseResult.UnmatchedTokens.ToArray();
+
+        // System.CommandLine can bind the unregistered --format token to `do`'s optional step.
+        // Put it back before parsing the list-only option, then recover the actual positional step
+        // from the tokens that remain after the format pair is removed.
+        var formatTokenParsedAsTarget = targetStep is not null && IsFormatToken(targetStep);
+        if (formatTokenParsedAsTarget)
+        {
+            unmatchedTokens = [targetStep!, .. unmatchedTokens];
+            targetStep = null;
+        }
+
+        if (!TryExtractListStepsFormat(unmatchedTokens, out outputFormat, out unmatchedTokens))
+        {
+            return false;
+        }
+
+        // Strict commands register --format so the parser can reject other unknown arguments.
+        // Forwarding commands leave it unmatched for the list-only extraction above.
+        if (parseResult.GetResult(s_listStepsFormatOption) is not null)
+        {
+            outputFormat = parseResult.GetValue(s_listStepsFormatOption);
+        }
+
+        if (formatTokenParsedAsTarget)
+        {
+            targetStep = ExtractPositionalTarget(unmatchedTokens, out unmatchedTokens);
+        }
+
+        return true;
+    }
+
+    private static bool IsFormatToken(string token) =>
+        token == "--format" || token.StartsWith("--format=", StringComparison.Ordinal);
+
+    private static string? ExtractPositionalTarget(string[] tokens, out string[] remainingTokens)
+    {
+        for (var i = 0; i < tokens.Length; i++)
+        {
+            if (!tokens[i].StartsWith("-", StringComparison.Ordinal))
+            {
+                remainingTokens = [.. tokens[..i], .. tokens[(i + 1)..]];
+                return tokens[i];
+            }
+        }
+
+        remainingTokens = tokens;
+        return null;
+    }
+
+    private static bool HasLegacyInspectOperationError(OutputCollector? outputCollector) =>
+        outputCollector?.GetLines().Any(line =>
+            line.Line.Contains(LegacyInspectOperationError, StringComparison.Ordinal)) == true;
 
     /// <summary>
     /// Prints pipeline steps in a numbered tree format showing dependencies and tags.
@@ -1196,6 +1466,7 @@ internal abstract class PipelineCommandBase : BaseCommand
         {
             return;
         }
+        _terminalProgressBarStarted = true;
         Console.Write("\u001b]9;4;3\u001b\\");
     }
 
@@ -1204,11 +1475,11 @@ internal abstract class PipelineCommandBase : BaseCommand
     /// </summary>
     private void StopTerminalProgressBar()
     {
-        // Skip terminal progress bar in non-interactive environments
-        if (!_hostEnvironment.SupportsInteractiveOutput)
+        if (!_terminalProgressBarStarted)
         {
             return;
         }
+        _terminalProgressBarStarted = false;
         Console.Write("\u001b]9;4;0\u001b\\");
     }
 }

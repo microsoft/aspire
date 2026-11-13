@@ -1,0 +1,17 @@
+name: Preload Azure CLI requests
+description: Preloads Azure CLI's bundled requests module to avoid import deadlocks
+
+runs:
+  using: composite
+  steps:
+    # Azure CLI can deadlock when an AAZ worker imports requests concurrently with another
+    # command-loading thread. Preload requests while the embedded Python interpreter is still
+    # single-threaded, matching the upstream fix from Azure/azure-cli#26287 that was removed in
+    # Azure/azure-cli#32824. Remove this after the runner's Azure CLI includes a durable fix.
+    # See https://github.com/Azure/azure-cli/issues/26272.
+    - name: Work around Azure CLI import deadlock
+      shell: bash
+      run: |
+        azure_cli_site_packages=$(/opt/az/bin/python3 -I -c 'import site; print(site.getsitepackages()[0])')
+        echo 'import requests' | sudo tee "$azure_cli_site_packages/aspire_requests_preload.pth" > /dev/null
+        /opt/az/bin/python3 -I -c "import sys; assert 'requests' in sys.modules; print('Preloaded requests ' + sys.modules['requests'].__version__)"

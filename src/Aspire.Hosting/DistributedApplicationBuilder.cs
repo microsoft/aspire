@@ -2,18 +2,14 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREPIPELINES003
-#pragma warning disable ASPIREPIPELINES001
-#pragma warning disable ASPIREPIPELINES002
-#pragma warning disable ASPIREPIPELINES004
 #pragma warning disable ASPIRECONTAINERRUNTIME001
-#pragma warning disable ASPIREFILESYSTEM001
-#pragma warning disable ASPIREUSERSECRETS001
 #pragma warning disable ASPIREWATCH001
 
 using System.Diagnostics;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Backchannel;
 using Aspire.Hosting.Cli;
@@ -27,12 +23,15 @@ using Aspire.Hosting.Eventing;
 using Aspire.Hosting.Health;
 using Aspire.Hosting.Lifecycle;
 using Aspire.Hosting.Orchestrator;
+using Aspire.Hosting.Utils;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Pipelines.Internal;
 using Aspire.Hosting.Publishing;
 using Aspire.Hosting.UserSecrets;
 using Aspire.Shared;
 using Aspire.Shared.UserSecrets;
+using Microsoft.Extensions.Configuration.CommandLine;
+using Microsoft.Extensions.Configuration.EnvironmentVariables;
 using Microsoft.Extensions.Configuration.UserSecrets;
 using Aspire.Hosting.VersionChecking;
 using Microsoft.Extensions.Configuration;
@@ -45,6 +44,8 @@ using Microsoft.Extensions.Options;
 using OpenTelemetry.Exporter;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
+
+#pragma warning disable ASPIRETERMINAL001 // Internal consumer of the experimental AppHost terminal API.
 
 namespace Aspire.Hosting;
 
@@ -71,6 +72,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
     private const string ApplicationBuiltEventName = "DistributedApplicationBuilt";
     private const string BuilderConstructingEventName = "DistributedApplicationBuilderConstructing";
     private const string BuilderConstructedEventName = "DistributedApplicationBuilderConstructed";
+    private const string AspireEnvironmentVariablePrefix = "ASPIRE_";
 
     private readonly DistributedApplicationOptions _options;
     private readonly HostApplicationBuilder _innerBuilder;
@@ -146,18 +148,11 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
             };
         }
 
-        var operation = _innerBuilder.Configuration["AppHost:Operation"]?.ToLowerInvariant() switch
+        return _innerBuilder.Configuration["AppHost:Operation"]?.ToLowerInvariant() switch
         {
-            "publish" => DistributedApplicationOperation.Publish,
-            "run" => DistributedApplicationOperation.Run,
-            _ => throw new DistributedApplicationException("Invalid operation specified. Valid operations are 'publish' or 'run'.")
-        };
-
-        return operation switch
-        {
-            DistributedApplicationOperation.Run => new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run) { RunConfiguration = BuildRunConfiguration() },
-            DistributedApplicationOperation.Publish => new DistributedApplicationExecutionContextOptions(operation, _innerBuilder.Configuration["Publishing:Publisher"] ?? "manifest"),
-            _ => throw new DistributedApplicationException("Invalid operation specified. Valid operations are 'publish' or 'run'.")
+            "run" => new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run) { RunConfiguration = BuildRunConfiguration() },
+            "publish" or "inspect" => new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Publish, _innerBuilder.Configuration["Publishing:Publisher"] ?? "manifest"),
+            _ => throw new DistributedApplicationException("Invalid operation specified. Valid operations are 'publish', 'run', or 'inspect'.")
         };
     }
 
@@ -197,30 +192,47 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
 
         _options = options;
 
-        var innerBuilderOptions = new HostApplicationBuilderSettings();
+        var innerBuilderOptions = new HostApplicationBuilderSettings
+        {
+            ContentRootPath = options.ContentRootPath
+        };
 
         // Args are set later in config with switch mappings. But specify them when creating the builder
         // so they're used to initialize some types created immediately, e.g. IHostEnvironment.
         innerBuilderOptions.Args = options.Args;
 
-        // Pre-seed the configuration with ASPIRE_-prefixed environment variables.
+        // Pre-seed fallback values before environment and host-default sources so every normal
+        // configuration provider can override them, then add ASPIRE_-prefixed environment variables.
         // HostApplicationBuilder will then add DOTNET_-prefixed env vars and command line args on top.
         // This gives us the priority order: --environment > DOTNET_ENVIRONMENT > ASPIRE_ENVIRONMENT > default.
         var configuration = new ConfigurationManager();
-        configuration.AddEnvironmentVariables(prefix: "ASPIRE_");
+        if (options.DefaultConfiguration is not null)
+        {
+            configuration.AddInMemoryCollection(options.DefaultConfiguration);
+        }
+        configuration.AddEnvironmentVariables(prefix: AspireEnvironmentVariablePrefix);
+        var aspireEnvironmentProvider = ((IConfigurationRoot)configuration).Providers.Last();
         innerBuilderOptions.Configuration = configuration;
 
         LogBuilderConstructing(options, innerBuilderOptions);
         _innerBuilder = new HostApplicationBuilder(innerBuilderOptions);
 
-        var configuredUserSecretsId = _innerBuilder.Configuration[KnownConfigNames.AspireUserSecretsId];
-        var userSecretsId = ResolveUserSecretsId(AppHostAssembly, _innerBuilder.Configuration);
-        AddConfiguredUserSecrets(_innerBuilder.Configuration, AppHostAssembly, configuredUserSecretsId, _innerBuilder.Environment.IsDevelopment());
+        var configuredUserSecretsId = GetAspirePrefixedConfigurationValue(_innerBuilder.Configuration, KnownConfigNames.AspireUserSecretsId, aspireEnvironmentProvider);
+        var configuredAspireSecretsFile = GetAspirePrefixedConfigurationValue(_innerBuilder.Configuration, KnownConfigNames.AspireSecretsFile, aspireEnvironmentProvider);
+        var userSecretsId = ResolveUserSecretsId(AppHostAssembly, _innerBuilder.Configuration, aspireEnvironmentProvider);
+        var legacyUserSecretsFilePath = ResolveLegacyUserSecretsFilePath(userSecretsId);
+        var aspireSecretsFilePath = ResolveAspireSecretsFilePath(configuredAspireSecretsFile, userSecretsId, _innerBuilder.Environment.EnvironmentName);
+        var isDevelopment = _innerBuilder.Environment.IsDevelopment();
+        AddConfiguredUserSecrets(_innerBuilder.Configuration, AppHostAssembly, configuredUserSecretsId, isDevelopment);
+        ImportLegacyUserSecretsIfNeeded(legacyUserSecretsFilePath, aspireSecretsFilePath, isDevelopment);
+        AddConfiguredAspireSecretsFile(_innerBuilder.Configuration, aspireSecretsFilePath);
 
         _innerBuilder.Services.AddSingleton(TimeProvider.System);
 
         _innerBuilder.Services.AddSingleton<BackchannelLoggerProvider>();
         _innerBuilder.Services.AddSingleton<ILoggerProvider>(sp => sp.GetRequiredService<BackchannelLoggerProvider>());
+        // Suppress routine HttpClientFactory Debug cleanup in every sink while retaining Information and higher diagnostics.
+        _innerBuilder.Logging.AddFilter("Microsoft.Extensions.Http.DefaultHttpClientFactory", LogLevel.Information);
         _innerBuilder.Logging.AddFilter("Microsoft.Hosting.Lifetime", LogLevel.Warning);
         _innerBuilder.Logging.AddFilter("Microsoft.AspNetCore.Server.Kestrel", LogLevel.Error);
         _innerBuilder.Logging.AddFilter("Grpc.AspNetCore.Server.ServerCallHandler", LogLevel.Error);
@@ -287,16 +299,22 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
             ["AppHost:Path"] = AppHostPath,
             ["AppHost:FilePath"] = appHostFilePath,
             ["AppHost:DashboardApplicationName"] = dashboardApplicationName,
+            // The build configuration (Debug/Release) propagated to .NET project resources. Guest AppHosts
+            // don't have one, so the prebuilt AppHost server's configuration isn't applied to user projects.
+            ["AppHost:BuildConfiguration"] = options.Configuration,
             [AspireStore.AspireStorePathKeyName] = aspireDir
         });
 
         _executionContextOptions = BuildExecutionContextOptions();
         ExecutionContext = new DistributedApplicationExecutionContext(_executionContextOptions);
 
-        // Compute both PathSha and ProjectNameSha to support different use cases:
-        // - PathSha: For disambiguating projects with the same name in different locations (deployment state)
+        // Compute path, deployment-state, and project-name identities for different use cases:
+        // - PathSha: Historical directory identity used by persistent run-mode resources.
+        // - DeploymentStatePathSha: Source-file-specific identity used by deployment state.
         // - ProjectNameSha: For stable naming across deployments regardless of path (Azure Functions, Azure environments)
         string appHostPathSha;
+        string deploymentStatePathSha;
+        string? legacyDeploymentStatePathSha = null;
         string appHostProjectNameSha;
         string appHostSha; // Legacy value, computed based on mode
 
@@ -306,14 +324,33 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         {
             // For backward compatibility with tests
             appHostPathSha = configuredAppHostSha;
+            deploymentStatePathSha = configuredAppHostSha;
             appHostProjectNameSha = configuredAppHostSha;
             appHostSha = configuredAppHostSha;
         }
         else
         {
-            // Normalize the casing of AppHostPath and compute PathSha
             var appHostPathShaBytes = SHA256.HashData(Encoding.UTF8.GetBytes(AppHostPath.ToLowerInvariant()));
             appHostPathSha = Convert.ToHexString(appHostPathShaBytes);
+
+            // Source-file and polyglot AppHosts can share a host process and project directory,
+            // so use the actual source file to keep their deployment state isolated.
+            var isSourceFileAppHost = !string.IsNullOrEmpty(appHostFilePath) &&
+                !string.Equals(Path.GetExtension(appHostFilePath), ".csproj", StringComparison.OrdinalIgnoreCase);
+            // This path feeds a persisted deployment-state identity. Preserve the pre-existing
+            // casing-only normalization so adding symlink resolution does not move existing state.
+            var appHostIdentityPath = isSourceFileAppHost
+                ? PathNormalizer.ResolvePathCasing(Path.GetFullPath(appHostFilePath!))
+                : AppHostPath;
+            var normalizedAppHostIdentityPath = isSourceFileAppHost && !OperatingSystem.IsWindows()
+                ? appHostIdentityPath
+                : appHostIdentityPath.ToLowerInvariant();
+            var deploymentStatePathShaBytes = SHA256.HashData(Encoding.UTF8.GetBytes(normalizedAppHostIdentityPath));
+            deploymentStatePathSha = Convert.ToHexString(deploymentStatePathShaBytes);
+            if (!string.Equals(deploymentStatePathSha, appHostPathSha, StringComparison.Ordinal))
+            {
+                legacyDeploymentStatePathSha = appHostPathSha;
+            }
 
             // Compute ProjectNameSha
             var appHostProjectNameShaBytes = SHA256.HashData(Encoding.UTF8.GetBytes(appHostName));
@@ -334,8 +371,11 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
 
         _innerBuilder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
         {
-            // PathSha for deployment state (path-based disambiguation)
+            // Historical path identity used by persistent run-mode resources.
             ["AppHost:PathSha256"] = appHostPathSha,
+            // Source-file-specific deployment identity and its migration fallback.
+            ["AppHost:DeploymentStatePathSha256"] = deploymentStatePathSha,
+            ["AppHost:LegacyDeploymentStatePathSha256"] = legacyDeploymentStatePathSha,
             // ProjectNameSha for Azure Functions and Azure environments (stable naming)
             ["AppHost:ProjectNameSha256"] = appHostProjectNameSha,
             // Legacy Sha256 for backward compatibility (mode-dependent)
@@ -346,7 +386,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         // This must happen before command line args are added so they can override saved state
         if (ExecutionContext.IsPublishMode)
         {
-            LoadDeploymentState(appHostPathSha);
+            LoadDeploymentState(deploymentStatePathSha, legacyDeploymentStatePathSha);
         }
 
         // Core things
@@ -361,8 +401,8 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         // Create and register the user secrets manager (uses the userSecretsId resolved at top of constructor)
         var userSecretsFactory = new UserSecretsManagerFactory(_directoryService);
 
-        _userSecretsManager = !string.IsNullOrEmpty(userSecretsId)
-            ? userSecretsFactory.GetOrCreateFromId(userSecretsId)
+        _userSecretsManager = !string.IsNullOrEmpty(aspireSecretsFilePath)
+            ? userSecretsFactory.GetOrCreate(aspireSecretsFilePath, isDevelopment ? legacyUserSecretsFilePath : null)
             : NoopUserSecretsManager.Instance;
 
         // Always register IUserSecretsManager so dependencies can resolve
@@ -371,7 +411,8 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         _innerBuilder.Services.AddSingleton(sp => new DistributedApplicationModel(Resources));
         _innerBuilder.Services.AddSingleton<PipelineExecutor>();
         _innerBuilder.Services.AddHostedService<PipelineExecutor>(sp => sp.GetRequiredService<PipelineExecutor>());
-        _innerBuilder.Services.AddHostedService<DistributedApplicationLifecycle>();
+        _innerBuilder.Services.AddSingleton<DistributedApplicationLifecycle>();
+        _innerBuilder.Services.AddHostedService<DistributedApplicationLifecycle>(sp => sp.GetRequiredService<DistributedApplicationLifecycle>());
         _innerBuilder.Services.AddHostedService<VersionCheckService>();
         _innerBuilder.Services.AddSingleton<IPackageFetcher, PackageFetcher>();
         _innerBuilder.Services.AddSingleton<IPackageVersionProvider, PackageVersionProvider>();
@@ -380,6 +421,8 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         _innerBuilder.Services.AddSingleton<ResourceLoggerService>();
         _innerBuilder.Services.AddSingleton<ResourceCommandService>(s => new ResourceCommandService(s.GetRequiredService<ResourceNotificationService>(), s.GetRequiredService<ResourceLoggerService>(), s));
         _innerBuilder.Services.TryAddSingleton<IProcessRunner, DefaultProcessRunner>();
+        _innerBuilder.Services.TryAddSingleton<IDotnetSdkVersionProvider, DotnetSdkVersionProvider>();
+        _innerBuilder.Services.AddSingleton<InteractionServiceConsumerState>();
         _innerBuilder.Services.AddSingleton<InteractionService>();
         _innerBuilder.Services.AddSingleton<IInteractionService>(sp => sp.GetRequiredService<InteractionService>());
         _innerBuilder.Services.AddSingleton<ParameterProcessor>(static sp =>
@@ -439,6 +482,20 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         _innerBuilder.Services.AddSingleton<SecretRedactionHistory>();
         _innerBuilder.Services.AddSingleton<AppHostRpcTarget>();
         _innerBuilder.Services.AddSingleton<IInteractionFileUploadStore, Dashboard.InteractionFileUploadStore>();
+        // Constructed explicitly rather than by DI activation: TerminalService is public (so AppHost code can
+        // resolve it) but its constructor is internal, and the DI container only activates public constructors.
+        _innerBuilder.Services.AddSingleton(sp =>
+        {
+            var logger = sp.GetRequiredService<ILogger<TerminalService>>();
+
+            return new TerminalService(logger, sp.GetRequiredService<IConfiguration>())
+            {
+                // Terminals belonging to resources are discovered from the model rather than registered, so the
+                // service is given a catalog to consult instead of owning their lifetime.
+                ResourceTerminals = new ResourceTerminalCatalog(sp.GetRequiredService<DistributedApplicationModel>(), logger)
+            };
+        });
+        _innerBuilder.Services.AddHostedService<TerminalServiceHost>();
 
         ConfigureHealthChecks();
 
@@ -529,6 +586,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
             _innerBuilder.Services.TryAddSingleton<IRequiredCommandValidator, RequiredCommandValidator>();
 #pragma warning restore ASPIRECOMMAND001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
             _innerBuilder.Services.TryAddEventingSubscriber<RequiredCommandValidationEventingSubscriber>();
+            _innerBuilder.Services.TryAddEventingSubscriber<DotnetBuildCommandEventingSubscriber>();
 
             // Terminal host binary path resolution (WithTerminal)
             _innerBuilder.Services.TryAddEventingSubscriber<TerminalHostEventingSubscriber>();
@@ -552,6 +610,12 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
             // DCP stuff
             _innerBuilder.Services.AddSingleton<DcpAppResourceStore>();
             _innerBuilder.Services.AddSingleton<ProxylessEndpointPortAllocator>();
+            _innerBuilder.Services.AddSingleton<AppHostLocalStateStore>();
+            _innerBuilder.Services.AddSingleton<PersistentPortAllocationStore>();
+            _innerBuilder.Services.AddSingleton<PersistentPortAllocator>();
+            _innerBuilder.Services.AddSingleton<ContainerNetworkEndpointProvisioner>();
+            _innerBuilder.Services.AddSingleton<ExecutableConfigurationResolver>();
+            _innerBuilder.Services.AddSingleton<ExecutableLaunchPolicy>();
             _innerBuilder.Services.AddSingleton<ExecutableCreator>();
             _innerBuilder.Services.AddSingleton<ContainerCreator>();
             _innerBuilder.Services.AddSingleton<DcpExecutor>();
@@ -563,7 +627,10 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
 
             // Locations now uses IFileSystemService for DCP session storage
             _innerBuilder.Services.AddSingleton<Locations>();
-            _innerBuilder.Services.AddSingleton<IKubernetesService, KubernetesService>();
+            // DCP retries follow an external process and must progress even when the
+            // application replaces TimeProvider with a clock that is not advancing.
+            _innerBuilder.Services.AddSingleton<IKubernetesService>(static sp =>
+                ActivatorUtilities.CreateInstance<KubernetesService>(sp, TimeProvider.System));
 
             Eventing.Subscribe<BeforeStartEvent>(BuiltInDistributedApplicationEventSubscriptionHandlers.InitializeDcpAnnotations);
             Eventing.Subscribe<BeforeStartEvent>(BuiltInDistributedApplicationEventSubscriptionHandlers.WarnPersistentContainersWithoutUserSecrets);
@@ -573,7 +640,9 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         Eventing.Subscribe<BeforeStartEvent>(BuiltInDistributedApplicationEventSubscriptionHandlers.MutateHttp2TransportAsync);
         _innerBuilder.Services.AddKeyedSingleton<IContainerRuntime, DockerContainerRuntime>(KnownContainerRuntimes.Docker);
         _innerBuilder.Services.AddKeyedSingleton<IContainerRuntime, PodmanContainerRuntime>(KnownContainerRuntimes.Podman);
+        _innerBuilder.Services.AddKeyedSingleton<IContainerRuntime, WslcContainerRuntime>(KnownContainerRuntimes.Wslc);
         _innerBuilder.Services.AddSingleton<IContainerRuntimeResolver, ContainerRuntimeResolver>();
+        _innerBuilder.Services.AddSingleton<ContainerRuntimeReadiness>();
         _innerBuilder.Services.AddSingleton<IResourceContainerImageManager, ResourceContainerImageManager>();
         _innerBuilder.Services.AddSingleton<PipelineActivityReporter>();
         _innerBuilder.Services.AddSingleton<IPipelineActivityReporter, PipelineActivityReporter>(sp => sp.GetRequiredService<PipelineActivityReporter>());
@@ -779,6 +848,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
 
             // Pipeline options (valid for aspire do based commands)
             { "--step", "Pipeline:Step" },
+            { "--list-steps", "Pipeline:ListSteps" },
             { "--output-path", "Pipeline:OutputPath" },
             { "--log-level", "Pipeline:LogLevel" },
             { "--include-exception-details", "Pipeline:IncludeExceptionDetails" },
@@ -791,6 +861,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
             // DCP Publisher options, we should only process these in run mode
             { "--dcp-cli-path", "DcpPublisher:CliPath" },
             { "--dcp-container-runtime", "DcpPublisher:ContainerRuntime" },
+            { "--dcp-container-tunnel-base-image", "DcpPublisher:ContainerTunnelBaseImage" },
             { "--dcp-dependency-check-timeout", "DcpPublisher:DependencyCheckTimeout" },
             { "--dcp-dashboard-path", "DcpPublisher:DashboardPath" }
         };
@@ -840,7 +911,12 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
             ValidateResourceName(resource);
         }
 
-        var application = new DistributedApplication(_innerBuilder.Build());
+        var host = _innerBuilder.Build();
+
+        // Initialize readiness only for the original application. Testing wrappers share its services
+        // and may be constructed after the before-start hooks have already completed.
+        host.Services.GetRequiredService<InteractionServiceConsumerState>().Ready = false;
+        var application = new DistributedApplication(host);
 
         _executionContextOptions.Services = application.Services.GetRequiredService<IServiceProvider>();
 
@@ -869,15 +945,84 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         return builder;
     }
 
-    internal static string? ResolveUserSecretsId(Assembly? appHostAssembly, IConfiguration configuration)
+    internal static string? ResolveUserSecretsId(Assembly? appHostAssembly, IConfiguration configuration, IConfigurationProvider? aspireEnvironmentProvider = null)
     {
         ArgumentNullException.ThrowIfNull(configuration);
 
         // An explicitly configured value should win over any assembly-level UserSecretsId so guest AppHosts can
         // direct secrets to their synthetic store instead of the generated server project's store.
-        var configuredUserSecretsId = configuration[KnownConfigNames.AspireUserSecretsId];
+        var configuredUserSecretsId = GetAspirePrefixedConfigurationValue(configuration, KnownConfigNames.AspireUserSecretsId, aspireEnvironmentProvider);
         var assemblyUserSecretsId = appHostAssembly?.GetCustomAttribute<UserSecretsIdAttribute>()?.UserSecretsId;
         return string.IsNullOrWhiteSpace(configuredUserSecretsId) ? assemblyUserSecretsId : configuredUserSecretsId;
+    }
+
+    internal static string? GetAspirePrefixedConfigurationValue(IConfiguration configuration, string key, IConfigurationProvider? aspireEnvironmentProvider = null)
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+        ArgumentException.ThrowIfNullOrWhiteSpace(key);
+
+        var configuredValue = configuration[key];
+        if (!string.IsNullOrWhiteSpace(configuredValue) || !key.StartsWith(AspireEnvironmentVariablePrefix, StringComparison.Ordinal))
+        {
+            return configuredValue;
+        }
+
+        // ASPIRE_SECRETS_FILE appears as SECRETS_FILE in the pre-seeded ASPIRE_
+        // provider. Only consult that provider: an unrelated appsettings or
+        // command-line SECRETS_FILE must not select the AppHost's secrets store.
+        return aspireEnvironmentProvider is not null &&
+            aspireEnvironmentProvider.TryGet(key[AspireEnvironmentVariablePrefix.Length..], out var value)
+            ? value
+            : null;
+    }
+
+    internal static string? ResolveAspireSecretsFilePath(string? configuredAspireSecretsFile, string? userSecretsId, string environmentName)
+    {
+        if (!string.IsNullOrWhiteSpace(configuredAspireSecretsFile))
+        {
+            return Path.GetFullPath(configuredAspireSecretsFile);
+        }
+
+        if (string.IsNullOrWhiteSpace(userSecretsId))
+        {
+            return null;
+        }
+
+        var resolvedEnvironment = string.IsNullOrWhiteSpace(environmentName) ? Environments.Development : environmentName;
+        // Host environment names predate the portable secrets filename contract.
+        // Unsupported names still work with other configuration or an explicit secrets file.
+        if (!AspireSecretsPathHelper.IsValidEnvironmentName(resolvedEnvironment))
+        {
+            return null;
+        }
+
+        return AspireSecretsPathHelper.GetSecretsFilePath(AspireSecretsPathHelper.GetDefaultHomeDirectory(), userSecretsId, resolvedEnvironment);
+    }
+
+    internal static string? ResolveLegacyUserSecretsFilePath(string? userSecretsId) =>
+        string.IsNullOrWhiteSpace(userSecretsId) ? null : UserSecretsPathHelper.GetSecretsPathFromSecretsId(userSecretsId);
+
+    internal static void ImportLegacyUserSecretsIfNeeded(string? legacyUserSecretsFilePath, string? aspireSecretsFilePath, bool isDevelopment)
+    {
+        if (!isDevelopment ||
+            legacyUserSecretsFilePath is null ||
+            aspireSecretsFilePath is null ||
+            !File.Exists(legacyUserSecretsFilePath) ||
+            File.Exists(aspireSecretsFilePath))
+        {
+            return;
+        }
+
+        var legacyStore = new SecretsStore(legacyUserSecretsFilePath);
+        if (legacyStore.Count == 0)
+        {
+            return;
+        }
+
+        var aspireStore = new SecretsStore(aspireSecretsFilePath);
+        aspireStore.MergeFrom(legacyStore);
+
+        aspireStore.Save();
     }
 
     internal static void AddConfiguredUserSecrets(IConfigurationManager configuration, Assembly? appHostAssembly, string? configuredUserSecretsId, bool isDevelopment)
@@ -892,8 +1037,64 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
             // Remove only the file-backed source for the assembly-derived user-secrets ID so the configured
             // user-secrets store replaces that single source without affecting other configuration providers.
             RemoveUserSecretsSource(configuration, appHostAssembly?.GetCustomAttribute<UserSecretsIdAttribute>()?.UserSecretsId);
-            configuration.AddUserSecrets(configuredUserSecretsId);
+            AddUserSecretsAtUserSecretsPrecedence(configuration, configuredUserSecretsId);
         }
+    }
+
+    private static void AddUserSecretsAtUserSecretsPrecedence(IConfigurationManager configuration, string userSecretsId)
+    {
+        configuration.AddUserSecrets(userSecretsId);
+        MoveLastConfigurationSourceToUserSecretsPrecedence(configuration);
+    }
+
+    internal static void AddConfiguredAspireSecretsFile(IConfigurationManager configuration, string? aspireSecretsFile)
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+
+        if (string.IsNullOrWhiteSpace(aspireSecretsFile))
+        {
+            return;
+        }
+
+        var secretsFile = new FileInfo(Path.GetFullPath(aspireSecretsFile));
+        if (secretsFile.DirectoryName is null)
+        {
+            throw new InvalidOperationException($"The configured Aspire secrets file path '{aspireSecretsFile}' does not have a directory.");
+        }
+
+        // The CLI passes an environment-specific flat JSON file. Add it after appsettings and any
+        // Development user-secrets source, but before environment variables and command-line args so
+        // deployment-time process inputs still have higher precedence.
+        configuration.AddJsonFile(secretsFile.FullName, optional: true, reloadOnChange: false);
+        MoveLastConfigurationSourceToUserSecretsPrecedence(configuration);
+    }
+
+    private static void MoveLastConfigurationSourceToUserSecretsPrecedence(IConfigurationManager configuration)
+    {
+        var lastIndex = configuration.Sources.Count - 1;
+        var source = configuration.Sources[lastIndex];
+        configuration.Sources.RemoveAt(lastIndex);
+        AddConfigurationSourceAtUserSecretsPrecedence(configuration, source);
+    }
+
+    private static void AddConfigurationSourceAtUserSecretsPrecedence(IConfigurationManager configuration, IConfigurationSource source)
+    {
+        var insertIndex = configuration.Sources.Count;
+        for (var i = configuration.Sources.Count - 1; i >= 0; i--)
+        {
+            if (configuration.Sources[i] is EnvironmentVariablesConfigurationSource or CommandLineConfigurationSource)
+            {
+                insertIndex = i;
+                continue;
+            }
+
+            if (insertIndex != configuration.Sources.Count)
+            {
+                break;
+            }
+        }
+
+        configuration.Sources.Insert(insertIndex, source);
     }
 
     internal static void RemoveUserSecretsSource(IConfigurationManager configuration, string? userSecretsId)
@@ -993,8 +1194,9 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
     /// Loads deployment state from the filesystem based on the app host SHA and environment name.
     /// Only loads if ClearCache is false.
     /// </summary>
-    /// <param name="appHostSha">The SHA hash of the app host.</param>
-    private void LoadDeploymentState(string appHostSha)
+    /// <param name="appHostSha">The current SHA hash of the app host.</param>
+    /// <param name="legacyAppHostSha">The previous SHA hash used for source-file AppHosts.</param>
+    private void LoadDeploymentState(string appHostSha, string? legacyAppHostSha)
     {
         // Only load if ClearCache is false
         var clearCache = _innerBuilder.Configuration.GetValue<bool>("Pipeline:ClearCache");
@@ -1004,24 +1206,37 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         }
 
         var environment = _innerBuilder.Environment.EnvironmentName.ToLowerInvariant();
-        var deploymentStatePath = Path.Combine(
-            System.Environment.GetFolderPath(System.Environment.SpecialFolder.UserProfile),
-            ".aspire",
-            "deployments",
-            appHostSha,
-            $"{environment}.json"
-        );
-
-        if (!File.Exists(deploymentStatePath))
-        {
-            return;
-        }
 
         try
         {
-            _innerBuilder.Configuration.AddJsonFile(deploymentStatePath, optional: true, reloadOnChange: false);
+            // GetStatePath validates the environment name and throws ArgumentException for names
+            // outside [a-zA-Z0-9_-]. Compute the paths inside the try so an unusual environment name
+            // degrades to skipping this best-effort load instead of failing builder construction.
+            var deploymentStatePath = FileDeploymentStateManager.GetStatePath(
+                _innerBuilder.Configuration,
+                appHostSha,
+                environment)!;
+            var legacyDeploymentStatePath = string.IsNullOrEmpty(legacyAppHostSha)
+                ? null
+                : FileDeploymentStateManager.GetStatePath(
+                    _innerBuilder.Configuration,
+                    legacyAppHostSha,
+                    environment);
+
+            var effectiveState = FileDeploymentStateManager.LoadEffectiveState(
+                deploymentStatePath,
+                legacyDeploymentStatePath);
+            if (effectiveState.Count > 0)
+            {
+                var flattenedState = JsonFlattener.FlattenJsonObject(effectiveState);
+                using var stream = new MemoryStream(Encoding.UTF8.GetBytes(flattenedState.ToJsonString()));
+                _innerBuilder.Configuration.AddJsonStream(stream);
+            }
         }
-        catch { }
+        catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException or JsonException or InvalidDataException or FormatException or TimeoutException)
+        {
+            Debug.WriteLine($"Failed to load deployment state for environment '{environment}': {ex}");
+        }
     }
 
     /// <summary>

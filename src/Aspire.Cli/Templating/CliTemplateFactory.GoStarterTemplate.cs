@@ -36,6 +36,7 @@ internal sealed partial class CliTemplateFactory
         _logger.LogDebug("Applying Go starter template. ProjectName: {ProjectName}, OutputPath: {OutputPath}, AspireVersion: {AspireVersion}.", projectName, outputPath, aspireVersion);
 
         var useLocalhostTld = await ResolveUseLocalhostTldAsync(parseResult, cancellationToken);
+        var useRedisCache = await ResolveUseRedisCacheAsync(parseResult, cancellationToken);
 
         TemplateResult templateResult;
         try
@@ -52,10 +53,22 @@ internal sealed partial class CliTemplateFactory
                     var projectNameLower = projectName.ToLowerInvariant();
                     var ports = GenerateRandomPorts();
                     var hostName = useLocalhostTld ? $"{projectNameLower}.dev.localhost" : "localhost";
-                    string ApplyAllTokens(string content) => ApplyTokens(content, projectName, projectNameLower, aspireVersion, ports, hostName);
+                    var conditions = new Dictionary<string, bool>
+                    {
+                        ["redis"] = useRedisCache,
+                        ["no-redis"] = !useRedisCache,
+                    };
+                    string ApplyAllTokens(string content) => ConditionalBlockProcessor.Process(
+                        ApplyTokens(content, projectName, projectNameLower, aspireVersion, ports, hostName),
+                        conditions);
 
                     _logger.LogDebug("Copying embedded Go starter template files to '{OutputPath}'.", outputPath);
                     await CopyTemplateTreeToDiskAsync("go-starter", outputPath, ApplyAllTokens, cancellationToken);
+
+                    if (useRedisCache)
+                    {
+                        AddRedisPackageToConfig(outputPath, aspireVersion);
+                    }
 
                     // Persist the resolved channel into the scaffolded project's aspire.config.json
                     // when NewCommand resolved an Explicit channel (pr-<N>, daily, staging, local).
@@ -70,6 +83,7 @@ internal sealed partial class CliTemplateFactory
                     {
                         var config = AspireConfigFile.LoadOrCreate(outputPath);
                         config.Channel = inputs.Channel;
+                        config.SdkVersion = aspireVersion;
                         config.Save(outputPath);
                     }
 
@@ -87,7 +101,7 @@ internal sealed partial class CliTemplateFactory
                         _interactionService.DisplayError("Automatic 'aspire restore' failed for the new Go starter project. Run 'aspire restore' in the project directory for more details.");
                         return new TemplateResult((int)CliExitCodes.FailedToBuildArtifacts, outputPath);
                     }
-                    await _templateNuGetConfigService.CreateOrUpdateNuGetConfigForSourceOverrideAsync(inputs.Source, inputs.Channel, outputPath, cancellationToken);
+                    await _templateNuGetConfigService.CreateNuGetConfigForSourceOverrideAsync(inputs.Source, inputs.Channel, outputPath, cancellationToken);
 
                     return new TemplateResult((int)CliExitCodes.Success, outputPath);
                 }), emoji: KnownEmojis.Rocket);

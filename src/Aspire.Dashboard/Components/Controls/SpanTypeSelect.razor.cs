@@ -30,6 +30,10 @@ public partial class SpanTypeSelect : ComponentBase
     [Inject]
     public required IStringLocalizer<Resources.Traces> Loc { get; init; }
 
+    // Created once. A new id on each render makes the page's frequent re-renders replace the select, which closes it while
+    // the user is choosing a span type.
+    private readonly string _spanTypeSelectId = $"span-type-select-{Guid.NewGuid():N}";
+
     private async Task HandleSelectedSpanTypeChangedInternalAsync()
     {
         await SpanTypeChanged.InvokeAsync(SpanType);

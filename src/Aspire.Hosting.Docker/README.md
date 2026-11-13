@@ -10,6 +10,7 @@ From your AppHost directory, add the `Aspire.Hosting.Docker` integration with th
 
 ```bash
 aspire add Aspire.Hosting.Docker
+aspire add Aspire.Hosting.Dotnet
 ```
 
 ## Usage example
@@ -27,6 +28,39 @@ builder.AddDockerComposeEnvironment("compose");
 ```typescript
 await builder.addDockerComposeEnvironment("compose");
 ```
+
+The dashboard container included in the published Compose file opts out of dashboard usage and error telemetry by default (`ASPIRE_DASHBOARD_TELEMETRY_OPTOUT=true`). This does not affect the application's OpenTelemetry data sent to the dashboard.
+
+Browser-origin endpoint properties use overridable deployment inputs because a Compose service address does not identify its public browser address.
+For example, `frontend.GetEndpoint("http").BrowserOrigins` reads `Parameters:frontend-http-BrowserOrigins` when preparing deployment.
+The input accepts a comma-separated origin list; local URL customization is unchanged.
+`frontend.GetEndpoint("http").PrimaryBrowserOrigin` uses a separate `Parameters:frontend-http-PrimaryBrowserOrigin` input containing a single origin, with the same localhost default rules.
+External HTTP endpoints with an explicit published port default to `http://localhost:<published-port>` (or HTTPS for an HTTPS endpoint), not the service's container port.
+External HTTP(S) endpoints without a known published port require an explicit input. Internal and non-HTTP(S) endpoint references are rejected.
+Generated input names include a stable suffix for hyphenated endpoint names so different resource/endpoint combinations cannot share an input.
+
+### Volumes
+
+Use an environment variable so projects and executables can use a local Aspire store directory while Docker Compose mounts the published named volume:
+
+**C#**
+
+```csharp
+builder.AddDotnetProject("api", "../Api/Api.csproj")
+    .WithVolume("data", "/data", env: "DATA_PATH");
+```
+
+**TypeScript**
+
+```typescript
+const api = await builder.addNodeApp("api", "../api", "server.js");
+await api.withVolume("/data", "data", "DATA_PATH");
+```
+
+In run mode, projects and executables receive a workload-scoped directory through `DATA_PATH`. Containers receive `/data` and use a local container volume. Named storage is preserved independently of resource lifetime: session resources stop with the AppHost and reuse their storage on the next run, while persistent resources can keep the compute instance alive. In the generated Compose service, all compute resource types receive `/data` and a named volume mounted at that path.
+
+> [!NOTE]
+> Docker Compose creates the named volume owned by `root`, so a service published as a non-root image cannot write to the mount without extra configuration. Aspire does not yet generate that configuration, so today the service has to run as a user that can write to the volume. Docker only seeds a named volume's contents and ownership from the image when the volume is empty, so pre-creating the target directory in your image fixes only the first run and has no effect once the volume holds data — which is exactly the reuse case described above. Tracked by [#19422](https://github.com/microsoft/aspire/issues/19422).
 
 ```shell
 aspire publish -o docker-compose-artifacts

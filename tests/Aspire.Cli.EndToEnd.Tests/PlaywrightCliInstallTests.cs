@@ -35,7 +35,8 @@ public sealed class PlaywrightCliInstallTests(ITestOutputHelper output)
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
         await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
-        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        // The CLI installs the newest @playwright/cli release by exact version, which a release-age cutoff would reject.
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace, useSettledNpmReleases: false);
 
         await auto.InstallAspireCliAsync(strategy, counter);
 
@@ -54,7 +55,7 @@ public sealed class PlaywrightCliInstallTests(ITestOutputHelper output)
 
         // Step 4: Run aspire agent init for Playwright only. This test is about
         // @playwright/cli acquisition, not the Aspire skills bundle.
-        await auto.TypeAsync("aspire agent init --workspace-root . --skill-locations claudecode --skills playwright-cli");
+        await auto.TypeAsync("aspire agent init --workspace-root . --agents claude --scope project --skills playwright-cli --mcp=false");
         await auto.EnterAsync();
 
         // Wait for installation to complete (this downloads from npm, can take a while)
@@ -94,7 +95,8 @@ public sealed class PlaywrightCliInstallTests(ITestOutputHelper output)
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
         await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
-        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        // The CLI installs the newest @playwright/cli release by exact version, which a release-age cutoff would reject.
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace, useSettledNpmReleases: false);
 
         await auto.InstallAspireCliAsync(strategy, counter);
 
@@ -110,7 +112,7 @@ public sealed class PlaywrightCliInstallTests(ITestOutputHelper output)
         // Step 3: Run aspire agent init from the PARENT directory for Playwright
         // only. When provided as options, the workspace root and skill selection
         // are deterministic and do not depend on Aspire default skills.
-        await auto.TypeAsync("aspire agent init --workspace-root TestProject --skill-locations claudecode --skills playwright-cli");
+        await auto.TypeAsync("aspire agent init --workspace-root TestProject --agents claude --scope project --skills playwright-cli --mcp=false");
         await auto.EnterAsync();
 
         await auto.WaitUntilTextAsync("configuration complete", timeout: TimeSpan.FromMinutes(3));

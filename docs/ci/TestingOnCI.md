@@ -14,6 +14,12 @@ The CI test infrastructure uses a unified matrix generation system that:
 
 For how MTP diagnostic arguments (hang dump, crash dump, etc.) flow through this pipeline, see [MTP Args Pipeline](mtp-args-pipeline.md).
 
+Windows GitHub Actions jobs that restore or consume NuGet packages should use
+`${{ github.workspace }}/.nuget/packages`. Multi-platform jobs should set
+`NUGET_PACKAGES` through `GITHUB_ENV` only on Windows so restore, build, and test
+steps share the same cache. When a step is the only NuGet consumer, set the
+variable at step scope. Linux and macOS should retain their existing cache behavior.
+
 ## Architecture
 
 ```text
@@ -58,7 +64,7 @@ This invokes `eng/TestEnumerationRunsheetBuilder/TestEnumerationRunsheetBuilder.
 - Writes a `.tests-metadata.json` file to `artifacts/helix/` containing:
   - `projectName`, `shortName`, `testProjectPath`
   - `supportedOSes` array (e.g., `["windows", "linux", "macos"]`)
-  - `properties` object with boolean flags (defined in `eng/testing/CITestsProperties.props`): `requiresNugets`, `requiresTestSdk`, `requiresCliArchive`, `requiresGitHubToken`, `enablePlaywrightInstall`
+  - `properties` object with boolean flags (defined in `eng/testing/CITestsProperties.props`): `requiresNugets`, `requiresTestSdk`, `requiresCliArchive`, `enablePlaywrightInstall`, `nonBlockingTestFailures`, `requiresJava`
   - `testSessionTimeout`, `testHangTimeout` values
   - `uncollectedTestsSessionTimeout`, `uncollectedTestsHangTimeout` values
   - `splitTests` flag
@@ -101,7 +107,8 @@ After all projects build, `eng/AfterSolutionBuild.targets` runs `eng/scripts/bui
         "requiresNugets": true,
         "requiresTestSdk": true,
         "requiresCliArchive": false,
-        "enablePlaywrightInstall": false
+        "enablePlaywrightInstall": false,
+        "nonBlockingTestFailures": false
       },
       "testSessionTimeout": "20m",
       "testHangTimeout": "10m",
@@ -116,7 +123,8 @@ After all projects build, `eng/AfterSolutionBuild.targets` runs `eng/scripts/bui
         "requiresNugets": false,
         "requiresTestSdk": false,
         "requiresCliArchive": false,
-        "enablePlaywrightInstall": false
+        "enablePlaywrightInstall": false,
+        "nonBlockingTestFailures": false
       },
       "testSessionTimeout": "30m",
       "extraTestArgs": "--filter-trait \"Partition=Docker\"",
@@ -134,7 +142,6 @@ Each CI platform has a thin script that transforms the canonical matrix:
 - Expands each entry for every OS in its `supportedOSes` array
 - Maps OS names to GitHub runners (`linux` → `ubuntu-latest`, etc.)
 - Preserves dependency metadata within the `properties` sub-object (including `requiresNugets`, `requiresCliArchive`, `requiresGitHubToken`), and custom runner overrides on each expanded entry
-- Applies overflow splitting for the `no_nugets` category (threshold: 250 entries) to stay under the GitHub Actions 256-job-per-matrix limit
 - Outputs a single `all_tests` matrix, which `.github/workflows/tests.yml` further splits by dependency type and OS using `eng/scripts/split-test-matrix-by-deps.ps1`
 
 **Azure DevOps** (future):
@@ -145,19 +152,19 @@ This separation keeps 90% of the logic platform-agnostic while allowing each CI 
 
 ### Phase 5: Test Execution
 
+Pull requests run `.github/actions/select-tests` before enumeration to select the affected .NET tests and non-.NET jobs. Non-PR events force an `ALL` selection, so rolling builds retain the complete test graph. Extension release metadata follows the same path: changes to `extension/package.json` and `extension/CHANGELOG.md` select extension unit and E2E validation without creating a .NET matrix.
+
 In `.github/workflows/tests.yml`, the workflow:
 
 1. Receives the OS-expanded `all_tests` matrix from the `enumerate-tests` action
-2. Splits that matrix with `eng/scripts/split-test-matrix-by-deps.ps1` into 6 buckets:
+2. Splits that matrix with `eng/scripts/split-test-matrix-by-deps.ps1` into 5 buckets:
    - `tests_matrix_no_nugets`
-   - `tests_matrix_no_nugets_overflow`
    - `tests_matrix_requires_nugets_linux`
    - `tests_matrix_requires_nugets_windows`
    - `tests_matrix_requires_nugets_macos`
    - `tests_matrix_requires_cli_archive`
 3. Runs the CI jobs so the critical path stays as short as possible:
     - `tests_no_nugets`: Runs immediately after enumeration
-    - `tests_no_nugets_overflow`: Runs immediately (handles entries beyond the 250-entry threshold)
     - `build_packages`: Produces the shared package feed used by all package-dependent jobs
     - `build_cli_archive_linux`, `build_cli_archive_windows`, `build_cli_archive_macos`: Build native CLI archives and the matching RID-specific DCP/Dashboard packages in parallel with `build_packages`
     - `tests_requires_nugets_linux`, `tests_requires_nugets_windows`, `tests_requires_nugets_macos`: Wait for `build_packages` plus only the CLI archive job for their OS
@@ -180,7 +187,7 @@ The workflow intentionally favors shorter dependency chains over a smaller numbe
 
 #### GitHub Actions 256-Job Limit
 
-GitHub Actions enforces a maximum of 256 jobs per `strategy.matrix`. To stay within this limit, the `no_nugets` category (typically the largest) is split into primary and overflow buckets at a threshold of 250 entries. If the total entry count is below 250, the overflow matrix is empty and the overflow job is skipped.
+GitHub Actions enforces a maximum of 256 jobs per `strategy.matrix`. The matrix splitter fails explicitly if any dependency bucket exceeds that limit, so the workflow cannot silently omit test entries.
 
 ## Enabling Test Splitting for a Project
 
@@ -309,6 +316,7 @@ All boolean test properties (such as `RequiresNugets`, `RequiresTestSdk`, `Requi
   <CITestsProperty Include="requiresTestSdk" MSBuildProp="RequiresTestSdk" Default="false" />
   <CITestsProperty Include="requiresCliArchive" MSBuildProp="RequiresCliArchive" Default="false" />
   <CITestsProperty Include="enablePlaywrightInstall" MSBuildProp="EnablePlaywrightInstall" Default="false" />
+  <CITestsProperty Include="nonBlockingTestFailures" MSBuildProp="NonBlockingTestFailures" Default="false" />
 </ItemGroup>
 ```
 
@@ -325,6 +333,26 @@ Each `CITestsProperty` item has three attributes:
 1. **MSBuild targets** (`TestEnumerationRunsheetBuilder.targets`, `SpecializedTestRunsheetBuilderBase.targets`) import this file and iterate `@(CITestsProperty)` to dynamically resolve property values and emit the `"properties"` JSON object — no hardcoded property names in the targets.
 2. **PowerShell scripts** (`build-test-matrix.ps1`) parse the `.props` XML at startup to build the defaults dictionary and copy properties generically — no per-property code blocks.
 3. **GitHub Actions workflows** (`run-tests.yml`) read properties from the opaque `properties` JSON string with bespoke `if:` conditions for each property that controls unique workflow behavior.
+
+Both `tests-outerloop.yml` and `tests-quarantine.yml` include
+`eng/testing/CITestsProperties.props` in their PR path filters because the
+specialized runsheet builder imports this registry. A registry-only change
+therefore triggers specialized PR smoke validation of the emitted metadata.
+Outerloop-only inputs, such as the advisory artifact filter, do not trigger
+quarantine validation.
+
+`NonBlockingTestFailures` is a narrow opt-in for test projects whose results
+should remain visible without gating the workflow. Known test outcomes such as
+failed tests, session aborts, and test-host crashes are reported in the job
+summary and artifacts, while missing evidence, unknown exit codes, and runner
+or configuration failures still fail the job. A project-level opt-in also fails
+when zero tests execute. Specialized workflows that intentionally apply a trait
+filter across project/OS combinations can explicitly allow a valid zero-test
+result.
+
+The reusable test job reports success only after that classification succeeds,
+so aggregate `Final Results` jobs do not need a separate exclusion list.
+Infrastructure failures still propagate as failed dependencies.
 
 ### Adding a new boolean test property
 

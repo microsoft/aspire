@@ -55,6 +55,12 @@ public partial class GridValue
     public string? ValueToVisualize { get; set; }
 
     /// <summary>
+    /// The initial visualizer format, overriding automatic format detection. Users can still change the format.
+    /// </summary>
+    [Parameter]
+    public string? TextVisualizerFormat { get; set; }
+
+    /// <summary>
     /// Determines whether or not masking support is enabled for this value
     /// </summary>
     [Parameter]
@@ -81,6 +87,13 @@ public partial class GridValue
     [Parameter]
     public string? ToolTip { get; set; }
 
+    /// <summary>
+    /// Gets or sets whether hovering the value shows it in a tooltip. Rows of lists that grow without bound, such as
+    /// structured logs, turn it off: every row would otherwise carry a copy of its text for the tooltip.
+    /// </summary>
+    [Parameter]
+    public bool ShowToolTip { get; set; } = true;
+
     [Parameter]
     public string PreCopyToolTip { get; set; } = null!;
 
@@ -102,8 +115,8 @@ public partial class GridValue
     [Inject]
     public required DashboardDialogService DialogService { get; init; }
 
-    private readonly Icon _maskIcon = new Icons.Regular.Size16.EyeOff();
-    private readonly Icon _unmaskIcon = new Icons.Regular.Size16.Eye();
+    private readonly Icon _maskIcon = new Icons.Regular.Size16.EyeOff().WithColor(Color.Primary);
+    private readonly Icon _unmaskIcon = new Icons.Regular.Size16.Eye().WithColor(Color.Primary);
     private readonly string _cellTextId = $"celltext-{Guid.NewGuid():N}";
     private string? _value;
     private string? _formattedValue;
@@ -162,7 +175,8 @@ public partial class GridValue
             DialogService = DialogService,
             ValueDescription = ValueDescription,
             Value = ValueToVisualize ?? Value ?? string.Empty,
-            ContainsSecret = IsMasked || ContainsSecret
+            ContainsSecret = IsMasked || ContainsSecret,
+            InitialFormat = TextVisualizerFormat
         });
     }
 

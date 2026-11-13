@@ -4,6 +4,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <TestShortName>Java SDK</TestShortName>
     <RunOnGithubActionsWindows>false</RunOnGithubActionsWindows>
+    <RequiresJava>true</RequiresJava>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Aspire.Hosting.CodeGeneration.Java\Aspire.Hosting.CodeGeneration.Java.csproj" />

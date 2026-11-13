@@ -19,19 +19,19 @@ with create_builder() as builder:
     # ---- withDataVolume: data persistence (custom name) ----
     oracle2.with_data_volume()
     # ---- withDataBindMount: bind mount for data ----
-    oracle2.with_data_bind_mount()
+    oracle2.with_data_bind_mount("./data")
     # ---- withInitFiles: initialization scripts ----
-    oracle2.with_init_files()
+    oracle2.with_init_files("./init")
     # ---- withDbSetupBindMount: DB setup directory ----
-    oracle2.with_db_setup_bind_mount()
+    oracle2.with_db_setup_bind_mount("./setup")
     # ---- withReference: connection string reference (from core) ----
     other_oracle = builder.add_oracle("resource")
     other_db = other_oracle.add_database("resource")
-    oracle.with_reference()
+    oracle.with_reference(other_db)
     # ---- withReference: with connection name option ----
-    oracle.with_reference()
+    oracle.with_reference(other_db, connection_name="database")
     # ---- withReference: unified reference to another Oracle server resource ----
-    oracle.with_reference()
+    oracle.with_reference(other_oracle)
     # ---- Fluent chaining: multiple methods chained ----
     oracle3 = builder.add_oracle("resource")
     oracle3.add_database("resource")

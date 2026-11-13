@@ -1,30 +1,69 @@
+import * as assert from 'assert';
 import * as fs from 'fs';
+import * as https from 'https';
 import * as path from 'path';
 import * as vscode from 'vscode';
+import { randomUUID } from 'crypto';
+import { WebSocket, type RawData } from 'ws';
 
 import { AspireExtensionContext } from '../AspireExtensionContext';
 import { getLoggableDebugConfiguration, type AspireDebugSession } from '../debugger/AspireDebugSession';
 import { createDebugSessionConfiguration, getResourceDebuggerExtensions } from '../debugger/debuggerExtensions';
-import { projectDebuggerExtension } from '../debugger/languages/dotnet';
-import { spawnCliProcess } from '../utils/process/cliProcess';
+import { externalBuildProjectDebuggerExtension, projectDebuggerExtension } from '../debugger/languages/dotnet';
+import { onDidSpawnCliProcess, redactCliArgsForLogging, spawnCliProcess, terminateCliProcess } from '../utils/process/cliProcess';
 import { cleanupRun } from '../debugger/runCleanupRegistry';
-import type { AspireResourceExtendedDebugConfiguration, EnvVar, ExecutableLaunchConfiguration } from '../dcp/types';
+import type { AspireResourceExtendedDebugConfiguration, DcpServerConnectionInfo, EnvVar, ExecutableLaunchConfiguration } from '../dcp/types';
 import { createStateSnapshot, getSensitiveDashboardUrl, isSamePath } from '../extensionState';
-import type { PreparableAppHostLifecycleTool } from '../lm/appHostLifecycleTools';
 import { AppHostLaunchRequestedEvent, AppHostLaunchService } from '../services/AppHostLaunchService';
-import type { AspireDebugConsoleOutputEvent, AspireExtensionE2EBrowserDebugSession, AspireExtensionE2ECommandInvocation, AspireExtensionE2EControlCommand, AspireExtensionE2EControlPayload, AspireExtensionE2EControlStatus, AspireExtensionE2EDebugConsoleOutput, AspireExtensionE2EDebugLaunch, AspireExtensionE2EStoppingPathEvent, AspireExtensionE2ETaskProcessEvent, AspireExtensionE2ETerminalCommand, AspireExtensionStateSnapshot } from '../types/extensionApi';
+import type { AspireDebugConsoleOutputEvent, AspireExtensionE2EBrowserDebugSession, AspireExtensionE2ECodeLensProbeResult, AspireExtensionE2ECommandInvocation, AspireExtensionE2EControlCommand, AspireExtensionE2EControlPayload, AspireExtensionE2EControlStatus, AspireExtensionE2EDebugConsoleOutput, AspireExtensionE2EDebugLaunch, AspireExtensionE2EStoppingPathEvent, AspireExtensionE2ETaskProcessEvent, AspireExtensionE2ETerminalCommand, AspireExtensionStateSnapshot } from '../types/extensionApi';
 import { AspireTerminalCommandEvent, AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import { delay } from '../utils/async';
 import { dashboardDefaultChangedNotificationKey } from '../utils/dashboardNotificationState';
 import { extensionLogOutputChannel } from '../utils/logging';
-import { onDidInvokeCommand } from '../utils/telemetry';
+import { certificateBase64ToPem } from '../utils/security';
+import { isCommandCancellation, onDidInvokeCommand } from '../utils/telemetry';
 import { AspireAppHostTreeProvider } from '../views/AspireAppHostTreeProvider';
 import { ResourceItem } from '../views/treeItems/resourceItems';
-import { ResourceJson } from '../data/appHostCliContracts';
+import { ResourceCommandJson, ResourceJson } from '../data/appHostCliContracts';
 import { AppHostDataRepository } from '../data/AppHostDataRepository';
-import { getSupportedCapabilities, javaLanguageExtensionId } from '../capabilities';
+import { csharpExtensionId, getSupportedCapabilities, javaLanguageExtensionId, useCsharpExtensionVersionProviderForTests } from '../capabilities';
+import { getCliPathTargetKey, workspaceFolderCliPathTarget } from '../utils/cliPathVariables';
+import { probeUsefulnessSurvey } from './usefulnessSurveyProbe';
+import { isEnabledCommand } from '../views/treePresentation';
+import { blazorWasmDebugProofTimeoutMs, getBlazorWasmDebugProofCleanupTimeoutMs } from './blazorWasmDebugProofTimeouts';
+import type { BlazorWasmDebuggerStatus } from './blazorWasmDebuggerSetup';
+import { getPsFollowProcessLogPath, type PsFollowProcessEvent } from './psFollowProcessLog';
+import { proveDotnetResourceLaunch } from './dotnetResourceLaunchProof';
+import { attachWhenResourceResponds, runAttachedResourceDetachSequence } from './attachedResourceDetachSequence';
 
 let atomicWriteSequence = 0;
+
+export function createE2ePsFollowProcessTracker(): vscode.Disposable {
+  const stateFile = process.env.ASPIRE_EXTENSION_E2E_STATE_FILE;
+  const runId = process.env.ASPIRE_EXTENSION_E2E_RUN_ID;
+  if (!isE2eBridgeEnabled() || !stateFile || !runId) {
+    return new vscode.Disposable(() => undefined);
+  }
+
+  const processLogPath = getPsFollowProcessLogPath(stateFile);
+  fs.mkdirSync(path.dirname(processLogPath), { recursive: true });
+  return onDidSpawnCliProcess(({ childProcess, args }) => {
+    const pid = childProcess.pid;
+    if (pid === undefined || args[0] !== 'ps' || !args.includes('--follow')) {
+      return;
+    }
+
+    const id = randomUUID();
+    const record = (state: PsFollowProcessEvent['state']) => {
+      const event: PsFollowProcessEvent = { runId, id, pid, state };
+      fs.appendFileSync(processLogPath, JSON.stringify(event) + '\n');
+    };
+    record('started');
+    // Shutdown can finish on exit before stdio closes. Keep observing this handle after
+    // disposing the spawn subscription so reload retires it before the host exits.
+    childProcess.once('exit', () => record('exited'));
+  });
+}
 
 export function createE2eStateFileBridge(
   context: vscode.ExtensionContext,
@@ -34,7 +73,7 @@ export function createE2eStateFileBridge(
   appHostTreeProvider: AspireAppHostTreeProvider,
   terminalProvider: AspireTerminalProvider,
   onDidChangeState: vscode.Event<AspireExtensionStateSnapshot>,
-  appHostLifecycleTools: ReadonlyMap<string, PreparableAppHostLifecycleTool>,
+  languageModelTools: ReadonlyMap<string, E2eLanguageModelToolRegistration>,
 ): vscode.Disposable {
   const stateFile = process.env.ASPIRE_EXTENSION_E2E_STATE_FILE;
   const controlFile = process.env.ASPIRE_EXTENSION_E2E_CONTROL_FILE;
@@ -45,6 +84,7 @@ export function createE2eStateFileBridge(
     return new vscode.Disposable(() => undefined);
   }
 
+  const extensionHostSessionId = randomUUID();
   const commandInvocations: AspireExtensionE2ECommandInvocation[] = [];
   const terminalCommands: AspireExtensionE2ETerminalCommand[] = [];
   const debugLaunches: AspireExtensionE2EDebugLaunch[] = [];
@@ -74,6 +114,7 @@ export function createE2eStateFileBridge(
     recordStoppingPathEvents(state.stoppingPaths);
 
     writeJsonFileAtomic(stateFile, {
+      extensionHostSessionId,
       updatedAt: new Date().toISOString(),
       runId,
       state,
@@ -253,7 +294,7 @@ export function createE2eStateFileBridge(
               }
             };
 
-            const result = await executeE2eControlCommand(context, aspireContext, dataRepository, appHostLaunchService, appHostTreeProvider, terminalProvider, clipboardSnapshot, clipboardExpectation, appHostLifecycleTools, payload.command, markCommandStarted);
+            const result = await executeE2eControlCommand(context, aspireContext, dataRepository, appHostLaunchService, appHostTreeProvider, terminalProvider, clipboardSnapshot, clipboardExpectation, languageModelTools, payload.command, markCommandStarted);
             controlStatus = { revision, status: 'applied', startedObserved: commandStarted, result };
           }
           else {
@@ -280,8 +321,8 @@ export function createE2eStateFileBridge(
   return vscode.Disposable.from(stateSubscription, commandSubscription, terminalCommandSubscription, debugLaunchSubscription, debugConsoleOutputSubscription, taskStartSubscription, taskEndSubscription, browserDebugSessionStartSubscription, browserDebugSessionEndSubscription, controlSubscription);
 }
 
-function isBrowserDebugSessionType(type: string): boolean {
-  return type === 'pwa-chrome' || type === 'pwa-msedge' || type === 'firefox';
+export function isBrowserDebugSessionType(type: string): boolean {
+  return type === 'blazorwasm' || type === 'chrome' || type === 'msedge' || type === 'pwa-chrome' || type === 'pwa-msedge';
 }
 
 function trimTaskProcessEvents(events: AspireExtensionE2ETaskProcessEvent[]): void {
@@ -364,10 +405,16 @@ async function processE2eControlFile(
 }
 
 function getE2eErrorMessage(error: unknown): string {
-  return error instanceof Error ? (error.stack ?? error.message) : String(error);
+  if (isCommandCancellation(error)) {
+    return 'E2E control command cancelled.';
+  }
+
+  return error instanceof Error && error.message.startsWith('Aspire extension E2E ')
+    ? error.message
+    : 'E2E control command failed.';
 }
 
-async function executeE2eControlCommand(
+export async function executeE2eControlCommand(
   context: vscode.ExtensionContext,
   aspireContext: AspireExtensionContext,
   dataRepository: AppHostDataRepository,
@@ -376,7 +423,7 @@ async function executeE2eControlCommand(
   terminalProvider: AspireTerminalProvider,
   clipboardSnapshot: E2eClipboardSnapshot,
   clipboardExpectation: E2eClipboardExpectation,
-  appHostLifecycleTools: ReadonlyMap<string, PreparableAppHostLifecycleTool>,
+  languageModelTools: ReadonlyMap<string, E2eLanguageModelToolRegistration>,
   command: AspireExtensionE2EControlCommand,
   markStarted: () => void
 ): Promise<unknown> {
@@ -422,6 +469,30 @@ async function executeE2eControlCommand(
     case 'debugAppHost': {
       const element = getAppHostElement(appHostTreeProvider, command.appHostPath);
       const commandPromise = vscode.commands.executeCommand('aspire-vscode.debugAppHost', element);
+      markStarted();
+      return await commandPromise;
+    }
+    case 'deployAppHostAction': {
+      const element = getRequiredAppHostActionElement(appHostTreeProvider, command.name, command.appHostPath);
+      const commandPromise = vscode.commands.executeCommand('aspire-vscode.deployAppHost', element);
+      markStarted();
+      return await commandPromise;
+    }
+    case 'publishAppHostAction': {
+      const element = getRequiredAppHostActionElement(appHostTreeProvider, command.name, command.appHostPath);
+      const commandPromise = vscode.commands.executeCommand('aspire-vscode.publishAppHost', element);
+      markStarted();
+      return await commandPromise;
+    }
+    case 'runPipelineStepAppHostAction': {
+      const element = getRequiredAppHostActionElement(appHostTreeProvider, command.name, command.appHostPath);
+      const commandPromise = vscode.commands.executeCommand('aspire-vscode.runPipelineStepAppHost', element);
+      markStarted();
+      return await commandPromise;
+    }
+    case 'debugPipelineStepAppHostAction': {
+      const element = getRequiredAppHostActionElement(appHostTreeProvider, command.name, command.appHostPath);
+      const commandPromise = vscode.commands.executeCommand('aspire-vscode.debugPipelineStepAppHost', element);
       markStarted();
       return await commandPromise;
     }
@@ -579,6 +650,23 @@ async function executeE2eControlCommand(
       markStarted();
       return getE2eBreakpoints();
     }
+    case 'startDebugging': {
+      const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+      if (!workspaceFolder) {
+        throw new Error('Aspire extension E2E startDebugging requires an open workspace folder.');
+      }
+
+      // Passing a name only searches launch.json. Resolve a matching dynamic configuration first so
+      // the control command can await the same provider pipeline that VS Code's debug picker starts.
+      const dynamicConfigurations = await aspireContext.debugConfigProvider?.provideDebugConfigurations(workspaceFolder);
+      const configuration = dynamicConfigurations?.find(configuration =>
+        configuration.name === command.configurationName ||
+        configuration.name.startsWith(`${command.configurationName} (`))
+        ?? command.configurationName;
+      const commandPromise = vscode.debug.startDebugging(workspaceFolder, configuration);
+      markStarted();
+      return await commandPromise;
+    }
     case 'stopDebugging': {
       markStarted();
       await stopDebuggingForE2E(aspireContext, dataRepository, appHostLaunchService, appHostTreeProvider);
@@ -589,47 +677,146 @@ async function executeE2eControlCommand(
       await vscode.commands.executeCommand('workbench.action.closeAllEditors');
       return getActiveEditorInfo();
     }
+    case 'clearAllNotifications': {
+      markStarted();
+      return await vscode.commands.executeCommand('notifications.clearAll');
+    }
     case 'getRegisteredAspireCommands': {
       markStarted();
       const commands = await vscode.commands.getCommands(true);
       return commands.filter(commandId => commandId.startsWith('aspire-vscode.')).sort();
     }
+    case 'probeUsefulnessSurvey': {
+      markStarted();
+      return await probeUsefulnessSurvey(context.globalState, command.reset);
+    }
     case 'getRegisteredLanguageModelTools': {
       markStarted();
       return vscode.lm.tools
         .filter(tool => tool.name.startsWith('aspire_'))
-        .map(tool => ({ name: tool.name, tags: [...tool.tags], description: tool.description }))
+        .map(tool => {
+          const registration = languageModelTools.get(tool.name);
+          return {
+            name: tool.name,
+            tags: [...tool.tags],
+            description: tool.description,
+            registered: registration?.registered === true,
+            supportsPreparation: typeof registration?.tool.prepareInvocation === 'function',
+          };
+        })
         .sort((left, right) => left.name.localeCompare(right.name));
     }
     case 'prepareLanguageModelToolInvocation': {
       markStarted();
-      const tool = appHostLifecycleTools.get(command.toolName);
-      if (!tool) {
+      const registration = languageModelTools.get(command.toolName);
+      if (!registration) {
         throw new Error(`Language model tool '${command.toolName}' is not registered.`);
       }
 
-      const prepared = await tool.prepareInvocation({ input: command.input }, new vscode.CancellationTokenSource().token);
-      return {
-        invocationMessage: prepared.invocationMessage,
-        confirmationTitle: prepared.confirmationMessages?.title,
-        confirmationMessage: prepared.confirmationMessages?.message,
-      };
+      if (typeof registration.tool.prepareInvocation !== 'function') {
+        return {
+          registered: registration.registered,
+          supportsPreparation: false,
+        };
+      }
+
+      const cancellationSource = new vscode.CancellationTokenSource();
+      try {
+        const prepared = await registration.tool.prepareInvocation(
+          { input: command.input },
+          cancellationSource.token);
+        return {
+          registered: registration.registered,
+          supportsPreparation: true,
+          invocationMessage: prepared?.invocationMessage,
+          confirmationTitle: prepared?.confirmationMessages?.title,
+          confirmationMessage: prepared?.confirmationMessages?.message,
+        };
+      }
+      finally {
+        // This command inspects preparation output without invoking the tool. Cancel the
+        // synthetic preparation so it cannot affect a later real invocation in the same host.
+        cancellationSource.cancel();
+        cancellationSource.dispose();
+      }
     }
     case 'invokeLanguageModelTool': {
       markStarted();
       const invocationCount = Math.max(1, command.times ?? 1);
-      const invocationResults = await Promise.all(Array.from({ length: invocationCount }, () => vscode.lm.invokeTool(command.toolName, {
-        input: command.input,
-        toolInvocationToken: undefined,
-      })));
+      const cancellationDelayMs = getE2eCancellationDelay(command.cancelAfterMs);
+      const cancellationSource = new vscode.CancellationTokenSource();
+      const cancellationTimer = cancellationDelayMs !== undefined
+        ? setTimeout(() => cancellationSource.cancel(), cancellationDelayMs)
+        : undefined;
+      try {
+        const invocationResults: vscode.LanguageModelToolResult[] = [];
+        let cancellations = 0;
+        let unexpectedFailures = 0;
+        if (command.cancelBeforeInvocation) {
+          invocationResults.push(...await invokeCanceledLanguageModelTools(
+            languageModelTools,
+            command.toolName,
+            command.input,
+            invocationCount));
+        }
+        else {
+          const registration = languageModelTools.get(command.toolName);
+          if (!registration) {
+            throw new Error(`Language model tool '${command.toolName}' is not registered.`);
+          }
+          const settledInvocations = await Promise.allSettled(
+            Array.from({ length: invocationCount }, () => command.invokeRegisteredToolDirectly
+              ? invokeRegisteredLanguageModelTool(registration, command.toolName, command.input, cancellationSource.token)
+              : vscode.lm.invokeTool(command.toolName, {
+                input: command.input,
+                toolInvocationToken: undefined,
+              }, cancellationSource.token)));
+          for (const settledInvocation of settledInvocations) {
+            if (settledInvocation.status === 'fulfilled') {
+              invocationResults.push(settledInvocation.value);
+            }
+            else if (isCommandCancellation(settledInvocation.reason)) {
+              cancellations++;
+            }
+            else {
+              // Do not persist the raw rejection: uploaded E2E state is public diagnostics.
+              // Keep unexpected failures distinct so validation/confirmation tests cannot
+              // accidentally accept a runtime exception as an expected cancellation.
+              unexpectedFailures++;
+            }
+          }
+        }
 
-      return {
-        results: invocationResults.map(invocationResult => invocationResult.content
-          .filter((part): part is vscode.LanguageModelTextPart => part instanceof vscode.LanguageModelTextPart)
-          .map(part => part.value)
-          .join('')),
-      };
+        return {
+          registered: languageModelTools.get(command.toolName)?.registered === true,
+          invocation: command.cancelBeforeInvocation
+            ? 'registeredToolCanceled'
+            : command.invokeRegisteredToolDirectly ? 'registeredToolDirect' : 'vscode.lm.invokeTool',
+          results: invocationResults.map(invocationResult => invocationResult.content
+            .filter((part): part is vscode.LanguageModelTextPart => part instanceof vscode.LanguageModelTextPart)
+            .map(part => part.value)
+            .join('')),
+          cancellations,
+          unexpectedFailures,
+          ...(cancellations > 0 ? { cancelled: true } : {}),
+        };
+      }
+      finally {
+        if (cancellationTimer !== undefined) {
+          clearTimeout(cancellationTimer);
+        }
+        cancellationSource.dispose();
+      }
     }
+    case 'setDashboardBrowserForE2E': {
+      markStarted();
+      await vscode.workspace.getConfiguration('aspire').update(
+        'dashboardBrowser',
+        command.value ?? undefined,
+        vscode.ConfigurationTarget.Workspace);
+      return undefined;
+    }
+
     case 'getDebugSessionProcessInfo': {
       markStarted();
       const state = createStateSnapshot(dataRepository, appHostLaunchService, appHostTreeProvider, aspireContext, true);
@@ -680,14 +867,23 @@ async function executeE2eControlCommand(
       markStarted();
       const launchConfig = getE2eLaunchConfiguration(command.launchConfig);
       const isApphost = command.isApphost ?? false;
-      const debuggerExtension = isApphost && launchConfig.type === 'project'
+      const appHostProjectDebuggerExtension = launchConfig.type === 'project'
         ? projectDebuggerExtension
+        : launchConfig.type === 'project-with-external-build.v1'
+          ? externalBuildProjectDebuggerExtension
+          : undefined;
+      const debuggerExtension = isApphost && appHostProjectDebuggerExtension
+        ? appHostProjectDebuggerExtension
         : getResourceDebuggerExtensions().find(extension => extension.resourceType === launchConfig.type);
       if (!debuggerExtension) {
         throw new Error(`No resource debugger extension is registered for launch configuration type '${launchConfig.type}'.`);
       }
 
       const runId = 'e2e-resource-debug-configuration';
+      const csharpExtensionVersion = getE2eCsharpExtensionVersion(command.csharpExtensionVersion);
+      const csharpExtensionVersionProvider = csharpExtensionVersion === undefined
+        ? undefined
+        : useCsharpExtensionVersionProviderForTests(() => csharpExtensionVersion ?? undefined);
       try {
         const debugSessionConfiguration = {
           type: 'aspire',
@@ -696,7 +892,7 @@ async function executeE2eControlCommand(
           program: '',
           debuggers: command.debuggers ? { ...command.debuggers } : undefined,
         };
-        const debugConfiguration = await createDebugSessionConfiguration(
+        const pendingConfiguration = createDebugSessionConfiguration(
           debugSessionConfiguration,
           launchConfig,
           getE2eStringArray(command.args, 'args'),
@@ -710,7 +906,13 @@ async function executeE2eControlCommand(
             debugSession: { configuration: debugSessionConfiguration } as AspireDebugSession
           },
           debuggerExtension);
+        if (command.expectedErrorMessage !== undefined) {
+          // Compare in the host so raw diagnostics never enter the exported state file.
+          await assert.rejects(pendingConfiguration, { message: command.expectedErrorMessage });
+          return;
+        }
 
+        const debugConfiguration = await pendingConfiguration;
         const loggableConfiguration = getLoggableDebugConfiguration(debugConfiguration, false);
         const environmentKeys = getE2eStringArray(command.environmentKeys, 'environmentKeys');
         return environmentKeys
@@ -720,20 +922,62 @@ async function executeE2eControlCommand(
           }
           : loggableConfiguration;
       } finally {
+        csharpExtensionVersionProvider?.dispose();
         cleanupRun(runId);
       }
+    }
+    case 'proveAttachedResourceDebugging': {
+      markStarted();
+      return await proveAttachedResourceDebugging(command, appHostTreeProvider, languageModelTools);
     }
     case 'proveAppHostAndResourceDebugging': {
       markStarted();
       return await proveAppHostAndResourceDebugging(command, aspireContext, appHostTreeProvider);
     }
+    case 'proveDotnetResourceLaunch': {
+      markStarted();
+      return await proveDotnetResourceLaunch({
+        ...command,
+        launchConfig: { ...command.launchConfig, project_path: getE2eWorkspacePath(command.launchConfig.project_path) },
+        sourcePath: getE2eWorkspacePath(command.sourcePath),
+        breakpointLine: getE2eBreakpointLine(command.breakpointLine),
+        readyFilePath: getE2eWorkspacePath(command.readyFilePath),
+        timeoutMs: getE2ePositiveInteger(command.timeoutMs, 120000, 'timeoutMs'),
+      });
+    }
+    case 'prepareBlazorWasmDebugger': {
+      markStarted();
+      return await prepareBlazorWasmDebugger();
+    }
+    case 'waitForCSharpProjectInitialization': {
+      markStarted();
+      return await waitForCSharpProjectInitialization(getE2ePositiveInteger(command.timeoutMs, 300000, 'timeoutMs'));
+    }
+    case 'proveBlazorWasmDebugging': {
+      markStarted();
+      return await proveBlazorWasmDebugging(command, appHostTreeProvider, context.logUri.fsPath);
+    }
     case 'proveMauiResourceDebugging': {
       markStarted();
-      return await proveMauiResourceDebugging(command, aspireContext, appHostTreeProvider, terminalProvider);
+      return await proveResourceDebugging(command, aspireContext, appHostTreeProvider, terminalProvider, {
+        displayName: 'MAUI',
+        proof: 'aspire-maui-resource-debug-breakpoint-hit',
+      });
+    }
+    case 'proveDenoResourceDebugging': {
+      markStarted();
+      return await proveResourceDebugging(command, aspireContext, appHostTreeProvider, terminalProvider, {
+        displayName: 'Deno',
+        proof: 'aspire-deno-resource-debug-breakpoint-hit',
+      });
     }
     case 'getExtensionPackageJson': {
       markStarted();
       return context.extension.packageJSON;
+    }
+    case 'getDcpRunSessionInfo': {
+      markStarted();
+      return await getDcpRunSessionInfoForE2E(aspireContext.dcpServer.connectionInfo);
     }
     case 'getExtensionFileStatus': {
       markStarted();
@@ -742,6 +986,31 @@ async function executeE2eControlCommand(
     case 'getDiagnostics': {
       markStarted();
       return await getDiagnosticsForFile(command.filePath);
+    }
+    case 'getDefinitions': {
+      const filePath = getE2eRunPath(command.filePath);
+      markStarted();
+      const definitions = await vscode.commands.executeCommand<Array<vscode.Location | vscode.LocationLink>>(
+        'vscode.executeDefinitionProvider',
+        vscode.Uri.file(filePath),
+        new vscode.Position(command.line, command.character));
+
+      return (definitions ?? []).map(definition => ({
+        filePath: 'targetUri' in definition ? definition.targetUri.fsPath : definition.uri.fsPath,
+        line: 'targetUri' in definition
+          ? (definition.targetSelectionRange ?? definition.targetRange).start.line
+          : definition.range.start.line,
+      }));
+    }
+    case 'getJavaProjects': {
+      markStarted();
+      const projects = await vscode.commands.executeCommand<Array<vscode.Uri | string>>('java.project.getAll');
+      return (projects ?? []).map(project => typeof project === 'string' ? project : project.toString());
+    }
+    case 'getCodeLenses': {
+      const filePath = getE2eRunPath(command.filePath, command.name);
+      markStarted();
+      return await getCodeLensesForFile(filePath);
     }
     case 'snapshotClipboard': {
       markStarted();
@@ -795,6 +1064,26 @@ async function executeE2eControlCommand(
       markStarted();
       return await setE2eWorkspaceFolders(folders);
     }
+    case 'setWorkspaceFolderCliPath': {
+      const folderPath = getE2eWorkspacePath(command.folderPath);
+      const cliPath = getE2eRunPath(command.cliPath);
+      const workspaceFolder = vscode.workspace.workspaceFolders?.find(folder => isSamePath(folder.uri.fsPath, folderPath));
+      if (!workspaceFolder) {
+        throw new Error(`Aspire extension E2E setWorkspaceFolderCliPath requires an exact open workspace folder: ${folderPath}`);
+      }
+
+      markStarted();
+      const targetKey = getCliPathTargetKey(workspaceFolderCliPathTarget(workspaceFolder));
+      const cliPaths = getE2eWorkspaceFolderCliPaths();
+      cliPaths[targetKey] = cliPath;
+      process.env.ASPIRE_EXTENSION_E2E_CLI_PATHS = JSON.stringify(cliPaths);
+      return { targetKey, cliPath };
+    }
+    case 'clearWorkspaceFolderCliPaths': {
+      markStarted();
+      delete process.env.ASPIRE_EXTENSION_E2E_CLI_PATHS;
+      return undefined;
+    }
     case 'stopOwnedDebugSessionProcesses': {
       markStarted();
       const appHostPath = command.appHostPath;
@@ -805,9 +1094,7 @@ async function executeE2eControlCommand(
         Promise.allSettled(debugSessions.map(session => session.requestCliStopForExtensionShutdown())),
         delay(5000),
       ]);
-      for (const session of debugSessions) {
-        session.terminateCliProcessTree({ force: true });
-      }
+      await Promise.allSettled(debugSessions.map(session => session.terminateCliProcessTree({ force: true })));
 
       return undefined;
     }
@@ -827,9 +1114,84 @@ async function executeE2eControlCommand(
       markStarted();
       return getActiveEditorInfo();
     }
+    case 'getOpenEditors': {
+      markStarted();
+      return getOpenEditorInfo();
+    }
+    case 'runAspireCli': {
+      if (!Array.isArray(command.args) || !command.args.every(argument => typeof argument === 'string')) {
+        throw new Error('Aspire extension E2E runAspireCli args must be an array of strings.');
+      }
+
+      const workingDirectory = getE2eRunAspireCliWorkingDirectory(command.workingDirectory);
+      const timeoutMs = getE2ePositiveInteger(command.timeoutMs, 300000, 'timeoutMs');
+      const commandPromise = runAspireCliForE2E(
+        terminalProvider,
+        [...command.args],
+        workingDirectory,
+        timeoutMs,
+        terminalProvider.createEnvironment(undefined, undefined, command.noExtensionVariables),
+        {
+          noExtensionVariables: command.noExtensionVariables === true,
+          rejectOnNonZero: command.allowNonZeroExit !== true,
+        });
+      markStarted();
+      return await commandPromise;
+    }
     default:
       throw new Error(`Unsupported Aspire extension E2E control command: ${getUnknownCommandName(command)}`);
   }
+}
+
+interface E2eLanguageModelToolRegistration {
+  readonly tool: vscode.LanguageModelTool<unknown>;
+  readonly registered: boolean;
+}
+
+async function invokeRegisteredLanguageModelTool(
+  registration: E2eLanguageModelToolRegistration,
+  toolName: string,
+  input: Record<string, unknown>,
+  token: vscode.CancellationToken): Promise<vscode.LanguageModelToolResult> {
+  await registration.tool.prepareInvocation?.({ input }, token);
+  const result = await registration.tool.invoke(
+    { input, toolInvocationToken: undefined },
+    token);
+  if (!result) {
+    throw new Error(`Language model tool '${toolName}' returned no result.`);
+  }
+
+  return result;
+}
+
+async function invokeCanceledLanguageModelTools(
+  languageModelTools: ReadonlyMap<string, E2eLanguageModelToolRegistration>,
+  toolName: string,
+  input: Record<string, unknown>,
+  invocationCount: number): Promise<vscode.LanguageModelToolResult[]> {
+  const registration = languageModelTools.get(toolName);
+  if (!registration) {
+    throw new Error(`Language model tool '${toolName}' is not registered.`);
+  }
+
+  return await Promise.all(Array.from({ length: invocationCount }, async () => {
+    const cancellation = new vscode.CancellationTokenSource();
+    try {
+      await registration.tool.prepareInvocation?.({ input }, cancellation.token);
+      cancellation.cancel();
+      const result = await registration.tool.invoke(
+        { input, toolInvocationToken: undefined },
+        cancellation.token);
+      if (!result) {
+        throw new Error(`Language model tool '${toolName}' returned no result.`);
+      }
+
+      return result;
+    }
+    finally {
+      cancellation.dispose();
+    }
+  }));
 }
 
 interface E2eClipboardSnapshot {
@@ -915,8 +1277,23 @@ function getE2eEnvVars(value: unknown): EnvVar[] {
   return value.map(item => ({ name: item.name, value: item.value }));
 }
 
+function getE2eCsharpExtensionVersion(value: unknown): string | null | undefined {
+  if (value !== undefined && value !== null && typeof value !== 'string') {
+    throw new Error('Aspire extension E2E createResourceDebugConfiguration csharpExtensionVersion must be a string or null when provided.');
+  }
+
+  return value;
+}
+
 type AppHostAndResourceDebugProofCommand = Extract<AspireExtensionE2EControlCommand, { name: 'proveAppHostAndResourceDebugging' }>;
-type MauiResourceDebugProofCommand = Extract<AspireExtensionE2EControlCommand, { name: 'proveMauiResourceDebugging' }>;
+type AttachedResourceDebugProofCommand = Extract<AspireExtensionE2EControlCommand, { name: 'proveAttachedResourceDebugging' }>;
+type BlazorWasmDebugProofCommand = Extract<AspireExtensionE2EControlCommand, { name: 'proveBlazorWasmDebugging' }>;
+type ResourceDebugProofCommand = Extract<AspireExtensionE2EControlCommand, { name: 'proveMauiResourceDebugging' | 'proveDenoResourceDebugging' }>;
+
+interface ResourceDebugProofOptions {
+  displayName: string;
+  proof: string;
+}
 
 interface DebugSessionSnapshot {
   id: string;
@@ -942,6 +1319,12 @@ interface DebugAdapterStoppedEvent {
   threadId?: number;
 }
 
+interface DebugAdapterExceptionStop {
+  stoppedEvent: DebugAdapterStoppedEvent;
+  exceptionInfo?: unknown;
+  error?: string;
+}
+
 interface DebugAdapterOutputEvent {
   sessionId: string;
   sessionType: string;
@@ -952,9 +1335,350 @@ interface DebugAdapterMessageSummary {
   sessionId: string;
   sessionType: string;
   sessionName: string;
+  sequence?: number;
+  requestSequence?: number;
   command?: string;
   success?: boolean;
+  arguments?: unknown;
   body?: unknown;
+}
+
+async function proveAttachedResourceDebugging(
+  command: AttachedResourceDebugProofCommand,
+  appHostTreeProvider: AspireAppHostTreeProvider,
+  languageModelTools: ReadonlyMap<string, E2eLanguageModelToolRegistration>,
+): Promise<unknown> {
+  const appHostPath = getE2eWorkspacePath(command.appHostPath);
+  const sourcePath = getE2eWorkspacePath(command.sourcePath);
+  const resourceName = getE2eRequiredString(command.resourceName, 'Aspire extension E2E attach proof requires resourceName.');
+  const expectedResponse = getE2eRequiredString(command.expectedResponse, 'Aspire extension E2E attach proof requires expectedResponse.');
+  const breakpointLine = getE2eBreakpointLine(command.breakpointLine);
+  const resourceRequestPath = command.resourceRequestPath ?? '/';
+  const timeoutMs = getE2ePositiveInteger(command.timeoutMs, 300000, 'timeoutMs');
+  const expectedDebugType = command.expectedDebugType;
+  if (expectedDebugType !== 'coreclr' && expectedDebugType !== 'go') {
+    throw new Error(`Aspire extension E2E attach proof expected coreclr or go, got '${String(expectedDebugType)}'.`);
+  }
+
+  const debugSessions: DebugSessionSnapshot[] = [];
+  const sessionById = new Map<string, vscode.DebugSession>();
+  const terminatedSessionIds = new Set<string>();
+  const attachRequests: DebugAdapterMessageSummary[] = [];
+  const debugAdapterResponses: DebugAdapterMessageSummary[] = [];
+  const breakpointResponses: DebugAdapterMessageSummary[] = [];
+  const stoppedEvents: DebugAdapterStoppedEvent[] = [];
+  const pendingBreakpointRequests = new Map<string, { sourcePath?: string; lines: number[]; afterRemoval: boolean }>();
+  const breakpointRemovalAcknowledgedSessionIds = new Set<string>();
+  let breakpointRemovalRequested = false;
+
+  const sessionSubscription = vscode.debug.onDidStartDebugSession(session => {
+    sessionById.set(session.id, session);
+    debugSessions.push(toDebugSessionSnapshot(session));
+  });
+  const terminationSubscription = vscode.debug.onDidTerminateDebugSession(session => {
+    terminatedSessionIds.add(session.id);
+  });
+  const trackerRegistration = vscode.debug.registerDebugAdapterTrackerFactory('*', {
+    createDebugAdapterTracker(session) {
+      return {
+        onWillReceiveMessage(message) {
+          if (message?.type === 'request' && message.command === 'attach') {
+            attachRequests.push({
+              sessionId: session.id,
+              sessionType: session.type,
+              sessionName: session.name,
+              command: message.command,
+              body: redactDebugAdapterArguments(message.arguments),
+            });
+          }
+          if (message?.type === 'request' && message.command === 'setBreakpoints' && typeof message.seq === 'number') {
+            const requestedBreakpoints: unknown[] = Array.isArray(message.arguments?.breakpoints) ? message.arguments.breakpoints : [];
+            pendingBreakpointRequests.set(`${session.id}:${message.seq}`, {
+              sourcePath: typeof message.arguments?.source?.path === 'string' ? message.arguments.source.path : undefined,
+              lines: requestedBreakpoints
+                .map(requested => (requested as { line?: unknown } | undefined)?.line)
+                .filter((line): line is number => typeof line === 'number'),
+              afterRemoval: breakpointRemovalRequested,
+            });
+          }
+        },
+        onDidSendMessage(message) {
+          if (message?.type === 'response' && message.success === false) {
+            debugAdapterResponses.push({
+              sessionId: session.id,
+              sessionType: session.type,
+              sessionName: session.name,
+              command: message.command,
+              success: false,
+              body: redactDebugAdapterArguments(message),
+            });
+          }
+          if (message?.type === 'response' && message.command === 'setBreakpoints') {
+            const breakpointResponse = {
+              sessionId: session.id,
+              sessionType: session.type,
+              sessionName: session.name,
+              command: message.command,
+              success: message.success,
+              body: redactDebugAdapterArguments(message.body),
+            };
+            breakpointResponses.push(breakpointResponse);
+            extensionLogOutputChannel.info(`Resource debug E2E ${session.type} setBreakpoints response: ${JSON.stringify(breakpointResponse)}`);
+
+            const requestKey = `${session.id}:${message.request_seq}`;
+            const request = pendingBreakpointRequests.get(requestKey);
+            pendingBreakpointRequests.delete(requestKey);
+            if (request?.afterRemoval &&
+              message.success === true &&
+              request.sourcePath !== undefined &&
+              isSamePath(request.sourcePath, sourcePath) &&
+              !request.lines.includes(breakpointLine + 1)) {
+              breakpointRemovalAcknowledgedSessionIds.add(session.id);
+            }
+          }
+          if (message?.type === 'event' && message.event === 'stopped') {
+            const stoppedEvent = {
+              sessionId: session.id,
+              sessionType: session.type,
+              sessionName: session.name,
+              reason: message.body?.reason,
+              threadId: message.body?.threadId,
+            };
+            stoppedEvents.push(stoppedEvent);
+            extensionLogOutputChannel.info(`Resource debug E2E ${session.type} stopped event: ${JSON.stringify(stoppedEvent)}`);
+          }
+        },
+      };
+    },
+  });
+
+  const breakpoint = new vscode.SourceBreakpoint(
+    new vscode.Location(vscode.Uri.file(sourcePath), new vscode.Position(breakpointLine, 0)),
+    true);
+  vscode.debug.addBreakpoints([breakpoint]);
+  let attachedSession: vscode.DebugSession | undefined;
+  let toolPayload: Record<string, unknown> | undefined;
+
+  try {
+    const resourceDebugTool = languageModelTools.get('aspire_resource_debug');
+    if (!resourceDebugTool?.registered) {
+      throw new Error('Aspire extension E2E attach proof could not find the registered aspire_resource_debug tool.');
+    }
+
+    const fetchResourceResponse = async (phase: 'beforeAttach' | 'attached' | 'detached'): Promise<string | undefined> => {
+      const resource = appHostTreeProvider.findResourceElement(resourceName, appHostPath);
+      if (!(resource instanceof ResourceItem) || resource.resource.state !== 'Running') {
+        return undefined;
+      }
+
+      const requestUrl = await resolveResourceRequestUrl(
+        appHostTreeProvider,
+        appHostPath,
+        resourceName,
+        resourceRequestPath,
+        timeoutMs);
+      try {
+        const response = await fetch(requestUrl, { signal: AbortSignal.timeout(5000) });
+        const body = await response.text();
+        return response.ok && body === expectedResponse ? body : undefined;
+      }
+      catch (error) {
+        throw new Error(`${phase} request to resource '${resourceName}' failed: ${error instanceof Error ? error.name : String(error)}`);
+      }
+    };
+    const workspaceRoot = getE2eWorkspacePath(process.env.ASPIRE_EXTENSION_E2E_WORKSPACE_ROOT);
+    const relativeAppHostPath = path.relative(workspaceRoot, appHostPath).split(path.sep).join('/');
+    const languageModelResult = await attachWhenResourceResponds({
+      waitForResourceResponse: async phase => {
+        const body = await waitForE2eValue(
+          `resource '${resourceName}' response before attaching the debugger`,
+          timeoutMs,
+          () => fetchResourceResponse(phase));
+        extensionLogOutputChannel.info(`Resource debug E2E resource '${resourceName}' responded before attach.`);
+        return body;
+      },
+      attach: async () => {
+        const toolCancellation = new vscode.CancellationTokenSource();
+        try {
+          return await invokeRegisteredLanguageModelTool(
+            resourceDebugTool,
+            'aspire_resource_debug',
+            {
+              appHostPath: relativeAppHostPath,
+              resourceName,
+              strategy: 'attach',
+            },
+            toolCancellation.token);
+        }
+        finally {
+          toolCancellation.dispose();
+        }
+      },
+    });
+    const resultPart = languageModelResult.content[0];
+    if (!(resultPart instanceof vscode.LanguageModelTextPart)) {
+      throw new Error('aspire_resource_debug returned a non-text result.');
+    }
+
+    toolPayload = JSON.parse(resultPart.value) as Record<string, unknown>;
+    const expectedProvider = expectedDebugType === 'coreclr' ? 'dotnet' : 'go';
+    if (toolPayload.outcome !== 'started' || toolPayload.provider !== expectedProvider) {
+      throw new Error(`aspire_resource_debug returned ${JSON.stringify(toolPayload)} instead of starting ${expectedProvider}.`);
+    }
+
+    attachedSession = await waitForE2eValue(
+      `${expectedDebugType} attach session for resource '${resourceName}'`,
+      timeoutMs,
+      () => [...sessionById.values()].find(session =>
+        session.type === expectedDebugType &&
+        session.configuration.request === 'attach'));
+
+    const requestUrl = await resolveResourceRequestUrl(
+      appHostTreeProvider,
+      appHostPath,
+      resourceName,
+      resourceRequestPath,
+      timeoutMs);
+    const breakpointHit = await withResourceTraffic(
+      requestUrl,
+      resourceName,
+      async () => await waitForE2eValue(
+        `breakpoint in ${sourcePath}:${breakpointLine + 1}`,
+        timeoutMs,
+        async () => {
+          for (const stoppedEvent of stoppedEvents) {
+            if (stoppedEvent.sessionId !== attachedSession?.id || stoppedEvent.threadId === undefined) {
+              continue;
+            }
+
+            let stackTrace: { stackFrames?: Array<{ source?: { path?: string }; line?: number }> } | undefined;
+            try {
+              stackTrace = await attachedSession.customRequest('stackTrace', {
+                threadId: stoppedEvent.threadId,
+                startFrame: 0,
+                levels: 20,
+              });
+            }
+            catch {
+              continue;
+            }
+
+            const matchingFrame = stackTrace?.stackFrames?.find(frame =>
+              typeof frame.source?.path === 'string' &&
+              isSamePath(frame.source.path, sourcePath) &&
+              frame.line === breakpointLine + 1);
+            if (matchingFrame) {
+              return { stoppedEvent, matchingFrame };
+            }
+          }
+
+          return undefined;
+        }));
+
+    const attachedSessionForDetach = attachedSession;
+    const responseBody = await runAttachedResourceDetachSequence({
+      removeBreakpoint: () => {
+        breakpointRemovalRequested = true;
+        vscode.debug.removeBreakpoints([breakpoint]);
+      },
+      waitForBreakpointRemoval: async () => {
+        await waitForE2eValue(
+          `${expectedDebugType} adapter to acknowledge breakpoint removal in ${sourcePath}:${breakpointLine + 1}`,
+          timeoutMs,
+          () => breakpointRemovalAcknowledgedSessionIds.has(attachedSessionForDetach.id) ? true : undefined);
+        extensionLogOutputChannel.info(`Resource debug E2E ${expectedDebugType} adapter acknowledged breakpoint removal.`);
+      },
+      continueExecution: async () => {
+        await attachedSessionForDetach.customRequest('continue', { threadId: breakpointHit.stoppedEvent.threadId });
+      },
+      waitForResourceResponse: async phase => {
+        const body = await waitForE2eValue(
+          phase === 'attached'
+            ? `resource '${resourceName}' response while the debugger is still attached`
+            : `resource '${resourceName}' response after debugger detach`,
+          timeoutMs,
+          () => fetchResourceResponse(phase));
+        extensionLogOutputChannel.info(`Resource debug E2E resource '${resourceName}' responded while ${phase}.`);
+        return body;
+      },
+      detach: async () => {
+        // Stopping at the breakpoint opened Run and Debug and hid the Aspire view, so the attach session is
+        // the only thing keeping resource state live. Show the Aspire view before detaching, as a user
+        // checking on the resource afterwards would, so the post-detach response check and later attaches
+        // still read live resource state.
+        await vscode.commands.executeCommand('workbench.view.extension.aspire-panel');
+        await vscode.debug.stopDebugging(attachedSessionForDetach);
+        await waitForE2eValue(
+          `${expectedDebugType} attach session termination`,
+          timeoutMs,
+          () => terminatedSessionIds.has(attachedSessionForDetach.id) ? true : undefined);
+      },
+    });
+
+    if (attachRequests.length === 0 || breakpointResponses.every(response => response.success !== true)) {
+      throw new Error(`The ${expectedDebugType} adapter did not report both attach and bound-breakpoint protocol traffic.`);
+    }
+
+    return {
+      proof: 'aspire-resource-attach-breakpoint-detach',
+      toolPayload,
+      resourceName,
+      debugType: expectedDebugType,
+      debugSessionId: attachedSession.id,
+      breakpoint: {
+        sourcePath,
+        line: breakpointLine + 1,
+        text: fs.readFileSync(sourcePath, 'utf8').split(/\r?\n/)[breakpointLine]?.trim(),
+        stoppedEvent: breakpointHit.stoppedEvent,
+        matchingStackFrame: breakpointHit.matchingFrame,
+      },
+      attachRequests,
+      breakpointResponses,
+      debugAdapterResponses,
+      resourceResponseAfterDetach: responseBody,
+      sessionTerminated: true,
+    };
+  }
+  catch (error) {
+    const diagnostics = {
+      debugSessions,
+      attachRequests,
+      breakpointResponses,
+      debugAdapterResponses,
+      stoppedEvents,
+      terminatedSessionIds: [...terminatedSessionIds],
+      toolPayload,
+    };
+    extensionLogOutputChannel.error(`Resource debug E2E attach proof failed: ${error instanceof Error ? error.message : String(error)}
+Diagnostics:
+${JSON.stringify(diagnostics, undefined, 2)}`);
+    throw new Error(`${error instanceof Error ? error.message : String(error)}
+Diagnostics:
+${JSON.stringify(diagnostics, undefined, 2)}`);
+  }
+  finally {
+    vscode.debug.removeBreakpoints([breakpoint]);
+    sessionSubscription.dispose();
+    terminationSubscription.dispose();
+    trackerRegistration.dispose();
+    if (attachedSession && !terminatedSessionIds.has(attachedSession.id)) {
+      await vscode.debug.stopDebugging(attachedSession);
+    }
+  }
+}
+
+interface DebugAdapterStackTraceResponse extends DebugAdapterMessageSummary {
+  success: boolean;
+  error?: string;
+  body?: {
+    stackFrames?: Array<{
+      id?: number;
+      name?: string;
+      source?: { path?: string };
+      line?: number;
+      column?: number;
+    }>;
+  };
 }
 
 async function proveAppHostAndResourceDebugging(command: AppHostAndResourceDebugProofCommand, aspireContext: AspireExtensionContext, appHostTreeProvider: AspireAppHostTreeProvider): Promise<unknown> {
@@ -972,15 +1696,60 @@ async function proveAppHostAndResourceDebugging(command: AppHostAndResourceDebug
   const launchRequests: DebugAdapterLaunchRequest[] = [];
   const debugAdapterResponses: DebugAdapterMessageSummary[] = [];
   const stoppedEvents: DebugAdapterStoppedEvent[] = [];
+  const exceptionStops: DebugAdapterExceptionStop[] = [];
+  const exceptionStopHandlers: Promise<void>[] = [];
   const breakpointRequests: DebugAdapterMessageSummary[] = [];
   const breakpointResponses: DebugAdapterMessageSummary[] = [];
+  const terminatedSessions: vscode.DebugSession[] = [];
+  const outputEvents: DebugAdapterOutputEvent[] = [];
+
+  const isProofSession = (session: vscode.DebugSession | undefined): boolean => {
+    while (session) {
+      if (typeof session.configuration.program === 'string' && isSamePath(session.configuration.program, appHostPath)) {
+        return true;
+      }
+      session = session.parentSession;
+    }
+
+    return false;
+  };
+  const waitForProofValue = async <T>(description: string, getValue: () => T | undefined | Promise<T | undefined>, describeState?: () => string): Promise<T> => {
+    // waitForE2eValue retries thrown errors. Return terminal failures as values so they
+    // escape that retry loop instead of becoming another five-minute breakpoint timeout.
+    const result = await waitForE2eValue<{ value: T } | { failure: string }>(description, timeoutMs, async () => {
+      const failedResponse = debugAdapterResponses.find(response =>
+        (response.command === 'launch' || response.command === 'attach') && isProofSession(sessionById.get(response.sessionId)));
+      if (failedResponse) {
+        return { failure: `AppHost debug proof ${failedResponse.command} failed: ${JSON.stringify(failedResponse.body)}` };
+      }
+      const terminatedSession = terminatedSessions.find(isProofSession);
+      if (terminatedSession) {
+        return { failure: `AppHost debug proof session '${terminatedSession.name}' (${terminatedSession.type}) terminated while waiting for ${description}.` };
+      }
+
+      const value = await getValue();
+      return value === undefined ? undefined : { value };
+    }, describeState);
+    if ('failure' in result) {
+      throw new Error(result.failure);
+    }
+
+    return result.value;
+  };
 
   const sessionSubscription = vscode.debug.onDidStartDebugSession(session => {
     sessionById.set(session.id, session);
     debugSessions.push(toDebugSessionSnapshot(session));
   });
+  const terminateSubscription = vscode.debug.onDidTerminateDebugSession(session => {
+    if (isProofSession(session)) {
+      terminatedSessions.push(session);
+    }
+  });
   const trackerRegistration = vscode.debug.registerDebugAdapterTrackerFactory('*', {
     createDebugAdapterTracker(session) {
+      // Launch can fail before VS Code raises onDidStartDebugSession.
+      sessionById.set(session.id, session);
       return {
         onWillReceiveMessage(message) {
           if (message?.type === 'request' && message.command === 'launch') {
@@ -1002,6 +1771,13 @@ async function proveAppHostAndResourceDebugging(command: AppHostAndResourceDebug
           }
         },
         onDidSendMessage(message) {
+          if (message?.type === 'event' && message.event === 'output' && isProofSession(session)) {
+            pushBounded(outputEvents, {
+              sessionId: session.id,
+              sessionType: session.type,
+              output: String(message.body?.output ?? '').slice(-4000),
+            }, 100);
+          }
           if (message?.type === 'response' && message.success === false) {
             debugAdapterResponses.push({
               sessionId: session.id,
@@ -1023,13 +1799,32 @@ async function proveAppHostAndResourceDebugging(command: AppHostAndResourceDebug
             });
           }
           if (message?.type === 'event' && message.event === 'stopped') {
-            stoppedEvents.push({
+            const stoppedEvent = {
               sessionId: session.id,
               sessionType: session.type,
               sessionName: session.name,
               reason: message.body?.reason,
               threadId: message.body?.threadId,
-            });
+            };
+            stoppedEvents.push(stoppedEvent);
+
+            if (command.continueExceptionStops &&
+              stoppedEvent.reason === 'exception' &&
+              stoppedEvent.threadId !== undefined) {
+              const exceptionStop: DebugAdapterExceptionStop = { stoppedEvent };
+              exceptionStops.push(exceptionStop);
+              exceptionStopHandlers.push((async () => {
+                try {
+                  exceptionStop.exceptionInfo = redactDebugAdapterArguments(await session.customRequest('exceptionInfo', {
+                    threadId: stoppedEvent.threadId,
+                  }));
+                  await session.customRequest('continue', { threadId: stoppedEvent.threadId });
+                }
+                catch (error) {
+                  exceptionStop.error = error instanceof Error ? error.message : String(error);
+                }
+              })());
+            }
           }
         }
       };
@@ -1044,9 +1839,8 @@ async function proveAppHostAndResourceDebugging(command: AppHostAndResourceDebug
     true);
   vscode.debug.addBreakpoints([appHostBreakpoint, resourceBreakpoint]);
 
-  const waitForBreakpoint = async (sourcePath: string, breakpointLine: number) => await waitForE2eValue(
+  const waitForBreakpoint = async (sourcePath: string, breakpointLine: number) => await waitForProofValue(
     `breakpoint in ${sourcePath}:${breakpointLine + 1}`,
-    timeoutMs,
     async () => {
       for (const stoppedEvent of stoppedEvents) {
         if (stoppedEvent.threadId === undefined) {
@@ -1100,25 +1894,29 @@ async function proveAppHostAndResourceDebugging(command: AppHostAndResourceDebug
     // a runner that is already hosting the Java language server, so capping this at five minutes
     // reported a timeout while the resource was legitimately still coming up - and reported it as
     // "300000ms" even though the spec had asked for fifteen minutes.
+    const baseUrl = await waitForProofValue(
+      `an HTTP endpoint for resource '${resourceName}'`,
+      () => {
+        const element = appHostTreeProvider.findEndpointElement({ appHostPath, resourceName });
+        return element && hasEndpointUrl(element) ? element.url : undefined;
+      },
+      () => describeResourcesForE2E(appHostTreeProvider, appHostPath, resourceName));
     const resourceHit = await withResourceTraffic(
-      appHostTreeProvider,
-      appHostPath,
+      getResourceRequestUrl(baseUrl, resourceRequestPath),
       resourceName,
-      resourceRequestPath,
-      timeoutMs,
       () => waitForBreakpoint(resourceSourcePath, resourceBreakpointLine));
     if (resourceHit.matchingFrame.line !== resourceBreakpointLine + 1) {
       throw new Error(`Expected resource breakpoint line ${resourceBreakpointLine + 1}, got ${resourceHit.matchingFrame.line}.`);
     }
     await resourceHit.session.customRequest('continue', { threadId: resourceHit.stoppedEvent.threadId });
 
-    const aspireDebugSession = await waitForE2eValue(
+    const aspireDebugSession = await waitForProofValue(
       'Aspire AppHost debug startup completion',
-      timeoutMs,
       () => aspireContext.aspireDebugSessions.find(session =>
         session.startupCompleted &&
         typeof session.appHostPath === 'string' &&
         isSamePath(session.appHostPath, appHostPath)));
+    await Promise.allSettled(exceptionStopHandlers);
 
     return {
       proof: 'aspire-apphost-and-resource-debug-breakpoints-hit',
@@ -1141,15 +1939,20 @@ async function proveAppHostAndResourceDebugging(command: AppHostAndResourceDebug
         matchingStackFrame: resourceHit.matchingFrame,
         topStackFrame: resourceHit.stackTrace?.stackFrames?.[0],
       },
+      appHostCodeLenses: await getCodeLensesForFile(appHostSourcePath),
       debugSessions,
       launchRequests,
       debugAdapterResponses,
       breakpointRequests,
       breakpointResponses,
       stoppedEvents,
+      exceptionStops,
+      terminatedSessions: terminatedSessions.map(toDebugSessionSnapshot),
+      outputEvents,
     };
   }
   catch (error) {
+    await Promise.allSettled(exceptionStopHandlers);
     throw new Error(`${error instanceof Error ? error.message : String(error)}
 Diagnostics:
 ${JSON.stringify({
@@ -1163,20 +1966,690 @@ ${JSON.stringify({
       breakpointRequests,
       breakpointResponses,
       stoppedEvents,
+      exceptionStops,
+      terminatedSessions: terminatedSessions.map(toDebugSessionSnapshot),
+      outputEvents,
     }, undefined, 2)}`);
   }
   finally {
     vscode.debug.removeBreakpoints([appHostBreakpoint, resourceBreakpoint]);
     sessionSubscription.dispose();
+    terminateSubscription.dispose();
     trackerRegistration.dispose();
     await vscode.debug.stopDebugging();
   }
 }
 
-async function proveMauiResourceDebugging(command: MauiResourceDebugProofCommand, aspireContext: AspireExtensionContext, appHostTreeProvider: AspireAppHostTreeProvider, terminalProvider: AspireTerminalProvider): Promise<unknown> {
+async function proveBlazorWasmDebugging(command: BlazorWasmDebugProofCommand, appHostTreeProvider: AspireAppHostTreeProvider, logDirectory: string): Promise<unknown> {
   const appHostPath = getE2eWorkspacePath(command.appHostPath);
   const sourcePath = getE2eWorkspacePath(command.sourcePath);
-  const resourceName = getE2eRequiredString(command.resourceName, 'Aspire extension E2E MAUI proof requires resourceName.');
+  const resourceName = getE2eRequiredString(command.resourceName, 'Aspire extension E2E Blazor WASM proof requires resourceName.');
+  const breakpointLine = getE2eBlazorBreakpointLine(command.breakpointLine);
+  const requestPath = getE2eRequiredString(command.requestPath, 'Aspire extension E2E Blazor WASM proof requires requestPath.');
+  const expectedBrowser = getE2eBlazorBrowser(command.expectedBrowser);
+  const closeMode = getE2eBlazorCloseMode(command.closeMode);
+  const timeoutMs = getE2eStrictlyPositiveInteger(command.timeoutMs, blazorWasmDebugProofTimeoutMs, 'timeoutMs');
+  const runRoot = process.env.ASPIRE_EXTENSION_E2E_RUN_ROOT;
+  if (!runRoot || !path.isAbsolute(runRoot)) {
+    throw new Error('Aspire extension E2E Blazor WASM proof requires an absolute ASPIRE_EXTENSION_E2E_RUN_ROOT.');
+  }
+  // userDataDir=true reuses js-debug's workspace profile. A lock left by another proof must not
+  // block this one. The runner removes these profiles only after VS Code exits, including when
+  // a failed adapter cannot acknowledge stop; never delete a possibly live browser's profile here.
+  // https://github.com/microsoft/vscode-js-debug/blob/v1.117.0/src/ui/configuration/chromiumDebugConfigurationProvider.ts
+  const browserProfileDirectory = fs.mkdtempSync(path.join(runRoot, 'blazor-browser-profile-'));
+  const deadline = Date.now() + timeoutMs;
+
+  const debugSessions: DebugSessionSnapshot[] = [];
+  const sessionById = new Map<string, vscode.DebugSession>();
+  const activeSessionIds = new Set<string>();
+  const terminationEvents: { sessionId: string; sessionType: string; observedAt: string }[] = [];
+  let commandStateAfterClose: Record<string, unknown> | undefined;
+  const launchRequests: DebugAdapterMessageSummary[] = [];
+  const debugAdapterResponses: DebugAdapterMessageSummary[] = [];
+  const breakpointRequests: DebugAdapterMessageSummary[] = [];
+  const breakpointResponses: DebugAdapterMessageSummary[] = [];
+  const stoppedEvents: DebugAdapterStoppedEvent[] = [];
+  const outputEvents: DebugAdapterOutputEvent[] = [];
+  const stackTraceResponses: DebugAdapterStackTraceResponse[] = [];
+  let rootSessionForCleanup: vscode.DebugSession | undefined;
+
+  const diagnostics = () => ({
+    debugSessions,
+    activeSessionIds: [...activeSessionIds],
+    terminationEvents,
+    commandStateAfterClose,
+    launchRequests,
+    debugAdapterResponses,
+    breakpointRequests,
+    breakpointResponses,
+    stoppedEvents,
+    outputEvents,
+    stackTraceResponses,
+  });
+  const describeDiagnostics = () => JSON.stringify(diagnostics());
+  const remainingTime = (description: string) => {
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) {
+      throw new Error(`Timed out after ${timeoutMs}ms waiting for ${description}.`);
+    }
+
+    return remaining;
+  };
+  const waitForProofValue = async <T>(description: string, getValue: () => T | undefined | Promise<T | undefined>): Promise<T> => {
+    const result = await waitForE2eValue<{ value: T } | { failure: DebugAdapterMessageSummary }>(
+      description, remainingTime(description), async () => {
+        const failure = debugAdapterResponses.find(response =>
+          (response.command === 'launch' || response.command === 'attach')
+          && (isExpectedBlazorBrowserType(response.sessionType, expectedBrowser)
+            || response.sessionType === 'monovsdbg_wasm'));
+        if (failure) {
+          return { failure };
+        }
+
+        const value = await getValue();
+        return value === undefined ? undefined : { value };
+      }, describeDiagnostics);
+    if ('failure' in result) {
+      throw new Error(`Blazor debugger ${result.failure.command} failed: ${JSON.stringify(result.failure.body)}`);
+    }
+
+    return result.value;
+  };
+  const runBeforeProofDeadline = async <T>(description: string, operation: () => Thenable<T>): Promise<T> => {
+    const operationTimeoutMs = remainingTime(description);
+    let timeout: NodeJS.Timeout | undefined;
+    try {
+      return await Promise.race([
+        operation(),
+        new Promise<T>((_, reject) => {
+          timeout = setTimeout(
+            () => reject(new Error(`Timed out after ${timeoutMs}ms waiting for ${description}.`)),
+            operationTimeoutMs);
+        }),
+      ]);
+    }
+    finally {
+      if (timeout) {
+        clearTimeout(timeout);
+      }
+    }
+  };
+
+  // The browser root can terminate before its page session starts. Keep js-debug's
+  // transport trace so a rejected proxy attach is distinguishable from a missing child.
+  const configurationSubscription = vscode.debug.registerDebugConfigurationProvider('*', {
+    resolveDebugConfiguration(_folder, configuration) {
+      if (configuration.resourceType === 'browser' && typeof configuration.projectPath === 'string'
+        && isPathWithinDirectory(sourcePath, path.dirname(configuration.projectPath))) {
+        configuration.userDataDir = browserProfileDirectory;
+        // C#'s resolved launch bypasses js-debug's configuration resolver. Boolean
+        // tracing then defaults to OS temp, outside the collected/redacted VS Code logs.
+        // https://github.com/microsoft/vscode-js-debug/blob/v1.117.0/src/common/logging/index.ts
+        configuration.trace = { logFile: path.join(logDirectory, `blazor-debugadapter-${randomUUID()}.json`) };
+        // Cold C# proxy/Chromium startup on CI can consume the default 30 seconds
+        // before target discovery completes. Keep this test-only startup allowance
+        // within the existing proof deadline; breakpoint and teardown gates are unchanged.
+        configuration.timeout = Math.min(90000, remainingTime('browser startup'));
+      }
+      return configuration;
+    }
+  });
+  const sessionSubscription = vscode.debug.onDidStartDebugSession(session => {
+    sessionById.set(session.id, session);
+    activeSessionIds.add(session.id);
+    pushBounded(debugSessions, toDebugSessionSnapshot(session), 100);
+  });
+  const terminateSubscription = vscode.debug.onDidTerminateDebugSession(session => {
+    activeSessionIds.delete(session.id);
+    pushBounded(terminationEvents, {
+      sessionId: session.id,
+      sessionType: session.type,
+      observedAt: new Date().toISOString(),
+    }, 100);
+  });
+  const trackerRegistration = vscode.debug.registerDebugAdapterTrackerFactory('*', {
+    createDebugAdapterTracker(session) {
+      // Tracker construction can precede onDidStartDebugSession. Retain the live object so evidence
+      // emitted during adapter startup can still be connected to the later session topology.
+      sessionById.set(session.id, session);
+      return {
+        onWillReceiveMessage(message) {
+          if (message?.type === 'request' && (message.command === 'launch' || message.command === 'attach')) {
+            pushBounded(launchRequests, {
+              sessionId: session.id,
+              sessionType: session.type,
+              sessionName: session.name,
+              sequence: message.seq,
+              command: message.command,
+              arguments: redactDebugAdapterArguments(message.arguments),
+            }, 100);
+          }
+          if (message?.type === 'request' && (message.command === 'setBreakpoints' || message.command === 'configurationDone')) {
+            pushBounded(breakpointRequests, {
+              sessionId: session.id,
+              sessionType: session.type,
+              sessionName: session.name,
+              sequence: message.seq,
+              command: message.command,
+              arguments: redactDebugAdapterArguments(message.arguments),
+            }, 100);
+          }
+        },
+        onDidSendMessage(message) {
+          if (message?.type === 'response' && message.success === false) {
+            pushBounded(debugAdapterResponses, {
+              sessionId: session.id,
+              sessionType: session.type,
+              sessionName: session.name,
+              requestSequence: message.request_seq,
+              command: message.command,
+              success: message.success,
+              body: redactDebugAdapterArguments(message),
+            }, 100);
+          }
+          if (message?.type === 'response' && (message.command === 'setBreakpoints' || message.command === 'configurationDone')) {
+            pushBounded(breakpointResponses, {
+              sessionId: session.id,
+              sessionType: session.type,
+              sessionName: session.name,
+              requestSequence: message.request_seq,
+              command: message.command,
+              success: message.success,
+              body: redactDebugAdapterArguments(message.body),
+            }, 100);
+          }
+          if (message?.type === 'event' && message.event === 'stopped') {
+            pushBounded(stoppedEvents, {
+              sessionId: session.id,
+              sessionType: session.type,
+              sessionName: session.name,
+              reason: message.body?.reason,
+              threadId: message.body?.threadId,
+            }, 100);
+          }
+          if (message?.type === 'event' && message.event === 'output') {
+            pushBounded(outputEvents, {
+              sessionId: session.id,
+              sessionType: session.type,
+              output: String(message.body?.output ?? ''),
+            }, 200);
+          }
+        }
+      };
+    }
+  });
+
+  vscode.debug.removeBreakpoints(vscode.debug.breakpoints);
+  const breakpoint = new vscode.SourceBreakpoint(
+    new vscode.Location(vscode.Uri.file(sourcePath), new vscode.Position(breakpointLine, 0)),
+    true);
+  vscode.debug.addBreakpoints([breakpoint]);
+
+  try {
+    // A running resource can still have a disabled debug command.
+    // Executing that snapshot is a UI no-op, not a browser launch to wait for.
+    const debugCommandElement = await waitForProofValue(
+      `enabled 'debug-in-browser' command for resource '${resourceName}'`,
+      () => {
+        const element = getResourceCommandElement(appHostTreeProvider, {
+          name: 'executeResourceCommandItem',
+          appHostPath,
+          resourceName,
+          commandName: 'debug-in-browser',
+        });
+        return isEnabledCommand(element.commandJson as ResourceCommandJson) ? element : undefined;
+      });
+    await runBeforeProofDeadline(
+      `'debug-in-browser' command completion`,
+      () => vscode.commands.executeCommand('aspire-vscode.executeResourceCommandItem', debugCommandElement));
+
+    const rootSession = await waitForProofValue(
+      `Blazor WASM root session for resource '${resourceName}'`,
+      () => {
+        for (const session of sessionById.values()) {
+          // C# 2.148 resolves blazorwasm to chrome/msedge before VS Code creates
+          // the session. js-debug can expose either that alias or its pwa-* type.
+          if (session.type !== 'blazorwasm' && !isExpectedBlazorBrowserType(session.type, expectedBrowser)) {
+            continue;
+          }
+
+          const configuration = session.configuration as Record<string, unknown>;
+          const projectPath = configuration.projectPath;
+          if (configuration.browser !== expectedBrowser
+            || configuration.resourceType !== 'browser'
+            || typeof projectPath !== 'string'
+            || !isPathWithinDirectory(sourcePath, path.dirname(projectPath))) {
+            continue;
+          }
+
+          return session;
+        }
+
+        return undefined;
+      });
+    rootSessionForCleanup = rootSession;
+    const browserType = expectedBrowser === 'edge' ? 'pwa-msedge' : 'pwa-chrome';
+    const browserSession = await waitForProofValue(
+      `${browserType} child session for Blazor WASM root '${rootSession.id}'`,
+      () => [...sessionById.values()].find(session =>
+        isExpectedBlazorBrowserType(session.type, expectedBrowser)
+        && session.parentSession?.id === rootSession.id));
+
+    const breakpointEvidence = await waitForProofValue(
+      `successful setBreakpoints response for ${sourcePath}:${breakpointLine + 1}`,
+      () => findSuccessfulBreakpointResponse(
+        rootSession,
+        sourcePath,
+        breakpointLine + 1,
+        sessionById,
+        breakpointRequests,
+        breakpointResponses));
+    await waitForProofValue(
+      `managed sibling or child session for Blazor WASM root '${rootSession.id}'`,
+      () => [...sessionById.values()].find(session =>
+        isManagedProofSession(session, rootSession, sessionById)));
+
+    await runBeforeProofDeadline(
+      `browser navigation to '${requestPath}'`,
+      () => browserSession.customRequest('evaluate', {
+        // Resolve against Blazor's <base href="/standalone/"> when behind a gateway.
+        expression: `window.location.replace(new URL(${JSON.stringify(requestPath)}, document.baseURI).href)`,
+        context: 'repl',
+      }));
+    await waitForProofValue(
+      `Blazor page '${requestPath}' to become interactive`,
+      async () => {
+        const response = await runBeforeProofDeadline(
+          `browser readiness evaluation for '${requestPath}'`,
+          () => browserSession.customRequest('evaluate', {
+            expression: `document.readyState === 'complete' && !!document.querySelector('button[data-aspire-e2e-interactive="true"]')`,
+            context: 'repl',
+          })) as { result?: unknown };
+        return response?.result === true || response?.result === 'true' ? true : undefined;
+      });
+    await runBeforeProofDeadline(
+      'managed Counter button click',
+      () => browserSession.customRequest('evaluate', {
+        // A synchronous click can pause managed execution before evaluate returns.
+        expression: "setTimeout(() => document.querySelector('button.btn-primary')?.click(), 0); undefined",
+        context: 'repl',
+      }));
+
+    const breakpointHit = await waitForProofValue(
+      `managed breakpoint in ${sourcePath}:${breakpointLine + 1}`,
+      async () => await findManagedBreakpointHit(
+        rootSession,
+        sourcePath,
+        breakpointLine + 1,
+        sessionById,
+        stoppedEvents,
+        stackTraceResponses,
+        (session, threadId) => runBeforeProofDeadline(
+          `stack trace for managed session '${session.id}'`,
+          () => session.customRequest('stackTrace', {
+            threadId,
+            startFrame: 0,
+            levels: 20,
+          }))));
+
+    if (closeMode === 'explicit') {
+      const stopCommandElement = getResourceCommandElement(appHostTreeProvider, {
+        name: 'executeResourceCommandItem',
+        appHostPath,
+        resourceName,
+        commandName: 'stop-browser-debug',
+      });
+      await runBeforeProofDeadline(
+        `'stop-browser-debug' command completion`,
+        () => vscode.commands.executeCommand('aspire-vscode.executeResourceCommandItem', stopCommandElement));
+    }
+    else {
+      await runBeforeProofDeadline(
+        'managed execution to resume before natural close',
+        () => breakpointHit.session.customRequest('continue', { threadId: breakpointHit.stoppedEvent.threadId }));
+      // window.close() can silently refuse to close a browser-launched tab with navigation
+      // history. Use js-debug's public, target-scoped CDP connection instead of discovering
+      // C#'s private bridge ports or stopping the DAP session ourselves.
+      // https://github.com/microsoft/vscode-js-debug/blob/v1.117.0/EXTENSION_AUTHORS.md#requesting-a-cdp-connection
+      const proxy = await runBeforeProofDeadline(
+        'browser CDP proxy',
+        () => vscode.commands.executeCommand<BrowserCdpProxy>(
+          'extension.js-debug.requestCDPProxy', browserSession.id));
+      if (!proxy || typeof proxy.host !== 'string' || !proxy.host
+        || !Number.isInteger(proxy.port) || proxy.port < 1 || proxy.port > 65535
+        || typeof proxy.path !== 'string' || !proxy.path.startsWith('/')) {
+        throw new Error('js-debug did not return a valid browser CDP proxy endpoint.');
+      }
+      await closeBrowserPageThroughCdp(proxy, remainingTime('browser window to close naturally'));
+    }
+
+    const proofSessionIds = new Set([rootSession.id, browserSession.id, breakpointHit.session.id]);
+    const commandStateAfterStop = await waitForProofValue(
+      `'debug-in-browser' to be enabled after ${closeMode} browser close`,
+      () => {
+        const commandElement = appHostTreeProvider.findResourceCommandElement({
+          appHostPath,
+          resourceName,
+          commandName: 'debug-in-browser',
+        });
+        commandStateAfterClose = commandElement && hasResourceCommandShape(commandElement)
+          ? toResourceCommandSnapshot(commandElement.commandName, commandElement.commandJson as ResourceCommandJson)
+          : undefined;
+        if ([...proofSessionIds].some(id => activeSessionIds.has(id))) {
+          return undefined;
+        }
+
+        if (!commandElement || !hasResourceCommandShape(commandElement) || !isEnabledCommand(commandElement.commandJson as ResourceCommandJson)) {
+          return undefined;
+        }
+
+        return toResourceCommandSnapshot(commandElement.commandName, commandElement.commandJson as ResourceCommandJson);
+      });
+
+    return {
+      proof: 'blazor-wasm-managed-breakpoint-hit',
+      rootSession: toDebugSessionSnapshot(rootSession),
+      browserSession: toDebugSessionSnapshot(browserSession),
+      managedSession: toDebugSessionSnapshot(breakpointHit.session),
+      breakpointResponse: breakpointEvidence.response,
+      stoppedEvent: breakpointHit.stoppedEvent,
+      stackTrace: breakpointHit.stackTrace,
+      commandStateAfterStop,
+    };
+  }
+  catch (error) {
+    throw new Error(`${error instanceof Error ? error.message : String(error)}
+Diagnostics:
+${JSON.stringify(diagnostics(), undefined, 2)}`);
+  }
+  finally {
+    vscode.debug.removeBreakpoints([breakpoint]);
+    const remainingSessions = [...activeSessionIds]
+      .map(id => sessionById.get(id))
+      .filter((session): session is vscode.DebugSession =>
+        session !== undefined
+        && (rootSessionForCleanup === undefined || isProofSession(session.id, rootSessionForCleanup, sessionById)));
+    let cleanupTimer: NodeJS.Timeout | undefined;
+    try {
+      // An unresponsive adapter must not prevent the bridge from returning the
+      // original failure and its diagnostics. Cleanup has a separate, bounded
+      // allowance after the proof deadline, also included by the ExTester waiter.
+      await Promise.race([
+        Promise.allSettled(remainingSessions.map(async session => await vscode.debug.stopDebugging(session))),
+        new Promise<void>(resolve => {
+          cleanupTimer = setTimeout(resolve, getBlazorWasmDebugProofCleanupTimeoutMs(timeoutMs));
+        }),
+      ]);
+    }
+    finally {
+      clearTimeout(cleanupTimer);
+      configurationSubscription.dispose();
+      sessionSubscription.dispose();
+      terminateSubscription.dispose();
+      trackerRegistration.dispose();
+    }
+  }
+}
+
+interface BrowserCdpProxy {
+  host: string;
+  port: number;
+  path: string;
+}
+
+async function closeBrowserPageThroughCdp(proxy: BrowserCdpProxy, timeoutMs: number): Promise<void> {
+  const host = proxy.host.includes(':') && !proxy.host.startsWith('[') ? `[${proxy.host}]` : proxy.host;
+  // The random path is part of js-debug's endpoint; connecting only to its host/port is rejected.
+  const socket = new WebSocket(`ws://${host}:${proxy.port}${proxy.path}`);
+  await new Promise<void>((resolve, reject) => {
+    let settled = false;
+    let closeRequested = false;
+    const finish = (error?: Error) => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      clearTimeout(timeout);
+      socket.off('open', onOpen);
+      socket.off('message', onMessage);
+      if (socket.readyState === WebSocket.CLOSED) {
+        socket.off('error', onError);
+        socket.off('close', onClose);
+      }
+      else {
+        // Abort rather than waiting for a close handshake beyond the proof deadline. Aborting
+        // a CONNECTING ws emits an asynchronous error, so retain its error handler until close.
+        socket.terminate();
+      }
+      if (error) {
+        reject(error);
+      }
+      else {
+        resolve();
+      }
+    };
+    const onError = (error: Error) => finish(new Error(`Browser CDP transport failed: ${error.message}`));
+    const onClose = () => {
+      // Page.close can destroy its target before the response arrives. This only ends the
+      // transport operation: the caller still requires root, page, and Mono termination.
+      finish(closeRequested ? undefined : new Error('Browser CDP connection closed before Page.close.'));
+      socket.off('error', onError);
+      socket.off('close', onClose);
+    };
+    const onMessage = (data: RawData) => {
+      try {
+        // CDP replies look like {"id":1,"result":{}} or
+        // {"id":1,"error":{"code":-32601,"message":"Method not found"}}.
+        // Events and replies for other request IDs are not acknowledgements of our close.
+        const response = JSON.parse(data.toString()) as { id?: number; error?: unknown };
+        if (response?.id === 1) {
+          finish(response.error === undefined || isCdpProxyTargetClosedError(response.error)
+            ? undefined
+            : new Error(`Browser CDP Page.close failed: ${JSON.stringify(response.error)}`));
+        }
+      }
+      catch (error) {
+        finish(new Error(`Invalid browser CDP response: ${error instanceof Error ? error.message : String(error)}`));
+      }
+    };
+    const onOpen = () => {
+      closeRequested = true;
+      try {
+        socket.send(JSON.stringify({ id: 1, method: 'Page.close', params: {} }), error => {
+          if (error) {
+            onError(error);
+          }
+        });
+      }
+      catch (error) {
+        onError(error instanceof Error ? error : new Error(String(error)));
+      }
+    };
+    const timeout = setTimeout(() => finish(new Error(
+      `Timed out after ${timeoutMs}ms waiting for browser CDP ${closeRequested ? 'Page.close response' : 'connection'}.`)), timeoutMs);
+    socket.on('open', onOpen);
+    socket.on('message', onMessage);
+    socket.on('error', onError);
+    socket.on('close', onClose);
+  });
+}
+
+// Page.close can also destroy its target before the browser replies while the proxy socket stays
+// open. js-debug then rejects the pending request with this error instead of closing the socket.
+// Like a close after Page.close, it only ends the transport operation; the caller still requires
+// root, page, and Mono termination.
+// https://github.com/microsoft/vscode-js-debug/blob/v1.117.0/src/cdp/connection.ts#L385-L388
+function isCdpProxyTargetClosedError(error: unknown): boolean {
+  const { code, message } = (error ?? {}) as { code?: unknown; message?: unknown };
+  return code === 0 && message === 'Connection is closed';
+}
+
+function findSuccessfulBreakpointResponse(
+  rootSession: vscode.DebugSession,
+  sourcePath: string,
+  line: number,
+  sessionById: ReadonlyMap<string, vscode.DebugSession>,
+  requests: readonly DebugAdapterMessageSummary[],
+  responses: readonly DebugAdapterMessageSummary[],
+): { response: DebugAdapterMessageSummary } | undefined {
+  for (const request of requests) {
+    if (request.command !== 'setBreakpoints'
+      || !isProofSession(request.sessionId, rootSession, sessionById)
+      || !isBreakpointRequestForSource(request.arguments, sourcePath, line)) {
+      continue;
+    }
+
+    const response = responses.find(candidate =>
+      candidate.command === 'setBreakpoints'
+      && candidate.sessionId === request.sessionId
+      && candidate.success === true
+      && (request.sequence === undefined || candidate.requestSequence === request.sequence));
+    if (response) {
+      return { response };
+    }
+  }
+
+  return undefined;
+}
+
+async function findManagedBreakpointHit(
+  rootSession: vscode.DebugSession,
+  sourcePath: string,
+  line: number,
+  sessionById: ReadonlyMap<string, vscode.DebugSession>,
+  stoppedEvents: readonly DebugAdapterStoppedEvent[],
+  stackTraceResponses: DebugAdapterStackTraceResponse[],
+  requestStackTrace: (session: vscode.DebugSession, threadId: number) => Promise<DebugAdapterStackTraceResponse['body']>,
+): Promise<{ session: vscode.DebugSession; stoppedEvent: DebugAdapterStoppedEvent; stackTrace: DebugAdapterStackTraceResponse['body'] } | undefined> {
+  for (const stoppedEvent of stoppedEvents) {
+    if (stoppedEvent.reason !== 'breakpoint' || stoppedEvent.threadId === undefined) {
+      continue;
+    }
+
+    const session = sessionById.get(stoppedEvent.sessionId);
+    if (!session || !isManagedProofSession(session, rootSession, sessionById)) {
+      continue;
+    }
+
+    try {
+      const stackTrace = await requestStackTrace(session, stoppedEvent.threadId);
+      pushBounded(stackTraceResponses, {
+        sessionId: session.id,
+        sessionType: session.type,
+        sessionName: session.name,
+        command: 'stackTrace',
+        success: true,
+        body: redactDebugAdapterArguments(stackTrace) as DebugAdapterStackTraceResponse['body'],
+      }, 100);
+      const matchingFrame = stackTrace?.stackFrames?.find(frame =>
+        typeof frame.source?.path === 'string'
+        && isSamePath(frame.source.path, sourcePath)
+        && frame.line === line);
+      if (matchingFrame) {
+        return { session, stoppedEvent, stackTrace };
+      }
+    }
+    catch (error) {
+      pushBounded(stackTraceResponses, {
+        sessionId: session.id,
+        sessionType: session.type,
+        sessionName: session.name,
+        command: 'stackTrace',
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      }, 100);
+    }
+  }
+
+  return undefined;
+}
+
+function isManagedProofSession(
+  session: vscode.DebugSession,
+  rootSession: vscode.DebugSession,
+  sessionById: ReadonlyMap<string, vscode.DebugSession>,
+): boolean {
+  return session.id !== rootSession.id
+    && !isBrowserDebugSessionType(session.type)
+    && isProofSession(session.id, rootSession, sessionById);
+}
+
+function isProofSession(
+  sessionId: string,
+  rootSession: vscode.DebugSession,
+  sessionById: ReadonlyMap<string, vscode.DebugSession>,
+): boolean {
+  if (sessionId === rootSession.id) {
+    return true;
+  }
+
+  // C# starts its WASM adapter before the browser, without a parent or Aspire
+  // metadata. This map contains only sessions created during this one command.
+  // Require a unique browser WASM adapter rather than accepting arbitrary CLR
+  // sessions that happen to start at the same time.
+  const managedSessions = [...sessionById.values()].filter(session =>
+    session.type === 'monovsdbg_wasm'
+    && session.parentSession === undefined
+    && session.configuration.monoDebuggerOptions?.platform === 'browser');
+  if (managedSessions.length === 1 && managedSessions[0].id === sessionId) {
+    return true;
+  }
+
+  let session = sessionById.get(sessionId);
+  const visited = new Set<string>();
+  while (session?.parentSession && !visited.has(session.id)) {
+    if (session.parentSession.id === rootSession.id) {
+      return true;
+    }
+
+    visited.add(session.id);
+    session = sessionById.get(session.parentSession.id) ?? session.parentSession;
+  }
+
+  const rootParentId = rootSession.parentSession?.id;
+  return rootParentId !== undefined && sessionById.get(sessionId)?.parentSession?.id === rootParentId;
+}
+
+function isExpectedBlazorBrowserType(type: string, browser: 'edge' | 'chrome'): boolean {
+  const alias = browser === 'edge' ? 'msedge' : 'chrome';
+  return type === alias || type === `pwa-${alias}`;
+}
+
+function isBreakpointRequestForSource(value: unknown, sourcePath: string, line: number): boolean {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+
+  const request = value as { source?: { path?: unknown }; breakpoints?: Array<{ line?: unknown }> };
+  return typeof request.source?.path === 'string'
+    && isSamePath(request.source.path, sourcePath)
+    && Array.isArray(request.breakpoints)
+    && request.breakpoints.some(breakpoint => breakpoint.line === line);
+}
+
+function toResourceCommandSnapshot(commandName: string, command: ResourceCommandJson): Record<string, unknown> {
+  return {
+    commandName,
+    displayName: command.displayName,
+    description: command.description,
+    state: command.state,
+    visibility: command.visibility,
+  };
+}
+
+function pushBounded<T>(values: T[], value: T, limit: number): void {
+  values.push(value);
+  if (values.length > limit) {
+    values.splice(0, values.length - limit);
+  }
+}
+
+async function proveResourceDebugging(command: ResourceDebugProofCommand, aspireContext: AspireExtensionContext, appHostTreeProvider: AspireAppHostTreeProvider, terminalProvider: AspireTerminalProvider, options: ResourceDebugProofOptions): Promise<unknown> {
+  const appHostPath = getE2eWorkspacePath(command.appHostPath);
+  const sourcePath = getE2eWorkspacePath(command.sourcePath);
+  const resourceName = getE2eRequiredString(command.resourceName, `Aspire extension E2E ${options.displayName} proof requires resourceName.`);
   const breakpointLine = getE2eBreakpointLine(command.breakpointLine);
   const timeoutMs = getE2ePositiveInteger(command.timeoutMs, 300000, 'timeoutMs');
   const pauseOnBreakpointMs = getE2ePositiveInteger(command.pauseOnBreakpointMs, 0, 'pauseOnBreakpointMs');
@@ -1289,12 +2762,13 @@ async function proveMauiResourceDebugging(command: MauiResourceDebugProofCommand
       ['resource', resourceName, 'start', '--apphost', appHostPath, '--non-interactive', '--nologo'],
       path.dirname(appHostPath),
       resourceStartTimeoutMs,
-      aspireDebugSession.debugSessionId);
+      terminalProvider.createDcpRunSessionEnvironment(aspireDebugSession.debugSessionId, false),
+      { noExtensionVariables: true, rejectOnNonZero: true });
 
     let stoppedEvent: { stoppedEvent: DebugAdapterStoppedEvent; stackTrace: { stackFrames?: Array<{ source?: { path?: string }; line?: number }> }; matchingFrame: { source?: { path?: string }; line?: number } };
     try {
       stoppedEvent = await waitForE2eValue(
-        `MAUI breakpoint in ${sourcePath}:${breakpointLine + 1}`,
+        `${options.displayName} breakpoint in ${sourcePath}:${breakpointLine + 1}`,
         breakpointTimeoutMs,
         async () => {
           for (const stoppedEvent of stoppedEvents) {
@@ -1319,7 +2793,9 @@ async function proveMauiResourceDebugging(command: MauiResourceDebugProofCommand
               continue;
             }
             const matchingFrame = stackTrace?.stackFrames?.find((frame: { source?: { path?: string }; line?: number }) =>
-              typeof frame.source?.path === 'string' && isSamePath(frame.source.path, sourcePath));
+              typeof frame.source?.path === 'string' &&
+              isSamePath(frame.source.path, sourcePath) &&
+              frame.line === breakpointLine + 1);
             if (matchingFrame) {
               return { stoppedEvent, stackTrace: stackTrace!, matchingFrame };
             }
@@ -1344,7 +2820,7 @@ ${JSON.stringify({
     }
 
     if (stoppedEvent.matchingFrame.line !== breakpointLine + 1) {
-      throw new Error(`Expected MAUI breakpoint line ${breakpointLine + 1}, got ${stoppedEvent.matchingFrame.line}.`);
+      throw new Error(`Expected ${options.displayName} breakpoint line ${breakpointLine + 1}, got ${stoppedEvent.matchingFrame.line}.`);
     }
 
     if (pauseOnBreakpointMs > 0) {
@@ -1352,7 +2828,7 @@ ${JSON.stringify({
     }
 
     return {
-      proof: 'aspire-maui-resource-debug-breakpoint-hit',
+      proof: options.proof,
       appHostPath,
       resourceName,
       timeouts: {
@@ -1414,8 +2890,16 @@ function redactDebugAdapterArguments(value: unknown): unknown {
   return copy;
 }
 
-async function runAspireCliForE2E(terminalProvider: AspireTerminalProvider, args: string[], workingDirectory: string, timeoutMs: number, debugSessionId: string): Promise<{ exitCode: number | null; stdout: string; stderr: string }> {
+async function runAspireCliForE2E(
+  terminalProvider: AspireTerminalProvider,
+  args: string[],
+  workingDirectory: string,
+  timeoutMs: number,
+  environment: Record<string, string | undefined>,
+  options: { noExtensionVariables: boolean; rejectOnNonZero: boolean }
+): Promise<{ exitCode: number | null; stdout: string; stderr: string }> {
   const cliPath = await terminalProvider.getAspireCliExecutablePath();
+  const diagnosticCommand = [cliPath, ...redactCliArgsForLogging(args)].join(' ');
   return await new Promise((resolve, reject) => {
     const stdout: string[] = [];
     const stderr: string[] = [];
@@ -1426,8 +2910,14 @@ async function runAspireCliForE2E(terminalProvider: AspireTerminalProvider, args
       }
 
       completed = true;
-      child.kill('SIGTERM');
-      reject(new Error(`${cliPath} ${args.join(' ')} timed out after ${timeoutMs}ms.\nstdout:\n${stdout.join('')}\nstderr:\n${stderr.join('')}`));
+      // `getE2eErrorMessage` only forwards messages that carry the "Aspire extension E2E " marker;
+      // everything else is collapsed to a generic string so failures cannot leak user-supplied
+      // values. These two diagnostics are safe to forward because `diagnosticCommand` has already
+      // been redacted by `redactCliArgsForLogging` and neither embeds captured stdout/stderr.
+      void terminateCliProcess(child, 'Aspire extension E2E CLI command', { force: true, suppressTimeoutWarning: true })
+        .then(
+          () => reject(new Error(`Aspire extension E2E ${diagnosticCommand} timed out after ${timeoutMs}ms.`)),
+          reject);
     }, timeoutMs);
 
     const child = spawnCliProcess(terminalProvider, cliPath, args, {
@@ -1442,10 +2932,10 @@ async function runAspireCliForE2E(terminalProvider: AspireTerminalProvider, args
         completed = true;
         clearTimeout(timeout);
         const result = { exitCode: code, stdout: stdout.join(''), stderr: stderr.join('') };
-        if (code === 0) {
+        if (code === 0 || !options.rejectOnNonZero) {
           resolve(result);
         } else {
-          reject(new Error(`${cliPath} ${args.join(' ')} exited with code ${code}.\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`));
+          reject(new Error(`Aspire extension E2E ${diagnosticCommand} exited with code ${code}.`));
         }
       },
       errorCallback: error => {
@@ -1457,8 +2947,9 @@ async function runAspireCliForE2E(terminalProvider: AspireTerminalProvider, args
         clearTimeout(timeout);
         reject(error);
       },
-      noExtensionVariables: true,
-      env: Object.entries(terminalProvider.createDcpRunSessionEnvironment(debugSessionId, false))
+      noExtensionVariables: options.noExtensionVariables,
+      createProcessGroup: true,
+      env: Object.entries(environment)
         .map(([name, value]) => ({ name, value: String(value) }))
     });
   });
@@ -1476,33 +2967,28 @@ async function runAspireCliForE2E(terminalProvider: AspireTerminalProvider, args
  * to satisfy; each attempt is abandoned after a short timeout and another is sent behind it.
  */
 async function withResourceTraffic<T>(
-  appHostTreeProvider: AspireAppHostTreeProvider,
-  appHostPath: string,
+  requestUrl: string,
   resourceName: string,
-  requestPath: string,
-  endpointTimeoutMs: number,
   waitForHit: () => Promise<T>
 ): Promise<T> {
-  const baseUrl = await waitForE2eValue(
-    `an HTTP endpoint for resource '${resourceName}'`,
-    endpointTimeoutMs,
-    () => {
-      const element = appHostTreeProvider.findEndpointElement({ appHostPath, resourceName });
-      return element && hasEndpointUrl(element) ? element.url : undefined;
-    },
-    () => describeResourcesForE2E(appHostTreeProvider, appHostPath, resourceName));
-
-  // A relative path resolves against the endpoint only when the base ends in '/'; without it the
-  // last segment of the endpoint would be replaced instead.
-  const requestUrl = new URL(requestPath.replace(/^\//, ''), baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`).toString();
+  extensionLogOutputChannel.info(`Resource debug E2E traffic target resolved for resource '${resourceName}'.`);
 
   let driving = true;
+  let firstAttempt = true;
   const driver = (async () => {
     while (driving) {
       try {
-        await fetch(requestUrl, { signal: AbortSignal.timeout(2000) });
+        const response = await fetch(requestUrl, { signal: AbortSignal.timeout(2000) });
+        if (firstAttempt) {
+          firstAttempt = false;
+          extensionLogOutputChannel.info(`Resource debug E2E first traffic response for resource '${resourceName}': HTTP ${response.status}.`);
+        }
       }
-      catch {
+      catch (error) {
+        if (firstAttempt) {
+          firstAttempt = false;
+          extensionLogOutputChannel.info(`Resource debug E2E first traffic attempt for resource '${resourceName}' failed: ${error instanceof Error ? error.name : typeof error}.`);
+        }
         // Connection refused until the server is listening, and aborted once a request parks on the
         // breakpoint. Neither says anything about whether the breakpoint bound, so both are ignored
         // and the wait below is left to decide.
@@ -1521,7 +3007,33 @@ async function withResourceTraffic<T>(
   }
 }
 
-async function waitForE2eValue<T>(description: string, timeoutMs: number, getValue: () => T | undefined | Promise<T | undefined>, describeState?: () => string): Promise<T> {  const started = Date.now();
+async function resolveResourceRequestUrl(
+  appHostTreeProvider: AspireAppHostTreeProvider,
+  appHostPath: string,
+  resourceName: string,
+  requestPath: string,
+  endpointTimeoutMs: number,
+): Promise<string> {
+  const baseUrl = await waitForE2eValue(
+    `an HTTP endpoint for resource '${resourceName}'`,
+    endpointTimeoutMs,
+    () => {
+      const element = appHostTreeProvider.findEndpointElement({ appHostPath, resourceName });
+      return element && hasEndpointUrl(element) ? element.url : undefined;
+    },
+    () => describeResourcesForE2E(appHostTreeProvider, appHostPath, resourceName));
+
+  return getResourceRequestUrl(baseUrl, requestPath);
+}
+
+function getResourceRequestUrl(baseUrl: string, requestPath: string): string {
+  // A relative path resolves against the endpoint only when the base ends in '/'; without it the
+  // last segment of the endpoint would be replaced instead.
+  return new URL(requestPath.replace(/^\//, ''), baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`).toString();
+}
+
+async function waitForE2eValue<T>(description: string, timeoutMs: number, getValue: () => T | undefined | Promise<T | undefined>, describeState?: () => string): Promise<T> {
+  const started = Date.now();
   let lastError: string | undefined;
   while (Date.now() - started < timeoutMs) {
     try {
@@ -1534,7 +3046,7 @@ async function waitForE2eValue<T>(description: string, timeoutMs: number, getVal
       lastError = error instanceof Error ? error.message : String(error);
     }
 
-    await delay(500);
+    await delay(Math.min(500, Math.max(1, timeoutMs - (Date.now() - started))));
   }
 
   // A poll that returns undefined never sets lastError, so waits that are simply never satisfied
@@ -1550,6 +3062,13 @@ async function stopDebuggingForE2E(
   appHostLaunchService: AppHostLaunchService,
   appHostTreeProvider: AspireAppHostTreeProvider
 ): Promise<void> {
+  // Earlier test steps can leave the Aspire view hidden: opening the workspace folder or reloading the
+  // window restarts VS Code with Explorer showing, and some tests switch to Explorer on purpose. Once the
+  // last debug session ends with the view hidden, nothing is watching the AppHost list, so it stops
+  // refreshing and the stopped AppHost never leaves the snapshot. Show the Aspire view, as a user
+  // watching the AppHost stop would.
+  await vscode.commands.executeCommand('workbench.view.extension.aspire-panel');
+
   const trackedSessions = aspireContext.aspireDebugSessions;
   if (trackedSessions.length > 0) {
     const stoppedDebugSessionIds = new Set(trackedSessions.map(debugSession => debugSession.debugSessionId));
@@ -1610,6 +3129,54 @@ function getE2ePositiveInteger(value: unknown, defaultValue: number, propertyNam
   return value;
 }
 
+function getE2eCancellationDelay(value: unknown): number | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0 || value > 10000) {
+    throw new Error('Aspire extension E2E language-model cancellation delay must be an integer between 0 and 10000.');
+  }
+
+  return value;
+}
+
+function getE2eStrictlyPositiveInteger(value: unknown, defaultValue: number, propertyName: string): number {
+  if (value === undefined) {
+    return defaultValue;
+  }
+
+  if (typeof value !== 'number' || !Number.isInteger(value) || value <= 0) {
+    throw new Error(`Aspire extension E2E Blazor WASM proof ${propertyName} must be a positive integer when provided.`);
+  }
+
+  return value;
+}
+
+function getE2eBlazorBreakpointLine(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) {
+    throw new Error('Aspire extension E2E Blazor WASM proof breakpointLine must be a non-negative zero-based integer.');
+  }
+
+  return value;
+}
+
+function getE2eBlazorBrowser(value: unknown): 'edge' | 'chrome' {
+  if (value !== 'edge' && value !== 'chrome') {
+    throw new Error("Aspire extension E2E Blazor WASM proof expectedBrowser must be 'edge' or 'chrome'.");
+  }
+
+  return value;
+}
+
+function getE2eBlazorCloseMode(value: unknown): 'explicit' | 'natural' {
+  if (value !== 'explicit' && value !== 'natural') {
+    throw new Error("Aspire extension E2E Blazor WASM proof closeMode must be 'explicit' or 'natural'.");
+  }
+
+  return value;
+}
+
 function getE2eAspireCommandId(commandId: unknown): string {
   if (typeof commandId !== 'string' || !commandId.startsWith('aspire-vscode.')) {
     throw new Error('Aspire extension E2E executeAspireCommand requires an aspire-vscode command id.');
@@ -1628,6 +3195,27 @@ function getE2eCommandArguments(args: unknown): readonly unknown[] {
   }
 
   return args;
+}
+
+function getE2eWorkspaceFolderCliPaths(): Record<string, string> {
+  const value = process.env.ASPIRE_EXTENSION_E2E_CLI_PATHS;
+  if (!value) {
+    return {};
+  }
+
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return Object.fromEntries(
+        Object.entries(parsed)
+          .filter((entry): entry is [string, string] => typeof entry[1] === 'string'));
+    }
+  }
+  catch {
+    return {};
+  }
+
+  return {};
 }
 
 function getE2eWorkspacePath(filePath: unknown): string {
@@ -1669,6 +3257,7 @@ function getE2eWorkspaceFolderEntries(folders: unknown): Array<{ uri: vscode.Uri
   if (typeof expectedWorkspaceRoot !== 'string' || expectedWorkspaceRoot.length === 0) {
     throw new Error('Aspire extension E2E setWorkspaceFolders requires ASPIRE_EXTENSION_E2E_WORKSPACE_ROOT.');
   }
+  const allowedRoots = getE2eWorkspaceFolderRoots();
 
   return folders.map((folder, index) => {
     if (!folder || typeof folder !== 'object') {
@@ -1682,8 +3271,8 @@ function getE2eWorkspaceFolderEntries(folders: unknown): Array<{ uri: vscode.Uri
     if (!fs.existsSync(folderPath) || !fs.statSync(folderPath).isDirectory()) {
       throw new Error(`Aspire extension E2E workspace folder ${index} requires an existing directory: ${folderPath}`);
     }
-    if (!isPathWithinDirectory(folderPath, expectedWorkspaceRoot)) {
-      throw new Error(`Aspire extension E2E workspace folder ${index} must stay inside the configured E2E workspace root.`);
+    if (!allowedRoots.some(root => isPathWithinDirectory(folderPath, root))) {
+      throw new Error(`Aspire extension E2E workspace folder ${index} must stay inside the configured E2E run root or workspace root.`);
     }
     if (name !== undefined && (typeof name !== 'string' || name.length === 0)) {
       throw new Error(`Aspire extension E2E workspace folder ${index} name must be a non-empty string when provided.`);
@@ -1735,13 +3324,13 @@ function getWorkspaceFolderInfo(): Array<{ name: string; uri: string; fileName: 
   })) ?? [];
 }
 
-function getE2eRunPath(filePath: unknown): string {
+function getE2eRunPath(filePath: unknown, commandName = 'openFile'): string {
   if (typeof filePath !== 'string' || filePath.length === 0 || !path.isAbsolute(filePath)) {
-    throw new Error('Aspire extension E2E openFile requires an absolute file path.');
+    throw new Error(`Aspire extension E2E ${commandName} requires an absolute file path.`);
   }
 
   if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
-    throw new Error(`Aspire extension E2E openFile requires an existing file: ${filePath}`);
+    throw new Error(`Aspire extension E2E ${commandName} requires an existing file: ${filePath}`);
   }
 
   // The workspace root is normally inside the run root, but a run whose workspace has to live
@@ -1753,19 +3342,36 @@ function getE2eRunPath(filePath: unknown): string {
   ].filter((root): root is string => typeof root === 'string' && root.length > 0);
 
   if (!allowedRoots.some(root => isPathWithinDirectory(filePath, root))) {
-    throw new Error('Aspire extension E2E openFile can only open files inside the configured E2E run root or workspace root.');
+    throw new Error(`Aspire extension E2E ${commandName} can only open files inside the configured E2E run root or workspace root.`);
   }
 
   return filePath;
 }
 
-// `addWorkspaceFolder` deliberately targets a folder that is NOT yet part of the workspace, so it
-// cannot reuse getE2eWorkspacePath (which requires containment in an already-open folder) and it
-// cannot reuse getE2eWorkspaceFolderPath (which only permits the workspace root itself). Validate
-// against the harness-configured roots instead, exactly as getE2eRunPath does: those roots are the
-// real sandbox boundary, and they stay meaningful before any folder has been opened.
-// Exported so the guard can be unit tested. The whole module is removed from production builds by
-// webpack (see e2eBridgeProductionGate.test.ts), so this export never ships.
+function getE2eRunAspireCliWorkingDirectory(directoryPath: unknown): string {
+  if (typeof directoryPath !== 'string' || directoryPath.length === 0 || path.isAbsolute(directoryPath)) {
+    throw new Error('Aspire extension E2E runAspireCli workingDirectory must be workspace-relative.');
+  }
+
+  const workspaceRoot = process.env.ASPIRE_EXTENSION_E2E_WORKSPACE_ROOT;
+  if (typeof workspaceRoot !== 'string' || workspaceRoot.length === 0) {
+    throw new Error('Aspire extension E2E runAspireCli requires the configured E2E workspace root.');
+  }
+
+  const resolvedDirectory = path.resolve(workspaceRoot, directoryPath);
+  if (!isPathWithinDirectory(resolvedDirectory, workspaceRoot)) {
+    throw new Error('Aspire extension E2E runAspireCli workingDirectory must stay inside the configured E2E workspace root.');
+  }
+
+  if (!fs.existsSync(resolvedDirectory) || !fs.statSync(resolvedDirectory).isDirectory()) {
+    throw new Error(`Aspire extension E2E runAspireCli requires an existing workingDirectory: ${directoryPath}`);
+  }
+
+  return resolvedDirectory;
+}
+
+// `addWorkspaceFolder` targets a folder that is not part of the workspace yet, so validate it
+// against the harness roots rather than requiring containment in an already-open workspace folder.
 export function getE2eAddableWorkspaceFolderPath(folderPath: unknown): string {
   if (typeof folderPath !== 'string' || folderPath.length === 0 || !path.isAbsolute(folderPath)) {
     throw new Error('Aspire extension E2E addWorkspaceFolder requires an absolute folder path.');
@@ -1775,19 +3381,22 @@ export function getE2eAddableWorkspaceFolderPath(folderPath: unknown): string {
     throw new Error(`Aspire extension E2E addWorkspaceFolder requires an existing folder: ${folderPath}`);
   }
 
-  const allowedRoots = [
-    process.env.ASPIRE_EXTENSION_E2E_RUN_ROOT,
-    process.env.ASPIRE_EXTENSION_E2E_WORKSPACE_ROOT,
-  ].filter((root): root is string => typeof root === 'string' && root.length > 0);
-
-  if (!allowedRoots.some(root => isPathWithinDirectory(folderPath, root))) {
+  if (!getE2eWorkspaceFolderRoots().some(root => isPathWithinDirectory(folderPath, root))) {
     throw new Error('Aspire extension E2E addWorkspaceFolder can only add folders inside the configured E2E run root or workspace root.');
   }
 
   return folderPath;
 }
 
-function getE2eBreakpointLine(line: unknown): number {  if (typeof line !== 'number' || !Number.isInteger(line) || line < 0) {
+function getE2eWorkspaceFolderRoots(): string[] {
+  return [
+    process.env.ASPIRE_EXTENSION_E2E_RUN_ROOT,
+    process.env.ASPIRE_EXTENSION_E2E_WORKSPACE_ROOT,
+  ].filter((root): root is string => typeof root === 'string' && root.length > 0);
+}
+
+function getE2eBreakpointLine(line: unknown): number {
+  if (typeof line !== 'number' || !Number.isInteger(line) || line < 0) {
     throw new Error('Aspire extension E2E setSourceBreakpoint requires a zero-based non-negative integer line.');
   }
 
@@ -1805,7 +3414,10 @@ function isPathWithinDirectory(candidatePath: string, directoryPath: string): bo
   const resolvedCandidate = path.resolve(candidatePath);
   const resolvedDirectory = path.resolve(directoryPath);
   const relativePath = path.relative(resolvedDirectory, resolvedCandidate);
-  return relativePath === '' || (!relativePath.startsWith('..') && !path.isAbsolute(relativePath));
+  return relativePath === '' ||
+      (relativePath !== '..' &&
+          !relativePath.startsWith(`..${path.sep}`) &&
+          !path.isAbsolute(relativePath));
 }
 
 function getE2eBreakpoints(): Array<{ filePath: string; line: number; enabled: boolean }> {
@@ -1816,6 +3428,45 @@ function getE2eBreakpoints(): Array<{ filePath: string; line: number; enabled: b
       line: breakpoint.location.range.start.line,
       enabled: breakpoint.enabled,
     }));
+}
+
+// Verify the packaged extension's externally visible DCP /info response, rather
+// than only calling the in-process capability helper.
+async function getDcpRunSessionInfoForE2E({ address, token, certificate }: DcpServerConnectionInfo): Promise<unknown> {
+  return await new Promise((resolve, reject) => {
+    const request = https.get(`https://${address}/info`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'microsoft-developer-dcp-instance-id': 'aspire-extension-e2e',
+      },
+      // The opt-in E2E bridge calls the extension's loopback-only DCP server, which uses a
+      // per-session self-signed certificate. Trust exactly that certificate instead of disabling validation.
+      ca: certificateBase64ToPem(certificate),
+    }, response => {
+      const chunks: Buffer[] = [];
+      response.on('data', chunk => chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)));
+      response.on('error', reject);
+      response.on('end', () => {
+        const body = Buffer.concat(chunks).toString('utf8');
+        if (response.statusCode !== 200) {
+          reject(new Error(`DCP /info returned HTTP ${response.statusCode}: ${body}`));
+          return;
+        }
+
+        try {
+          resolve(JSON.parse(body));
+        }
+        catch (error) {
+          reject(error);
+        }
+      });
+    });
+
+    request.on('error', reject);
+    request.setTimeout(10000, () => {
+      request.destroy(new Error('DCP /info request timed out'));
+    });
+  });
 }
 
 function getExtensionFileStatus(context: vscode.ExtensionContext, relativePaths: readonly string[]): Record<string, boolean> {
@@ -1865,6 +3516,20 @@ export async function getDiagnosticsForFile(filePath: string): Promise<{ message
   return diagnostics;
 }
 
+export async function getCodeLensesForFile(filePath: string): Promise<AspireExtensionE2ECodeLensProbeResult> {
+  const uri = vscode.Uri.file(filePath);
+  const document = await vscode.workspace.openTextDocument(uri);
+  const codeLenses = await vscode.commands.executeCommand<vscode.CodeLens[] | undefined>('vscode.executeCodeLensProvider', uri);
+
+  return {
+    filePath: document.uri.fsPath,
+    languageId: document.languageId,
+    commandTitles: (codeLenses ?? [])
+      .map(codeLens => codeLens.command?.title)
+      .filter((title): title is string => typeof title === 'string' && title.length > 0),
+  };
+}
+
 function isFileOpenInAnyTab(uri: vscode.Uri): boolean {
   return vscode.window.tabGroups.all.some(group => group.tabs.some(tab =>
     tab.input instanceof vscode.TabInputText && tab.input.uri.fsPath === uri.fsPath));
@@ -1872,6 +3537,19 @@ function isFileOpenInAnyTab(uri: vscode.Uri): boolean {
 
 function getAppHostElement(appHostTreeProvider: AspireAppHostTreeProvider, appHostPath: string | undefined): unknown {
   return appHostPath ? appHostTreeProvider.findAppHostElement(appHostPath) ?? { appHostPath } : undefined;
+}
+
+function getRequiredAppHostActionElement(
+  appHostTreeProvider: AspireAppHostTreeProvider,
+  commandName: string,
+  appHostPath: string,
+): unknown {
+  const element = appHostTreeProvider.findAppHostElement(appHostPath);
+  if (!element) {
+    throw new Error(`Aspire extension E2E ${commandName} could not find AppHost '${appHostPath}'.`);
+  }
+
+  return element;
 }
 
 function getAppHostPathForClipboard(element: unknown): string {
@@ -2055,6 +3733,18 @@ function getActiveEditorInfo(): { uri?: string; fileName?: string; text?: string
   };
 }
 
+function getOpenEditorInfo(): Array<{ label: string; uri?: string; isPreview: boolean }> {
+  return vscode.window.tabGroups.all.flatMap(group =>
+    group.tabs.map(tab => {
+      const uri = tab.input instanceof vscode.TabInputText ? tab.input.uri : undefined;
+      return {
+        label: tab.label,
+        uri: uri?.toString(),
+        isPreview: tab.isPreview,
+      };
+    }));
+}
+
 function cloneTerminalCommandEvent(event: AspireTerminalCommandEvent, sequence: number): AspireExtensionE2ETerminalCommand {
   return {
     sequence,
@@ -2075,6 +3765,8 @@ function cloneDebugLaunchEvent(event: AppHostLaunchRequestedEvent, sequence: num
     command: event.command,
     noDebug: event.noDebug,
     doStep: event.doStep,
+    cliPath: event.cliPath,
+    cliTargetKey: event.cliTargetKey,
     executionSuppressed: event.executionSuppressed,
   };
 }
@@ -2087,6 +3779,71 @@ function cloneDebugConsoleOutputEvent(event: AspireDebugConsoleOutputEvent, sequ
     category: event.category,
     output: event.output,
   };
+}
+
+async function prepareBlazorWasmDebugger(): Promise<BlazorWasmDebuggerStatus> {
+  const extension = vscode.extensions.getExtension(csharpExtensionId);
+  if (!extension) {
+    throw new Error(`${csharpExtensionId} is required for the Blazor browser debugger E2E tests.`);
+  }
+
+  // Activation awaits runtime dependency installation. initializationFinished() additionally
+  // waits for project import, which is unrelated to checking the bridge and can remain pending.
+  // https://github.com/dotnet/vscode-csharp/blob/v2.148.23-prerelease/src/main.ts
+  await extension.activate();
+
+  // The pinned C# extension downloads this runtime dependency during activation. If acquisition
+  // fails, it still activates but silently selects the legacy app-hosted proxy instead of VSdbg.
+  // Match its availability check; let C# perform acquisition and integrity validation on reload.
+  // https://github.com/dotnet/vscode-csharp/blob/v2.148.23-prerelease/src/razor/src/blazorDebug/blazorDebugConfigurationProvider.ts
+  const bridgePath = path.join(extension.extensionPath, '.vswebassemblybridge', 'Microsoft.Diagnostics.BrowserDebugHost.dll');
+  return fs.existsSync(bridgePath) && fs.statSync(bridgePath).isFile() ? 'ready' : 'missing-bridge';
+}
+
+/**
+ * Waits until the C# language server has finished its initial project load.
+ *
+ * Without Dev Kit, the pinned C# extension enumerates the workspace's `*.csproj` files once, when its
+ * language server starts, and Roslyn then design-time builds each of them. On Windows the in-process
+ * MSBuild build makes the project directory the BuildHost's current directory, so a fixture created
+ * while that discovery is still pending gets loaded and cannot be deleted until the load finishes.
+ * Specs that create and delete project fixtures in the workspace wait here first so the language
+ * server's project set is fixed before their fixtures exist.
+ *
+ * initializationFinished() resolves after the server reports project initialization complete, even if
+ * that happened before this call.
+ * https://github.com/dotnet/vscode-csharp/blob/v2.148.23-prerelease/src/activateRoslyn.ts
+ * https://github.com/dotnet/vscode-csharp/blob/v2.148.23-prerelease/src/lsptoolshost/server/roslynLanguageServer.ts
+ */
+async function waitForCSharpProjectInitialization(timeoutMs: number): Promise<'initialized'> {
+  const extension = vscode.extensions.getExtension<{ initializationFinished?: () => Promise<void> }>(csharpExtensionId);
+  if (!extension) {
+    throw new Error(`${csharpExtensionId} is required to wait for C# project initialization.`);
+  }
+
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    await Promise.race([
+      (async () => {
+        const api = await extension.activate();
+        if (typeof api?.initializationFinished !== 'function') {
+          throw new Error(`${csharpExtensionId} did not export initializationFinished(), so C# project initialization cannot be observed.`);
+        }
+
+        await api.initializationFinished();
+      })(),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`The C# language server did not finish its initial project load within ${timeoutMs}ms.`)), timeoutMs);
+      }),
+    ]);
+  }
+  finally {
+    if (timer) {
+      clearTimeout(timer);
+    }
+  }
+
+  return 'initialized';
 }
 
 /**

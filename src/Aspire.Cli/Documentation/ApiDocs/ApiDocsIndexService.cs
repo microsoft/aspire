@@ -26,12 +26,18 @@ internal static class ApiReferenceLanguages
     public const string TypeScript = "typescript";
 
     /// <summary>
+    /// The Go API language identifier.
+    /// </summary>
+    public const string Go = "go";
+
+    /// <summary>
     /// Gets the supported API language identifiers.
     /// </summary>
     public static IReadOnlyList<string> All { get; } =
     [
         CSharp,
-        TypeScript
+        TypeScript,
+        Go
     ];
 
     /// <summary>
@@ -305,6 +311,7 @@ internal sealed partial class ApiDocsIndexService(IApiDocsFetcher fetcher, IApiD
 {
     private const string RootCSharpScope = ApiReferenceLanguages.CSharp;
     private const string RootTypeScriptScope = ApiReferenceLanguages.TypeScript;
+    private const string RootGoScope = ApiReferenceLanguages.Go;
     private const float ExactIdMatchBonus = 60.0f;
     private const float ExactNameMatchBonus = 45.0f;
     private const float PathSegmentMatchBonus = 20.0f;
@@ -322,8 +329,10 @@ internal sealed partial class ApiDocsIndexService(IApiDocsFetcher fetcher, IApiD
 
     // Cache schema version for the API reference sitemap-driven index. Bump this whenever
     // a code change would produce a different ApiReferenceItem[] for the same sitemap so
-    // older caches are invalidated on first launch. v1 is the original schema.
-    private const int IndexSchemaVersion = 1;
+    // older caches are invalidated on first launch.
+    //   v1 — original schema.
+    //   v2 — indexes Go API routes.
+    private const int IndexSchemaVersion = 2;
 
     private readonly IApiDocsFetcher _fetcher = fetcher;
     private readonly IApiDocsCache _cache = cache;
@@ -743,10 +752,14 @@ internal sealed partial class ApiDocsIndexService(IApiDocsFetcher fetcher, IApiD
             });
         }
 
+        // Go routes mirror TypeScript routes segment for segment, so a Go item scores the same as its
+        // TypeScript twin. Break ties by language before id: ordering by id alone would sort "go/" ahead
+        // of "typescript/" and push the Go copy above the TypeScript result for every unfiltered search.
         return
         [
             .. results
                 .OrderByDescending(static result => result.Score)
+                .ThenBy(static result => GetLanguageSortOrder(result.Language))
                 .ThenBy(static result => result.Id, StringComparer.OrdinalIgnoreCase)
                 .Take(topK)
         ];
@@ -866,9 +879,9 @@ internal sealed partial class ApiDocsIndexService(IApiDocsFetcher fetcher, IApiD
     private static List<ApiReferenceItem> BuildBaseItems(IReadOnlyList<ApiSitemapEntry> entries, string sitemapUrl)
     {
         var items = new List<ApiReferenceItem>(entries.Count);
-        var typeScriptContainerIds = entries
-            .Where(static entry => entry.Language == ApiReferenceLanguages.TypeScript && entry.Segments.Length == 3)
-            .Select(static entry => $"{ApiReferenceLanguages.TypeScript}/{entry.Segments[0]}/{entry.Segments[1]}")
+        var moduleContainerIds = entries
+            .Where(static entry => IsModuleLanguage(entry.Language) && entry.Segments.Length == 3)
+            .Select(static entry => $"{entry.Language}/{entry.Segments[0]}/{entry.Segments[1]}")
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         foreach (var entry in entries)
@@ -879,13 +892,19 @@ internal sealed partial class ApiDocsIndexService(IApiDocsFetcher fetcher, IApiD
                     BuildCSharpItems(items, entry, sitemapUrl);
                     break;
                 case ApiReferenceLanguages.TypeScript:
-                    BuildTypeScriptItems(items, entry, typeScriptContainerIds, sitemapUrl);
+                    BuildModuleItems(items, entry, RootTypeScriptScope, moduleContainerIds, sitemapUrl);
+                    break;
+                case ApiReferenceLanguages.Go:
+                    BuildModuleItems(items, entry, RootGoScope, moduleContainerIds, sitemapUrl);
                     break;
             }
         }
 
         return Deduplicate(items);
     }
+
+    private static bool IsModuleLanguage(string language)
+        => language is ApiReferenceLanguages.TypeScript or ApiReferenceLanguages.Go;
 
     private static void BuildCSharpItems(List<ApiReferenceItem> items, ApiSitemapEntry entry, string sitemapUrl)
     {
@@ -932,17 +951,25 @@ internal sealed partial class ApiDocsIndexService(IApiDocsFetcher fetcher, IApiD
         }
     }
 
-    private static void BuildTypeScriptItems(List<ApiReferenceItem> items, ApiSitemapEntry entry, HashSet<string> typeScriptContainerIds, string sitemapUrl)
+    // TypeScript and Go routes share one module-based layout, so they share one builder:
+    //   /reference/api/<language>/<module>/                  -> module
+    //   /reference/api/<language>/<module>/<item>/           -> symbol when it has member pages, otherwise a member
+    //   /reference/api/<language>/<module>/<item>/<member>/  -> member
+    // The kind comes from the route depth instead of the kind labels in the page markdown, so the
+    // per-language kind vocabulary does not need to be known here.
+    private static void BuildModuleItems(List<ApiReferenceItem> items, ApiSitemapEntry entry, string rootScope, HashSet<string> moduleContainerIds, string sitemapUrl)
     {
+        var language = entry.Language;
+
         if (entry.Segments.Length == 1)
         {
             items.Add(new ApiReferenceItem
             {
-                Id = $"{ApiReferenceLanguages.TypeScript}/{entry.Segments[0]}",
+                Id = $"{language}/{entry.Segments[0]}",
                 Name = entry.Segments[0],
-                Language = ApiReferenceLanguages.TypeScript,
+                Language = language,
                 Kind = ApiReferenceKinds.Module,
-                ParentId = RootTypeScriptScope,
+                ParentId = rootScope,
                 PageUrl = ApiDocsSourceConfiguration.RebasePageUrl(entry.Url, sitemapUrl)
             });
             return;
@@ -950,14 +977,14 @@ internal sealed partial class ApiDocsIndexService(IApiDocsFetcher fetcher, IApiD
 
         if (entry.Segments.Length == 2)
         {
-            var id = $"{ApiReferenceLanguages.TypeScript}/{entry.Segments[0]}/{entry.Segments[1]}";
+            var id = $"{language}/{entry.Segments[0]}/{entry.Segments[1]}";
             items.Add(new ApiReferenceItem
             {
                 Id = id,
                 Name = entry.Segments[1],
-                Language = ApiReferenceLanguages.TypeScript,
-                Kind = typeScriptContainerIds.Contains(id) ? ApiReferenceKinds.Symbol : ApiReferenceKinds.Member,
-                ParentId = $"{ApiReferenceLanguages.TypeScript}/{entry.Segments[0]}",
+                Language = language,
+                Kind = moduleContainerIds.Contains(id) ? ApiReferenceKinds.Symbol : ApiReferenceKinds.Member,
+                ParentId = $"{language}/{entry.Segments[0]}",
                 PageUrl = ApiDocsSourceConfiguration.RebasePageUrl(entry.Url, sitemapUrl)
             });
             return;
@@ -967,11 +994,11 @@ internal sealed partial class ApiDocsIndexService(IApiDocsFetcher fetcher, IApiD
         {
             items.Add(new ApiReferenceItem
             {
-                Id = $"{ApiReferenceLanguages.TypeScript}/{entry.Segments[0]}/{entry.Segments[1]}/{entry.Segments[2]}",
+                Id = $"{language}/{entry.Segments[0]}/{entry.Segments[1]}/{entry.Segments[2]}",
                 Name = entry.Segments[2],
-                Language = ApiReferenceLanguages.TypeScript,
+                Language = language,
                 Kind = ApiReferenceKinds.Member,
-                ParentId = $"{ApiReferenceLanguages.TypeScript}/{entry.Segments[0]}/{entry.Segments[1]}",
+                ParentId = $"{language}/{entry.Segments[0]}/{entry.Segments[1]}",
                 PageUrl = ApiDocsSourceConfiguration.RebasePageUrl(entry.Url, sitemapUrl)
             });
         }
@@ -1002,6 +1029,14 @@ internal sealed partial class ApiDocsIndexService(IApiDocsFetcher fetcher, IApiD
         ApiReferenceKinds.MemberGroup => 3,
         ApiReferenceKinds.Member => 3,
         _ => 4
+    };
+
+    private static int GetLanguageSortOrder(string language) => language switch
+    {
+        ApiReferenceLanguages.CSharp => 0,
+        ApiReferenceLanguages.TypeScript => 1,
+        ApiReferenceLanguages.Go => 2,
+        _ => 3
     };
 
     private static string NormalizeId(string value) => value.Trim().Trim('/');

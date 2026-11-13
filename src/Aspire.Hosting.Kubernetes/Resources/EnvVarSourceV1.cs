@@ -9,7 +9,7 @@ namespace Aspire.Hosting.Kubernetes.Resources;
 /// EnvVarSourceV1 represents a source for an environment variable value in a Kubernetes resource.
 /// It provides multiple options to derive the value of an environment variable, such as from
 /// a specific key in a ConfigMap, a field reference within the resource, a resource field (e.g., CPU or memory usage),
-/// or a specific key in a Secret.
+/// a specific key in a Secret, or a key in an environment variable file.
 /// </summary>
 [YamlSerializable]
 public sealed class EnvVarSourceV1
@@ -29,6 +29,13 @@ public sealed class EnvVarSourceV1
     /// </summary>
     [YamlMember(Alias = "fieldRef")]
     public ObjectFieldSelectorV1? FieldRef { get; set; }
+
+    /// <summary>
+    /// Gets or sets a reference to a key in an environment variable file in an emptyDir volume.
+    /// Requires Kubernetes 1.34 or later with the EnvFiles feature enabled.
+    /// </summary>
+    [YamlMember(Alias = "fileKeyRef")]
+    public FileKeySelectorV1? FileKeyRef { get; set; }
 
     /// <summary>
     /// ResourceFieldRef is a property representing a reference to container resource fields, such as CPU or Memory.

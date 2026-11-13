@@ -37,9 +37,10 @@ public sealed class DashboardClientAuthTests
     [InlineData(false)]
     public async Task ConnectsToResourceService_Unsecured(bool useHttps)
     {
+        using var activitySource = new DashboardActivitySource();
         var loggerFactory = IntegrationTestHelpers.CreateLoggerFactory(_testOutputHelper);
         await using var server = await CreateResourceServiceServerAsync(loggerFactory, useHttps).DefaultTimeout();
-        await using var client = await CreateDashboardClientAsync(loggerFactory, server.Url, authMode: ResourceClientAuthMode.Unsecured).DefaultTimeout();
+        await using var client = await CreateDashboardClientAsync(activitySource, loggerFactory, server.Url, authMode: ResourceClientAuthMode.Unsecured).DefaultTimeout();
 
         var call = await server.Calls.ResourceInformationCallsChannel.Reader.ReadAsync().DefaultTimeout();
 
@@ -53,9 +54,10 @@ public sealed class DashboardClientAuthTests
     [InlineData(false)]
     public async Task ConnectsToResourceService_ApiKey(bool useHttps)
     {
+        using var activitySource = new DashboardActivitySource();
         var loggerFactory = IntegrationTestHelpers.CreateLoggerFactory(_testOutputHelper);
         await using var server = await CreateResourceServiceServerAsync(loggerFactory, useHttps).DefaultTimeout();
-        await using var client = await CreateDashboardClientAsync(loggerFactory, server.Url, authMode: ResourceClientAuthMode.ApiKey, configureOptions: options => options.ResourceServiceClient.ApiKey = "TestApiKey!").DefaultTimeout();
+        await using var client = await CreateDashboardClientAsync(activitySource, loggerFactory, server.Url, authMode: ResourceClientAuthMode.ApiKey, configureOptions: options => options.ResourceServiceClient.ApiKey = "TestApiKey!").DefaultTimeout();
 
         var call = await server.Calls.ResourceInformationCallsChannel.Reader.ReadAsync().DefaultTimeout();
 
@@ -106,6 +108,7 @@ public sealed class DashboardClientAuthTests
     }
 
     private static async Task<DashboardClient> CreateDashboardClientAsync(
+        DashboardActivitySource activitySource,
         ILoggerFactory loggerFactory,
         string serverAddress,
         ResourceClientAuthMode authMode = ResourceClientAuthMode.Unsecured,
@@ -125,11 +128,13 @@ public sealed class DashboardClientAuthTests
         options.ResourceServiceClient.TryParseOptions(out _);
 
         var client = new DashboardClient(
+            activitySource: activitySource,
             loggerFactory: loggerFactory,
             configuration: new ConfigurationManager(),
             dashboardOptions: Options.Create(options),
             knownPropertyLookup: new MockKnownPropertyLookup(),
             loc: new Aspire.Dashboard.Tests.TestStringLocalizer<Dashboard.Resources.Resources>(),
+            resourceRepositoryWriter: new NoopResourceRepositoryWriter(),
             configureHttpHandler: handler => handler.SslOptions.RemoteCertificateValidationCallback = (sender, cert, chain, sslPolicyErrors) => true);
 
         var iClient = (IDashboardClient)client;
@@ -137,6 +142,15 @@ public sealed class DashboardClientAuthTests
         await iClient.WhenConnected;
 
         return client;
+    }
+
+    private sealed class NoopResourceRepositoryWriter : IResourceRepositoryWriter
+    {
+        public Task ReplaceResourcesAsync(IReadOnlyList<Resource> resources) => Task.CompletedTask;
+        public Task ApplyChangesAsync(IReadOnlyList<WatchResourcesChange> changes) => Task.CompletedTask;
+        public Task AddConsoleLogsAsync(string resourceName, IReadOnlyList<ConsoleLogLine> logLines) => Task.CompletedTask;
+        public Task MarkConsoleLogsLoadedAsync(string resourceName) => Task.CompletedTask;
+        public Task ClearConsoleLogsAsync(IReadOnlyList<string> resourceNames, DateTime clearDate) => Task.CompletedTask;
     }
 
     private sealed class ResourceServiceServer(WebApplication serverApp, TestCalls testCalls) : IAsyncDisposable

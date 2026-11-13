@@ -1,0 +1,5 @@
+﻿parameters:
+  worker:
+    worker_image: "registry.example.com/worker:latest"
+secrets: {}
+config: {}

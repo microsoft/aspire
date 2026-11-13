@@ -111,6 +111,10 @@ internal sealed class AppHostRpcClient : IAppHostRpcClient
         => InvokeCodeGenerationAsync<Commands.Sdk.CapabilitiesInfo>("getCapabilities", [assemblyNames], cancellationToken);
 
     /// <inheritdoc />
+    public Task<JsonElement> ExportApiAsync(string languageId, string packageName, string packageVersion, CancellationToken cancellationToken)
+        => InvokeCodeGenerationAsync<JsonElement>("exportApi", [languageId, packageName, packageVersion], cancellationToken);
+
+    /// <inheritdoc />
     public Task<T> InvokeAsync<T>(string methodName, object?[] parameters, CancellationToken cancellationToken)
         => _jsonRpc.InvokeWithProfilingAsync<T>(_profilingTelemetry, ConnectionName, methodName, parameters, cancellationToken);
 

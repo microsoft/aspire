@@ -14,7 +14,7 @@ public class AzureSearchExtensionsTests(ITestOutputHelper output)
     [Fact]
     public async Task AddAzureSearch()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(output);
 
         // Add search and parameterize the SKU
         var sku = builder.AddParameter("searchSku");
@@ -114,7 +114,7 @@ public class AzureSearchExtensionsTests(ITestOutputHelper output)
     [Fact]
     public async Task AddAsExistingResource_RespectsExistingAzureResourceAnnotation_ForAzureSearchResource()
     {
-        using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create(output);
         var existingName = builder.AddParameter("existing-search-name");
         var existingResourceGroup = builder.AddParameter("existing-search-rg");
 

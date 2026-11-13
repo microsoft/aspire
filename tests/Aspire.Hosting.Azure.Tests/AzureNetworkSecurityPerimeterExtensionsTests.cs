@@ -10,12 +10,12 @@ using Azure.Provisioning.Network;
 
 namespace Aspire.Hosting.Azure.Tests;
 
-public class AzureNetworkSecurityPerimeterExtensionsTests
+public class AzureNetworkSecurityPerimeterExtensionsTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
     public void AddNetworkSecurityPerimeter_CreatesResource()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var nsp = builder.AddNetworkSecurityPerimeter("my-nsp");
 
@@ -27,7 +27,7 @@ public class AzureNetworkSecurityPerimeterExtensionsTests
     [Fact]
     public void AddNetworkSecurityPerimeter_InRunMode_DoesNotAddToBuilder()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run, testOutputHelper);
 
         var nsp = builder.AddNetworkSecurityPerimeter("my-nsp");
 
@@ -37,7 +37,7 @@ public class AzureNetworkSecurityPerimeterExtensionsTests
     [Fact]
     public async Task AddNetworkSecurityPerimeter_GeneratesCorrectBicep()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var nsp = builder.AddNetworkSecurityPerimeter("my-nsp");
 
@@ -49,7 +49,7 @@ public class AzureNetworkSecurityPerimeterExtensionsTests
     [Fact]
     public async Task AddNetworkSecurityPerimeter_WithAccessRules_GeneratesCorrectBicep()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var nsp = builder.AddNetworkSecurityPerimeter("my-nsp")
             .WithAccessRule(new AzureNspAccessRule
@@ -73,7 +73,7 @@ public class AzureNetworkSecurityPerimeterExtensionsTests
     [Fact]
     public async Task AddNetworkSecurityPerimeter_WithSubscriptionRule_GeneratesCorrectBicep()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var nsp = builder.AddNetworkSecurityPerimeter("my-nsp")
             .WithAccessRule(new AzureNspAccessRule
@@ -91,7 +91,7 @@ public class AzureNetworkSecurityPerimeterExtensionsTests
     [Fact]
     public async Task AddNetworkSecurityPerimeter_WithParameterBasedAccessRules_GeneratesCorrectBicep()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var inboundAddressPrefix = builder.AddParameter("inboundAddressPrefix");
         var allowedSubscription = builder.AddParameter("allowedSubscription");
@@ -128,7 +128,7 @@ public class AzureNetworkSecurityPerimeterExtensionsTests
     [Fact]
     public async Task AddNetworkSecurityPerimeter_WithStorageAssociation_GeneratesCorrectBicep()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var nsp = builder.AddNetworkSecurityPerimeter("my-nsp");
         var storage = builder.AddAzureStorage("storage");
@@ -143,7 +143,7 @@ public class AzureNetworkSecurityPerimeterExtensionsTests
     [Fact]
     public async Task AddNetworkSecurityPerimeter_WithMultipleAssociations_GeneratesCorrectBicep()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var nsp = builder.AddNetworkSecurityPerimeter("my-nsp")
             .WithAccessRule(new AzureNspAccessRule
@@ -167,7 +167,7 @@ public class AzureNetworkSecurityPerimeterExtensionsTests
     [Fact]
     public void WithAccessRule_DuplicateName_Throws()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var nsp = builder.AddNetworkSecurityPerimeter("my-nsp")
             .WithAccessRule(new AzureNspAccessRule
@@ -190,7 +190,7 @@ public class AzureNetworkSecurityPerimeterExtensionsTests
     [Fact]
     public void AssociateWith_DuplicateAssociationName_Throws()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
 
         var nsp = builder.AddNetworkSecurityPerimeter("my-nsp");
         var storage = builder.AddAzureStorage("storage");

@@ -66,6 +66,23 @@ static class TestResourceExtensions
     }
 
     [AspireExportIgnore(Reason = "Stress playground helper; not part of the supported ATS surface.")]
+    public static IResourceBuilder<HttpCommandGroupResource> AddHttpCommandGroup(this IDistributedApplicationBuilder builder, string name, IResource parent)
+    {
+        var rb = builder.AddResource(new HttpCommandGroupResource(name, parent))
+                      .WithInitialState(new()
+                      {
+                          ResourceType = "Command Group",
+                          State = "Running",
+                          Properties = [
+                              new(KnownProperties.Resource.ParentName, parent.Name)
+                          ]
+                      })
+                      .ExcludeFromManifest();
+
+        return rb;
+    }
+
+    [AspireExportIgnore(Reason = "Stress playground helper; not part of the supported ATS surface.")]
     public static IResourceBuilder<NoStatusResource> AddNoStatusResource(this IDistributedApplicationBuilder builder, string name)
     {
         var rb = builder.AddResource(new NoStatusResource(name))
@@ -197,6 +214,11 @@ sealed class TestNestedResource(string name, IResource parent) : Resource(name),
 }
 
 sealed class CommandGroupResource(string name, IResource parent) : Resource(name), IResourceWithParent
+{
+    public IResource Parent { get; } = parent;
+}
+
+sealed class HttpCommandGroupResource(string name, IResource parent) : Resource(name), IResourceWithParent, IResourceWithEndpoints
 {
     public IResource Parent { get; } = parent;
 }

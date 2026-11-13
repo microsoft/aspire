@@ -139,6 +139,12 @@ node_modules/
 target/
 dependency-reduced-pom.xml
 
+# Gradle local cache/state and Java build outputs
+# Unanchored so caches match at any nesting depth.
+.gradle/
+playground/Java*/**/build/
+tests/PolyglotAppHosts/**/Java/**/build/
+
 # Java AppHost build artifacts
 #
 # .java-build is where the CLI compiles a single-file Java AppHost before launching it with

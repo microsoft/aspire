@@ -1,0 +1,17 @@
+﻿{
+  Config:
+export interface AksNodePoolConfig {
+    name?: string;
+    mode?: AksNodePoolMode;
+    vmSize?: string;
+    minCount?: number;
+    maxCount?: number;
+    osSku?: string | null;
+},
+  AddNodePool: [
+    addNodePool(name: string, configure: (obj: AksNodePoolConfig) => Promise<void>): AksNodePoolResourcePromise
+  ],
+  WithSystemNodePool: [
+    withSystemNodePool(configure: (obj: AksNodePoolConfig) => Promise<void>): AzureKubernetesEnvironmentResourcePromise
+  ]
+}

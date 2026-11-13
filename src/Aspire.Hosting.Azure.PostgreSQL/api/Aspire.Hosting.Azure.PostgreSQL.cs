@@ -25,10 +25,10 @@ namespace Aspire.Hosting
         [AspireExport(RunSyncOnBackgroundThread = true)]
         public static ApplicationModel.IResourceBuilder<Azure.AzurePostgresFlexibleServerResource> RunAsContainer(this ApplicationModel.IResourceBuilder<Azure.AzurePostgresFlexibleServerResource> builder, System.Action<ApplicationModel.IResourceBuilder<ApplicationModel.PostgresServerResource>>? configureContainer = null) { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withPasswordAuthentication dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withPasswordAuthentication dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<Azure.AzurePostgresFlexibleServerResource> WithPasswordAuthentication(this ApplicationModel.IResourceBuilder<Azure.AzurePostgresFlexibleServerResource> builder, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource>? userName = null, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource>? password = null) { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withPasswordAuthentication dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withPasswordAuthentication dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<Azure.AzurePostgresFlexibleServerResource> WithPasswordAuthentication(this ApplicationModel.IResourceBuilder<Azure.AzurePostgresFlexibleServerResource> builder, ApplicationModel.IResourceBuilder<Azure.IAzureKeyVaultResource> keyVaultBuilder, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource>? userName = null, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource>? password = null) { throw null; }
 
         [AspireExport(RunSyncOnBackgroundThread = true)]

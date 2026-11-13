@@ -82,10 +82,28 @@ public static class DashboardEndpointsBuilder
             }
             requestCulture ??= new RequestCulture(newLanguage.Name, newLanguage.Name);
 
+            var cookieOptions = new CookieOptions
+            {
+                Expires = DateTimeOffset.UtcNow.AddYears(1), // consistent with theme cookie expiry
+                // The culture cookie is only read on the server by the request localization middleware.
+                HttpOnly = true,
+                SameSite = SameSiteMode.Lax
+            };
+
+            // Only mark the cookie Secure when the request was made over HTTPS. The dashboard is commonly served over
+            // plain HTTP, e.g. http://localhost or a standalone container on http://host:18888. Browsers silently drop
+            // Secure cookies set from a non-localhost HTTP origin, which would break language selection.
+            // IsHttps honors X-Forwarded-Proto when forwarded headers are enabled, so cookies set behind a
+            // TLS-terminating reverse proxy are also Secure. This matches the dashboard auth cookies (SameAsRequest).
+            if (httpContext.Request.IsHttps)
+            {
+                cookieOptions.Secure = true;
+            }
+
             httpContext.Response.Cookies.Append(
                 CookieRequestCultureProvider.DefaultCookieName,
                 CookieRequestCultureProvider.MakeCookieValue(requestCulture),
-                new CookieOptions { Expires = DateTimeOffset.UtcNow.AddYears(1) }); // consistent with theme cookie expiry
+                cookieOptions);
 
             return Results.LocalRedirect(redirectUrl);
         }).SkipStatusCodePages();
@@ -159,7 +177,7 @@ public static class DashboardEndpointsBuilder
                 return Results.Empty;
             }
 
-            var response = service.GetSpans(resource, traceId, hasError, limit, search);
+            var response = await service.GetSpansAsync(resource, traceId, hasError, limit, cancellationToken, search).ConfigureAwait(false);
             if (response is null)
             {
                 return Results.NotFound(new ProblemDetails
@@ -191,7 +209,7 @@ public static class DashboardEndpointsBuilder
                 return Results.Empty;
             }
 
-            var response = service.GetLogs(resource, traceId, severity, limit, search);
+            var response = await service.GetLogsAsync(resource, traceId, severity, limit, cancellationToken, search).ConfigureAwait(false);
             if (response is null)
             {
                 return Results.NotFound(new ProblemDetails
@@ -206,14 +224,15 @@ public static class DashboardEndpointsBuilder
 
         // GET /api/telemetry/traces - List traces in OTLP JSON format (snapshot only, no streaming)
         // Supports multiple resource names: ?resource=app1&resource=app2
-        group.MapGet("/traces", (
+        group.MapGet("/traces", async (
             TelemetryApiService service,
             [FromQuery] string[]? resource,
             [FromQuery] bool? hasError,
             [FromQuery] int? limit,
-            [FromQuery] string? search) =>
+            [FromQuery] string? search,
+            CancellationToken cancellationToken) =>
         {
-            var response = service.GetTraces(resource, hasError, limit, search);
+            var response = await service.GetTracesAsync(resource, hasError, limit, cancellationToken, search).ConfigureAwait(false);
             if (response is null)
             {
                 return Results.NotFound(new ProblemDetails

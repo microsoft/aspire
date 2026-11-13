@@ -17,6 +17,7 @@
     <Compile Include="$(TestsSharedDir)\TestModuleInitializer.cs" />
     <Compile Include="$(TestsSharedDir)\TestPipelineActivityReporter.cs" />
     <Compile Include="$(TestsSharedDir)\InMemoryDeploymentStateManager.cs" />
+    <Compile Include="$(TestsSharedDir)\FakeHelmRunner.cs" />
   </ItemGroup>
 
   <ItemGroup>

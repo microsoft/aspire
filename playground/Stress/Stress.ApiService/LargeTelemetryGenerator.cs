@@ -1,0 +1,781 @@
+// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+
+using System.Buffers.Binary;
+using System.Diagnostics;
+using System.Globalization;
+using Google.Protobuf;
+using Grpc.Core;
+using Grpc.Net.Client;
+using OpenTelemetry.Proto.Collector.Logs.V1;
+using OpenTelemetry.Proto.Collector.Metrics.V1;
+using OpenTelemetry.Proto.Collector.Trace.V1;
+using OpenTelemetry.Proto.Common.V1;
+using OpenTelemetry.Proto.Logs.V1;
+using OpenTelemetry.Proto.Metrics.V1;
+using OpenTelemetry.Proto.Resource.V1;
+using OpenTelemetry.Proto.Trace.V1;
+using OtlpSpan = OpenTelemetry.Proto.Trace.V1.Span;
+
+namespace Stress.ApiService;
+
+public sealed class LargeTelemetryGenerator(ILogger<LargeTelemetryGenerator> logger, IConfiguration configuration)
+{
+    public const int TraceCount = 50_000;
+    public const int SpansPerTrace = 6;
+    public const int LargeTraceSpanCount = 50_000;
+    public const int StructuredLogCount = 100_000;
+    public const int ConsoleLogCount = 100_000;
+    public const int MetricDurationHours = 24;
+    public const int MetricDimensionCount = 5;
+
+    private const int TraceBatchSize = 1_000;
+    private const int LargeTraceBatchSize = 1_000;
+    private const int LogBatchSize = 1_000;
+    private const int MetricSecondsPerBatch = 100;
+    private const int ProgressInterval = 10_000;
+    private static readonly double[] s_histogramValues = [5, 25, 75, 150];
+    private readonly SemaphoreSlim _runLock = new(1, 1);
+
+    public async Task<bool> TryGenerateAsync(LargeTelemetryGenerationOptions options, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        if (options.GetValidationError() is { } validationError)
+        {
+            throw new ArgumentException(validationError, nameof(options));
+        }
+
+        if (!await _runLock.WaitAsync(0, cancellationToken))
+        {
+            return false;
+        }
+
+        try
+        {
+            var endpoint = configuration["OTEL_EXPORTER_OTLP_ENDPOINT"]
+                ?? throw new InvalidOperationException("OTEL_EXPORTER_OTLP_ENDPOINT is required.");
+            using var channel = GrpcChannel.ForAddress(endpoint);
+            var metadata = CreateMetadata(configuration["OTEL_EXPORTER_OTLP_HEADERS"]);
+
+            if (options.GenerateTraces)
+            {
+                logger.LogInformation("Generating {TraceCount} traces with {SpansPerTrace} spans each.", options.TraceCount, options.SpansPerTrace);
+                var traceClient = new TraceService.TraceServiceClient(channel);
+                await ExportTracesAsync(traceClient, metadata, options.TraceCount, options.SpansPerTrace, cancellationToken);
+            }
+
+            if (options.GenerateLargeTrace)
+            {
+                logger.LogInformation("Generating one trace with {SpanCount} spans.", options.LargeTraceSpanCount);
+                var traceClient = new TraceService.TraceServiceClient(channel);
+                await ExportLargeTraceAsync(traceClient, metadata, options.LargeTraceSpanCount, cancellationToken);
+            }
+
+            if (options.GenerateStructuredLogs)
+            {
+                logger.LogInformation("Generating {LogCount} structured logs.", options.StructuredLogCount);
+                var logsClient = new LogsService.LogsServiceClient(channel);
+                await ExportStructuredLogsAsync(logsClient, metadata, options.StructuredLogCount, cancellationToken);
+            }
+
+            if (options.GenerateConsoleLogs)
+            {
+                logger.LogInformation("Writing {LogCount} console logs through ILogger.", options.ConsoleLogCount);
+                var nextProgressCount = ProgressInterval;
+                for (var logIndex = 0; logIndex < options.ConsoleLogCount; logIndex++)
+                {
+                    logger.LogInformation("Large console log {LogIndex}.", logIndex + 1);
+                    LogProgress(logIndex + 1, ref nextProgressCount, "console logs");
+                    if ((logIndex + 1) % LogBatchSize == 0)
+                    {
+                        await Task.Yield();
+                        cancellationToken.ThrowIfCancellationRequested();
+                    }
+                }
+            }
+
+            if (options.GenerateMetrics)
+            {
+                logger.LogInformation(
+                    "Generating {DurationHours} hours of counter and histogram data across {DimensionCount} dimensions.",
+                    options.MetricDurationHours,
+                    options.MetricDimensionCount);
+                var metricsClient = new MetricsService.MetricsServiceClient(channel);
+                await ExportMetricsAsync(
+                    metricsClient,
+                    metadata,
+                    options.MetricDurationHours,
+                    options.MetricDimensionCount,
+                    Math.Max(options.TraceCount, 1),
+                    Math.Max(options.SpansPerTrace, 1),
+                    cancellationToken);
+            }
+
+            logger.LogInformation("Large telemetry generation completed.");
+            return true;
+        }
+        finally
+        {
+            _runLock.Release();
+        }
+    }
+
+    public async Task ExportIncompatibleHistogramAsync(CancellationToken cancellationToken)
+    {
+        var histogram = new Metric
+        {
+            Name = "incompatible.histogram.bounds",
+            Description = "Dimensions with no shared bucket boundaries. Percentiles are unavailable when both layouts are selected.",
+            Unit = "ms",
+            Histogram = new Histogram
+            {
+                AggregationTemporality = AggregationTemporality.Cumulative
+            }
+        };
+
+        // SDK histogram views normally share one layout across dimensions. Raw OTLP lets us reproduce
+        // differing producer layouts without invalidating either dimension's cumulative aggregation.
+        double[][] layouts = [[10, 50, 100], [20, 60, 200]];
+        const int durationSeconds = 300;
+        var startTime = DateTime.UtcNow.AddSeconds(-durationSeconds);
+        for (var second = 1; second <= durationSeconds; second++)
+        {
+            var countPerBucket = (ulong)second;
+            for (var layoutIndex = 0; layoutIndex < layouts.Length; layoutIndex++)
+            {
+                histogram.Histogram.DataPoints.Add(new HistogramDataPoint
+                {
+                    StartTimeUnixNano = DateTimeToUnixNanoseconds(startTime),
+                    TimeUnixNano = DateTimeToUnixNanoseconds(startTime.AddSeconds(second)),
+                    Count = countPerBucket * 4,
+                    Sum = second * (5 + 25 + 75 + 250),
+                    BucketCounts = { countPerBucket, countPerBucket, countPerBucket, countPerBucket },
+                    ExplicitBounds = { layouts[layoutIndex] },
+                    Attributes =
+                    {
+                        new KeyValue
+                        {
+                            Key = "stress.layout",
+                            Value = new AnyValue { StringValue = layoutIndex.ToString(CultureInfo.InvariantCulture) }
+                        }
+                    }
+                });
+            }
+        }
+
+        await ExportHistogramAsync(histogram, "incompatible-histogram-metrics", cancellationToken);
+    }
+
+    public Task ExportUnavailableHistogramPercentilesAsync(CancellationToken cancellationToken)
+    {
+        return ExportUnavailableHistogramPercentilesAsync(includeExemplars: false, cancellationToken);
+    }
+
+    public Task ExportUnavailableHistogramExemplarsAsync(CancellationToken cancellationToken)
+    {
+        return ExportUnavailableHistogramPercentilesAsync(includeExemplars: true, cancellationToken);
+    }
+
+    public Task ExportDeltaHistogramIntervalsAsync(CancellationToken cancellationToken)
+    {
+        return ExportDeltaHistogramIntervalsAsync(omitStart: false, cancellationToken);
+    }
+
+    public Task ExportDeltaHistogramWithoutStartAsync(CancellationToken cancellationToken)
+    {
+        return ExportDeltaHistogramIntervalsAsync(omitStart: true, cancellationToken);
+    }
+
+    private async Task ExportDeltaHistogramIntervalsAsync(bool omitStart, CancellationToken cancellationToken)
+    {
+        var histogram = new Metric
+        {
+            Name = omitStart ? "histogram.delta.without.start" : "histogram.delta.intervals",
+            Description = omitStart
+                ? "Delta points omit their optional start timestamp. End timestamps place all observations in current chart windows, while export preserves the omitted start."
+                : "Every delta interval contains 100 observations, but the distribution changes every 100 seconds. Equal counts must not merge intervals or discard their observations.",
+            Unit = "ms",
+            Histogram = new Histogram { AggregationTemporality = AggregationTemporality.Delta }
+        };
+        ulong[][] distributions = [[50, 40, 10, 0], [10, 40, 50, 0], [0, 10, 90, 0]];
+        const int durationSeconds = 300;
+        var startTime = DateTime.UtcNow.AddSeconds(-durationSeconds);
+        for (var second = 0; second < durationSeconds; second++)
+        {
+            var counts = distributions[second / 100];
+            var pointStart = startTime.AddSeconds(second);
+            histogram.Histogram.DataPoints.Add(new HistogramDataPoint
+            {
+                StartTimeUnixNano = omitStart ? 0 : DateTimeToUnixNanoseconds(pointStart),
+                TimeUnixNano = DateTimeToUnixNanoseconds(pointStart.AddSeconds(1)),
+                Count = 100,
+                Sum = counts.Select((count, index) => count * s_histogramValues[index]).Sum(),
+                BucketCounts = { counts },
+                ExplicitBounds = { 10d, 50d, 100d }
+            });
+        }
+
+        await ExportHistogramAsync(histogram, omitStart ? "delta-histogram-without-start" : "delta-histogram-intervals", cancellationToken);
+    }
+
+    public async Task ExportCumulativeHistogramResetsAsync(CancellationToken cancellationToken)
+    {
+        var histogram = new Metric
+        {
+            Name = "histogram.cumulative.resets",
+            Description = "Cumulative counts restart twice, with new aggregation start timestamps and bucket layouts. Percentiles use each aggregation independently; Show count displays three rising ramps.",
+            Unit = "ms",
+            Histogram = new Histogram { AggregationTemporality = AggregationTemporality.Cumulative }
+        };
+        const int durationSeconds = 300;
+        var startTime = DateTime.UtcNow.AddSeconds(-durationSeconds);
+        for (var second = 0; second < durationSeconds; second++)
+        {
+            var phase = second / 100;
+            var multiplier = (ulong)(second % 100 + 1);
+            var changedLayout = phase == 1;
+            ulong[] counts = changedLayout ? [5, 3, 1, 1, 0] : [5, 4, 1, 0];
+            double[] bounds = changedLayout ? [20, 50, 100, 200] : [10, 50, 100];
+
+            // Bucket layouts may change only when a cumulative aggregation resets.
+            // Shared bounds also keep windows that straddle a reset calculable.
+            histogram.Histogram.DataPoints.Add(new HistogramDataPoint
+            {
+                StartTimeUnixNano = DateTimeToUnixNanoseconds(startTime.AddSeconds(phase * 100)),
+                TimeUnixNano = DateTimeToUnixNanoseconds(startTime.AddSeconds(second + 1)),
+                Count = multiplier * 10,
+                Sum = multiplier * (changedLayout ? 380d : 200d),
+                BucketCounts = { counts.Select(count => count * multiplier) },
+                ExplicitBounds = { bounds }
+            });
+        }
+
+        await ExportHistogramAsync(histogram, "cumulative-histogram-resets", cancellationToken);
+    }
+
+    public async Task ExportSharedHistogramBoundsAsync(CancellationToken cancellationToken)
+    {
+        var histogram = new Metric
+        {
+            Name = "histogram.shared.bounds",
+            Description = "Two dimensions use different bucket layouts with shared boundaries at 50 and 100 ms. Selecting both merges their distributions at those boundaries without a percentile warning.",
+            Unit = "ms",
+            Histogram = new Histogram { AggregationTemporality = AggregationTemporality.Cumulative }
+        };
+        double[][] layouts = [[10, 50, 100], [20, 50, 100, 200]];
+        ulong[][] distributions = [[50, 40, 9, 1], [50, 30, 10, 9, 1]];
+        const int durationSeconds = 300;
+        var startTime = DateTime.UtcNow.AddSeconds(-durationSeconds);
+        for (var second = 1; second <= durationSeconds; second++)
+        {
+            var multiplier = (ulong)second;
+            for (var dimensionIndex = 0; dimensionIndex < layouts.Length; dimensionIndex++)
+            {
+                histogram.Histogram.DataPoints.Add(new HistogramDataPoint
+                {
+                    StartTimeUnixNano = DateTimeToUnixNanoseconds(startTime),
+                    TimeUnixNano = DateTimeToUnixNanoseconds(startTime.AddSeconds(second)),
+                    Count = multiplier * 100,
+                    Sum = multiplier * (dimensionIndex == 0 ? 2075d : 3900d),
+                    BucketCounts = { distributions[dimensionIndex].Select(count => count * multiplier) },
+                    ExplicitBounds = { layouts[dimensionIndex] },
+                    Attributes =
+                    {
+                        new KeyValue
+                        {
+                            Key = "stress.layout",
+                            Value = new AnyValue { StringValue = dimensionIndex.ToString(CultureInfo.InvariantCulture) }
+                        }
+                    }
+                });
+            }
+        }
+
+        await ExportHistogramAsync(histogram, "shared-histogram-bounds", cancellationToken);
+    }
+
+    private async Task ExportUnavailableHistogramPercentilesAsync(bool includeExemplars, CancellationToken cancellationToken)
+    {
+        var resourceName = includeExemplars ? "unavailable-histogram-exemplars" : "unavailable-histogram-percentiles";
+        var histogram = new Metric
+        {
+            Name = includeExemplars ? "histogram.unavailable.exemplars" : "histogram.unavailable.percentiles",
+            Description = includeExemplars
+                ? "Exemplars remain available before, during, and after the percentile gap. The table retains the unavailable interval with no-data dashes in the percentile cells and an exemplar button."
+                : "Percentiles are available before and after the middle interval. Incompatible bucket bounds make that interval unavailable, so the graph has a gap rather than zero values.",
+            Unit = "ms",
+            Histogram = new Histogram
+            {
+                AggregationTemporality = AggregationTemporality.Delta
+            }
+        };
+
+        double[] compatibleBounds = [10, 50, 100];
+        double[] incompatibleBounds = [20, 60, 200];
+        var scopeSpans = CreateScopeSpans("Stress.Histograms");
+        const int durationSeconds = 300;
+        var startTime = DateTime.UtcNow.AddSeconds(-durationSeconds);
+        for (var second = 0; second < durationSeconds; second++)
+        {
+            for (var dimensionIndex = 0; dimensionIndex < 2; dimensionIndex++)
+            {
+                // Delta layouts may change between intervals. Only the middle 80 seconds
+                // have disjoint bounds; observations still exist throughout the gap.
+                var incompatible = dimensionIndex == 1 && second is >= 100 and < 180;
+                var pointStart = startTime.AddSeconds(second);
+                var pointEnd = pointStart.AddSeconds(1);
+                var point = new HistogramDataPoint
+                {
+                    StartTimeUnixNano = DateTimeToUnixNanoseconds(pointStart),
+                    TimeUnixNano = DateTimeToUnixNanoseconds(pointEnd),
+                    Count = 100,
+                    Sum = 50 * 5 + 40 * 25 + 9 * 75 + (incompatible ? 250 : 150),
+                    BucketCounts = { 50ul, 40ul, 9ul, 1ul },
+                    ExplicitBounds = { incompatible ? incompatibleBounds : compatibleBounds },
+                    Attributes =
+                    {
+                        new KeyValue
+                        {
+                            Key = "stress.layout",
+                            Value = new AnyValue { StringValue = dimensionIndex.ToString(CultureInfo.InvariantCulture) }
+                        }
+                    }
+                };
+                // Sample both layouts inside the gap and one sample on each available side.
+                if (includeExemplars && (second == 140 || (dimensionIndex == 0 && second is 50 or 250)))
+                {
+                    var traceId = ByteString.CopyFrom(Convert.FromHexString(ActivityTraceId.CreateRandom().ToHexString()));
+                    var spanId = CreateSpanId(1);
+                    point.Exemplars.Add(new Exemplar
+                    {
+                        TimeUnixNano = DateTimeToUnixNanoseconds(pointStart.AddMilliseconds(500)),
+                        AsDouble = s_histogramValues[dimensionIndex],
+                        TraceId = traceId,
+                        SpanId = spanId
+                    });
+                    var phase = second < 100 ? "before gap" : second < 180 ? "unavailable percentiles" : "after gap";
+                    var span = CreateSpan(traceId, spanId, ByteString.Empty, $"Histogram exemplar: {phase}", pointStart, pointEnd);
+                    span.Attributes.AddRange(point.Attributes);
+                    scopeSpans.Spans.Add(span);
+                }
+                histogram.Histogram.DataPoints.Add(point);
+            }
+        }
+
+        if (includeExemplars)
+        {
+            var endpoint = configuration["OTEL_EXPORTER_OTLP_ENDPOINT"]
+                ?? throw new InvalidOperationException("OTEL_EXPORTER_OTLP_ENDPOINT is required.");
+            using var channel = GrpcChannel.ForAddress(endpoint);
+            var metadata = CreateMetadata(configuration["OTEL_EXPORTER_OTLP_HEADERS"]);
+            await ExportTraceBatchAsync(new TraceService.TraceServiceClient(channel), metadata, scopeSpans, resourceName, cancellationToken);
+        }
+        await ExportHistogramAsync(histogram, resourceName, cancellationToken);
+    }
+
+    private async Task ExportHistogramAsync(Metric histogram, string resourceName, CancellationToken cancellationToken)
+    {
+        var endpoint = configuration["OTEL_EXPORTER_OTLP_ENDPOINT"]
+            ?? throw new InvalidOperationException("OTEL_EXPORTER_OTLP_ENDPOINT is required.");
+        using var channel = GrpcChannel.ForAddress(endpoint);
+        var client = new MetricsService.MetricsServiceClient(channel);
+        var metadata = CreateMetadata(configuration["OTEL_EXPORTER_OTLP_HEADERS"]);
+        var request = new ExportMetricsServiceRequest
+        {
+            ResourceMetrics =
+            {
+                new ResourceMetrics
+                {
+                    Resource = CreateResource(resourceName),
+                    ScopeMetrics =
+                    {
+                        new ScopeMetrics
+                        {
+                            Scope = new InstrumentationScope { Name = "Stress.Histograms" },
+                            Metrics = { histogram }
+                        }
+                    }
+                }
+            }
+        };
+        var response = await client.ExportAsync(request, headers: metadata, cancellationToken: cancellationToken);
+        if (response.PartialSuccess is { RejectedDataPoints: > 0 } partialSuccess)
+        {
+            throw new InvalidOperationException($"Dashboard rejected {partialSuccess.RejectedDataPoints} metric points: {partialSuccess.ErrorMessage}");
+        }
+
+        logger.LogInformation("Exported {PointCount} points for histogram {InstrumentName}.", histogram.Histogram.DataPoints.Count, histogram.Name);
+    }
+
+    private async Task ExportTracesAsync(
+        TraceService.TraceServiceClient client,
+        Metadata metadata,
+        int totalTraceCount,
+        int spansPerTrace,
+        CancellationToken cancellationToken)
+    {
+        var finalTraceTime = DateTime.UtcNow;
+        var nextProgressCount = ProgressInterval;
+        for (var firstTraceIndex = 0; firstTraceIndex < totalTraceCount; firstTraceIndex += TraceBatchSize)
+        {
+            var scopeSpans = CreateScopeSpans("LargeTelemetry.ManyTraces");
+            var traceCount = Math.Min(TraceBatchSize, totalTraceCount - firstTraceIndex);
+            for (var traceOffset = 0; traceOffset < traceCount; traceOffset++)
+            {
+                var traceIndex = firstTraceIndex + traceOffset;
+                var traceId = CreateTraceId(discriminator: 1, traceIndex + 1);
+                var traceStart = finalTraceTime.AddMilliseconds(traceIndex - totalTraceCount);
+                for (var spanIndex = 0; spanIndex < spansPerTrace; spanIndex++)
+                {
+                    var isRoot = spanIndex == 0;
+                    scopeSpans.Spans.Add(CreateSpan(
+                        traceId,
+                        CreateSpanId(spanIndex + 1),
+                        isRoot ? ByteString.Empty : CreateSpanId(1),
+                        $"GET /stress/page/{spanIndex + 1}",
+                        traceStart.AddMilliseconds(spanIndex),
+                        isRoot ? traceStart.AddMilliseconds(spansPerTrace) : traceStart.AddMilliseconds(spanIndex + 1)));
+                }
+            }
+
+            await ExportTraceBatchAsync(client, metadata, scopeSpans, "large-telemetry-traces", cancellationToken);
+            LogProgress(firstTraceIndex + traceCount, ref nextProgressCount, "traces");
+        }
+    }
+
+    private async Task ExportLargeTraceAsync(
+        TraceService.TraceServiceClient client,
+        Metadata metadata,
+        int totalSpanCount,
+        CancellationToken cancellationToken)
+    {
+        var traceId = CreateTraceId(discriminator: 2, value: 1);
+        var traceStart = DateTime.UtcNow.AddMinutes(-1);
+        var nextProgressCount = ProgressInterval;
+        for (var firstSpanIndex = 0; firstSpanIndex < totalSpanCount; firstSpanIndex += LargeTraceBatchSize)
+        {
+            var scopeSpans = CreateScopeSpans("LargeTelemetry.LargeTrace");
+            var spanCount = Math.Min(LargeTraceBatchSize, totalSpanCount - firstSpanIndex);
+            for (var spanOffset = 0; spanOffset < spanCount; spanOffset++)
+            {
+                var spanIndex = firstSpanIndex + spanOffset;
+                var isRoot = spanIndex == 0;
+                scopeSpans.Spans.Add(CreateSpan(
+                    traceId,
+                    CreateSpanId(spanIndex + 1),
+                    isRoot ? ByteString.Empty : CreateSpanId(1),
+                    $"large-trace-span-{spanIndex + 1}",
+                    traceStart.AddTicks(spanIndex * 10L),
+                        isRoot ? traceStart.AddTicks(totalSpanCount * 10L) : traceStart.AddTicks((spanIndex + 1L) * 10L)));
+            }
+
+            await ExportTraceBatchAsync(client, metadata, scopeSpans, "large-telemetry-traces", cancellationToken);
+            LogProgress(firstSpanIndex + spanCount, ref nextProgressCount, "large trace spans");
+        }
+    }
+
+    private static async Task ExportTraceBatchAsync(
+        TraceService.TraceServiceClient client,
+        Metadata metadata,
+        ScopeSpans scopeSpans,
+        string resourceName,
+        CancellationToken cancellationToken)
+    {
+        // Export requests use the OTLP shape ResourceSpans -> ScopeSpans -> Span. Keeping each request
+        // below 6,000 spans avoids large gRPC messages while allowing one trace to cross request boundaries.
+        var request = new ExportTraceServiceRequest
+        {
+            ResourceSpans =
+            {
+                new ResourceSpans
+                {
+                    Resource = CreateResource(resourceName),
+                    ScopeSpans = { scopeSpans }
+                }
+            }
+        };
+        var response = await client.ExportAsync(request, headers: metadata, cancellationToken: cancellationToken);
+        if (response.PartialSuccess is { RejectedSpans: > 0 } partialSuccess)
+        {
+            throw new InvalidOperationException($"Dashboard rejected {partialSuccess.RejectedSpans} spans: {partialSuccess.ErrorMessage}");
+        }
+    }
+
+    private async Task ExportStructuredLogsAsync(
+        LogsService.LogsServiceClient client,
+        Metadata metadata,
+        int totalLogCount,
+        CancellationToken cancellationToken)
+    {
+        var finalLogTime = DateTime.UtcNow;
+        var nextProgressCount = ProgressInterval;
+        for (var firstLogIndex = 0; firstLogIndex < totalLogCount; firstLogIndex += LogBatchSize)
+        {
+            var scopeLogs = new ScopeLogs
+            {
+                Scope = new InstrumentationScope { Name = "LargeTelemetry.StructuredLogs" }
+            };
+            var logCount = Math.Min(LogBatchSize, totalLogCount - firstLogIndex);
+            for (var logOffset = 0; logOffset < logCount; logOffset++)
+            {
+                var logIndex = firstLogIndex + logOffset;
+                var timestamp = DateTimeToUnixNanoseconds(finalLogTime.AddMilliseconds(logIndex - totalLogCount));
+                scopeLogs.LogRecords.Add(new LogRecord
+                {
+                    TimeUnixNano = timestamp,
+                    ObservedTimeUnixNano = timestamp,
+                    SeverityNumber = SeverityNumber.Info,
+                    SeverityText = "Information",
+                    Body = new AnyValue { StringValue = $"Large structured log {logIndex + 1}." },
+                    Attributes =
+                    {
+                        new KeyValue { Key = "{OriginalFormat}", Value = new AnyValue { StringValue = "Large structured log {LogIndex}." } },
+                        new KeyValue { Key = "LogIndex", Value = new AnyValue { IntValue = logIndex + 1 } }
+                    }
+                });
+            }
+
+            // Log batches use the OTLP shape ResourceLogs -> ScopeLogs -> LogRecord.
+            var request = new ExportLogsServiceRequest
+            {
+                ResourceLogs =
+                {
+                    new ResourceLogs
+                    {
+                        Resource = CreateResource("large-telemetry-structured-logs"),
+                        ScopeLogs = { scopeLogs }
+                    }
+                }
+            };
+            var response = await client.ExportAsync(request, headers: metadata, cancellationToken: cancellationToken);
+            if (response.PartialSuccess is { RejectedLogRecords: > 0 } partialSuccess)
+            {
+                throw new InvalidOperationException($"Dashboard rejected {partialSuccess.RejectedLogRecords} logs: {partialSuccess.ErrorMessage}");
+            }
+
+            LogProgress(firstLogIndex + logCount, ref nextProgressCount, "structured logs");
+        }
+    }
+
+    private async Task ExportMetricsAsync(
+        MetricsService.MetricsServiceClient client,
+        Metadata metadata,
+        int durationHours,
+        int dimensionCount,
+        int exemplarTraceCount,
+        int exemplarSpansPerTrace,
+        CancellationToken cancellationToken)
+    {
+        var durationSeconds = checked(durationHours * 60 * 60);
+        var startTime = DateTime.UtcNow.AddSeconds(-durationSeconds);
+        var addedMetricCount = 0L;
+        var nextProgressCount = ProgressInterval;
+        for (var firstSecond = 0; firstSecond < durationSeconds; firstSecond += MetricSecondsPerBatch)
+        {
+            var counter = new Metric
+            {
+                Name = "large.telemetry.counter",
+                Description = "One-second counter data.",
+                Unit = "requests",
+                Sum = new Sum
+                {
+                    AggregationTemporality = AggregationTemporality.Cumulative,
+                    IsMonotonic = true
+                }
+            };
+            var histogram = new Metric
+            {
+                Name = "large.telemetry.histogram",
+                Description = "One-second histogram data with exemplars.",
+                Unit = "ms",
+                Histogram = new Histogram
+                {
+                    AggregationTemporality = AggregationTemporality.Cumulative
+                }
+            };
+
+            var secondCount = Math.Min(MetricSecondsPerBatch, durationSeconds - firstSecond);
+            for (var secondOffset = 0; secondOffset < secondCount; secondOffset++)
+            {
+                var secondIndex = firstSecond + secondOffset;
+                var pointTime = startTime.AddSeconds(secondIndex + 1L);
+                var timestamp = DateTimeToUnixNanoseconds(pointTime);
+                for (var dimensionIndex = 0; dimensionIndex < dimensionCount; dimensionIndex++)
+                {
+                    var dimension = new KeyValue
+                    {
+                        Key = "stress.dimension",
+                        Value = new AnyValue { StringValue = dimensionIndex.ToString(CultureInfo.InvariantCulture) }
+                    };
+                    counter.Sum.DataPoints.Add(new NumberDataPoint
+                    {
+                        StartTimeUnixNano = DateTimeToUnixNanoseconds(startTime),
+                        TimeUnixNano = timestamp,
+                        AsInt = (long)(secondIndex + 1) * (dimensionIndex + 1),
+                        Attributes = { dimension }
+                    });
+
+                    var observationIndex = secondIndex % s_histogramValues.Length;
+                    var histogramPoint = new HistogramDataPoint
+                    {
+                        StartTimeUnixNano = DateTimeToUnixNanoseconds(startTime),
+                        TimeUnixNano = timestamp,
+                        Count = (ulong)secondIndex + 1,
+                        Sum = CalculateHistogramSum(secondIndex + 1),
+                        ExplicitBounds = { 10, 50, 100 },
+                        Attributes = { dimension },
+                        Exemplars =
+                        {
+                            new Exemplar
+                            {
+                                TimeUnixNano = timestamp,
+                                AsDouble = s_histogramValues[observationIndex],
+                                TraceId = CreateTraceId(discriminator: 1, (secondIndex % exemplarTraceCount) + 1),
+                                SpanId = CreateSpanId((dimensionIndex % exemplarSpansPerTrace) + 1)
+                            }
+                        }
+                    };
+                    histogramPoint.BucketCounts.Add(CalculateBucketCount(secondIndex + 1, 0));
+                    histogramPoint.BucketCounts.Add(CalculateBucketCount(secondIndex + 1, 1));
+                    histogramPoint.BucketCounts.Add(CalculateBucketCount(secondIndex + 1, 2));
+                    histogramPoint.BucketCounts.Add(CalculateBucketCount(secondIndex + 1, 3));
+                    histogram.Histogram.DataPoints.Add(histogramPoint);
+                }
+            }
+
+            // Metric batches use ResourceMetrics -> ScopeMetrics -> Metric and contain 100 seconds at a
+            // time. At five dimensions and two instruments this caps each request at 1,000 data points.
+            var request = new ExportMetricsServiceRequest
+            {
+                ResourceMetrics =
+                {
+                    new ResourceMetrics
+                    {
+                        Resource = CreateResource("large-telemetry-metrics"),
+                        ScopeMetrics =
+                        {
+                            new ScopeMetrics
+                            {
+                                Scope = new InstrumentationScope { Name = "LargeTelemetry.Metrics" },
+                                Metrics = { counter, histogram }
+                            }
+                        }
+                    }
+                }
+            };
+            var response = await client.ExportAsync(request, headers: metadata, cancellationToken: cancellationToken);
+            if (response.PartialSuccess is { RejectedDataPoints: > 0 } partialSuccess)
+            {
+                throw new InvalidOperationException($"Dashboard rejected {partialSuccess.RejectedDataPoints} metric points: {partialSuccess.ErrorMessage}");
+            }
+
+            addedMetricCount += (long)secondCount * dimensionCount * 2;
+            LogProgress(addedMetricCount, ref nextProgressCount, "metric data points");
+        }
+    }
+
+    private void LogProgress(long addedCount, ref int nextProgressCount, string telemetryKind)
+    {
+        while (addedCount >= nextProgressCount)
+        {
+            logger.LogInformation("{TelemetryCount} {TelemetryKind} added.", nextProgressCount, telemetryKind);
+            nextProgressCount += ProgressInterval;
+        }
+    }
+
+    private static ScopeSpans CreateScopeSpans(string name) => new()
+    {
+        Scope = new InstrumentationScope { Name = name }
+    };
+
+    private static OtlpSpan CreateSpan(
+        ByteString traceId,
+        ByteString spanId,
+        ByteString parentSpanId,
+        string name,
+        DateTime startTime,
+        DateTime endTime) => new()
+        {
+            TraceId = traceId,
+            SpanId = spanId,
+            ParentSpanId = parentSpanId,
+            Name = name,
+            Kind = OtlpSpan.Types.SpanKind.Server,
+            StartTimeUnixNano = DateTimeToUnixNanoseconds(startTime),
+            EndTimeUnixNano = DateTimeToUnixNanoseconds(endTime),
+            Status = new OpenTelemetry.Proto.Trace.V1.Status
+            {
+                Code = OpenTelemetry.Proto.Trace.V1.Status.Types.StatusCode.Ok
+            }
+        };
+
+    private static Resource CreateResource(string serviceName) => new()
+    {
+        Attributes =
+        {
+            new KeyValue { Key = "service.name", Value = new AnyValue { StringValue = serviceName } },
+            new KeyValue { Key = "service.instance.id", Value = new AnyValue { StringValue = "large-telemetry-1" } }
+        }
+    };
+
+    private static Metadata CreateMetadata(string? headers)
+    {
+        var metadata = new Metadata();
+        if (string.IsNullOrWhiteSpace(headers))
+        {
+            return metadata;
+        }
+
+        // OTEL_EXPORTER_OTLP_HEADERS uses comma-separated key=value pairs. Values may contain '=' and
+        // may be URL encoded, so split each pair only at its first '=' delimiter.
+        foreach (var pair in headers.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var separatorIndex = pair.IndexOf('=');
+            if (separatorIndex <= 0)
+            {
+                continue;
+            }
+
+            metadata.Add(
+                pair[..separatorIndex].Trim().ToLowerInvariant(),
+                Uri.UnescapeDataString(pair[(separatorIndex + 1)..].Trim()));
+        }
+        return metadata;
+    }
+
+    private static ByteString CreateTraceId(byte discriminator, int value)
+    {
+        var id = new byte[16];
+        id[0] = discriminator;
+        BinaryPrimitives.WriteInt32BigEndian(id.AsSpan(12), value);
+        return ByteString.CopyFrom(id);
+    }
+
+    private static ByteString CreateSpanId(int value)
+    {
+        var id = new byte[8];
+        BinaryPrimitives.WriteInt32BigEndian(id.AsSpan(4), value);
+        return ByteString.CopyFrom(id);
+    }
+
+    private static ulong CalculateBucketCount(int sampleCount, int observationIndex)
+    {
+        var completeCycles = sampleCount / s_histogramValues.Length;
+        var remainder = sampleCount % s_histogramValues.Length;
+        return (ulong)(completeCycles + (observationIndex < remainder ? 1 : 0));
+    }
+
+    private static double CalculateHistogramSum(int sampleCount)
+    {
+        var completeCycles = sampleCount / s_histogramValues.Length;
+        var remainder = sampleCount % s_histogramValues.Length;
+        var cycleSum = s_histogramValues.Sum();
+        return completeCycles * cycleSum + s_histogramValues.Take(remainder).Sum();
+    }
+
+    private static ulong DateTimeToUnixNanoseconds(DateTime dateTime)
+    {
+        var timeSinceEpoch = dateTime.ToUniversalTime() - DateTime.UnixEpoch;
+        return (ulong)timeSinceEpoch.Ticks * 100;
+    }
+}

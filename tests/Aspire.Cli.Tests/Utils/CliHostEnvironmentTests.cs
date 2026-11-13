@@ -36,6 +36,42 @@ public class CliHostEnvironmentTests
         _ = env.SupportsInteractiveOutput;
     }
 
+    [Fact]
+    public void SupportsInteractiveOutput_ReturnsFalse_WhenOutputIsRedirected()
+    {
+        var configuration = new ConfigurationBuilder().Build();
+
+        var env = new CliHostEnvironment(configuration, nonInteractive: false, isOutputRedirected: true);
+
+        Assert.False(env.SupportsInteractiveOutput);
+    }
+
+    [Fact]
+    public void SupportsInteractiveOutput_ReturnsFalse_WhenOutputIsRedirectedInPlaygroundMode()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["ASPIRE_PLAYGROUND"] = "true"
+            })
+            .Build();
+
+        var env = new CliHostEnvironment(configuration, nonInteractive: false, isOutputRedirected: true);
+
+        Assert.False(env.SupportsInteractiveOutput);
+    }
+
+    [PlatformSpecific(TestPlatforms.AnyUnix)]
+    [Fact]
+    public void SupportsInteractiveOutput_ReturnsTrue_WhenOutputIsNotRedirected()
+    {
+        var configuration = new ConfigurationBuilder().Build();
+
+        var env = new CliHostEnvironment(configuration, nonInteractive: false, isOutputRedirected: false);
+
+        Assert.True(env.SupportsInteractiveOutput);
+    }
+
     [Theory]
     [InlineData("ASPIRE_NON_INTERACTIVE", "true")]
     [InlineData("ASPIRE_NON_INTERACTIVE", "1")]
@@ -97,6 +133,23 @@ public class CliHostEnvironmentTests
 
         // Assert
         Assert.False(env.SupportsInteractiveInput);
+    }
+
+    [Fact]
+    public void SupportsInteractiveInput_ReturnsTrue_WhenExtensionPromptsEnabledInCI()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["ASPIRE_EXTENSION_ENDPOINT"] = "localhost:1234",
+                ["ASPIRE_EXTENSION_PROMPT_ENABLED"] = "true",
+                ["GITHUB_ACTIONS"] = "true"
+            })
+            .Build();
+
+        var env = new CliHostEnvironment(configuration, nonInteractive: false);
+
+        Assert.True(env.SupportsInteractiveInput);
     }
 
     [Theory]
@@ -213,7 +266,7 @@ public class CliHostEnvironmentTests
             .Build();
 
         // Act
-        var env = new CliHostEnvironment(configuration, nonInteractive: false);
+        var env = new CliHostEnvironment(configuration, nonInteractive: false, isOutputRedirected: false);
 
         // Assert
         Assert.True(env.SupportsInteractiveOutput);
@@ -251,7 +304,7 @@ public class CliHostEnvironmentTests
             .Build();
 
         // Act
-        var env = new CliHostEnvironment(configuration, nonInteractive: false);
+        var env = new CliHostEnvironment(configuration, nonInteractive: false, isOutputRedirected: false);
 
         // Assert
         Assert.True(env.SupportsInteractiveOutput);

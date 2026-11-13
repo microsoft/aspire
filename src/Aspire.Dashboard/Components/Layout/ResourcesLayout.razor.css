@@ -1,0 +1,2975 @@
+﻿/* The resource list renders resource rows two ways (see RenderSidebarRow and RenderTableRow): the sidebar's picker
+   rows (.resource-row-sidebar) and the full-page list's table rows (.resource-row-table). A rule for one view's
+   resource rows keys to that class. Rules that also style the list's other rows, which both views share (All
+   resources, group headers, telemetry sources), keep the layout's .pane-full-canvas state instead. */
+.resources-layout {
+    /* --resource-pane-expanded-width is set inline once the user resizes the pane. */
+    --resource-pane-width: var(--resource-pane-expanded-width, 420px);
+    --resource-row-height: var(--aspire-density-resource-row-height, 52px);
+    --resource-row-icon-size: 32px;
+    --resource-row-font-size: var(--aspire-font-size-body);
+    --resource-row-line-height: var(--lineHeightBase300);
+    --resource-secondary-font-size: var(--aspire-font-size-secondary);
+    --resource-secondary-line-height: 18px;
+    /* The full canvas's action rail from 960px: two highlighted commands and the menu, 3 x 28px + 2 x 4px gaps. The
+       expand toggle leads the row instead, and the URLs column replaces an open-URL button. */
+    --resource-row-actions-width: 92px;
+    /* The full canvas's Started column: a clock, the verb and a short age, up to "Stopped 23h ago". */
+    --resource-row-status-width: 128px;
+    --resource-insight-height: 28px;
+    --resource-insight-icon-size: 14px;
+    --resource-insight-padding: 6px;
+    --resource-insight-gap: var(--spacingHorizontalXS);
+    --resource-insight-request-width: 132px;
+    --resource-insight-latency-width: 120px;
+    --resource-insight-failure-width: 36px;
+    --resource-row-icon-offset: 10px;
+    --resource-row-depth-step: 24px;
+    --resource-brand-soft: color-mix(in srgb, var(--colorBrandBackground) 14%, transparent);
+    --resource-pane-motion-duration: var(--durationNormal, 200ms);
+    --resource-pane-motion-easing: var(--curveEasyEase, cubic-bezier(.33, 0, .67, 1));
+    display: flex;
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    position: relative;
+    container: resource-workspace / inline-size;
+    background: var(--aspire-page-background);
+}
+
+/* Compact rows are a single line, so they're sized for the 28px row actions rather than for two text bands. */
+.resource-pane-list.density-compact {
+    --resource-row-height: var(--aspire-density-resource-row-height, 32px);
+    --resource-row-icon-size: 22px;
+    /* The type column of the compact rows. See the persistent override below. */
+    --resource-row-meta-type-width: 64px;
+    /* The full canvas's identity column holds only the name in the other densities. A compact row also puts its type
+       and state columns there, so the column grows by their width (type + 8px gap + 10px state + 8px gap) rather
+       than taking it from the name. Only where the tracks can afford it, though: from the 1440px breakpoint the
+       identity track is fixed and the sum still fits, but below that the extra goes into the track's maximum, never
+       its minimum. Below 960px the identity track is flexible and has no maximum to raise. Adding it to the
+       minimums made the row wider than the pane at 540-584px, 720-730px and 960-998px, which pushed the actions out
+       of view. */
+    --resource-row-identity-extra: calc(var(--resource-row-meta-type-width) + 26px);
+    --resource-row-line-height: var(--lineHeightBase200);
+    --resource-secondary-line-height: 16px;
+    --resource-insight-height: 24px;
+    --resource-insight-icon-size: 12px;
+    --resource-insight-padding: var(--spacingHorizontalXS);
+    --resource-insight-request-width: 116px;
+    --resource-insight-latency-width: 108px;
+    --resource-insight-failure-width: 32px;
+}
+
+/* Persistent types, such as "RabbitMQ (persistent)", are wider than the others, so every row's type column widens
+   together and the columns stay aligned. 100cqw is the width of the resource-pane container. The full canvas keeps
+   64px: its fixed tracks would otherwise have to give up endpoint width at the narrower breakpoints.
+   On touch screens the 112px action rail is always showing, so names come first: the column stays at 64px at the
+   default 420px pane width and only widens with the room a wider pane adds, reaching 128px at 484px. */
+.resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact:has(.resource-row-type-persistent) {
+    --resource-row-meta-type-width: clamp(64px, calc(100cqw - 356px), 128px);
+}
+
+/* Where rows can be hovered, a row at rest narrows the action rail to 20px (see "Compact sidebar rows show their
+   actions only while the row is hovered" below), which
+   leaves room for the full 128px column while still keeping about 180px for names at the default pane width. */
+@media (hover: hover) {
+    .resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact:has(.resource-row-type-persistent) {
+        --resource-row-meta-type-width: clamp(48px, calc(100cqw - 180px), 128px);
+    }
+}
+
+/* In a narrow sidebar the type column goes, so the names keep their room, and the state dot stays at the row's end.
+   The type is still in the row's accessible description and on the resource's page. The column width is zeroed as
+   well as the type hidden, because the error badge's offsets are measured from it. Both selectors are repeated so this
+   wins over the persistent-type widths above. */
+@container resource-pane (max-width: 379px) {
+    .resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact,
+    .resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact:has(.resource-row-type-persistent) {
+        --resource-row-meta-type-width: 0px;
+    }
+
+    .resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-row-meta .resource-row-type {
+        display: none;
+    }
+}
+
+/* The collapsed sidebar track is hidden; the popup overrides this for its own pane. */
+.resources-layout.pane-collapsed .resource-pane {
+    visibility: hidden;
+    pointer-events: none;
+    border-right: 0;
+}
+
+.resources-layout.pane-collapsed .resource-pane-foot {
+    visibility: hidden;
+    pointer-events: none;
+}
+
+/* A presentation of the same pane, not a second list or a saved navigation preference. */
+.resources-layout.pane-full-canvas .resource-pane {
+    position: relative;
+    inset: auto;
+    flex: 1 1 auto;
+    width: 100%;
+    border-right: 0;
+}
+
+.resources-layout.pane-full-canvas .resource-pane::after {
+    display: none;
+}
+
+.resource-picker-popover {
+    position: fixed;
+    position-anchor: --resource-picker;
+    top: anchor(bottom);
+    left: anchor(left);
+    right: auto;
+    bottom: 12px;
+    margin: 6px 0 0;
+    position-try-fallbacks: flip-inline;
+    box-sizing: border-box;
+    width: min(var(--resource-pane-expanded-width, 290px), calc(100vw - 24px));
+    max-width: none;
+    height: max-content;
+    max-height: stretch;
+    padding: 0;
+    border: 1px solid var(--colorNeutralStroke1);
+    border-radius: var(--aspire-radius-small);
+    background: var(--aspire-page-background);
+    color: var(--colorNeutralForeground1);
+    box-shadow: var(--shadow16);
+    overflow: hidden;
+}
+
+.resource-picker-popover:popover-open {
+    display: flex;
+    flex-direction: column;
+}
+
+.resource-title:has(.resource-picker-button) {
+    overflow: visible;
+}
+
+/* The picker takes the title's place and shows the same text, so it keeps the title's font and size: the name
+   doesn't change shape when the resource list is collapsed or opened. */
+.resource-title ::deep .resource-picker-button {
+    max-width: 100%;
+    font: inherit;
+}
+
+.resource-picker-button > [slot="start"] {
+    display: flex;
+    align-items: center;
+}
+
+.resource-picker-button .resource-header-icon {
+    flex: 0 0 20px;
+    width: 20px;
+    height: 20px;
+    border: 0;
+    background: transparent;
+}
+
+.resource-picker-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.resources-layout.pane-collapsed .resource-pane-popup {
+    visibility: visible;
+    pointer-events: auto;
+}
+
+.resource-pane.resource-pane-popup {
+    flex: 0 1 auto;
+    width: 100%;
+    max-height: min(600px, calc(100dvh - 120px));
+    border-right: 0;
+}
+
+.resources-layout.pane-full-canvas .resource-content-foot {
+    display: none;
+}
+
+.resources-layout.pane-full-canvas .resource-content {
+    visibility: hidden;
+    pointer-events: none;
+}
+
+.resources-layout.pane-full-canvas .resource-workspace-foot {
+    grid-template-columns: minmax(0, 100%) minmax(0, 0fr);
+}
+
+.resources-layout.pane-full-canvas .resource-pane-foot {
+    border-right: 0;
+}
+
+.resources-layout.pane-full-canvas .resource-workspace-foot .resource-pane-foot {
+    padding-inline-end: 6px;
+}
+
+/* Animate the real region, so container-width disclosure follows the moving boundary.
+   Unrelated navigation cancels motion; pointer resizing must remain immediate. */
+.resources-layout,
+.resource-pane,
+.resource-content,
+.resource-workspace-foot {
+    /* General-purpose transitions must not continue a canceled reveal or animate a deep link. */
+    transition: none;
+}
+
+.resources-layout.pane-motion-enabled,
+.resources-layout.pane-motion-enabled .resource-workspace-foot {
+    transition: grid-template-columns var(--resource-pane-motion-duration) var(--resource-pane-motion-easing);
+}
+
+.resources-layout.pane-motion-enabled .resource-pane {
+    transition: width var(--resource-pane-motion-duration) var(--resource-pane-motion-easing),
+        margin-inline var(--resource-pane-motion-duration) var(--resource-pane-motion-easing),
+        visibility 0s;
+}
+
+.resources-layout.pane-motion-enabled.pane-collapsed .resource-pane {
+    transition-delay: 0s, 0s, var(--resource-pane-motion-duration);
+}
+
+.resources-layout:has(.resource-pane-resizer.resizing),
+.resources-layout:has(.resource-pane-resizer.resizing) .resource-workspace-foot {
+    transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .resources-layout.pane-motion-enabled,
+    .resources-layout.pane-motion-enabled .resource-workspace-foot,
+    .resources-layout.pane-motion-enabled .resource-pane {
+        transition: none;
+    }
+}
+
+/* Selecting a resource from the full-page list narrows the pane to the sidebar, and its table rows give way to sidebar
+   rows (see RenderSidebarRow). The rows fade in while the pane narrows, so they don't jump from one layout to the
+   other. The fade fills backwards only, so once it ends it doesn't override a row's own opacity, such as a muted
+   unavailable row's. */
+@media (prefers-reduced-motion: no-preference) {
+    .resources-layout.pane-selection-reveal .resource-row-sidebar {
+        animation: resource-row-crossfade var(--resource-pane-motion-duration) var(--resource-pane-motion-easing) backwards;
+    }
+}
+
+@keyframes resource-row-crossfade {
+    from {
+        opacity: 0;
+    }
+}
+
+/* Resource pane */
+
+.resource-pane {
+    container: resource-pane / inline-size;
+    display: flex;
+    flex-direction: column;
+    flex: 0 0 var(--resource-pane-width);
+    width: var(--resource-pane-width);
+    min-width: 0;
+    position: relative;
+    border-right: 1px solid var(--colorNeutralStroke3);
+    background: var(--aspire-page-background);
+}
+
+/* Clip the moving boundary without clipping the resizer outside the pane edge. */
+.resource-pane-contents {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+}
+
+/* The resizer straddles the pane's right border so it's easy to grab. */
+.resource-pane-resizer {
+    position: absolute;
+    top: 0;
+    right: -4px;
+    bottom: 0;
+    z-index: 5;
+    width: 8px;
+    cursor: col-resize;
+    touch-action: none;
+}
+
+.resource-pane-resizer::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 3px;
+    width: 2px;
+    background: transparent;
+    transition: background-color .15s;
+}
+
+.resource-pane-resizer:hover::after,
+.resource-pane-resizer.resizing::after,
+.resource-pane-resizer:focus-visible::after {
+    background: var(--colorBrandStroke1);
+}
+
+.resource-pane-resizer:focus-visible {
+    outline: none;
+}
+
+.resource-pane-head {
+    display: flex;
+    align-items: center;
+    gap: var(--aspire-space-1);
+    padding: 12px 12px 8px;
+    box-sizing: border-box;
+    height: 52px;
+    flex-shrink: 0;
+}
+
+.resource-pane-head ::deep .aspire-menu-container:has(.resource-grouping-menu-item) fluent-menu-list {
+    /* Match the filter's viewport-bounded anchor area, including inline/block
+       collision fallbacks. Fluent supplies the button's position-anchor. */
+    inset: auto !important;
+    position-area: bottom span-right;
+    justify-self: start;
+    margin: 4px 0 12px;
+    position-try-fallbacks: flip-inline, flip-block, flip-block flip-inline;
+    position-try-order: most-height;
+    box-sizing: border-box;
+    min-width: min(180px, calc(100vw - 24px));
+    max-width: calc(100vw - 24px);
+    max-height: calc(100% - 16px);
+    overflow: auto;
+    overscroll-behavior: contain;
+    padding: 4px;
+    border: 1px solid var(--colorNeutralStroke1);
+}
+
+/* The options have no icons and their checkmark is at the end, so they don't reserve the 32px leading icon track: the
+   labels start under the header's icon, like a list under its heading. They're as tall as other menus' items. */
+.resource-pane-head ::deep fluent-menu-item.resource-grouping-menu-item {
+    width: calc(100% - 8px);
+    grid-template-columns: 12px 0 minmax(0, 1fr) minmax(32px, auto);
+}
+
+/* The checkmark marks the chosen grouping, so the item has no background of its own: Fluent's subtle hover grey
+   didn't match the menu's tinted surface. Hover and focus tint it like any menu item (see controls.css). */
+.resource-pane-head ::deep fluent-menu-item.resource-grouping-menu-item[checked] {
+    color: var(--colorNeutralForeground1);
+}
+
+.resource-pane-head ::deep fluent-menu-item.resource-grouping-menu-item > .aspire-menu-item-indicator {
+    color: var(--colorBrandForeground1);
+}
+
+::deep .resource-pane-search {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+::deep .resource-pane-search > fluent-text-input,
+::deep fluent-text-input.resource-pane-search {
+    width: 100%;
+}
+
+.state-dot {
+    display: inline-block;
+    flex: 0 0 8px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--colorNeutralForeground3);
+}
+
+.state-dot.state-success {
+    background: var(--success);
+}
+
+.state-dot.state-error {
+    background: var(--error);
+}
+
+.state-dot.state-warning {
+    background: var(--warning);
+}
+
+.state-dot.state-pending {
+    background: transparent;
+    border: 1.5px solid var(--warning);
+}
+
+.state-dot.state-neutral {
+    background: var(--colorNeutralStroke1);
+}
+
+.resource-pane-list {
+    --resource-insight-width: calc(var(--resource-insight-request-width) + var(--resource-insight-latency-width) + var(--resource-insight-failure-width) + var(--spacingHorizontalS));
+    --resource-group-boundary-gap: var(--spacingVerticalXS);
+    --resource-group-header-gap: var(--spacingVerticalXS);
+    flex: 1 1 auto;
+    min-height: 0;
+    padding-inline: 6px;
+    overflow: auto;
+}
+
+/* Rows show activity only for resources that have some. When none does, the activity track collapses rather than
+   leaving an empty gap before the actions; the rows' tracks match, since the list decides for all of them. */
+.resource-pane-list:not(:has(.resource-row-insights)) {
+    --resource-insight-width: 0px;
+}
+
+.resource-pane-section-label {
+    padding: 12px 6px 5px;
+    color: var(--colorNeutralForeground3);
+    font-size: var(--aspire-font-size-caption);
+    font-weight: var(--aspire-font-weight-semibold);
+    line-height: 16px;
+    text-transform: uppercase;
+}
+
+.resource-pane-section-header {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    margin: var(--resource-group-boundary-gap) 0 var(--resource-group-header-gap);
+    padding: 8px 6px 5px;
+    border: 0;
+    background: transparent;
+    color: var(--colorNeutralForeground3);
+    font: inherit;
+    font-size: var(--aspire-font-size-caption);
+    font-weight: var(--aspire-font-weight-semibold);
+    line-height: 16px;
+    text-align: left;
+    text-transform: uppercase;
+    cursor: pointer;
+}
+
+.resource-pane-section-header:hover {
+    color: var(--colorNeutralForeground2);
+}
+
+.resource-pane-section-count {
+    min-width: 20px;
+    margin-left: 6px;
+    padding-inline: 5px;
+    border-radius: var(--aspire-radius-medium);
+    background: var(--colorNeutralBackground3);
+    color: var(--colorNeutralForeground2);
+    line-height: 18px;
+    text-align: center;
+}
+
+.resource-pane-section-chevron {
+    display: inline-flex;
+    margin-left: auto;
+    transition: transform .15s ease;
+}
+
+/* In the full-page list, pointing at a section header draws a dotted rule from its count to the chevron, as the
+   metrics page's section headers do, so the wide header reads as one collapsible row. At rest it's hidden to keep the
+   table quiet. It always takes its room, so the chevron doesn't move. */
+.resource-pane-section-rule {
+    flex: 1 1 auto;
+    min-width: 16px;
+    margin-inline: 12px 8px;
+    border-top: 2px dotted var(--colorNeutralStroke2);
+    visibility: hidden;
+}
+
+.resources-layout.pane-full-canvas .resource-pane-section-header:is(:hover, :focus-visible) .resource-pane-section-rule {
+    visibility: visible;
+}
+
+.resource-pane-section-chevron.collapsed {
+    transform: rotate(-90deg);
+}
+
+.resource-pane-message {
+    display: flex;
+    justify-content: center;
+    padding: 16px 8px;
+    color: var(--colorNeutralForeground2);
+    font-size: var(--aspire-font-size-body);
+}
+
+.resource-pane-group {
+    margin: 10px 6px 4px;
+    color: var(--colorNeutralForeground2);
+    font-size: var(--aspire-font-size-caption);
+    font-weight: var(--aspire-font-weight-semibold);
+    letter-spacing: .04em;
+    text-transform: uppercase;
+}
+
+.resource-tag-group {
+    /* Contain the last row's margin instead of collapsing it between groups. */
+    display: flow-root;
+    position: relative;
+    padding: 0;
+}
+
+.resource-tag-group + .resource-tag-group {
+    margin-top: var(--resource-group-boundary-gap);
+}
+
+.resource-tag-group > .resource-row:last-child {
+    margin-bottom: 0;
+}
+
+.resource-pane-list > .resource-row:has(+ .resource-pane-section-header) {
+    margin-bottom: 0;
+}
+
+.resource-tag-header {
+    display: flex;
+    align-items: center;
+    position: relative;
+    margin-bottom: var(--resource-group-header-gap);
+    border-radius: var(--aspire-radius-medium);
+}
+
+.resource-tag-header:hover {
+    background: light-dark(var(--colorNeutralBackground1Hover), color-mix(in srgb, var(--aspire-control-background) 88%, var(--colorNeutralForeground1)));
+}
+
+.resource-tag-header.selected {
+    background: var(--aspire-control-background);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, .08);
+}
+
+.resource-tag-header.selected::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 6px;
+    bottom: 6px;
+    width: 3px;
+    border-radius: var(--aspire-radius-small);
+    background: var(--colorBrandBackground);
+}
+
+/* Matches the resource row link so the tag icon lines up with the resource icons below it. */
+.resource-tag-link {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    gap: var(--aspire-space-1);
+    min-width: 0;
+    min-height: 30px;
+    padding: 4px 8px;
+    border-radius: var(--aspire-radius-medium);
+    color: var(--colorNeutralForeground1);
+    font-size: var(--aspire-font-size-body);
+    font-weight: var(--aspire-font-weight-semibold);
+    text-decoration: none;
+}
+
+.resource-tag-link:focus-visible {
+    outline: 2px solid var(--colorStrokeFocus2);
+    outline-offset: -2px;
+}
+
+.resource-tag-name {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.untagged .resource-tag-name {
+    color: var(--colorNeutralForeground2);
+    font-weight: var(--aspire-font-weight-regular);
+}
+
+.resource-tag-count {
+    flex: 0 0 auto;
+    min-width: 20px;
+    padding: 0 6px;
+    border-radius: var(--aspire-radius-medium);
+    background: var(--colorNeutralBackground3);
+    color: var(--colorNeutralForeground2);
+    font-size: var(--aspire-font-size-caption);
+    line-height: 18px;
+    text-align: center;
+}
+
+/* Rows of a group are indented under its header so the grouping reads at a glance. */
+.resource-tag-group .resource-row-link {
+    padding-inline-start: calc(var(--resource-row-icon-offset) + 8px);
+}
+
+.resource-tags-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--aspire-space-1);
+    margin: 8px 4px 12px;
+    padding: 16px 12px;
+    border: 1px dashed var(--colorNeutralStroke2);
+    border-radius: var(--aspire-radius-medium);
+    text-align: center;
+}
+
+.resource-tags-empty-title {
+    margin-top: 4px;
+    font-size: var(--aspire-font-size-body);
+    font-weight: var(--aspire-font-weight-semibold);
+}
+
+.resource-tags-empty-description {
+    color: var(--colorNeutralForeground2);
+    font-size: var(--aspire-font-size-secondary);
+}
+
+.resource-row {
+    display: flex;
+    align-items: center;
+    position: relative;
+    box-sizing: border-box;
+    height: var(--resource-row-height);
+    min-height: var(--resource-row-height);
+    max-height: var(--resource-row-height);
+    flex-shrink: 0;
+    margin-bottom: var(--aspire-density-resource-row-gap, 1px);
+    border: 0;
+    box-shadow: none;
+    border-radius: 0;
+    background: transparent;
+    --resource-tree-icon-center: calc(var(--resource-row-icon-offset) + var(--resource-row-icon-size) / 2);
+}
+
+.resource-row-kind-resource {
+    --resource-row-kind-accent: var(--colorBrandForeground1);
+}
+
+.resource-row-kind-parameter {
+    --resource-row-kind-accent: var(--colorPaletteDarkOrangeForeground2);
+}
+
+.resource-row-kind-telemetry {
+    --resource-row-kind-accent: var(--colorPaletteBlueForeground2);
+}
+
+.resource-row.selected {
+    background: var(--colorNeutralBackground1);
+}
+
+.resource-row:hover {
+    background: var(--colorNeutralBackground3);
+}
+
+.resource-row::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 8px;
+    bottom: 8px;
+    width: 2px;
+    border-radius: var(--aspire-radius-small);
+    background: transparent;
+    pointer-events: none;
+}
+
+.resource-row.selected::before {
+    width: 3px;
+    background: var(--resource-row-kind-accent, var(--colorBrandForeground1));
+}
+
+/* The full-page list draws a hairline between rows, in the 1px gap that separates them, so a wide row is easy to follow
+   from its name to its URLs and actions. It uses the lightest stroke and stops before a section header, which has its
+   own spacing. The sidebar's rows are short enough not to need it. */
+.resource-row.resource-row-table:not(:last-child, :has(+ .resource-pane-section-header))::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: calc(-1 * var(--aspire-density-resource-row-gap, 1px));
+    height: 1px;
+    background: var(--colorNeutralStroke3);
+    pointer-events: none;
+}
+
+.resource-row.selected:hover {
+    background: var(--colorNeutralBackground3);
+}
+
+.resource-row:active {
+    background: var(--colorNeutralBackground1Pressed);
+}
+
+.resource-row.selected:active {
+    background: var(--colorNeutralBackground1Pressed);
+}
+
+.resource-row:has(> .resource-row-link:focus-visible) {
+    outline: 2px solid var(--colorStrokeFocus2);
+    outline-offset: -2px;
+}
+
+.resource-row-kind-label {
+    color: var(--resource-row-kind-accent);
+}
+
+.resource-row-kind-telemetry .resource-row-text {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0;
+}
+
+.resource-row.resource-row-unavailable {
+    background: light-dark(var(--colorNeutralBackground3), color-mix(in srgb, var(--aspire-page-background) 90%, var(--aspire-shell-background)));
+}
+
+.resource-row.resource-row-unavailable:hover {
+    background: light-dark(color-mix(in srgb, var(--colorNeutralBackground3) 75%, var(--colorNeutralStroke1)), color-mix(in srgb, var(--aspire-control-background) 60%, var(--aspire-page-background)));
+}
+
+.resource-row.resource-row-unavailable:active {
+    background: light-dark(var(--colorNeutralBackground3Pressed), color-mix(in srgb, var(--aspire-page-background) 85%, var(--aspire-shell-background)));
+}
+
+.resource-row-unavailable > .resource-row-link,
+.resource-row-unavailable .resource-row-sub,
+.resource-row-unavailable .resource-row-type,
+.resource-row-unavailable .resource-row-kind-label {
+    color: var(--colorNeutralForeground3);
+}
+
+.resource-row-unavailable .resource-row-icon {
+    background: light-dark(var(--colorNeutralBackground3), var(--aspire-page-background));
+}
+
+@media (forced-colors: active) {
+    .resource-row {
+        --resource-row-kind-accent: CanvasText;
+    }
+
+    .resource-row.selected,
+    .resource-row:hover,
+    .resource-row:focus-within {
+        outline: 1px solid Highlight;
+    }
+
+    .resource-row.selected {
+        --resource-row-kind-accent: HighlightText;
+        --colorNeutralForeground1: HighlightText;
+        --colorNeutralForeground2: HighlightText;
+        --colorNeutralForeground3: HighlightText;
+        --colorBrandForeground1: HighlightText;
+        --success: HighlightText;
+        --warning: HighlightText;
+        --error: HighlightText;
+        /* Preserve the system-color pair without automatic text backplates.
+           https://drafts.csswg.org/css-color-adjust-1/#forced-color-adjust-prop */
+        forced-color-adjust: none;
+        background: Highlight;
+        color: HighlightText;
+    }
+
+    .resource-row.selected:hover,
+    .resource-row.selected:active {
+        background: Highlight;
+    }
+
+    .resource-row.selected ::deep .resource-relationship-trigger {
+        color: HighlightText;
+    }
+
+    /* Forced colors drop the dimmed foreground, so mark rows without data for the current tab with the
+       system disabled-text color. The reason is still in the row's tooltip and aria-description.
+       https://drafts.csswg.org/css-color-4/#css-system-colors */
+    .resource-row-unavailable:not(.selected) > .resource-row-link {
+        color: GrayText;
+    }
+}
+
+.resource-dragging {
+    opacity: .5;
+}
+
+.resource-drop-before::after,
+.resource-drop-after::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: var(--colorBrandBackground);
+    pointer-events: none;
+}
+
+.resource-drop-before::after {
+    top: -1px;
+}
+
+.resource-drop-after::after {
+    bottom: -1px;
+}
+
+/* A parent's expand toggle takes its icon tile's place rather than a column of its own, so every row's icon stays
+   aligned with the filter box above the list. At rest the tile shows the resource's icon. The chevron shows instead
+   when the row is hovered or has focus, always on touch screens, which can't hover, and always while the parent is
+   collapsed, so hidden rows are never out of sight. Hidden, it can't be clicked or tabbed to, so a click on the icon
+   selects the row as on any other; the row's Left and Right arrow keys collapse and expand it from the keyboard.
+   https://www.w3.org/WAI/ARIA/apg/patterns/treeview/ */
+.resource-row ::deep .resource-row-toggle-leading,
+.resource-row ::deep .resource-row-toggle-leading::part(control) {
+    width: var(--resource-row-icon-size);
+    min-width: var(--resource-row-icon-size);
+    height: var(--resource-row-icon-size);
+    min-height: var(--resource-row-icon-size);
+    margin: 0;
+    padding: 0;
+    border-radius: var(--aspire-radius-medium);
+}
+
+.resource-row ::deep .resource-row-toggle-leading {
+    position: absolute;
+    top: 50%;
+    inset-inline-start: calc(var(--resource-row-icon-offset) + var(--resource-row-depth, 0) * var(--resource-row-depth-step));
+    z-index: 1;
+    visibility: hidden;
+    transform: translateY(-50%);
+}
+
+.resource-row:is(:hover, :focus-within) ::deep .resource-row-toggle-leading,
+.resource-row ::deep .resource-row-toggle-leading.collapsed {
+    visibility: visible;
+}
+
+.resource-row:has(> .resource-row-toggle-leading):is(:hover, :focus-within) .resource-row-glyph,
+.resource-row:has(> .resource-row-toggle-leading.collapsed) .resource-row-glyph {
+    visibility: hidden;
+}
+
+@media (hover: none) {
+    .resource-row ::deep .resource-row-toggle-leading {
+        visibility: visible;
+    }
+
+    .resource-row:has(> .resource-row-toggle-leading) .resource-row-glyph {
+        visibility: hidden;
+    }
+}
+
+.resource-row ::deep .resource-row-toggle-leading.collapsed svg {
+    transform: rotate(-90deg);
+}
+
+/* A collapsed parent's count of the rows it hides, after its name. */
+.resource-row-child-count {
+    flex: 0 0 auto;
+    min-width: 16px;
+    padding: 0 5px;
+    border-radius: var(--aspire-radius-round);
+    background: var(--colorNeutralBackground3);
+    color: var(--colorNeutralForeground2);
+    font-size: var(--aspire-font-size-caption);
+    font-weight: var(--aspire-font-weight-regular);
+    line-height: 16px;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+}
+
+/* The expand toggle's own look; where it sits is above (.resource-row-toggle-leading). */
+.resource-row-toggle {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    margin-right: 6px;
+    padding: 0;
+    border: 0;
+    border-radius: var(--aspire-radius-small);
+    background: transparent;
+    color: var(--colorNeutralForeground2);
+    cursor: pointer;
+}
+
+.resource-row-toggle:hover {
+    background: var(--colorNeutralBackground3);
+}
+
+.resource-row-toggle.collapsed ::deep svg {
+    transform: rotate(-90deg);
+}
+
+.resource-row-link {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    gap: var(--aspire-space-2);
+    min-width: 0;
+    /* Nested resources are indented by their depth in the tree. */
+    padding: calc((var(--resource-row-height) - 2 * var(--resource-row-line-height)) / 2) 8px calc((var(--resource-row-height) - 2 * var(--resource-row-line-height)) / 2) calc(var(--resource-row-icon-offset) + var(--resource-row-depth, 0) * var(--resource-row-depth-step));
+    border-radius: 0;
+    color: var(--colorNeutralForeground1);
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.resource-row-link:focus-visible {
+    outline: none;
+}
+
+.resource-row-link:focus-visible .resource-row-name {
+    text-decoration: underline;
+    text-decoration-thickness: 2px;
+    text-underline-offset: 3px;
+}
+
+.pane-full-canvas .resource-row.resource-row-table,
+.pane-full-canvas .resource-row-kind-telemetry {
+    cursor: pointer;
+}
+
+.pane-full-canvas .resource-row:has(> .resource-row-link:focus-visible) {
+    outline: 2px solid var(--colorStrokeFocus2);
+    outline-offset: -2px;
+}
+
+.pane-full-canvas .resource-row-link:focus-visible {
+    outline: none;
+}
+
+.resource-row-icon {
+    --persistent-badge-inline-end: -4px;
+    --persistent-badge-bottom: -3px;
+    display: inline-flex;
+    flex: 0 0 var(--resource-row-icon-size);
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    width: var(--resource-row-icon-size);
+    height: var(--resource-row-icon-size);
+    border-radius: var(--aspire-radius-medium);
+    background: var(--colorNeutralBackground3);
+}
+
+.resource-row-glyph {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.resource-row.selected:not(.resource-row-unavailable) .resource-row-icon {
+    background: var(--resource-brand-soft);
+}
+
+/* The "All resources" row clears the selection, so it's separated from the resources it stands for. */
+.resource-row-all {
+    margin-bottom: 9px;
+}
+
+/* The row has no actions, so its link spans the actions rail the other rows reserve. Otherwise its counts would stop
+   short of the end and, in compact rows, jump toward the name on hover, when the rail widens for actions. */
+.resource-row.resource-row-all > .resource-row-link {
+    grid-column: 1 / -1;
+}
+
+/* The divider spans the row's full width, the same as the row's selected highlight above it. */
+.resource-row-all::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -5px;
+    height: 1px;
+    background: var(--colorNeutralStroke2);
+}
+
+/* Give "All resources" a brand-tinted icon at rest (not just when selected) so it reads as the
+   primary entry point in the pane rather than just another resource row. */
+.resource-row-all .resource-row-icon {
+    background: var(--resource-brand-soft);
+    color: var(--colorBrandForeground1);
+}
+
+.resource-row-all .resource-row-name {
+    font-weight: var(--aspire-font-weight-semibold);
+}
+
+/* The counts sit at the row's end in every density, as in compact rows, rather than on a second line under the name in
+   Comfortable. The row is the same in both, and the counts line up with the types and states of the rows below. */
+.resource-row-all .resource-row-text {
+    flex-direction: row;
+    align-items: center;
+    gap: var(--aspire-space-2);
+}
+
+.resource-row-all .resource-row-sub {
+    flex: 0 0 auto;
+    margin-inline-start: auto;
+}
+
+.resource-row-text {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.resource-row-name {
+    overflow: hidden;
+    font-size: var(--resource-row-font-size);
+    line-height: var(--resource-row-line-height);
+    font-weight: var(--aspire-font-weight-semibold);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* The second line (state, age) is secondary text, the same size as the full list's columns. Only the name uses the
+   row size, so each density has two sizes. */
+.resource-row-sub {
+    display: flex;
+    align-items: center;
+    gap: var(--aspire-space-1);
+    overflow: hidden;
+    color: var(--colorNeutralForeground2);
+    font-size: var(--resource-secondary-font-size);
+    line-height: var(--resource-row-line-height);
+    white-space: nowrap;
+}
+
+.resource-row-type {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.resource-pane-counts {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--aspire-space-2);
+    min-width: 0;
+}
+
+.resource-pane-count {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--aspire-space-1);
+    flex: 0 0 auto;
+    color: var(--colorNeutralForeground2);
+    font-variant-numeric: tabular-nums;
+}
+
+.resource-pane-count ::deep svg {
+    color: var(--colorNeutralForeground3);
+}
+
+.error-badge {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: var(--aspire-radius-medium);
+    background: var(--error);
+    color: #fff;
+    font-size: var(--aspire-font-size-caption);
+    font-weight: var(--aspire-font-weight-semibold);
+}
+
+/* In a flex row the link follows the row link, which fills the row up to the actions, so it lands where an inline
+   badge would. The sidebar and wide grids overlay it on the end of the row link's track instead (see below).
+   The margin matches the row link's end padding. */
+.resource-row-error-link {
+    margin-inline-end: 8px;
+    text-decoration: none;
+}
+
+.resource-row-error-link:hover {
+    background: var(--colorPaletteRedBackground3);
+}
+
+.resource-row-error-link:focus-visible {
+    outline: 2px solid var(--colorStrokeFocus2);
+    outline-offset: 1px;
+}
+
+/* Only the grid layouts overlay the badge on the row link and need the spacer. */
+.error-badge-spacer {
+    display: none;
+}
+
+/* Counts at the start, then the selection hint right-aligned before the view options. The counts keep their full width:
+   a centered hint used to clip them in a narrow sidebar, so the hint gives way instead (see below). */
+.resource-pane-foot {
+    container: resource-footer / inline-size;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    column-gap: var(--aspire-space-2);
+    align-items: center;
+    padding: 4px 6px;
+    border-top: 1px solid var(--colorNeutralStroke3);
+    color: var(--colorNeutralForeground2);
+    font-size: var(--aspire-font-size-secondary);
+}
+
+.resource-pane-foot > span:first-child {
+    padding-inline-start: 6px;
+    white-space: nowrap;
+}
+
+.resource-selection-hint {
+    display: inline-grid;
+    grid-column: 2;
+    justify-self: end;
+    grid-template-columns: max-content;
+    align-items: center;
+    white-space: nowrap;
+    font-size: var(--aspire-font-size-secondary);
+    line-height: 14px;
+}
+
+.resource-selection-instruction {
+    display: inline-flex;
+    grid-area: 1 / 1;
+    align-items: center;
+    gap: var(--aspire-space-1);
+    animation: resource-selection-hint 10s linear infinite;
+}
+
+.resource-selection-instruction + .resource-selection-instruction {
+    animation-delay: -5s;
+}
+
+/* Compositor-only rotation reserves both instructions' footprint without a timer,
+   DOM updates, or screen-reader announcements. Each instruction fades in, dwells for about 4.4s and fades out before the
+   other fades in (the second runs 5s behind), so the two never show on top of each other. */
+@keyframes resource-selection-hint {
+    0%, 50%, 100% { opacity: 0; }
+    3%, 47% { opacity: 1; }
+}
+
+.resource-selection-hint:hover .resource-selection-instruction,
+.resource-selection-hint:focus-within .resource-selection-instruction,
+.resources-layout[data-document-hidden] .resource-selection-instruction {
+    animation-play-state: paused;
+}
+
+.resource-selection-hint:focus-visible {
+    outline: 2px solid var(--colorStrokeFocus2);
+    outline-offset: 2px;
+}
+
+.resource-selection-hint kbd {
+    padding: 0 2px;
+    border: 1px solid var(--colorNeutralStroke2);
+    border-radius: var(--aspire-radius-small);
+    font: inherit;
+    line-height: 12px;
+}
+
+.resource-pane-foot-actions {
+    grid-column: 3;
+    justify-self: end;
+}
+
+/* Too narrow for the counts, the longer instruction ("Shift + click Select range") and the view options side by side.
+   The hint is a reminder; the same keys work without it. */
+@container resource-footer (max-width: 339px) {
+    .resource-selection-hint {
+        display: none;
+    }
+}
+
+@container resource-footer (min-width: 640px) {
+    .resource-selection-hint {
+        display: inline-flex;
+        gap: var(--aspire-space-4);
+    }
+
+    .resource-selection-instruction {
+        animation: none;
+        opacity: 1;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .resource-selection-instruction {
+        animation-timing-function: steps(1, end);
+    }
+}
+
+/* Identity links are selection controls; keep copyable source and popover content selectable. */
+.resource-row-link {
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+::deep .resource-pane-toggle-button {
+    --aspire-control-height: 32px;
+    flex: 0 0 auto;
+    width: 32px;
+    height: 32px;
+}
+
+.resource-pane-foot-actions {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.resource-workspace-foot {
+    display: block;
+}
+
+/* Resource content */
+
+.resource-content {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+}
+
+@media (min-width: 769px) {
+    .resources-layout {
+        display: grid;
+        grid-template-columns: minmax(0, var(--resource-pane-width)) minmax(0, 1fr);
+        grid-template-rows: auto minmax(0, 1fr) 34px;
+    }
+
+    .resources-layout.pane-collapsed {
+        grid-template-columns: minmax(0, 0px) minmax(0, 1fr);
+    }
+
+    .resources-layout.pane-full-canvas {
+        grid-template-columns: minmax(0, 100%) minmax(0, 0fr);
+    }
+
+    .resources-layout.pane-full-canvas .resource-context-header {
+        padding: 0;
+    }
+
+    .resource-pane {
+        grid-column: 1;
+        grid-row: 1 / 3;
+        width: auto;
+    }
+
+    /* Preserve row geometry while the containing track shrinks; only the clip
+       boundary moves. Full canvas still discloses metadata at its actual width. */
+    .resources-layout:not(.pane-full-canvas) .resource-pane:not(.resource-pane-popup) .resource-pane-contents > * {
+        width: calc(var(--resource-pane-width) - 1px);
+    }
+
+    .resource-context-header {
+        grid-column: 2;
+        grid-row: 1;
+    }
+
+    .resource-content {
+        grid-column: 2;
+        grid-row: 2;
+    }
+
+    /* A real border imposes a 1px minimum while the grid track is opening from zero. */
+    .resource-pane {
+        border-right: 0;
+    }
+
+    .resource-pane::after {
+        content: "";
+        position: absolute;
+        inset: 0 0 0 auto;
+        border-right: 1px solid var(--colorNeutralStroke3);
+        pointer-events: none;
+    }
+
+    /* Only selecting from full canvas reveals rigid details. Ordinary pane motion
+       keeps the details anchored to the workspace's right edge and lets them reflow. */
+    .resources-layout.pane-selection-reveal .resource-content {
+        width: calc(100cqw - var(--resource-pane-width));
+        max-width: none;
+    }
+
+    .resources-layout.pane-collapsed .resource-content {
+        width: 100%;
+    }
+
+    .resource-workspace-foot {
+        display: grid;
+        grid-column: 1 / -1;
+        grid-row: 3;
+        grid-template-columns: minmax(0, var(--resource-pane-width)) minmax(0, 1fr);
+        grid-template-rows: minmax(0, 1fr);
+        min-width: 0;
+        border-top: 1px solid var(--colorNeutralStroke3);
+        background: var(--aspire-page-background);
+    }
+
+    .resources-layout.pane-collapsed .resource-workspace-foot {
+        grid-template-columns: minmax(0, 0px) minmax(0, 1fr);
+    }
+
+    .resource-workspace-foot .resource-pane-foot {
+        min-width: 0;
+        padding: 0 5px 0 6px;
+        border-top: 0;
+        border-right: 1px solid var(--colorNeutralStroke3);
+    }
+}
+
+.resource-content-foot {
+    display: flex;
+    grid-column: 2;
+    align-items: center;
+    gap: var(--aspire-space-2);
+    min-width: 0;
+    padding: 2px 8px;
+}
+
+.resource-footer-status {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    gap: var(--aspire-space-1) var(--aspire-space-2);
+    min-width: 0;
+    overflow: hidden;
+    color: var(--colorNeutralForeground2);
+    font-size: var(--aspire-font-size-secondary);
+    white-space: nowrap;
+}
+
+.resource-footer-status .state-pill {
+    flex: 0 0 auto;
+    padding-block: 1px;
+}
+
+.resource-footer-status .resource-header-urls {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.resource-footer-page-status {
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 100%;
+    margin-left: auto;
+    overflow: hidden;
+    color: var(--colorNeutralForeground2);
+    font-size: var(--aspire-font-size-secondary);
+    white-space: nowrap;
+}
+
+.resource-footer-page-status ::deep .items-footer {
+    min-height: 0;
+    column-gap: var(--aspire-space-3);
+}
+
+.resource-footer-page-status ::deep .result-count {
+    flex: 0 0 auto;
+    padding-inline-start: 0;
+}
+
+.resource-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    column-gap: var(--aspire-space-2);
+    padding: 12px var(--layout-right-padding) 0 var(--layout-left-padding);
+    background: var(--aspire-page-background);
+    /* Header actions condense against the full header width without moving their section outlet on resize. */
+    container-type: inline-size;
+}
+
+.resource-header-row {
+    display: flex;
+    align-self: start;
+    align-items: center;
+    gap: var(--aspire-space-2);
+    min-width: 0;
+}
+
+.resource-header-icon {
+    position: relative;
+    display: inline-flex;
+    flex: 0 0 32px;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: var(--aspire-radius-medium);
+    background: var(--resource-brand-soft);
+}
+
+.resource-header-icon.neutral {
+    border: 1px dashed var(--colorNeutralStroke1);
+    background: transparent;
+}
+
+.resource-header-icon.scope {
+    background: transparent;
+}
+
+.resource-header-text {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    gap: var(--aspire-space-3);
+    min-width: 0;
+    min-height: 32px;
+}
+
+.resource-header-title {
+    display: flex;
+    align-items: center;
+    gap: var(--aspire-space-1);
+    min-width: 0;
+}
+
+.resource-header-actions {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+}
+
+.resource-header-controls {
+    display: flex;
+    flex: 0 1 auto;
+    align-items: center;
+    gap: var(--aspire-space-2);
+    min-width: 0;
+    margin-left: auto;
+}
+
+/* The heading size rather than the title size: when the resource list is collapsed, a picker button takes the
+   title's place and shows the same text, so the two match (see .resource-picker). */
+.resource-title {
+    margin: 0;
+    overflow: hidden;
+    font-family: var(--aspire-font-display);
+    font-size: var(--aspire-font-size-heading);
+    font-weight: var(--aspire-font-weight-semibold);
+    line-height: 24px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.resource-header-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--aspire-space-1) var(--aspire-space-2);
+    min-width: 0;
+    min-height: 20px;
+    margin-top: 2px;
+    color: var(--colorNeutralForeground2);
+    font-size: var(--aspire-font-size-body);
+}
+
+.resource-header-urls {
+    min-width: 0;
+    max-width: 100%;
+}
+
+.state-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--aspire-space-1);
+    padding: 2px 9px;
+    border-radius: var(--aspire-radius-medium);
+    background: var(--colorNeutralBackground3);
+    color: var(--colorNeutralForeground2);
+    font-size: var(--aspire-font-size-secondary);
+    font-weight: var(--aspire-font-weight-semibold);
+}
+
+/* Status colors don't reach text contrast on the tinted pill, so only the icon carries the state color. */
+.state-pill.state-success {
+    background: color-mix(in srgb, var(--success) 14%, transparent);
+    color: var(--colorNeutralForeground1);
+}
+
+.state-pill.state-success ::deep svg {
+    color: var(--success);
+}
+
+.state-pill.state-error {
+    background: color-mix(in srgb, var(--error) 14%, transparent);
+    color: var(--colorNeutralForeground1);
+}
+
+.state-pill.state-error ::deep svg {
+    color: var(--error);
+}
+
+.state-pill.state-warning,
+.state-pill.state-pending {
+    background: color-mix(in srgb, var(--warning) 14%, transparent);
+    color: var(--colorNeutralForeground1);
+}
+
+.state-pill.state-warning ::deep svg,
+.state-pill.state-pending ::deep svg {
+    color: var(--warning);
+}
+
+.resource-header-actions {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: var(--aspire-space-1);
+}
+
+.resource-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--aspire-space-2) var(--aspire-space-3);
+    margin-top: 10px;
+    min-width: 0;
+}
+
+.resource-tabs > .resource-tab-toolbar {
+    display: flex;
+    flex: 0 1 auto;
+    align-items: center;
+    min-width: 0;
+    max-width: 100%;
+    margin-left: auto;
+}
+
+.resource-header-controls > .resource-tab-toolbar {
+    margin-left: 0;
+}
+
+.resource-tab-toolbar:empty {
+    display: none;
+}
+
+/* The toolbar's controls keep their size, so when they don't fit they wrap onto another line instead of painting over
+   the tab picker. */
+.resource-tab-toolbar ::deep .main-toolbar.filter-toolbar,
+.resource-tab-toolbar ::deep .main-toolbar.filter-toolbar > .toolbar-end {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    row-gap: var(--aspire-space-2);
+}
+
+.resource-tab-toolbar ::deep .main-toolbar.filter-toolbar {
+    padding: 0;
+}
+
+.resource-tab-toolbar ::deep .main-toolbar.filter-toolbar .toolbar-search {
+    flex-basis: 9rem;
+    width: 9rem;
+    min-width: 7rem;
+}
+
+/* The span type options are short ("Messaging" is the longest), so this dropdown is narrower than Fluent's 160px default. */
+.resource-tab-toolbar ::deep .main-toolbar.filter-toolbar .toolbar-select-compact,
+.resource-tab-toolbar ::deep .main-toolbar.filter-toolbar .toolbar-select-compact > fluent-dropdown {
+    --aspire-dropdown-min-width: 0px;
+    width: 8rem;
+    min-width: 0;
+}
+
+/* FluentTabs keeps its horizontal tab list at max-content width. Constrain the host so
+   focus can scroll the selected tab into view when space is limited. */
+.resource-tabs-nav ::deep .resources-tab-header {
+    width: max-content;
+    max-width: 100%;
+    min-width: 0;
+    flex: 0 1 auto;
+    overflow: hidden;
+}
+
+/* Tabs that don't fit are hidden from the right by registerTabOverflow and listed in the "..." menu instead. */
+.resource-tabs-nav ::deep fluent-tab[data-tab-overflow] {
+    display: none;
+}
+
+/* The tab that's active while no tab is shown selected, when the resource content is closed (see
+   RenderTabNavigation). Not displayed, it can't be seen, focused or announced. */
+.resource-tabs-nav ::deep fluent-tab.resource-tab-none {
+    display: none;
+}
+
+.resource-tabs-overflow {
+    display: none;
+    flex: 0 0 auto;
+    align-items: center;
+}
+
+.resource-tabs-overflow.has-overflow {
+    display: flex;
+}
+
+.resource-tabs-nav .resource-tabs-overflow ::deep .aspire-menu-button {
+    display: inline-flex;
+}
+
+.resource-tabs-nav .resource-tabs-overflow ::deep .resource-tabs-overflow-button {
+    color: var(--colorNeutralForeground2);
+}
+
+/* The current page's tab is in the menu, so the button takes the active tab's accent. */
+.resource-tabs-overflow.has-active ::deep .resource-tabs-overflow-button {
+    color: var(--colorBrandForeground1);
+}
+
+/* Wraps the tab row in its own layout container so a container query can react to the row's
+   actual available width - which depends on sibling pane/toolbar state, not just viewport width -
+   rather than letting FluentTabs grow a horizontal scrollbar once labels no longer fit. */
+.resource-tabs-nav {
+    container-type: inline-size;
+    display: flex;
+    flex: 1 1 auto;
+    min-width: 0;
+    /* The tabs are navigation, not text. A drag that starts in the strip's empty space would otherwise select
+       every tab label. */
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+/* The compact tab picker is a single bordered control, like the dropdowns in the toolbar, with the chevron at the end. */
+.resource-tabs-nav ::deep .aspire-menu-button {
+    display: none;
+    align-items: center;
+}
+
+.resource-tabs-nav ::deep .resource-tabs-compact-button {
+    justify-content: flex-start;
+    min-width: 160px;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.resource-tabs-nav ::deep .resource-tabs-compact-button::part(content) {
+    flex: 1 1 auto;
+}
+
+.resource-tabs-nav ::deep .resource-tabs-compact-button > svg[slot="end"] {
+    margin-inline-start: auto;
+}
+
+.resource-tabs-nav ::deep .resource-tabs-compact-button > svg[slot="start"] {
+    width: 18px !important;
+    min-width: 18px;
+    max-width: 18px;
+    height: 18px !important;
+    margin-right: var(--spacingHorizontalXS);
+    color: var(--colorBrandForeground1);
+}
+
+.resource-tabs-nav ::deep .aspire-menu-container fluent-menu-list {
+    width: max-content;
+    min-width: anchor-size(width);
+    gap: var(--aspire-space-1);
+    padding: 3px;
+    border: 1px solid var(--colorNeutralStroke1);
+    border-radius: var(--aspire-control-radius);
+    background-color: var(--colorNeutralBackground1);
+}
+
+.resource-tabs-nav ::deep fluent-menu-item.resource-tab-menu-item {
+    grid-template-columns: minmax(0, 1fr) 32px;
+    width: auto;
+    height: 32px;
+    min-height: 32px;
+    margin: 0;
+    padding: 0 12px;
+    border: 1px solid transparent;
+    border-radius: var(--aspire-control-radius);
+    background-color: transparent;
+    color: var(--colorNeutralForeground2);
+}
+
+.resource-tabs-nav ::deep fluent-menu-item.resource-tab-menu-item::part(content) {
+    grid-column: 1;
+}
+
+.resource-tabs-nav ::deep fluent-menu-item.resource-tab-menu-item > .aspire-menu-item-indicator {
+    grid-column: 2;
+}
+
+.resource-tabs-nav ::deep fluent-menu-item.resource-tab-menu-item[checked] {
+    border-color: var(--colorNeutralStroke1);
+    background-color: var(--colorNeutralBackground3);
+    color: var(--colorNeutralForeground1);
+}
+
+.resource-tabs-nav ::deep fluent-menu-item.resource-tab-menu-item:not(:state(disabled)):hover,
+.resource-tabs-nav ::deep fluent-menu-item.resource-tab-menu-item:not(:state(disabled)):state(active),
+.resource-tabs-nav ::deep fluent-menu-item.resource-tab-menu-item:not(:state(disabled)):focus-visible {
+    background-color: var(--colorNeutralBackground3);
+    color: var(--colorNeutralForeground1);
+}
+
+.resource-tabs-nav ::deep fluent-menu-item.resource-tab-menu-item .aspire-menu-item-label {
+    gap: var(--spacingHorizontalXS);
+}
+
+.resource-tabs-nav ::deep fluent-menu-item.resource-tab-menu-item .aspire-menu-item-label svg {
+    width: 18px !important;
+    min-width: 18px;
+    max-width: 18px;
+    height: 18px !important;
+    color: var(--colorBrandForeground1);
+}
+
+@container (max-width: 200px) {
+    .resource-tabs-nav ::deep .resources-tab-header {
+        display: none;
+    }
+
+    .resource-tabs-nav ::deep .aspire-menu-button {
+        display: inline-flex;
+    }
+
+    .resource-tabs-nav .resource-tabs-overflow.has-overflow {
+        display: none;
+    }
+}
+
+.resource-tabs-nav ::deep .resource-tab-error-count {
+    background: color-mix(in srgb, var(--error) 14%, transparent);
+    color: var(--error);
+}
+
+.resource-tab-body {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+}
+
+/* Mobile: the resource pane is a full-screen sheet over the content. It's opaque, so it needs no scrim. The breakpoint
+   matches ViewportInformation.MobileCutoffPixelWidth, which decides what the layout renders. */
+
+@media (max-width: 768px) {
+    /* Reserve the same mobile header/navigation above both the sheet and the details. */
+    .resources-layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: auto minmax(0, 1fr) auto;
+    }
+
+    .resource-context-header {
+        grid-area: 1 / 1;
+    }
+
+    .resource-content {
+        grid-area: 2 / 1;
+    }
+
+    .resource-pane {
+        grid-area: 2 / 1;
+        position: relative;
+        inset: auto;
+        z-index: 21;
+        width: 100%;
+        margin-inline: 0;
+        height: 100%;
+        border-right: 0;
+    }
+
+    .resources-layout.drawer-open .resource-content {
+        /* The details remain mounted, but their scrollbar must not show beside the drawer's list. */
+        display: none;
+    }
+
+    .resource-pane-head {
+        height: 44px;
+        padding: 6px 8px;
+    }
+
+    .resource-pane-list {
+        padding-inline: 8px;
+        overflow-x: hidden;
+    }
+
+    .resource-pane-foot {
+        flex: 0 0 auto;
+        padding-inline: 8px;
+    }
+
+    .resource-header {
+        padding: 8px 8px 0;
+        row-gap: var(--aspire-space-2);
+    }
+
+    .resource-header-row {
+        grid-column: 1 / -1;
+        grid-row: 1;
+    }
+
+    .resource-header-controls {
+        grid-column: 2;
+        grid-row: 2;
+    }
+
+    .resource-header-icon {
+        display: none;
+    }
+
+    .resource-header-text {
+        display: block;
+        min-height: 0;
+    }
+
+    .resource-header-title {
+        gap: 0;
+    }
+
+    /* The title is the control that opens the resource list. It spans the content width, like the page content
+       below it, and has the outline and chevron of a select so it reads as something to change. The heading's
+       own overflow clipping is lifted so the focus ring isn't cut off. */
+    .resource-title {
+        flex: 1 1 auto;
+        min-width: 0;
+        overflow: visible;
+    }
+
+    .resource-picker {
+        display: grid;
+        grid-template-columns: 20px minmax(0, 1fr) 16px;
+        align-items: center;
+        column-gap: var(--aspire-space-2);
+        width: 100%;
+        min-height: 36px;
+        padding: 0 10px;
+        border: 1px solid var(--colorNeutralStroke1);
+        border-radius: var(--aspire-control-radius);
+        background: color-mix(in srgb, var(--colorBrandBackground) 5%, var(--aspire-control-background));
+        color: var(--colorNeutralForeground1);
+        /* The title's font and size: the picker shows the same text in the same place. */
+        font: inherit;
+        line-height: 22px;
+        text-align: start;
+        cursor: pointer;
+    }
+
+    .resource-picker-leading-icon,
+    .resource-picker-chevron {
+        display: block;
+        flex: 0 0 auto;
+    }
+
+    .resource-picker-chevron {
+        justify-self: center;
+        color: var(--colorNeutralForeground2);
+        transition: transform .15s ease;
+    }
+
+    .resource-picker[aria-expanded="true"] .resource-picker-chevron {
+        transform: rotate(180deg);
+    }
+
+    .resource-picker:hover {
+        background: var(--aspire-menu-item-hover-background);
+    }
+
+    .resource-picker:active {
+        background: var(--colorNeutralBackground3);
+    }
+
+    .resource-picker:focus-visible {
+        outline: 2px solid var(--colorStrokeFocus2);
+        outline-offset: 1px;
+    }
+
+    .resource-picker-text {
+        flex: 1 1 auto;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .resource-tabs {
+        grid-column: 1;
+        grid-row: 2;
+        margin-top: 0;
+        column-gap: var(--aspire-space-2);
+    }
+
+    .resources-layout.drawer-open .resource-tabs {
+        grid-row: 1;
+    }
+
+    /* The footer is outside the scrolling tab body, so status stays visible without covering the last card. */
+    .resource-workspace-foot {
+        grid-area: 3 / 1;
+        flex: 0 0 auto;
+        min-width: 0;
+        min-height: 32px;
+        padding-bottom: env(safe-area-inset-bottom, 0px);
+        border-top: 1px solid var(--colorNeutralStroke3);
+        background: var(--aspire-page-background);
+    }
+
+    .resources-layout.drawer-open .resource-workspace-foot {
+        display: none;
+    }
+
+    .resource-content-foot {
+        min-height: 32px;
+        padding-inline: 12px;
+    }
+
+    .resource-tabs-nav ::deep .aspire-menu-button {
+        flex: 1 1 auto;
+    }
+
+    .resource-tabs-nav ::deep .resource-tabs-compact-button {
+        flex: 1 1 auto;
+        width: 100%;
+        min-width: 0;
+        min-height: 34px;
+        padding: 0 10px;
+        border-color: var(--colorNeutralStroke2);
+        background: var(--aspire-page-background);
+        color: var(--colorNeutralForeground1);
+        font-size: var(--aspire-font-size-body);
+        font-weight: var(--aspire-font-weight-semibold);
+    }
+
+    .resource-tabs-nav ::deep .resource-tabs-compact-button::part(control) {
+        min-height: 34px;
+        padding: 0;
+        border: 0;
+        background: transparent;
+    }
+
+    .resource-tabs-nav ::deep .resource-tabs-compact-button > svg[slot="end"] {
+        width: 16px !important;
+        min-width: 16px;
+        max-width: 16px;
+        height: 16px !important;
+        margin-inline-start: auto;
+        color: var(--colorNeutralForeground2) !important;
+        transition: transform .15s ease;
+    }
+
+    .resource-tabs-nav ::deep .resource-tabs-compact-button[aria-expanded="true"] > svg[slot="end"] {
+        transform: rotate(180deg);
+    }
+
+    /* The tab picker's menu is a sheet as wide as the page content, directly under its trigger, so the options are
+       large targets that line up with everything else. The popover's backdrop dims the page behind it, and a tap
+       there closes the menu. */
+    .resource-tabs-nav ::deep .aspire-menu-container fluent-menu-list {
+        left: var(--layout-left-padding);
+        right: var(--layout-right-padding);
+        width: auto;
+        min-width: 0;
+        max-width: none;
+        margin-top: 4px;
+    }
+
+    .resource-tabs-nav ::deep .aspire-menu-container fluent-menu-list::backdrop {
+        background: rgba(0, 0, 0, .35);
+    }
+
+    .resource-tabs-nav ::deep fluent-menu-item.resource-tab-menu-item {
+        height: 44px;
+        min-height: 44px;
+        padding: 0 16px;
+        font-size: var(--aspire-font-size-heading);
+    }
+
+}
+
+/* Fluent UI has no 16px GroupList icon. Draw the 20px one at 16px so the grouping button matches the
+   filter and collapse buttons next to it. FluentIcon sets the width inline, hence !important. */
+.resource-pane-head ::deep #resourcePaneGroupingButton svg {
+    width: 16px !important;
+}
+
+/* Compact density: one line per resource. The state, type and persistence move to fixed-width columns on the
+   right, so they line up from row to row. The sidebar and full-canvas rules further down assume two text bands;
+   the "Compact density overrides" section after them puts everything back on one line. */
+.density-compact .resource-row-link {
+    gap: var(--aspire-space-2);
+}
+
+.density-compact .resource-row-icon {
+    flex-basis: var(--resource-row-icon-size);
+    width: var(--resource-row-icon-size);
+    height: var(--resource-row-icon-size);
+    border-radius: 6px;
+}
+
+.density-compact .resource-row-text ::deep .resource-row-hidden-icon {
+    flex-shrink: 0;
+}
+
+.resource-row-meta {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: var(--aspire-space-2);
+    color: var(--colorNeutralForeground2);
+    font-size: var(--aspire-font-size-secondary);
+}
+
+.resource-row-meta-state {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.resource-row-title {
+    display: flex;
+    align-items: center;
+    gap: var(--aspire-space-1);
+    min-width: 0;
+}
+
+.resource-row-toggle-spacer {
+    flex: 0 0 20px;
+    margin-right: 6px;
+}
+
+.resource-row-meta-state {
+    width: 10px;
+}
+
+.resource-row-meta .resource-row-type {
+    width: var(--resource-row-meta-type-width);
+    text-align: right;
+    white-space: nowrap;
+}
+
+/* Disclosure follows the pane itself, including divider resizing and the mobile sheet.
+   The compact name/state/type row remains unchanged below the first threshold. */
+.resource-row-wide-metadata {
+    display: none;
+    min-width: 0;
+    color: var(--colorNeutralForeground2);
+    font-size: var(--resource-row-font-size);
+    line-height: var(--resource-row-line-height);
+}
+
+::deep .resource-row-insights {
+    display: none;
+    min-width: 0;
+}
+
+.resource-row-source {
+    display: none;
+    min-width: 0;
+}
+
+.resource-row-source-value {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--colorNeutralForeground1);
+    font-size: var(--resource-secondary-font-size);
+}
+
+.resource-row-source-value:focus-visible {
+    outline: 2px solid var(--colorStrokeFocus2);
+    outline-offset: 1px;
+}
+
+::deep .resource-row-insight {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--resource-insight-gap);
+    min-width: 0;
+    box-sizing: border-box;
+    height: var(--resource-insight-height);
+    padding: 0 var(--resource-insight-padding);
+    border: 0;
+    border-radius: var(--aspire-radius-small);
+    background: color-mix(in srgb, var(--colorBrandBackground2) 25%, var(--colorNeutralBackground1));
+    color: var(--colorNeutralForeground2);
+    font-size: var(--resource-secondary-font-size);
+    line-height: var(--resource-secondary-line-height);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    text-decoration: none;
+}
+
+::deep .resource-row-insight:hover {
+    background: var(--colorBrandBackground2);
+    color: var(--colorNeutralForeground1);
+    text-decoration: underline;
+}
+
+::deep .resource-row-insight > span {
+    flex-shrink: 0;
+}
+
+::deep .resource-row-insight svg {
+    flex-shrink: 0;
+}
+
+::deep .resource-row-insight:focus-visible {
+    outline: 2px solid var(--colorBrandStroke1);
+    outline-offset: 2px;
+}
+
+::deep .resource-row-insight-failed {
+    background: var(--colorPaletteRedBackground1);
+    color: var(--error);
+}
+
+@media (forced-colors: active) {
+    ::deep .resource-row-insight {
+        border-color: LinkText;
+        background: Canvas;
+        color: LinkText;
+    }
+}
+
+.resource-row-health,
+.resource-row-start-time {
+    display: flex;
+    align-items: center;
+    gap: var(--aspire-space-1);
+    min-width: 0;
+}
+
+/* The state dot right after a compact row's name in the full-page list. The name shrinks first, so a long name
+   ends with an ellipsis before the dot rather than pushing it out. */
+.resource-row-text > .resource-row-meta-state {
+    flex: 0 0 auto;
+    /* With the row's 4px gap, 8px from the name. */
+    margin-inline-start: var(--aspire-space-1);
+}
+
+.resource-row-start-time {
+    color: var(--colorNeutralForeground2);
+    font-size: var(--resource-secondary-font-size);
+    flex-shrink: 0;
+}
+
+.resource-row-endpoints {
+    display: flex;
+    align-items: center;
+    flex-direction: row;
+    gap: var(--aspire-space-3);
+    min-width: 0;
+}
+
+/* The URLs column is the resources grid's (see UrlsColumnDisplay): links to the URLs that fit, then a +N button
+   listing the rest. Clicking them doesn't select the row (see ResourcesLayout.razor.js). Its text matches the
+   other metadata columns, the start time and source. */
+.resource-row-endpoints ::deep .url-container {
+    min-width: 0;
+    padding: 0;
+    font-size: var(--resource-secondary-font-size);
+    line-height: var(--resource-secondary-line-height);
+}
+
+/* A hovered link is in a hovered row, and in the light theme Fluent's lighter link hover color (#7455dd) has a 4.3:1
+   contrast on the row's hover background, under the 4.5:1 text needs. The link keeps its color, 6.7:1 there. */
+.resource-row-endpoints ::deep a:hover {
+    color: var(--colorBrandForegroundLink);
+}
+
+.resource-row-start-time > time {
+    display: inline-flex;
+    gap: var(--aspire-space-1);
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+.resource-row-wide-metadata .resource-row-start-time {
+    display: flex;
+    height: var(--resource-row-line-height);
+}
+
+@container resource-pane (min-width: 420px) {
+    .resource-row.resource-row-table {
+        /* Identity and actions take priority over secondary metadata. */
+        --resource-row-tracks: [identity] minmax(0, 1fr) [status] var(--resource-row-status-width) [endpoint source insights actions] 76px [end];
+        --resource-row-actions-column: actions;
+        display: grid;
+        grid-template-columns: var(--resource-row-tracks);
+        column-gap: var(--spacingHorizontalS);
+        padding-inline-end: 12px;
+    }
+
+    .resource-row-wide-metadata {
+        display: contents;
+    }
+
+    .resource-row-health {
+        grid-column: status;
+        grid-row: 1;
+        display: grid;
+        grid-template-rows: var(--resource-row-line-height);
+        align-content: center;
+        gap: 0;
+    }
+
+    .resource-row-wide-metadata .resource-row-start-time {
+        grid-row: 1;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .resource-row-health .resource-row-start-time > time {
+        flex-shrink: 0;
+        overflow: visible;
+    }
+
+    .resource-row-endpoints {
+        display: none;
+        padding-block: 0;
+        grid-row: 1;
+    }
+
+    .resource-row.resource-row-table > .resource-row-link {
+        grid-column: identity;
+        /* Pinned so the explicitly placed error link below can't push it to an implicit second row. */
+        grid-row: 1;
+    }
+
+    /* The error link shares the identity track with the row link. The row link keeps a hidden copy of the
+       badge so the resource name stops before it instead of running underneath. */
+    .resource-row.resource-row-table > .resource-row-error-link {
+        grid-column: identity;
+        grid-row: 1;
+        justify-self: end;
+        align-self: center;
+    }
+
+    .resource-row.resource-row-table .error-badge-spacer {
+        display: inline-flex;
+        visibility: hidden;
+    }
+
+    .resource-row-health-detail,
+    .resource-row-endpoint-detail {
+        display: none;
+    }
+}
+
+@container resource-pane (min-width: 540px) {
+    .resource-row.resource-row-table {
+        --resource-row-tracks: [identity] minmax(160px, 1.5fr) [status] var(--resource-row-status-width) [endpoint] minmax(96px, 1fr) [source insights actions] 76px [end];
+    }
+
+    .resource-row-endpoints {
+        display: grid;
+        grid-template-columns: subgrid;
+        grid-template-rows: var(--resource-row-line-height);
+        column-gap: inherit;
+        grid-column: endpoint;
+        align-items: center;
+        height: var(--resource-row-line-height);
+    }
+
+    .resource-row-endpoints ::deep .url-container {
+        grid-column: endpoint;
+    }
+}
+
+.density-compact .resource-row-toggle,
+.density-compact .resource-row-toggle-spacer {
+    margin-right: 2px;
+}
+
+/* A resource's actions: labeled buttons in the overview, icons on the rows of the resource list. */
+.resource-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    align-items: center;
+    gap: var(--aspire-space-1);
+}
+
+.resource-row-actions {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 2px;
+    margin-right: 12px;
+}
+
+.resource-row-actions ::deep .resource-row-toggle,
+.resource-row-actions ::deep .resource-row-toggle::part(control) {
+    width: 24px;
+    min-width: 24px;
+    height: 24px;
+    min-height: 24px;
+    margin: 0;
+    padding: 0;
+    grid-column: 1;
+    grid-row: 1;
+    justify-self: center;
+}
+
+.resource-row-actions ::deep .resource-row-toggle.collapsed svg {
+    transform: rotate(-90deg);
+}
+
+.resource-row-actions ::deep .resource-row-action {
+    width: 24px;
+    min-width: 24px;
+    height: 24px;
+    /* Fluent UI buttons default to a 32px minimum, which would make the row taller than the others. */
+    min-height: 24px;
+}
+
+.resource-row-actions ::deep .resource-row-action::part(control) {
+    width: 24px;
+    min-width: 24px;
+    height: 24px;
+    padding: 0;
+}
+
+/* Let container-query disclosure override the native link's default display, just like Fluent buttons. */
+.resource-row-actions > :where(a).resource-row-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--aspire-radius-small);
+    color: var(--colorNeutralForeground2);
+    text-decoration: none;
+}
+
+.resource-row-actions > a.resource-row-action:hover {
+    background: var(--colorSubtleBackgroundHover);
+    color: var(--colorNeutralForeground1);
+}
+
+/* Row actions are neutral so brand color is reserved for selection, primary actions and links.
+   The resource's own URL stays brand-colored: opening it is the row's main job. */
+.resource-row-actions > a.resource-row-primary-endpoint {
+    color: var(--colorBrandForeground1);
+}
+
+.resource-row-actions ::deep fluent-button.resource-row-action {
+    --aspire-button-foreground: var(--colorNeutralForeground2);
+    color: var(--colorNeutralForeground2);
+}
+
+.resource-row-actions ::deep fluent-button.resource-row-action:hover {
+    color: var(--colorNeutralForeground1);
+}
+
+/* Override the direct-anchor display rule as well as Fluent button styles when disclosing actions. */
+@container resource-pane (max-width: 239px) {
+    .resource-row-actions ::deep .resource-row-action.resource-row-action-priority-0 {
+        display: none;
+    }
+}
+
+@container resource-pane (max-width: 299px) {
+    .resource-row-actions ::deep .resource-row-action.resource-row-action-priority-1 {
+        display: none;
+    }
+}
+
+@container resource-pane (max-width: 359px) {
+    .resource-row-actions ::deep .resource-row-action.resource-row-action-priority-2 {
+        display: none;
+    }
+}
+
+@container resource-pane (max-width: 419px) {
+    .resource-row-actions ::deep .resource-row-action.resource-row-action-priority-3 {
+        display: none;
+    }
+}
+
+@container resource-pane (min-width: 420px) {
+    /* Fixed action slots reserve a missing endpoint just like missing metadata.
+       Narrower panes retain lifecycle commands in the existing overflow menu. */
+    .resource-row.resource-row-table .resource-row-actions {
+        display: grid;
+        grid-template-columns: 20px repeat(3, 24px);
+        grid-column: var(--resource-row-actions-column);
+        grid-row: 1;
+        gap: 2px;
+        margin-right: 0;
+    }
+
+    .resource-row-actions .resource-row-toggle,
+    .resource-row-actions .resource-row-toggle-spacer {
+        grid-column: 1;
+        grid-row: 1;
+        margin-right: 0;
+    }
+
+    .resource-row-actions ::deep .resource-row-action.resource-row-highlighted {
+        display: inline-flex;
+        grid-row: 1;
+    }
+
+    .resource-row-actions ::deep .resource-row-command-slot-0 {
+        grid-column: 2;
+    }
+
+    .resource-row-actions ::deep .resource-row-command-slot-1 {
+        grid-column: 3;
+    }
+
+    .resource-row-actions ::deep .aspire-menu-button {
+        grid-column: 4;
+        grid-row: 1;
+    }
+
+    .resource-row-actions ::deep .resource-row-primary-endpoint {
+        display: none;
+    }
+}
+
+@container resource-pane (min-width: 720px) {
+    .resource-row.resource-row-table {
+        --resource-row-tracks: [identity] minmax(200px, 1.5fr) [status] var(--resource-row-status-width) [endpoint] minmax(96px, 1fr) [source insights actions] 180px [end];
+        column-gap: var(--spacingHorizontalM);
+    }
+
+    /* Shared row slots are overridden by the sidebar and full-page layouts below. */
+    .resource-row.resource-row-table .resource-row-actions {
+        grid-template-columns: 20px repeat(4, 28px);
+        gap: var(--aspire-space-1);
+    }
+
+    .resource-row-actions ::deep .resource-row-action,
+    .resource-row-actions ::deep .resource-row-action::part(control) {
+        width: 28px;
+        min-width: 28px;
+        height: 28px;
+        min-height: 28px;
+    }
+
+    .resource-row-actions ::deep .resource-row-primary-endpoint {
+        display: inline-flex;
+        grid-column: 4;
+        grid-row: 1;
+    }
+
+    .resource-row-actions ::deep .aspire-menu-button {
+        grid-column: 5;
+    }
+}
+
+@container resource-pane (min-width: 960px) {
+    /* The full-page list has the room for whole type names ("PostgreSQL Server") in its name column, next to the
+       state dot. The name column grows by the same amount (see --resource-row-identity-extra). */
+    .pane-full-canvas .resource-pane-list.density-compact {
+        --resource-row-meta-type-width: 120px;
+    }
+
+    .resource-row.resource-row-table {
+        --resource-row-tracks: [identity] minmax(220px, calc(320px + var(--resource-row-identity-extra, 0px))) [status] var(--resource-row-status-width) [source] minmax(200px, 1fr) [endpoint] minmax(96px, 1fr) [insights actions] var(--resource-row-actions-width) [end];
+        column-gap: var(--spacingHorizontalS);
+    }
+
+    .resource-row-health {
+        gap: 0;
+    }
+
+    .resource-row-wide-metadata .resource-row-start-time {
+        display: flex;
+    }
+
+    .resource-row-started {
+        display: none;
+    }
+
+    .resource-row-source {
+        display: flex;
+        grid-column: source;
+        grid-row: 1;
+        align-items: center;
+        min-width: 0;
+    }
+
+    .resource-row.resource-row-table .resource-row-actions {
+        width: var(--resource-row-actions-width);
+        justify-self: end;
+    }
+}
+
+/* A sidebar row has two fixed text bands and a reserved action rail. Missing
+   endpoints/commands leave their slots empty instead of changing identity width.
+   Full-canvas metadata has a separate track layout above, never sidebar breakpoints. */
+.resources-layout:not(.pane-full-canvas) .resource-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 112px;
+    column-gap: var(--aspire-space-1);
+    padding-inline-end: 12px;
+}
+
+/* The error link shares the identity track with the row link instead of taking the action rail's slot. The row
+   link keeps a hidden copy of the badge so the resource name stops before it instead of running underneath. */
+.resources-layout:not(.pane-full-canvas) .resource-row:has(> .resource-row-error-link) > .resource-row-link {
+    grid-column: 1;
+    grid-row: 1;
+}
+
+.resources-layout:not(.pane-full-canvas) .resource-row-error-link {
+    grid-column: 1;
+    grid-row: 1;
+    justify-self: end;
+    align-self: center;
+}
+
+.resources-layout:not(.pane-full-canvas) .error-badge-spacer {
+    display: inline-flex;
+    visibility: hidden;
+}
+
+.resources-layout:not(.pane-full-canvas) .resource-row-link {
+    box-sizing: border-box;
+    width: 100%;
+    height: var(--resource-row-height);
+    padding-block: calc((var(--resource-row-height) - 2 * var(--resource-row-line-height)) / 2);
+    gap: var(--aspire-space-2);
+}
+
+.resources-layout:not(.pane-full-canvas) .resource-row-text {
+    display: grid;
+    grid-template-rows: repeat(2, var(--resource-row-line-height));
+    align-items: center;
+    gap: 0;
+}
+
+.resources-layout:not(.pane-full-canvas) .resource-row-title {
+    min-width: 0;
+    height: var(--resource-row-line-height);
+}
+
+.resources-layout:not(.pane-full-canvas) .resource-row-name {
+    display: block;
+    min-width: 0;
+    line-height: var(--resource-row-line-height);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.resources-layout:not(.pane-full-canvas) .resource-row-sub {
+    height: var(--resource-row-line-height);
+    line-height: var(--resource-row-line-height);
+    flex-wrap: nowrap;
+    column-gap: var(--aspire-space-2);
+}
+
+/* A resource's second line stays one line and ends with an ellipsis when it runs out of room, for example before an
+   error badge, rather than being cut off mid-word. It's laid out as text rather than as flex items, so it's cut once,
+   at its end: the age gives way first, then the state. (Flex items each shrink a little, so both would get an
+   ellipsis.) Both keep their full text: the age in its tooltip, the state in the row's accessible description. */
+.resources-layout:not(.pane-full-canvas) .resource-pane-list:not(.density-compact) .resource-row.resource-row-sidebar .resource-row-sub {
+    display: block;
+    text-overflow: ellipsis;
+}
+
+.resources-layout:not(.pane-full-canvas) .resource-pane-list:not(.density-compact) .resource-row.resource-row-sidebar .resource-row-sub > .state-dot,
+.resources-layout:not(.pane-full-canvas) .resource-pane-list:not(.density-compact) .resource-row.resource-row-sidebar .resource-row-sub ::deep > svg {
+    display: inline-block;
+    margin-inline-end: 8px;
+    vertical-align: middle;
+}
+
+.resources-layout:not(.pane-full-canvas) .resource-pane-list:not(.density-compact) .resource-row.resource-row-sidebar .resource-row-sub > .resource-row-sidebar-start {
+    display: inline;
+    margin-inline-start: 8px;
+}
+
+.resources-layout:not(.pane-full-canvas) .resource-pane-list:not(.density-compact) .resource-row.resource-row-sidebar .resource-row-sidebar-start > time {
+    display: inline;
+}
+
+/* The full-page list's second line, the state and type, is cut the same way, for example before an error badge, which
+   the row link reserves room for (see .error-badge-spacer). The type gives way first, then the state. The spacing
+   matches the line's flex gap. */
+.pane-full-canvas .resource-pane-list:not(.density-compact) .resource-row.resource-row-table .resource-row-sub {
+    display: block;
+    text-overflow: ellipsis;
+}
+
+.pane-full-canvas .resource-pane-list:not(.density-compact) .resource-row.resource-row-table .resource-row-sub > .state-dot,
+.pane-full-canvas .resource-pane-list:not(.density-compact) .resource-row.resource-row-table .resource-row-sub ::deep > svg {
+    display: inline-block;
+    margin-inline-end: 5px;
+    vertical-align: middle;
+}
+
+.pane-full-canvas .resource-pane-list:not(.density-compact) .resource-row.resource-row-table .resource-row-sub > .resource-row-sep {
+    margin-inline: 5px;
+}
+
+.resources-layout:not(.pane-full-canvas) .resource-row-health-status {
+    flex-shrink: 0;
+}
+
+.resources-layout:not(.pane-full-canvas) .resource-row-actions {
+    display: grid;
+    grid-template-columns: 20px repeat(3, 28px);
+    justify-content: end;
+    align-items: center;
+    column-gap: 2px;
+    width: 112px;
+    min-width: 112px;
+    max-width: 112px;
+    margin: 0;
+    overflow: visible;
+}
+
+.resources-layout:not(.pane-full-canvas) .resource-row-actions > .resource-row-toggle,
+.resources-layout:not(.pane-full-canvas) .resource-row-actions > .resource-row-toggle-spacer {
+    grid-column: 1;
+    grid-row: 1;
+    margin: 0;
+}
+
+.resources-layout:not(.pane-full-canvas) .resource-row-actions > .resource-row-primary-endpoint {
+    display: inline-flex;
+    grid-column: 2;
+    grid-row: 1;
+}
+
+.resources-layout:not(.pane-full-canvas) .resource-row-actions ::deep .resource-row-command-slot-0 {
+    display: inline-flex;
+    grid-column: 3;
+    grid-row: 1;
+}
+
+.resources-layout:not(.pane-full-canvas) .resource-row-actions ::deep .aspire-menu-button {
+    display: inline-flex;
+    grid-column: 4;
+    grid-row: 1;
+}
+
+.resources-layout:not(.pane-full-canvas) .resource-row-actions ::deep .resource-row-action {
+    --aspire-control-height: 28px;
+    width: 28px;
+    min-width: 0;
+    height: 28px;
+    padding: 0;
+}
+
+/* Preserve both author-highlighted custom commands within the same protected rail.
+   Their 22px targets plus 2px separation keep neighboring target centers 24px apart. */
+.resources-layout:not(.pane-full-canvas) .resource-row-actions:has(.resource-row-command-slot-1) {
+    grid-template-columns: 16px repeat(4, 22px);
+}
+
+.resources-layout:not(.pane-full-canvas) .resource-row-actions:has(.resource-row-command-slot-1) ::deep .resource-row-action {
+    width: 22px;
+}
+
+.resources-layout:not(.pane-full-canvas) .resource-row-actions ::deep .resource-row-action::part(control) {
+    width: 100%;
+    min-width: 0;
+    height: 28px;
+}
+
+.resources-layout:not(.pane-full-canvas) .resource-row-actions ::deep .resource-row-command-slot-1 {
+    display: inline-flex;
+    grid-column: 4;
+    grid-row: 1;
+}
+
+.resources-layout:not(.pane-full-canvas) .resource-row-actions:has(.resource-row-command-slot-1) ::deep .aspire-menu-button {
+    grid-column: 5;
+}
+
+/* Compact density overrides. The sidebar rules above and the full-canvas rules below lay a row's text out in two
+   fixed bands; a compact row has one. These selectors match the specificity of the sidebar ones and come after
+   them, so they win in both layouts. */
+.resource-pane-list.density-compact .resource-row-link {
+    padding-block: 0;
+}
+
+.resource-pane-list.density-compact .resource-row-text {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: var(--aspire-space-1);
+}
+
+.resource-pane-list.density-compact .resource-row-name {
+    flex: 0 1 auto;
+    min-width: 0;
+}
+
+/* Telemetry-only rows and the "All" row have no type/state columns. Their secondary label (the kind, or the counts)
+   moves to the end of the line, and the name gives way first when space runs out. */
+.resource-pane-list.density-compact .resource-row-title {
+    flex: 0 1 auto;
+    width: auto;
+    height: auto;
+}
+
+.resource-pane-list.density-compact .resource-row-sub {
+    flex: 0 0 auto;
+    height: auto;
+    margin-inline-start: auto;
+}
+
+/* The availability badge doesn't fit on one line. The row is muted instead, and its tooltip and accessible
+   description give the reason. App-model rows don't render the badge in compact density at all. */
+.resource-pane-list.density-compact .resource-row-availability {
+    display: none;
+}
+
+/* The compact sidebar's expand toggle leads the row, so its actions need no trailing toggle slot. */
+.resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-row {
+    grid-template-columns: minmax(0, 1fr) 88px;
+}
+
+.resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-row-actions {
+    grid-template-columns: repeat(3, 28px);
+    width: 88px;
+    min-width: 88px;
+    max-width: 88px;
+}
+
+.resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-row-actions > .resource-row-toggle-spacer {
+    display: none;
+}
+
+.resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-row-actions > .resource-row-primary-endpoint {
+    grid-column: 1;
+}
+
+.resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-row-actions ::deep .resource-row-command-slot-0 {
+    grid-column: 2;
+}
+
+.resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-row-actions ::deep .aspire-menu-button {
+    grid-column: 3;
+}
+
+/* Four 22px targets need 94px with their gaps. Grow into the preceding gap and link end padding so the menu stays
+   right-aligned without moving the name or error badge. Target centers remain 24px apart. */
+.resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-row-actions:has(.resource-row-command-slot-1) {
+    grid-template-columns: repeat(4, 22px);
+    width: 94px;
+    min-width: 94px;
+    max-width: 94px;
+    margin-inline-start: -6px;
+}
+
+.resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-row-actions:has(.resource-row-command-slot-1) ::deep .resource-row-command-slot-1 {
+    grid-column: 3;
+}
+
+.resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-row-actions:has(.resource-row-command-slot-1) ::deep .aspire-menu-button {
+    grid-column: 4;
+}
+
+/* The error badge is overlaid on the row link (see .resource-row-error-link). In a compact row it goes over its
+   spacer, just before the type and state columns, instead of over the columns at the end of the link:
+   8px link end padding + type column + 8px gap + 10px state column + 8px gap. */
+.resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-row-error-link {
+    margin-inline-end: calc(var(--resource-row-meta-type-width) + 34px);
+}
+
+@container resource-pane (min-width: 420px) {
+    .resource-pane-list.density-compact .resource-row.resource-row-table > .resource-row-error-link {
+        margin-inline-end: calc(var(--resource-row-meta-type-width) + 34px);
+    }
+}
+
+/* Compact sidebar rows show their actions only while the row is hovered or has keyboard-visible focus, or while one of its menus is
+   open, and then in place of the type and state columns. The rest of the time the action rail is hidden, so the
+   name gets its room. The swap keeps the name's width about the same: the 92px the rail and its gap gain is about
+   the 90px the columns give up.
+   An open menu is matched by aria-haspopup as well as aria-expanded: a parent's expand toggle also sets
+   aria-expanded="true", and that must not keep its actions showing. Only the attribute's presence is tested
+   because Fluent's menu changes the button's aria-haspopup from "menu" to "true" while the menu is open.
+   Mouse selection leaves the row link focused, so :focus-within would keep the actions visible after the pointer leaves.
+   Keep hidden actions tabbable so moving focus from the row link to an action reveals the rail without losing focus.
+   Touch screens can't hover, so (hover: hover) leaves their actions always visible. The expanded list (the full
+   canvas) is excluded and keeps its fixed, always-visible action slots. */
+@media (hover: hover) {
+    .resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-row:not(:hover, :has(:focus-visible), :has(.resource-row-actions [aria-haspopup][aria-expanded="true"])) {
+        grid-template-columns: minmax(0, 1fr);
+        column-gap: 0;
+    }
+
+    .resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-row:not(:hover, :has(:focus-visible), :has(.resource-row-actions [aria-haspopup][aria-expanded="true"])) .resource-row-actions {
+        position: absolute;
+        inset-inline-end: 0;
+        opacity: 0;
+        pointer-events: none;
+    }
+
+    .resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-row:is(:hover, :has(:focus-visible), :has(.resource-row-actions [aria-haspopup][aria-expanded="true"])) .resource-row-meta {
+        display: none;
+    }
+
+    /* The error badge keeps one place whether the columns or the actions show, so it never moves, least of all out
+       from under a pointer that is on it. Its margin is measured from the end of the name track, which is 92px
+       wider at rest than while the actions show (the 88px rail and 4px gap are hidden). At rest the badge must clear the
+       type and state columns: the type column + 34px (see above). While the actions show it must clear the link's
+       8px end padding, which is 8px + 92px = 100px from the end of the wider, at-rest track. The badge takes
+       whichever is further from the end in both states, so with wide persistent type columns a gap is left before
+       the actions. The spacer, which stops the name before the badge, moves with it: at rest it sits before the
+       columns, and while the actions show only the link's 8px end padding follows it. */
+    .resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact {
+        --resource-row-error-offset: max(calc(var(--resource-row-meta-type-width) + 34px), 100px);
+    }
+
+    .resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-row-error-link {
+        margin-inline-end: var(--resource-row-error-offset);
+    }
+
+    .resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .error-badge-spacer {
+        margin-inline-end: calc(var(--resource-row-error-offset) - var(--resource-row-meta-type-width) - 34px);
+    }
+
+    .resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-row:is(:hover, :has(:focus-visible), :has(.resource-row-actions [aria-haspopup][aria-expanded="true"])) .resource-row-error-link {
+        margin-inline-end: calc(var(--resource-row-error-offset) - 92px);
+    }
+
+    .resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-row:is(:hover, :has(:focus-visible), :has(.resource-row-actions [aria-haspopup][aria-expanded="true"])) .error-badge-spacer {
+        margin-inline-end: calc(var(--resource-row-error-offset) - 100px);
+    }
+}
+
+.resource-tree-guide,
+.resource-tree-stem {
+    position: absolute;
+    inset-inline-start: calc(var(--resource-tree-icon-center) + var(--tree-level, 0) * var(--resource-row-depth-step));
+    /* Each segment spans the inter-row gap so the tree stays continuous in every density. */
+    top: calc(-1 * var(--aspire-density-resource-row-gap, 1px));
+    bottom: 0;
+    border-inline-start: 1px dotted var(--colorNeutralStrokeAccessible);
+    pointer-events: none;
+}
+
+.resource-tree-guide.branch:not(.continuing) {
+    bottom: 50%;
+}
+
+.resource-tree-guide.branch::after {
+    content: "";
+    position: absolute;
+    inset-inline-start: 0;
+    top: calc(var(--resource-row-height) / 2 + var(--aspire-density-resource-row-gap, 1px));
+    width: calc(var(--resource-row-icon-offset) + var(--resource-row-depth-step) - var(--resource-tree-icon-center));
+    border-top: 1px dotted var(--colorNeutralStrokeAccessible);
+}
+
+.resource-tree-stem {
+    inset-inline-start: calc(var(--resource-tree-icon-center) + var(--resource-row-depth, 0) * var(--resource-row-depth-step));
+    top: calc(50% + var(--resource-row-icon-size) / 2);
+    bottom: calc(-1 * var(--aspire-density-resource-row-gap, 1px));
+}
+
+@media (forced-colors: active) {
+    .resource-tree-guide,
+    .resource-tree-guide.branch::after,
+    .resource-tree-stem {
+        border-color: CanvasText;
+    }
+
+    .resource-row.selected,
+    .resource-row:hover,
+    .resource-row:focus-within,
+    .pane-full-canvas .resource-row:has(> .resource-row-link:focus-visible) {
+        outline: 1px solid Highlight;
+        outline-offset: -1px;
+    }
+}
+
+/* Full canvas uses the same fixed two-band identity as the sidebar. */
+.pane-full-canvas .resource-row-title {
+    width: 100%;
+    height: var(--resource-row-line-height);
+}
+
+.pane-full-canvas .resource-row-sub {
+    height: var(--resource-row-line-height);
+}
+
+.pane-full-canvas .resource-row-link {
+    box-sizing: border-box;
+    height: var(--resource-row-height);
+    padding-block: calc((var(--resource-row-height) - 2 * var(--resource-row-line-height)) / 2);
+}
+
+@container resource-pane (min-width: 1440px) {
+    /* Source and URLs share the spare width, so neither bunches up against the other; activity stays next to
+       actions. The status track holds only the age ("58m ago"). */
+    .resource-row.resource-row-table {
+        --resource-row-tracks: [identity] calc(260px + var(--resource-row-identity-extra, 0px)) [status] var(--resource-row-status-width) [source] minmax(200px, 1fr) [endpoint] minmax(200px, 1fr) [insights] var(--resource-insight-width) [actions] var(--resource-row-actions-width) [end];
+    }
+
+    ::deep .resource-row-insights {
+        position: relative;
+        box-sizing: border-box;
+        display: grid;
+        grid-template-columns: [requests] var(--resource-insight-request-width) [latency] var(--resource-insight-latency-width);
+        padding-inline-start: var(--resource-insight-failure-width);
+        grid-column: insights;
+        grid-row: 1;
+        align-items: center;
+        column-gap: var(--spacingHorizontalS);
+    }
+
+    ::deep .resource-row-insight {
+        grid-row: 1;
+    }
+
+    ::deep .resource-row-insight-requests {
+        grid-column: requests;
+    }
+
+    ::deep .resource-row-insight-latency {
+        grid-column: latency;
+    }
+
+    ::deep .resource-row-insight-failed {
+        position: absolute;
+        inset-inline-start: 0;
+        top: 50%;
+        transform: translateY(-50%);
+        width: var(--resource-insight-height);
+        justify-content: center;
+    }
+}
+
+@container resource-pane (min-width: 1600px) {
+    .resource-row.resource-row-table {
+        --resource-row-tracks: [identity] calc(320px + var(--resource-row-identity-extra, 0px)) [status] var(--resource-row-status-width) [source] minmax(220px, 1fr) [endpoint] minmax(240px, 1fr) [insights] var(--resource-insight-width) [actions] var(--resource-row-actions-width) [end];
+        column-gap: var(--spacingHorizontalL);
+    }
+}
+
+@container resource-pane (min-width: 1800px) {
+    .resource-row.resource-row-table {
+        --resource-row-tracks: [identity] calc(320px + var(--resource-row-identity-extra, 0px)) [status] var(--resource-row-status-width) [source] minmax(352px, 1fr) [endpoint] minmax(240px, 1fr) [insights] var(--resource-insight-width) [actions] var(--resource-row-actions-width) [end];
+    }
+}
+
+/* Reserve room for two highlighted commands and the menu, but pack the available actions against the
+   trailing edge so resources and parameters with fewer actions have no empty slots between their buttons. */
+@container resource-pane (min-width: 420px) {
+    .pane-full-canvas .resource-row.resource-row-table .resource-row-actions {
+        display: flex;
+        justify-content: flex-end;
+        justify-self: end;
+        width: 76px;
+    }
+}
+
+@container resource-pane (min-width: 720px) {
+    .pane-full-canvas .resource-row.resource-row-table .resource-row-actions {
+        width: var(--resource-row-actions-width);
+    }
+}

@@ -2,9 +2,9 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Dashboard.Authentication;
+using Aspire.Dashboard.Utils;
 using Grpc.Core;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Mvc;
 using OpenTelemetry.Proto.Collector.Trace.V1;
 
 namespace Aspire.Dashboard.Otlp.Grpc;
@@ -22,6 +22,6 @@ public class OtlpGrpcTraceService : TraceService.TraceServiceBase
 
     public override Task<ExportTraceServiceResponse> Export(ExportTraceServiceRequest request, ServerCallContext context)
     {
-        return Task.FromResult(_traceService.Export(request));
+        return _traceService.ExportAsync(request);
     }
 }

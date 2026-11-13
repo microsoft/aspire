@@ -2,19 +2,37 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREEXTENSION001
-#pragma warning disable ASPIREDOCKERFILEBUILDER001
 #pragma warning disable ASPIRECOMMAND001
 
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Dcp;
 using Aspire.Hosting.Dcp.Model;
+using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using System.Text.Json;
 
 namespace Aspire.Hosting.Go.Tests;
 
 public class AddGoAppTests(ITestOutputHelper outputHelper)
 {
+    [Theory]
+    [InlineData(false, "localhost")]
+    [InlineData(true, "0.0.0.0")]
+    public async Task AddGoAppConfiguresBindAddressForExecutionMode(bool publish, string expectedAddress)
+    {
+        var operation = publish ? DistributedApplicationOperation.Publish : DistributedApplicationOperation.Run;
+        using var builder = TestDistributedApplicationBuilder.Create(operation);
+        var app = builder.AddGoApp("api", AppContext.BaseDirectory);
+
+        var manifest = await ManifestUtils.GetManifest(app.Resource);
+
+        Assert.Contains($"\"HOST\":\"{expectedAddress}\"", manifest.ToJsonString(), StringComparison.Ordinal);
+    }
+
     // ---- Manifest: go run . (baseline) ------------------------------------
 
     [Fact]
@@ -37,6 +55,7 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
                 "."
               ],
               "env": {
+                "HOST": "localhost",
                 "PORT": "{api.bindings.http.targetPort}"
               },
               "bindings": {
@@ -72,7 +91,10 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
               "args": [
                 "run",
                 "./cmd/server"
-              ]
+              ],
+              "env": {
+                "HOST": "localhost"
+              }
             }
             """;
         Assert.Equal(expected, manifest.ToString());
@@ -117,7 +139,10 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
                 "run",
                 "-tags=netgo,osusergo",
                 "."
-              ]
+              ],
+              "env": {
+                "HOST": "localhost"
+              }
             }
             """;
         Assert.Equal(expected, manifest.ToString());
@@ -141,7 +166,10 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
                 "run",
                 "-ldflags=-X main.version=1.0.0",
                 "."
-              ]
+              ],
+              "env": {
+                "HOST": "localhost"
+              }
             }
             """;
         Assert.Equal(expected, manifest.ToString());
@@ -165,7 +193,10 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
                 "run",
                 "-gcflags=all=-N -l",
                 "."
-              ]
+              ],
+              "env": {
+                "HOST": "localhost"
+              }
             }
             """;
         Assert.Equal(expected, manifest.ToString());
@@ -189,7 +220,10 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
                 "run",
                 "-race",
                 "."
-              ]
+              ],
+              "env": {
+                "HOST": "localhost"
+              }
             }
             """;
         Assert.Equal(expected, manifest.ToString());
@@ -220,7 +254,10 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
                 "-ldflags=-s -w",
                 "-gcflags=all=-N -l",
                 "."
-              ]
+              ],
+              "env": {
+                "HOST": "localhost"
+              }
             }
             """;
         Assert.Equal(expected, manifest.ToString());
@@ -248,7 +285,10 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
                 ".",
                 "--config",
                 "prod.yaml"
-              ]
+              ],
+              "env": {
+                "HOST": "localhost"
+              }
             }
             """;
         Assert.Equal(expected, manifest.ToString());
@@ -274,7 +314,10 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
               "args": [
                 "run",
                 "."
-              ]
+              ],
+              "env": {
+                "HOST": "localhost"
+              }
             }
             """;
         Assert.Equal(expected, manifest.ToString());
@@ -299,7 +342,10 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
               "args": [
                 "run",
                 "."
-              ]
+              ],
+              "env": {
+                "HOST": "localhost"
+              }
             }
             """;
         Assert.Equal(expected, manifest.ToString());
@@ -324,7 +370,10 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
               "args": [
                 "run",
                 "."
-              ]
+              ],
+              "env": {
+                "HOST": "localhost"
+              }
             }
             """;
         Assert.Equal(expected, manifest.ToString());
@@ -353,7 +402,10 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
                 "--api-version=2",
                 "debug",
                 "."
-              ]
+              ],
+              "env": {
+                "HOST": "localhost"
+              }
             }
             """;
         Assert.Equal(expected, manifest.ToString());
@@ -381,7 +433,10 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
                 "--accept-multiclient",
                 "debug",
                 "."
-              ]
+              ],
+              "env": {
+                "HOST": "localhost"
+              }
             }
             """;
         Assert.Equal(expected, manifest.ToString());
@@ -409,7 +464,10 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
                 "--only-same-user=false",
                 "debug",
                 "."
-              ]
+              ],
+              "env": {
+                "HOST": "localhost"
+              }
             }
             """;
         Assert.Equal(expected, manifest.ToString());
@@ -437,7 +495,10 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
                 "debug",
                 "--continue",
                 "."
-              ]
+              ],
+              "env": {
+                "HOST": "localhost"
+              }
             }
             """;
         Assert.Equal(expected, manifest.ToString());
@@ -470,7 +531,10 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
                 "--log-output=rpc,dap,debugger",
                 "debug",
                 "."
-              ]
+              ],
+              "env": {
+                "HOST": "localhost"
+              }
             }
             """;
         Assert.Equal(expected, manifest.ToString());
@@ -500,6 +564,68 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
 
     // ---- VS Code debugging --------------------------------------------------
 
+    [Theory]
+    [InlineData(null, true, false)]
+    [InlineData(ExecutableLaunchMode.NoDebug, true, false)]
+    [InlineData(ExecutableLaunchMode.Debug, true, true)]
+    [InlineData(ExecutableLaunchMode.Debug, false, false)]
+    [InlineData(ExecutableLaunchMode.NoDebug, false, false)]
+    public async Task WithVSCodeDebugging_UsesIdeOnlyForSupportedDebugLaunches(
+        string? launchMode,
+        bool supportsGo,
+        bool usesIde)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var sourceDir = workspace.CreateDirectory("source");
+        builder.Configuration["DEBUG_SESSION_INFO"] = JsonSerializer.Serialize(new RunSessionInfo
+        {
+            ProtocolsSupported = ["test"],
+            SupportedLaunchConfigurations = supportsGo ? ["go"] : ["python"]
+        });
+        builder.Configuration["DEBUG_SESSION_PORT"] = "5678";
+        builder.Configuration[KnownConfigNames.DebugSessionRunMode] = launchMode;
+        var app = builder.AddGoApp("api", sourceDir.FullName,
+                packagePath: "./cmd/server",
+                buildTags: ["integration"],
+                gcFlags: "all=-N -l")
+            .WithAppArgs("--config", "prod.yaml");
+        using var application = builder.Build();
+        var executionContext = new DistributedApplicationExecutionContext(
+            new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run)
+            {
+                Services = application.Services
+            });
+        var executionConfiguration = await ExecutionConfigurationBuilder.Create(app.Resource)
+            .WithArgumentsConfig()
+            .BuildAsync(executionContext, NullLogger.Instance, CancellationToken.None);
+
+        var plan = await ExecutableCreator.ResolveLaunchPlanAsync(
+            app.Resource,
+            executionConfiguration,
+            builder.Configuration,
+            new DistributedApplicationOptions(),
+            new ExecutableLaunchPolicy(builder.Configuration),
+            NullLogger.Instance,
+            CancellationToken.None);
+
+        Assert.Equal(usesIde ? ExecutableLaunchMechanism.Ide : ExecutableLaunchMechanism.Process, plan.Mechanism);
+        Assert.Equal("go", plan.Command);
+        Assert.Equal(sourceDir.FullName, plan.WorkingDirectory);
+        if (usesIde)
+        {
+            Assert.Equal(["--config", "prod.yaml"], plan.Arguments);
+            var launchConfiguration = Assert.Single(plan.LaunchConfigurations);
+            Assert.Equal("go", launchConfiguration.GetProperty("type").GetString());
+            Assert.Equal(ExecutableLaunchMode.Debug, launchConfiguration.GetProperty("mode").GetString());
+        }
+        else
+        {
+            Assert.Equal(["run", "-tags=integration", "-gcflags=all=-N -l", "./cmd/server", "--config", "prod.yaml"], plan.Arguments);
+            Assert.Empty(plan.LaunchConfigurations);
+        }
+    }
+
     [Fact]
     public async Task WithVSCodeDebugging_PopulatesGoLaunchConfiguration()
     {
@@ -514,7 +640,7 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
             gcFlags: "all=-N -l",
             raceDetector: true);
 
-        var launchConfig = await InvokeLaunchConfigurationAnnotatorAsync(app.Resource);
+        var launchConfig = await CreateLaunchConfigurationAsync(app.Resource);
 
         Assert.Equal("go", launchConfig.Type);
         Assert.Equal(ExecutableLaunchMode.Debug, launchConfig.Mode);
@@ -532,7 +658,7 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
 
         var app = builder.AddGoApp("api", sourceDir.FullName);
 
-        var launchConfig = await InvokeLaunchConfigurationAnnotatorAsync(app.Resource);
+        var launchConfig = await CreateLaunchConfigurationAsync(app.Resource);
 
         Assert.Null(launchConfig.BuildFlags);
     }
@@ -668,7 +794,10 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
                 "debug",
                 "--build-flags=-tags=\u0027netgo\u0027 -ldflags=\u0027-s -w\u0027",
                 "."
-              ]
+              ],
+              "env": {
+                "HOST": "localhost"
+              }
             }
             """;
         Assert.Equal(expected, manifest.ToString());
@@ -698,7 +827,10 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
                 "debug",
                 "--build-flags=-race",
                 "."
-              ]
+              ],
+              "env": {
+                "HOST": "localhost"
+              }
             }
             """;
         Assert.Equal(expected, manifest.ToString());
@@ -728,7 +860,10 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
                 "debug",
                 "--build-flags=-gcflags=\u0027all=-N -l\u0027",
                 "."
-              ]
+              ],
+              "env": {
+                "HOST": "localhost"
+              }
             }
             """;
         Assert.Equal(expected, manifest.ToString());
@@ -761,7 +896,10 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
                 "--",
                 "--port",
                 "9090"
-              ]
+              ],
+              "env": {
+                "HOST": "localhost"
+              }
             }
             """;
         Assert.Equal(expected, manifest.ToString());
@@ -868,6 +1006,225 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
 
         Assert.False(app.Resource.TryGetLastAnnotation<DockerfileBuilderCallbackAnnotation>(out _),
             "No DockerfileBuilderCallbackAnnotation should be added when a Dockerfile already exists");
+    }
+
+    [Fact]
+    public async Task PublishWithExistingDockerfileStillPublishesWhenPackagePathIsNotDefault()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path);
+
+        // A mismatch is only warned about, so an existing Dockerfile that already builds the package keeps publishing.
+        var app = builder.AddGoApp("api", CreateGoAppDirectoryWithDockerfile(workspace), packagePath: "./cmd/server");
+
+        var manifest = await ManifestUtils.GetManifest(app.Resource, workspace.Path);
+
+        Assert.Equal("container.v1", manifest["type"]?.ToString());
+    }
+
+    [Fact]
+    public async Task PublishPipelineWithExistingDockerfileWarnsFromValidationStepWhenPackagePathIsNotDefault()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: "validate-go-dockerfile-package-path-api");
+        var reporter = new TestPipelineActivityReporter(outputHelper);
+        builder.Services.AddSingleton<IPipelineActivityReporter>(reporter);
+
+        var sourceDir = CreateGoAppDirectoryWithDockerfile(workspace);
+        builder.AddGoApp("api", sourceDir, packagePath: "./cmd/server");
+
+        using var app = builder.Build();
+        var pipeline = app.Services.GetRequiredService<IDistributedApplicationPipeline>();
+
+        await pipeline.ExecuteAsync(CreatePipelineContext(app));
+
+        var warning = Assert.Single(GetWarnings(reporter));
+        Assert.Equal(
+            $"Go app resource 'api' is configured to run package './cmd/server', but publish is using the existing Dockerfile '{Path.Combine(sourceDir, "Dockerfile")}'. " +
+            "Aspire does not change an existing Dockerfile, so the published image runs whatever that Dockerfile builds and starts. " +
+            "Make sure it builds and runs that package, remove or rename the Dockerfile so Aspire can generate one, or call PublishAsDockerFile(...) and set the container entrypoint explicitly.",
+            warning);
+    }
+
+    [Theory]
+    [InlineData(".")]
+    [InlineData("./")]
+    [InlineData("./.")]
+    public async Task PublishPipelineWithExistingDockerfileDoesNotWarnWhenPackagePathResolvesToAppDirectory(string packagePath)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: "validate-go-dockerfile-package-path-api");
+        var reporter = new TestPipelineActivityReporter(outputHelper);
+        builder.Services.AddSingleton<IPipelineActivityReporter>(reporter);
+
+        // Only the literal "." is the default, but these spellings select the same package.
+        builder.AddGoApp("api", CreateGoAppDirectoryWithDockerfile(workspace), packagePath: packagePath);
+
+        using var app = builder.Build();
+        var pipeline = app.Services.GetRequiredService<IDistributedApplicationPipeline>();
+
+        await pipeline.ExecuteAsync(CreatePipelineContext(app));
+
+        Assert.Empty(GetWarnings(reporter));
+    }
+
+    [Fact]
+    public async Task PublishWithExistingDockerfileAllowsDefaultPackagePath()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path);
+
+        var app = builder.AddGoApp("api", CreateGoAppDirectoryWithDockerfile(workspace));
+
+        var manifest = await ManifestUtils.GetManifest(app.Resource, workspace.Path);
+
+        Assert.Equal("container.v1", manifest["type"]?.ToString());
+    }
+
+    [Fact]
+    public async Task PublishWithExistingDockerfileAllowsBuildFlagsWithDefaultPackagePath()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path);
+
+        // Build flags do not select what the Dockerfile runs, so they are not an entrypoint conflict.
+        var app = builder.AddGoApp("api", CreateGoAppDirectoryWithDockerfile(workspace), buildTags: ["netgo"], ldFlags: "-s -w", gcFlags: "-N -l", raceDetector: true);
+
+        var manifest = await ManifestUtils.GetManifest(app.Resource, workspace.Path);
+
+        Assert.Equal("container.v1", manifest["type"]?.ToString());
+    }
+
+    [Fact]
+    public async Task PublishWithExistingDockerfileAllowsExplicitEntrypointOverride()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path);
+
+        var app = builder.AddGoApp("api", CreateGoAppDirectoryWithDockerfile(workspace), packagePath: "./cmd/server")
+            .PublishAsDockerFile(container => container.WithEntrypoint("/app/server"));
+
+        var manifest = await ManifestUtils.GetManifest(app.Resource, workspace.Path);
+
+        Assert.Equal("container.v1", manifest["type"]?.ToString());
+        Assert.Equal("/app/server", manifest["entrypoint"]?.ToString());
+    }
+
+    [Fact]
+    public async Task PublishPipelineWithoutDockerfileDoesNotWarnWhenPackagePathIsNotDefault()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: "validate-go-dockerfile-package-path-api");
+        var reporter = new TestPipelineActivityReporter(outputHelper);
+        builder.Services.AddSingleton<IPipelineActivityReporter>(reporter);
+
+        // Without an existing Dockerfile Aspire generates one that builds the requested package,
+        // which VerifyPublish_PackagePath_UsedInDockerfileBuildCommand covers through the manifest.
+        builder.AddGoApp("api", workspace.CreateDirectory("source").FullName, packagePath: "./cmd/server");
+
+        using var app = builder.Build();
+        var pipeline = app.Services.GetRequiredService<IDistributedApplicationPipeline>();
+
+        await pipeline.ExecuteAsync(CreatePipelineContext(app));
+
+        Assert.Empty(GetWarnings(reporter));
+    }
+
+    [Fact]
+    public async Task PublishAsDockerFileWithDockerfileWarnsFromValidationStepWhenPackagePathIsNotDefault()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: "validate-go-dockerfile-package-path-api");
+        var reporter = new TestPipelineActivityReporter(outputHelper);
+        builder.Services.AddSingleton<IPipelineActivityReporter>(reporter);
+
+        var sourceDir = CreateGoAppDirectoryWithDockerfile(workspace);
+        var publishDockerfile = CreateDockerfile(sourceDir, "Dockerfile.prod");
+        builder.AddGoApp("api", sourceDir, packagePath: "./cmd/server")
+            .PublishAsDockerFile(container => container.WithDockerfile(sourceDir, publishDockerfile));
+
+        using var app = builder.Build();
+        var pipeline = app.Services.GetRequiredService<IDistributedApplicationPipeline>();
+
+        await pipeline.ExecuteAsync(CreatePipelineContext(app));
+
+        var warning = Assert.Single(GetWarnings(reporter));
+        Assert.Contains("package './cmd/server'", warning);
+        Assert.Contains(publishDockerfile, warning);
+    }
+
+    [Fact]
+    public async Task PublishAsDockerFileWithDockerfileAndExplicitEntrypointDoesNotWarn()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: "validate-go-dockerfile-package-path-api");
+        var reporter = new TestPipelineActivityReporter(outputHelper);
+        builder.Services.AddSingleton<IPipelineActivityReporter>(reporter);
+
+        var sourceDir = CreateGoAppDirectoryWithDockerfile(workspace);
+        var publishDockerfile = CreateDockerfile(sourceDir, "Dockerfile.prod");
+        builder.AddGoApp("api", sourceDir, packagePath: "./cmd/server")
+            .PublishAsDockerFile(container => container.WithDockerfile(sourceDir, publishDockerfile).WithEntrypoint("/app/server"));
+
+        using var app = builder.Build();
+        var pipeline = app.Services.GetRequiredService<IDistributedApplicationPipeline>();
+
+        await pipeline.ExecuteAsync(CreatePipelineContext(app));
+
+        Assert.Empty(GetWarnings(reporter));
+    }
+
+    [Fact]
+    public async Task PublishPipelineValidationStepIsNoOpForResourceExcludedFromManifest()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var reporter = new TestPipelineActivityReporter(outputHelper);
+        builder.Services.AddSingleton<IPipelineActivityReporter>(reporter);
+
+        var sourceDir = CreateGoAppDirectoryWithDockerfile(workspace);
+        builder.AddGoApp("excluded", sourceDir, packagePath: "./cmd/server").ExcludeFromManifest();
+        builder.AddGoApp("sibling", sourceDir);
+
+        using var app = builder.Build();
+        var pipeline = (DistributedApplicationPipeline)app.Services.GetRequiredService<IDistributedApplicationPipeline>();
+        var context = CreatePipelineContext(app);
+
+        var validationStepNames = (await pipeline.ResolveStepsAsync(context))
+            .Select(step => step.Name)
+            .Where(name => name.StartsWith("validate-go-dockerfile-package-path-", StringComparison.Ordinal))
+            .ToList();
+
+        foreach (var stepName in validationStepNames)
+        {
+            await pipeline.ExecuteStepSequentiallyAsync(stepName, context);
+        }
+
+        Assert.Equal(
+            ["validate-go-dockerfile-package-path-excluded", "validate-go-dockerfile-package-path-sibling"],
+            validationStepNames.Order(StringComparer.Ordinal));
+        Assert.Empty(GetWarnings(reporter));
+    }
+
+    [Fact]
+    public async Task PublishPipelineRunsValidationStepBeforeImageBuildStep()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.Services.AddSingleton<IPipelineActivityReporter, NullPublishingActivityReporter>();
+
+        builder.AddGoApp("api", CreateGoAppDirectoryWithDockerfile(workspace), packagePath: "./cmd/server");
+
+        using var app = builder.Build();
+        var pipeline = (DistributedApplicationPipeline)app.Services.GetRequiredService<IDistributedApplicationPipeline>();
+
+        var steps = (await pipeline.ResolveStepsAsync(CreatePipelineContext(app)))
+            .ToDictionary(step => step.Name, StringComparer.Ordinal);
+
+        // Compute environments such as Azure Container Apps depend on the image build step without the aggregate Build step.
+        var buildStepClosure = DistributedApplicationPipeline.ComputeTransitiveDependencies(steps["build-api"], steps);
+
+        Assert.Contains(buildStepClosure, step => step.Name == "validate-go-dockerfile-package-path-api");
     }
 
     [Fact]
@@ -1183,18 +1540,112 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
         await Verify(content);
     }
 
-    private static async Task<GoLaunchConfiguration> InvokeLaunchConfigurationAnnotatorAsync(IResource resource)
+    [Fact]
+    public void AddGoApp_RequestsPlatformCertificateTrustScope()
     {
-        Assert.True(resource.TryGetLastAnnotation<SupportsDebuggingAnnotation>(out var supportsDebugging));
+        using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
 
-        var exe = Executable.Create("test", "go");
+        var app = builder.AddGoApp("api", AppContext.BaseDirectory);
+
+        // On macOS and Windows, setting SSL_CERT_DIR makes Go load roots only from disk instead of the
+        // platform verifier, and those platforms have no default cert files. Under the default Append
+        // scope Go would then trust only Aspire's own certificates, so the bundle must include the
+        // system roots as well. Linux still loads its default bundle file, so Append works there.
+        var expectedScope = OperatingSystem.IsMacOS() || OperatingSystem.IsWindows()
+            ? CertificateTrustScope.System
+            : CertificateTrustScope.Append;
+        Assert.True(app.Resource.TryGetLastAnnotation<CertificateAuthorityCollectionAnnotation>(out var certAnnotation));
+        Assert.Equal(expectedScope, certAnnotation.Scope);
+    }
+
+    [Fact]
+    public void AddGoApp_ExplicitCertificateTrustScope_OverridesDefault()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
+
+        var app = builder.AddGoApp("api", AppContext.BaseDirectory)
+            .WithCertificateTrustScope(CertificateTrustScope.Append);
+
+        Assert.True(app.Resource.TryGetLastAnnotation<CertificateAuthorityCollectionAnnotation>(out var certAnnotation));
+        Assert.Equal(CertificateTrustScope.Append, certAnnotation.Scope);
+    }
+
+    [Fact]
+    public async Task AddGoApp_WithAppendCertificateTrustScope_LogsThatPublicRootsAreNotTrustedOnMacOSAndWindows()
+    {
+        // https://github.com/microsoft/aspire/issues/21198
+        Assert.SkipUnless(OperatingSystem.IsMacOS() || OperatingSystem.IsWindows(), "Go only replaces the platform roots on macOS and Windows.");
+
+        using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
+
+        var goApp = builder.AddGoApp("api", AppContext.BaseDirectory);
+
+        using var app = builder.Build();
+
+        Assert.True(goApp.Resource.TryGetLastAnnotation<CertificateTrustConfigurationCallbackAnnotation>(out var annotation));
+
+        await annotation.Callback(new CertificateTrustConfigurationCallbackAnnotationContext
+        {
+            ExecutionContext = new DistributedApplicationExecutionContext(
+                new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run)
+                {
+                    Services = app.Services
+                }),
+            Resource = goApp.Resource,
+            Arguments = [],
+            EnvironmentVariables = new Dictionary<string, object>(),
+            CertificateBundlePath = ReferenceExpression.Create($"/aspire/cert.pem"),
+            CertificateDirectoriesPath = ReferenceExpression.Create($"/aspire/certs"),
+            Scope = CertificateTrustScope.Append,
+            CancellationToken = default
+        });
+
+        // WatchAsync replays the logs already written for the resource as its first batch.
+        var resourceLoggerService = app.Services.GetRequiredService<ResourceLoggerService>();
+        await using var logs = resourceLoggerService.WatchAsync(goApp.Resource).GetAsyncEnumerator();
+        Assert.True(await logs.MoveNextAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(30)));
+
+        // Log content is prefixed with a timestamp, for example "2026-10-22T06:54:13.6917970Z Certificate ...".
+        var content = Assert.Single(logs.Current).Content;
+        Assert.Equal(
+            "Certificate trust scope is set to 'Append', but since Go 1.27, Go on macOS and Windows trusts only the configured certificates instead of adding them to the system roots, so public certificate authorities will not be trusted. Use 'System' to trust both.",
+            content[(content.IndexOf(' ') + 1)..]);
+    }
+
+    private static string CreateGoAppDirectoryWithDockerfile(TemporaryWorkspace workspace)
+    {
+        var sourceDir = workspace.CreateDirectory("source");
+
+        File.WriteAllText(Path.Combine(sourceDir.FullName, "go.mod"), "module example.com/api\n\ngo 1.24\n");
+        File.WriteAllText(Path.Combine(sourceDir.FullName, "Dockerfile"), "FROM scratch\nENTRYPOINT [\"/app/api\"]\n");
+
+        return sourceDir.FullName;
+    }
+
+    private static string CreateDockerfile(string directory, string fileName)
+    {
+        var dockerfilePath = Path.Combine(directory, fileName);
+
+        File.WriteAllText(dockerfilePath, "FROM scratch\nENTRYPOINT [\"/app/api\"]\n");
+
+        return dockerfilePath;
+    }
+
+    private static PipelineContext CreatePipelineContext(DistributedApplication app) => new(
+        app.Services.GetRequiredService<DistributedApplicationModel>(),
+        app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
+        app.Services,
+        app.Services.GetRequiredService<ILogger<AddGoAppTests>>(),
+        CancellationToken.None);
+
+    private static string[] GetWarnings(TestPipelineActivityReporter reporter) =>
+        [.. reporter.LoggedMessages.Where(log => log.LogLevel == LogLevel.Warning).Select(log => log.Message)];
+
+    private static async Task<GoLaunchConfiguration> CreateLaunchConfigurationAsync(IResource resource)
+    {
         var callbackContext = LaunchConfigurationTestHelpers.CreateCallbackContext(resource);
-        await supportsDebugging.LaunchConfigurationAnnotator(exe, callbackContext);
-
-        Assert.True(exe.TryGetAnnotationAsObjectList<GoLaunchConfiguration>(
-            Executable.LaunchConfigurationsAnnotation,
-            out var launchConfigs));
-        return Assert.Single(launchConfigs);
+        return Assert.IsType<GoLaunchConfiguration>(
+            await LaunchConfigurationTestHelpers.InvokeLaunchConfigurationProducerAsync(resource, callbackContext));
     }
 
     private sealed class GoFilesContainer(string name, string command, string workingDirectory)

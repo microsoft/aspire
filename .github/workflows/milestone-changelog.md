@@ -23,27 +23,27 @@ max-daily-ai-credits: -1
 #      apply editorial feedback, generate changelog entries,
 #      and write state files to disk.
 #
-#   3. publish job (safe-output) — Pushes the wiki page and
-#      memory branch, and ensures the companion feedback
-#      issue exists.
+#   3. publish job (safe-output) — Pushes the wiki page, updates
+#      the wiki home page index, pushes the memory branch, and
+#      ensures the companion feedback issue exists.
 #
 # Data flows fetch-data → agent via the changelog-data
-# artifact. Agent → publish uses the framework's built-in
-# safe-output artifact passing.
+# artifact. Agent → publish uses an explicit changelog-output
+# artifact for the generated body and memory files.
 #
 # ──────────────────────────────────────────────────────────
 # To change the target milestone, update the MILESTONE value
 # in the env block below, then run:
-#   gh aw compile
+#   gh aw compile --schedule-seed microsoft/aspire
 # ──────────────────────────────────────────────────────────
 
 env:
   PRODUCT: "Aspire"
   REPO: "microsoft/aspire"
   DOCS_REPO: "microsoft/aspire.dev"
-  MILESTONE_START: "2026-06-02"
-  MILESTONE: "13.5"
-  PREVIOUS_MILESTONE: "13.4"
+  MILESTONE_START: "2026-09-30"
+  MILESTONE: "17.0"
+  PREVIOUS_MILESTONE: "13.6"
   RELEASE_NOTES_URL: "https://aka.ms/aspire/update-latest"
   BATCH_SIZE: "20"
 
@@ -54,6 +54,7 @@ on:
 
 jobs:
   fetch-data:
+    if: github.repository == 'microsoft/aspire'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -72,6 +73,68 @@ jobs:
           BATCH_SIZE="${{ env.BATCH_SIZE }}"
           DATA_DIR="/tmp/gh-aw/pr-data"
           mkdir -p "$DATA_DIR"
+
+          # Run `gh pr list` with bounded retry. The large (--limit 5000)
+          # GraphQL queries below occasionally hit a transient 502/504 from
+          # GitHub's GraphQL gateway or get a truncated response body. Retry
+          # only those transient failures (4 attempts, 15s/30s/60s backoff);
+          # Invalid JSON after a successful command is retryable even if gh
+          # printed warnings. Other command errors and valid non-array JSON
+          # fail immediately. Usage: gh_pr_list_with_retry OUT ARGS...
+          gh_pr_list_with_retry() {
+            local out="$1"; shift
+            local delays=(15 30 60)
+            local attempt=1
+            local diagnostics err validation_err
+            diagnostics=$(mktemp -d)
+            err="$diagnostics/gh.stderr"
+            validation_err="$diagnostics/jq.stderr"
+            while true; do
+              local status=0 validation_status=0
+              local transient=false
+              : > "$validation_err"
+              if gh pr list "$@" > "$out" 2> "$err"; then
+                if jq -s -e 'if length == 1 and (.[0] | type == "array") then true else error("Expected exactly one JSON array") end' \
+                    "$out" > /dev/null 2> "$validation_err"; then
+                  tr '\r' '\n' < "$err" | sed 's/##\[/##\\[/g; s/^/gh stderr: /' >&2
+                  rm -f "$err" "$validation_err"
+                  rmdir "$diagnostics"
+                  return 0
+                else
+                  validation_status=$?
+                fi
+                if ! jq -s -e 'length > 0' "$out" > /dev/null 2>&1; then
+                  transient=true
+                fi
+              else
+                status=$?
+                # Examples: "HTTP 502: Bad Gateway", "unexpected end of JSON input".
+                if grep -qE 'HTTP 5[0-9][0-9]|unexpected end of JSON input' "$err"; then
+                  transient=true
+                fi
+              fi
+
+              echo "gh pr list attempt $attempt failed for $out (gh exit=$status, jq exit=$validation_status)" >&2
+              tr '\r' '\n' < "$err" | sed 's/##\[/##\\[/g; s/^/gh stderr: /' >&2
+              tr '\r' '\n' < "$validation_err" | sed 's/##\[/##\\[/g; s/^/jq stderr: /' >&2
+              # PR bodies can be large and contain workflow-command syntax.
+              # Bound the preview and prefix every line, including CR-delimited lines.
+              # Legacy "##[command]" markers are recognized even after a prefix.
+              echo "Response preview (first 4096 bytes of $(wc -c < "$out") bytes):" >&2
+              head -c 4096 "$out" | tr '\r' '\n' | sed 's/##\[/##\\[/g; s/^/stdout: /' >&2
+              printf '\n' >&2
+              if [ "$transient" != true ] || [ "$attempt" -gt "${#delays[@]}" ]; then
+                rm -f "$err" "$validation_err"
+                rmdir "$diagnostics"
+                echo "::error::gh pr list failed after $attempt attempt(s)"
+                return 1
+              fi
+              local delay="${delays[$((attempt - 1))]}"
+              echo "::warning::gh pr list attempt $attempt failed with a transient error; retrying in ${delay}s"
+              sleep "$delay"
+              attempt=$((attempt + 1))
+            done
+          }
 
           # 0. Clone the memory branch to read existing state (prs/, changes/,
           #    feedback-issue.json). The full content is copied to
@@ -109,7 +172,7 @@ jobs:
             # PR number from the filename instead of reading every JSON file (which
             # can fail when the glob expands to hundreds of arguments).
             if [ -d "$PRS_DIR" ]; then
-              PRS_LISTING=$(ls "$PRS_DIR" 2>/dev/null \
+              PRS_LISTING=$(find "$PRS_DIR" -maxdepth 1 -type f -printf '%f\n' \
                 | sed -n 's/.*-\([0-9]*\)\.json$/\1/p' \
                 | jq -Rs '[split("\n") | .[] | select(. != "") | tonumber]')
               if echo "$PRS_LISTING" | jq -e 'type == "array" and length > 0' >/dev/null 2>&1; then
@@ -120,7 +183,7 @@ jobs:
 
             DOCS_PRS_DIR="$MEMORY_DIR/prs-docs"
             if [ -d "$DOCS_PRS_DIR" ]; then
-              DOCS_PRS_LISTING=$(ls "$DOCS_PRS_DIR" 2>/dev/null \
+              DOCS_PRS_LISTING=$(find "$DOCS_PRS_DIR" -maxdepth 1 -type f -printf '%f\n' \
                 | sed -n 's/.*-\([0-9]*\)\.json$/\1/p' \
                 | jq -Rs '[split("\n") | .[] | select(. != "") | tonumber]')
               if echo "$DOCS_PRS_LISTING" | jq -e 'type == "array" and length > 0' >/dev/null 2>&1; then
@@ -143,11 +206,13 @@ jobs:
           rm -f "$CLONE_ERR"
 
           # 1. Fetch ALL merged PRs in milestone, sorted by merge date ascending
-          gh pr list --repo "$REPO" --state merged --limit 5000 \
+          gh_pr_list_with_retry "$DATA_DIR/all-milestone-prs.raw.json" \
+            --repo "$REPO" --state merged --limit 5000 \
             --search "milestone:$MILESTONE" \
-            --json number,title,body,author,mergedBy,mergedAt,labels,additions,deletions,changedFiles \
-            | jq 'sort_by(.mergedAt)' \
+            --json number,title,body,author,mergedBy,mergedAt,labels,additions,deletions,changedFiles
+          jq 'sort_by(.mergedAt)' "$DATA_DIR/all-milestone-prs.raw.json" \
             > "$DATA_DIR/all-milestone-prs.json"
+          rm -f "$DATA_DIR/all-milestone-prs.raw.json"
 
           TOTAL=$(jq length "$DATA_DIR/all-milestone-prs.json")
           echo "Total merged PRs in milestone: $TOTAL"
@@ -225,11 +290,13 @@ jobs:
             DOCS_MERGED_RANGE="merged:${MILESTONE_START}..${BATCH_CUTOFF}"
             echo "Capping docs PRs to merged on or before $BATCH_CUTOFF (batch is full)"
           fi
-          gh pr list --repo "$DOCS_REPO" --state merged --limit 5000 \
+          gh_pr_list_with_retry "$DATA_DIR/all-docs-prs.raw.json" \
+            --repo "$DOCS_REPO" --state merged --limit 5000 \
             --search "$DOCS_MERGED_RANGE" \
-            --json number,title,body,author,mergedBy,mergedAt,labels,additions,deletions,changedFiles,files \
-            | jq 'sort_by(.mergedAt)' \
+            --json number,title,body,author,mergedBy,mergedAt,labels,additions,deletions,changedFiles,files
+          jq 'sort_by(.mergedAt)' "$DATA_DIR/all-docs-prs.raw.json" \
             > "$DATA_DIR/all-docs-prs.json"
+          rm -f "$DATA_DIR/all-docs-prs.raw.json"
 
           DOCS_TOTAL=$(jq length "$DATA_DIR/all-docs-prs.json")
           echo "Total docs PRs merged since $MILESTONE_START: $DOCS_TOTAL"
@@ -312,13 +379,13 @@ jobs:
           rm -rf "$WIKI_TMP"
 
           echo "has_work=$HAS_WORK" >> "$GITHUB_OUTPUT"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7.0.1
         if: steps.fetch.outputs.has_work == 'true'
         with:
           name: changelog-data
           path: /tmp/gh-aw/
 
-if: github.repository_owner == 'microsoft' && needs.fetch-data.outputs.has-work == 'true'
+if: github.repository == 'microsoft/aspire' && needs.fetch-data.outputs.has-work == 'true'
 
 permissions:
   contents: read
@@ -349,7 +416,15 @@ safe-outputs:
       env:
         GH_TOKEN: ${{ github.token }}
       steps:
+        - name: Download changelog files
+          id: download-changelog
+          uses: actions/download-artifact@v8.0.1
+          with:
+            name: changelog-output
+            path: ${{ runner.temp }}/changelog-output
         - name: Publish changelog and update memory branch
+          env:
+            CHANGELOG_DIR: ${{ steps.download-changelog.outputs.download-path }}
           run: |
             set -euo pipefail
 
@@ -359,8 +434,7 @@ safe-outputs:
               exit 1
             fi
 
-            ARTIFACT_DIR=$(dirname "$OUTPUT_FILE")
-            BODY_FILE="$ARTIFACT_DIR/agent/new-body.md"
+            BODY_FILE="$CHANGELOG_DIR/new-body.md"
             if [ ! -f "$BODY_FILE" ]; then
               echo "::error::Changelog body not found at $BODY_FILE"
               exit 1
@@ -377,6 +451,8 @@ safe-outputs:
             PAGE_NAME="${MILESTONE}-Change-log"
             FEEDBACK_TITLE="[${MILESTONE}] Changelog feedback"
             MEMORY_BRANCH="memory/milestone-changelog"
+            HOME_PAGE="wiki-repo/Home.md"
+            HOME_LINK="- [${MILESTONE} Change log](${PAGE_NAME})"
 
             # ── 1. Publish wiki page ──
             if ! git clone --depth 1 \
@@ -388,9 +464,42 @@ safe-outputs:
                 "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.wiki.git"
             fi
             cp "$BODY_FILE" "wiki-repo/${PAGE_NAME}.md"
+
+            # Keep newly generated milestone pages discoverable from the wiki landing page.
+            if [ ! -f "$HOME_PAGE" ]; then
+              printf 'Welcome to the aspire wiki!\n\n## Change logs\n\n%s\n' \
+                "$HOME_LINK" > "$HOME_PAGE"
+            elif ! grep -Fqx -- "$HOME_LINK" "$HOME_PAGE"; then
+              HOME_TMP=$(mktemp)
+              awk -v link="$HOME_LINK" '
+                /^## Change logs$/ && !added {
+                  print
+                  print ""
+                  print link
+                  added = 1
+                  skip_blank = 1
+                  next
+                }
+                skip_blank && /^[[:space:]]*$/ {
+                  skip_blank = 0
+                  next
+                }
+                { skip_blank = 0; print }
+                END {
+                  if (!added) {
+                    print ""
+                    print "## Change logs"
+                    print ""
+                    print link
+                  }
+                }
+              ' "$HOME_PAGE" > "$HOME_TMP"
+              mv "$HOME_TMP" "$HOME_PAGE"
+            fi
+
             git -C wiki-repo config user.name "github-actions[bot]"
             git -C wiki-repo config user.email "github-actions[bot]@users.noreply.github.com"
-            git -C wiki-repo add "${PAGE_NAME}.md"
+            git -C wiki-repo add "${PAGE_NAME}.md" "Home.md"
 
             if git -C wiki-repo diff --cached --quiet; then
               echo "No changes to wiki page"
@@ -401,7 +510,7 @@ safe-outputs:
             fi
 
             # ── 2. Push state to memory branch ──
-            MEMORY_DIR="$ARTIFACT_DIR/agent/memory/$MILESTONE"
+            MEMORY_DIR="$CHANGELOG_DIR/memory/$MILESTONE"
             if [ -d "$MEMORY_DIR" ]; then
               if ! git clone --depth 1 --branch "$MEMORY_BRANCH" \
                   "https://x-access-token:${GH_TOKEN}@github.com/${REPO}.git" \
@@ -452,10 +561,21 @@ safe-outputs:
 timeout-minutes: 30
 
 steps:
-  - uses: actions/download-artifact@v4
+  - uses: actions/download-artifact@v8.0.1
     with:
       name: changelog-data
       path: /tmp/gh-aw/
+
+# Custom agent files are not included in gh-aw's diagnostic agent artifact.
+post-steps:
+  - name: Upload changelog files
+    uses: actions/upload-artifact@v7.0.1
+    with:
+      name: changelog-output
+      path: |
+        /tmp/gh-aw/agent/new-body.md
+        /tmp/gh-aw/agent/memory/${{ env.MILESTONE }}/
+      if-no-files-found: error
 
 ---
 
@@ -467,7 +587,7 @@ previous entries. A companion feedback issue collects editorial comments.
 
 <!-- Keep the hardcoded values below in sync with the env block above. -->
 > **Note:** `${PRODUCT}`, `${REPO}`, `${DOCS_REPO}`, `${MILESTONE_START}`, `${MILESTONE}`, `${PREVIOUS_MILESTONE}`, `${RELEASE_NOTES_URL}`, and `${BATCH_SIZE}` refer to values set in the workflow's
-> `env` block (currently **`Aspire`**, **`microsoft/aspire`**, **`microsoft/aspire.dev`**, **`2026-06-02`**, **`13.5`**, **`13.4`**, **`https://aka.ms/aspire/update-latest`**, and **`20`**). All file names,
+> `env` block (currently **`Aspire`**, **`microsoft/aspire`**, **`microsoft/aspire.dev`**, **`2026-09-30`**, **`17.0`**, **`13.6`**, **`https://aka.ms/aspire/update-latest`**, and **`20`**). All file names,
 > titles, and references below derive from those values.
 
 ## Important: available tools

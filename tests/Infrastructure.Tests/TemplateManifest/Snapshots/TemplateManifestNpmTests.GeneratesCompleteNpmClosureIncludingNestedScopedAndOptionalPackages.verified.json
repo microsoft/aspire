@@ -1,0 +1,114 @@
+﻿{
+  "$schema": "https://json.schemastore.org/component-detection-manifest.json",
+  "version": 1,
+  "registrations": [
+    {
+      "component": {
+        "type": "npm",
+        "npm": {
+          "name": "@real/package",
+          "version": "6.0.0"
+        }
+      }
+    },
+    {
+      "component": {
+        "type": "npm",
+        "npm": {
+          "name": "@scope/direct",
+          "version": "2.1.0"
+        }
+      }
+    },
+    {
+      "component": {
+        "type": "npm",
+        "npm": {
+          "name": "@scope/transitive",
+          "version": "3.0.0"
+        }
+      }
+    },
+    {
+      "component": {
+        "type": "npm",
+        "npm": {
+          "name": "dev-tool",
+          "version": "4.1.0"
+        }
+      }
+    },
+    {
+      "component": {
+        "type": "npm",
+        "npm": {
+          "name": "dev-transitive",
+          "version": "4.2.0"
+        }
+      }
+    },
+    {
+      "component": {
+        "type": "npm",
+        "npm": {
+          "name": "direct",
+          "version": "1.2.0"
+        }
+      }
+    },
+    {
+      "component": {
+        "type": "npm",
+        "npm": {
+          "name": "is-number",
+          "version": "7.0.0"
+        }
+      }
+    },
+    {
+      "component": {
+        "type": "npm",
+        "npm": {
+          "name": "optional-native",
+          "version": "5.1.0"
+        }
+      }
+    },
+    {
+      "component": {
+        "type": "npm",
+        "npm": {
+          "name": "platform-linux",
+          "version": "5.2.0"
+        }
+      }
+    },
+    {
+      "component": {
+        "type": "npm",
+        "npm": {
+          "name": "platform-win",
+          "version": "5.2.0"
+        }
+      }
+    },
+    {
+      "component": {
+        "type": "npm",
+        "npm": {
+          "name": "shared",
+          "version": "1.0.0"
+        }
+      }
+    },
+    {
+      "component": {
+        "type": "npm",
+        "npm": {
+          "name": "shared",
+          "version": "2.0.0"
+        }
+      }
+    }
+  ]
+}

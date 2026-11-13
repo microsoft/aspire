@@ -9,7 +9,7 @@ import (
 func main() {
 	builder, err := aspire.CreateBuilder()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	milvus := builder.AddMilvus("milvus")
@@ -17,11 +17,11 @@ func main() {
 	customKey := builder.AddParameter("milvus-key", &aspire.AddParameterOptions{Secret: aspire.BoolPtr(true)})
 	milvus2 := builder.AddMilvus("milvus2", &aspire.AddMilvusOptions{ApiKey: &customKey})
 
-	builder.AddMilvus("milvus3", &aspire.AddMilvusOptions{GrpcPort: aspire.Float64Ptr(19531)})
+	builder.AddMilvus("milvus3", &aspire.AddMilvusOptions{GrpcPort: aspire.IntPtr(19531)})
 
 	db := milvus.AddDatabase("mydb")
 	if err = db.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	milvus.AddDatabase("db2", &aspire.AddDatabaseOptions{DatabaseName: aspire.StringPtr("customdb")})
@@ -32,7 +32,7 @@ func main() {
 
 	builder.AddMilvus("milvus-attu-cfg").WithAttu(&aspire.WithAttuOptions{
 		ConfigureContainer: func(container aspire.AttuResource) {
-			container.WithHttpEndpoint(&aspire.WithHttpEndpointOptions{Port: aspire.Float64Ptr(3001)})
+			container.WithHttpEndpoint(&aspire.WithHttpEndpointOptions{Port: aspire.IntPtr(3001)})
 		},
 	})
 
@@ -55,7 +55,7 @@ func main() {
 	api.WithReference(db)
 	api.WithReference(milvus)
 	if err = api.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	_ = milvus.PrimaryEndpoint()
@@ -67,14 +67,14 @@ func main() {
 	_, _ = milvus.Databases()
 
 	if err = milvus.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	app, err := builder.Build()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 	if err := app.Run(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 }

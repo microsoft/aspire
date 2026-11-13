@@ -35,7 +35,7 @@ Repo-local development builds discover the built managed dashboard from `artifac
 Capture startup for an AppHost and exit automatically after startup:
 
 ```bash
-./dotnet.sh exec artifacts/bin/Aspire.Cli/Debug/net10.0/aspire.dll run \
+./dotnet.sh exec artifacts/bin/Aspire.Cli/Debug/net11.0/aspire.dll run \
   --project tests/TestingAppHost1/TestingAppHost1.AppHost/TestingAppHost1.AppHost.csproj \
   --capture-profile \
   --capture-profile-output artifacts/tmp/startup-profile/profile.zip \

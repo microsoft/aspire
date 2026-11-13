@@ -1,6 +1,6 @@
 import * as assert from 'assert';
-import { findResource, getCommandInvocationCount, getTaskProcessEventCount, waitForCommandOutcome, waitForHttpText, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForResourceState, waitForTaskProcessEvent, waitForWorkspaceAppHost } from './helpers/assertions';
-import { executeE2eControlCommand, runE2eTeardown, stopPrimaryAppHostIfRunning } from './helpers/fixtures';
+import { findResource, getCommandInvocationCount, getTaskProcessEventCount, waitForCommandOutcome, waitForHttpText, waitForNoDebugSessions, waitForNoRunningAppHost, waitForRepositoryIdle, waitForResourceState, waitForRunningResourceWithUrl, waitForTaskProcessEvent, waitForWorkspaceAppHost } from './helpers/assertions';
+import { executeE2eControlCommand, reloadWorkspaceForE2E, runE2eTeardown, stopPrimaryAppHostIfRunning } from './helpers/fixtures';
 import { getPrimaryAppHostProjectPath } from './helpers/paths';
 import { openAspireView } from './helpers/vscode';
 
@@ -27,6 +27,12 @@ suite('Aspire Azure Functions E2E', function () {
         await openAspireView();
         await waitForRepositoryIdle();
         await waitForWorkspaceAppHost();
+        await reloadWorkspaceForE2E();
+        await waitForRepositoryIdle();
+        await waitForWorkspaceAppHost();
+        // Reloading the window restarts the extension host and returns VS Code to Explorer.
+        // Reopen the Aspire view so its visibility-driven runtime state polling observes the AppHost.
+        await openAspireView();
 
         const appHostPath = getPrimaryAppHostProjectPath();
         const taskSequenceBeforeRun = getTaskProcessEventCount();
@@ -34,7 +40,9 @@ suite('Aspire Azure Functions E2E', function () {
         await executeE2eControlCommand({ name: 'runAppHost', appHostPath }, { waitFor: 'started' });
         await waitForCommandOutcome('aspire-vscode.runAppHost', 'success', 60000, runInvocationBefore);
 
-        const runningState = await waitForResourceState('e2e-functions', ['Running'], 300000);
+        // Running and endpoint activation are separate updates; the backchannel omits inactive URLs.
+        // Wait for both in the same snapshot before probing HTTPS (https://github.com/microsoft/aspire/issues/19639).
+        const runningState = await waitForRunningResourceWithUrl('e2e-functions', 'https:', 300000);
         const functionsResource = findResource(runningState.state, 'e2e-functions');
         assert.ok(functionsResource, 'Expected the HTTPS Azure Functions resource in extension state.');
         const httpsUrl = functionsResource.urls?.find(url => new URL(url.url).protocol === 'https:')?.url;
@@ -49,7 +57,7 @@ suite('Aspire Azure Functions E2E', function () {
         assert.ok(taskStarted.processId && taskStarted.processId > 0, 'Expected VS Code to report the Functions host task process ID.');
 
         const stopInvocationBefore = getCommandInvocationCount('aspire-vscode.stopResource');
-        await executeE2eControlCommand({ name: 'stopResource', appHostPath, resourceName: functionsResource.name });
+        await executeE2eControlCommand({ name: 'stopResource', appHostPath, resourceName: functionsResource.name }, { waitFor: 'started' });
         await waitForCommandOutcome('aspire-vscode.stopResource', 'success', 60000, stopInvocationBefore);
         await waitForResourceState(functionsResource.name, ['Exited', 'Finished', 'Stopped'], 120000);
 

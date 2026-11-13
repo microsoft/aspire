@@ -11,6 +11,7 @@ using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
+using Aspire.Cli.Secrets;
 using Aspire.Cli.Utils;
 using Aspire.Cli.Utils.Markdown;
 using Microsoft.Extensions.Configuration;
@@ -250,7 +251,7 @@ internal sealed class RenderCommand : BaseCommand
 
         InteractionService.DisplayEmptyLine();
         InteractionService.DisplayError("Failed to resolve package 'Aspire.Hosting.Azure.CosmosDB' version 9.2.0. The package source 'https://api.nuget.org/v3/index.json' returned a 503 Service Unavailable response. Please check your network connection and try again, or configure an alternative package source in your NuGet.config file.");
-        InteractionService.DisplaySuccess("All 47 integration tests passed successfully across 3 target frameworks (net8.0, net9.0, net10.0). Total execution time: 2 minutes and 14 seconds. Code coverage increased from 78.3% to 82.1%.");
+        InteractionService.DisplaySuccess("All 47 integration tests passed successfully across 2 target frameworks (net10.0, net11.0). Total execution time: 2 minutes and 14 seconds. Code coverage increased from 78.3% to 82.1%.");
         return CliExitCodes.Success;
     }
 
@@ -564,6 +565,8 @@ internal sealed class RenderCommand : BaseCommand
         _hostEnvironment,
         _serviceProvider.GetRequiredService<IAppHostProjectFactory>(),
         _serviceProvider.GetRequiredService<IConfiguration>(),
+        _serviceProvider.GetRequiredService<IEnvironment>(),
+        _serviceProvider.GetRequiredService<AspireSecretsStoreResolver>(),
         _serviceProvider.GetRequiredService<ILogger<RenderCommand>>(),
         _ansiConsole,
         _serviceProvider.GetRequiredService<CommonCommandServices>());
@@ -812,16 +815,18 @@ internal sealed class RenderCommand : BaseCommand
         ICliHostEnvironment hostEnvironment,
         IAppHostProjectFactory projectFactory,
         IConfiguration configuration,
+        IEnvironment environment,
+        AspireSecretsStoreResolver aspireSecretsStoreResolver,
         ILogger logger,
         IAnsiConsole ansiConsole,
         CommonCommandServices services)
-        : PipelineCommandBase("test-render", "Test rendering", runner, projectLocator, features, hostEnvironment, projectFactory, configuration, logger, ansiConsole, services)
+        : PipelineCommandBase("test-render", "Test rendering", runner, projectLocator, features, hostEnvironment, projectFactory, configuration, environment, aspireSecretsStoreResolver, logger, ansiConsole, services)
     {
         protected override string OperationCompletedPrefix => "Publish";
         protected override string OperationFailedPrefix => "Publish failed";
         protected override string GetOutputPathDescription() => "Test output path";
-        protected override Task<string[]> GetRunArgumentsAsync(string? fullyQualifiedOutputPath, string[] unmatchedTokens, ParseResult parseResult, CancellationToken cancellationToken) => Task.FromResult(Array.Empty<string>());
-        protected override string GetCanceledMessage() => "Test canceled";
+        protected override Task<string[]> GetRunArgumentsAsync(string? fullyQualifiedOutputPath, string[] unmatchedTokens, string? targetStep, ParseResult parseResult, CancellationToken cancellationToken) => Task.FromResult(Array.Empty<string>());
+        protected override string CancellationMessage => "Test canceled";
         protected override string GetProgressMessage(ParseResult parseResult) => "Test progress";
     }
 

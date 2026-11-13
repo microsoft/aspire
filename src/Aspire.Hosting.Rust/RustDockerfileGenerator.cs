@@ -1,8 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREDOCKERFILEBUILDER001
-
 using System.Collections.ObjectModel;
 using System.IO.Hashing;
 using System.Text;
@@ -484,5 +482,3 @@ internal static partial class RustDockerfileGenerator
         => context.Resource.Annotations.OfType<DockerfileBaseImageAnnotation>().LastOrDefault()
             ?? resource.Annotations.OfType<DockerfileBaseImageAnnotation>().LastOrDefault();
 }
-
-#pragma warning restore ASPIREDOCKERFILEBUILDER001

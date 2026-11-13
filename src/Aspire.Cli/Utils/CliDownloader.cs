@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using Aspire.Cli.Interaction;
@@ -47,9 +46,8 @@ internal class CliDownloader(
 
         var baseUrl = channel.CliDownloadBaseUrl.TrimEnd('/');
 
-        var (os, arch) = DetectPlatform();
-        var runtimeIdentifier = $"{os}-{arch}";
-        var extension = os == "win" ? "zip" : "tar.gz";
+        var runtimeIdentifier = GetDownloadRid();
+        var extension = environment.IsWindows() ? "zip" : "tar.gz";
         var archiveFilename = $"aspire-cli-{runtimeIdentifier}.{extension}";
         var checksumFilename = $"{archiveFilename}.sha512";
         var archiveUrl = $"{baseUrl}/{archiveFilename}";
@@ -122,11 +120,11 @@ internal class CliDownloader(
         return $"{fileName} from {source}";
     }
 
-    private (string os, string arch) DetectPlatform()
+    private string GetDownloadRid()
     {
         var os = DetectOperatingSystem();
         var arch = DetectArchitecture();
-        return (os, arch);
+        return $"{os}-{arch}";
     }
 
     private string DetectOperatingSystem()
@@ -138,35 +136,11 @@ internal class CliDownloader(
         else if (environment.IsLinux())
         {
             // Check if it's musl-based (Alpine, etc.)
-            try
+            if (environment.RuntimeIdentifier.Contains("musl", StringComparison.OrdinalIgnoreCase))
             {
-                var lddPath = "/usr/bin/ldd";
-                if (File.Exists(lddPath))
-                {
-                    var psi = new ProcessStartInfo
-                    {
-                        FileName = lddPath,
-                        Arguments = "--version",
-                        RedirectStandardOutput = true,
-                        RedirectStandardError = true,
-                        UseShellExecute = false
-                    };
-                    using var process = Process.Start(psi);
-                    if (process is not null)
-                    {
-                        var output = process.StandardOutput.ReadToEnd() + process.StandardError.ReadToEnd();
-                        process.WaitForExit();
-                        if (output.Contains("musl", StringComparison.OrdinalIgnoreCase))
-                        {
-                            return "linux-musl";
-                        }
-                    }
-                }
+                return "linux-musl";
             }
-            catch
-            {
-                // Fall back to regular linux
-            }
+
             return "linux";
         }
         else if (environment.IsMacOS())

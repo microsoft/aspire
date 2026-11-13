@@ -1,13 +1,13 @@
 .notification-entry {
-    font-family: var(--body-font);
-    color: var(--neutral-foreground-rest);
+    font-family: var(--fontFamilyBase);
+    color: var(--colorNeutralForeground1);
     display: grid;
     grid-template-columns: 24px 1fr auto;
     width: 100%;
     min-height: 36px;
     padding: 0 8px;
-    column-gap: 4px;
-    border-top: calc(var(--stroke-width) * 1px) solid var(--neutral-stroke-divider-rest);
+    column-gap: var(--aspire-space-1);
+    border-top: var(--strokeWidthThin) solid var(--colorNeutralStroke3);
 }
 
 .notification-entry.intent-info {
@@ -39,8 +39,8 @@
     grid-row: 1;
     padding: 10px 0;
     align-self: center;
-    font-weight: 600;
-    font-size: 12px;
+    font-weight: var(--aspire-font-weight-semibold);
+    font-size: var(--aspire-font-size-secondary);
     line-height: 16px;
     white-space: unset;
 }
@@ -62,21 +62,27 @@
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    gap: 8px;
-    font-size: 12px;
+    gap: var(--aspire-space-2);
+    font-size: var(--aspire-font-size-secondary);
     word-break: break-word;
 }
 
 .notification-entry-time {
     grid-column: 2 / 4;
     grid-row: 3;
-    font-size: 12px;
+    font-size: var(--aspire-font-size-secondary);
     text-align: right;
     padding: 4px 4px 8px 0px;
-    color: var(--foreground-subtext-rest);
+    color: var(--colorNeutralForeground3);
+}
+
+::deep .notification-entry-dismiss {
+    --aspire-link-button-color: var(--colorNeutralForeground1);
+    --aspire-link-button-hover-color: var(--colorNeutralForeground1);
+    --aspire-link-button-pressed-color: var(--colorNeutralForeground1);
 }
 
 ::deep .notification-entry-action {
-    height: 24px;
-    font-size: 12px;
+    --aspire-neutral-button-background: var(--notification-action-background);
+    --aspire-neutral-button-border: var(--notification-action-border);
 }

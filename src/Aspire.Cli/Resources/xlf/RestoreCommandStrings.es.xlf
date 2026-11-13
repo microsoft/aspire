@@ -4,22 +4,22 @@
     <body>
       <trans-unit id="Description">
         <source>Restore dependencies and generate SDK code for an AppHost</source>
-        <target state="new">Restore dependencies and generate SDK code for an AppHost</target>
+        <target state="translated">Restauración de dependencias y generación de código SDK para un AppHost</target>
         <note />
       </trans-unit>
       <trans-unit id="UnrecognizedAppHostType">
         <source>Unrecognized AppHost type.</source>
-        <target state="new">Unrecognized AppHost type.</target>
+        <target state="translated">Tipo de AppHost no reconocido.</target>
         <note />
       </trans-unit>
       <trans-unit id="RestoringSdkCode">
         <source>Restoring SDK code...</source>
-        <target state="new">Restoring SDK code...</target>
+        <target state="translated">Restaurando el código del SDK...</target>
         <note />
       </trans-unit>
       <trans-unit id="RestoreSucceeded">
         <source>SDK code restored successfully for {0}.</source>
-        <target state="new">SDK code restored successfully for {0}.</target>
+        <target state="translated">El código del SDK se restauró correctamente para {0}.</target>
         <note>{0} is the AppHost project file name.</note>
       </trans-unit>
     </body>

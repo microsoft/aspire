@@ -18,11 +18,11 @@ namespace Aspire.Hosting.Azure.Tests;
 public class AzureCosmosDBEmulatorFunctionalTests(ITestOutputHelper testOutputHelper)
 {
     [Theory]
-    // [InlineData(true)] // "Using CosmosDB emulator in integration tests leads to flaky tests - https://github.com/microsoft/aspire/issues/5820"
-    [InlineData(false)]
+    [InlineData(true)]
+    // [InlineData(false)] // "Using CosmosDB emulator in integration tests leads to flaky tests - https://github.com/microsoft/aspire/issues/5820"
     [RequiresFeature(TestFeature.ContainerRuntime)]
     [ActiveIssue("https://github.com/microsoft/aspire/issues/18898")]
-    public async Task VerifyWaitForOnCosmosDBEmulatorBlocksDependentResources(bool usePreview)
+    public async Task VerifyWaitForOnCosmosDBEmulatorBlocksDependentResources(bool useClassic)
     {
         // Cosmos can be pretty slow to spin up, lets give it plenty of time.
         var cts = new CancellationTokenSource(TimeSpan.FromMinutes(10));
@@ -35,7 +35,7 @@ public class AzureCosmosDBEmulatorFunctionalTests(ITestOutputHelper testOutputHe
         });
 
         var resource = builder.AddAzureCosmosDB("resource")
-                              .RunAsEmulator(usePreview)
+                              .RunAsEmulator(useClassic)
                               .WithHealthCheck("blocking_check");
 
         var dependentResource = builder.AddContainer("nginx", "mcr.microsoft.com/cbl-mariner/base/nginx", "1.22")
@@ -64,7 +64,7 @@ public class AzureCosmosDBEmulatorFunctionalTests(ITestOutputHelper testOutputHe
     [InlineData(true)]
     [InlineData(false)]
     [RequiresFeature(TestFeature.ContainerRuntime)]
-    public async Task VerifyCosmosResource(bool usePreview)
+    public async Task VerifyCosmosResource(bool useClassic)
     {
         var cts = new CancellationTokenSource(TimeSpan.FromMinutes(10));
         var pipeline = new ResiliencePipelineBuilder()
@@ -84,7 +84,7 @@ public class AzureCosmosDBEmulatorFunctionalTests(ITestOutputHelper testOutputHe
         var containerName = "container1";
 
         var cosmos = builder.AddAzureCosmosDB("cosmos")
-            .RunAsEmulator(usePreview);
+            .RunAsEmulator(useClassic);
         var db = cosmos.AddCosmosDatabase(databaseName);
 
         using var app = builder.Build();
@@ -134,7 +134,7 @@ public class AzureCosmosDBEmulatorFunctionalTests(ITestOutputHelper testOutputHe
     [InlineData(true)]
     [InlineData(false)]
     [RequiresFeature(TestFeature.ContainerRuntime)]
-    public async Task WithDataVolumeShouldPersistStateBetweenUsages(bool usePreview)
+    public async Task WithDataVolumeShouldPersistStateBetweenUsages(bool useClassic)
     {
         // Use a volume to do a snapshot save
 
@@ -158,7 +158,7 @@ public class AzureCosmosDBEmulatorFunctionalTests(ITestOutputHelper testOutputHe
         // Use a deterministic volume name to prevent them from exhausting the machines if deletion fails
         var volumeName = VolumeNameGenerator.Generate(cosmos1, nameof(WithDataVolumeShouldPersistStateBetweenUsages));
 
-        cosmos1.RunAsEmulator(usePreview, volumeName);
+        cosmos1.RunAsEmulator(useClassic, volumeName);
 
         cosmos1.AddCosmosDatabase(databaseName);
 
@@ -212,7 +212,7 @@ public class AzureCosmosDBEmulatorFunctionalTests(ITestOutputHelper testOutputHe
         using var builder2 = TestDistributedApplicationBuilder.Create(options => { }, testOutputHelper);
 
         var cosmos2 = builder2.AddAzureCosmosDB("cosmos")
-            .RunAsEmulator(usePreview, volumeName);
+            .RunAsEmulator(useClassic, volumeName);
         cosmos2.AddCosmosDatabase(databaseName);
 
         using (var app = builder2.Build())
@@ -337,7 +337,7 @@ public record Entry
 
 internal static class CosmosExtensions
 {
-    public static IResourceBuilder<AzureCosmosDBResource> RunAsEmulator(this IResourceBuilder<AzureCosmosDBResource> builder, bool usePreview, string? volumeName = null)
+    public static IResourceBuilder<AzureCosmosDBResource> RunAsEmulator(this IResourceBuilder<AzureCosmosDBResource> builder, bool useClassic, string? volumeName = null)
     {
         void WithVolume(IResourceBuilder<AzureCosmosDBEmulatorResource> emulator)
         {
@@ -347,10 +347,8 @@ internal static class CosmosExtensions
             }
         }
 
-        return usePreview
-#pragma warning disable ASPIRECOSMOSDB001 // RunAsPreviewEmulator is experimental
-            ? builder.RunAsPreviewEmulator(WithVolume)
-#pragma warning restore ASPIRECOSMOSDB001 // RunAsPreviewEmulator is experimental
+        return useClassic
+            ? builder.RunAsClassicEmulator(WithVolume)
             : builder.RunAsEmulator(WithVolume);
     }
 }
