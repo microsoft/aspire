@@ -324,9 +324,9 @@ An unavailable stop RPC or shutdown timeout fails without escalation. `--pid`
 cannot be combined with `--all` or `--force`. Without `--pid`, existing project-level
 stop behavior is unchanged.
 
-### Experimental desktop tray companion
+### Desktop tray companion (Preview)
 
-The native macOS, Windows, and glibc Linux CLI bundles include the experimental Aspire menu
+The native macOS, Windows, and glibc Linux CLI bundles include the Aspire menu
 bar or system tray companion:
 
 ```bash
