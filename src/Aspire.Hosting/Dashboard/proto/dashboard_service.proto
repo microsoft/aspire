@@ -290,6 +290,9 @@ message Resource {
     // Human-readable resource type label, independent of resource_type and telemetry service identity.
     // Consumers fall back to resource_type when absent.
     optional string resource_type_display_name = 25;
+
+    // Embedded base64 image data URI. Render as an image, never inline as SVG markup.
+    optional string icon_data = 26;
 }
 
 ////////////////////////////////////////////

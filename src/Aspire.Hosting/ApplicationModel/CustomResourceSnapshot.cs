@@ -160,6 +160,11 @@ public sealed record CustomResourceSnapshot
     public string? IconName { get; init; }
 
     /// <summary>
+    /// Gets the custom resource image as a base64 image data URI.
+    /// </summary>
+    public string? IconData { get; init; }
+
+    /// <summary>
     /// The custom icon variant for the resource.
     /// </summary>
     public IconVariant? IconVariant { get; init; }
@@ -209,6 +214,7 @@ public sealed record CustomResourceSnapshot
             ResourceReadyEvent != other.ResourceReadyEvent ||
             IsHidden != other.IsHidden ||
             SupportsDetailedTelemetry != other.SupportsDetailedTelemetry ||
+            IconData != other.IconData ||
             IconName != other.IconName ||
             IconVariant != other.IconVariant)
         {

@@ -18,6 +18,17 @@ public class ResourceGraphMapperTests
     private readonly IconResolver _iconResolver = new IconResolver(NullLogger<IconResolver>.Instance);
 
     [Fact]
+    public void MapResource_CustomImagePreservesData()
+    {
+        const string data = "data:image/svg+xml;base64,PHN2Zy8+";
+        var resource = ModelTestHelpers.CreateResource("app", iconData: data);
+        var resources = new Dictionary<string, ResourceViewModel> { [resource.Name] = resource };
+        var dto = ResourceGraphMapper.MapResource(resource, resources.Values, resources, new TestStringLocalizer<Columns>(), false, _iconResolver);
+        Assert.Equal(data, dto.ResourceIcon.ImageData);
+        Assert.Equal(string.Empty, dto.ResourceIcon.Path);
+    }
+
+    [Fact]
     public void MapResource_HasReference_Added()
     {
         // Arrange

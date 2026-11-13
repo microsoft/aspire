@@ -9,11 +9,20 @@ using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
 internal static class ResourceIconHelpers
 {
+    private static readonly string[] s_imageDataPrefixes = ["data:image/svg+xml;base64,", "data:image/png;base64,", "data:image/jpeg;base64,", "data:image/x-icon;base64,"];
+
     /// <summary>
     /// Maps a resource to an icon, checking for custom icons first, then falling back to default icons.
     /// </summary>
     public static Icon GetIconForResource(IconResolver iconResolver, ResourceViewModel resource, IconSize desiredSize, IconVariant desiredVariant = IconVariant.Filled)
     {
+        if (GetCustomIconData(resource) is { } data)
+        {
+            // Image mode keeps scripts and external references in SVGs disabled.
+            // https://www.w3.org/TR/SVG2/conform.html#secure-static-mode
+            return Icon.FromImageUrl(data);
+        }
+
         // Check if the resource has a custom icon specified
         if (!string.IsNullOrWhiteSpace(resource.IconName))
         {
@@ -60,6 +69,30 @@ internal static class ResourceIconHelpers
 
             return iconResolver.ResolveIconName("CodeCircle", desiredSize, desiredVariant);
         }
+    }
+
+    public static string? GetCustomIconData(ResourceViewModel resource)
+    {
+        var data = resource.IconData;
+        if (data is null || data.Length > 350_000)
+        {
+            return null;
+        }
+
+        // Resource metadata is untrusted. Accept only embedded image bytes, e.g.
+        // data:image/png;base64,iVBORw0KGgo... . Restrict the payload alphabet so it
+        // cannot escape an image attribute. Never insert SVG markup into the document
+        // or fetch a URL supplied by the AppHost.
+        foreach (var prefix in s_imageDataPrefixes)
+        {
+            if (data.StartsWith(prefix, StringComparison.Ordinal) && data.Length > prefix.Length &&
+                data.AsSpan(prefix.Length).IndexOfAnyExcept("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=") < 0)
+            {
+                return data;
+            }
+        }
+
+        return null;
     }
 
     public static (Icon? icon, Color color) GetHealthStatusIcon(HealthStatus? healthStatus)

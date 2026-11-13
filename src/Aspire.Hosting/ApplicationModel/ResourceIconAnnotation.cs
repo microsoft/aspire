@@ -26,4 +26,9 @@ public sealed class ResourceIconAnnotation(string iconName, IconVariant iconVari
     /// Gets the variant of the icon (Regular or Filled).
     /// </summary>
     public IconVariant IconVariant { get; } = iconVariant;
+
+    /// <summary>
+    /// Gets the custom image as a base64 image data URI. When set, it takes precedence over <see cref="IconName"/>.
+    /// </summary>
+    public string? IconData { get; init; }
 }

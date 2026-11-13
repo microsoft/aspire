@@ -50,7 +50,8 @@ public static class ResourceGraphMapper
         var resourceName = ResourceViewModel.GetResourceName(r, resourcesByName);
         var color = ColorGenerator.Instance.GetColorVariableByKey(resourceName);
 
-        var icon = GetIconPathData(ResourceIconHelpers.GetIconForResource(iconResolver, r, IconSize.Size24));
+        var imageData = ResourceIconHelpers.GetCustomIconData(r);
+        var icon = imageData is null ? GetIconPathData(ResourceIconHelpers.GetIconForResource(iconResolver, r, IconSize.Size24)) : string.Empty;
 
         var stateIcon = ResourceStateViewModel.GetStateViewModel(r, columnsLoc);
 
@@ -63,6 +64,7 @@ public static class ResourceGraphMapper
             ResourceIcon = new IconDto
             {
                 Path = icon,
+                ImageData = imageData,
                 Color = color,
                 Tooltip = r.ResourceTypeDisplayName
             },

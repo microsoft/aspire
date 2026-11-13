@@ -35,6 +35,15 @@ public class ResourcePublisherTests
     }
 
     [Fact]
+    public void CustomIconDataIsConvertedToProtocol()
+    {
+        const string data = "data:image/png;base64,AQID";
+        var snapshot = CreateResourceSnapshot("app", new CustomResourceSnapshot { ResourceType = "Container", Properties = [], IconData = data });
+        var resource = Aspire.DashboardService.Proto.V1.Resource.FromSnapshot(snapshot);
+        Assert.Equal(data, resource.IconData);
+    }
+
+    [Fact]
     public void ConnectionPropertiesAreConvertedToStructuredValue()
     {
         var snapshot = CreateResourceSnapshot(
@@ -253,6 +262,7 @@ public class ResourcePublisherTests
             Relationships = [],
             IsHidden = false,
             SupportsDetailedTelemetry = false,
+            IconData = state.IconData,
             IconName = null,
             IconVariant = null
         };

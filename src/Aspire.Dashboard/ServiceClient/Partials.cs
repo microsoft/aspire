@@ -44,6 +44,7 @@ partial class Resource
                 HealthReports = HealthReports.Select(ToHealthReportViewModel).OrderBy(vm => vm.Name).ToImmutableArray(),
                 IsHidden = IsHidden,
                 SupportsDetailedTelemetry = SupportsDetailedTelemetry,
+                IconData = HasIconData ? IconData : null,
                 IconName = HasIconName ? IconName : null,
                 IconVariant = HasIconVariant ? MapResourceIconVariant(IconVariant) : null
             };

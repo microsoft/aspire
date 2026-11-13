@@ -49,6 +49,7 @@ public sealed class ResourceViewModel
     public HealthStatus? HealthStatus { get; private set; }
     public bool IsHidden { private get; init; }
     public bool SupportsDetailedTelemetry { get; init; }
+    public string? IconData { get; init; }
     public string? IconName { get; init; }
     public IconVariant? IconVariant { get; init; }
     internal bool ConsoleLogsLoaded { get; set; }

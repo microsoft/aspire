@@ -23,6 +23,11 @@ partial class Resource
             SupportsDetailedTelemetry = snapshot.SupportsDetailedTelemetry
         };
 
+        if (snapshot.IconData is not null)
+        {
+            resource.IconData = snapshot.IconData;
+        }
+
         if (snapshot.IconName is not null)
         {
             resource.IconName = snapshot.IconName;
