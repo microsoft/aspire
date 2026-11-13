@@ -205,9 +205,17 @@
     margin-left: auto;
 }
 
+/* The header is a band darker than the page, so the app's name and the tabs read as the frame around it. Its pieces
+   (the band, and on phones the logo's cell and the app bar) share one color. In the dark theme the shell background
+   is pure black, which is too harsh beside the page, so the band is the page's own color taken about halfway to
+   black. The light theme keeps the shell's grey. */
+::deep.layout {
+    --aspire-header-background: light-dark(var(--aspire-shell-background), color-mix(in srgb, #000 55%, var(--aspire-page-background)));
+}
+
 ::deep.layout > header {
     grid-area: head;
-    background-color: var(--colorNeutralBackground4);
+    background-color: var(--aspire-header-background);
     margin-bottom: 0;
 }
 
@@ -228,12 +236,10 @@
         border-bottom: 1px solid var(--colorNeutralStroke1);
     }
 
-    /* The header shares the page's background and is told apart from it by a hairline, so that the brand can read
-       as the top of the resource list's column (see the docked rules below). */
+    /* A hairline finishes the band's lower edge, across the whole header. */
     ::deep.layout > header {
         position: relative;
         padding-left: 0;
-        background-color: var(--aspire-page-background);
     }
 
     ::deep.layout > header::after {
@@ -413,19 +419,19 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        background-color: var(--colorNeutralBackground4);
+        background-color: var(--aspire-header-background);
     }
 
     ::deep.layout > .fluent-appbar {
         grid-area: nav;
         overflow-y: auto;
-        background: var(--colorNeutralBackground4);
+        background: var(--aspire-header-background);
     }
 
     ::deep.layout > .aspire-icon {
         padding-left: 15px;
         padding-right: 10px;
-        background-color: var(--colorNeutralBackground4);
+        background-color: var(--aspire-header-background);
     }
 
     ::deep.layout > .aspire-icon fluent-anchor {
@@ -447,7 +453,7 @@
 }
 
 ::deep.layout > .aspire-icon fluent-anchor[appearance=stealth].logo::part(control) {
-    background-color: var(--colorNeutralBackground4);
+    background-color: var(--aspire-header-background);
 }
 
 #blazor-error-ui {
@@ -479,8 +485,8 @@
 
 /* The resource list goes to the top of the page.
 
-   The header's brand is the head of the list's column: exactly as wide as the docked list, with the same background
-   and the same edge, so the column runs unbroken from the logo to the footer. The tabs then start where the page
+   The header's brand is the head of the list's column: exactly as wide as the docked list, with the same edge, so
+   the column's line runs unbroken from the header to the footer. The tabs then start where the page
    they switch starts, which shows what they are: views of what's selected in the list, not places beside it.
 
    The brand keeps that width while the list is hidden or fills the page as the table, so the header doesn't move
@@ -554,16 +560,5 @@
         margin-left: 0;
         padding-left: 10px;
         border-left: 0;
-    }
-
-    /* While the list is docked, the hairline is under the tabs only. The brand has none: it and the list's filter
-       below it are one column. */
-    ::deep.layout:has(.resources-layout:not(.pane-collapsed, .pane-full-canvas)) > header::after {
-        inset-inline-start: var(--resource-pane-width);
-    }
-
-    /* At home the list is the whole page, so the whole header is its head. */
-    ::deep.layout:has(.resources-layout.pane-full-canvas) > header::after {
-        display: none;
     }
 }
