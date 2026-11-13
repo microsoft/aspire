@@ -48,24 +48,27 @@ public sealed class ResourceOverviewEndpointTests : PlaywrightTestsBase<Resource
 
             var catalog = rows.Filter(new() { Has = page.GetByText("Catalog API", new() { Exact = true }) });
             await Assertions.Expect(catalog.Locator(".overview-list-label")).ToHaveTextAsync("https");
+            var catalogName = catalog.GetByRole(AriaRole.Link, new() { Name = "Catalog API", Exact = true });
+            await Assertions.Expect(catalogName).ToHaveAttributeAsync("href", PublicUrl);
+            await Assertions.Expect(catalogName).ToHaveAttributeAsync("target", "_blank");
+            await Assertions.Expect(catalogName).ToHaveAttributeAsync("rel", "noreferrer noopener");
             var link = catalog.GetByRole(AriaRole.Link, new() { Name = MaskedPublicUrl, Exact = true });
             await Assertions.Expect(link).ToBeVisibleAsync();
             await Assertions.Expect(link).ToHaveAttributeAsync("href", PublicUrl);
             await Assertions.Expect(link).ToHaveAttributeAsync("target", "_blank");
             await Assertions.Expect(link).ToHaveAttributeAsync("rel", "noreferrer noopener");
-            await Assertions.Expect(link).ToHaveAttributeAsync("data-tooltip", MaskedPublicUrl);
-            await Assertions.Expect(catalog.Locator(".overview-endpoint-address")).ToHaveTextAsync([MaskedPublicUrl, MaskedInternalUrl]);
+            // The endpoint's other address is in the tooltip, so each endpoint is listed once.
+            await Assertions.Expect(link).ToHaveAttributeAsync("data-tooltip", $"{MaskedPublicUrl}, also at {MaskedInternalUrl}");
+            await Assertions.Expect(catalog.Locator(".overview-endpoint-address")).ToHaveTextAsync([MaskedPublicUrl]);
 
             var tooltip = page.Locator(".dashboard-tooltip");
             await link.ScrollIntoViewIfNeededAsync();
             await link.HoverAsync();
             await Assertions.Expect(tooltip).ToBeVisibleAsync();
-            await Assertions.Expect(tooltip).ToHaveTextAsync(MaskedPublicUrl);
+            await Assertions.Expect(tooltip).ToHaveTextAsync($"{MaskedPublicUrl}, also at {MaskedInternalUrl}");
             await page.Keyboard.PressAsync("Escape");
             await Assertions.Expect(tooltip).ToHaveCountAsync(0);
-            var secondary = catalog.Locator("span.overview-endpoint-address");
-            await AssertKeyboardTooltipAfterScrollingAsync(link, MaskedPublicUrl, scrollToEnd: true);
-            await AssertKeyboardTooltipAfterScrollingAsync(secondary, MaskedInternalUrl, scrollToEnd: true);
+            await AssertKeyboardTooltipAfterScrollingAsync(link, $"{MaskedPublicUrl}, also at {MaskedInternalUrl}", scrollToEnd: true);
 
             var tcp = rows.Filter(new() { Has = page.GetByText("Cache connection", new() { Exact = true }) });
             await Assertions.Expect(tcp.Locator(".overview-endpoint-address")).ToHaveTextAsync(MaskedTcpUrl);
@@ -76,7 +79,8 @@ public sealed class ResourceOverviewEndpointTests : PlaywrightTestsBase<Resource
 
             var docs = rows.Filter(new() { Has = page.GetByText("Documentation", new() { Exact = true }) });
             await Assertions.Expect(docs.Locator(".overview-list-label")).ToHaveTextAsync("Documentation");
-            await Assertions.Expect(docs.GetByRole(AriaRole.Link)).ToHaveTextAsync("https://localhost:7443/docs");
+            await Assertions.Expect(docs.GetByRole(AriaRole.Link, new() { Name = "Documentation", Exact = true })).ToHaveAttributeAsync("href", "https://localhost:7443/docs");
+            await Assertions.Expect(docs.GetByRole(AriaRole.Link, new() { Name = "https://localhost:7443/docs", Exact = true })).ToBeVisibleAsync();
 
             var plain = rows.Filter(new() { Has = page.GetByText("http", new() { Exact = true }) });
             await Assertions.Expect(plain.GetByRole(AriaRole.Link)).ToHaveTextAsync("http://localhost:5080");

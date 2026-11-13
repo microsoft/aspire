@@ -306,21 +306,21 @@ internal sealed class UpdateCommand : BaseCommand
             var project = projectFile is not null ? _projectFactory.GetProject(projectFile) : null;
             var isProjectReferenceMode = project is not null && projectFile is not null && project.IsUsingProjectReferences(projectFile);
 
-            // Non-C# updates retain explicit option, project-scoped configuration, CLI
-            // identity, hive prompt, and implicit fallback precedence. Scope configuration
-            // lookup to the selected AppHost, not the launch directory (issue #16650).
+            // Explicit options override configuration. Scope configuration lookup to the
+            // selected AppHost, not the launch directory (issue #16650).
             var channelName = parseResult.GetValue(_channelOption) ?? parseResult.GetValue(_qualityOption);
             var hasExplicitChannel = !string.IsNullOrWhiteSpace(channelName);
-            // Native NuGet policy owns unqualified C# updates. Neither project metadata nor
-            // replacing the CLI may silently change the feeds used by dotnet restore.
-            var preserveNuGetPolicy = project?.LanguageId == KnownLanguageId.CSharp && !hasExplicitChannel;
             var channelFromConfig = false;
-            if (!hasExplicitChannel && !preserveNuGetPolicy)
+            if (!hasExplicitChannel)
             {
                 channelName = await _configurationService.GetConfigurationFromDirectoryAsync(
                     "channel", updateDirectory, cancellationToken: cancellationToken);
                 channelFromConfig = !string.IsNullOrWhiteSpace(channelName);
             }
+
+            // Without a selected channel, C# updates preserve native NuGet policy rather
+            // than choosing replacement feeds from the CLI identity or available hives.
+            var preserveNuGetPolicy = project?.LanguageId == KnownLanguageId.CSharp && !hasExplicitChannel && !channelFromConfig;
 
             PackageChannel channel;
 
@@ -336,25 +336,22 @@ internal sealed class UpdateCommand : BaseCommand
                 var matchedChannel = allChannels.FirstOrDefault(c => string.Equals(c.Name, channelName, StringComparisons.ChannelName));
                 if (matchedChannel is null)
                 {
-                    // When the user explicitly asked for the 'staging' channel and the packaging
+                    // When the selected channel is 'staging' and the packaging
                     // service refused to synthesize it (daily/local/pr-N CLI without an override),
                     // surface the packaging-service reason instead of the generic "no channel
                     // matching" message — the generic message hides the actual fix from the user.
                     // See https://github.com/microsoft/aspire/issues/16652.
-                    if (string.Equals(channelName, PackageChannelNames.Staging, StringComparisons.ChannelName))
-                    {
-                        var stagingUnavailableReason = _packagingService.GetStagingChannelUnavailableReason();
-                        if (stagingUnavailableReason is not null)
-                        {
-                            throw new ChannelNotFoundException(stagingUnavailableReason);
-                        }
-                    }
-
-                    throw new ChannelNotFoundException(string.Format(
+                    var stagingUnavailableReason = string.Equals(channelName, PackageChannelNames.Staging, StringComparisons.ChannelName)
+                        ? _packagingService.GetStagingChannelUnavailableReason()
+                        : null;
+                    var message = stagingUnavailableReason ?? string.Format(
                         CultureInfo.CurrentCulture,
                         UpdateCommandStrings.NoChannelFoundMatching,
                         channelName,
-                        string.Join(", ", allChannels.Select(c => c.Name))));
+                        string.Join(", ", allChannels.Select(c => c.Name)));
+                    throw new ChannelNotFoundException(channelFromConfig
+                        ? string.Format(CultureInfo.CurrentCulture, UpdateCommandStrings.ConfiguredChannelNotFoundFormat, channelName, message)
+                        : message);
                 }
 
                 channel = matchedChannel;
@@ -362,6 +359,13 @@ internal sealed class UpdateCommand : BaseCommand
                 if (channelFromConfig)
                 {
                     _logger.LogDebug("Using channel '{ChannelName}' from configuration.", channel.Name);
+                    if (!string.Equals(channel.Name, PackageChannelNames.Stable, StringComparisons.ChannelName))
+                    {
+                        InteractionService.DisplayMessage(KnownEmojis.Information, string.Format(
+                            CultureInfo.CurrentCulture,
+                            UpdateCommandStrings.UsingConfiguredChannelFormat,
+                            channel.Name));
+                    }
                 }
             }
             else if (preserveNuGetPolicy)
@@ -455,7 +459,7 @@ internal sealed class UpdateCommand : BaseCommand
             {
                 AppHostFile = projectFile,
                 Channel = channel,
-                HasExplicitChannel = hasExplicitChannel,
+                HasExplicitChannel = hasExplicitChannel || channelFromConfig,
                 ConfirmBinding = confirmBinding,
                 NuGetConfigDirBinding = PromptBinding.Create(parseResult, s_nugetConfigDirOption),
                 AdditionalUpdateSteps = toolUpdateStep is null ? [] : [toolUpdateStep]

@@ -6,8 +6,10 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Text.Json;
 using Aspire.Cli.Backchannel;
+using Aspire.Cli.Configuration;
 using Aspire.Cli.Diagnostics;
 using Aspire.Cli.DotNet;
+using Aspire.Cli.Git;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Processes;
 using Aspire.Cli.Profiling;
@@ -111,11 +113,28 @@ internal sealed class AppHostLauncher(
     }
 
     /// <summary>
-    /// Resolves whether the AppHost should run isolated from the explicit CLI option.
+    /// Resolves whether the AppHost should run isolated from the explicit CLI option or linked-worktree policy.
     /// </summary>
-    internal static bool ResolveIsolated(ParseResult parseResult)
+    internal static bool ResolveIsolated(
+        ParseResult parseResult,
+        FileInfo appHostFile,
+        IFeatures features)
     {
-        return ResolveIsolatedOption(GetExplicitIsolated(parseResult)) ?? false;
+        if (ResolveIsolatedOption(GetExplicitIsolated(parseResult)) is { } explicitIsolated)
+        {
+            return explicitIsolated;
+        }
+
+        var metadata = KnownFeatures.GetFeatureMetadata(KnownFeatures.GitWorktreeIsolationEnabled)
+            ?? throw new InvalidOperationException($"Feature metadata for '{KnownFeatures.GitWorktreeIsolationEnabled}' was not found.");
+        var automaticIsolationEnabled = features.IsFeatureEnabled(
+            KnownFeatures.GitWorktreeIsolationEnabled,
+            metadata.DefaultValue);
+        var appHostDirectory = appHostFile.Directory
+            ?? throw new InvalidOperationException($"AppHost path '{appHostFile.FullName}' does not have a parent directory.");
+
+        return automaticIsolationEnabled &&
+            GitWorktree.TryGetLinkedWorktreeRoot(appHostDirectory.FullName) is not null;
     }
 
     /// <summary>

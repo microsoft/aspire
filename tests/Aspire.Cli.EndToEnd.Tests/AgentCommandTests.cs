@@ -205,9 +205,6 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         await File.WriteAllTextAsync(localSkillPath, localSkillContent);
         string[] expectedWarnings =
         [
-            "Skill sources:",
-            "https://github.com/microsoft/aspire-skills",
-            "Only use sources you trust.",
             "Local Aspire skill files may override plugin skills",
             ".agents/skills/aspire/SKILL.md"
         ];
@@ -349,8 +346,6 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
 
         await auto.WaitUntilTextAsync("Where should skills and tools be installed?", timeout: TimeSpan.FromSeconds(30));
         var scopeScreen = auto.CreateSnapshot().GetScreenText();
-        Assert.Contains("Only use sources you trust.", scopeScreen);
-        Assert.Contains("https://github.com/microsoft/aspire-skills", scopeScreen);
         Assert.DoesNotContain("Install Aspire MCP server", scopeScreen);
         Assert.DoesNotContain("Which source do you want to use for Aspire?", scopeScreen);
         await auto.EnterAsync();
@@ -411,8 +406,6 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         // registration — no MCP prompt is shown, and Claude's project MCP file is untouched.
         await auto.WaitUntilTextAsync("configuration complete", timeout: TimeSpan.FromSeconds(30));
         var completionScreen = auto.CreateSnapshot().GetScreenText();
-        Assert.Contains("Only use sources you trust.", completionScreen);
-        Assert.Contains("https://github.com/microsoft/aspire-skills", completionScreen);
         Assert.DoesNotContain("Which source do you want to use for Aspire?", completionScreen);
         Assert.DoesNotContain("Configure the Aspire MCP server", completionScreen);
         await auto.WaitForSuccessPromptAsync(counter);
@@ -506,21 +499,41 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
               }
             }
             """;
-        // Opt-out suppresses emission, but global setup still registers the CLI hook.
-        var expectedClaudeGlobalSettings = JsonNode.Parse(expectedPluginSettings)!;
-        expectedClaudeGlobalSettings["hooks"] = JsonNode.Parse($$"""
+        // Opt-out suppresses emission, but setup at either scope still registers the user-level CLI hook.
+        var hookExecutable = JsonSerializer.Serialize(executablePath);
+        var expectedHooks = JsonNode.Parse($$"""
             {
               "PostToolUse": [{
-                "matcher": "*",
+                "matcher": "^Skill$",
                 "hooks": [{
                   "type": "command",
-                  "command": {{JsonSerializer.Serialize(executablePath)}},
+                  "command": {{hookExecutable}},
                   "args": ["agent", "telemetry", "--hook"],
                   "timeout": 30
                 }]
+              }, {
+                "matcher": "^(?:aspire-.+|mcp__aspire__.+|mcp_aspire_.+)$",
+                "hooks": [{
+                  "type": "command",
+                  "command": {{hookExecutable}},
+                  "args": ["agent", "telemetry", "--hook"],
+                  "timeout": 30
+                }]
+              }, {
+                "matcher": "^Read$",
+                "hooks": [{
+                  "type": "command",
+                  "command": {{hookExecutable}},
+                  "args": ["agent", "telemetry", "--hook"],
+                  "timeout": 30,
+                  "if": "Read(//**/skills/aspire*/**)"
+                }]
               }]
             }
-            """);
+            """)!;
+        var expectedClaudeGlobalSettings = JsonNode.Parse(expectedPluginSettings)!;
+        expectedClaudeGlobalSettings["hooks"] = expectedHooks.DeepClone();
+        var expectedClaudeUserSettingsAfterProjectSetup = new JsonObject { ["hooks"] = expectedHooks.DeepClone() };
         const string openCodeSettings = """
             {"theme":"dark","mcp":{"custom":{"type":"remote","url":"https://example.test/mcp"}},"skills":{"paths":["./team-skills"],"urls":["https://example.test/skills/"]}}
             """;
@@ -568,6 +581,18 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
             foreach (var (path, bytes) in configured)
             {
                 Assert.Equal(bytes, await File.ReadAllBytesAsync(path, TestContext.Current.CancellationToken));
+            }
+
+            if (scope == "project")
+            {
+                // Project setup writes the hooks to user-level configuration, which the container creates
+                // owner-only as root, so inspect it in the container and then remove it so the host can
+                // seed the global scope.
+                await auto.RunCommandAsync(
+                    $"jq -e --argjson expected {AspireCliShellCommandHelpers.QuoteBashArg(expectedClaudeUserSettingsAfterProjectSetup.ToJsonString())} " +
+                    """'. == $expected' "$HOME/.claude/settings.json" && test -f "$HOME/.copilot/hooks/aspire-telemetry.json" """,
+                    counter);
+                await auto.RunCommandAsync("""rm -rf "$HOME/.claude" "$HOME/.copilot" """, counter);
             }
         }
     }

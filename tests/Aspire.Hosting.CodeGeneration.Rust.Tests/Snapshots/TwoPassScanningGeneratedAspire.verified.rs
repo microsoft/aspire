@@ -3198,12 +3198,12 @@ impl CSharpAppResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
-    /// Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
-    pub fn with_dashboard_position(&self, position: f64) -> Result<IResource, Box<dyn std::error::Error>> {
+    /// Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+    pub fn with_display_order(&self, order: f64) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
-        args.insert("position".to_string(), serde_json::to_value(&position).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting/withDashboardPosition", args)?;
+        args.insert("order".to_string(), serde_json::to_value(&order).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withDisplayOrder", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
@@ -4742,12 +4742,12 @@ impl ContainerRegistryResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
-    /// Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
-    pub fn with_dashboard_position(&self, position: f64) -> Result<IResource, Box<dyn std::error::Error>> {
+    /// Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+    pub fn with_display_order(&self, order: f64) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
-        args.insert("position".to_string(), serde_json::to_value(&position).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting/withDashboardPosition", args)?;
+        args.insert("order".to_string(), serde_json::to_value(&order).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withDisplayOrder", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
@@ -6230,12 +6230,12 @@ impl ContainerResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
-    /// Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
-    pub fn with_dashboard_position(&self, position: f64) -> Result<IResource, Box<dyn std::error::Error>> {
+    /// Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+    pub fn with_display_order(&self, order: f64) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
-        args.insert("position".to_string(), serde_json::to_value(&position).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting/withDashboardPosition", args)?;
+        args.insert("order".to_string(), serde_json::to_value(&order).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withDisplayOrder", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
@@ -8221,12 +8221,12 @@ impl DotnetToolResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
-    /// Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
-    pub fn with_dashboard_position(&self, position: f64) -> Result<IResource, Box<dyn std::error::Error>> {
+    /// Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+    pub fn with_display_order(&self, order: f64) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
-        args.insert("position".to_string(), serde_json::to_value(&position).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting/withDashboardPosition", args)?;
+        args.insert("order".to_string(), serde_json::to_value(&order).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withDisplayOrder", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
@@ -10202,12 +10202,12 @@ impl ExecutableResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
-    /// Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
-    pub fn with_dashboard_position(&self, position: f64) -> Result<IResource, Box<dyn std::error::Error>> {
+    /// Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+    pub fn with_display_order(&self, order: f64) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
-        args.insert("position".to_string(), serde_json::to_value(&position).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting/withDashboardPosition", args)?;
+        args.insert("order".to_string(), serde_json::to_value(&order).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withDisplayOrder", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
@@ -11090,12 +11090,12 @@ impl ExternalServiceResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
-    /// Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
-    pub fn with_dashboard_position(&self, position: f64) -> Result<IResource, Box<dyn std::error::Error>> {
+    /// Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+    pub fn with_display_order(&self, order: f64) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
-        args.insert("position".to_string(), serde_json::to_value(&position).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting/withDashboardPosition", args)?;
+        args.insert("order".to_string(), serde_json::to_value(&order).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withDisplayOrder", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
@@ -12210,6 +12210,24 @@ impl IDistributedApplicationBuilder {
         Ok(IResourceWithConnectionString::new(handle, self.client.clone()))
     }
 
+    /// Adds an opt-in target that checks for stale generated pipeline output.
+    pub fn with_output_diffing(&self, target_step: Option<&str>, diff_step_name: Option<&str>, description: Option<&str>) -> Result<IDistributedApplicationBuilder, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        if let Some(ref v) = target_step {
+            args.insert("targetStep".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = diff_step_name {
+            args.insert("diffStepName".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = description {
+            args.insert("description".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withOutputDiffing", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IDistributedApplicationBuilder::new(handle, self.client.clone()))
+    }
+
     /// Adds a .NET project resource
     pub fn add_project(&self, name: &str, project_path: &str, launch_profile_or_options: Option<Value>) -> Result<ProjectResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -12236,24 +12254,6 @@ impl IDistributedApplicationBuilder {
         let result = self.client.invoke_capability("Aspire.Hosting/addCSharpApp", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(CSharpAppResource::new(handle, self.client.clone()))
-    }
-
-    /// Adds an opt-in target that checks for stale generated pipeline output.
-    pub fn with_output_diffing(&self, target_step: Option<&str>, diff_step_name: Option<&str>, description: Option<&str>) -> Result<IDistributedApplicationBuilder, Box<dyn std::error::Error>> {
-        let mut args: HashMap<String, Value> = HashMap::new();
-        args.insert("builder".to_string(), self.handle.to_json());
-        if let Some(ref v) = target_step {
-            args.insert("targetStep".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
-        }
-        if let Some(ref v) = diff_step_name {
-            args.insert("diffStepName".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
-        }
-        if let Some(ref v) = description {
-            args.insert("description".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
-        }
-        let result = self.client.invoke_capability("Aspire.Hosting/withOutputDiffing", args)?;
-        let handle: Handle = serde_json::from_value(result)?;
-        Ok(IDistributedApplicationBuilder::new(handle, self.client.clone()))
     }
 
     /// Gets the application configuration.
@@ -14743,12 +14743,12 @@ impl ParameterResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
-    /// Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
-    pub fn with_dashboard_position(&self, position: f64) -> Result<IResource, Box<dyn std::error::Error>> {
+    /// Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+    pub fn with_display_order(&self, order: f64) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
-        args.insert("position".to_string(), serde_json::to_value(&position).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting/withDashboardPosition", args)?;
+        args.insert("order".to_string(), serde_json::to_value(&order).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withDisplayOrder", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
@@ -16544,12 +16544,12 @@ impl ProjectResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
-    /// Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
-    pub fn with_dashboard_position(&self, position: f64) -> Result<IResource, Box<dyn std::error::Error>> {
+    /// Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+    pub fn with_display_order(&self, order: f64) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
-        args.insert("position".to_string(), serde_json::to_value(&position).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting/withDashboardPosition", args)?;
+        args.insert("order".to_string(), serde_json::to_value(&order).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withDisplayOrder", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
@@ -18918,12 +18918,12 @@ impl TestDatabaseResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
-    /// Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
-    pub fn with_dashboard_position(&self, position: f64) -> Result<IResource, Box<dyn std::error::Error>> {
+    /// Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+    pub fn with_display_order(&self, order: f64) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
-        args.insert("position".to_string(), serde_json::to_value(&position).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting/withDashboardPosition", args)?;
+        args.insert("order".to_string(), serde_json::to_value(&order).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withDisplayOrder", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
@@ -20610,12 +20610,12 @@ impl TestRedisResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
-    /// Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
-    pub fn with_dashboard_position(&self, position: f64) -> Result<IResource, Box<dyn std::error::Error>> {
+    /// Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+    pub fn with_display_order(&self, order: f64) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
-        args.insert("position".to_string(), serde_json::to_value(&position).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting/withDashboardPosition", args)?;
+        args.insert("order".to_string(), serde_json::to_value(&order).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withDisplayOrder", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
@@ -22522,12 +22522,12 @@ impl TestVaultResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
-    /// Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
-    pub fn with_dashboard_position(&self, position: f64) -> Result<IResource, Box<dyn std::error::Error>> {
+    /// Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+    pub fn with_display_order(&self, order: f64) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
-        args.insert("position".to_string(), serde_json::to_value(&position).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting/withDashboardPosition", args)?;
+        args.insert("order".to_string(), serde_json::to_value(&order).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withDisplayOrder", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }

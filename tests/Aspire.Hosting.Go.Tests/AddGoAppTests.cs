@@ -19,6 +19,20 @@ namespace Aspire.Hosting.Go.Tests;
 
 public class AddGoAppTests(ITestOutputHelper outputHelper)
 {
+    [Theory]
+    [InlineData(false, "localhost")]
+    [InlineData(true, "0.0.0.0")]
+    public async Task AddGoAppConfiguresBindAddressForExecutionMode(bool publish, string expectedAddress)
+    {
+        var operation = publish ? DistributedApplicationOperation.Publish : DistributedApplicationOperation.Run;
+        using var builder = TestDistributedApplicationBuilder.Create(operation);
+        var app = builder.AddGoApp("api", AppContext.BaseDirectory);
+
+        var manifest = await ManifestUtils.GetManifest(app.Resource);
+
+        Assert.Contains($"\"HOST\":\"{expectedAddress}\"", manifest.ToJsonString(), StringComparison.Ordinal);
+    }
+
     // ---- Manifest: go run . (baseline) ------------------------------------
 
     [Fact]
@@ -41,6 +55,7 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
                 "."
               ],
               "env": {
+                "HOST": "localhost",
                 "PORT": "{api.bindings.http.targetPort}"
               },
               "bindings": {
@@ -76,7 +91,10 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
               "args": [
                 "run",
                 "./cmd/server"
-              ]
+              ],
+              "env": {
+                "HOST": "localhost"
+              }
             }
             """;
         Assert.Equal(expected, manifest.ToString());
@@ -121,7 +139,10 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
                 "run",
                 "-tags=netgo,osusergo",
                 "."
-              ]
+              ],
+              "env": {
+                "HOST": "localhost"
+              }
             }
             """;
         Assert.Equal(expected, manifest.ToString());
@@ -145,7 +166,10 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
                 "run",
                 "-ldflags=-X main.version=1.0.0",
                 "."
-              ]
+              ],
+              "env": {
+                "HOST": "localhost"
+              }
             }
             """;
         Assert.Equal(expected, manifest.ToString());
@@ -169,7 +193,10 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
                 "run",
                 "-gcflags=all=-N -l",
                 "."
-              ]
+              ],
+              "env": {
+                "HOST": "localhost"
+              }
             }
             """;
         Assert.Equal(expected, manifest.ToString());
@@ -193,7 +220,10 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
                 "run",
                 "-race",
                 "."
-              ]
+              ],
+              "env": {
+                "HOST": "localhost"
+              }
             }
             """;
         Assert.Equal(expected, manifest.ToString());
@@ -224,7 +254,10 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
                 "-ldflags=-s -w",
                 "-gcflags=all=-N -l",
                 "."
-              ]
+              ],
+              "env": {
+                "HOST": "localhost"
+              }
             }
             """;
         Assert.Equal(expected, manifest.ToString());
@@ -252,7 +285,10 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
                 ".",
                 "--config",
                 "prod.yaml"
-              ]
+              ],
+              "env": {
+                "HOST": "localhost"
+              }
             }
             """;
         Assert.Equal(expected, manifest.ToString());
@@ -278,7 +314,10 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
               "args": [
                 "run",
                 "."
-              ]
+              ],
+              "env": {
+                "HOST": "localhost"
+              }
             }
             """;
         Assert.Equal(expected, manifest.ToString());
@@ -303,7 +342,10 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
               "args": [
                 "run",
                 "."
-              ]
+              ],
+              "env": {
+                "HOST": "localhost"
+              }
             }
             """;
         Assert.Equal(expected, manifest.ToString());
@@ -328,7 +370,10 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
               "args": [
                 "run",
                 "."
-              ]
+              ],
+              "env": {
+                "HOST": "localhost"
+              }
             }
             """;
         Assert.Equal(expected, manifest.ToString());
@@ -357,7 +402,10 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
                 "--api-version=2",
                 "debug",
                 "."
-              ]
+              ],
+              "env": {
+                "HOST": "localhost"
+              }
             }
             """;
         Assert.Equal(expected, manifest.ToString());
@@ -385,7 +433,10 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
                 "--accept-multiclient",
                 "debug",
                 "."
-              ]
+              ],
+              "env": {
+                "HOST": "localhost"
+              }
             }
             """;
         Assert.Equal(expected, manifest.ToString());
@@ -413,7 +464,10 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
                 "--only-same-user=false",
                 "debug",
                 "."
-              ]
+              ],
+              "env": {
+                "HOST": "localhost"
+              }
             }
             """;
         Assert.Equal(expected, manifest.ToString());
@@ -441,7 +495,10 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
                 "debug",
                 "--continue",
                 "."
-              ]
+              ],
+              "env": {
+                "HOST": "localhost"
+              }
             }
             """;
         Assert.Equal(expected, manifest.ToString());
@@ -474,7 +531,10 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
                 "--log-output=rpc,dap,debugger",
                 "debug",
                 "."
-              ]
+              ],
+              "env": {
+                "HOST": "localhost"
+              }
             }
             """;
         Assert.Equal(expected, manifest.ToString());
@@ -734,7 +794,10 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
                 "debug",
                 "--build-flags=-tags=\u0027netgo\u0027 -ldflags=\u0027-s -w\u0027",
                 "."
-              ]
+              ],
+              "env": {
+                "HOST": "localhost"
+              }
             }
             """;
         Assert.Equal(expected, manifest.ToString());
@@ -764,7 +827,10 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
                 "debug",
                 "--build-flags=-race",
                 "."
-              ]
+              ],
+              "env": {
+                "HOST": "localhost"
+              }
             }
             """;
         Assert.Equal(expected, manifest.ToString());
@@ -794,7 +860,10 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
                 "debug",
                 "--build-flags=-gcflags=\u0027all=-N -l\u0027",
                 "."
-              ]
+              ],
+              "env": {
+                "HOST": "localhost"
+              }
             }
             """;
         Assert.Equal(expected, manifest.ToString());
@@ -827,7 +896,10 @@ public class AddGoAppTests(ITestOutputHelper outputHelper)
                 "--",
                 "--port",
                 "9090"
-              ]
+              ],
+              "env": {
+                "HOST": "localhost"
+              }
             }
             """;
         Assert.Equal(expected, manifest.ToString());

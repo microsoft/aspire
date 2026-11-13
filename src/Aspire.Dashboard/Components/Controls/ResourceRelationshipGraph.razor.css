@@ -5,7 +5,7 @@
     margin: auto;
     overflow: visible;
     font-family: inherit;
-    font-size: 12px;
+    font-size: var(--aspire-font-size-caption);
 }
 
 .relationship-graph-edge {
@@ -36,7 +36,7 @@
 }
 
 .relationship-graph-node.center text {
-    font-weight: 600;
+    font-weight: var(--aspire-font-weight-semibold);
 }
 
 a.relationship-graph-node {

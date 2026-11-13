@@ -10,8 +10,8 @@
 
 namespace Aspire.Cli.Resources {
     using System;
-
-
+    
+    
     /// <summary>
     ///   A strongly-typed resource class, for looking up localized strings, etc.
     /// </summary>
@@ -23,15 +23,15 @@ namespace Aspire.Cli.Resources {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
     internal class DoctorCommandStrings {
-
+        
         private static global::System.Resources.ResourceManager resourceMan;
-
+        
         private static global::System.Globalization.CultureInfo resourceCulture;
-
+        
         [global::System.Diagnostics.CodeAnalysis.SuppressMessageAttribute("Microsoft.Performance", "CA1811:AvoidUncalledPrivateCode")]
         internal DoctorCommandStrings() {
         }
-
+        
         /// <summary>
         ///   Returns the cached ResourceManager instance used by this class.
         /// </summary>
@@ -45,7 +45,7 @@ namespace Aspire.Cli.Resources {
                 return resourceMan;
             }
         }
-
+        
         /// <summary>
         ///   Overrides the current thread's CurrentUICulture property for all
         ///   resource lookups using this strongly typed resource class.
@@ -59,7 +59,7 @@ namespace Aspire.Cli.Resources {
                 resourceCulture = value;
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to AppHost.
         /// </summary>
@@ -68,7 +68,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("AppHostCategoryHeader", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Could not determine AppHost version.
         /// </summary>
@@ -77,7 +77,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("AppHostVersionCheckFailedMessage", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to AppHost version {0} ({1}).
         /// </summary>
@@ -86,7 +86,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("AppHostVersionMessageFormat", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Could not determine AppHost version ({0}).
         /// </summary>
@@ -95,7 +95,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("AppHostVersionUnknownMessageFormat", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Aspire.
         /// </summary>
@@ -104,7 +104,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("AspireCategoryHeader", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Delete these files, then run &apos;aspire agent init --skills aspire&apos;..
         /// </summary>
@@ -113,7 +113,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("AspireSkillsFix", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Could not inspect local Aspire skills.
         /// </summary>
@@ -122,7 +122,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("AspireSkillsInspectionFailedMessage", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to  (channel: {0}).
         /// </summary>
@@ -131,7 +131,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ChannelSuffixFormat", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Checking Aspire environment....
         /// </summary>
@@ -140,7 +140,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("CheckingPrerequisites", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Aspire CLI version {0}.
         /// </summary>
@@ -149,7 +149,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("CliVersionMessageFormat", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Run &apos;{0}&apos; to update Aspire CLI..
         /// </summary>
@@ -158,7 +158,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("CliVersionOutOfDateFixFormat", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Aspire CLI version {0} is out of date. Latest version is {1}.
         /// </summary>
@@ -167,7 +167,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("CliVersionOutOfDateMessageFormat", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Could not check for Aspire CLI updates.
         /// </summary>
@@ -176,7 +176,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("CliVersionUpdateCheckFailedMessage", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Channel.
         /// </summary>
@@ -185,7 +185,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ColumnChannel", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Path.
         /// </summary>
@@ -194,7 +194,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ColumnPath", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to PATH status.
         /// </summary>
@@ -203,7 +203,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ColumnPathStatus", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Route.
         /// </summary>
@@ -212,7 +212,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ColumnRoute", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Version.
         /// </summary>
@@ -221,7 +221,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ColumnVersion", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Container Runtime.
         /// </summary>
@@ -230,7 +230,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ContainerCategoryHeader", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to  ← active.
         /// </summary>
@@ -239,7 +239,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ContainerRuntimeActiveSuffix", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Failed to check container runtime.
         /// </summary>
@@ -248,7 +248,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ContainerRuntimeCheckFailedMessage", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to {0} client version {1} is below minimum required {2}.
         /// </summary>
@@ -257,7 +257,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ContainerRuntimeClientVersionWarningFormat", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to  ← explicitly selected.
         /// </summary>
@@ -266,7 +266,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ContainerRuntimeExplicitSelectionSuffix", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Install Docker Desktop: https://www.docker.com/products/docker-desktop.
         /// </summary>
@@ -275,7 +275,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ContainerRuntimeInstallDockerFix", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Install Docker Desktop: https://www.docker.com/products/docker-desktop or Podman: https://podman.io/getting-started/installation.
         /// </summary>
@@ -284,7 +284,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ContainerRuntimeInstallFix", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Install {0}.
         /// </summary>
@@ -293,7 +293,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ContainerRuntimeInstallGenericFixFormat", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Install Podman: https://podman.io/getting-started/installation.
         /// </summary>
@@ -302,7 +302,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ContainerRuntimeInstallPodmanFix", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Install Docker Desktop: https://www.docker.com/products/docker-desktop or Podman: https://podman.io/getting-started/installation or WSLc: https://aka.ms/aspire/containers.
         /// </summary>
@@ -311,7 +311,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ContainerRuntimeInstallWindowsFix", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Install WSLc on Windows: https://aka.ms/aspire/containers.
         /// </summary>
@@ -320,7 +320,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ContainerRuntimeInstallWslcFix", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to No container runtime detected.
         /// </summary>
@@ -329,7 +329,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ContainerRuntimeNotDetectedMessage", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to {0}: not found (configured via ASPIRE_CONTAINER_RUNTIME={1}){2}.
         /// </summary>
@@ -338,7 +338,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ContainerRuntimeNotFoundMessageFormat", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to {0}{1}: running{2}.
         /// </summary>
@@ -347,7 +347,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ContainerRuntimeRunningMessageFormat", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Set ASPIRE_CONTAINER_RUNTIME to docker or podman..
         /// </summary>
@@ -356,7 +356,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ContainerRuntimeSelectAlternativeFix", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to {0} server version {1} is below minimum required {2}.
         /// </summary>
@@ -365,7 +365,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ContainerRuntimeServerVersionWarningFormat", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Start {0} daemon.
         /// </summary>
@@ -374,7 +374,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ContainerRuntimeStartDaemonFixFormat", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Start Docker Desktop.
         /// </summary>
@@ -383,7 +383,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ContainerRuntimeStartDockerDesktopFix", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Start Podman service: sudo systemctl start podman.
         /// </summary>
@@ -392,7 +392,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ContainerRuntimeStartPodmanFix", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Ensure the WSLc session manager is running. Check its status with: wslc info --format json.
         /// </summary>
@@ -401,7 +401,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ContainerRuntimeStartWslcFix", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to {0}: installed but not running{1}.
         /// </summary>
@@ -410,7 +410,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ContainerRuntimeStoppedMessageFormat", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Upgrade {0} to version {1} or later from: {2}.
         /// </summary>
@@ -419,7 +419,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ContainerRuntimeUpgradeFixFormat", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Upgrade {0} to a newer version.
         /// </summary>
@@ -428,7 +428,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ContainerRuntimeUpgradeGenericFixFormat", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Upgrade WSLc to version {0} or later. See: https://aka.ms/aspire/containers.
         /// </summary>
@@ -437,7 +437,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ContainerRuntimeUpgradeWslcFixFormat", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to  v{0}.
         /// </summary>
@@ -446,7 +446,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ContainerRuntimeVersionSuffixFormat", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to {0}: required version metadata could not be validated.
         /// </summary>
@@ -455,7 +455,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ContainerRuntimeVersionUnavailableMessageFormat", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Aspire requires Linux containers. Windows containers are not supported..
         /// </summary>
@@ -464,7 +464,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ContainerRuntimeWindowsModeDetails", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Switch Docker Desktop to Linux containers mode (right-click Docker tray icon → &apos;Switch to Linux containers...&apos;).
         /// </summary>
@@ -473,7 +473,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ContainerRuntimeWindowsModeFix", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to {0} is running in Windows container mode.
         /// </summary>
@@ -482,7 +482,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ContainerRuntimeWindowsModeMessageFormat", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to WSLc is only supported on Windows.
         /// </summary>
@@ -491,7 +491,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ContainerRuntimeWslcUnsupportedHostMessage", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Developer Control Plane (DCP) API server returned HTTP {0} ({1})..
         /// </summary>
@@ -500,7 +500,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("DcpApiServerReturnedHttpStatusMessageFormat", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to The running Aspire CLI is not associated with a bundle layout that contains the Developer Control Plane (DCP)..
         /// </summary>
@@ -509,7 +509,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("DcpBundleNotFoundDetails", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Developer Control Plane (DCP) bundle not found; skipping connection health checks.
         /// </summary>
@@ -518,7 +518,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("DcpBundleNotFoundMessage", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Failed to check Developer Control Plane (DCP) connection health.
         /// </summary>
@@ -527,7 +527,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("DcpConnectionCheckFailedMessage", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Developer Control Plane (DCP) connection health checks succeeded.
         /// </summary>
@@ -536,7 +536,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("DcpConnectionSucceededMessage", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Timed out after {0} seconds while checking Developer Control Plane (DCP) connection health..
         /// </summary>
@@ -545,7 +545,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("DcpConnectionTimedOutMessageFormat", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Developer Control Plane (DCP) connection using the developer certificate failed.
         /// </summary>
@@ -554,7 +554,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("DcpDeveloperCertificateConnectionFailedMessage", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Developer Control Plane (DCP) connection using the developer certificate succeeded.
         /// </summary>
@@ -563,7 +563,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("DcpDeveloperCertificateConnectionSucceededMessage", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to The developer certificate could not be cached because it was not valid..
         /// </summary>
@@ -572,7 +572,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("DcpDeveloperCertificateInvalidForCacheDetails", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to The developer certificate did not have a thumbprint..
         /// </summary>
@@ -581,7 +581,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("DcpDeveloperCertificateMissingThumbprintDetails", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to No fully trusted exportable developer certificate with a private key was found..
         /// </summary>
@@ -590,7 +590,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("DcpDeveloperCertificateNoTrustedExportableDetails", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Run `aspire certs trust` to repair developer certificate trust..
         /// </summary>
@@ -599,7 +599,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("DcpDeveloperCertificateRepairTrustFix", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Run `aspire certs trust` to create and trust a developer certificate..
         /// </summary>
@@ -608,7 +608,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("DcpDeveloperCertificateTrustFix", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to No trusted developer certificate was available for the Developer Control Plane (DCP) developer certificate connection check.
         /// </summary>
@@ -617,7 +617,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("DcpDeveloperCertificateUnavailableMessage", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to The developer certificate could not be cached because the user profile directory could not be determined..
         /// </summary>
@@ -626,7 +626,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("DcpDeveloperCertificateUserProfileMissingDetails", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Developer Control Plane (DCP) connection using an ephemeral DCP-managed certificate failed.
         /// </summary>
@@ -635,7 +635,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("DcpEphemeralCertificateConnectionFailedMessage", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Developer Control Plane (DCP) connection using an ephemeral DCP-managed certificate succeeded.
         /// </summary>
@@ -644,7 +644,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("DcpEphemeralCertificateConnectionSucceededMessage", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Expected Developer Control Plane (DCP) executable at &apos;{0}&apos;..
         /// </summary>
@@ -653,7 +653,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("DcpExecutableNotFoundDetailsFormat", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Developer Control Plane (DCP) executable not found.
         /// </summary>
@@ -662,7 +662,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("DcpExecutableNotFoundMessage", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Developer Control Plane (DCP) exited before writing kubeconfig. Exit code: {0}.{1}{2}.
         /// </summary>
@@ -671,7 +671,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("DcpExitedBeforeKubeconfigDetailsFormat", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Developer Control Plane (DCP) kubeconfig did not contain a valid server URI..
         /// </summary>
@@ -680,7 +680,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("DcpKubeconfigMissingServerDetails", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Developer Control Plane (DCP) did not write any output..
         /// </summary>
@@ -689,7 +689,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("DcpNoOutputDetails", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Failed to start Developer Control Plane (DCP)..
         /// </summary>
@@ -698,7 +698,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("DcpStartFailedMessage", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to TLS authentication failed: {0}.
         /// </summary>
@@ -707,7 +707,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("DcpTlsAuthenticationFailedDetailsFormat", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Diagnose Aspire environment issues and verify setup.
         /// </summary>
@@ -716,7 +716,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("Description", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to For detailed prerequisites: {0}.
         /// </summary>
@@ -725,7 +725,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("DetailedPrerequisitesLink", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Run &apos;{0}&apos; to remove all certificates, then run &apos;{1}&apos; to create and trust a new one..
         /// </summary>
@@ -734,7 +734,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("DevCertsCleanAndTrustFixFormat", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Install {0}, run &apos;{1}&apos; to remove all certificates, then run &apos;{2}&apos; to create and trust a new one..
         /// </summary>
@@ -743,7 +743,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("DevCertsInstallOpenSslCleanAndTrustFixFormat", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Aspire uses certutil to query and update NSS certificate databases used by Firefox and Chromium browsers on Linux..
         /// </summary>
@@ -752,7 +752,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("DevCertsMissingCertUtilDetails", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Install certutil from your distribution&apos;s NSS tools package (for example, libnss3-tools)..
         /// </summary>
@@ -761,7 +761,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("DevCertsMissingCertUtilFix", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to certutil is not available; browser certificate trust may be incomplete.
         /// </summary>
@@ -770,7 +770,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("DevCertsMissingCertUtilMessage", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Found certificates: {0}. Having multiple certificates can cause confusion..
         /// </summary>
@@ -779,7 +779,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("DevCertsMultipleNoneTrustedDetailsFormat", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Multiple HTTPS development certificates found ({0} certificates), but none are trusted.
         /// </summary>
@@ -788,7 +788,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("DevCertsMultipleNoneTrustedMessageFormat", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Found certificates: {0}. Having multiple certificates can cause confusion when selecting which one to use..
         /// </summary>
@@ -797,7 +797,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("DevCertsMultipleSomeUntrustedDetailsFormat", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Multiple HTTPS development certificates found ({0} certificates).
         /// </summary>
@@ -806,7 +806,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("DevCertsMultipleSomeUntrustedMessageFormat", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Aspire uses HTTPS for secure communication between the dashboard and your services during local development..
         /// </summary>
@@ -815,7 +815,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("DevCertsNoCertificateDetails", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to No HTTPS development certificate found.
         /// </summary>
@@ -824,7 +824,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("DevCertsNoCertificateMessage", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Certificate {0} exists in the personal store but was not found in the trusted root store..
         /// </summary>
@@ -833,7 +833,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("DevCertsNotTrustedDetailsFormat", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to HTTPS development certificate is not trusted.
         /// </summary>
@@ -842,7 +842,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("DevCertsNotTrustedMessage", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Older certificate versions (&lt; v{0}) may not support all certificate trust scenarios..
         /// </summary>
@@ -851,7 +851,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("DevCertsOldVersionDetailsFormat", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to HTTPS development certificate has an older version ({0}).
         /// </summary>
@@ -860,7 +860,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("DevCertsOldVersionMessageFormat", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to OpenSSL HTTPS development certificate cache is missing the current certificate.
         /// </summary>
@@ -869,7 +869,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("DevCertsOpenSslCacheMissingCurrentCertificateMessage", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to The OpenSSL certificate cache at &apos;{0}&apos; does not contain certificate {1} from the .NET current user certificate store. Run &apos;aspire certs clean&apos; and then &apos;aspire certs trust&apos; to remove stale or corrupt certificates and regenerate trusted development certificates..
         /// </summary>
@@ -878,7 +878,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("DevCertsOpenSslCacheMissingDetailsFormat", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to The OpenSSL certificate cache at &apos;{0}&apos; contains certificate {1}, but no subject-hash entry points to it. OpenSSL workloads use subject-hash entries when loading CA directories..
         /// </summary>
@@ -887,7 +887,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("DevCertsOpenSslCacheMissingHashLinkDetailsFormat", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to OpenSSL HTTPS development certificate cache is missing subject-hash links.
         /// </summary>
@@ -896,7 +896,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("DevCertsOpenSslCacheMissingHashLinkMessage", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Could not read certificate files under &apos;{0}&apos;: {1}. Run &apos;aspire certs clean&apos; and then &apos;aspire certs trust&apos; to remove stale or corrupt certificates and regenerate trusted development certificates..
         /// </summary>
@@ -905,7 +905,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("DevCertsOpenSslCacheUnreadableFilesDetailsFormat", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to OpenSSL HTTPS development certificate cache contains unreadable certificate files.
         /// </summary>
@@ -914,7 +914,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("DevCertsOpenSslCacheUnreadableMessage", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to The certificate is in the trusted store, but SSL_CERT_DIR is not configured to include &apos;{0}&apos;. Some applications may not trust the certificate. &apos;aspire run&apos; will configure this automatically..
         /// </summary>
@@ -923,7 +923,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("DevCertsPartiallyTrustedDetailsFormat", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Set SSL_CERT_DIR in your shell profile: {0}.
         /// </summary>
@@ -932,7 +932,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("DevCertsPartiallyTrustedFixFormat", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to HTTPS development certificate is only partially trusted.
         /// </summary>
@@ -941,7 +941,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("DevCertsPartiallyTrustedMessage", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to HTTPS development certificate is trusted.
         /// </summary>
@@ -950,7 +950,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("DevCertsTrustedMessage", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Run &apos;{0}&apos; to trust the HTTPS development certificate..
         /// </summary>
@@ -959,7 +959,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("DevCertsTrustFixFormat", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to [trusted].
         /// </summary>
@@ -968,7 +968,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("DevCertsTrustLabelFull", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to [partial].
         /// </summary>
@@ -977,7 +977,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("DevCertsTrustLabelPartial", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Development Tools.
         /// </summary>
@@ -986,7 +986,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("DevelopmentToolsCategoryHeader", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Environment.
         /// </summary>
@@ -995,7 +995,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("EnvironmentCategoryHeader", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Aspire Environment Check.
         /// </summary>
@@ -1004,7 +1004,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("EnvironmentCheckHeader", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Environment checks timed out after {0} seconds..
         /// </summary>
@@ -1013,7 +1013,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("EnvironmentChecksTimedOutMessageFormat", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Environment check &apos;{0}&apos; timed out after {1} seconds..
         /// </summary>
@@ -1022,7 +1022,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("EnvironmentCheckTimedOutMessageFormat", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Files:.
         /// </summary>
@@ -1031,7 +1031,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("FilesHeader", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Aspire CLI Installations.
         /// </summary>
@@ -1040,7 +1040,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("HeaderInstallations", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Install discovery failed. See the Aspire CLI logs for details..
         /// </summary>
@@ -1049,7 +1049,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("InstallationDiscoveryFailedReason", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Install discovery timed out after {0} seconds. See the Aspire CLI logs for details..
         /// </summary>
@@ -1058,7 +1058,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("InstallationDiscoveryTimedOutReasonFormat", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Output format (Table or Json).
         /// </summary>
@@ -1067,17 +1067,16 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("JsonOptionDescription", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to Run &apos;aspire init&apos; (or any aspire run/add/update/pipeline command) to migrate to aspire.config.json.
-        ///The legacy file continues to work — this is a non-blocking warning..
+        ///   Looks up a localized string similar to Run &apos;aspire init&apos; (or any aspire run/add/update/pipeline command) to migrate to aspire.config.json. The legacy file continues to work — this is a non-blocking warning..
         /// </summary>
         internal static string LegacySettingsDetectedFix {
             get {
                 return ResourceManager.GetString("LegacySettingsDetectedFix", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Legacy .aspire/settings.json detected at {0}.
         /// </summary>
@@ -1086,7 +1085,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("LegacySettingsDetectedMessageFormat", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Legacy &apos;apphost.ts&apos; layout detected at {0}.
         /// </summary>
@@ -1095,7 +1094,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("LegacyTypeScriptAppHostMessageFormat", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Operating system: {0}.
         /// </summary>
@@ -1104,7 +1103,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("OperatingSystemMessageFormat", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Run &apos;aspire update --migrate&apos; to apply the recommended migration..
         /// </summary>
@@ -1113,7 +1112,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("PendingMigrationFix", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to .NET SDK.
         /// </summary>
@@ -1122,7 +1121,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("SdkCategoryHeader", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Summary: {0} passed, {1} warnings, {2} failed.
         /// </summary>
@@ -1131,7 +1130,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("SummaryFormat", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to (current).
         /// </summary>
@@ -1140,7 +1139,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ValueCurrentMarker", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to (not probed).
         /// </summary>
@@ -1149,7 +1148,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ValueNotProbed", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to active.
         /// </summary>
@@ -1158,7 +1157,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ValuePathActive", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to not on PATH.
         /// </summary>
@@ -1167,7 +1166,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ValuePathNotOnPath", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to shadowed.
         /// </summary>
@@ -1176,7 +1175,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ValuePathShadowed", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to (probe failed).
         /// </summary>
@@ -1185,7 +1184,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ValueProbeFailed", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to (unknown).
         /// </summary>
@@ -1194,7 +1193,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ValueUnknown", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to unknown.
         /// </summary>
@@ -1203,7 +1202,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("VersionUnknown", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Aspire extension for VS Code is installed.
         /// </summary>
@@ -1212,7 +1211,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("VsCodeExtensionInstalledMessage", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Install the Aspire extension from the VS Code Marketplace for an integrated Aspire experience..
         /// </summary>
@@ -1221,7 +1220,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("VsCodeExtensionMissingFix", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to VS Code is installed, but the Aspire extension is not installed.
         /// </summary>

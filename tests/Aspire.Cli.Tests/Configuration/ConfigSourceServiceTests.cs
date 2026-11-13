@@ -19,6 +19,7 @@ using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
+using Spectre.Console;
 
 namespace Aspire.Cli.Tests.Configuration;
 
@@ -34,7 +35,8 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         {
             [CliConfigNames.InitSourceUrl] = "https://git.example/configuration",
             [CliConfigNames.InitSourcePath] = path,
-            [CliConfigNames.InitSourceRef] = "config-preview"
+            [CliConfigNames.InitSourceRef] = "config-preview",
+            [CliConfigNames.InitSourceReadmeUrl] = "../invalid"
         });
         var detector = new TestConfigSourceDetector { IsInternal = true };
         var interaction = new TestInteractionService();
@@ -42,7 +44,8 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         {
             ReadConfiguration = (source, _) =>
             {
-                var warning = Assert.Single(interaction.DisplayedMessages);
+                var warning = Assert.Single(interaction.DisplayedMessages,
+                    message => message.Message == $"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]");
                 Assert.Equal(KnownEmojis.PoliceCarLight, warning.Emoji);
                 Assert.Equal($"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]", warning.Message);
                 Assert.Equal(ConsoleOutput.Error, warning.ConsoleOverride);
@@ -69,7 +72,14 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(0, detector.Calls);
         Assert.Equal(1, git.Calls);
-        Assert.Single(interaction.DisplayedMessages);
+        Assert.Collection(interaction.DisplayedMessages,
+            message => Assert.Equal($"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]", message.Message),
+            message =>
+            {
+                Assert.Equal($"[blue]{string.Format(SharedCommandStrings.FetchingSource,
+                    SharedCommandStrings.GitFetchConfigurationSource, "https://git.example/configuration")}[/]", message.Message);
+                Assert.Equal(ConsoleOutput.Error, message.ConsoleOverride);
+            });
         var definition = Assert.Single(sources);
         Assert.Equal("enterprise", definition.Key);
         Assert.Equal("https://git.example/templates", definition.Value!["repository"]!.GetValue<string>());
@@ -112,7 +122,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         });
         var interaction = new TestInteractionService
         {
-            PromptForSelectionCallback = (_, _, _, _) => ConfigSourceStrings.Decline
+            ConfirmCallback = (_, _) => false
         };
         var git = new TestConfigSourceRepository
         {
@@ -123,7 +133,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         using var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(),
             git: git, environment: environment, interaction: interaction, interactive: true);
 
-        var source = await service.ResolveAndAcquireConfigSourceAsync(ParseConsent(consent), CancellationToken.None);
+        var source = await service.ResolveAndAcquireConfigSourceAsync(ParseConsent(consent), ConfigSourceStrings.NewUseSourcePrompt, CancellationToken.None);
         var sources = await service.GetTemplateSourcesAsync(CancellationToken.None);
         var repeatedSources = await service.GetTemplateSourcesAsync(CancellationToken.None);
 
@@ -343,7 +353,9 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         }
         if (!force)
         {
-            Assert.Equal(ConfigSourceStrings.UpdateAvailable, Assert.Single(interaction.DisplayedMessages).Message);
+            var notification = Assert.Single(interaction.DisplayedMessages);
+            Assert.Equal(ConfigSourceStrings.UpdateAvailable, notification.Message);
+            Assert.Equal(KnownEmojis.Information, notification.Emoji);
         }
         Assert.Equal(originalGlobal, await File.ReadAllTextAsync(globalFile.FullName));
         Assert.Equal(siblingConfiguration, await File.ReadAllTextAsync(siblingPath));
@@ -812,7 +824,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
                 [CliConfigNames.InitSourceRef] = expected.Ref
             }));
 
-        Assert.Equivalent(expected, await service.ResolveAndAcquireConfigSourceAsync(ParseConsent(true), CancellationToken.None), strict: true);
+        Assert.Equivalent(expected, await service.ResolveAndAcquireConfigSourceAsync(ParseConsent(true), ConfigSourceStrings.NewUseSourcePrompt, CancellationToken.None), strict: true);
         Assert.Equal(0, detector.Calls);
         Assert.Equal(1, git.Calls);
         Assert.False(File.Exists(Path.Combine(workspace.Path, AspireConfigFile.FileName)));
@@ -835,7 +847,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
                 ["ASPIRE_INIT_CONFIG"] = "invalid-legacy-variable"
             }));
 
-        var selected = await service.ResolveAndAcquireConfigSourceAsync(ParseConsent(detected ? true : null), CancellationToken.None);
+        var selected = await service.ResolveAndAcquireConfigSourceAsync(ParseConsent(detected ? true : null), ConfigSourceStrings.NewUseSourcePrompt, CancellationToken.None);
 
         Assert.Equivalent(detected ? new ConfigSource { Repository = ConfigSourceService.MicrosoftRepository, Path = AspireConfigFile.FileName } : null,
             selected, strict: true);
@@ -852,7 +864,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git,
             detector: new TestConfigSourceDetector { IsInternal = true, Outcome = outcome });
 
-        Assert.Null(await service.ResolveAndAcquireConfigSourceAsync(ParseConsent(null), CancellationToken.None));
+        Assert.Null(await service.ResolveAndAcquireConfigSourceAsync(ParseConsent(null), ConfigSourceStrings.NewUseSourcePrompt, CancellationToken.None));
         Assert.Equal(0, git.Calls);
     }
 
@@ -864,10 +876,120 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git);
 
         var error = await Assert.ThrowsAsync<ConfigSourceException>(() =>
-            service.ResolveAndAcquireConfigSourceAsync(ParseConsent(true), CancellationToken.None));
+            service.ResolveAndAcquireConfigSourceAsync(ParseConsent(true), ConfigSourceStrings.NewUseSourcePrompt, CancellationToken.None));
 
         Assert.Equal(string.Format(CultureInfo.CurrentCulture, ConfigSourceStrings.NoCandidate, CliConfigNames.InitSourceUrl), error.Message);
         Assert.Equal(0, git.Calls);
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task SelectForCreation_ReadmeOverrideIsDisplayedBeforeConsent(bool microsoftDefault, bool supportsLinks)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var git = new TestConfigSourceRepository();
+        var interaction = new TestInteractionService { SupportsLinks = supportsLinks };
+        var prompted = false;
+        interaction.ConfirmCallback = (_, _) =>
+        {
+            prompted = true;
+            Assert.Equal(3, interaction.DisplayedMessages.Count);
+            Assert.Equal(ConfigSourceStrings.Explanation, interaction.DisplayedMessages[0].Message);
+            Assert.Single(interaction.DisplayedRenderables);
+            Assert.Equal(0, git.Calls);
+            return false;
+        };
+        var environment = new TestEnvironment(new Dictionary<string, string?>
+        {
+            [CliConfigNames.InitSourceUrl] = microsoftDefault ? null : s_source.Repository,
+            [CliConfigNames.InitSourceReadmeUrl] = "https://docs.example/config-source?team=[platform]"
+        });
+        using var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(),
+            git: git, environment: environment, detector: new TestConfigSourceDetector { IsInternal = true },
+            interaction: interaction, interactive: true);
+
+        var source = await service.ResolveAndAcquireConfigSourceAsync(ParseConsent(null), ConfigSourceStrings.NewUseSourcePrompt, CancellationToken.None);
+
+        Assert.True(prompted);
+        Assert.True(Assert.IsType<ConfigSource>(source).OptOut);
+        Assert.Equal(0, git.Calls);
+        await Verify(string.Join(Environment.NewLine, interaction.DisplayedMessages.Select(message => message.Message)), "txt")
+            .UseParameters(microsoftDefault, supportsLinks);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task SelectForCreation_MicrosoftSourceDefaultsToRootReadme(bool explicitSource)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var interaction = new TestInteractionService { SupportsLinks = true };
+        var detector = new TestConfigSourceDetector { IsInternal = true };
+        using var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(),
+            detector: detector, interaction: interaction,
+            environment: new TestEnvironment(new Dictionary<string, string?>
+            {
+                [CliConfigNames.InitSourceUrl] = explicitSource ? ConfigSourceService.MicrosoftRepository : null
+            }));
+
+        var source = await service.ResolveAndAcquireConfigSourceAsync(ParseConsent(false), ConfigSourceStrings.NewUseSourcePrompt, CancellationToken.None);
+
+        Assert.True(Assert.IsType<ConfigSource>(source).OptOut);
+        Assert.Equal(explicitSource ? 0 : 1, detector.Calls);
+        Assert.Equal($"[link=https://msft.ghe.com/coreai/aspire-1p-init]{ConfigSourceStrings.ReadmeLink}[/]",
+            interaction.DisplayedMessages[1].Message);
+        Assert.Single(interaction.DisplayedRenderables);
+        await Verify(string.Join(Environment.NewLine, interaction.DisplayedMessages.Select(message => message.Message)), "txt")
+            .UseParameters(explicitSource);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(" ")]
+    [InlineData("README.md")]
+    [InlineData("/README.md")]
+    [InlineData("file:///README.md")]
+    [InlineData("ftp://docs.example/README.md")]
+    [InlineData("https://docs.example/README.md\n")]
+    [InlineData("https://docs.example/README.md\u001b")]
+    public async Task SelectForCreation_InvalidReadmeUrlFailsBeforeConsentOrAcquisition(string readmeUrl)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var git = new TestConfigSourceRepository();
+        var interaction = new TestInteractionService();
+        using var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(),
+            git: git, interaction: interaction,
+            environment: new TestEnvironment(new Dictionary<string, string?>
+            {
+                [CliConfigNames.InitSourceUrl] = s_source.Repository,
+                [CliConfigNames.InitSourceReadmeUrl] = readmeUrl
+            }));
+
+        var error = await Assert.ThrowsAsync<ConfigSourceException>(() =>
+            service.ResolveAndAcquireConfigSourceAsync(ParseConsent(true), ConfigSourceStrings.NewUseSourcePrompt, CancellationToken.None));
+
+        Assert.Equal(string.Format(CultureInfo.CurrentCulture, ConfigSourceStrings.InvalidReadmeUrl,
+            CliConfigNames.InitSourceReadmeUrl), error.Message);
+        Assert.Empty(interaction.DisplayedMessages);
+        Assert.Equal(0, git.Calls);
+    }
+
+    [Fact]
+    public async Task SelectForCreation_WithoutCandidateIgnoresReadmeOverride()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var interaction = new TestInteractionService();
+        using var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), interaction: interaction,
+            environment: new TestEnvironment(new Dictionary<string, string?>
+            {
+                [CliConfigNames.InitSourceReadmeUrl] = "../invalid"
+            }));
+
+        Assert.Null(await service.ResolveAndAcquireConfigSourceAsync(ParseConsent(null), ConfigSourceStrings.NewUseSourcePrompt, CancellationToken.None));
+        Assert.Empty(interaction.DisplayedMessages);
     }
 
     [Theory]
@@ -881,13 +1003,13 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var interaction = new TestInteractionService();
         var prompted = false;
-        interaction.PromptForSelectionCallback = (_, _, _, _) =>
+        interaction.ConfirmCallback = (_, _) =>
         {
             prompted = true;
             var warning = Assert.Single(interaction.DisplayedMessages,
                 message => message.Message == $"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]");
             Assert.Equal(ConsoleOutput.Error, warning.ConsoleOverride);
-            return ConfigSourceStrings.Accept;
+            return true;
         };
         var git = new TestConfigSourceRepository
         {
@@ -905,13 +1027,26 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         using var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(),
             git: git, environment: environment, interaction: interaction, interactive: interactive);
 
-        var source = await service.ResolveAndAcquireConfigSourceAsync(ParseConsent(consent), CancellationToken.None);
+        var source = await service.ResolveAndAcquireConfigSourceAsync(ParseConsent(consent), ConfigSourceStrings.NewUseSourcePrompt, CancellationToken.None);
+        List<string> expectedMessages =
+        [
+            ConfigSourceStrings.Explanation,
+            $"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]"
+        ];
+        if (consent is not false)
+        {
+            expectedMessages.Add($"[blue]{string.Format(interactive ? SharedCommandStrings.FetchingSourceWithAuthentication : SharedCommandStrings.FetchingSource,
+                SharedCommandStrings.GitFetchConfigurationSource, s_source.Repository)}[/]");
+        }
+        Assert.Equal(expectedMessages, interaction.DisplayedMessages.Select(message => message.Message));
+        Assert.Single(interaction.DisplayedRenderables);
         if (source is not null)
         {
             await service.MaterializeAsync(source, workspace.WorkspaceRoot, CancellationToken.None);
         }
 
         Assert.Equal(consent is null, prompted);
+        Assert.Equal(consent is null ? 1 : 0, interaction.BooleanPromptCalls.Count);
         Assert.Equal(consent is false ? 0 : 1, git.Calls);
         var warning = Assert.Single(interaction.DisplayedMessages,
             message => message.Message == $"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]");
@@ -926,30 +1061,48 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
             detector: new TestConfigSourceDetector { IsInternal = true });
 
         Assert.Equal(ConfigSourceStrings.ConsentRequired, (await Assert.ThrowsAsync<ConfigSourceException>(() =>
-            service.ResolveAndAcquireConfigSourceAsync(ParseConsent(null), CancellationToken.None))).Message);
+            service.ResolveAndAcquireConfigSourceAsync(ParseConsent(null), ConfigSourceStrings.NewUseSourcePrompt, CancellationToken.None))).Message);
     }
 
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task SelectForCreation_InteractiveChoiceControlsAcquisition(bool accepted)
+    public async Task SelectForCreation_InteractiveConfirmationControlsAcquisition(bool accepted)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var git = new TestConfigSourceRepository();
         var interaction = new TestInteractionService
         {
-            PromptForSelectionCallback = (_, choices, _, _) =>
+            ConfirmCallback = (prompt, defaultValue) =>
             {
-                Assert.Equal([ConfigSourceStrings.Accept, ConfigSourceStrings.Decline], choices.Cast<string>());
-                return accepted ? ConfigSourceStrings.Accept : ConfigSourceStrings.Decline;
+                Assert.Equal(ConfigSourceStrings.NewUseSourcePrompt, prompt);
+                Assert.True(defaultValue);
+                return accepted;
             }
         };
         var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git,
             detector: new TestConfigSourceDetector { IsInternal = true }, interaction: interaction, interactive: true);
 
         Assert.Equivalent(accepted ? new ConfigSource { Repository = ConfigSourceService.MicrosoftRepository, Path = AspireConfigFile.FileName } : new ConfigSource { OptOut = true },
-            await service.ResolveAndAcquireConfigSourceAsync(ParseConsent(null), CancellationToken.None), strict: true);
+            await service.ResolveAndAcquireConfigSourceAsync(ParseConsent(null), ConfigSourceStrings.NewUseSourcePrompt, CancellationToken.None), strict: true);
         Assert.Equal(accepted ? 1 : 0, git.Calls);
+        Assert.Single(interaction.BooleanPromptCalls);
+    }
+
+    [Fact]
+    public async Task SelectForCreation_InteractiveConfirmationDefaultsToAccept()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var git = new TestConfigSourceRepository();
+        var interaction = new TestInteractionService();
+        using var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git,
+            detector: new TestConfigSourceDetector { IsInternal = true }, interaction: interaction, interactive: true);
+
+        var source = await service.ResolveAndAcquireConfigSourceAsync(ParseConsent(null), ConfigSourceStrings.NewUseSourcePrompt, CancellationToken.None);
+
+        Assert.False(Assert.IsType<ConfigSource>(source).OptOut);
+        Assert.True(Assert.Single(interaction.BooleanPromptCalls).DefaultValue);
+        Assert.Equal(1, git.Calls);
     }
 
     [Fact]
@@ -962,7 +1115,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git,
             detector: new TestConfigSourceDetector { IsInternal = true }, interaction: interaction, interactive: true);
 
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => service.ResolveAndAcquireConfigSourceAsync(ParseConsent(null), CancellationToken.None));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => service.ResolveAndAcquireConfigSourceAsync(ParseConsent(null), ConfigSourceStrings.NewUseSourcePrompt, CancellationToken.None));
         Assert.Equal(0, git.Calls);
         Assert.False(File.Exists(Path.Combine(workspace.Path, AspireConfigFile.FileName)));
     }
@@ -1024,7 +1177,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         var detector = new TestConfigSourceDetector { IsInternal = true };
         var interaction = new TestInteractionService
         {
-            PromptForSelectionCallback = (_, _, _, _) => throw new InvalidOperationException("Unexpected source prompt.")
+            ConfirmCallback = (_, _) => throw new InvalidOperationException("Unexpected source prompt.")
         };
         using var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git,
             detector: detector, interaction: interaction, interactive: true);
@@ -1126,7 +1279,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         using var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), environment: environment);
 
         var source = Assert.IsType<ConfigSource>(
-            await service.ResolveAndAcquireConfigSourceAsync(ParseConsent(true), TestContext.Current.CancellationToken));
+            await service.ResolveAndAcquireConfigSourceAsync(ParseConsent(true), ConfigSourceStrings.NewUseSourcePrompt, TestContext.Current.CancellationToken));
         await service.MaterializeAsync(source, workspace.WorkspaceRoot, TestContext.Current.CancellationToken);
 
         await Verify(await File.ReadAllTextAsync(Path.Combine(workspace.Path, AspireConfigFile.FileName)), "json");
@@ -1555,6 +1708,54 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
+    [InlineData(false, "https://git.example/configuration")]
+    [InlineData(true, "https://git.example/configuration")]
+    [InlineData(false, "ssh://git@git.example/team/configuration.git")]
+    [InlineData(true, "ssh://git@git.example/team/configuration.git")]
+    [InlineData(false, "https://git.example/configuration/[team]")]
+    [InlineData(true, "https://git.example/configuration/[team]")]
+    public async Task Acquire_NotifiesBeforeGitWithoutStatusOrRepeatingForCachedSnapshot(
+        bool interactive, string repository)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var source = new ConfigSource { Repository = repository, Path = AspireConfigFile.FileName };
+        var git = new TestConfigSourceRepository();
+        var interaction = new TestInteractionService();
+        var fetchMessage = $"[blue]{string.Format(interactive ? SharedCommandStrings.FetchingSourceWithAuthentication : SharedCommandStrings.FetchingSource,
+            SharedCommandStrings.GitFetchConfigurationSource, repository).EscapeMarkup()}[/]";
+        var notified = false;
+        interaction.DisplayMessageCallback = (emoji, message, consoleOverride) =>
+        {
+            if (message == fetchMessage)
+            {
+                Assert.Equal(KnownEmojis.InboxTray, emoji);
+                Assert.Equal(ConsoleOutput.Error, consoleOverride);
+                Assert.Empty(git.ResolutionModes);
+                Assert.Empty(git.FetchModes);
+                notified = true;
+            }
+        };
+        git.ReadConfiguration = (_, _) =>
+        {
+            Assert.True(notified);
+            Assert.Empty(interaction.ShownStatuses);
+            return Task.FromResult(("version-1", new JsonObject()));
+        };
+        using var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(),
+            git: git, interaction: interaction, interactive: interactive);
+
+        var first = await service.AcquireAsync(source, force: false, CancellationToken.None);
+        var cached = await service.AcquireAsync(source, force: false, CancellationToken.None);
+
+        Assert.Same(first, cached);
+        Assert.Equal(1, git.Calls);
+        Assert.Empty(interaction.ShownStatuses);
+        Assert.Collection(interaction.DisplayedMessages,
+            message => Assert.Equal($"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]", message.Message),
+            message => Assert.Equal(fetchMessage, message.Message));
+    }
+
+    [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public async Task Acquire_ReusesSnapshotForSameIdentityWithDifferentAppliedVersions(bool hasAppliedVersion)
@@ -1862,9 +2063,10 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task Update_ForcesFetchAndRetainsOnlyLatestSnapshot(bool changed)
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public async Task Update_ForcesFetchAndRetainsOnlyLatestSnapshot(bool sourceChanged, bool localEdits)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var context = workspace.CreateExecutionContext();
@@ -1884,9 +2086,13 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         var stale = Directory.CreateDirectory(Path.Combine(cache, Guid.NewGuid().ToString("N")));
         await File.WriteAllTextAsync(Path.Combine(stale.FullName, "stale.txt"), "obsolete snapshot");
         File.SetAttributes(Path.Combine(stale.FullName, "stale.txt"), FileAttributes.ReadOnly);
-        if (changed)
+        if (sourceChanged)
         {
             git.ReadConfiguration = (_, _) => Task.FromResult(("version-2", new JsonObject()));
+        }
+        if (localEdits)
+        {
+            await ConfigurationService.SetConfigurationInFileAsync(path, "skillSources.team.repository", "example/local");
         }
         clock.UtcNow += TimeSpan.FromSeconds(1);
         var interaction = new TestInteractionService();
@@ -1900,8 +2106,19 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
                 Assert.Equal($"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]", message.Message);
                 Assert.Equal(ConsoleOutput.Error, message.ConsoleOverride);
             },
-            message => Assert.Contains(changed ? ConfigSourceStrings.Refreshed : ConfigSourceStrings.RefreshedUnchanged, message.Message));
-        if (!changed)
+            message =>
+            {
+                Assert.Equal($"[blue]{string.Format(SharedCommandStrings.FetchingSource,
+                    SharedCommandStrings.GitFetchConfigurationSource, s_source.Repository)}[/]", message.Message);
+                Assert.Equal(ConsoleOutput.Error, message.ConsoleOverride);
+            },
+            message =>
+            {
+                Assert.Equal(sourceChanged || localEdits ? ConfigSourceStrings.Updated : ConfigSourceStrings.AlreadyUpToDate, message.Message);
+                Assert.Equal(sourceChanged || localEdits ? KnownEmojis.CheckMarkButton : KnownEmojis.Information, message.Emoji);
+                Assert.Equal(ConsoleOutput.Error, message.ConsoleOverride);
+            });
+        if (!sourceChanged)
         {
             Assert.Equal(original, await File.ReadAllTextAsync(path));
         }
@@ -1912,7 +2129,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         var metadata = JsonSerializer.Deserialize(await File.ReadAllTextAsync(
             Path.Combine(next.GetCacheDirectory(s_source), pointer, "metadata.json")), JsonSourceGenerationContext.Default.ConfigSourceMetadata)!;
         Assert.Equal(clock.UtcNow, metadata.FetchedAt);
-        Assert.Equal(changed ? "version-2" : "version-1", metadata.Version);
+        Assert.Equal(sourceChanged ? "version-2" : "version-1", metadata.Version);
         Assert.Equal("version-1", retained.Metadata.Version);
     }
 

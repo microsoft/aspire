@@ -151,7 +151,7 @@
     <value>Playwright CLI requires npm, which was not found on PATH. Skipping installation.</value>
   </data>
   <data name="InitCommand_InstalledSkillsSummary" xml:space="preserve">
-    <value>Installed Aspire agent skills:</value>
+    <value>Installed skills:</value>
   </data>
   <data name="InitCommand_InstalledSkillsSummarySkills" xml:space="preserve">
     <value>Skills: {0}</value>
@@ -159,11 +159,15 @@
   <data name="InitCommand_InstalledSkillsSummaryLocations" xml:space="preserve">
     <value>Locations: {0}</value>
   </data>
+  <data name="InitCommand_LocationWithAgents" xml:space="preserve">
+    <value>{0} ({1})</value>
+    <comment>{0} is a location, and {1} lists the agents that use it, separated by commas.</comment>
+  </data>
   <data name="InitCommand_FailedToInstallSkill" xml:space="preserve">
     <value>Failed to install {0} skill at {1}: {2}</value>
   </data>
   <data name="InitCommand_TelemetryHooksInstalled" xml:space="preserve">
-    <value>Installed Aspire agent telemetry hooks for: {0}. Only Aspire skill, MCP tool, and reference-file usage is recorded. Opt out anytime by setting ASPIRE_CLI_TELEMETRY_OPTOUT=true.</value>
+    <value>Installed Aspire agent telemetry hooks in user-level configuration for: {0}. Only Aspire skill, MCP tool, and reference-file usage is recorded. Opt out anytime by setting ASPIRE_CLI_TELEMETRY_OPTOUT=true.</value>
   </data>
   <data name="InitCommand_TelemetryHookSkippedMalformedConfig" xml:space="preserve">
     <value>Skipped the telemetry hook for {0} because its configuration file contains malformed JSON.</value>
@@ -288,15 +292,17 @@
 {0}</value>
     <comment>{0} lists the local skill entry-point paths, one per line.</comment>
   </data>
+  <data name="InitCommand_SkillSourcesExplanation" xml:space="preserve">
+    <value>One or more skill sources are configured. A skill source lets an organization share skills to customize your development experience.</value>
+  </data>
   <data name="InitCommand_SkillSources" xml:space="preserve">
     <value>Skill sources:
 {0}</value>
     <comment>{0} lists the configured skill source repository and/or catalog URLs for the selected agent clients, one per line.</comment>
   </data>
   <data name="InitCommand_ConfiguredTargets" xml:space="preserve">
-    <value>Configured Aspire plugin:
-  {0}</value>
-    <comment>{0} lists one agent per line, with that agent's configuration paths comma-separated.</comment>
+    <value>Configured sources in {0}</value>
+    <comment>{0} lists the configuration file paths with their agent names in parentheses, separated by commas.</comment>
   </data>
   <data name="InitCommand_ConfigurationTarget" xml:space="preserve">
     <value>{0}: {1}</value>

@@ -16,13 +16,15 @@ func main() {
 	buildSecret := builder.AddParameterFromConfiguration("buildSecret", "MyConfig:Secret", &aspire.AddParameterFromConfigurationOptions{Secret: aspire.BoolPtr(true)})
 
 	backend := builder.AddContainer("backend", "nginx")
-	backend.WithHttpEndpoint(&aspire.WithHttpEndpointOptions{Name: aspire.StringPtr("http"), TargetPort: aspire.Float64Ptr(80)})
-	backendService := builder.AddProject("backend-service", "./src/BackendService", &aspire.AddProjectOptions{LaunchProfileOrOptions: "http"})
+	backend.WithHttpEndpoint(&aspire.WithHttpEndpointOptions{Name: aspire.StringPtr("http"), TargetPort: aspire.IntPtr(80)})
+	backendService := builder.AddDotnetProject("backend-service", "./src/BackendService", &aspire.AddDotnetProjectOptions{
+		Options: &aspire.DotnetProjectOptions{LaunchProfileName: aspire.StringPtr("http")},
+	})
 	externalBackend := builder.AddExternalService("external-backend", "https://example.com")
 
 	proxy := builder.AddYarp("proxy").
-		WithHostPort(aspire.Float64Ptr(8080)).
-		WithHostHttpsPort(aspire.Float64Ptr(8443)).
+		WithHostPort(aspire.IntPtr(8080)).
+		WithHostHttpsPort(aspire.IntPtr(8443)).
 		WithEndpointProxySupport(true).
 		WithDockerfile("./context").
 		WithImageSHA256("abc123def456").
@@ -51,7 +53,7 @@ func main() {
 			WithHttpClientConfig(&aspire.YarpHttpClientConfig{
 				DangerousAcceptAnyServerCertificate: aspire.BoolPtr(true),
 				EnableMultipleHttp2Connections:      aspire.BoolPtr(true),
-				MaxConnectionsPerServer:             aspire.Float64Ptr(10),
+				MaxConnectionsPerServer:             aspire.IntPtr(10),
 				RequestHeaderEncoding:               aspire.StringPtr("utf-8"),
 				ResponseHeaderEncoding:              aspire.StringPtr("utf-8"),
 			}).
@@ -205,7 +207,6 @@ func main() {
 		_ = config.AddRoute("/multi/{**catchall}", multiDestinationCluster)
 	})
 
-	proxy.PublishAsConnectionString()
 	if err = proxy.Err(); err != nil {
 		log.Fatal(aspire.FormatError(err))
 	}

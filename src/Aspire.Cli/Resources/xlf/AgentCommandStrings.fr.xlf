@@ -108,11 +108,9 @@
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_ConfiguredTargets">
-        <source>Configured Aspire plugin:
-  {0}</source>
-        <target state="new">Configured Aspire plugin:
-  {0}</target>
-        <note>{0} lists one agent per line, with that agent's configuration paths comma-separated.</note>
+        <source>Configured sources in {0}</source>
+        <target state="new">Configured sources in {0}</target>
+        <note>{0} lists the configuration file paths with their agent names in parentheses, separated by commas.</note>
       </trans-unit>
       <trans-unit id="InitCommand_Description">
         <source>Initialize configuration and skills for selected agent clients</source>
@@ -162,8 +160,8 @@
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_InstalledSkillsSummary">
-        <source>Installed Aspire agent skills:</source>
-        <target state="translated">Compétences d’assistant Aspire installées :</target>
+        <source>Installed skills:</source>
+        <target state="needs-review-translation">Compétences d’assistant Aspire installées :</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_InstalledSkillsSummaryLocations">
@@ -197,6 +195,11 @@
         <target state="new">Local Aspire skill files may override plugin skills
 {0}</target>
         <note>{0} lists the local skill entry-point paths, one per line.</note>
+      </trans-unit>
+      <trans-unit id="InitCommand_LocationWithAgents">
+        <source>{0} ({1})</source>
+        <target state="new">{0} ({1})</target>
+        <note>{0} is a location, and {1} lists the agents that use it, separated by commas.</note>
       </trans-unit>
       <trans-unit id="InitCommand_McpConfigurationDescription">
         <source>Configure Aspire MCP for {0} at {1}</source>
@@ -260,6 +263,11 @@
 {0}</target>
         <note>{0} lists the configured skill source repository and/or catalog URLs for the selected agent clients, one per line.</note>
       </trans-unit>
+      <trans-unit id="InitCommand_SkillSourcesExplanation">
+        <source>One or more skill sources are configured. A skill source lets an organization share skills to customize your development experience.</source>
+        <target state="new">One or more skill sources are configured. A skill source lets an organization share skills to customize your development experience.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="InitCommand_SkillsLocationHint">
         <source>Skills: {0}</source>
         <target state="translated">Compétences : {0}</target>
@@ -286,8 +294,8 @@
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_TelemetryHooksInstalled">
-        <source>Installed Aspire agent telemetry hooks for: {0}. Only Aspire skill, MCP tool, and reference-file usage is recorded. Opt out anytime by setting ASPIRE_CLI_TELEMETRY_OPTOUT=true.</source>
-        <target state="translated">Hooks de télémétrie de l’assistant Aspire installés pour : {0}. Seule l’utilisation de la compétence Aspire, de l’outil MCP et du fichier de référence est enregistrée. Renoncez à tout moment en définissant ASPIRE_CLI_TELEMETRY_OPTOUT=true.</target>
+        <source>Installed Aspire agent telemetry hooks in user-level configuration for: {0}. Only Aspire skill, MCP tool, and reference-file usage is recorded. Opt out anytime by setting ASPIRE_CLI_TELEMETRY_OPTOUT=true.</source>
+        <target state="needs-review-translation">Hooks de télémétrie de l’assistant Aspire installés pour : {0}. Seule l’utilisation de la compétence Aspire, de l’outil MCP et du fichier de référence est enregistrée. Renoncez à tout moment en définissant ASPIRE_CLI_TELEMETRY_OPTOUT=true.</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_WorkspaceRootOptionDescription">

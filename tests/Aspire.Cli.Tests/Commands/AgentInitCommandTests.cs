@@ -5,6 +5,8 @@ using System.Globalization;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Agents;
 using Aspire.Cli.Agents.AspireSkills;
+using Aspire.Cli.Agents.Copilot;
+using Aspire.Cli.Agents.Hooks;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
@@ -19,6 +21,7 @@ using Aspire.Cli.Tests.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Spectre.Console;
 
 namespace Aspire.Cli.Tests.Commands;
 
@@ -218,12 +221,15 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
                 "default": { "openCodeV1Catalog": "https://third-party.example/skills/" },
                 "team": {
                   "repository": "example/team",
+                  "marketplace": "TEAM",
                   "openCodeV1Catalog": "https://team.example/skills/",
                   "openCodeV2Catalog": "https://team.example/skills/"
                 },
                 "pluginsOnly": { "repository": "example/plugins" },
                 "teamAlias": {
                   "repository": "example/team",
+                  "marketplace": "team-marketplace",
+                  "ref": "source-demo",
                   "openCodeV1Catalog": "https://team.example/skills/"
                 },
                 "disabled": {
@@ -257,14 +263,31 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             $"agent init --agents {agents} --scope project --skills aspire");
 
         Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
-        Assert.Equal(2, messagesBeforeRegistration.Count);
+        Assert.Equal([AgentCommandStrings.InitCommand_SkillSourcesExplanation, $"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]"],
+            messagesBeforeRegistration);
+        Assert.NotEmpty(interaction.DisplayedRenderables);
         var warning = Assert.Single(interaction.DisplayedMessages, message => message.Emoji.Equals(KnownEmojis.PoliceCarLight));
         Assert.Equal($"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]", warning.Message);
         Assert.Equal(ConsoleOutput.Error, warning.ConsoleOverride);
         Assert.Equal(messagesBeforeRegistration, interaction.DisplayedMessages
             .Where(message => message.Emoji.Equals(KnownEmojis.Information) || message.Emoji.Equals(KnownEmojis.PoliceCarLight))
             .Select(message => message.Message));
-        await Verify(messagesBeforeRegistration).UseParameters(agents);
+        using var renderedSources = new StringWriter();
+        var console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.No,
+            ColorSystem = ColorSystemSupport.NoColors,
+            Out = new AnsiConsoleOutput(renderedSources),
+            Enrichment = new ProfileEnrichment { UseDefaultEnrichers = false }
+        });
+        console.Profile.Width = 160;
+        foreach (var source in interaction.DisplayedRenderables)
+        {
+            console.Write(source);
+            console.WriteLine();
+        }
+        await Verify(new { Sources = renderedSources.ToString(), Warnings = messagesBeforeRegistration })
+            .UseParameters(agents).ScrubLinesWithReplace(line => line.TrimEnd());
     }
 
     [Fact]
@@ -647,19 +670,15 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(expected, File.Exists(Path.Combine(workspace.Path, ".agents", "skills", SkillDefinition.DotnetInspect.Name, "SKILL.md")));
     }
 
-    [Theory]
-    [InlineData(nameof(AgentEnvironment.CopilotCli), "GitHub Copilot CLI")]
-    [InlineData(nameof(AgentEnvironment.CopilotApp), "GitHub Copilot App")]
-    public async Task AgentInitCommand_GlobalScope_InstallsTelemetryHook_ForSelectedDetectedEnvironment(string environmentName, string displayName)
+    [Fact]
+    public async Task AgentInitCommand_GlobalScope_InstallsTelemetryHook_ForSelectedClient()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var homeDirectory = workspace.CreateDirectory("fake-home");
         var interactionService = new TestInteractionService();
-        var environment = Enum.Parse<AgentEnvironment>(environmentName);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.CliExecutionContextFactory = _ => CreateExecutionContext(workspace.WorkspaceRoot, homeDirectory);
-            options.AgentEnvironmentDetectorFactory = _ => new TestAgentEnvironmentDetector { DetectedEnvironments = environment };
             options.InteractionServiceFactory = _ => interactionService;
         });
 
@@ -674,7 +693,47 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         Assert.True(File.Exists(hookFile), $"Expected telemetry hook at {hookFile}");
         Assert.Contains(
             interactionService.DisplayedMessages,
-            message => message.Message.Contains(displayName, StringComparison.Ordinal));
+            message => message.Message.Contains("for: GitHub Copilot.", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData(nameof(TelemetryHookStatus.MalformedConfig))]
+    [InlineData(nameof(TelemetryHookStatus.UnexpectedConfigShape))]
+    [InlineData(nameof(TelemetryHookStatus.WriteFailed))]
+    public async Task AgentInitCommand_DisplaysSkippedTelemetryHookMessage_UsingClientDisplayName(string statusName)
+    {
+        var status = Enum.Parse<TelemetryHookStatus>(statusName);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var homeDirectory = workspace.CreateDirectory("fake-home");
+        var interactionService = new TestInteractionService();
+        var subtleMessages = new List<string>();
+        interactionService.DisplaySubtleMessageCallback = subtleMessages.Add;
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ => CreateExecutionContext(workspace.WorkspaceRoot, homeDirectory);
+            options.InteractionServiceFactory = _ => interactionService;
+            options.TelemetryHookConfiguratorFactory = _ => new TestTelemetryHookConfigurator
+            {
+                ResultFactory = selected => [new TelemetryHookResult(selected[0], status)]
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"agent init --workspace-root {workspace.WorkspaceRoot.FullName} --agents copilot --scope global --skills aspire");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        var format = status switch
+        {
+            TelemetryHookStatus.MalformedConfig => AgentCommandStrings.InitCommand_TelemetryHookSkippedMalformedConfig,
+            TelemetryHookStatus.UnexpectedConfigShape => AgentCommandStrings.InitCommand_TelemetryHookSkippedUnexpectedShape,
+            TelemetryHookStatus.WriteFailed => AgentCommandStrings.InitCommand_TelemetryHookWriteFailed,
+            _ => throw new ArgumentOutOfRangeException(nameof(statusName)),
+        };
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Contains(string.Format(CultureInfo.CurrentCulture, format, "GitHub Copilot"), subtleMessages);
     }
 
     [Fact]
@@ -692,7 +751,6 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.CliExecutionContextFactory = _ => CreateExecutionContext(workspace.WorkspaceRoot, homeDirectory);
-            options.AgentEnvironmentDetectorFactory = _ => new TestAgentEnvironmentDetector { DetectedEnvironments = AgentEnvironment.CopilotCli };
             options.InteractionServiceFactory = _ => interactionService;
             options.TelemetryHookConfiguratorFactory = _ => new TestTelemetryHookConfigurator { Exception = new InvalidOperationException(failureMessage) };
         });
@@ -734,6 +792,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         {
             options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
             options.InteractionServiceFactory = _ => interaction;
+            options.TelemetryHookConfiguratorFactory = _ => new TestTelemetryHookConfigurator();
         });
         using var provider = services.BuildServiceProvider();
 
@@ -749,29 +808,15 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         var config = JsonNode.Parse(await File.ReadAllTextAsync(expectedPath))!.AsObject();
         Assert.Equal(client == "opencode" ? ["skills"] : new[] { "enabledPlugins", "extraKnownMarketplaces" }, config.Select(property => property.Key).Order());
         Assert.Empty(messages);
-        var sourceUrls = client == "opencode"
-            ? string.Join(System.Environment.NewLine, SkillSource.DefaultV1Catalog, SkillSource.DefaultV2Catalog)
-            : AspireSkillsRemoteConfiguration.RepositoryUrl;
+        Assert.Empty(interaction.DisplayedRenderables);
         Assert.Collection(interaction.DisplayedMessages,
-            message =>
-            {
-                Assert.Equal(KnownEmojis.Information, message.Emoji);
-                Assert.Equal(string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_SkillSources,
-                    sourceUrls), message.Message);
-            },
-            message =>
-            {
-                Assert.Equal(KnownEmojis.PoliceCarLight, message.Emoji);
-                Assert.Equal($"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]", message.Message);
-                Assert.Equal(ConsoleOutput.Error, message.ConsoleOverride);
-            },
             message =>
             {
                 Assert.Equal(KnownEmojis.Robot, message.Emoji);
                 Assert.Equal(string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_ConfiguredTargets,
-                    string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_ConfigurationTarget,
-                        context.Clients.Single(value => value.Id == client).DisplayName,
-                        scope == "project" ? relativePath : $"~/{relativePath}")), message.Message);
+                    string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_LocationWithAgents,
+                        scope == "project" ? relativePath : $"~/{relativePath}",
+                        context.Clients.Single(value => value.Id == client).DisplayName)), message.Message);
             });
         Assert.Empty(interaction.DisplayedErrors);
     }
@@ -796,7 +841,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         var scopeRoot = scope is AgentConfigurationScope.Project ? context.Project : context.Home;
         var prefix = scope is AgentConfigurationScope.Global ? "~/" : string.Empty;
         var targetEntries = context.Clients.Select(client =>
-            $"{client.DisplayName}: {prefix}{Path.GetRelativePath(scopeRoot.FullName, client.GetIntegrationConfigPath(scope, context.Project)).Replace(Path.DirectorySeparatorChar, '/')}").ToArray();
+            $"{prefix}{Path.GetRelativePath(scopeRoot.FullName, client.GetIntegrationConfigPath(scope, context.Project)).Replace(Path.DirectorySeparatorChar, '/')} ({client.DisplayName})").ToArray();
 
         for (var invocation = 0; invocation < 2; invocation++)
         {
@@ -809,25 +854,66 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             Assert.Collection(messages,
                 message =>
                 {
-                    Assert.Equal(KnownEmojis.Information, message.Emoji);
-                    Assert.Equal(string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_SkillSources,
-                        string.Join(System.Environment.NewLine, AspireSkillsRemoteConfiguration.RepositoryUrl, SkillSource.DefaultV1Catalog, SkillSource.DefaultV2Catalog)),
-                        message.Message);
-                },
-                message =>
-                {
-                    Assert.Equal(KnownEmojis.PoliceCarLight, message.Emoji);
-                    Assert.Equal($"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]", message.Message);
-                    Assert.Equal(ConsoleOutput.Error, message.ConsoleOverride);
-                },
-                message =>
-                {
                     Assert.Equal(KnownEmojis.Robot, message.Emoji);
                     Assert.Equal(string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_ConfiguredTargets,
-                        string.Join($"{System.Environment.NewLine}  ", targetEntries)), message.Message);
+                        string.Join(", ", targetEntries)), message.Message);
                 });
             Assert.Empty(interaction.DisplayedErrors);
         }
+    }
+
+    [Fact]
+    public async Task Remote_SummaryListsAgentConfigurationFiles()
+    {
+        using var context = new AgentConfigurationTestContext(outputHelper);
+        await AgentConfigurationTestContext.WriteAsync(Path.Combine(context.Project.FullName, "aspire.config.json"), """
+            {"skillSources":{"team":{"repository":"example/team","plugins":["deployment"]}}}
+            """);
+        var interaction = new TestInteractionService();
+        using var provider = context.CreateServiceCollection(outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interaction;
+        }).BuildServiceProvider();
+        var result = provider.GetRequiredService<RootCommand>().Parse(
+            "agent init --agents copilot,claude --scope project --skills aspire --mcp=false");
+
+        Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
+        var summary = Assert.Single(interaction.DisplayedMessages, message => message.Emoji.Equals(KnownEmojis.Robot));
+        await Verify(summary.Message);
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task Remote_SummaryListsAgentConfigurationFilesWithExistingOpenCodeCatalogs(bool array, bool pinned)
+    {
+        using var context = new AgentConfigurationTestContext(outputHelper);
+        var catalogs = new JsonArray("https://example.test/unrelated-catalog/");
+        if (pinned)
+        {
+            catalogs.Add("https://raw.githubusercontent.com/microsoft/aspire-skills/release/opencode/v2/");
+        }
+        var config = new JsonObject
+        {
+            ["skills"] = array ? catalogs : new JsonObject { ["urls"] = catalogs }
+        };
+        await AgentConfigurationTestContext.WriteAsync(
+            context.OpenCode.GetIntegrationConfigPath(AgentConfigurationScope.Project, context.Project), config.ToJsonString());
+        var interaction = new TestInteractionService();
+        using var provider = context.CreateServiceCollection(outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interaction;
+        }).BuildServiceProvider();
+        var result = provider.GetRequiredService<RootCommand>().Parse(
+            "agent init --agents copilot,claude,opencode --scope project --skills aspire --mcp=false");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+        outputHelper.WriteLine(string.Join(System.Environment.NewLine, interaction.DisplayedErrors));
+        Assert.Empty(interaction.DisplayedErrors);
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        var summary = Assert.Single(interaction.DisplayedMessages, message => message.Emoji.Equals(KnownEmojis.Robot));
+        await Verify(summary.Message).UseParameters(array, pinned);
     }
 
     [Fact]
@@ -955,7 +1041,6 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         var services = context.CreateServiceCollection(outputHelper, options =>
         {
             options.InteractionServiceFactory = _ => interaction;
-            options.AgentEnvironmentDetectorFactory = _ => new TestAgentEnvironmentDetector { DetectedEnvironments = AgentEnvironment.CopilotCli };
             options.TelemetryHookConfiguratorFactory = _ => hooks;
         });
         using var provider = services.BuildServiceProvider();
@@ -966,7 +1051,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.InvalidCommand, await result.InvokeAsync().DefaultTimeout());
         Assert.Equal(original, await File.ReadAllTextAsync(path));
         Assert.True(File.Exists(context.Copilot.GetMcpConfigPath(scope, context.Project)));
-        Assert.Equal(scope is AgentConfigurationScope.Global ? AgentEnvironment.CopilotCli : AgentEnvironment.None, hooks.ConfiguredEnvironments);
+        Assert.Equal([CopilotAgentClient.ClientId], hooks.SelectedClientIds);
         Assert.Equal(string.Format(CultureInfo.CurrentCulture,
             AgentCommandStrings.McpServerContainerMustBeJsonObject, "mcp.servers", path), Assert.Single(interaction.DisplayedErrors));
     }
@@ -985,6 +1070,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         var services = context.CreateServiceCollection(outputHelper, options =>
         {
             options.InteractionServiceFactory = _ => interaction;
+            options.TelemetryHookConfiguratorFactory = _ => new TestTelemetryHookConfigurator();
         });
         using var provider = services.BuildServiceProvider();
 

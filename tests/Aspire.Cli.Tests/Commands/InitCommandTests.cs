@@ -1115,12 +1115,18 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         Assert.False(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".mcp.json")));
     }
 
-    [Fact]
-    public async Task InitCommand_WhenNoSolutionExists_SingleFileSkeletonPinsPackageVersions()
+    [Theory]
+    [InlineData("13.6.1", false, true)]
+    [InlineData("17.0.0-preview.1.26479.11", true, true)]
+    [InlineData("17.1.0-preview.1.26556.5", true, false)]
+    public async Task InitCommand_WhenNoSolutionExists_SingleFileSkeletonUsesVersionCompatibleDirectives(string version, bool packageOnly, bool explicitBundle)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ => workspace.CreateExecutionContext(identityVersion: version);
+        });
         using var serviceProvider = services.BuildServiceProvider();
         var initCommand = serviceProvider.GetRequiredService<InitCommand>();
 
@@ -1131,12 +1137,27 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
 
         var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs");
         var appHostContent = await File.ReadAllTextAsync(appHostPath);
+        var directives = packageOnly
+            ? $"""
+                #:package Aspire.Hosting.AppHost@{version}
+                #:package Aspire.Hosting.Dotnet@{version}
+                """
+            : $"#:sdk Aspire.AppHost.Sdk@{version}";
+        if (explicitBundle)
+        {
+            directives += "\n#:property AspireUseCliBundle=true";
+        }
 
-        var firstLine = appHostContent.Split('\n')[0].TrimEnd('\r');
-        var version = serviceProvider.GetRequiredService<CliExecutionContext>().IdentitySdkVersion;
-        Assert.Equal($"#:package Aspire.Hosting.AppHost@{version}", firstLine);
-        Assert.Contains($"#:package Aspire.Hosting.Dotnet@{version}", appHostContent);
-        Assert.Contains("#:property AspireUseCliBundle=true", appHostContent);
+        var expected = $$"""
+            {{directives}}
+
+            var builder = DistributedApplication.CreateBuilder(args);
+
+            // The aspireify skill will wire up your projects here.
+
+            builder.Build().Run();
+            """;
+        Assert.Equal(expected.ReplaceLineEndings("\n"), appHostContent.ReplaceLineEndings("\n").TrimEnd('\n'));
     }
 
     [Fact]

@@ -61,14 +61,23 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Yes.
+        ///   Looks up a localized string similar to For help accessing this configuration source, see {0}..
         /// </summary>
-        internal static string Accept {
+        internal static string AccessHelp {
             get {
-                return ResourceManager.GetString("Accept", resourceCulture);
+                return ResourceManager.GetString("AccessHelp", resourceCulture);
             }
         }
         
+        /// <summary>
+        ///   Looks up a localized string similar to Configuration is already up to date with its source..
+        /// </summary>
+        internal static string AlreadyUpToDate {
+            get {
+                return ResourceManager.GetString("AlreadyUpToDate", resourceCulture);
+            }
+        }
+
         /// <summary>
         ///   Looks up a localized string similar to A saved configuration source has no recorded applied version. Run `aspire update --config-source` to save its allowed settings and establish the applied version..
         /// </summary>
@@ -93,15 +102,6 @@ namespace Aspire.Cli.Resources {
         internal static string BindingChanged {
             get {
                 return ResourceManager.GetString("BindingChanged", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Configuration source: {0} Configuration file: {1} Configuration ref: {2} Source origin: {3}.
-        /// </summary>
-        internal static string Candidate {
-            get {
-                return ResourceManager.GetString("Candidate", resourceCulture);
             }
         }
         
@@ -133,20 +133,20 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to A configuration source is available. Specify --use-config-source to accept it or --use-config-source false to use standard Aspire configuration in non-interactive mode..
+        ///   Looks up a localized string similar to Configuration file.
         /// </summary>
-        internal static string ConsentRequired {
+        internal static string ConfigurationFile {
             get {
-                return ResourceManager.GetString("ConsentRequired", resourceCulture);
+                return ResourceManager.GetString("ConfigurationFile", resourceCulture);
             }
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to No, use standard Aspire configuration.
+        ///   Looks up a localized string similar to A configuration source is available, but confirmation can&apos;t be requested in non-interactive mode. Specify --use-config-source to use it, or --use-config-source false to use the standard Aspire configuration..
         /// </summary>
-        internal static string Decline {
+        internal static string ConsentRequired {
             get {
-                return ResourceManager.GetString("Decline", resourceCulture);
+                return ResourceManager.GetString("ConsentRequired", resourceCulture);
             }
         }
         
@@ -165,6 +165,15 @@ namespace Aspire.Cli.Resources {
         internal static string EmployeeOrigin {
             get {
                 return ResourceManager.GetString("EmployeeOrigin", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to A configuration source was detected on your machine. It lets an organization share Aspire settings to customize your development experience..
+        /// </summary>
+        internal static string Explanation {
+            get {
+                return ResourceManager.GetString("Explanation", resourceCulture);
             }
         }
         
@@ -192,6 +201,15 @@ namespace Aspire.Cli.Resources {
         internal static string IncompatibleOptions {
             get {
                 return ResourceManager.GetString("IncompatibleOptions", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Initialize Aspire using configuration from this source?.
+        /// </summary>
+        internal static string InitUseSourcePrompt {
+            get {
+                return ResourceManager.GetString("InitUseSourcePrompt", resourceCulture);
             }
         }
         
@@ -232,6 +250,15 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to {0} must be a nonempty absolute HTTP or HTTPS URL without control characters..
+        /// </summary>
+        internal static string InvalidReadmeUrl {
+            get {
+                return ResourceManager.GetString("InvalidReadmeUrl", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to The configuration source ref must be a branch name or full commit SHA, not an empty value, tag, revision expression, or command option..
         /// </summary>
         internal static string InvalidRef {
@@ -268,6 +295,15 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Create app using configuration from this source?.
+        /// </summary>
+        internal static string NewUseSourcePrompt {
+            get {
+                return ResourceManager.GetString("NewUseSourcePrompt", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to No configuration source to update..
         /// </summary>
         internal static string NoBinding {
@@ -286,20 +322,11 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to configuration updated.
+        ///   Looks up a localized string similar to Read more about this configuration source.
         /// </summary>
-        internal static string Refreshed {
+        internal static string ReadmeLink {
             get {
-                return ResourceManager.GetString("Refreshed", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to configuration already up to date.
-        /// </summary>
-        internal static string RefreshedUnchanged {
-            get {
-                return ResourceManager.GetString("RefreshedUnchanged", resourceCulture);
+                return ResourceManager.GetString("ReadmeLink", resourceCulture);
             }
         }
         
@@ -322,6 +349,24 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Source origin.
+        /// </summary>
+        internal static string SourceOrigin {
+            get {
+                return ResourceManager.GetString("SourceOrigin", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Include template sources from this configuration source?.
+        /// </summary>
+        internal static string TemplateSourceListUseSourcePrompt {
+            get {
+                return ResourceManager.GetString("TemplateSourceListUseSourcePrompt", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to A new version of the configuration source is available. Run `aspire update --config-source` to apply it..
         /// </summary>
         internal static string UpdateAvailable {
@@ -331,11 +376,20 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Configuration source {0} ({1}) at commit {2}: {3}. Settings file: {4}.
+        ///   Looks up a localized string similar to Configuration updated to the latest version from its source..
         /// </summary>
-        internal static string UseNotice {
+        internal static string Updated {
             get {
-                return ResourceManager.GetString("UseNotice", resourceCulture);
+                return ResourceManager.GetString("Updated", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Update app to use configuration from this source?.
+        /// </summary>
+        internal static string UpdateUseSourcePrompt {
+            get {
+                return ResourceManager.GetString("UpdateUseSourcePrompt", resourceCulture);
             }
         }
         
@@ -345,15 +399,6 @@ namespace Aspire.Cli.Resources {
         internal static string UseSourceOptionDescription {
             get {
                 return ResourceManager.GetString("UseSourceOptionDescription", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Use configuration from this source?.
-        /// </summary>
-        internal static string UseSourcePrompt {
-            get {
-                return ResourceManager.GetString("UseSourcePrompt", resourceCulture);
             }
         }
     }

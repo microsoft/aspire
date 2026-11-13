@@ -45,7 +45,7 @@ public sealed class SettingsDialogTests : DashboardTestContext
         var cut = Render<SettingsDialog>();
 
         Assert.Equal(GetExpectedIconLabels(), cut.FindAll(".icon-toggle").Select(e => e.GetAttribute("aria-label")));
-        Assert.IsType<Icons.Regular.Size20.DataBarVertical>(
+        Assert.IsType<Icons.Regular.Size20.DataUsage>(
             cut.FindComponent<IconToggleGroup<GroupOverview>>().Instance.Options.Single(option => option.Value == GroupOverview.Summary).Icon);
     }
 
@@ -131,7 +131,7 @@ public sealed class SettingsDialogTests : DashboardTestContext
         var labels = new List<string>
         {
             "System", "Light", "Dark",
-            "Spacious", "Comfortable", "Compact",
+            "Comfortable", "Compact",
             "Summary", "Graph",
             "System", "12-hour", "24-hour",
             "New dashboard"

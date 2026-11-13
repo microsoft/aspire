@@ -68,11 +68,13 @@ export interface ActivityBar {
 }
 
 export interface Menu {
+    hasItem(name: string): Promise<boolean>;
     select(...path: string[]): Promise<Menu | undefined>;
     close(): Promise<void>;
 }
 
 export interface InputBox {
+    getText(): Promise<string>;
     setText(text: string): Promise<void>;
     getPlaceHolder(): Promise<string>;
     getTitle(): Promise<string | undefined>;

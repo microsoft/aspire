@@ -318,19 +318,23 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
         AssertDashboardAndOrchestrationReferences(packageReferences);
     }
 
-    [Fact]
-    public async Task ComputeRunArgumentsUsesAspireCliWhenCliBundleIsEnabled()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(null)]
+    public async Task ComputeRunArgumentsUsesAspireCliWhenCliBundleIsEnabledOrDefaulted(bool? aspireUseCliBundle)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var project = await CreateRunHookProjectAsync(workspace.Path, aspireUseCliBundle: true);
+        var project = await CreateRunHookProjectAsync(workspace.Path, aspireUseCliBundle);
         var fakeCliDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "fake-cli"));
         var aspireCliPath = await CreateFakeAspireCliAsync(fakeCliDirectory.FullName);
         await CreateFakeDnxAsync(fakeCliDirectory.FullName);
+        var environment = CreatePathEnvironment(fakeCliDirectory.FullName);
+        environment["AspireUseCliBundle"] = string.Empty;
 
         var properties = await GetComputeRunArgumentsPropertiesAsync(
             project,
             ["-p:RunArguments=--custom foo"],
-            CreatePathEnvironment(fakeCliDirectory.FullName));
+            environment);
 
         Assert.Equal("Aspire", properties["_AspireResolvedCliInvocationMode"]);
         Assert.Equal("13.5.0", properties["_AspireResolvedCliVersion"]);
@@ -643,8 +647,84 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
         AssertUsesExplicitAspireCli(properties, project, aspireCliPath);
     }
 
-    [Fact]
-    public async Task ComputeRunArgumentsUsesFileBasedAppHostPathWhenCliBundleIsEnabled()
+    [Theory]
+    [InlineData("Dnx")]
+    [InlineData("DnxPinned")]
+    [InlineData("dNxPiNnEd")]
+    public async Task ComputeRunArgumentsWarnsWhenAmbientAspireCliPathOverridesDnxMode(string invocationMode)
+    {
+        // Regression test for https://github.com/microsoft/aspire/issues/19713: tooling such as the
+        // VS Code extension can set AspireCliPath in the environment, which silently overrode an
+        // explicitly configured DNX invocation mode.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var fakeCliDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "fake-cli"));
+        var aspireCliPath = await CreateFakeAspireCliAsync(fakeCliDirectory.FullName);
+        await CreateFakeDnxAsync(fakeCliDirectory.FullName);
+        var project = await CreateRunHookProjectAsync(workspace.Path, aspireUseCliBundle: true,
+            $$"""
+              <PropertyGroup>
+                <AspireCliInvocationMode>{{invocationMode}}</AspireCliInvocationMode>
+              </PropertyGroup>
+            """);
+
+        var result = await RunDotNetWithArgumentsAsync(
+            project.ProjectDirectory,
+            ["msbuild", "-nologo", "-restore", "-t:ComputeRunArguments", "-getProperty:_AspireResolvedCliInvocationMode,RunCommand,RunArguments", project.ProjectFile],
+            new Dictionary<string, string>
+            {
+                ["AspireCliPath"] = aspireCliPath,
+                [GetPathEnvironmentVariableName()] = CreatePathWithoutAspire(fakeCliDirectory.FullName)
+            });
+
+        Assert.True(result.ExitCode == 0, result.Output);
+        Assert.Contains("warning ASPIRE015", result.Output);
+        Assert.Contains($"AspireCliInvocationMode={invocationMode} is ignored because AspireCliPath is set to '{aspireCliPath}'", result.Output);
+
+        // AspireCliPath remains authoritative; the warning only makes the override visible.
+        var jsonStart = result.StandardOutput.IndexOf('{');
+        var jsonEnd = result.StandardOutput.LastIndexOf('}');
+        Assert.True(jsonStart >= 0 && jsonEnd > jsonStart, result.Output);
+        using var document = JsonDocument.Parse(result.StandardOutput[jsonStart..(jsonEnd + 1)]);
+        var properties = document.RootElement.GetProperty("Properties")
+            .EnumerateObject()
+            .ToDictionary(property => property.Name, property => property.Value.GetString() ?? string.Empty);
+        Assert.Equal("Aspire", properties["_AspireResolvedCliInvocationMode"]);
+        AssertUsesExplicitAspireCli(properties, project, aspireCliPath);
+    }
+
+    [Theory]
+    [InlineData("Path", null)]
+    [InlineData("DnxPinned", "ASPIRE015")]
+    public async Task ComputeRunArgumentsDoesNotWarnWhenAspireCliPathDoesNotOverrideDnxMode(string invocationMode, string? noWarn)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var fakeCliDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "fake-cli"));
+        var aspireCliPath = await CreateFakeAspireCliAsync(fakeCliDirectory.FullName);
+        var project = await CreateRunHookProjectAsync(workspace.Path, aspireUseCliBundle: true,
+            $$"""
+              <PropertyGroup>
+                <AspireCliInvocationMode>{{invocationMode}}</AspireCliInvocationMode>
+                <NoWarn>$(NoWarn);{{noWarn}}</NoWarn>
+              </PropertyGroup>
+            """);
+
+        var result = await RunDotNetWithArgumentsAsync(
+            project.ProjectDirectory,
+            ["msbuild", "-nologo", "-restore", "-t:ComputeRunArguments", project.ProjectFile],
+            new Dictionary<string, string>
+            {
+                ["AspireCliPath"] = aspireCliPath,
+                [GetPathEnvironmentVariableName()] = CreatePathWithoutAspire(fakeCliDirectory.FullName)
+            });
+
+        Assert.True(result.ExitCode == 0, result.Output);
+        Assert.DoesNotContain("ASPIRE015", result.Output);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(null)]
+    public async Task ComputeRunArgumentsUsesFileBasedAppHostPathWhenCliBundleIsEnabledOrDefaulted(bool? aspireUseCliBundle)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var appHostDirectory = Path.Combine(workspace.Path, "FileApp");
@@ -669,14 +749,16 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
                 </RuntimeHostConfigurationOption>
               </ItemGroup>
             """;
-        var project = await CreateRunHookProjectAsync(workspace.Path, aspireUseCliBundle: true, extraProjectXml: extraProjectXml);
+        var project = await CreateRunHookProjectAsync(workspace.Path, aspireUseCliBundle, extraProjectXml: extraProjectXml);
         var fakeCliDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "fake-cli"));
         var aspireCliPath = await CreateFakeAspireCliAsync(fakeCliDirectory.FullName);
+        var environment = CreatePathEnvironment(fakeCliDirectory.FullName);
+        environment["AspireUseCliBundle"] = string.Empty;
 
         var properties = await GetComputeRunArgumentsPropertiesAsync(
             project,
             ["-p:RunArguments=--custom foo"],
-            CreatePathEnvironment(fakeCliDirectory.FullName));
+            environment);
 
         Assert.Equal(GetExpectedAspireRunCommand(aspireCliPath), properties["RunCommand"]);
         Assert.Equal(GetExpectedAspireRunArguments(aspireCliPath, appHostFile, "--custom foo"), properties["RunArguments"]);
@@ -728,6 +810,37 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
         {
             Assert.Contains("AppHost requires the Aspire CLI bundle. Remove AspireUseCliBundle or set it to true, and install the matching Aspire CLI from https://get.aspire.dev. ASPIRE013 cannot be suppressed to disable the bundle. See https://aka.ms/aspire/diagnostics/aspire013 for more information.", result.Output);
         }
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task CSharpAppHostRespectsInheritedDisabledCliBundle(bool useEnvironmentVariable)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        if (!useEnvironmentVariable)
+        {
+            await File.WriteAllTextAsync(Path.Combine(workspace.Path, "Directory.Build.props"), """
+                <Project>
+                  <PropertyGroup>
+                    <AspireUseCliBundle>false</AspireUseCliBundle>
+                  </PropertyGroup>
+                </Project>
+                """);
+        }
+
+        var project = await CreateRunHookProjectAsync(workspace.Path, aspireUseCliBundle: null);
+        var environment = new Dictionary<string, string>
+        {
+            ["AspireUseCliBundle"] = useEnvironmentVariable ? "false" : string.Empty
+        };
+        var result = await RunDotNetWithArgumentsAsync(
+            project.ProjectDirectory,
+            ["msbuild", "-nologo", "-restore", "-t:PrepareForBuild"],
+            environment);
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Equal(["error ASPIRE013"], Regex.Matches(result.Output, @"\b(?:warning|error) ASPIRE\d+:").Select(match => match.Value.TrimEnd(':')));
     }
 
     [Theory]
@@ -1045,6 +1158,126 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
         AssertCliBundleExists(aspireHome, JsonSerializer.Serialize(properties));
     }
 
+    [Fact]
+    public async Task ResolveAspireCliBundlePathsUsesPinnedDnxBundleInsteadOfSharedAspireHomeBundle()
+    {
+        // https://github.com/microsoft/aspire/issues/21463: a complete layout in the shared Aspire home can
+        // belong to a different global CLI (and DCP) version than the CLI package pinned to this AppHost.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var dnxDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "dnx"));
+        await CreateFakeDnxAsync(dnxDirectory.FullName);
+        var aspireHome = Path.Combine(workspace.Path, "aspire-home");
+        var sharedBundle = CreateFakeCliBundle(aspireHome);
+        var project = await CreateRunHookProjectAsync(workspace.Path, aspireUseCliBundle: true,
+            """
+              <PropertyGroup>
+                <AspireCliInvocationMode>DnxPinned</AspireCliInvocationMode>
+              </PropertyGroup>
+            """,
+            includeBundlePaths: false);
+        var environment = new Dictionary<string, string>
+        {
+            ["ASPIRE_HOME"] = aspireHome,
+            [GetPathEnvironmentVariableName()] = CreatePathWithoutAspire(dnxDirectory.FullName)
+        };
+
+        var properties = await GetResolveAspireCliBundlePathPropertiesAsync(project, environment, ["-warnaserror"]);
+        var pinnedLayoutDirectory = GetPinnedDnxLayoutDirectory(aspireHome);
+        var pinnedBundle = GetFakeCliBundlePaths(pinnedLayoutDirectory);
+
+        Assert.Equal("Dnx", properties["_AspireResolvedCliInvocationMode"]);
+        Assert.Equal(pinnedBundle.DcpDirectory, Path.TrimEndingDirectorySeparator(properties["DcpDir"]));
+        Assert.Equal(pinnedBundle.DashboardDirectory, Path.TrimEndingDirectorySeparator(properties["AspireDashboardDir"]));
+        Assert.Equal(pinnedBundle.DashboardPath, properties["AspireDashboardPath"]);
+        Assert.NotEqual(sharedBundle.DcpDirectory, Path.TrimEndingDirectorySeparator(properties["DcpDir"]));
+        AssertCliBundleExists(pinnedLayoutDirectory, JsonSerializer.Serialize(properties));
+        AssertCliBundleExists(aspireHome, JsonSerializer.Serialize(properties));
+    }
+
+    [Fact]
+    public async Task ResolveAspireCliBundlePathsReusesExistingPinnedDnxBundle()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var dnxDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "dnx"));
+        await CreateFakeDnxWithSetupExitCodeAsync(dnxDirectory.FullName, 42);
+        var aspireHome = Path.Combine(workspace.Path, "aspire-home");
+        CreateFakeCliBundle(aspireHome);
+        var pinnedBundle = CreateFakeCliBundle(GetPinnedDnxLayoutDirectory(aspireHome));
+        var project = await CreateRunHookProjectAsync(workspace.Path, aspireUseCliBundle: true,
+            """
+              <PropertyGroup>
+                <AspireCliInvocationMode>DnxPinned</AspireCliInvocationMode>
+              </PropertyGroup>
+            """,
+            includeBundlePaths: false);
+        var environment = new Dictionary<string, string>
+        {
+            ["ASPIRE_HOME"] = aspireHome,
+            [GetPathEnvironmentVariableName()] = CreatePathWithoutAspire(dnxDirectory.FullName)
+        };
+
+        // The fake DNX fails setup, so success proves the existing pinned layout was used without setup.
+        var properties = await GetResolveAspireCliBundlePathPropertiesAsync(project, environment, ["-warnaserror"]);
+
+        Assert.Equal(pinnedBundle.DcpDirectory, Path.TrimEndingDirectorySeparator(properties["DcpDir"]));
+        Assert.Equal(pinnedBundle.DashboardPath, properties["AspireDashboardPath"]);
+    }
+
+    [Theory]
+    [InlineData("13.6.4")]
+    [InlineData("13.6.4-preview.1+abc")]
+    public async Task ResolveAspireCliBundlePathsUsesAppHostPackageVersionForPinnedDnxBundle(string appHostPackageVersion)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var dnxDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "dnx"));
+        await CreateFakeDnxAsync(dnxDirectory.FullName, appHostPackageVersion);
+        var aspireHome = Path.Combine(workspace.Path, "aspire-home");
+        var setupArgumentsPath = Path.Combine(workspace.Path, "setup-arguments.txt");
+        var project = await CreateRunHookProjectAsync(workspace.Path, aspireUseCliBundle: true,
+            $$"""
+              <PropertyGroup>
+                <AspireCliInvocationMode>DnxPinned</AspireCliInvocationMode>
+                <_AspireAppHostPackageVersion>{{appHostPackageVersion}}</_AspireAppHostPackageVersion>
+              </PropertyGroup>
+            """,
+            includeBundlePaths: false);
+        var environment = new Dictionary<string, string>
+        {
+            ["ASPIRE_HOME"] = aspireHome,
+            ["ASPIRE_TEST_CAPTURE_PATH"] = setupArgumentsPath,
+            [GetPathEnvironmentVariableName()] = CreatePathWithoutAspire(dnxDirectory.FullName)
+        };
+
+        var properties = await GetResolveAspireCliBundlePathPropertiesAsync(
+            project,
+            environment,
+            ["-warnaserror"],
+            restore: false);
+        var pinnedLayoutDirectory = GetPinnedDnxLayoutDirectory(aspireHome, appHostPackageVersion);
+        var pinnedBundle = GetFakeCliBundlePaths(pinnedLayoutDirectory);
+        var setupArguments = await File.ReadAllLinesAsync(setupArgumentsPath);
+
+        Assert.Equal(["--yes", $"aspire.cli@{appHostPackageVersion}", "--", "setup", "--install-path", pinnedLayoutDirectory], setupArguments);
+        Assert.Equal(pinnedBundle.DcpDirectory, Path.TrimEndingDirectorySeparator(properties["DcpDir"]));
+        Assert.Equal(pinnedBundle.DashboardDirectory, Path.TrimEndingDirectorySeparator(properties["AspireDashboardDir"]));
+        Assert.Equal(pinnedBundle.DashboardPath, properties["AspireDashboardPath"]);
+        AssertCliBundleExists(pinnedLayoutDirectory, JsonSerializer.Serialize(properties));
+    }
+
+    [Theory]
+    [InlineData("13.5.0", "13.5.0")]
+    [InlineData("13.5.0-preview.1.25301.1+abc", "13.5.0-preview.1.25301.1+abc")]
+    [InlineData("../evil", ".._evil")]
+    [InlineData("..", "__")]
+    public void ResolveAspireCliBundlePinnedLayoutDirectoryStaysUnderAspireHome(string version, string expectedDirectoryName)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var directory = ResolveAspireCliBundle.GetPinnedLayoutDirectory(workspace.Path, version);
+
+        Assert.Equal(Path.Combine(workspace.Path, "dnx", "aspire.cli", expectedDirectoryName), directory);
+    }
+
     [Theory]
     [InlineData("Dnx", false)]
     [InlineData("DnxPinned", false)]
@@ -1082,6 +1315,10 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
         Assert.Contains(errorLines, line => line.Contains("Acquiring Aspire CLI; package source: 'test-feed'.", StringComparison.Ordinal));
         Assert.Contains(errorLines, line => line.Contains("error: Unable to load 'test-feed'; response: 401 (Unauthorized).", StringComparison.Ordinal));
         Assert.Equal(includePathCli ? 2 : 1, errorLines.Count(line => line.Contains("Output from '", StringComparison.Ordinal)));
+
+        // Pinned setup validates its layout only when ASPIRE_LAYOUT_PATH points at it, so the rerun guidance must say so.
+        var layoutPathGuidance = $"with the ASPIRE_LAYOUT_PATH environment variable set to '{Path.Combine(workspace.Path, "aspire-home", "dnx", "aspire.cli")}";
+        Assert.Equal(invocationMode == "DnxPinned", errorLines.Any(line => line.Contains(layoutPathGuidance, StringComparison.Ordinal)));
     }
 
     [Theory]
@@ -1727,14 +1964,16 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
     private static async Task<Dictionary<string, string>> GetResolveAspireCliBundlePathPropertiesAsync(
         RunHookProject project,
         IDictionary<string, string> environment,
-        string[]? extraArguments = null)
+        string[]? extraArguments = null,
+        bool restore = true)
     {
         return await GetTargetPropertiesAsync(
             project,
             "ResolveAspireCliBundlePaths",
             "DcpDir,AspireDashboardDir,AspireDashboardPath,_AspireResolvedCliInvocationMode,_AspireResolvedCliPath",
             extraArguments,
-            environment: environment);
+            environment: environment,
+            restore: restore);
     }
 
     private static async Task<Dictionary<string, string>> GetTargetPropertiesAsync(
@@ -1742,17 +1981,23 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
         string target,
         string propertyNames,
         string[]? extraArguments,
-        IDictionary<string, string>? environment)
+        IDictionary<string, string>? environment,
+        bool restore = true)
     {
         var arguments = new List<string>
         {
             "msbuild",
-            "-nologo",
-            "-restore",
-            $"-t:{target}",
-            $"-getProperty:{propertyNames}",
-            project.ProjectFile
+            "-nologo"
         };
+
+        if (restore)
+        {
+            arguments.Add("-restore");
+        }
+
+        arguments.Add($"-t:{target}");
+        arguments.Add($"-getProperty:{propertyNames}");
+        arguments.Add(project.ProjectFile);
 
         if (extraArguments is not null)
         {
@@ -1887,7 +2132,7 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
         return aspirePath;
     }
 
-    private static async Task<string> CreateFakeDnxAsync(string fakeCliDirectory)
+    private static async Task<string> CreateFakeDnxAsync(string fakeCliDirectory, string cliVersion = AspireCliVersion)
     {
         var dnxPath = Path.Combine(fakeCliDirectory, OperatingSystem.IsWindows() ? "dnx.cmd" : "dnx");
         if (OperatingSystem.IsWindows())
@@ -1922,6 +2167,13 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
                     exit 0
                 fi
                 if [ "$1" = "--yes" ] && { [ "$2" = "aspire.cli@13.5.0" ] || [ "$2" = "aspire.cli" ]; } && [ "$3" = "--" ] && [ "$4" = "setup" ] && [ "$5" = "--install-path" ]; then
+                    # Like the real CLI, setup validates the extracted layout through layout discovery,
+                    # which only probes ASPIRE_LAYOUT_PATH and the Aspire home for a DNX-hosted CLI.
+                    printf '%s\n' "$@" > "$ASPIRE_TEST_CAPTURE_PATH"
+                    if [ "$6" != "${ASPIRE_LAYOUT_PATH:-}" ] && [ "$6" != "${ASPIRE_HOME:-$HOME/.aspire}" ]; then
+                        echo "Bundle was extracted to $6 but layout validation failed." >&2
+                        exit 1
+                    fi
                     mkdir -p "$6/bundle/dcp" "$6/bundle/managed" "$6/bundle/dashboard"
                     : > "$6/bundle/dcp/dcp"
                     : > "$6/bundle/managed/aspire-managed"
@@ -1930,6 +2182,11 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
                 fi
                 printf '%s\n' "$@" > "$ASPIRE_TEST_CAPTURE_PATH"
                 """).ReplaceLineEndings("\n"));
+        if (!string.Equals(cliVersion, AspireCliVersion, StringComparison.Ordinal))
+        {
+            var script = await File.ReadAllTextAsync(dnxPath);
+            await File.WriteAllTextAsync(dnxPath, script.Replace(AspireCliVersion, cliVersion, StringComparison.Ordinal));
+        }
 
         if (!OperatingSystem.IsWindows())
         {
@@ -2325,6 +2582,9 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
         Assert.Equal(expectedArguments, properties["RunArguments"]);
         Assert.Equal(project.ProjectDirectory, properties["RunWorkingDirectory"]);
     }
+
+    private static string GetPinnedDnxLayoutDirectory(string aspireHome, string version = AspireCliVersion)
+        => Path.Combine(aspireHome, "dnx", "aspire.cli", version);
 
     private static void AssertCliBundleExists(string aspireHome, string output)
     {

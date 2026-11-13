@@ -692,6 +692,7 @@ async function main() {
     patchExtesterLaunchLocale();
     writeVsCodeLocaleFile();
 
+    const devCertificatePath = exportDevelopmentCertificate();
     const extestEnv = getAspireCliEnvironment({
       ASPIRE_EXTENSION_E2E_CLI_PATH: cliPath,
       ASPIRE_EXTENSION_E2E_EXTENSION_ROOT: extensionRoot,
@@ -705,6 +706,7 @@ async function main() {
       // ignore an extension host left behind by an earlier run that is still polling them.
       ASPIRE_EXTENSION_E2E_RUN_ID: runId,
       ASPIRE_EXTENSION_E2E_ENABLE_BRIDGE: 'true',
+      ...(devCertificatePath ? { ASPIRE_EXTENSION_E2E_DEV_CERT_PATH: devCertificatePath } : {}),
       NUGET_PACKAGES: e2eNuGetPackages,
       ASPIRE_EXTENSION_E2E_NUGET_PACKAGES: e2eNuGetPackages,
       ASPIRE_EXTENSION_E2E_SKIP_CURRENT_CLI_REGRESSIONS: process.env.ASPIRE_EXTENSION_E2E_SKIP_CURRENT_CLI_REGRESSIONS === 'true' ? 'true' : 'false',
@@ -1782,7 +1784,25 @@ builder.Build().Run();
 
 function writeAppHostProject(projectName, resolvedAppHostSdkVersion, includeAzureFunctions, includeWinUi, includeResourceDebug) {
   const projectDirectory = path.join(workspaceRoot, projectName);
+  const includeLanguageSources = matchedTestSpecs.some(specPath => path.basename(specPath) === 'treeActions.e2e.test.js');
   fs.mkdirSync(projectDirectory, { recursive: true });
+  fs.mkdirSync(path.join(projectDirectory, 'e2e-source-image'), { recursive: true });
+  fs.writeFileSync(path.join(projectDirectory, 'e2e-source-tool'), 'Non-filesystem source collision fixture.');
+  if (includeLanguageSources) {
+    const pythonDirectory = path.join(projectDirectory, 'e2e-python-source');
+    const pythonInterpreter = path.join(pythonDirectory, '.venv', isWindows ? 'Scripts' : 'bin', isWindows ? 'python.exe' : 'python');
+    fs.mkdirSync(path.dirname(pythonInterpreter), { recursive: true });
+    fs.writeFileSync(pythonInterpreter, Buffer.from([0x4d, 0x5a, 0, 0]));
+    fs.writeFileSync(path.join(pythonDirectory, 'main.py'), 'print("Python source navigation fixture")\n');
+    const javaDirectory = path.join(projectDirectory, 'e2e-java-source');
+    const javaLauncher = path.join(projectDirectory, 'e2e-java-launcher', 'cmd.exe');
+    fs.mkdirSync(javaDirectory, { recursive: true });
+    fs.mkdirSync(path.dirname(javaLauncher), { recursive: true });
+    fs.writeFileSync(javaLauncher, Buffer.from([0x4d, 0x5a, 0, 0]));
+    fs.writeFileSync(path.join(javaDirectory, 'App.java'), 'class App {}\n');
+  }
+  const outsideWorkspaceSourcePath = path.join(shortRunRoot, 'e2e-outside-workspace-source');
+  fs.mkdirSync(outsideWorkspaceSourcePath, { recursive: true });
   // Keep the Functions lane's SDK machinery; ordinary V2 resources no longer need generated metadata.
   const projectSdk = includeAzureFunctions ? `Aspire.AppHost.Sdk/${resolvedAppHostSdkVersion}` : 'Microsoft.NET.Sdk';
   const appHostPackageReference = includeAzureFunctions
@@ -1829,16 +1849,40 @@ ${goPackageReference}  </ItemGroup>
   const winUiResource = includeWinUi
     ? 'builder.AddDotnetProject("e2e-winui", "../AspireE2E.WinUI/AspireE2E.WinUI.csproj", options => options.LaunchProfileName = "E2E");\n\n'
     : '';
+  const languageSourceResources = includeLanguageSources
+    ? `// Match source metadata with existing binaries without installing or launching Python or Java.
+foreach (var (language, launcher) in new[]
+{
+    ("python", Path.Combine(builder.AppHostDirectory, "e2e-python-source", ".venv", ${isWindows ? '"Scripts", "python.exe"' : '"bin", "python"'})),
+    ("java", Path.Combine(builder.AppHostDirectory, "e2e-java-launcher", "cmd.exe"))
+})
+{
+    builder.AddResource(new NoCommandsResource($"e2e-{language}-source"))
+        .WithInitialState(new CustomResourceSnapshot
+        {
+            ResourceType = "Executable",
+            State = KnownResourceStates.Running,
+            Properties = [
+                new("resource.sourcePath", Path.Combine(builder.AppHostDirectory, $"e2e-{language}-source")),
+                new("executable.path", launcher),
+                new("executable.workDir", Path.Combine(builder.AppHostDirectory, $"e2e-{language}-source"))
+            ]
+        });
+}
+
+`
+    : '';
   fs.writeFileSync(path.join(projectDirectory, 'AppHost.cs'), `${csharpFileHeader}#pragma warning disable ASPIREINTERACTION001
 #pragma warning disable ASPIREPIPELINES001 // Older published SDKs still mark pipeline APIs experimental.
 #pragma warning disable ASPIRETERMINAL001
 
+using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Pipelines;
 
 // The E2E fixture intentionally covers interaction command arguments and terminal metadata while those APIs are still experimental.
 var builder = DistributedApplication.CreateBuilder(args);
 
-builder.AddDotnetProject("e2e-worker", "../AspireE2E.Worker/AspireE2E.Worker.csproj")
+var worker = builder.AddDotnetProject("e2e-worker", "../AspireE2E.Worker/AspireE2E.Worker.csproj")
     .WithHttpEndpoint(name: "http")
     .WithCommand(
         "echo-arguments",
@@ -1903,6 +1947,84 @@ builder.AddDotnetProject("e2e-worker", "../AspireE2E.Worker/AspireE2E.Worker.csp
         });
 
 builder.AddResource(new NoCommandsResource("e2e-no-commands"));
+
+var workerProjectPath = worker.Resource.GetProjectMetadata().ProjectPath;
+
+// Metadata-only resources cover image/package source collisions without downloading containers or tools.
+builder.AddResource(new NoCommandsResource("e2e-image-source"))
+    .WithInitialState(new CustomResourceSnapshot
+    {
+        ResourceType = "Container",
+        State = KnownResourceStates.Running,
+        Properties = [
+            new("container.image", "e2e-source-image"),
+            new(CustomResourceKnownProperties.Source, "e2e-source-image")
+        ]
+    });
+
+builder.AddResource(new NoCommandsResource("e2e-tool-source"))
+    .WithInitialState(new CustomResourceSnapshot
+    {
+        ResourceType = "Tool",
+        State = KnownResourceStates.Running,
+        Properties = [
+            new("tool.package", "e2e-source-tool"),
+            new("executable.path", Path.Combine(builder.AppHostDirectory, "e2e-source-tool")),
+            new(CustomResourceKnownProperties.Source, "e2e-source-tool")
+        ]
+    });
+
+builder.AddResource(new NoCommandsResource("e2e-suppressed-source"))
+    .WithInitialState(new CustomResourceSnapshot
+    {
+        ResourceType = "Project",
+        State = KnownResourceStates.Running,
+        Properties = [
+            new("project.path", workerProjectPath),
+            new(CustomResourceKnownProperties.Source, string.Empty)
+        ]
+    });
+
+builder.AddResource(new NoCommandsResource("e2e-directory-source"))
+    .WithInitialState(new CustomResourceSnapshot
+    {
+        ResourceType = "Executable",
+        State = KnownResourceStates.Running,
+        Properties = [
+            new("executable.path", "dotnet"),
+            new("executable.workDir", Path.GetDirectoryName(workerProjectPath))
+        ]
+    });
+
+${languageSourceResources}builder.AddResource(new NoCommandsResource("e2e-display-source"))
+    .WithInitialState(new CustomResourceSnapshot
+    {
+        ResourceType = "Custom",
+        State = KnownResourceStates.Running,
+        Properties = [
+            new(CustomResourceKnownProperties.Source, workerProjectPath)
+        ]
+    });
+
+builder.AddResource(new NoCommandsResource("e2e-missing-source"))
+    .WithInitialState(new CustomResourceSnapshot
+    {
+        ResourceType = "Project",
+        State = KnownResourceStates.Running,
+        Properties = [
+            new("project.path", Path.ChangeExtension(workerProjectPath, ".missing.csproj"))
+        ]
+    });
+
+builder.AddResource(new NoCommandsResource("e2e-outside-workspace-source"))
+    .WithInitialState(new CustomResourceSnapshot
+    {
+        ResourceType = "Project",
+        State = KnownResourceStates.Running,
+        Properties = [
+            new("project.path", ${JSON.stringify(outsideWorkspaceSourcePath)})
+        ]
+    });
 
 // e2e-terminal opts into WithTerminal so the real CLI surfaces terminal.enabled and
 // terminal.replicaIndex over the backchannel. The extension's Open terminal action reads
@@ -2019,7 +2141,11 @@ public partial class App : Application
     {
         var readyFile = Environment.GetEnvironmentVariable("ASPIRE_WINUI_E2E_READY_FILE")
             ?? throw new InvalidOperationException("ASPIRE_WINUI_E2E_READY_FILE is required.");
-        File.WriteAllText(readyFile, $"ready:{Environment.ProcessId}");
+        // Publish the marker atomically: the E2E test polls for this file and asserts on its
+        // first successful read, so it must never observe a created-but-empty file.
+        var pendingReadyFile = readyFile + ".tmp";
+        File.WriteAllText(pendingReadyFile, $"ready:{Environment.ProcessId}");
+        File.Move(pendingReadyFile, readyFile, overwrite: true);
 
         _window = new Window
         {
@@ -2288,6 +2414,34 @@ function compareConcreteVersions(left, right) {
   }
 
   return 0;
+}
+
+/**
+ * Exports the public half of the ASP.NET Core development certificate. The AppHost serves the
+ * Dashboard and HTTPS resource endpoints with it, and the tests pin it (see readTrustedDevCertificate
+ * in src/test-e2e/helpers/assertions.ts) instead of disabling certificate validation. `dotnet dev-certs`
+ * writes a private key only when --password or --no-password is passed, so none is exported here.
+ * Like the CLI on first run, the export creates the certificate when the machine has none, but it
+ * never trusts it.
+ *
+ * A failure is not fatal: shards that never probe an HTTPS endpoint do not need the certificate, and
+ * the probes in the shards that do fail with a certificate error under the default trust store.
+ */
+function exportDevelopmentCertificate() {
+  logStep('Exporting the ASP.NET Core development certificate');
+  const certificatePath = path.join(shortRunRoot, 'aspnetcore-dev-cert.pem');
+  try {
+    run('dotnet', ['dev-certs', 'https', '--export-path', certificatePath, '--format', 'Pem'], {}, { timeout: 120000 });
+    if (!fs.existsSync(certificatePath)) {
+      throw new Error(`dotnet dev-certs did not write ${certificatePath}.`);
+    }
+  }
+  catch (error) {
+    console.warn(`Warning: unable to export the ASP.NET Core development certificate, so HTTPS probes will use the default trust store: ${error instanceof Error ? error.message : String(error)}`);
+    return undefined;
+  }
+
+  return certificatePath;
 }
 
 function getAspireCliEnvironment(extraEnv = {}) {

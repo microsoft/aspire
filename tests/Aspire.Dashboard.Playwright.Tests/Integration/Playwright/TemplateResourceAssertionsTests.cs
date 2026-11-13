@@ -23,11 +23,15 @@ public sealed class TemplateResourceAssertionsTests(TemplateResourceAssertionsTe
         new("Container", "cache", "Running", "registry.example.test/redis:latest")
     ];
 
+    // Templates and other app tests open the dashboard in its default density, compact, whose rows show the state
+    // as a dot, so the helper must read the state at every density.
     [Theory]
-    [InlineData("/resources")]
-    [InlineData("/graph")]
+    [InlineData("/resources", true)]
+    [InlineData("/resources", false)]
+    [InlineData("/graph", true)]
+    [InlineData("/graph", false)]
     [OuterloopTest("Resource-intensive Playwright browser test")]
-    public async Task TemplateHelper_ValidatesSidebarAndDetailsWithoutCards(string path)
+    public async Task TemplateHelper_ValidatesSidebarAndDetailsWithoutCards(string path, bool useDefaultDensity)
     {
         await RunTestAsync(async page =>
         {
@@ -35,11 +39,18 @@ public sealed class TemplateResourceAssertionsTests(TemplateResourceAssertionsTe
             await Assertions.Expect(page.Locator(".resource-row[data-resource-name]")).ToHaveCountAsync(2);
             var originalUrl = page.Url;
 
+            foreach (var resource in s_expectedResources)
+            {
+                var row = page.Locator($".resource-row[data-resource-name='{resource.Name}']");
+                await Assertions.Expect(DashboardResourceAssertions.RowState(row, resource.State)).ToBeVisibleAsync();
+                await Assertions.Expect(DashboardResourceAssertions.RowState(row, "Finished")).ToHaveCountAsync(0);
+            }
+
             var rows = await DashboardResourceAssertions.CheckResourcesAsync(new WrapperForIPage(page, output), s_expectedResources, output, timeoutSecs: 10);
 
             Assert.Equal(s_expectedResources.OrderBy(resource => resource.Name), rows.OrderBy(resource => resource.Name));
             Assert.Equal(originalUrl, page.Url);
-        });
+        }, useDefaultDensity);
     }
 
     [Theory]

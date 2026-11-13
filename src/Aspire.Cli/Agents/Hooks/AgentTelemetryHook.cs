@@ -23,6 +23,11 @@ internal sealed class AgentTelemetryHook(IEnvironment environment)
     private const string ContinueResponse = """{"continue":true}""";
     private static readonly string[] s_mcpPrefixes = ["aspire-", "mcp__aspire__", "mcp_aspire_"];
 
+    // Matches the tool names Classify recognizes through s_mcpPrefixes, for example aspire-list_resources
+    // (Copilot), mcp__aspire__list_resources (Claude Code), and mcp_aspire_list_resources (VS Code).
+    // Clients build their hook matchers from this so they cannot drift from the classifier.
+    internal static string McpMatcher => string.Join('|', s_mcpPrefixes.Select(prefix => prefix + ".+"));
+
     internal static (string Command, string[] Args) GetCommand(string mode)
     {
         var command = Environment.ProcessPath ?? throw new InvalidOperationException("Could not resolve the CLI executable.");
@@ -180,21 +185,11 @@ internal sealed class AgentTelemetryHook(IEnvironment environment)
                 return null;
             }
 
-            // The app also sets COPILOT_CLI, so its specific runtime marker must take precedence.
-            var isCopilotApp = string.Equals(
-                environment.GetEnvironmentVariable(CopilotAppInstallationDetector.AgentEnvironmentVariable),
-                CopilotAppInstallationDetector.AgentEnvironmentValue,
-                StringComparison.Ordinal);
-            var client = isCopilotApp ? "copilot-app"
-                : environment.IsFlagEnabled("COPILOT_CLI") ? "copilot-cli"
-                : Property(data, "hook_event_name") is not null
-                    ? IsVsCode(data) ? "vscode" : "claude-code"
-                    : Property(data, "toolArgs") is not null ? "copilot-cli" : "unknown";
             var args = new List<string>
             {
                 AgentTelemetryProtocol.AgentCommandName, AgentTelemetryProtocol.TelemetryCommandName,
                 AgentTelemetryProtocol.EventTypeOptionName, telemetryEvent.EventType,
-                AgentTelemetryProtocol.ClientNameOptionName, client,
+                AgentTelemetryProtocol.ClientNameOptionName, GetClientName(data, environment),
                 AgentTelemetryProtocol.TimestampOptionName, DateTimeOffset.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture),
                 telemetryEvent.Dimension, telemetryEvent.Value
             };
@@ -210,6 +205,17 @@ internal sealed class AgentTelemetryHook(IEnvironment environment)
             return null;
         }
     }
+
+    // The app also sets COPILOT_CLI, so its specific runtime marker must take precedence.
+    private static string GetClientName(JsonElement data, IEnvironment environment) =>
+        environment.GetEnvironmentVariable(CopilotAppInstallationDetector.AgentEnvironmentVariable) switch
+        {
+            CopilotAppInstallationDetector.AgentEnvironmentValue => "copilot-app",
+            _ when environment.IsFlagEnabled("COPILOT_CLI") => "copilot-cli",
+            _ when Property(data, "hook_event_name") is not null => IsVsCode(data) ? "vscode" : "claude-code",
+            _ when Property(data, "toolArgs") is not null => "copilot-cli",
+            _ => "unknown"
+        };
 
     private static bool IsVsCode(JsonElement data)
     {

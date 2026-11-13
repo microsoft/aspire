@@ -3,6 +3,7 @@
 
 using System.Net;
 using System.Text.Json;
+using Aspire.Dashboard.Model;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dcp;
 using Aspire.Hosting.Dcp.Model;
@@ -23,7 +24,31 @@ namespace Aspire.Hosting.Blazor.Tests;
 public class AddBlazorGatewayTests(ITestOutputHelper testOutputHelper)
 {
     private const string GatewayPackageId = "Microsoft.AspNetCore.Components.Gateway.Cli";
-    private const string GatewayPackageVersion = "11.0.0-rc.1.26425.128";
+    private const string GatewayPackageVersion = "11.0.0";
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void AddBlazorWasmProject_PublishesProjectPathForSourceNavigation(bool useProjectMetadata)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var app = useProjectMetadata
+            ? builder.AddBlazorWasmProject<TestProjectMetadata>("store")
+            : builder.AddBlazorWasmApp("store", "../Store/Store.csproj");
+
+        var snapshot = Assert.Single(app.Resource.Annotations.OfType<ResourceSnapshotAnnotation>()).InitialSnapshot;
+        Assert.Collection(snapshot.Properties,
+            property =>
+            {
+                Assert.Equal(CustomResourceKnownProperties.Source, property.Name);
+                Assert.Equal(Path.GetFileName(app.Resource.ProjectPath), property.Value);
+            },
+            property =>
+            {
+                Assert.Equal(KnownProperties.Project.Path, property.Name);
+                Assert.Equal(app.Resource.ProjectPath, property.Value);
+            });
+    }
 
     [Fact]
     public void AddBlazorGateway_PreservesProjectResourceApiAndUsesToolForRunMode()
@@ -122,7 +147,7 @@ public class AddBlazorGatewayTests(ITestOutputHelper testOutputHelper)
             "Blazor/Blazor.csproj",
             ".aspire/scripts/PrefixEndpoints.cs",
             "app",
-            "11.0.100-rc.2.26504.105",
+            "11.0.100",
             "net11.0");
 
         await Verify(dockerfile, extension: "Dockerfile")
@@ -135,7 +160,7 @@ public class AddBlazorGatewayTests(ITestOutputHelper testOutputHelper)
     [InlineData("8.0.408", "net8.0")]
     [InlineData("9.0.203", "net9.0")]
     [InlineData("10.0.201", "net10.0")]
-    [InlineData("11.0.100-rc.2.26504.105", "net11.0")]
+    [InlineData("11.0.100", "net11.0")]
     public void BlazorWasmPublishCompanion_InstallsClientSdkAlongsideGatewaySdk(string sdkVersion, string framework)
     {
         var dockerfile = BlazorGatewayExtensions.BuildBlazorWasmPublishDockerfile(

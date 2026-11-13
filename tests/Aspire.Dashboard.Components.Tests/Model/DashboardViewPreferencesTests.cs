@@ -43,6 +43,38 @@ public class DashboardViewPreferencesTests : DashboardTestContext
         Assert.Single(writes);
     }
 
+    [Fact]
+    public async Task Load_RemovedSpaciousDensity_WritesComfortableOnce()
+    {
+        // Spacious was removed. A saved choice of it becomes the closest density, Comfortable, rather than the default,
+        // Compact, and it's rewritten once so later loads don't migrate it again.
+        object? stored = "Spacious";
+        var writes = new List<(string Key, object? Value)>();
+        var storage = new TestLocalStorage
+        {
+            OnGetUnprotectedAsync = key => key == BrowserStorageKeys.ResourceListDensity ? (true, stored) : (false, null),
+            OnSetUnprotectedAsync = (key, value) =>
+            {
+                writes.Add((key, value));
+                stored = value;
+            }
+        };
+        FluentUISetupHelpers.AddCommonDashboardServices(this, localStorage: storage);
+        var preferences = Services.GetRequiredService<DashboardViewPreferences>();
+
+        await preferences.EnsureLoadedAsync();
+
+        Assert.Equal(ResourceListDensity.Comfortable, preferences.Density);
+        Assert.Equal([(BrowserStorageKeys.ResourceListDensity, (object?)"Comfortable")], writes);
+
+        await using var reopened = new DashboardViewPreferencesTests();
+        FluentUISetupHelpers.AddCommonDashboardServices(reopened, localStorage: storage);
+        var reopenedPreferences = reopened.Services.GetRequiredService<DashboardViewPreferences>();
+        await reopenedPreferences.EnsureLoadedAsync();
+        Assert.Equal(ResourceListDensity.Comfortable, reopenedPreferences.Density);
+        Assert.Single(writes);
+    }
+
     [Theory]
     [InlineData(null, GroupOverview.Summary)]
     [InlineData("", GroupOverview.Summary)]

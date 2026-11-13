@@ -22,6 +22,61 @@ namespace Aspire.Cli.Tests.Commands;
 public partial class NewCommandLocalTemplateTests
 {
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ConfiguredGitSources_FetchNoticesIdentifyEachRepository(bool pinned)
+    {
+        const string firstRepository = "https://example.test/first.git";
+        const string secondRepository = "ssh://git@example.test/second.git";
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var interaction = new TestInteractionService
+        {
+            PromptForSelectionCallback = (_, choices, _, _) => choices.Cast<object>().Last()
+        };
+        interaction.SetupStringPromptResponse("Hello");
+        var git = TestGitCommandRunner.CreateForTemplateCheckout((_, destination, _, _) =>
+            CreateClonedSearchTemplateAsync(workspace, destination, "Remote"));
+        var runGit = Assert.IsType<Func<GitCommandInvocation, CancellationToken, Task<string>>>(git.RunCallback);
+        git.RunCallback = (command, token) =>
+        {
+            var repository = command.Arguments[0] switch
+            {
+                "ls-remote" => command.Arguments[2],
+                "fetch" => TestGitCommandRunner.GetFetchArguments(command).Repository,
+                _ => null
+            };
+            if (repository is not null)
+            {
+                var notice = interaction.DisplayedMessages.Last(message => message.Emoji.Equals(KnownEmojis.InboxTray));
+                Assert.Contains(repository, notice.Message);
+            }
+            return runGit(command, token);
+        };
+        var services = CreateServices(workspace, interaction, interactive: true);
+        services.AddSingleton<IGitCommandRunner>(git);
+        using var provider = services.BuildServiceProvider();
+        await WriteConfiguredSourcesAsync(provider, new()
+        {
+            ["first"] = new { repository = firstRepository, @ref = pinned ? TestGitCommandRunner.DefaultCommitSha : null },
+            ["second"] = new { repository = secondRepository, @ref = pinned ? TestGitCommandRunner.DefaultCommitSha : null }
+        });
+
+        var exitCode = await provider.GetRequiredService<RootCommand>()
+            .Parse("new --name Demo --output out --suppress-agent-init").InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal([firstRepository, secondRepository], GetGitFetches(git).Select(fetch => fetch.Repository));
+        var notices = interaction.DisplayedMessages.Where(message => message.Emoji.Equals(KnownEmojis.InboxTray)).ToArray();
+        Assert.Equal(new[] { firstRepository, secondRepository }.Select(repository =>
+        {
+            var source = pinned ? $"{repository} ({SharedCommandStrings.SourceRef}: {TestGitCommandRunner.DefaultCommitSha})" : repository;
+            return $"[blue]{string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.FetchingSourceWithAuthentication,
+                SharedCommandStrings.GitFetchTemplates, source)}[/]";
+        }), notices.Select(notice => notice.Message));
+        Assert.All(notices, notice => Assert.Equal(ConsoleOutput.Error, notice.ConsoleOverride));
+    }
+
+    [Theory]
     [InlineData(null, null)]
     [InlineData("release/templates", null)]
     [InlineData("refs/heads/release/templates", "Company [templates]")]
@@ -37,6 +92,19 @@ public partial class NewCommandLocalTemplateTests
         interaction.SetupStringPromptResponse("Hello");
         var git = TestGitCommandRunner.CreateForTemplateCheckout((_, destination, _, _) =>
             CreateClonedSearchTemplateAsync(workspace, destination, "Remote"));
+        var runGit = git.RunCallback ?? throw new InvalidOperationException("A template checkout must configure the Git runner.");
+        git.RunCallback = (command, token) =>
+        {
+            var source = reference is null ? repository : $"{repository} ({SharedCommandStrings.SourceRef}: {reference})";
+            Assert.Equal(
+                [NewCommandStrings.TemplateSourceExplanation, $"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]",
+                    $"[blue]{string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.FetchingSourceWithAuthentication,
+                        SharedCommandStrings.GitFetchTemplates, source)}[/]"],
+                interaction.DisplayedMessages.Select(message => message.Message));
+            Assert.Single(interaction.DisplayedRenderables);
+            Assert.Empty(interaction.DisplayedPlainText);
+            return runGit(command, token);
+        };
         var services = CreateServices(workspace, interaction, interactive: true);
         services.AddSingleton<IGitCommandRunner>(git);
         using var provider = services.BuildServiceProvider();
@@ -50,8 +118,7 @@ public partial class NewCommandLocalTemplateTests
 
         Assert.Equal(CliExitCodes.Success, exitCode);
         var choice = Assert.Single(interaction.GroupedSelectionPromptCalls)[^1];
-        Assert.Equal(new SelectionChoiceGroup("source:company",
-            $"{displayName ?? "company"} ({repository} @ {reference ?? ConfigSourceStrings.DefaultBranch})")
+        Assert.Equal(new SelectionChoiceGroup("source:company", displayName ?? "company")
         {
             Style = new Style(Color.Green)
         }, choice.Group);
@@ -121,7 +188,7 @@ public partial class NewCommandLocalTemplateTests
     }
 
     [Fact]
-    public async Task ConfiguredGitSources_MixedSearchSelectsGitTemplateAndShowsAcquisitionStages()
+    public async Task ConfiguredGitSources_MixedSearchSelectsGitTemplateWithoutAcquisitionStatus()
     {
         const string repository = "https://example.test/templates.git";
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -143,10 +210,7 @@ public partial class NewCommandLocalTemplateTests
             Assert.Equal(
                 providerTemplates.Select(template => template.Description),
                 options.Select(formatter).SkipLast(2));
-            Assert.Equal(
-                [string.Format(CultureInfo.CurrentCulture, NewCommandStrings.SearchingTemplateSource, "local-source"),
-                    NewCommandStrings.ResolvingTemplateRepository, NewCommandStrings.CloningTemplateRepository],
-                interaction.ShownStatuses);
+            Assert.Empty(interaction.ShownStatuses);
             return options[^2];
         };
         var services = CreateServices(workspace, interaction, interactive: true);
@@ -283,7 +347,8 @@ public partial class NewCommandLocalTemplateTests
             3 => ErrorStrings.GitTimedOut,
             _ => string.Format(CultureInfo.CurrentCulture, NewCommandStrings.TemplateRepositoryRefNotFound, "HEAD")
         };
-        Assert.Collection(interaction.DisplayedMessages,
+        Assert.Collection(interaction.DisplayedMessages.Where(message => !message.Emoji.Equals(KnownEmojis.InboxTray)),
+            message => Assert.Equal(NewCommandStrings.TemplateSourceExplanation, message.Message),
             warning =>
             {
                 Assert.Equal($"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]", warning.Message);
@@ -345,9 +410,10 @@ public partial class NewCommandLocalTemplateTests
 
         Assert.Single(GetGitResolutions(git));
         Assert.Equal(cancelResolution ? 0 : 1, GetGitFetches(git).Count);
-        var warning = Assert.Single(interaction.DisplayedMessages);
-        Assert.Equal($"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]", warning.Message);
-        Assert.Equal(ConsoleOutput.Error, warning.ConsoleOverride);
+        var messages = interaction.DisplayedMessages.Where(message => !message.Emoji.Equals(KnownEmojis.InboxTray)).ToArray();
+        Assert.Equal([NewCommandStrings.TemplateSourceExplanation, $"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]"],
+            messages.Select(message => message.Message));
+        Assert.Equal(ConsoleOutput.Error, messages[1].ConsoleOverride);
         var cacheRoot = Path.Combine(provider.GetRequiredService<CliExecutionContext>().CacheDirectory.FullName, "git");
         if (cancelResolution)
         {
@@ -551,7 +617,7 @@ public partial class NewCommandLocalTemplateTests
             var labels = choices.Cast<object>().Select(formatter).ToArray();
             Assert.False(noBuiltIns, "No choices should open a picker when there are no built-ins or discovered templates.");
             Assert.NotEmpty(labels);
-            Assert.Equal(3, interaction.DisplayedMessages.Count);
+            Assert.Equal(6, interaction.DisplayedMessages.Count);
             cancellation.Cancel();
             throw new OperationCanceledException(cancellation.Token);
         };
@@ -576,18 +642,21 @@ public partial class NewCommandLocalTemplateTests
         Assert.Equal(noBuiltIns ? 0 : 1, selections);
         Assert.Equal(noBuiltIns ? ["No templates are available for the current environment."] : Array.Empty<string>(), interaction.DisplayedErrors);
         Assert.Equal(2, GetGitFetches(git).Count);
-        Assert.Equal(noBuiltIns ? 4 : 3, interaction.DisplayedMessages.Count);
-        Assert.Equal($"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]", interaction.DisplayedMessages[0].Message);
-        Assert.All(interaction.DisplayedMessages.Skip(1).Take(2), message => Assert.Equal(KnownEmojis.PoliceCarLight, message.Emoji));
+        var messages = interaction.DisplayedMessages.Where(message => !message.Emoji.Equals(KnownEmojis.InboxTray)).ToArray();
+        Assert.Equal(noBuiltIns ? 5 : 4, messages.Length);
+        Assert.Equal(2, interaction.DisplayedMessages.Count(message => message.Emoji.Equals(KnownEmojis.InboxTray)));
+        Assert.Equal(NewCommandStrings.TemplateSourceExplanation, messages[0].Message);
+        Assert.Equal($"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]", messages[1].Message);
+        Assert.All(messages.Skip(2).Take(2), message => Assert.Equal(KnownEmojis.PoliceCarLight, message.Emoji));
         if (noBuiltIns)
         {
-            Assert.Equal(KnownEmojis.PageFacingUp, interaction.DisplayedMessages[^1].Emoji);
+            Assert.Equal(KnownEmojis.PageFacingUp, messages[^1].Emoji);
         }
         Assert.StartsWith(string.Format(CultureInfo.CurrentCulture, NewCommandStrings.TemplateSourceSearchFailed, "empty", ""),
-            interaction.DisplayedMessages[1].Message);
+            messages[2].Message);
         Assert.Equal(string.Format(CultureInfo.CurrentCulture, NewCommandStrings.TemplateSourceSearchFailed, "broken",
             string.Format(CultureInfo.CurrentCulture, NewCommandStrings.TemplateRepositoryGitExited, 128, ErrorStrings.GitAuthenticationFailed)),
-            interaction.DisplayedMessages[2].Message);
+            messages[3].Message);
         Assert.False(Directory.Exists(Path.Combine(workspace.Path, "out")));
     }
 
@@ -604,5 +673,9 @@ public partial class NewCommandLocalTemplateTests
 
     private static IReadOnlyList<(string Repository, DirectoryInfo Destination, string CommitSha)> GetGitFetches(TestGitCommandRunner git) =>
         git.Commands.Where(call => call.Arguments[0] == "fetch")
-            .Select(call => (call.Arguments[5], call.WorkingDirectory, call.Arguments[6])).ToArray();
+            .Select(call =>
+            {
+                var (repository, reference) = TestGitCommandRunner.GetFetchArguments(call);
+                return (repository, call.WorkingDirectory, reference);
+            }).ToArray();
 }

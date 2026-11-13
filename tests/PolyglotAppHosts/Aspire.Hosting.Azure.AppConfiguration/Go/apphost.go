@@ -39,7 +39,7 @@ func main() {
 			emulator.WithDataVolume(&aspire.WithDataVolumeOptions{
 				Name: aspire.StringPtr("appconfig-data"),
 			})
-			emulator.WithHostPort(aspire.Float64Ptr(8483))
+			emulator.WithHostPort(aspire.IntPtr(8483))
 		},
 	})
 	if err = appConfig.Err(); err != nil {
