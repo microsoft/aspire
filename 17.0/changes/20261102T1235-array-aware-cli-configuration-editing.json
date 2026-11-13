@@ -6,7 +6,9 @@
   "changeType": "Bug fixes",
   "communityContributors": [],
   "description": "`aspire config set` no longer replaces an existing JSON array with an object when editing an indexed value, so unrelated elements are preserved. Explicit `[index]` bracket syntax creates or edits array elements, and setting the next index appends an element.",
-  "docsPrs": [],
+  "docsPrs": [
+    2026
+  ],
   "docsRequired": true,
   "emoji": "🧮",
   "firstMergedAt": "2026-11-02T12:35:27Z",

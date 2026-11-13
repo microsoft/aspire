@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "WebSocket compression setting docs",
+  "mergedAt": "2026-11-13T06:39:48Z",
+  "number": 1820,
+  "runDate": "2026-11-13T12:05:00Z",
+  "status": "included",
+  "title": "[docs] Document Dashboard:Frontend:DisableWebSocketCompression setting"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Source PR #21982 not yet in a changelog entry",
+  "mergedAt": "2026-11-13T06:13:59Z",
+  "number": 2097,
+  "runDate": "2026-11-13T12:05:00Z",
+  "status": "excluded",
+  "title": "[docs] Document aspire new --use-config-source and Git fetch notice"
+}

@@ -6,7 +6,9 @@
   "changeType": "New features",
   "communityContributors": [],
   "description": "The dashboard now shows first-time setup guidance beneath the empty-state messages on Structured Logs, Traces, and Metrics, with an **Add telemetry** dialog covering OTLP endpoints, authentication, and container guidance. The onboarding guidance hides dashboard-wide once telemetry is received or previously exported data is imported.",
-  "docsPrs": [],
+  "docsPrs": [
+    1916
+  ],
   "docsRequired": true,
   "emoji": "🧭",
   "firstMergedAt": "2026-10-19T23:51:31Z",

@@ -6,7 +6,9 @@
   "changeType": "Improvements",
   "communityContributors": [],
   "description": "Dashboard product telemetry attributes are renamed to lowercase, dot-separated OpenTelemetry-style keys and now share the CLI's environment, OS, machine, and Microsoft-internal enrichment. Startup events also report the configured persistence mode (none, run, resume, or unknown).",
-  "docsPrs": [],
+  "docsPrs": [
+    1887
+  ],
   "docsRequired": true,
   "emoji": "📡",
   "firstMergedAt": "2026-10-14T00:20:01Z",
