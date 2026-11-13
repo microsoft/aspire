@@ -2784,26 +2784,31 @@
     }
 }
 
-/* Compact sidebar rows show their actions only while the row is hovered or focused, or while one of its menus is
+/* Compact sidebar rows show their actions only while the row is hovered or has keyboard-visible focus, or while one of its menus is
    open, and then in place of the type and state columns. The rest of the time the action rail is hidden, so the
    name gets its room. The swap keeps the name's width about the same: the 92px the rail and its gap gain is about
    the 90px the columns give up.
    An open menu is matched by aria-haspopup as well as aria-expanded: a parent's expand toggle also sets
    aria-expanded="true", and that must not keep its actions showing. Only the attribute's presence is tested
    because Fluent's menu changes the button's aria-haspopup from "menu" to "true" while the menu is open.
+   Mouse selection leaves the row link focused, so :focus-within would keep the actions visible after the pointer leaves.
+   Keep hidden actions tabbable so moving focus from the row link to an action reveals the rail without losing focus.
    Touch screens can't hover, so (hover: hover) leaves their actions always visible. The expanded list (the full
    canvas) is excluded and keeps its fixed, always-visible action slots. */
 @media (hover: hover) {
-    .resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-row:not(:hover, :focus-within, :has(.resource-row-actions [aria-haspopup][aria-expanded="true"])) {
+    .resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-row:not(:hover, :has(:focus-visible), :has(.resource-row-actions [aria-haspopup][aria-expanded="true"])) {
         grid-template-columns: minmax(0, 1fr);
         column-gap: 0;
     }
 
-    .resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-row:not(:hover, :focus-within, :has(.resource-row-actions [aria-haspopup][aria-expanded="true"])) .resource-row-actions {
-        display: none;
+    .resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-row:not(:hover, :has(:focus-visible), :has(.resource-row-actions [aria-haspopup][aria-expanded="true"])) .resource-row-actions {
+        position: absolute;
+        inset-inline-end: 0;
+        opacity: 0;
+        pointer-events: none;
     }
 
-    .resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-row:is(:hover, :focus-within, :has(.resource-row-actions [aria-haspopup][aria-expanded="true"])) .resource-row-meta {
+    .resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-row:is(:hover, :has(:focus-visible), :has(.resource-row-actions [aria-haspopup][aria-expanded="true"])) .resource-row-meta {
         display: none;
     }
 
@@ -2827,11 +2832,11 @@
         margin-inline-end: calc(var(--resource-row-error-offset) - var(--resource-row-meta-type-width) - 34px);
     }
 
-    .resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-row:is(:hover, :focus-within, :has(.resource-row-actions [aria-haspopup][aria-expanded="true"])) .resource-row-error-link {
+    .resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-row:is(:hover, :has(:focus-visible), :has(.resource-row-actions [aria-haspopup][aria-expanded="true"])) .resource-row-error-link {
         margin-inline-end: calc(var(--resource-row-error-offset) - 92px);
     }
 
-    .resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-row:is(:hover, :focus-within, :has(.resource-row-actions [aria-haspopup][aria-expanded="true"])) .error-badge-spacer {
+    .resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-row:is(:hover, :has(:focus-visible), :has(.resource-row-actions [aria-haspopup][aria-expanded="true"])) .error-badge-spacer {
         margin-inline-end: calc(var(--resource-row-error-offset) - 100px);
     }
 }
