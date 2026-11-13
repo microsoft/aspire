@@ -230,7 +230,7 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
 
                     var dialogParameters = CreateDialogParameters(item, intent: null);
                     dialogParameters.Id = "interactions-input-dialog";
-                    dialogParameters.Width = "min(900px, 90vw)";
+                    dialogParameters.Width = "min(650px, 75vw)";
                     // A non-cancelled result means the form submission already sent its request.
                     dialogParameters.OnDialogResult = CreateDialogResultCallback(dialogResult =>
                         dialogResult.Cancelled ? CreateCompletionRequest(item.InteractionId) : null);

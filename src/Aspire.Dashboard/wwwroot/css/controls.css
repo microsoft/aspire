@@ -362,6 +362,11 @@ fluent-field.aspire-checkbox {
     row-gap: 0;
 }
 
+/* Keep the spacing inside the clickable label rather than in the checkbox's margin. */
+fluent-field.aspire-checkbox > label {
+    padding-inline-start: var(--aspire-space-2);
+}
+
 fluent-field.aspire-checkbox:has(> fluent-checkbox[disabled]) {
     color: var(--colorNeutralForegroundDisabled);
 }
@@ -385,6 +390,7 @@ fluent-field.aspire-checkbox > fluent-checkbox {
     min-width: 18px;
     height: 18px;
     min-height: 18px;
+    margin-inline-end: 0;
     --borderRadiusSmall: 6px;
 }
 

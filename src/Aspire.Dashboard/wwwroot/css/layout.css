@@ -483,7 +483,6 @@ fluent-drawer fluent-drawer-body > [slot="close"] {
 
 .mobile-filter-toolbar fluent-field.aspire-checkbox {
     grid-template-columns: 18px auto;
-    column-gap: var(--aspire-space-2);
     height: 20px;
     min-height: 20px;
 }
