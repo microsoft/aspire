@@ -6,7 +6,11 @@ let resourceGraph = null;
 export function initializeResourcesGraph(resourcesInterop, graphIcons) {
     resourceGraph = new ResourceGraph(resourcesInterop, graphIcons);
     resourceGraph.resize();
-    attachResourceGraphGame(resourceGraph, graphIcons?.game);
+    // Pages that don't offer the Aspire Outage game (the previous dashboard experience) pass no game strings. Don't
+    // attach it there: besides the Play button, it would also take the O key from the dashboard's global shortcuts.
+    if (graphIcons?.game) {
+        attachResourceGraphGame(resourceGraph, graphIcons.game);
+    }
 
     const observer = new ResizeObserver(function () {
         resourceGraph.resize();
