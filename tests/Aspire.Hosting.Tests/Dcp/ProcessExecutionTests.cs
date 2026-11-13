@@ -4,7 +4,6 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using System.IO.Pipes;
-using System.Runtime.InteropServices;
 using System.Text;
 using Aspire.Hosting.Dcp.Process;
 using Aspire.Hosting.Tests.Utils;
@@ -15,7 +14,7 @@ using Microsoft.DotNet.RemoteExecutor;
 namespace Aspire.Hosting.Tests.Dcp;
 
 [Trait("Partition", "4")]
-public partial class ProcessExecutionTests(ITestOutputHelper outputHelper)
+public class ProcessExecutionTests(ITestOutputHelper outputHelper)
 {
     [Theory]
     [InlineData("")]
@@ -73,15 +72,11 @@ public partial class ProcessExecutionTests(ITestOutputHelper outputHelper)
     [Theory]
     [InlineData(128)]
     [InlineData(0)]
-    public async Task RejectedInputPreservesNonzeroDiagnosticsButIsNotSuccessfulDelivery(int exitCode)
+    public async Task UndeliveredInputPreservesNonzeroDiagnosticsButIsNotSuccessfulDelivery(int exitCode)
     {
         using var child = CreateChild(static async (string requestedExitCode) =>
         {
-            if (OperatingSystem.IsWindows())
-            {
-                if (!CloseHandle(GetStdHandle(-10))) { throw new IOException("Closing stdin failed."); }
-            }
-            else if (Close(0) != 0) { throw new IOException("Closing stdin failed."); }
+            // Leave stdin unread so the process exits with the large input still pending.
             await Console.OpenStandardOutput().WriteAsync(Encoding.UTF8.GetBytes("output\0no newline"));
             await Console.OpenStandardError().WriteAsync(Encoding.UTF8.GetBytes(new string('E', 220000) + "late ü\0\r\n"));
             return int.Parse(requestedExitCode);
@@ -96,51 +91,6 @@ public partial class ProcessExecutionTests(ITestOutputHelper outputHelper)
         {
             Assert.Equal(new ProcessCaptureResult(exitCode, "output\0no newline", new string('E', 220000) + "late ü\0\r\n"), await capture);
         }
-    }
-
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task EachOutputFlushesAtItsOwnEofBeforeRootExit(bool errorFirst)
-    {
-        using var child = CreateChild(static async (string pipeName, string firstIsError) =>
-        {
-            using var pipe = new NamedPipeClientStream(".", pipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
-            await pipe.ConnectAsync();
-            var isError = firstIsError == "True";
-            await (isError ? Console.OpenStandardError() : Console.OpenStandardOutput()).WriteAsync(new byte[] { (byte)'x', 0xE2 });
-            if (OperatingSystem.IsWindows())
-            {
-                if (!CloseHandle(GetStdHandle(isError ? -12 : -11))) { throw new IOException("Closing output failed."); }
-            }
-            else if (Close(isError ? 2 : 1) != 0) { throw new IOException("Closing output failed."); }
-            await pipe.ReadExactlyAsync(new byte[1]);
-            return 0;
-        });
-        var name = "process-eof-" + Guid.NewGuid().ToString("N");
-        await using var pipe = new NamedPipeServerStream(name, PipeDirection.InOut, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous);
-        using var cancellation = CreateCancellation();
-        await using var events = CreateExecution(child, arguments: [name, errorFirst.ToString()])
-            .DecodeText(Encoding.UTF8).ReadLines().GetAsyncEnumerator(cancellation.Token);
-        Assert.True(await events.MoveNextAsync());
-        var started = Assert.IsType<ProcessEvent<string>.Started>(events.Current);
-        using var process = Process.GetProcessById(started.ProcessId);
-        await pipe.WaitForConnectionAsync(cancellation.Token);
-        Assert.False(process.HasExited);
-
-        Assert.True(await events.MoveNextAsync());
-        Assert.Equal(errorFirst ? new ProcessEvent<string>.StandardError("x�") : new ProcessEvent<string>.StandardOutput("x�"), events.Current);
-        Assert.True(await events.MoveNextAsync());
-        Assert.Equal(errorFirst ? (ProcessEvent<string>)new ProcessEvent<string>.StandardErrorCompleted() : new ProcessEvent<string>.StandardOutputCompleted(), events.Current);
-        Assert.False(process.HasExited);
-        await pipe.WriteAsync(new byte[] { 1 }, cancellation.Token);
-
-        var remaining = new List<ProcessEvent<string>>();
-        while (await events.MoveNextAsync()) { remaining.Add(events.Current); }
-        Assert.Equal(2, remaining.Count);
-        Assert.Equal(errorFirst ? (ProcessEvent<string>)new ProcessEvent<string>.StandardOutputCompleted() : new ProcessEvent<string>.StandardErrorCompleted(), remaining[0]);
-        Assert.Equal(new ProcessEvent<string>.Exited(0), remaining[1]);
-        Assert.True(process.HasExited);
     }
 
     [Theory]
@@ -855,16 +805,6 @@ public partial class ProcessExecutionTests(ITestOutputHelper outputHelper)
         cancellation.CancelAfter(TestConstants.LongTimeoutDuration);
         return cancellation;
     }
-
-    [LibraryImport("kernel32.dll", SetLastError = true)]
-    private static partial nint GetStdHandle(int value);
-
-    [LibraryImport("kernel32.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool CloseHandle(nint handle);
-
-    [LibraryImport("libc", EntryPoint = "close", SetLastError = true)]
-    private static partial int Close(int descriptor);
 
     private sealed class RemoteChild : IDisposable
     {

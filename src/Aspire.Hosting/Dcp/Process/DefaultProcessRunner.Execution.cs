@@ -104,9 +104,9 @@ internal sealed partial class DefaultProcessRunner : IProcessRunner
             var inputStream = process.StandardInput.BaseStream;
             // No other writer starts until Started is queued.
             events.TryWrite(new ProcessEvent<ReadOnlyMemory<byte>>.Started(process.Id));
-            var output = ReadAsync(outputStream, isError: false);
-            var error = ReadAsync(errorStream, isError: true);
-            var input = WriteInputAsync();
+            var output = ReadOutputAsync(outputStream, events, isError: false, stop.Token);
+            var error = ReadOutputAsync(errorStream, events, isError: true, stop.Token);
+            var input = WriteInputAsync(inputStream, command.Input?.Bytes ?? default, inputStop.Token, stop.Token);
             var pending = new List<Task> { output, error, input, exit, abort.Task };
             try
             {
@@ -188,62 +188,6 @@ internal sealed partial class DefaultProcessRunner : IProcessRunner
                     }
                 }
             }
-
-            async Task ReadAsync(Stream stream, bool isError)
-            {
-                try
-                {
-                    while (true)
-                    {
-                        // Each published array belongs to its event, including after disposal.
-                        var buffer = new byte[ReadBufferSize];
-                        var count = await stream.ReadAsync(buffer, stop.Token).ConfigureAwait(false);
-                        if (count == 0)
-                        {
-                            await events.WriteAsync(isError
-                                ? new ProcessEvent<ReadOnlyMemory<byte>>.StandardErrorCompleted()
-                                : new ProcessEvent<ReadOnlyMemory<byte>>.StandardOutputCompleted(), stop.Token).ConfigureAwait(false);
-                            return;
-                        }
-                        ReadOnlyMemory<byte> content = buffer.AsMemory(0, count);
-                        await events.WriteAsync(isError
-                            ? new ProcessEvent<ReadOnlyMemory<byte>>.StandardError(content)
-                            : new ProcessEvent<ReadOnlyMemory<byte>>.StandardOutput(content), stop.Token).ConfigureAwait(false);
-                    }
-                }
-                catch (Exception exception) when (stop.IsCancellationRequested &&
-                    exception is OperationCanceledException or ObjectDisposedException or IOException)
-                {
-                    // Cleanup closes local pipes even if a descendant holds the write end.
-                    // Aborted reads must not publish a successful EOF.
-                    throw new OperationCanceledException("Process output reading was aborted.", exception, stop.Token);
-                }
-            }
-
-            async Task<IOException?> WriteInputAsync()
-            {
-                try
-                {
-                    await inputStream.WriteAsync(command.Input?.Bytes ?? default, inputStop.Token).ConfigureAwait(false);
-                    return null;
-                }
-                catch (IOException exception) when (!stop.IsCancellationRequested)
-                {
-                    // A tool rejecting stdin can still emit its actual failure on stderr.
-                    return exception;
-                }
-                catch (Exception exception) when (inputStop.IsCancellationRequested &&
-                    exception is OperationCanceledException or ObjectDisposedException or IOException)
-                {
-                    return stop.IsCancellationRequested ? null
-                        : new IOException("The process exited before standard input was delivered.", exception);
-                }
-                finally
-                {
-                    // Only BaseStream is used. Disposing StreamWriter could flush a broken pipe.
-                    inputStream.Close();
-                }
-            }
         }
         catch (Exception exception)
         {
@@ -258,5 +202,75 @@ internal sealed partial class DefaultProcessRunner : IProcessRunner
         // Completion follows process/stream/token disposal even if the iterator stays paused.
         events.TryComplete(result);
         return (exitCode, result);
+    }
+
+    /// <summary>
+    /// Publishes output buffers and EOF independently of process exit.
+    /// </summary>
+    internal static async Task ReadOutputAsync(
+        Stream stream,
+        ChannelWriter<ProcessEvent<ReadOnlyMemory<byte>>> events,
+        bool isError,
+        CancellationToken stopToken)
+    {
+        try
+        {
+            while (true)
+            {
+                // Each published array belongs to its event, including after disposal.
+                var buffer = new byte[ReadBufferSize];
+                var count = await stream.ReadAsync(buffer, stopToken).ConfigureAwait(false);
+                if (count == 0)
+                {
+                    await events.WriteAsync(isError
+                        ? new ProcessEvent<ReadOnlyMemory<byte>>.StandardErrorCompleted()
+                        : new ProcessEvent<ReadOnlyMemory<byte>>.StandardOutputCompleted(), stopToken).ConfigureAwait(false);
+                    return;
+                }
+                ReadOnlyMemory<byte> content = buffer.AsMemory(0, count);
+                await events.WriteAsync(isError
+                    ? new ProcessEvent<ReadOnlyMemory<byte>>.StandardError(content)
+                    : new ProcessEvent<ReadOnlyMemory<byte>>.StandardOutput(content), stopToken).ConfigureAwait(false);
+            }
+        }
+        catch (Exception exception) when (stopToken.IsCancellationRequested &&
+            exception is OperationCanceledException or ObjectDisposedException or IOException)
+        {
+            // Cleanup closes local pipes even if a descendant holds the write end.
+            // Aborted reads must not publish a successful EOF.
+            throw new OperationCanceledException("Process output reading was aborted.", exception, stopToken);
+        }
+    }
+
+    /// <summary>
+    /// Delivers and closes stdin, retaining delivery failures for exit-code policy.
+    /// </summary>
+    internal static async Task<IOException?> WriteInputAsync(
+        Stream stream,
+        ReadOnlyMemory<byte> input,
+        CancellationToken inputStopToken,
+        CancellationToken executionStopToken)
+    {
+        try
+        {
+            await stream.WriteAsync(input, inputStopToken).ConfigureAwait(false);
+            return null;
+        }
+        catch (IOException exception) when (!executionStopToken.IsCancellationRequested)
+        {
+            // A tool rejecting stdin can still emit its actual failure on stderr.
+            return exception;
+        }
+        catch (Exception exception) when (inputStopToken.IsCancellationRequested &&
+            exception is OperationCanceledException or ObjectDisposedException or IOException)
+        {
+            return executionStopToken.IsCancellationRequested ? null
+                : new IOException("The process exited before standard input was delivered.", exception);
+        }
+        finally
+        {
+            // Closing stdin signals EOF without flushing a StreamWriter into a broken pipe.
+            stream.Close();
+        }
     }
 }
