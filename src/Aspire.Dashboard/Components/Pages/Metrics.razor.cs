@@ -36,6 +36,9 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
     private List<OtlpResource> _resources = default!;
     private List<SelectViewModel<ResourceTypeDetails>> _resourceViewModels = default!;
     private List<SelectViewModel<ResourceTypeDetails>>? _selectionResourceViewModels;
+
+    // Exposed for tests, which wait for telemetry resource updates that the page processes asynchronously.
+    internal IReadOnlyList<SelectViewModel<ResourceTypeDetails>>? SelectionResourceViewModels => _selectionResourceViewModels;
     private List<OtlpResource>? _aggregateResources;
     private Subscription? _resourcesSubscription;
     private Subscription? _metricsSubscription;
@@ -831,12 +834,28 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
         return ResourcesLayout?.AddSelectionToUrl(url) ?? url;
     }
 
-    private string? GetSelectedChartResourceName(MetricsPageState serializable) =>
-        serializable is { InstrumentName: not null, ResourceName: { } name } &&
-        _selectionResourceViewModels is { } selectionResources &&
-        selectionResources.Any(r => string.Equals(r.Name, name, StringComparisons.ResourceName))
-            ? name
-            : null;
+    private string? GetSelectedChartResourceName(MetricsPageState serializable)
+    {
+        if (serializable is not { InstrumentName: not null, ResourceName: { } name } ||
+            _selectionResourceViewModels is not { } selectionResources)
+        {
+            return null;
+        }
+
+        // A resource's display name changes when it gains a replica: the singleton "api" becomes the replica
+        // "api-<instance id>". The open chart's view model still has the old name, which is no longer part of the
+        // selection. When the state is the page's own, find the chart's resource by its telemetry key, which doesn't
+        // change, and use the selection entry's current name.
+        if (string.Equals(PageViewModel.SelectedResource.Name, name, StringComparisons.ResourceName) &&
+            PageViewModel.SelectedResource.Id is { ReplicaSetName: not null } id &&
+            selectionResources.FirstOrDefault(r => r.Id!.GetResourceKey() == id.GetResourceKey()) is { } current)
+        {
+            return current.Name;
+        }
+
+        // State restored from the session isn't the page's view model, so it's matched by name.
+        return selectionResources.Any(r => string.Equals(r.Name, name, StringComparisons.ResourceName)) ? name : null;
+    }
 
     private async Task OnShowRunningTotalChangedAsync(bool showRunningTotal)
     {

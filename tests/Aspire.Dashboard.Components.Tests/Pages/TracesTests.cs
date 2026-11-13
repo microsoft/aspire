@@ -344,7 +344,13 @@ public class TracesTests : DashboardTestContext
 
         var repository = Services.GetRequiredService<SqliteTelemetryRepository>();
         await AddTraceAsync(repository, "api", "trace-api");
-        cut.WaitForAssertion(() => Assert.Equal("api", page.Instance.PageViewModel.SelectedResource.Name));
+        // The page and the layout are notified by separate callbacks that can run in either order, so also wait for
+        // the layout's telemetry key that the grid queries.
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal("api", page.Instance.PageViewModel.SelectedResource.Name);
+            Assert.Equal(["api"], page.Instance.TracesViewModel.ResourceKeys?.Select(key => key.Name) ?? []);
+        });
         await AddTraceAsync(repository, "worker", "trace-worker");
 
         var result = await cut.InvokeAsync(() => grid.Instance.ItemsProvider!(new GridItemsProviderRequest<TraceSummary>

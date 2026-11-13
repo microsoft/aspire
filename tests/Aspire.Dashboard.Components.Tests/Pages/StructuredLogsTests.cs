@@ -438,8 +438,13 @@ public partial class StructuredLogsTests : DashboardTestContext
         await AddLogAsync(repository, "worker", SeverityNumber.Error);
         await AddLogAsync(repository, "api", SeverityNumber.Info);
 
-        // Telemetry from the selected resource scopes the page to it.
-        cut.WaitForAssertion(() => Assert.Equal("api", page.Instance.PageViewModel.SelectedResource.Name));
+        // Telemetry from the selected resource scopes the page to it. The page and the layout are notified by separate
+        // callbacks that can run in either order, so also wait for the layout's telemetry key that the grid queries.
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal("api", page.Instance.PageViewModel.SelectedResource.Name);
+            Assert.Equal(["api"], page.Instance.ViewModel.ResourceKeys?.Select(key => key.Name) ?? []);
+        });
 
         await AddLogAsync(repository, "worker", SeverityNumber.Error);
 

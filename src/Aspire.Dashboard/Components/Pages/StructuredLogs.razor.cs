@@ -566,6 +566,11 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
         ViewModel.ResourceKey = PageViewModel.SelectedResource.Id?.GetResourceKey();
         ViewModel.ResourceKeys = ResourcesLayout?.GetSelectionTelemetryKeys(SelectedResourceNames);
 
+        // Replace the previous page's subscription before awaiting the grid refresh below. Navigating from all
+        // logs leaves a read subscription for every resource, and an error arriving during the refresh would
+        // otherwise be marked as viewed although the new page doesn't show it.
+        UpdateSubscription();
+
         if (LogLevelText is not null && Enum.TryParse<LogLevel>(LogLevelText, ignoreCase: true, out var logLevel))
         {
             PageViewModel.SelectedLogLevel = _logLevels.SingleOrDefault(e => e.Id == logLevel) ?? _logLevels[0];
