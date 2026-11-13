@@ -1051,7 +1051,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.InvalidCommand, await result.InvokeAsync().DefaultTimeout());
         Assert.Equal(original, await File.ReadAllTextAsync(path));
         Assert.True(File.Exists(context.Copilot.GetMcpConfigPath(scope, context.Project)));
-        Assert.Equal(scope is AgentConfigurationScope.Global ? [CopilotAgentClient.ClientId] : [], hooks.SelectedClientIds);
+        Assert.Equal([CopilotAgentClient.ClientId], hooks.SelectedClientIds);
         Assert.Equal(string.Format(CultureInfo.CurrentCulture,
             AgentCommandStrings.McpServerContainerMustBeJsonObject, "mcp.servers", path), Assert.Single(interaction.DisplayedErrors));
     }
@@ -1070,6 +1070,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         var services = context.CreateServiceCollection(outputHelper, options =>
         {
             options.InteractionServiceFactory = _ => interaction;
+            options.TelemetryHookConfiguratorFactory = _ => new TestTelemetryHookConfigurator();
         });
         using var provider = services.BuildServiceProvider();
 

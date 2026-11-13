@@ -505,12 +505,9 @@ internal sealed class AgentInitCommand : BaseCommand
 
         if (!configureAspire && !playwright && !dotnetInspect && !configureMcp)
         {
-            // Nothing is installed, so scope is not prompted for. A global re-run still refreshes hooks
-            // for clients whose Aspire setup already exists.
-            if (scope is AgentConfigurationScope.Global)
-            {
-                await ConfigureGlobalTelemetryHooksAsync(selectedClients, [], workspaceRoot, cancellationToken);
-            }
+            // Nothing is installed, so scope is not prompted for. The re-run still refreshes hooks for
+            // clients whose Aspire setup already exists at the resolved scope.
+            await ConfigureTelemetryHooksForAspireSetupAsync(selectedClients, [], workspaceRoot, scope, cancellationToken);
 
             InteractionService.DisplaySubtleMessage(AgentCommandStrings.InitCommand_NoConfigurationSelected);
             return new(CliExitCodes.Success, selectedClients, []);
@@ -691,22 +688,23 @@ internal sealed class AgentInitCommand : BaseCommand
         }
 
         // --- Phase 6: Install agent telemetry hooks (default-on, parity with azure-skills) ---
-        // Global setup registers one user-level hook per selected client. Whether telemetry is actually
-        // transmitted stays gated by the single ASPIRE_CLI_TELEMETRY_OPTOUT opt-out, which both the hook
-        // scripts and the `aspire agent telemetry` command path re-check at runtime.
+        // Setup at either scope registers one user-level hook per selected client. Hooks are never written
+        // to project configuration because Copilot runs hooks from every source, including a repository's
+        // .claude/settings.json, and ignores Claude's `if` filter. A project-level hook would launch the
+        // CLI on every matching tool call, or twice alongside the user-level hook. Whether telemetry is
+        // actually transmitted stays gated by the single ASPIRE_CLI_TELEMETRY_OPTOUT opt-out, which both
+        // the hook scripts and the `aspire agent telemetry` command path re-check at runtime.
         // The hooks only report aspire@aspire-skills skills and Aspire MCP tool usage, so a client gets a
-        // hook only when this run registered that plugin or configured the Aspire MCP server for it, or
-        // either is already set up. The latter keeps re-runs that skip both choices refreshing the hook.
-        // Selecting the aspire skill choice is not enough: skill sources can disable the default source
-        // or replace its plugins.
-        if (scope is AgentConfigurationScope.Global)
-        {
-            await ConfigureGlobalTelemetryHooksAsync(
-                selectedClients,
-                GetAspireSkillsRegisteredClients(registrationResults, skillSources).Concat(mcpConfiguredClients).ToHashSet(),
-                workspaceRoot,
-                cancellationToken);
-        }
+        // hook only when this run registered that plugin or configured the Aspire MCP server for it at the
+        // requested scope, or either is already set up there. The latter keeps re-runs that skip both
+        // choices refreshing the hook. Selecting the aspire skill choice is not enough: skill sources can
+        // disable the default source or replace its plugins.
+        await ConfigureTelemetryHooksForAspireSetupAsync(
+            selectedClients,
+            GetAspireSkillsRegisteredClients(registrationResults, skillSources).Concat(mcpConfiguredClients).ToHashSet(),
+            workspaceRoot,
+            scope,
+            cancellationToken);
 
         if (hasErrors)
         {
@@ -727,10 +725,11 @@ internal sealed class AgentInitCommand : BaseCommand
         };
     }
 
-    private async Task ConfigureGlobalTelemetryHooksAsync(
+    private async Task ConfigureTelemetryHooksForAspireSetupAsync(
         IReadOnlyList<IAgentClient> selectedClients,
         ICollection<IAgentClient> aspireConfiguredClients,
         DirectoryInfo workspaceRoot,
+        AgentConfigurationScope scope,
         CancellationToken cancellationToken)
     {
         var telemetryHookClients = new List<IAgentClient>();
@@ -738,7 +737,7 @@ internal sealed class AgentInitCommand : BaseCommand
         {
             // The configurator owns hook eligibility; the guard only avoids reading config it would ignore.
             if (aspireConfiguredClients.Contains(client) ||
-                (client.SupportsTelemetryHooks && await HasExistingAspireSetupAsync(client, workspaceRoot, AgentConfigurationScope.Global, cancellationToken)))
+                (client.SupportsTelemetryHooks && await HasExistingAspireSetupAsync(client, workspaceRoot, scope, cancellationToken)))
             {
                 telemetryHookClients.Add(client);
             }
