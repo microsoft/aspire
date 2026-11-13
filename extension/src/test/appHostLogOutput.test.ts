@@ -2589,6 +2589,20 @@ suite('AppHost log output coordinator with reported console formatter options', 
             []);
     });
 
+    test('returns to the fallback parser when the AppHost stops reporting a format', () => {
+        const coordinator = new AppHostLogOutputCoordinator();
+        assert.ok(coordinator.handleBackchannelEntry(createEntry({
+            message: 'Earlier record.',
+            consoleFormat: { timestampFormat: 'HH:mm:ss ', singleLine: true, includeScopes: false }
+        })));
+
+        // A switch to a non-simple formatter reports null; the SingleLine grammar must not linger.
+        assert.ok(coordinator.handleBackchannelEntry(createEntry({ sequenceNumber: 2, logLevel: 'Warning', message: 'Port is busy.', consoleFormat: null })));
+        assert.deepStrictEqual(
+            renderConsole(coordinator, '2026-08-10 17:40:09 warn: Example.Category[7]\n      Port is busy.\n', 'stdout'),
+            []);
+    });
+
     test('deduplicates SingleLine output', () => {
         assertDeduplicatedInBothOrders(
             { timestampFormat: 'HH:mm:ss ', singleLine: true, includeScopes: false },

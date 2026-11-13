@@ -152,6 +152,10 @@ export class AppHostLogOutputCoordinator {
 
         if (entry.consoleFormat) {
             this.useConsoleFormat(entry.consoleFormat);
+        } else if (entry.consoleFormat === null) {
+            // The AppHost switched away from the simple formatter (JSON, systemd or custom), so its options no longer apply.
+            this._consoleGrammar = fallbackConsoleLoggerGrammar;
+            this._consoleFormatKey = undefined;
         }
 
         const record = createBackchannelRecord(entry);
