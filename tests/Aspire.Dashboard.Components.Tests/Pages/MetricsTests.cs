@@ -377,6 +377,170 @@ public partial class MetricsTests : DashboardTestContext
     }
 
     [Fact]
+    public async Task ResourcesLayout_MultiSelectionInstrumentChart_ChangingViewKeepsActiveResource()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        MetricsSetupHelpers.SetupMetricsPage(this);
+        var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("api"), ModelTestHelpers.CreateResource("worker")],
+            resourceChannelProvider: () => channel));
+        Render<FluentToastProvider>();
+
+        var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        foreach (var name in new[] { "api", "worker" })
+        {
+            // Without an instance ID, the telemetry resource's name matches the app model resource's name.
+            var resource = CreateResource(name: name);
+            resource.Attributes.Remove(resource.Attributes.Single(attribute => attribute.Key == OtlpResource.SERVICE_INSTANCE_ID));
+            await telemetryRepository.AddMetricsAsync(new AddContext(), new RepeatedField<ResourceMetrics>
+            {
+                new ResourceMetrics
+                {
+                    Resource = resource,
+                    ScopeMetrics =
+                    {
+                        new ScopeMetrics
+                        {
+                            Scope = CreateScope(name: "test-meter"),
+                            Metrics = { CreateSumMetric(metricName: "test-instrument", startTime: s_testTime.AddMinutes(1)) }
+                        }
+                    }
+                }
+            });
+        }
+
+        // With api and worker selected, open api's instrument chart, as clicking its card in the aggregate list does.
+        var navigationManager = Services.GetRequiredService<NavigationManager>();
+        navigationManager.NavigateTo(DashboardUrls.MetricsUrl(resource: "api", meter: "test-meter", instrument: "test-instrument", duration: 5, view: MetricViewKind.Graph.ToString())
+            + "&resource=api&resource=worker");
+
+        var cut = Render<ResourcesLayout>(builder =>
+        {
+            builder.AddCascadingValue(viewport);
+            builder.Add(layout => layout.Body, bodyBuilder =>
+            {
+                bodyBuilder.OpenComponent<Metrics>(0);
+                bodyBuilder.AddAttribute(1, nameof(Metrics.ResourceName), "api");
+                bodyBuilder.CloseComponent();
+            });
+        });
+
+        var page = cut.FindComponent<Metrics>();
+        cut.WaitForAssertion(() =>
+        {
+            Assert.True(cut.Instance.IsMultiSelection);
+            Assert.Equal("api", page.Instance.PageViewModel.SelectedResource.Name);
+            Assert.Equal("test-instrument", page.Instance.PageViewModel.SelectedInstrument?.Name);
+        });
+
+        var chart = cut.FindComponent<ChartContainer>();
+        await cut.InvokeAsync(() => chart.Instance.OnViewChangedAsync(MetricViewKind.Table));
+
+        // The chart stays open for api, and the selection is kept.
+        var uri = new Uri(navigationManager.Uri);
+        Assert.Equal("/metrics/resource/api", uri.AbsolutePath);
+        var query = HttpUtility.ParseQueryString(uri.Query);
+        Assert.Equal("test-instrument", query["instrument"]);
+        Assert.Equal(MetricViewKind.Table.ToString(), query["view"]);
+        Assert.Equal(["api", "worker"], query.GetValues("resource") ?? []);
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal("api", page.Instance.PageViewModel.SelectedResource.Name);
+            Assert.Equal("test-instrument", page.Instance.PageViewModel.SelectedInstrument?.Name);
+            Assert.Equal(MetricViewKind.Table, page.Instance.PageViewModel.SelectedViewKind);
+        });
+    }
+
+    [Fact]
+    public async Task ResourcesLayout_MultiSelectionInstrumentChart_ReplicaArrivesWhileOpen_ChangingViewKeepsActiveResource()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        MetricsSetupHelpers.SetupMetricsPage(this);
+        var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources:
+            [
+                ModelTestHelpers.CreateResource("api-a", displayName: "api"),
+                ModelTestHelpers.CreateResource("api-b", displayName: "api"),
+                ModelTestHelpers.CreateResource("worker")
+            ],
+            resourceChannelProvider: () => channel));
+        Render<FluentToastProvider>();
+
+        var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
+
+        // Only the first replica has sent telemetry, so the page lists it as the singleton "api".
+        await AddMetricAsync(telemetryRepository, CreateResource(name: "api", instanceId: "a"));
+        var worker = CreateResource(name: "worker");
+        worker.Attributes.Remove(worker.Attributes.Single(attribute => attribute.Key == OtlpResource.SERVICE_INSTANCE_ID));
+        await AddMetricAsync(telemetryRepository, worker);
+
+        var navigationManager = Services.GetRequiredService<NavigationManager>();
+        navigationManager.NavigateTo(DashboardUrls.MetricsUrl(resource: "api", meter: "test-meter", instrument: "test-instrument", duration: 5, view: MetricViewKind.Graph.ToString())
+            + "&resource=api-a&resource=worker");
+
+        var cut = Render<ResourcesLayout>(builder =>
+        {
+            builder.AddCascadingValue(viewport);
+            builder.Add(layout => layout.Body, bodyBuilder =>
+            {
+                bodyBuilder.OpenComponent<Metrics>(0);
+                bodyBuilder.AddAttribute(1, nameof(Metrics.ResourceName), "api");
+                bodyBuilder.CloseComponent();
+            });
+        });
+
+        var page = cut.FindComponent<Metrics>();
+        cut.WaitForAssertion(() =>
+        {
+            Assert.True(cut.Instance.IsMultiSelection);
+            Assert.Equal("api", page.Instance.PageViewModel.SelectedResource.Name);
+            Assert.Equal("test-instrument", page.Instance.PageViewModel.SelectedInstrument?.Name);
+        });
+
+        // The second replica's telemetry renames the open chart's resource from "api" to "api-a".
+        await AddMetricAsync(telemetryRepository, CreateResource(name: "api", instanceId: "b"));
+        cut.WaitForAssertion(() => Assert.Equal(["api-a", "worker"], page.Instance.SelectionResourceViewModels?.Select(r => r.Name) ?? []));
+
+        // Build the URL a duration or view change navigates to. The page is rendered with a fixed route resource
+        // here, without a router to update it, so the test checks the URL rather than navigating to it.
+        var url = await cut.InvokeAsync(() =>
+        {
+            var state = page.Instance.ConvertViewModelToSerializable();
+            state.ViewKind = MetricViewKind.Table.ToString();
+            return page.Instance.GetUrlFromSerializableViewModel(state);
+        });
+
+        // The chart stays open for the same replica, under its current name.
+        var uri = new Uri(navigationManager.ToAbsoluteUri(url).ToString());
+        Assert.Equal("/metrics/resource/api-a", uri.AbsolutePath);
+        var query = HttpUtility.ParseQueryString(uri.Query);
+        Assert.Equal("test-instrument", query["instrument"]);
+        Assert.Equal(MetricViewKind.Table.ToString(), query["view"]);
+        Assert.Equal(["api-a", "worker"], query.GetValues("resource") ?? []);
+
+        static Task AddMetricAsync(SqliteTelemetryRepository repository, OpenTelemetry.Proto.Resource.V1.Resource resource)
+        {
+            return repository.AddMetricsAsync(new AddContext(), new RepeatedField<ResourceMetrics>
+            {
+                new ResourceMetrics
+                {
+                    Resource = resource,
+                    ScopeMetrics =
+                    {
+                        new ScopeMetrics
+                        {
+                            Scope = CreateScope(name: "test-meter"),
+                            Metrics = { CreateSumMetric(metricName: "test-instrument", startTime: s_testTime.AddMinutes(1)) }
+                        }
+                    }
+                }
+            });
+        }
+    }
+
+    [Fact]
     public async Task PinButton_PinsAndUnpinsForEachResourceOfTheSelection()
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);

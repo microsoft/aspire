@@ -142,7 +142,16 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
 
     private async ValueTask<GridItemsProviderResult<LogSummary>> GetData(GridItemsProviderRequest<LogSummary> request)
     {
-        ViewModel.ResourceKeys = ResourcesLayout?.GetSelectionTelemetryKeys(SelectedResourceNames);
+        // While the page is being replaced, the resource list's selection is the destination page's (see
+        // IsLeavingPage). Keep querying the keys the page was showing rather than the destination's.
+        if (!IsLeavingPage)
+        {
+            ViewModel.ResourceKeys = GetSelectionTelemetryKeys();
+        }
+
+        // The subscription follows the keys queried here (see UpdateSubscription). The resource list can map new
+        // telemetry before it raises ResourcesChanged.
+        UpdateSubscription();
         ViewModel.StartIndex = request.StartIndex;
         ViewModel.Count = request.Count is > 0 ? request.Count.Value : DashboardUIHelpers.DefaultDataGridResultCount;
 
@@ -175,14 +184,18 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
         _totalItemsCount = logs.TotalItemCount;
         _totalItemsFooter?.UpdateDisplayedCount(_totalItemsCount, _displayedItemCount);
 
-        if (ViewModel.ResourceKeys is { } resourceKeys)
+        if (IsLeavingPage)
+        {
+            // The page is no longer the one being viewed, so it doesn't mark any errors as viewed.
+        }
+        else if (ViewModel.ResourceKeys is { } resourceKeys)
         {
             foreach (var resourceKey in resourceKeys)
             {
                 TelemetryRepository.MarkViewedErrorLogs(resourceKey);
             }
         }
-        else
+        else if (!IsRouteResourceUnresolved)
         {
             TelemetryRepository.MarkViewedErrorLogs(ViewModel.ResourceKey);
         }
@@ -246,12 +259,42 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
         {
             layout.ResourcesChanged += OnLayoutResourcesChanged;
         }
-        _resourcesSubscription = TelemetryRepository.OnNewResources(() => InvokeAsync(() =>
+        _resourcesSubscription = TelemetryRepository.OnNewResources(() => InvokeAsync(async () =>
         {
             UpdateResources();
+            await ResolveRouteResourceAsync();
             StateHasChanged();
         }));
     }
+
+    /// <summary>
+    /// Resolves the route's resource once its telemetry is known.
+    /// </summary>
+    /// <remarks>
+    /// A resource's page can be opened before the resource sends telemetry. The route then resolves to "All", and,
+    /// without resolving it again, the page would keep listing every resource's logs under the selected resource
+    /// and its subscription would mark every resource's errors as viewed.
+    /// </remarks>
+    private async Task ResolveRouteResourceAsync()
+    {
+        if (!IsRouteResourceUnresolved ||
+            _resourceViewModels.GetResource(Logger, ResourceName, canSelectGrouping: true, _allResource) is not { } resource ||
+            resource == _allResource)
+        {
+            return;
+        }
+
+        PageViewModel.SelectedResource = resource;
+        ViewModel.ResourceKey = resource.Id?.GetResourceKey();
+        ViewModel.ResourceKeys = GetSelectionTelemetryKeys();
+        UpdateSubscription();
+        await _dataGrid.SafeRefreshDataAsync();
+    }
+
+    /// <summary>
+    /// Gets whether the route names a resource that the page couldn't resolve yet, for example because it hasn't sent telemetry.
+    /// </summary>
+    private bool IsRouteResourceUnresolved => ResourceName is not null && PageViewModel.SelectedResource == _allResource;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -287,17 +330,46 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
 
     private void OnLayoutResourcesChanged()
     {
-        if (ResourcesLayout?.GetSelectionTelemetryKeys(SelectedResourceNames) is not { } resourceKeys ||
+        if (IsLeavingPage)
+        {
+            // The resource list raises ResourcesChanged on a tab change, before this page is replaced. Its selection
+            // is then the destination page's, for example metrics/resource/worker, and following it would subscribe
+            // to worker's logs and mark their errors as viewed without showing them.
+            UpdateSubscription();
+            return;
+        }
+
+        if (GetSelectionTelemetryKeys() is not { } resourceKeys ||
             ViewModel.ResourceKeys is { } current && current.SequenceEqual(resourceKeys))
         {
             return;
         }
 
-        // The layout can finish loading its resource snapshot after the grid's first query.
+        // The layout can finish loading its resource snapshot after the grid's first query, or change its selection
+        // before this page receives the new URL's parameters.
         ViewModel.ResourceKeys = resourceKeys;
+        UpdateSubscription();
         ViewModel.ClearData();
         _ = InvokeAsync(_dataGrid.SafeRefreshDataAsync);
     }
+
+    /// <summary>
+    /// Gets the telemetry keys of the resources selected in the resource list, or <see langword="null"/> without it.
+    /// </summary>
+    /// <remarks>
+    /// The resource list's selection is used rather than <see cref="SelectedResourceNames"/>. Both come from the URL's
+    /// <c>resource</c> query, but on navigation the resource list updates its selection and raises
+    /// <see cref="ResourcesLayout.ResourcesChanged"/> before the page receives the new parameters. With the page's
+    /// stale names, the handler would keep the previous selection's read subscription during the navigation, and its
+    /// resource's new errors would be marked as viewed although the page is moving away from it.
+    /// </remarks>
+    private IReadOnlyList<ResourceKey>? GetSelectionTelemetryKeys() =>
+        ResourcesLayout is { } layout ? layout.GetSelectionTelemetryKeys(layout.SelectedResourceNames) : null;
+
+    /// <summary>
+    /// Gets whether the resource list has moved to another tab, so this page is about to be replaced.
+    /// </summary>
+    private bool IsLeavingPage => ResourcesLayout is { CurrentTab: not ResourceTab.StructuredLogs };
 
     private Task HandleSelectedResourceChangedAsync()
     {
@@ -313,11 +385,43 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
 
     private void UpdateSubscription()
     {
+        if (IsLeavingPage)
+        {
+            // The page is about to be replaced, so it doesn't show any resource's logs. Without a subscription, no
+            // errors are marked as viewed and the departing grid isn't refreshed. GetData can still run until the page
+            // is disposed, so this check is here rather than only in OnLayoutResourcesChanged.
+            _logsSubscription?.Dispose();
+            _logsSubscription = null;
+            return;
+        }
+
+        // A read subscription marks a resource's new errors as viewed when they arrive, and one without a resource key
+        // does that for every resource. It must only cover resources the grid shows, or other resources lose their
+        // unread counts.
+        var (resourceKey, subscriptionType) = ViewModel.ResourceKeys switch
+        {
+            // The resource list's keys are what the grid queries. A subscription has a single key, so it can only be a
+            // read subscription for a single resource. With several resources, or none with telemetry yet, it's a
+            // subscription for every resource that only refreshes the grid. GetData still marks the errors of the
+            // resources it shows as viewed on each refresh.
+            //
+            // The page's own resource can't be used here: it's resolved from the page's telemetry resources, which
+            // can disagree with the resource list. For example, the list doesn't map names that several telemetry
+            // resources share, such as ("api-a", "1") and ("api", "a-1"), while the page picks the first match.
+            [var key] => (key, SubscriptionType.Read),
+            { } => ((ResourceKey?)null, SubscriptionType.Other),
+
+            // Without the resource list, the page shows its selected resource, or every resource. While the route's
+            // resource is unresolved, it isn't showing every resource, so it must not hide other resources' new errors.
+            // Telemetry from several resources can arrive in one batch, before the route resolves.
+            null => (PageViewModel.SelectedResource.Id?.GetResourceKey(), IsRouteResourceUnresolved ? SubscriptionType.Other : SubscriptionType.Read)
+        };
+
         // Subscribe to updates.
-        if (_logsSubscription is null || _logsSubscription.ResourceKey != PageViewModel.SelectedResource.Id?.GetResourceKey())
+        if (_logsSubscription is null || _logsSubscription.ResourceKey != resourceKey || _logsSubscription.SubscriptionType != subscriptionType)
         {
             _logsSubscription?.Dispose();
-            _logsSubscription = TelemetryRepository.OnNewLogs(PageViewModel.SelectedResource.Id?.GetResourceKey(), SubscriptionType.Read, async () =>
+            _logsSubscription = TelemetryRepository.OnNewLogs(resourceKey, subscriptionType, async () =>
             {
                 ViewModel.ClearData();
                 await InvokeAsync(_dataGrid.SafeRefreshDataAsync);
@@ -527,7 +631,12 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
     {
         viewModel.SelectedResource = _resourceViewModels.GetResource(Logger, ResourceName, canSelectGrouping: true, _allResource);
         ViewModel.ResourceKey = PageViewModel.SelectedResource.Id?.GetResourceKey();
-        ViewModel.ResourceKeys = ResourcesLayout?.GetSelectionTelemetryKeys(SelectedResourceNames);
+        ViewModel.ResourceKeys = GetSelectionTelemetryKeys();
+
+        // Replace the previous page's subscription before awaiting the grid refresh below. Navigating from all
+        // logs leaves a read subscription for every resource, and an error arriving during the refresh would
+        // otherwise be marked as viewed although the new page doesn't show it.
+        UpdateSubscription();
 
         if (LogLevelText is not null && Enum.TryParse<LogLevel>(LogLevelText, ignoreCase: true, out var logLevel))
         {
@@ -605,7 +714,7 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
     private Task ClearStructureLogs(ResourceKey? key)
     {
         DataSource.EnsureWritable();
-        if (ResourcesLayout?.GetSelectionTelemetryKeys(SelectedResourceNames) is { } keys)
+        if (GetSelectionTelemetryKeys() is { } keys)
         {
             return Task.WhenAll(keys.Select(resourceKey => TelemetryRepositoryWriter.ClearStructuredLogsAsync(resourceKey)));
         }
