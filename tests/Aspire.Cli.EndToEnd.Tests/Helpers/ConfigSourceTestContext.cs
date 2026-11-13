@@ -154,7 +154,7 @@ internal sealed class ConfigSourceTestContext
         await _auto.EnterAsync();
         if (!useOption)
         {
-            var consentPrompt = new CellPatternSearcher().Find("Use configuration from this source? [Y/n]:");
+            var consentPrompt = new CellPatternSearcher().Find("Create app using configuration from this source? [Y/n]:");
             await _auto.WaitUntilAsync(snapshot => consentPrompt.Search(snapshot).Count > 0,
                 timeout: TimeSpan.FromMinutes(2), description: "waiting for configuration source consent");
             // Confirmation consumes a single key; an extra Enter could reach the next prompt.
@@ -195,12 +195,13 @@ internal sealed class ConfigSourceTestContext
 
     public async Task AssertNonInteractiveConsentRequiredAsync()
     {
+        // Wrapped error text can contain ANSI style resets between words.
         await _auto.RunCommandAsync(
-            $"{NewCommand} --non-interactive > \"$ASPIRE_E2E_WORKSPACE/consent.log\" 2>&1; " +
+            $"env -u ASPIRE_ANSI_PASS_THRU NO_COLOR=1 {NewCommand} --non-interactive > \"$ASPIRE_E2E_WORKSPACE/consent.log\" 2>&1; " +
             $"result=$?; cat \"$ASPIRE_E2E_WORKSPACE/consent.log\"; test \"$result\" -eq {CliExitCodes.InvalidCommand}",
             _counter, timeout: TimeSpan.FromMinutes(3));
         var consentOutput = await File.ReadAllTextAsync(Path.Combine(_root, "consent.log"), _cancellationToken);
-        Assert.Contains("Specify --use-config-source to accept it or --use-config-source false",
+        Assert.Contains("Specify --use-config-source to use it, or --use-config-source false",
             Regex.Replace(consentOutput, @"\s+", " "));
         Assert.False(Directory.Exists(Path.Combine(_root, "SourceApp")));
         await AssertSourceNotAcquiredAsync();
@@ -355,7 +356,7 @@ internal sealed class ConfigSourceTestContext
         await _auto.TypeAsync("aspire update --yes");
         await _auto.EnterAsync();
         var candidate = new CellPatternSearcher().Find("Git source:");
-        var consentPrompt = new CellPatternSearcher().Find("Use configuration from this source? [Y/n]:");
+        var consentPrompt = new CellPatternSearcher().Find("Update app to use configuration from this source? [Y/n]:");
         await _auto.WaitUntilAsync(snapshot => candidate.Search(snapshot).Count > 0 && consentPrompt.Search(snapshot).Count > 0,
             timeout: TimeSpan.FromMinutes(2), description: "waiting for brownfield configuration source consent");
         await _auto.TypeAsync("y");
