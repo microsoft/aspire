@@ -283,7 +283,7 @@
     <value>Agent assets from configured skill sources</value>
   </data>
   <data name="InitCommand_KeepSkillCopiesOptionDescription" xml:space="preserve">
-    <value>Keep copied Aspire skill folders when the Aspire skills plugin replaces them at the selected scope.     Omit to be asked before they are deleted.</value>
+    <value>Keep copied Aspire skill folders when the Aspire skills plugin replaces them at the selected scope. Omit to be asked before they are deleted.</value>
   </data>
   <data name="InitCommand_SkillCopiesFound" xml:space="preserve">
     <value>Found copied Aspire skills that the Aspire skills plugin now provides.</value>

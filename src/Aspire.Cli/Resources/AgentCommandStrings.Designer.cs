@@ -466,7 +466,7 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Keep copied Aspire skill folders when the Aspire skills plugin replaces them at the selected scope.         Omit to be asked before they are deleted..
+        ///   Looks up a localized string similar to Keep copied Aspire skill folders when the Aspire skills plugin replaces them at the selected scope. Omit to be asked before they are deleted..
         /// </summary>
         internal static string InitCommand_KeepSkillCopiesOptionDescription {
             get {

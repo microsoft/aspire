@@ -200,8 +200,8 @@
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_KeepSkillCopiesOptionDescription">
-        <source>Keep copied Aspire skill folders when the Aspire skills plugin replaces them at the selected scope.     Omit to be asked before they are deleted.</source>
-        <target state="new">Keep copied Aspire skill folders when the Aspire skills plugin replaces them at the selected scope.     Omit to be asked before they are deleted.</target>
+        <source>Keep copied Aspire skill folders when the Aspire skills plugin replaces them at the selected scope. Omit to be asked before they are deleted.</source>
+        <target state="new">Keep copied Aspire skill folders when the Aspire skills plugin replaces them at the selected scope. Omit to be asked before they are deleted.</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_KeptSkillCopies">
