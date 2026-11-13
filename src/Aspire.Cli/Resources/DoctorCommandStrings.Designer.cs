@@ -106,7 +106,7 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Delete these files, then run &apos;aspire agent init --skills aspire&apos;..
+        ///   Looks up a localized string similar to Run &apos;aspire agent init&apos; to configure skill sources and remove these copies..
         /// </summary>
         internal static string AspireSkillsFix {
             get {
@@ -115,11 +115,11 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Could not inspect local Aspire skills.
+        ///   Looks up a localized string similar to Found static copies of Aspire skills..
         /// </summary>
-        internal static string AspireSkillsInspectionFailedMessage {
+        internal static string AspireSkillsMessage {
             get {
-                return ResourceManager.GetString("AspireSkillsInspectionFailedMessage", resourceCulture);
+                return ResourceManager.GetString("AspireSkillsMessage", resourceCulture);
             }
         }
         
@@ -1020,15 +1020,6 @@ namespace Aspire.Cli.Resources {
         internal static string EnvironmentCheckTimedOutMessageFormat {
             get {
                 return ResourceManager.GetString("EnvironmentCheckTimedOutMessageFormat", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Files:.
-        /// </summary>
-        internal static string FilesHeader {
-            get {
-                return ResourceManager.GetString("FilesHeader", resourceCulture);
             }
         }
         

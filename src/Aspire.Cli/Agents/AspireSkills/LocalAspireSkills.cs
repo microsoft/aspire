@@ -1,9 +1,9 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Globalization;
-using System.Text.Json;
-using Aspire.Cli.Resources;
+using Aspire.Cli.Agents.ClaudeCode;
+using Aspire.Cli.Agents.Copilot;
+using Aspire.Cli.Agents.OpenCode;
 
 namespace Aspire.Cli.Agents.AspireSkills;
 
@@ -22,80 +22,54 @@ internal static class LocalAspireSkills
         "aspireify"
     ];
 
-    internal static (IReadOnlyList<string> Files, IReadOnlyList<string> Errors, bool HasFileErrors) Find(
+    private static readonly string[] s_universalSkillOwners = [CopilotAgentClient.ClientId, OpenCodeAgentClient.ClientId];
+
+    // Agent-specific roots such as CLAUDE_CONFIG_DIR or OpenCode skills.paths never received copies.
+    private static readonly (string Directory, string[] Owners)[] s_projectSkillDirectories =
+    [
+        (AgentPath.UniversalSkillsDirectory, s_universalSkillOwners),
+        (Path.Combine(".claude", "skills"), [ClaudeCodeAgentClient.ClientId]),
+        (Path.Combine(".github", "skills"), [CopilotAgentClient.ClientId]),
+        (Path.Combine(".opencode", "skill"), [OpenCodeAgentClient.ClientId])
+    ];
+
+    internal static IReadOnlyList<(string Directory, AgentConfigurationScope Scope, string[] Owners)> Find(
         DirectoryInfo workingDirectory,
         DirectoryInfo workspaceRoot,
-        IEnumerable<IAgentClient> agents,
+        DirectoryInfo homeDirectory,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        // Clients load project skills along the active ancestor chain, not just at its root.
-        // Clamping to the workspace excludes sibling projects and unrelated current directories.
-        var projectDirectories = AgentPath.ProjectDirectories(workingDirectory, workspaceRoot).ToArray();
-        var files = new Dictionary<string, string>(StringComparers.FileSystemPath);
-        var errors = new HashSet<string>(StringComparer.Ordinal);
-        var inspected = new HashSet<string>(StringComparers.FileSystemPath);
-        var hasFileErrors = false;
-        foreach (var agent in agents)
+        // Clients load project skills along the active ancestor chain, so every directory from the
+        // working directory up to the workspace root is checked. Older CLIs only copied user-level
+        // skills to the standard location.
+        var candidates = AgentPath.ProjectDirectories(workingDirectory, workspaceRoot)
+            .SelectMany(root => s_projectSkillDirectories.Select(location =>
+                (Path: Path.Combine(root.FullName, location.Directory), Scope: AgentConfigurationScope.Project, location.Owners)))
+            .Append((Path: Path.Combine(homeDirectory.FullName, AgentPath.UniversalSkillsDirectory), Scope: AgentConfigurationScope.Global, Owners: s_universalSkillOwners));
+
+        // A workspace rooted at the home directory shares the user-level location, so a copy there
+        // is reported under both scopes and removal at either scope covers it.
+        var found = new List<(string Directory, AgentConfigurationScope Scope, string[] Owners)>();
+        foreach (var (skillsDirectory, scope, owners) in candidates)
         {
-            foreach (var scope in new[] { AgentConfigurationScope.Project, AgentConfigurationScope.Global })
+            foreach (var name in s_legacySkillNames)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                string[] directories;
-                try
-                {
-                    directories = scope is AgentConfigurationScope.Project
-                        ? projectDirectories.SelectMany(directory => agent.GetLocalSkillDirectories(scope, directory)).ToArray()
-                        : agent.GetLocalSkillDirectories(scope, workspaceRoot).ToArray();
-                }
-                catch (Exception ex) when (ex is JsonException or InvalidOperationException or ArgumentNullException)
-                {
-                    // Invalid skill settings block plugin setup, not independently selected MCP.
-                    errors.Add(string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.LocalSkills_ReadFailed, agent.DisplayName, ex.Message));
-                    continue;
-                }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
-                {
-                    hasFileErrors = true;
-                    errors.Add(string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.LocalSkills_ReadFailed, agent.DisplayName, ex.Message));
-                    continue;
-                }
 
-                foreach (var directory in directories)
+                // Older CLIs left no ownership stamp, so the directory name is the only signal.
+                var path = Path.GetFullPath(Path.Combine(skillsDirectory, name));
+                if (Directory.Exists(path))
                 {
-                    foreach (var name in s_legacySkillNames)
-                    {
-                        cancellationToken.ThrowIfCancellationRequested();
-                        var path = Path.Combine(directory, name, "SKILL.md");
-                        if (!inspected.Add(path))
-                        {
-                            continue;
-                        }
-
-                        try
-                        {
-                            var fullPath = Path.GetFullPath(path);
-                            // Older CLI versions copied Markdown verbatim, without an ownership
-                            // stamp or installed version. Names identify possible collisions only;
-                            // even byte-identical direct installs cannot be classified as obsolete.
-                            using var stream = File.OpenRead(fullPath);
-                            files.TryAdd(fullPath, path);
-                        }
-                        catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
-                        {
-                            // Missing entry points are expected; unreadable ones remain errors.
-                        }
-                        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
-                        {
-                            hasFileErrors = true;
-                            errors.Add(string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.LocalSkills_ReadFailed, path, ex.Message));
-                        }
-                    }
+                    found.Add((path, scope, owners));
                 }
             }
         }
 
-        return (files.Values.Order(StringComparers.FileSystemPath).ToArray(), errors.Order(StringComparer.Ordinal).ToArray(), hasFileErrors);
+        return found
+            .OrderBy(entry => entry.Directory, StringComparers.FileSystemPath)
+            .ThenBy(entry => entry.Scope)
+            .ToArray();
     }
 }

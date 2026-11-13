@@ -172,7 +172,8 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
 
     /// <summary>
     /// Tests that aspire agent init with a .vscode folder shows client, skill, and scope selection
-    /// prompts, and that accepting the defaults registers the remote Aspire plugin.
+    /// prompts, and that accepting the defaults registers the remote Aspire plugin and removes copied
+    /// Aspire skills.
     /// </summary>
     [Fact]
     public async Task AgentInitCommand_DefaultSelection_RegistersRemotePlugin()
@@ -203,11 +204,6 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         Directory.CreateDirectory(Path.GetDirectoryName(localSkillPath)!);
         const string localSkillContent = "My customized Aspire instructions.";
         await File.WriteAllTextAsync(localSkillPath, localSkillContent);
-        string[] expectedWarnings =
-        [
-            "Local Aspire skill files may override plugin skills",
-            ".agents/skills/aspire/SKILL.md"
-        ];
 
         // Accept agents before choosing independent assets and project scope.
         await auto.TypeAsync("aspire agent init");
@@ -222,27 +218,22 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("Which skills and tools do you want to configure?", timeout: TimeSpan.FromSeconds(30));
         await auto.WaitUntilTextAsync("aspire — Agent assets from configured skill sources", timeout: TimeSpan.FromSeconds(30));
-        var skillsScreen = auto.CreateSnapshot().GetScreenText();
-        foreach (var warning in expectedWarnings)
-        {
-            Assert.Contains(warning, skillsScreen);
-            Assert.True(skillsScreen.IndexOf(warning, StringComparison.Ordinal) <
-                skillsScreen.IndexOf("Which skills and tools do you want to configure?", StringComparison.Ordinal));
-        }
         await auto.EnterAsync();
         await auto.WaitUntilAsync(
             s => s.ContainsText("Configure the Aspire MCP server for selected agent environments?"),
             timeout: TimeSpan.FromSeconds(30), description: "MCP server confirmation prompt");
-        var mcpScreen = auto.CreateSnapshot().GetScreenText();
-        foreach (var warning in expectedWarnings)
-        {
-            Assert.Contains(warning, mcpScreen);
-        }
         // MCP configuration is strictly opt-in and defaults to No, so accepting the default
         // here leaves MCP unconfigured.
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("Where should skills and tools be installed?", timeout: TimeSpan.FromSeconds(30));
         await auto.EnterAsync();
+        // Deleting copied skills is opt-in and the prompt defaults to No, so answer it explicitly.
+        // The [y/N] prompt accepts a single key, so a trailing Enter would reach bash as a blank
+        // command and desync the sequence counter.
+        await auto.WaitUntilTextAsync("Delete this copied skill folder?", timeout: TimeSpan.FromSeconds(30));
+        await auto.WaitAsync(500);
+        await auto.TypeAsync("y");
+        await auto.WaitUntilTextAsync("Removed copied Aspire skills in", timeout: TimeSpan.FromSeconds(30));
         await auto.WaitUntilTextAsync("configuration complete", timeout: TimeSpan.FromSeconds(30));
         await auto.WaitForSuccessPromptAsync(counter);
 
@@ -252,9 +243,7 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         await auto.RunCommandAsync(
             """jq -e '.enabledPlugins["aspire@aspire-skills"] == true and .extraKnownMarketplaces["aspire-skills"].source.repo == "microsoft/aspire-skills"' "$ASPIRE_E2E_WORKSPACE/.github/copilot/settings.json" """,
             counter);
-        Assert.Equal(localSkillContent, await File.ReadAllTextAsync(localSkillPath));
-        Assert.Equal([localSkillPath], Directory.GetFiles(
-            Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills"), "*", SearchOption.AllDirectories));
+        Assert.False(Directory.Exists(Path.GetDirectoryName(localSkillPath)));
 
         // Verify MCP was not configured, since it was never selected in the prompt above.
         var vscodeMcpConfigPath = Path.Combine(vscodePath, "mcp.json");
