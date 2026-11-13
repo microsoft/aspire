@@ -24,6 +24,7 @@ import { isE2eBridgeEnabled } from '../testing/e2eStateFileBridge';
 import { registerInstrumentedCommand } from './instrumentedCommand';
 import { AppHostCommandTarget, getAppHostArgs } from '../utils/appHostArgs';
 import { getCliPathTargetForUri } from '../utils/cliPathVariables';
+import type { AppHostDiscoveryService } from '../utils/appHostDiscovery';
 
 interface CommandInvocation {
   readonly target: CliPathResolutionTarget;
@@ -45,6 +46,7 @@ const cliCheckDeferredCommands = new Set([
 export function registerCliCommands(
   terminalProvider: AspireTerminalProvider,
   editorCommandProvider: AspireEditorCommandProvider,
+  appHostDiscoveryService: AppHostDiscoveryService,
   configInfoProvider: ConfigInfoProvider = new ConfigInfoProvider(terminalProvider),
 ): vscode.Disposable[] {
   const cliAddCommandRegistration = vscode.commands.registerCommand('aspire-vscode.add', () => tryExecuteCommand('aspire-vscode.add', terminalProvider, (tp, invocation, cliPath) => addCommand(tp, editorCommandProvider, invocation.appHost ?? {}, invocation.target, cliPath), () => selectAppHostCommandInvocation(editorCommandProvider)));
@@ -65,7 +67,7 @@ export function registerCliCommands(
       (tp, invocation, resolvedCliPath) => updateSelfCommand(tp, invocation.target, resolvedCliPath || undefined),
       async () => ({ target, cliPath })));
   const openTerminalCommandRegistration = vscode.commands.registerCommand('aspire-vscode.openTerminal', () => tryExecuteCommand('aspire-vscode.openTerminal', terminalProvider, (tp, invocation, cliPath) => openTerminalCommand(tp, invocation.target, cliPath), selectCommandInvocation));
-  const configureLaunchJsonCommandRegistration = vscode.commands.registerCommand('aspire-vscode.configureLaunchJson', () => tryExecuteCommand('aspire-vscode.configureLaunchJson', terminalProvider, configureLaunchJsonCommand));
+  const configureLaunchJsonCommandRegistration = vscode.commands.registerCommand('aspire-vscode.configureLaunchJson', () => tryExecuteCommand('aspire-vscode.configureLaunchJson', terminalProvider, () => configureLaunchJsonCommand(appHostDiscoveryService)));
   const settingsCommandRegistration = vscode.commands.registerCommand('aspire-vscode.settings', () => tryExecuteCommand('aspire-vscode.settings', terminalProvider, settingsCommand));
   const openLocalSettingsCommandRegistration = vscode.commands.registerCommand('aspire-vscode.openLocalSettings', () => tryExecuteCommand('aspire-vscode.openLocalSettings', terminalProvider, (tp, invocation, cliPath) => openLocalSettingsCommand(tp, invocation.target, cliPath), selectCommandInvocation));
   const openGlobalSettingsCommandRegistration = vscode.commands.registerCommand('aspire-vscode.openGlobalSettings', () => tryExecuteCommand('aspire-vscode.openGlobalSettings', terminalProvider, openGlobalSettingsCommand));
