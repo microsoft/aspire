@@ -3,7 +3,6 @@
 
 #pragma warning disable ASPIRECOMPUTE002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREPROJECTS001 // ProjectLaunchDefaultsAnnotation is experimental.
-#pragma warning disable ASPIRECONNECTIONSTRINGS001 // Connection-string reference metadata is experimental.
 
 using System.Globalization;
 using System.Net.Sockets;

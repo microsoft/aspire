@@ -1,14 +1,15 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Diagnostics.CodeAnalysis;
-
 namespace Aspire.Hosting.ApplicationModel;
 
 /// <summary>
 /// Describes the logical and physical names used for a connection-string reference.
 /// </summary>
-[Experimental("ASPIRECONNECTIONSTRINGS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+/// <remarks>
+/// The names can be independently initialized in a record copy; they are not recomputed
+/// when another property changes. Use <see cref="Create"/> to derive names from a resource.
+/// </remarks>
 public sealed record ConnectionStringEnvironmentVariableNames
 {
     private const string Prefix = "ConnectionStrings__";
