@@ -286,6 +286,68 @@ public sealed class ResourcePaneFullCanvasTests(ResourceTagPaneTests.TaggedResou
         }, useDefaultDensity: true);
     }
 
+    [Fact]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task Escape_GoesHomeLikeTheBrandWhenNothingElseUsesIt()
+    {
+        await RunTestAsync(async page =>
+        {
+            await page.SetViewportSizeAsync(1440, 900);
+            await page.GotoAsync("/resources/tag-a");
+            var fullCanvas = page.Locator(".resources-layout.pane-full-canvas");
+            var row = page.Locator(".resource-row[data-resource-name='tag-a'] .resource-row-link");
+            var overview = page.GetByRole(AriaRole.Tab, new() { Name = Resources.Layout.ResourceTabOverview, Exact = true });
+            await Assertions.Expect(page.Locator(".resources-layout")).ToHaveAttributeAsync("data-pane-interactions-ready", "true");
+            await Assertions.Expect(page.Locator(".resources-layout")).ToHaveAttributeAsync("data-escape-home", "true");
+
+            // A text field keeps Escape.
+            await page.Locator(".resource-pane").GetByRole(AriaRole.Searchbox).FocusAsync();
+            await page.Keyboard.PressAsync("Escape");
+            await Assertions.Expect(page).ToHaveURLAsync(new Regex("/resources/tag-a$"));
+
+            // So does an open menu, which closes.
+            await page.Locator("#resourcePaneGroupingButton").ClickAsync();
+            var noGrouping = page.GetByRole(AriaRole.Menuitemradio, new() { Name = "None", Exact = true });
+            await Assertions.Expect(noGrouping).ToBeVisibleAsync();
+            await page.Keyboard.PressAsync("Escape");
+            await Assertions.Expect(noGrouping).ToBeHiddenAsync();
+            // The menu closes in the browser, and its button reports it closed once the server renders it. Until then,
+            // Escape still counts as used by the menu.
+            await Assertions.Expect(page.Locator("#resourcePaneGroupingButton")).Not.ToHaveAttributeAsync("aria-expanded", "true");
+            await Assertions.Expect(page).ToHaveURLAsync(new Regex("/resources/tag-a$"));
+            await Assertions.Expect(fullCanvas).ToHaveCountAsync(0);
+
+            // Otherwise it does what the brand does: the table of every resource, at home.
+            await row.FocusAsync();
+            await page.Keyboard.PressAsync("Escape");
+            await Assertions.Expect(page).ToHaveURLAsync(ResourcePaneNavigation.HomeUrl);
+            await Assertions.Expect(fullCanvas).ToBeVisibleAsync();
+            await AssertNoTabSelectedAsync(page);
+            await Assertions.Expect(page.Locator(".resources-layout")).Not.ToHaveAttributeAsync("data-escape-home", "true");
+
+            // The data tabs go home too, as their close button did.
+            await page.GotoAsync("/consolelogs/resource/tag-a");
+            await Assertions.Expect(page.Locator(".resources-layout")).ToHaveAttributeAsync("data-escape-home", "true");
+            await page.Keyboard.PressAsync("Escape");
+            await Assertions.Expect(page).ToHaveURLAsync(ResourcePaneNavigation.HomeUrl);
+            await Assertions.Expect(fullCanvas).ToBeVisibleAsync();
+
+            // A tab with keyboard focus doesn't get it back in the strip re-created at home, where it would show its
+            // focus ring.
+            await page.GotoAsync("/resources/tag-a");
+            await Assertions.Expect(page.Locator(".resources-layout")).ToHaveAttributeAsync("data-escape-home", "true");
+            await overview.FocusAsync();
+            await Assertions.Expect(overview).ToBeFocusedAsync();
+            await page.Keyboard.PressAsync("Escape");
+            await Assertions.Expect(page).ToHaveURLAsync(ResourcePaneNavigation.HomeUrl);
+            await Assertions.Expect(fullCanvas).ToBeVisibleAsync();
+            // Give the strip's focus restore, which runs as the strip is re-created and again on the next frame, time
+            // to act before checking it didn't.
+            await page.WaitForTimeoutAsync(500);
+            await Assertions.Expect(page.Locator(".resources-tab-header fluent-tab:focus")).ToHaveCountAsync(0);
+        });
+    }
+
     // At home the active tab is a hidden placeholder, so no visible tab is selected.
     private static Task AssertNoTabSelectedAsync(IPage page) =>
         Assertions.Expect(page.Locator(".resources-tab-header fluent-tab[aria-selected='true']:visible")).ToHaveCountAsync(0);

@@ -344,6 +344,7 @@
          data-pane-location="@_lastLocation"
          data-pane-interactions-ready="@(_isOrderingRegistered ? "true" : "false")"
          data-home-pending="@(_homeNavigation is not null ? "true" : null)"
+         data-escape-home="@(CanEscapeGoHome ? "true" : null)"
          style="@GetLayoutStyle()"
          @ref="_layoutElement">
         @* A single header keeps section subscriptions stable across viewport changes. *@
@@ -505,6 +506,9 @@
                     <FluentIcon Value="@(new Icons.Regular.Size16.Open())" Color="Color.Primary" />
                 </a>
             }
+            @* Resolved icons are shared. Set the component color rather than mutating the cached icon with WithColor.
+               Every action icon takes its button's text color, labeled or not, so an icon reads as part of its button
+               and dims with it when the button is disabled. *@
             @foreach (var command in showLabels ? GetHighlightedCommands(resource) : _isPaneFullCanvas ? GetFullPageRowCommands(resource) : GetSidebarCommands(resource))
             {
                 var commandTitle = !string.IsNullOrEmpty(command.GetDisplayDescription()) ? command.GetDisplayDescription() : command.GetDisplayName();
@@ -512,9 +516,9 @@
                 {
                     <FluentButton Appearance="ButtonAppearance.Default"
                                   data-tooltip="@commandTitle"
-                                  IconStart="@IconResolver.ResolveHighlightedCommandIcon(command.IconName, command.IconVariant).WithColor(Color.Primary)"
                                   OnClick="@handlers.Command(command.Name)"
                                   Disabled="@IsCommandDisabled(resource, command)">
+                        <FluentIcon Value="@IconResolver.ResolveHighlightedCommandIcon(command.IconName, command.IconVariant)" Color="Color.Custom" CustomColor="currentColor" Slot="start" />
                         @command.GetDisplayName()
                     </FluentButton>
                 }
@@ -523,12 +527,13 @@
                     <FluentButton Appearance="ButtonAppearance.Transparent"
                                   Class="@($"{GetResourceRowActionClass(actionIndex++)} resource-row-highlighted resource-row-command-slot-{highlightedIndex++}")"
                                   IconOnly="true"
-                                  IconStart="@(IconResolver.ResolveHighlightedCommandIcon(command.IconName, command.IconVariant).WithColor("currentColor"))"
                                   data-tooltip="@commandTitle"
                                   data-tooltip-positioning="above"
                                   aria-label="@($"{command.GetDisplayName()} {resourceName}")"
                                   OnClick="@handlers.Command(command.Name)"
-                                  Disabled="@IsCommandDisabled(resource, command)" />
+                                  Disabled="@IsCommandDisabled(resource, command)">
+                        <FluentIcon Value="@IconResolver.ResolveHighlightedCommandIcon(command.IconName, command.IconVariant)" Color="Color.Custom" CustomColor="currentColor" />
+                    </FluentButton>
                 }
             }
             @* Every row has its menu, parameters included: it holds what the row's buttons don't, such as Delete
@@ -536,8 +541,6 @@
             <AspireMenuButton ButtonAppearance="@(showLabels ? ButtonAppearance.Default : ButtonAppearance.Transparent)"
                               ButtonClass="@(showLabels ? null : "resource-row-action")"
                               Icon="@(new Icons.Regular.Size16.MoreHorizontal())"
-                              IconColor="Color.Custom"
-                              IconCustomColor="currentColor"
                               ItemsProvider="@handlers.MenuItems"
                               data-tooltip-positioning="@(!showLabels ? "above" : null)"
                               Title="@string.Format(CultureInfo.CurrentCulture, Loc[nameof(Dashboard.Resources.Layout.ResourcePaneResourceActions)], resourceName)" />
