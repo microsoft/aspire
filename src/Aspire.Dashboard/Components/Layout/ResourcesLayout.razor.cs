@@ -2180,6 +2180,22 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         return signals;
     }
 
+    private string GetTelemetryRowAccessibilityDescription(OtlpResource resource, string? unavailableReason)
+    {
+        var description = Loc[nameof(Resources.Layout.NavMenuTelemetrySourcesTab)].Value;
+        var signals = GetTelemetrySignals(resource);
+        if (signals.Count > 0)
+        {
+            description += $"; {string.Join(", ", signals)}";
+        }
+        if (unavailableReason is not null)
+        {
+            description += $"; {unavailableReason}";
+        }
+
+        return description;
+    }
+
     private string? GetResourceUnavailableReason(ResourceViewModel resource)
     {
         // While the resource list fills the page, its content is closed and no tab is shown selected (see

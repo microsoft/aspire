@@ -2930,7 +2930,7 @@ public class ResourcesLayoutTests : DashboardTestContext
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public async Task TelemetrySource_SubtitleShowsAvailableSignalsOnlyInComfortableDensity(bool appHostEnabled)
+    public async Task TelemetrySource_SubtitleAndAccessibilityDescriptionTrackAvailableSignals(bool appHostEnabled)
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: appHostEnabled,
@@ -2943,6 +2943,8 @@ public class ResourcesLayoutTests : DashboardTestContext
         await cut.InvokeAsync(() => preferences.SetDensityAsync(ResourceListDensity.Comfortable));
         cut.WaitForAssertion(() =>
             Assert.Equal(["Structured logs"], cut.Find(".resource-row-kind-telemetry .resource-row-sub").Children.Select(element => element.TextContent)));
+        Assert.Equal("Telemetry sources; Structured logs",
+            cut.Find(".resource-row-kind-telemetry .resource-row-link").GetAttribute("aria-description"));
 
         var repository = Services.GetRequiredService<SqliteTelemetryRepository>();
         var resource = CreateResource("browser");
@@ -2957,6 +2959,8 @@ public class ResourcesLayoutTests : DashboardTestContext
         ]);
         cut.WaitForAssertion(() =>
             Assert.Equal(["Structured logs", "·", "Traces"], cut.Find(".resource-row-kind-telemetry .resource-row-sub").Children.Select(element => element.TextContent)));
+        Assert.Equal("Telemetry sources; Structured logs, Traces",
+            cut.Find(".resource-row-kind-telemetry .resource-row-link").GetAttribute("aria-description"));
 
         await repository.AddMetricsAsync(new(),
         [
@@ -2973,15 +2977,23 @@ public class ResourcesLayoutTests : DashboardTestContext
             var separators = subtitle.QuerySelectorAll(".resource-row-sep");
             Assert.Equal(2, separators.Length);
             Assert.All(separators, separator => Assert.Equal("true", separator.GetAttribute("aria-hidden")));
+            Assert.Equal("Telemetry sources; Structured logs, Traces, Metrics",
+                cut.Find(".resource-row-kind-telemetry .resource-row-link").GetAttribute("aria-description"));
         });
 
         await repository.ClearStructuredLogsAsync();
         cut.WaitForAssertion(() =>
-            Assert.Equal(["Traces", "·", "Metrics"], cut.Find(".resource-row-kind-telemetry .resource-row-sub").Children.Select(element => element.TextContent)));
+        {
+            Assert.Equal(["Traces", "·", "Metrics"], cut.Find(".resource-row-kind-telemetry .resource-row-sub").Children.Select(element => element.TextContent));
+            Assert.Equal($"Telemetry sources; Traces, Metrics; {Resources.Layout.ResourcePaneNoStructuredLogs}",
+                cut.Find(".resource-row-kind-telemetry .resource-row-link").GetAttribute("aria-description"));
+        });
 
         await cut.InvokeAsync(() => preferences.SetDensityAsync(ResourceListDensity.Compact));
         Assert.Equal("browser", cut.Find(".resource-row-kind-telemetry .resource-row-text").TextContent.Trim());
         Assert.Empty(cut.FindAll(".resource-row-kind-telemetry .resource-row-sub"));
+        Assert.Equal($"Telemetry sources; Traces, Metrics; {Resources.Layout.ResourcePaneNoStructuredLogs}",
+            cut.Find(".resource-row-kind-telemetry .resource-row-link").GetAttribute("aria-description"));
     }
 
     [Fact]

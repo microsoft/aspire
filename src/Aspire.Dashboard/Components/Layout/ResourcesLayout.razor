@@ -282,7 +282,7 @@
                                    href="@GetRowUrl(telemetryResourceName)"
                                    aria-current="@GetRowAriaCurrent(isSelected)"
                                    aria-label="@telemetryResourceName"
-                                   aria-description="@($"{Loc[nameof(Dashboard.Resources.Layout.NavMenuTelemetrySourcesTab)]}{(unavailableReason is not null ? $"; {unavailableReason}" : null)}")"
+                                   aria-description="@GetTelemetryRowAccessibilityDescription(telemetryResource.Resource, unavailableReason)"
                                    data-tooltip="@unavailableReason"
                                    data-resource-unavailable-reason="@unavailableReason"
                                    @onclick="@GetTelemetryRowClick(telemetryResourceName)"
