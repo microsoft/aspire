@@ -396,10 +396,6 @@ internal sealed class AgentInitCommand : BaseCommand
                 foreach (var skillSource in skillSources)
                 {
                     var sourceName = skillSource.GetName();
-                    if (sourceName.Equals(SkillSource.DefaultName, StringComparison.OrdinalIgnoreCase))
-                    {
-                        continue;
-                    }
                     List<(string Label, string Value)> details = [(SharedCommandStrings.SourceName, sourceName)];
                     if (usesPlugins)
                     {

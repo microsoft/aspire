@@ -1,5 +1,9 @@
 ﻿{
   Sources:
+                  Name:  default
+   OpenCode V1 catalog:  https://third-party.example/skills/
+   OpenCode V2 catalog:  https://raw.githubusercontent.com/microsoft/aspire-skills/main/opencode/v2/
+
                   Name:  team
    OpenCode V1 catalog:  https://team.example/skills/
    OpenCode V2 catalog:  https://team.example/skills/
