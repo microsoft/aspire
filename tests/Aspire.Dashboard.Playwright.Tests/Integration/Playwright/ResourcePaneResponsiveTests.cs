@@ -650,6 +650,10 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
             // middle of that makes FluentDataGrid use a disposed JS module and end the circuit. The data tabs have no close
             // button for it.
             await page.GotoAsync(fullCanvas ? "/" : "/resources/cache?pane=tags");
+            // The feedback prompt is shown above the header once the page has read browser storage, after the first
+            // render, and pushes the page down. Hovering before it arrives can leave the pointer over the brand,
+            // whose tooltip then shows instead of the button's.
+            await Assertions.Expect(page.GetByText(Resources.Dialogs.DashboardFeedbackPromptTitle, new() { Exact = true })).ToBeVisibleAsync();
             if (width <= 768)
             {
                 await page.Locator(".resource-picker").ClickAsync();
@@ -1771,8 +1775,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                                 essential.every(shown) ? 1 : 0,
                                 [...rail.querySelectorAll('.resource-row-action')].some(shown) ? 1 : 0,
                                 row.matches(':hover') || row.querySelector(':focus-visible, .resource-row-actions [aria-haspopup][aria-expanded="true"]') ? 1 : 0,
-                                rail.querySelectorAll('.resource-row-highlighted').length,
-                                row.classList.contains('resource-row-kind-parameter') ? 1 : 0];
+                                rail.querySelectorAll('.resource-row-highlighted').length];
                         })
                         """;
                     var resourceRows = pane.Locator(".resource-row[data-resource-name]");
@@ -1792,8 +1795,9 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                         }
                         else
                         {
-                            // Parameter rows have no overflow menu in the expanded list.
-                            Assert.Equal(fullCanvas && values[8] == 1 ? 0 : 1, values[3]);
+                            // Every row has its overflow menu, parameters included: it holds what the row's buttons
+                            // don't, such as Delete.
+                            Assert.Equal(1, values[3]);
                             if (!fullCanvas)
                             {
                                 var expectedRailWidth = compactSidebar ? (values[7] > 1 ? 94 : 88) : 112;
