@@ -49,3 +49,4 @@ for runtime requirements and run/publish behavior.
 | Diagnostic ID | Description | Location |
 | ------------- | ----------- | -------- |
 | `ASPIREAZUREFUNCTIONS001` | Directory-based Azure Functions app APIs are experimental pending API review and may change or be removed. Suppress this diagnostic to opt in. | [src/Aspire.Hosting.Azure.Functions](../src/Aspire.Hosting.Azure.Functions) |
+| `ASPIRERESOURCETRAITS001` | Resource trait and display-order APIs (`WithTrait`, `WithTags`, `WithDisplayOrder`, `TraitAnnotation`, `DisplayOrderAnnotation`) are experimental and may change or be removed. Suppress this diagnostic to opt in. | [src/Aspire.Hosting/ResourceTraitBuilderExtensions.cs](../src/Aspire.Hosting/ResourceTraitBuilderExtensions.cs) |

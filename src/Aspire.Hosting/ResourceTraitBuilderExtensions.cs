@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics.CodeAnalysis;
 using Aspire.Dashboard.Model;
 using Aspire.Hosting.ApplicationModel;
 
@@ -15,6 +16,7 @@ public static class ResourceTraitBuilderExtensions
     /// <param name="name">The case-sensitive trait name.</param>
     /// <param name="value">The trait value. Do not include secrets.</param>
     /// <returns>The resource builder.</returns>
+    [Experimental("ASPIRERESOURCETRAITS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExport]
     public static IResourceBuilder<T> WithTrait<T>(this IResourceBuilder<T> builder, string name, string value) where T : IResource
     {
@@ -36,6 +38,7 @@ public static class ResourceTraitBuilderExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="tags">The tags, each up to 50 characters with single spaces between words.</param>
     /// <returns>The resource builder.</returns>
+    [Experimental("ASPIRERESOURCETRAITS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExportIgnore(Reason = "ReadOnlySpan is not supported by ATS; use the withTags array adapter for polyglot SDKs.")]
     public static IResourceBuilder<T> WithTags<T>(this IResourceBuilder<T> builder, params ReadOnlySpan<string> tags) where T : IResource
     {
@@ -53,6 +56,7 @@ public static class ResourceTraitBuilderExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="tags">The tags, each up to 50 characters with single spaces between words.</param>
     /// <returns>The resource builder.</returns>
+    [Experimental("ASPIRERESOURCETRAITS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExport("withTags")]
     internal static IResourceBuilder<T> WithTagsForPolyglot<T>(this IResourceBuilder<T> builder, string[] tags) where T : IResource
     {
@@ -72,6 +76,7 @@ public static class ResourceTraitBuilderExtensions
     /// Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
     /// </param>
     /// <returns>The resource builder.</returns>
+    [Experimental("ASPIRERESOURCETRAITS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExport]
     public static IResourceBuilder<T> WithDisplayOrder<T>(this IResourceBuilder<T> builder, int order) where T : IResource =>
         builder.WithAnnotation(new DisplayOrderAnnotation(order), ResourceAnnotationMutationBehavior.Replace);

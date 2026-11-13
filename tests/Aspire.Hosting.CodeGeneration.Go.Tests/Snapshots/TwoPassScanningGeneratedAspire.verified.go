@@ -2929,6 +2929,11 @@ type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	//     order of 0, so a negative value moves a resource after them.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithDisplayOrder(order int) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 
 	// WithDockerfile - Causes Aspire to build the specified container image from a
@@ -3612,6 +3617,11 @@ type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	//     words.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithTags(tags []string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 
 	// WithTerminal adds an interactive terminal session to a resource with an
@@ -3632,6 +3642,11 @@ type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	//   - value: The trait value. Do not include secrets.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithTrait(name string, value string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 
 	// WithUnionDependency adds a dependency from a string or another resource
@@ -7165,6 +7180,11 @@ type CSharpAppResource interface {
 	//     order of 0, so a negative value moves a resource after them.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithDisplayOrder(order int) CSharpAppResource
 
 	// WithDockerfileBaseImage configures custom base images for generated
@@ -7740,6 +7760,11 @@ type CSharpAppResource interface {
 	//     words.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithTags(tags []string) CSharpAppResource
 
 	// WithTerminal adds an interactive terminal session to a resource with an
@@ -7760,6 +7785,11 @@ type CSharpAppResource interface {
 	//   - value: The trait value. Do not include secrets.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithTrait(name string, value string) CSharpAppResource
 
 	// WithUnionDependency adds a dependency from a string or another resource
@@ -12218,6 +12248,11 @@ type ContainerRegistryResource interface {
 	//     order of 0, so a negative value moves a resource after them.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithDisplayOrder(order int) ContainerRegistryResource
 
 	// WithDockerfileBaseImage configures custom base images for generated
@@ -12511,6 +12546,11 @@ type ContainerRegistryResource interface {
 	//     words.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithTags(tags []string) ContainerRegistryResource
 
 	// WithTerminal adds an interactive terminal session to a resource with an
@@ -12531,6 +12571,11 @@ type ContainerRegistryResource interface {
 	//   - value: The trait value. Do not include secrets.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithTrait(name string, value string) ContainerRegistryResource
 
 	// WithUnionDependency adds a dependency from a string or another resource
@@ -14458,6 +14503,11 @@ type ContainerResource interface {
 	//     order of 0, so a negative value moves a resource after them.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithDisplayOrder(order int) ContainerResource
 
 	// WithDockerfile - Causes Aspire to build the specified container image from a
@@ -15141,6 +15191,11 @@ type ContainerResource interface {
 	//     words.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithTags(tags []string) ContainerResource
 
 	// WithTerminal adds an interactive terminal session to a resource with an
@@ -15161,6 +15216,11 @@ type ContainerResource interface {
 	//   - value: The trait value. Do not include secrets.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithTrait(name string, value string) ContainerResource
 
 	// WithUnionDependency adds a dependency from a string or another resource
@@ -20795,6 +20855,11 @@ type DotnetToolResource interface {
 	//     order of 0, so a negative value moves a resource after them.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithDisplayOrder(order int) DotnetToolResource
 
 	// WithDockerfileBaseImage configures custom base images for generated
@@ -21373,6 +21438,11 @@ type DotnetToolResource interface {
 	//     words.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithTags(tags []string) DotnetToolResource
 
 	// WithTerminal adds an interactive terminal session to a resource with an
@@ -21466,6 +21536,11 @@ type DotnetToolResource interface {
 	//   - value: The trait value. Do not include secrets.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithTrait(name string, value string) DotnetToolResource
 
 	// WithUnionDependency adds a dependency from a string or another resource
@@ -25973,6 +26048,11 @@ type ExecutableResource interface {
 	//     order of 0, so a negative value moves a resource after them.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithDisplayOrder(order int) ExecutableResource
 
 	// WithDockerfileBaseImage configures custom base images for generated
@@ -26551,6 +26631,11 @@ type ExecutableResource interface {
 	//     words.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithTags(tags []string) ExecutableResource
 
 	// WithTerminal adds an interactive terminal session to a resource with an
@@ -26571,6 +26656,11 @@ type ExecutableResource interface {
 	//   - value: The trait value. Do not include secrets.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithTrait(name string, value string) ExecutableResource
 
 	// WithUnionDependency adds a dependency from a string or another resource
@@ -29706,6 +29796,11 @@ type ExternalServiceResource interface {
 	//     order of 0, so a negative value moves a resource after them.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithDisplayOrder(order int) ExternalServiceResource
 
 	// WithDockerfileBaseImage configures custom base images for generated
@@ -30006,6 +30101,11 @@ type ExternalServiceResource interface {
 	//     words.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithTags(tags []string) ExternalServiceResource
 
 	// WithTerminal adds an interactive terminal session to a resource with an
@@ -30026,6 +30126,11 @@ type ExternalServiceResource interface {
 	//   - value: The trait value. Do not include secrets.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithTrait(name string, value string) ExternalServiceResource
 
 	// WithUnionDependency adds a dependency from a string or another resource
@@ -34299,6 +34404,11 @@ type ParameterResource interface {
 	//     order of 0, so a negative value moves a resource after them.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithDisplayOrder(order int) ParameterResource
 
 	// WithDockerfileBaseImage configures custom base images for generated
@@ -34611,6 +34721,11 @@ type ParameterResource interface {
 	//     words.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithTags(tags []string) ParameterResource
 
 	// WithTerminal adds an interactive terminal session to a resource with an
@@ -34631,6 +34746,11 @@ type ParameterResource interface {
 	//   - value: The trait value. Do not include secrets.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithTrait(name string, value string) ParameterResource
 
 	// WithUnionDependency adds a dependency from a string or another resource
@@ -37562,6 +37682,11 @@ type ProjectResource interface {
 	//     order of 0, so a negative value moves a resource after them.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithDisplayOrder(order int) ProjectResource
 
 	// WithDockerfileBaseImage configures custom base images for generated
@@ -38137,6 +38262,11 @@ type ProjectResource interface {
 	//     words.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithTags(tags []string) ProjectResource
 
 	// WithTerminal adds an interactive terminal session to a resource with an
@@ -38157,6 +38287,11 @@ type ProjectResource interface {
 	//   - value: The trait value. Do not include secrets.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithTrait(name string, value string) ProjectResource
 
 	// WithUnionDependency adds a dependency from a string or another resource
@@ -43519,6 +43654,11 @@ type TestDatabaseResource interface {
 	//     order of 0, so a negative value moves a resource after them.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithDisplayOrder(order int) TestDatabaseResource
 
 	// WithDockerfile - Causes Aspire to build the specified container image from a
@@ -44202,6 +44342,11 @@ type TestDatabaseResource interface {
 	//     words.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithTags(tags []string) TestDatabaseResource
 
 	// WithTerminal adds an interactive terminal session to a resource with an
@@ -44222,6 +44367,11 @@ type TestDatabaseResource interface {
 	//   - value: The trait value. Do not include secrets.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithTrait(name string, value string) TestDatabaseResource
 
 	// WithUnionDependency adds a dependency from a string or another resource
@@ -47990,6 +48140,11 @@ type TestRedisResource interface {
 	//     order of 0, so a negative value moves a resource after them.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithDisplayOrder(order int) TestRedisResource
 
 	// WithDockerfile - Causes Aspire to build the specified container image from a
@@ -48714,6 +48869,11 @@ type TestRedisResource interface {
 	//     words.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithTags(tags []string) TestRedisResource
 
 	// WithTerminal adds an interactive terminal session to a resource with an
@@ -48734,6 +48894,11 @@ type TestRedisResource interface {
 	//   - value: The trait value. Do not include secrets.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithTrait(name string, value string) TestRedisResource
 
 	// WithUnionDependency adds a dependency from a string or another resource
