@@ -1,5 +1,4 @@
 {{appHostDirectives}}
-#:property AspireUseCliBundle=true
 
 var builder = DistributedApplication.CreateBuilder(args);
 
