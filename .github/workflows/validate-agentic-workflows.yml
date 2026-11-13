@@ -38,7 +38,7 @@ jobs:
       # workflows are byte-for-byte comparable with what a contributor generates locally; see
       # .github/workflows/README.md.
       - name: Install gh-aw extension
-        uses: github/gh-aw-actions/setup-cli@f3b81cdb3070066a47faa9bdf440f4f1dc78b1f0 # v0.89.17
+        uses: github/gh-aw-actions/setup-cli@406c7719e31d7fe354224d4bb8fe3d4aeb47da1c # v1.2.1
         with:
           version: v0.89.17
 
@@ -69,7 +69,7 @@ jobs:
       - name: Lint generated agentic workflows
         run: gh aw lint --shellcheck
 
-      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
         with:
           global-json-file: global.json
 
