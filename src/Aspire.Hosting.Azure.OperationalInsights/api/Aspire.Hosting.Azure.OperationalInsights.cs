@@ -32,6 +32,8 @@ namespace Aspire.Hosting.Azure
 
         public BicepOutputReference NameOutputReference { get { throw null; } }
 
+        public override string ResourceTypeDisplayName { get { throw null; } }
+
         public BicepOutputReference WorkspaceId { get { throw null; } }
 
         public override global::Azure.Provisioning.Primitives.ProvisionableResource AddAsExistingResource(AzureResourceInfrastructure infra) { throw null; }

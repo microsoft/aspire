@@ -16,6 +16,12 @@ namespace Aspire.Hosting
         [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addDotnetProject dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<Dotnet.DotnetProjectResource> AddDotnetProject(this IDistributedApplicationBuilder builder, string name, string path) { throw null; }
 
+        [AspireExport("disableDotnetProjectForwardedHeaders", MethodName = "disableForwardedHeaders")]
+        public static ApplicationModel.IResourceBuilder<Dotnet.DotnetProjectResource> DisableForwardedHeaders(this ApplicationModel.IResourceBuilder<Dotnet.DotnetProjectResource> builder) { throw null; }
+
+        [AspireExportIgnore(Reason = "Project metadata is a .NET-specific contract and is not part of the ATS surface.")]
+        public static IProjectMetadata GetProjectMetadata(this Dotnet.DotnetProjectResource projectResource) { throw null; }
+
         [AspireExportIgnore(Reason = "Raw Action delegate callbacks are not ATS-compatible.")]
         public static ApplicationModel.IResourceBuilder<Dotnet.DotnetProjectResource> WithBuildEnvironment(this ApplicationModel.IResourceBuilder<Dotnet.DotnetProjectResource> builder, System.Action<ApplicationModel.EnvironmentCallbackContext> callback) { throw null; }
 
@@ -24,6 +30,12 @@ namespace Aspire.Hosting
 
         [AspireExport]
         public static ApplicationModel.IResourceBuilder<Dotnet.DotnetProjectResource> WithBuildEnvironment(this ApplicationModel.IResourceBuilder<Dotnet.DotnetProjectResource> builder, string name, string value) { throw null; }
+
+        [AspireExportIgnore(Reason = "Uses Func<EndpointAnnotation, bool>; polyglot AppHosts use the endpoint-name dispatcher.")]
+        public static ApplicationModel.IResourceBuilder<Dotnet.DotnetProjectResource> WithEndpointsInEnvironment(this ApplicationModel.IResourceBuilder<Dotnet.DotnetProjectResource> builder, System.Func<ApplicationModel.EndpointAnnotation, bool> filter) { throw null; }
+
+        [AspireExport("withDotnetProjectReplicas", MethodName = "withReplicas")]
+        public static ApplicationModel.IResourceBuilder<Dotnet.DotnetProjectResource> WithReplicas(this ApplicationModel.IResourceBuilder<Dotnet.DotnetProjectResource> builder, int replicas) { throw null; }
     }
 }
 

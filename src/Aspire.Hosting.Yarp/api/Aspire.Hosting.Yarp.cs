@@ -113,6 +113,8 @@ namespace Aspire.Hosting.Yarp
     public partial class YarpResource : ApplicationModel.ContainerResource, IResourceWithServiceDiscovery, ApplicationModel.IResourceWithEndpoints, ApplicationModel.IResource, ApplicationModel.IContainerFilesDestinationResource
     {
         public YarpResource(string name) : base(default!, default) { }
+
+        public override string ResourceTypeDisplayName { get { throw null; } }
     }
 
     [AspireExport]

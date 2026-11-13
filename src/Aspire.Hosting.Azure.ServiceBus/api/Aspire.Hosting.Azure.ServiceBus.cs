@@ -62,6 +62,15 @@ namespace Aspire.Hosting
         [AspireExportIgnore(Reason = "ServiceBusBuiltInRole is an Azure.Provisioning type not compatible with ATS. Use the AzureServiceBusRole-based overload instead.")]
         public static ApplicationModel.IResourceBuilder<T> WithRoleAssignments<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.IResourceBuilder<Azure.AzureServiceBusResource> target, params global::Azure.Provisioning.ServiceBus.ServiceBusBuiltInRole[] roles)
             where T : ApplicationModel.IResource { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<Azure.AzureServiceBusEmulatorResource> WithSqlServer(this ApplicationModel.IResourceBuilder<Azure.AzureServiceBusEmulatorResource> builder, ApplicationModel.IResourceBuilder<ApplicationModel.SqlServerServerResource> sqlServer) { throw null; }
+
+        [AspireExportIgnore(Reason = "Action<IResourceBuilder<SqlServerServerResource>> callbacks are not ATS-compatible. Use the WithSqlServer overload that takes a SQL Server resource instead.")]
+        public static ApplicationModel.IResourceBuilder<Azure.AzureServiceBusEmulatorResource> WithSqlServer(this ApplicationModel.IResourceBuilder<Azure.AzureServiceBusEmulatorResource> builder, System.Action<ApplicationModel.IResourceBuilder<ApplicationModel.SqlServerServerResource>> configureSqlServer) { throw null; }
+
+        [AspireExportIgnore(Reason = "The emulator creates its own SQL Server resource by default, so there is nothing to configure. Use the WithSqlServer overload that takes a SQL Server resource to reuse an existing one.")]
+        public static ApplicationModel.IResourceBuilder<Azure.AzureServiceBusEmulatorResource> WithSqlServer(this ApplicationModel.IResourceBuilder<Azure.AzureServiceBusEmulatorResource> builder) { throw null; }
     }
 }
 
@@ -96,6 +105,8 @@ namespace Aspire.Hosting.Azure
         public AzureServiceBusEmulatorResource(AzureServiceBusResource innerResource) : base(default!, default) { }
 
         public override ApplicationModel.ResourceAnnotationCollection Annotations { get { throw null; } }
+
+        public override string ResourceTypeDisplayName { get { throw null; } }
     }
 
     public enum AzureServiceBusFilterType
@@ -134,6 +145,8 @@ namespace Aspire.Hosting.Azure
 
         public bool? RequiresSession { get { throw null; } set { } }
 
+        public override string ResourceTypeDisplayName { get { throw null; } }
+
         System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, ApplicationModel.ReferenceExpression>> ApplicationModel.IResourceWithConnectionString.GetConnectionProperties() { throw null; }
 
         void IResourceWithAzureFunctionsConfig.ApplyAzureFunctionsConfiguration(System.Collections.Generic.IDictionary<string, object> target, string connectionName) { }
@@ -155,6 +168,8 @@ namespace Aspire.Hosting.Azure
         public BicepOutputReference NameOutputReference { get { throw null; } }
 
         public ApplicationModel.ReferenceExpression? Port { get { throw null; } }
+
+        public override string ResourceTypeDisplayName { get { throw null; } }
 
         public BicepOutputReference ServiceBusEndpoint { get { throw null; } }
 
@@ -207,6 +222,8 @@ namespace Aspire.Hosting.Azure
 
         public bool? RequiresSession { get { throw null; } set { } }
 
+        public override string ResourceTypeDisplayName { get { throw null; } }
+
         public System.Collections.Generic.List<AzureServiceBusRule> Rules { get { throw null; } }
 
         public string SubscriptionName { get { throw null; } set { } }
@@ -231,6 +248,8 @@ namespace Aspire.Hosting.Azure
         public AzureServiceBusResource Parent { get { throw null; } }
 
         public bool? RequiresDuplicateDetection { get { throw null; } set { } }
+
+        public override string ResourceTypeDisplayName { get { throw null; } }
 
         public string TopicName { get { throw null; } set { } }
 
