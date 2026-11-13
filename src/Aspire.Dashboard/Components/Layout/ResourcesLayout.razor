@@ -297,7 +297,20 @@
                                         <span class="resource-row-title">
                                             <span class="resource-row-name"><FluentHighlighter HighlightedText="@_filter.TextFilter" Text="@telemetryResourceName" /></span>
                                         </span>
-                                        <span class="resource-row-sub resource-row-kind-label">@Loc[nameof(Dashboard.Resources.Layout.NavMenuTelemetrySourcesTab)]</span>
+                                        @if (!IsCompact)
+                                        {
+                                            var signals = GetTelemetrySignals(telemetryResource.Resource);
+                                            <span class="resource-row-sub">
+                                                @for (var i = 0; i < signals.Count; i++)
+                                                {
+                                                    if (i > 0)
+                                                    {
+                                                        <span class="resource-row-sep" aria-hidden="true">·</span>
+                                                    }
+                                                    <span>@signals[i]</span>
+                                                }
+                                            </span>
+                                        }
                                     </span>
                                 </a>
                             </div>

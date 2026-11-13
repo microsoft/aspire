@@ -972,9 +972,8 @@
     margin-bottom: 9px;
 }
 
-/* The row has no actions, so its link spans the actions rail the other rows reserve. Otherwise its counts would stop
-   short of the end and, in compact rows, jump toward the name on hover, when the rail widens for actions. */
-.resource-row.resource-row-all > .resource-row-link {
+/* These rows have no actions, so their links span the actions rail other rows reserve, including on hover. */
+.resource-row:is(.resource-row-all, .resource-row-kind-telemetry) > .resource-row-link {
     grid-column: 1 / -1;
 }
 
@@ -2714,8 +2713,8 @@
     min-width: 0;
 }
 
-/* Telemetry-only rows and the "All" row have no type/state columns. Their secondary label (the kind, or the counts)
-   moves to the end of the line, and the name gives way first when space runs out. */
+/* Rows without type/state columns keep the title inline. The "All" row's counts
+   move to the end of the line, and the name gives way first when space runs out. */
 .resource-pane-list.density-compact .resource-row-title {
     flex: 0 1 auto;
     width: auto;

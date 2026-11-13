@@ -22,6 +22,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.JSInterop;
 using OpenTelemetry.Proto.Logs.V1;
+using OpenTelemetry.Proto.Metrics.V1;
+using OpenTelemetry.Proto.Trace.V1;
 using Xunit;
 using static Aspire.Tests.Shared.Telemetry.TelemetryTestHelpers;
 
@@ -1163,7 +1165,7 @@ public class ResourcesLayoutTests : DashboardTestContext
                 link.GetAttribute("aria-label"), link.GetAttribute("aria-description"), link.GetAttribute("data-tooltip"))));
         var sourceRow = cut.Find(".resource-row-kind-telemetry");
         Assert.Equal("api", sourceRow.QuerySelector(".resource-row-name")!.TextContent);
-        Assert.Equal("Telemetry sources", sourceRow.QuerySelector(".resource-row-kind-label")!.TextContent);
+        Assert.Empty(sourceRow.QuerySelectorAll(".resource-row-sub"));
     }
 
     // The pane used to have a toggle for each kind of item, stored as a list such as "Resources,Parameters". Telemetry
@@ -2923,6 +2925,63 @@ public class ResourcesLayoutTests : DashboardTestContext
             Assert.Equal(appHostEnabled ? "No resources found" : "No telemetry sources", message.TextContent.Trim());
             Assert.Equal(cut.Find(".resource-row-all"), message.PreviousElementSibling);
         });
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task TelemetrySource_SubtitleShowsAvailableSignalsOnlyInComfortableDensity(bool appHostEnabled)
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: appHostEnabled,
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        await AddTelemetryAsync("browser");
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.StructuredLogsUrl());
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
+        var preferences = Services.GetRequiredService<DashboardViewPreferences>();
+        await cut.InvokeAsync(() => preferences.SetDensityAsync(ResourceListDensity.Comfortable));
+        cut.WaitForAssertion(() =>
+            Assert.Equal(["Structured logs"], cut.Find(".resource-row-kind-telemetry .resource-row-sub").Children.Select(element => element.TextContent)));
+
+        var repository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        var resource = CreateResource("browser");
+        resource.Attributes.Remove(resource.Attributes.Single(attribute => attribute.Key == OtlpResource.SERVICE_INSTANCE_ID));
+        await repository.AddTracesAsync(new(),
+        [
+            new ResourceSpans
+            {
+                Resource = resource,
+                ScopeSpans = { new ScopeSpans { Scope = CreateScope(), Spans = { CreateSpan("trace", "span", DateTime.UnixEpoch, DateTime.UnixEpoch.AddSeconds(1)) } } }
+            }
+        ]);
+        cut.WaitForAssertion(() =>
+            Assert.Equal(["Structured logs", "·", "Traces"], cut.Find(".resource-row-kind-telemetry .resource-row-sub").Children.Select(element => element.TextContent)));
+
+        await repository.AddMetricsAsync(new(),
+        [
+            new ResourceMetrics
+            {
+                Resource = resource,
+                ScopeMetrics = { new ScopeMetrics { Scope = CreateScope(), Metrics = { CreateSumMetric("browser.requests", DateTime.UnixEpoch) } } }
+            }
+        ]);
+        cut.WaitForAssertion(() =>
+        {
+            var subtitle = cut.Find(".resource-row-kind-telemetry .resource-row-sub");
+            Assert.Equal(["Structured logs", "·", "Traces", "·", "Metrics"], subtitle.Children.Select(element => element.TextContent));
+            var separators = subtitle.QuerySelectorAll(".resource-row-sep");
+            Assert.Equal(2, separators.Length);
+            Assert.All(separators, separator => Assert.Equal("true", separator.GetAttribute("aria-hidden")));
+        });
+
+        await repository.ClearStructuredLogsAsync();
+        cut.WaitForAssertion(() =>
+            Assert.Equal(["Traces", "·", "Metrics"], cut.Find(".resource-row-kind-telemetry .resource-row-sub").Children.Select(element => element.TextContent)));
+
+        await cut.InvokeAsync(() => preferences.SetDensityAsync(ResourceListDensity.Compact));
+        Assert.Equal("browser", cut.Find(".resource-row-kind-telemetry .resource-row-text").TextContent.Trim());
+        Assert.Empty(cut.FindAll(".resource-row-kind-telemetry .resource-row-sub"));
     }
 
     [Fact]

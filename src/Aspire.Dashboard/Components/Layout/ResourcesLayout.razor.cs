@@ -2160,6 +2160,26 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
     private OtlpResource? GetTelemetryResource(ResourceViewModel resource) => _telemetryResourcesByName.GetValueOrDefault(resource.Name);
 
+    private List<string> GetTelemetrySignals(OtlpResource resource)
+    {
+        var availability = _resourceSignalAvailability.GetValueOrDefault(resource.ResourceKey);
+        List<string> signals = [];
+        if (availability.HasLogs)
+        {
+            signals.Add(Loc[nameof(Resources.Layout.NavMenuStructuredLogsTab)]);
+        }
+        if (availability.HasTraces)
+        {
+            signals.Add(Loc[nameof(Resources.Layout.NavMenuTracesTab)]);
+        }
+        if (availability.HasMetrics)
+        {
+            signals.Add(Loc[nameof(Resources.Layout.NavMenuMetricsTab)]);
+        }
+
+        return signals;
+    }
+
     private string? GetResourceUnavailableReason(ResourceViewModel resource)
     {
         // While the resource list fills the page, its content is closed and no tab is shown selected (see
