@@ -67,13 +67,15 @@ with create_builder() as builder:
     fabric = project.add_fabric_tool("fabric-tool", ["workspace-id"])
     az_func = project.add_azure_function_tool(
         "az-func-tool",
-        "myFunction",
-        "Does something",
-        "{}",
-        "https://queue.core.windows.net",
-        "input-q",
-        "https://queue.core.windows.net",
-        "output-q")
+        {
+            "functionName": "myFunction",
+            "description": "Does something",
+            "parametersJson": "{}",
+            "inputQueueEndpoint": "https://queue.core.windows.net",
+            "inputQueueName": "input-q",
+            "outputQueueEndpoint": "https://queue.core.windows.net",
+            "outputQueueName": "output-q"
+        })
     func_tool = project.add_function_tool("func-tool", "myFunc", "{}")
 
     # Prompt Agent
