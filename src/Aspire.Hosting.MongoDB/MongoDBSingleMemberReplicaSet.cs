@@ -16,7 +16,7 @@ internal sealed class MongoDBSingleMemberReplicaSetAnnotation(string name) : IRe
 {
     public string Name { get; } = name;
 
-    // Initialization and health polling run concurrently. Null means initialization and election succeeded.
+    // Initialization and health polling run concurrently. Null means initialization succeeded and the member accepts writes.
     public volatile string? InitializationError = "The single-member replica set has not been initialized.";
 }
 
@@ -118,9 +118,9 @@ internal static class MongoDBSingleMemberReplicaSet
                 }
 
                 ValidateConfiguration(config, name, host);
-                var status = await database.RunCommandAsync<BsonDocument>(
-                    new BsonDocument("replSetGetStatus", 1), ReadPreference.Nearest, cancellationToken).ConfigureAwait(false);
-                if (IsPrimary(status, name))
+                var hello = await database.RunCommandAsync<BsonDocument>(
+                    new BsonDocument("hello", 1), ReadPreference.Nearest, cancellationToken).ConfigureAwait(false);
+                if (IsWritablePrimary(hello, name))
                 {
                     return;
                 }
@@ -150,6 +150,13 @@ internal static class MongoDBSingleMemberReplicaSet
         }
     }
 
-    internal static bool IsPrimary(BsonDocument status, string name) =>
-        status["set"].AsString == name && status["myState"].AsInt32 == 1 && status["members"].AsBsonArray.Count == 1;
+    // A newly elected member reports PRIMARY (replSetGetStatus myState: 1) before it finishes draining its oplog
+    // buffer, and rejects writes with NotWritablePrimary until then. Only hello's isWritablePrimary reflects that.
+    // https://www.mongodb.com/docs/manual/reference/command/hello/#mongodb-data-hello.isWritablePrimary
+    // hello returns { isWritablePrimary: true, setName: "mongo", hosts: ["localhost:27017"], ... }; while draining it
+    // returns isWritablePrimary: false and secondary: false.
+    internal static bool IsWritablePrimary(BsonDocument hello, string name) =>
+        hello.TryGetValue("setName", out var setName) && setName.IsString && setName.AsString == name &&
+        hello.TryGetValue("isWritablePrimary", out var isWritablePrimary) && isWritablePrimary.ToBoolean() &&
+        hello.TryGetValue("hosts", out var hosts) && hosts.IsBsonArray && hosts.AsBsonArray.Count == 1;
 }

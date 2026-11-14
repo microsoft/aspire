@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Net;
+using System.Reflection;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
@@ -8,6 +10,9 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using MongoDB.Bson;
 using MongoDB.Driver;
+using MongoDB.Driver.Core.Clusters;
+using MongoDB.Driver.Core.Connections;
+using MongoDB.Driver.Core.Servers;
 
 #pragma warning disable ASPIRECERTIFICATES001
 #pragma warning disable ASPIREMONGODB001
@@ -189,20 +194,58 @@ public class SingleMemberReplicaSetTests(ITestOutputHelper testOutputHelper)
     }
 
     [Theory]
-    [InlineData("mongo", 1, 1, true)]
-    [InlineData("mongo", 2, 1, false)]
-    [InlineData("other", 1, 1, false)]
-    [InlineData("mongo", 1, 2, false)]
-    public void ReadinessRequiresTheSingleMemberPrimary(string name, int state, int memberCount, bool expected)
+    [InlineData("mongo", true, 1, true)]
+    [InlineData("mongo", false, 1, false)]
+    [InlineData("other", true, 1, false)]
+    [InlineData("mongo", true, 2, false)]
+    public void ReadinessRequiresTheSingleMemberWritablePrimary(string name, bool isWritablePrimary, int hostCount, bool expected)
     {
-        var status = new BsonDocument
+        var hello = new BsonDocument
         {
-            ["set"] = name,
-            ["myState"] = state,
-            ["members"] = new BsonArray(Enumerable.Range(0, memberCount).Select(id => new BsonDocument("_id", id))),
+            ["isWritablePrimary"] = isWritablePrimary,
+            ["setName"] = name,
+            ["hosts"] = new BsonArray(Enumerable.Range(0, hostCount).Select(i => $"localhost:{27017 + i}")),
         };
 
-        Assert.Equal(expected, MongoDBSingleMemberReplicaSet.IsPrimary(status, "mongo"));
+        Assert.Equal(expected, MongoDBSingleMemberReplicaSet.IsWritablePrimary(hello, "mongo"));
+    }
+
+    [Fact]
+    public void ReadinessRejectsHelloFromAStandaloneServer()
+    {
+        // A server without --replSet (for example, the image's temporary init mongod) is writable but has no set.
+        Assert.False(MongoDBSingleMemberReplicaSet.IsWritablePrimary(BsonDocument.Parse("""{ "isWritablePrimary": true, "ok": 1 }"""), "mongo"));
+    }
+
+    [Fact]
+    public async Task InitializationWaitsUntilTheElectedPrimaryAcceptsWrites()
+    {
+        // replSetGetStatus reports myState: 1 while a newly elected primary is still draining, but writes fail with
+        // NotWritablePrimary until hello reports isWritablePrimary. Initialization must not complete in that window.
+        var member = DrainingMember.Create(drainingProbes: 2, out var admin);
+
+        await MongoDBSingleMemberReplicaSet.InitializeAndWaitForPrimaryAsync(admin, "mongo", "localhost:27017", CancellationToken.None);
+
+        Assert.Equal(
+            ["replSetGetConfig", "replSetInitiate", "replSetGetConfig", "hello", "replSetGetConfig", "hello", "replSetGetConfig", "hello"],
+            member.Commands.Select(c => c.GetElement(0).Name));
+        Assert.True(member.AcceptsWrites);
+    }
+
+    [Fact]
+    public async Task HealthIsUnhealthyWhileTheElectedPrimaryIsDraining()
+    {
+        var member = DrainingMember.Create(drainingProbes: 1, out var admin, initiated: true);
+        var annotation = new MongoDBSingleMemberReplicaSetAnnotation("mongo") { InitializationError = null };
+        var check = new MyMongoDbHealthCheck(DrainingMember.CreateClient(admin), "admin", annotation);
+
+        var draining = await check.CheckHealthAsync(new HealthCheckContext());
+        var writable = await check.CheckHealthAsync(new HealthCheckContext());
+
+        Assert.Equal(HealthStatus.Unhealthy, draining.Status);
+        Assert.Equal("MongoDB replica set 'mongo' is not a writable single-member primary.", draining.Description);
+        Assert.Equal(HealthStatus.Healthy, writable.Status);
+        Assert.Equal(["hello", "hello"], member.Commands.Select(c => c.GetElement(0).Name));
     }
 
     [Fact]
@@ -214,5 +257,82 @@ public class SingleMemberReplicaSetTests(ITestOutputHelper testOutputHelper)
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
             MongoDBSingleMemberReplicaSet.InitializeAndWaitForPrimaryAsync(client.GetDatabase("admin"), "mongo", "localhost:27017", cancellation.Token));
+    }
+    public class DrainingMember : DispatchProxy
+    {
+        private int _drainingProbes;
+        private int _probes;
+        private bool _initiated;
+
+        public List<BsonDocument> Commands { get; } = [];
+
+        // Mirrors a real mongod after election: PRIMARY immediately, but writable only once draining completes.
+        public bool AcceptsWrites => _initiated && _probes > _drainingProbes;
+
+        public static DrainingMember Create(int drainingProbes, out IMongoDatabase admin, bool initiated = false)
+        {
+            admin = Create<IMongoDatabase, DrainingMember>();
+            var member = (DrainingMember)(object)admin;
+            member._drainingProbes = drainingProbes;
+            member._initiated = initiated;
+            return member;
+        }
+
+        public static IMongoClient CreateClient(IMongoDatabase admin)
+        {
+            var client = Create<IMongoClient, DatabaseClient>();
+            ((DatabaseClient)(object)client).Database = admin;
+            return client;
+        }
+
+        protected override object? Invoke(MethodInfo? targetMethod, object?[]? args)
+        {
+            if (targetMethod is not { Name: nameof(IMongoDatabase.RunCommandAsync) } || args is not [Command<BsonDocument> command, _, CancellationToken cancellationToken])
+            {
+                throw new NotSupportedException($"Unexpected call to '{targetMethod?.Name}'.");
+            }
+
+            cancellationToken.ThrowIfCancellationRequested();
+            var document = ((BsonDocumentCommand<BsonDocument>)command).Document;
+            Commands.Add(document);
+
+            switch (document.GetElement(0).Name)
+            {
+                case "replSetGetConfig" when !_initiated:
+                    var result = new BsonDocument { ["ok"] = 0, ["code"] = 94, ["codeName"] = "NotYetInitialized" };
+                    var connectionId = new ConnectionId(new ServerId(new ClusterId(), new DnsEndPoint("localhost", 27017)));
+                    return Task.FromException<BsonDocument>(new MongoCommandException(connectionId, "no replset config has been received", document, result));
+
+                case "replSetGetConfig":
+                    return Task.FromResult(BsonDocument.Parse("""{ "config": { "_id": "mongo", "members": [{ "_id": 0, "host": "localhost:27017" }] }, "ok": 1 }"""));
+
+                case "replSetInitiate":
+                    _initiated = true;
+                    return Task.FromResult(new BsonDocument("ok", 1));
+
+                case "hello":
+                    _probes++;
+                    return Task.FromResult(new BsonDocument
+                    {
+                        ["isWritablePrimary"] = AcceptsWrites,
+                        ["secondary"] = false,
+                        ["setName"] = "mongo",
+                        ["hosts"] = new BsonArray { "localhost:27017" },
+                        ["ok"] = 1,
+                    });
+
+                default:
+                    throw new NotSupportedException($"Unexpected command '{document}'.");
+            }
+        }
+    }
+
+    public class DatabaseClient : DispatchProxy
+    {
+        public IMongoDatabase? Database { get; set; }
+
+        protected override object? Invoke(MethodInfo? targetMethod, object?[]? args) => targetMethod?.Name == nameof(IMongoClient.GetDatabase)
+            ? Database
+            : throw new NotSupportedException($"Unexpected call to '{targetMethod?.Name}'.");
     }
 }
