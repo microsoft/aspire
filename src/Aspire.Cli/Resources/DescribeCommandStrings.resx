@@ -150,6 +150,10 @@
   <data name="HeaderState" xml:space="preserve">
     <value>State</value>
   </data>
+  <data name="StateWithExitCode" xml:space="preserve">
+    <value>{0} (exit code: {1})</value>
+    <comment>{0} is the resource state; {1} is the process exit code.</comment>
+  </data>
   <data name="HeaderHealth" xml:space="preserve">
     <value>Health</value>
   </data>
