@@ -237,6 +237,55 @@ function Invoke-DetachedAspireCommand
     return (Get-Date) - $startedAt
 }
 
+function Wait-AspireResource
+{
+    param(
+        [string]$ResourceName,
+        [string]$Phase,
+        [string]$TemplateId,
+        [string]$WorkingDirectory,
+        [string]$DiagnosticsDirectory,
+        [int]$TimeoutSeconds
+    )
+
+    $sanitizedResourceName = $ResourceName -replace '[^A-Za-z0-9_.-]', '_'
+    $prefix = if ($Phase -eq 'run') { 'aspire-wait-run' } else { 'aspire-wait' }
+    $stdoutPath = Join-Path $DiagnosticsDirectory "$prefix-${sanitizedResourceName}.stdout.log"
+    $stderrPath = Join-Path $DiagnosticsDirectory "$prefix-${sanitizedResourceName}.stderr.log"
+    $combinedPath = Join-Path $DiagnosticsDirectory "$prefix-${sanitizedResourceName}.log"
+
+    Write-DiagnosticMessage "${TemplateId}: invoking aspire wait for resource '$ResourceName' after $Phase."
+    $process = Start-Process -FilePath 'aspire' `
+        -ArgumentList @('wait', $ResourceName, '--status', 'up', '--timeout', $TimeoutSeconds) `
+        -WorkingDirectory $WorkingDirectory `
+        -RedirectStandardOutput $stdoutPath `
+        -RedirectStandardError $stderrPath `
+        -Wait `
+        -PassThru
+    Write-DiagnosticMessage "${TemplateId}: aspire wait for resource '$ResourceName' after $Phase returned with exit code $($process.ExitCode)."
+
+    $output = Get-CombinedProcessOutput -StdOutPath $stdoutPath -StdErrPath $stderrPath
+    Set-Content -Path $combinedPath -Value $output -Encoding utf8
+
+    if ($process.ExitCode -ne 0)
+    {
+        try
+        {
+            # Capture installer logs before stopping the AppHost; they can explain
+            # why a dependent resource entered FailedToStart.
+            $logsFile = if ($Phase -eq 'run') { 'aspire-run-resource-logs.log' } else { 'aspire-resource-logs.log' }
+            aspire logs --include-hidden *>&1 |
+                Out-File -FilePath (Join-Path $DiagnosticsDirectory $logsFile) -Encoding utf8
+        }
+        catch
+        {
+            Write-Warning "${TemplateId}: failed to capture resource logs: $($_.Exception.Message)"
+        }
+
+        throw "${TemplateId}: aspire wait for resource $ResourceName failed with exit code $($process.ExitCode)."
+    }
+}
+
 $validationRootPath = Get-ValidationRoot
 Remove-Item -Recurse -Force $validationRootPath -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Path $validationRootPath -Force | Out-Null
@@ -257,7 +306,7 @@ $templates = @(
         ProjectName = 'AspireCliGoStarterSmoke'
         # Hosted macOS/Windows runners have no Linux container runtime. Keep full Redis
         # readiness on Linux; the other runners exercise the supported cache-free starter.
-        ExpectedResources = $(if ($IsLinux) { @('app', 'cache') } else { @('app') })
+        ExpectedResources = $(if ($IsLinux) { @('app', 'frontend', 'cache') } else { @('app', 'frontend') })
     }
 )
 
@@ -308,6 +357,15 @@ foreach ($template in $templates)
                     -WorkingDirectory $projectRoot `
                     -DiagnosticsDirectory $diagnosticsDir `
                     -TimeoutSeconds $MaxStartupSeconds
+
+                if ($templateId -eq 'aspire-go-starter')
+                {
+                    # The next start reuses this project. Finish the installer before stopping
+                    # so its interrupted npm cleanup cannot race the next npm install.
+                    Wait-AspireResource -ResourceName 'frontend' -Phase 'run' -TemplateId $templateId `
+                        -WorkingDirectory $projectRoot -DiagnosticsDirectory $diagnosticsDir `
+                        -TimeoutSeconds $ResourceReadyTimeoutSeconds
+                }
 
                 Write-DiagnosticMessage "${templateId}: invoking aspire stop after run."
                 aspire stop --non-interactive --nologo *>&1 | Out-File -FilePath $postRunStopLogPath -Encoding utf8
@@ -373,29 +431,9 @@ foreach ($template in $templates)
 
             foreach ($resourceName in $expectedResources)
             {
-                $sanitizedResourceName = $resourceName -replace '[^A-Za-z0-9_.-]', '_'
-                $waitStdOutPath = Join-Path $diagnosticsDir "aspire-wait-${sanitizedResourceName}.stdout.log"
-                $waitStdErrPath = Join-Path $diagnosticsDir "aspire-wait-${sanitizedResourceName}.stderr.log"
-                $waitCombinedPath = Join-Path $diagnosticsDir "aspire-wait-${sanitizedResourceName}.log"
-
-                Write-DiagnosticMessage "${templateId}: invoking aspire wait for resource '$resourceName'."
-                $waitProcess = Start-Process -FilePath 'aspire' `
-                    -ArgumentList @('wait', $resourceName, '--status', 'up', '--timeout', $ResourceReadyTimeoutSeconds) `
-                    -WorkingDirectory $projectRoot `
-                    -RedirectStandardOutput $waitStdOutPath `
-                    -RedirectStandardError $waitStdErrPath `
-                    -Wait `
-                    -PassThru
-                Write-DiagnosticMessage "${templateId}: aspire wait for resource '$resourceName' returned with exit code $($waitProcess.ExitCode)."
-
-                $waitOutput = Get-CombinedProcessOutput -StdOutPath $waitStdOutPath -StdErrPath $waitStdErrPath
-
-                Set-Content -Path $waitCombinedPath -Value $waitOutput -Encoding utf8
-
-                if ($waitProcess.ExitCode -ne 0)
-                {
-                    throw "${templateId}: aspire wait for resource $resourceName failed with exit code $($waitProcess.ExitCode)."
-                }
+                Wait-AspireResource -ResourceName $resourceName -Phase 'start' -TemplateId $templateId `
+                    -WorkingDirectory $projectRoot -DiagnosticsDirectory $diagnosticsDir `
+                    -TimeoutSeconds $ResourceReadyTimeoutSeconds
             }
 
             Write-Host "$templateId aspire start started in $([math]::Round($startElapsed.TotalSeconds, 2)) seconds."
@@ -430,15 +468,6 @@ foreach ($template in $templates)
             finally
             {
                 Pop-Location
-            }
-
-            # The diagnostics artifact preserves the generated project but does not need installed
-            # dependencies. Remove them after all Aspire processes stop so upload-artifact cannot race
-            # a package installer cleanup and fail while stat-ing a disappearing node_modules directory.
-            foreach ($relativeDependencyPath in @('node_modules', 'frontend/node_modules'))
-            {
-                $dependencyPath = Join-Path $projectRoot $relativeDependencyPath
-                Remove-Item -Recurse -Force $dependencyPath -ErrorAction SilentlyContinue
             }
         }
 
