@@ -363,10 +363,41 @@ Prompt agents support several tool types, all created as project-level resources
 | Bing Grounding | `project.AddBingGroundingTool(name).WithReference(conn)` | Grounds responses using Bing Search |
 | SharePoint | `project.AddSharePointTool(name, connectionIds)` | Searches SharePoint data |
 | Microsoft Fabric | `project.AddFabricTool(name, connectionIds)` | Queries data through Fabric data agents |
-| Azure Functions | `project.AddAzureFunctionTool(name, ...)` | Invokes serverless Azure Functions |
+| Azure Functions | `project.AddAzureFunctionTool(name, options)` | Invokes serverless Azure Functions |
 | Function Calling | `project.AddFunctionTool(name, funcName, params)` | Calls application-defined functions |
 | Image Generation | `project.AddImageGenerationTool(name)` | Generates and edits images (preview) |
 | Computer Use | `project.AddComputerUseTool(name, w, h)` | Interacts with a computer desktop (preview) |
+
+Azure Function tools use `AzureFunctionToolOptions` to group the function definition and queue bindings:
+
+**C#**
+
+```csharp
+var functionTool = project.AddAzureFunctionTool("weather-tool", new AzureFunctionToolOptions
+{
+    FunctionName = "get_weather",
+    Description = "Gets the weather for a city.",
+    ParametersJson = """{"type":"object","properties":{"city":{"type":"string"}}}""",
+    InputQueueEndpoint = "https://storage.queue.core.windows.net",
+    InputQueueName = "weather-input",
+    OutputQueueEndpoint = "https://storage.queue.core.windows.net",
+    OutputQueueName = "weather-output"
+});
+```
+
+**TypeScript**
+
+```typescript
+const functionTool = await project.addAzureFunctionTool("weather-tool", {
+    functionName: "get_weather",
+    description: "Gets the weather for a city.",
+    parametersJson: JSON.stringify({ type: "object", properties: { city: { type: "string" } } }),
+    inputQueueEndpoint: "https://storage.queue.core.windows.net",
+    inputQueueName: "weather-input",
+    outputQueueEndpoint: "https://storage.queue.core.windows.net",
+    outputQueueName: "weather-output"
+});
+```
 
 ### Azure AI Search tool example
 
