@@ -5,6 +5,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { spawn, spawnSync } = require('child_process');
+const { selectAppHostSdkVersion } = require('./e2e-apphost-sdk-version');
 const {
   ensureDownloadCache,
   projectDownloadCache,
@@ -2223,17 +2224,12 @@ function resolveAppHostSdkVersion(resolvedCliPath) {
   if (versionResult.status === 0) {
     const version = versionResult.stdout.trim().split('+')[0];
     if (/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version)) {
-      if (availablePackageVersions.includes(version) || process.env.CI) {
-        return version;
+      const selectedVersion = selectAppHostSdkVersion(version, availablePackageVersions);
+      if (selectedVersion !== version) {
+        console.warn(`Using local Aspire.AppHost.Sdk ${selectedVersion} for E2E fixture restore because ${version} is not available in local package sources.`);
       }
 
-      const localVersion = availablePackageVersions[0];
-      if (localVersion) {
-        console.warn(`Using local Aspire.AppHost.Sdk ${localVersion} for E2E fixture restore because ${version} is not available in local package sources.`);
-        return localVersion;
-      }
-
-      return version;
+      return selectedVersion;
     }
   }
 
