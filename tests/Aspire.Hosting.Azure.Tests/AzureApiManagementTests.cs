@@ -170,7 +170,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
             PublisherName = "Contoso APIs",
         });
 
-        var api = apim.AddApi("catalog-api", backend, "/catalog/", "Catalog", subscriptionRequired: true);
+        var api = apim.AddApi("catalog-api", backend, "/catalog/", new() { DisplayName = "Catalog" });
         var operation = api.AddOperation("get-product", "get", "/products/{id}", "Get product");
 
         Assert.Equal("catalog", api.Resource.Path);
@@ -204,8 +204,65 @@ public class AzureApiManagementTests(ITestOutputHelper output)
             operationName: "physical-operation");
 
         Assert.Equal("physical-api", api.Resource.ApiName);
+        Assert.Equal("catalog-api", api.Resource.DisplayName);
         Assert.True(api.Resource.SubscriptionRequired);
         Assert.Equal("physical-operation", operation.Resource.OperationName);
+    }
+
+    [Theory]
+    [InlineData("compute", false)]
+    [InlineData("compute", true)]
+    [InlineData("without-target", false)]
+    [InlineData("without-target", true)]
+    [InlineData("openai", false)]
+    [InlineData("openai", true)]
+    public void ApiOptionsApplyToAllApiKinds(string kind, bool useOptions)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var target = builder.AddContainer("backend", "nginx").WithHttpEndpoint(targetPort: 80);
+        var apim = builder.AddAzureApiManagement("apim", new()
+        {
+            PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
+        });
+        var options = useOptions
+            ? new AzureApiManagementApiOptions { DisplayName = "Catalog", SubscriptionRequired = false }
+            : null;
+
+        var api = kind switch
+        {
+            "compute" => apim.AddApi("catalog-api", target, "/catalog/", options, apiName: "physical-api"),
+            "without-target" => apim.AddApi("catalog-api", "/catalog/", options, apiName: "physical-api"),
+            "openai" => apim.AddOpenAIApi("catalog-api", "/catalog/", options, apiName: "physical-api"),
+            _ => throw new InvalidOperationException($"Unexpected API kind '{kind}'."),
+        };
+
+        Assert.Equal("physical-api", api.Resource.ApiName);
+        Assert.Equal("catalog", api.Resource.Path);
+        Assert.Equal(useOptions ? "Catalog" : "catalog-api", api.Resource.DisplayName);
+        Assert.Equal(!useOptions, api.Resource.SubscriptionRequired);
+        Assert.Same(apim.Resource, api.Resource.Parent);
+        Assert.Same(api.Resource, Assert.Single(apim.Resource.Apis));
+        Assert.Contains(api.Resource, builder.Resources);
+    }
+
+    [Fact]
+    public void ApiResourceConstructorAppliesOptions()
+    {
+        var parent = new AzureApiManagementResource("apim", new()
+        {
+            PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
+        }, _ => { });
+        var target = new ContainerResource("backend");
+        var api = new AzureApiManagementApiResource(
+            "catalog-api", "physical-api", "catalog",
+            new() { SubscriptionRequired = false }, target, parent);
+
+        Assert.Equal("catalog-api", api.DisplayName);
+        Assert.False(api.SubscriptionRequired);
+        Assert.Same(target, api.Target);
+        Assert.Same(parent, api.Parent);
     }
 
     [Fact]
@@ -248,9 +305,9 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         Assert.Throws<ArgumentException>(() =>
             apim.AddApi("long-path-api", backend, new string('p', 401)));
         Assert.Throws<ArgumentException>(() =>
-            apim.AddApi("long-display-api", backend, "long-display", new string('d', 301)));
+            apim.AddApi("long-display-api", backend, "long-display", new() { DisplayName = new string('d', 301) }));
         Assert.Throws<ArgumentException>(() =>
-            apim.AddApi("blank-display-api", backend, "blank-display", " "));
+            apim.AddApi("blank-display-api", backend, "blank-display", new() { DisplayName = " " }));
         Assert.Throws<ArgumentException>(() =>
             api.AddOperation("long-template", "GET", new string('u', 1001)));
         Assert.Throws<ArgumentException>(() =>
@@ -854,7 +911,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
             Capacity = 2,
         }).WithInboundPolicy(
             "<set-header name=\"x-gateway\" exists-action=\"override\"><value>apim</value></set-header>");
-        var api = apim.AddApi("catalog-api", backend, "/catalog", "Catalog API", subscriptionRequired: true)
+        var api = apim.AddApi("catalog-api", backend, "/catalog", new() { DisplayName = "Catalog API" })
             .WithInboundPolicy("<rate-limit calls=\"100\" renewal-period=\"60\" />");
         api.AddOperation("get-product", "get", "/products/{id}/{*path}", "Get product")
             .WithInboundPolicy("<set-query-parameter name=\"source\" exists-action=\"override\"><value>apim</value></set-query-parameter>");
@@ -2788,7 +2845,7 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         var pool = apim.AddBackendPool("blob-pool")
             .WithBackend(primaryBackend, weight: 3)
             .WithBackend(secondaryBackend);
-        apim.AddApi("blob-api", "blobs", subscriptionRequired: false)
+        apim.AddApi("blob-api", "blobs", new() { SubscriptionRequired = false })
             .WithBackend(pool)
             .WithInboundPolicy("<set-header name=\"x-ms-version\" exists-action=\"override\"><value>2023-11-03</value></set-header>");
 
@@ -2811,8 +2868,11 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         }
     }
 
-    [Fact]
-    public async Task GenericBackendOptionsGenerateBackendConfiguration()
+    [Theory]
+    [InlineData(1, 1, "PT1S", "PT1S")]
+    [InlineData(30, 60, "PT30S", "PT1M")]
+    public async Task GenericBackendOptionsGenerateBackendConfiguration(
+        int failureIntervalSeconds, int tripDurationSeconds, string expectedInterval, string expectedTripDuration)
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var apim = builder.AddAzureApiManagement("apim", new()
@@ -2832,8 +2892,8 @@ public class AzureApiManagementTests(ITestOutputHelper output)
                 {
                     Name = "serverErrors",
                     FailureCount = 3,
-                    FailureIntervalSeconds = 30,
-                    TripDurationSeconds = 60,
+                    FailureInterval = TimeSpan.FromSeconds(failureIntervalSeconds),
+                    TripDuration = TimeSpan.FromSeconds(tripDurationSeconds),
                     StatusCodeRanges = [new(500, 599)],
                 },
             },
@@ -2849,9 +2909,44 @@ public class AzureApiManagementTests(ITestOutputHelper output)
         Assert.Contains("protocol: 'soap'", bicep);
         Assert.Contains("validateCertificateName: false", bicep);
         Assert.Contains("name: 'serverErrors'", bicep);
-        Assert.Contains("interval: 'PT30S'", bicep);
-        Assert.Contains("tripDuration: 'PT1M'", bicep);
+        Assert.Contains($"interval: '{expectedInterval}'", bicep);
+        Assert.Contains($"tripDuration: '{expectedTripDuration}'", bicep);
         Assert.Contains("backend-id=\"custom&quot;backend\"", bicep);
+    }
+
+    [Theory]
+    [InlineData(-TimeSpan.TicksPerSecond)]
+    [InlineData(0L)]
+    [InlineData(1L)]
+    [InlineData(TimeSpan.TicksPerSecond - 1)]
+    [InlineData(TimeSpan.TicksPerSecond + 1)]
+    [InlineData(TimeSpan.TicksPerSecond + TimeSpan.TicksPerMillisecond * 500)]
+    public void CircuitBreakerRejectsDurationsBelowOneSecondOrWithFractionalSeconds(long ticks)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var apim = builder.AddAzureApiManagement("apim", new()
+        {
+            PublisherEmail = "api-owners@example.com",
+            PublisherName = "Contoso APIs",
+        });
+        var duration = TimeSpan.FromTicks(ticks);
+
+        var intervalException = Assert.Throws<ArgumentOutOfRangeException>(() => apim.AddBackend(
+            "invalid-interval",
+            ReferenceExpression.Create($"https://example.com"),
+            new() { CircuitBreaker = new() { FailureInterval = duration } }));
+        var tripException = Assert.Throws<ArgumentOutOfRangeException>(() => apim.AddBackend(
+            "invalid-trip",
+            ReferenceExpression.Create($"https://example.com"),
+            new() { CircuitBreaker = new() { TripDuration = duration } }));
+
+        Assert.Equal("FailureInterval", intervalException.ParamName);
+        Assert.Equal(duration, intervalException.ActualValue);
+        Assert.Contains("whole number of seconds and at least one second", intervalException.Message);
+        Assert.Equal("TripDuration", tripException.ParamName);
+        Assert.Equal(duration, tripException.ActualValue);
+        Assert.Contains("whole number of seconds and at least one second", tripException.Message);
+        Assert.Empty(apim.Resource.Backends);
     }
 
     [Fact]
