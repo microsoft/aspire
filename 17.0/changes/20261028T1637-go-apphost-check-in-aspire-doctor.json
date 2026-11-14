@@ -1,14 +1,16 @@
 {
   "area": "CLI",
-  "areaEmoji": "\ud83d\udcbb",
+  "areaEmoji": "💻",
   "backport": false,
   "breaking": false,
   "changeType": "New features",
   "communityContributors": [],
   "description": "aspire doctor now verifies the Go toolchain meets the version required by Go AppHosts, instead of failing late on aspire run.",
-  "docsPrs": [],
+  "docsPrs": [
+    1966
+  ],
   "docsRequired": false,
-  "emoji": "\ud83e\ude7a",
+  "emoji": "🩺",
   "firstMergedAt": "2026-10-28T16:37:01Z",
   "lastMergedAt": "2026-10-28T16:37:01Z",
   "name": "Go AppHost check in aspire doctor",

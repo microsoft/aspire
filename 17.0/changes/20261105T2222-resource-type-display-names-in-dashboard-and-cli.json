@@ -1,14 +1,16 @@
 {
   "area": "AppHost",
-  "areaEmoji": "\ud83c\udfe0",
+  "areaEmoji": "🏠",
   "backport": false,
   "breaking": false,
   "changeType": "New features",
   "communityContributors": [],
   "description": "Resources can now provide a friendly type label such as `Redis` or `PostgreSQL Server` that is shown in the Dashboard and CLI instead of the technical `Container` type.",
-  "docsPrs": [],
+  "docsPrs": [
+    2065
+  ],
   "docsRequired": true,
-  "emoji": "\ud83c\udff7\ufe0f",
+  "emoji": "🏷️",
   "firstMergedAt": "2026-11-05T22:22:22Z",
   "lastMergedAt": "2026-11-05T22:22:22Z",
   "name": "Resource type display names in Dashboard and CLI",

@@ -1,14 +1,16 @@
 {
   "area": "CLI",
-  "areaEmoji": "\ud83d\udcbb",
+  "areaEmoji": "💻",
   "backport": false,
   "breaking": false,
   "changeType": "Bug fixes",
   "communityContributors": [],
   "description": "`aspire destroy` now rejects unknown options and positional arguments before starting the AppHost instead of silently running the destroy pipeline.",
-  "docsPrs": [],
+  "docsPrs": [
+    1975
+  ],
   "docsRequired": false,
-  "emoji": "\ud83d\uded1",
+  "emoji": "🛑",
   "firstMergedAt": "2026-10-29T01:50:49Z",
   "lastMergedAt": "2026-10-29T01:50:49Z",
   "name": "aspire destroy rejects unknown arguments",

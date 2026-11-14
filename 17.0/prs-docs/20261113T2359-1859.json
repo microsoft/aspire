@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents Bicep enum parameter expressions (#20557)",
+  "mergedAt": "2026-11-13T23:59:03Z",
+  "number": 1859,
+  "runDate": "2026-11-14T00:10:00Z",
+  "status": "included",
+  "title": "[docs] Document Bicep parameter expressions for enum-valued SKU properties"
+}

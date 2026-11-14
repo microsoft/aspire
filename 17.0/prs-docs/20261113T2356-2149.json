@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Docs CI fix, not a user-facing change",
+  "mergedAt": "2026-11-13T23:56:20Z",
+  "number": 2149,
+  "runDate": "2026-11-14T00:10:00Z",
+  "status": "excluded",
+  "title": "Fix release/17.0 CI: aspire destroy unknown-option sample"
+}

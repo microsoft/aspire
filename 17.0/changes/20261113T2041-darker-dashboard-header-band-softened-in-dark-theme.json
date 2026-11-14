@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": true,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The dashboard header is a band darker than the page again, with a softer shade in the dark theme.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🌗",
+  "firstMergedAt": "2026-11-13T20:41:16Z",
+  "lastMergedAt": "2026-11-13T20:41:16Z",
+  "name": "Darker dashboard header band, softened in dark theme",
+  "owner": "maddymontaquila",
+  "prs": [
+    22267
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Resource graph controls no longer clipped",
+  "mergedAt": "2026-11-13T20:43:04Z",
+  "number": 22268,
+  "runDate": "2026-11-14T00:10:00Z",
+  "status": "included",
+  "title": "[release/17.0] Fix clipped graph controls and hide the game in the previous dashboard"
+}

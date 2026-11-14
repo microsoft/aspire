@@ -6,7 +6,9 @@
   "changeType": "Improvements",
   "communityContributors": [],
   "description": "The Go SDK generator now emits godoc comments from ATS documentation metadata, so IDE hover and `go doc` show API documentation for generated Aspire types and members.",
-  "docsPrs": [],
+  "docsPrs": [
+    1981
+  ],
   "docsRequired": false,
   "emoji": "📚",
   "firstMergedAt": "2026-10-30T02:27:04Z",

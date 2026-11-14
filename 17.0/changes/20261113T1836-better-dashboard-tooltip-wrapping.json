@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": true,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Long dashboard tooltips now wrap more cleanly instead of overflowing.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "💬",
+  "firstMergedAt": "2026-11-13T18:36:58Z",
+  "lastMergedAt": "2026-11-13T18:36:58Z",
+  "name": "Better dashboard tooltip wrapping",
+  "owner": "JamesNK",
+  "prs": [
+    22249
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": true,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed a 404 that occurred when switching display language in the previous dashboard experience.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🌍",
+  "firstMergedAt": "2026-11-13T18:36:25Z",
+  "lastMergedAt": "2026-11-13T18:36:25Z",
+  "name": "Language switching works in the previous dashboard",
+  "owner": "sebastienros",
+  "prs": [
+    22262
+  ]
+}

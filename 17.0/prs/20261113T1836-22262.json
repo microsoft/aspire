@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Language switching works in the previous dashboard",
+  "mergedAt": "2026-11-13T18:36:25Z",
+  "number": 22262,
+  "runDate": "2026-11-14T00:10:00Z",
+  "status": "included",
+  "title": "[release/17.0] Fix 404 when switching language in the previous dashboard"
+}

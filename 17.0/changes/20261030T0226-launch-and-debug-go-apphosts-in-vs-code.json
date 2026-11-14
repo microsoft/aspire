@@ -6,7 +6,9 @@
   "changeType": "New features",
   "communityContributors": [],
   "description": "The VS Code extension can now launch and debug Go AppHosts.",
-  "docsPrs": [],
+  "docsPrs": [
+    1982
+  ],
   "docsRequired": true,
   "emoji": "🐞",
   "firstMergedAt": "2026-10-30T02:26:31Z",

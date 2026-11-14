@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": true,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Improved the prompts asking where CLI configuration should be saved and the feedback shown after configuration is updated.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🧭",
+  "firstMergedAt": "2026-11-13T18:39:12Z",
+  "lastMergedAt": "2026-11-13T18:39:12Z",
+  "name": "Clearer CLI config source prompts and feedback",
+  "owner": "JamesNK",
+  "prs": [
+    22240
+  ]
+}

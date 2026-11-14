@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents ASPIRE013 (#21288)",
+  "mergedAt": "2026-11-13T23:55:34Z",
+  "number": 2071,
+  "runDate": "2026-11-14T00:10:00Z",
+  "status": "included",
+  "title": "[docs] Document ASPIRE013 and scope ASPIRE010 to non-C# AppHosts"
+}

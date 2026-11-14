@@ -1,0 +1,21 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": true,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed clipped resource graph controls and hid the Aspire Outage game in the previous dashboard experience.",
+  "docsPrs": [
+    2144
+  ],
+  "docsRequired": false,
+  "emoji": "📈",
+  "firstMergedAt": "2026-11-13T20:43:04Z",
+  "lastMergedAt": "2026-11-13T20:43:04Z",
+  "name": "Resource graph controls no longer clipped",
+  "owner": "sebastienros",
+  "prs": [
+    22268
+  ]
+}

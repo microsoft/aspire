@@ -1,0 +1,9 @@
+{
+  "author": "joperezr",
+  "comment": "Dependency version bumps for vulnerable packages",
+  "mergedAt": "2026-11-13T20:14:14Z",
+  "number": 22266,
+  "runDate": "2026-11-14T00:10:00Z",
+  "status": "excluded",
+  "title": "[release/17.0] Update vulnerable dependencies"
+}

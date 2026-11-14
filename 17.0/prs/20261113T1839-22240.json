@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Clearer CLI config source prompts and feedback",
+  "mergedAt": "2026-11-13T18:39:12Z",
+  "number": 22240,
+  "runDate": "2026-11-14T00:10:00Z",
+  "status": "included",
+  "title": "[release/17.0] Improve config source prompts and update feedback"
+}

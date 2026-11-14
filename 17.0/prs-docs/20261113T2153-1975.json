@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents aspire destroy unknown arguments (#21379)",
+  "mergedAt": "2026-11-13T21:53:10Z",
+  "number": 1975,
+  "runDate": "2026-11-14T00:10:00Z",
+  "status": "included",
+  "title": "[docs] Document aspire destroy rejecting unknown arguments"
+}

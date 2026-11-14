@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents godoc comments (#21197)",
+  "mergedAt": "2026-11-13T23:58:43Z",
+  "number": 1981,
+  "runDate": "2026-11-14T00:10:00Z",
+  "status": "included",
+  "title": "[docs] Document godoc comments in generated Go SDK"
+}

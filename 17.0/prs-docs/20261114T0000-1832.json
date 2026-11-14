@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents Mongo Express direct connection (#20571)",
+  "mergedAt": "2026-11-14T00:00:51Z",
+  "number": 1832,
+  "runDate": "2026-11-14T00:10:00Z",
+  "status": "included",
+  "title": "[docs] Document Mongo Express direct connection for single-member replica sets"
+}

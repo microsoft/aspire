@@ -6,7 +6,9 @@
   "changeType": "Improvements",
   "communityContributors": [],
   "description": "Kubernetes deployment now accepts any Helm 4 release (4.0.0 or later) instead of requiring 4.2.0, so runners with Helm 4.1.x are no longer rejected.",
-  "docsPrs": [],
+  "docsPrs": [
+    2012
+  ],
   "docsRequired": false,
   "emoji": "⎈",
   "firstMergedAt": "2026-10-31T19:26:43Z",

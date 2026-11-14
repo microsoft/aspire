@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Source PR #20551 not in changelog",
+  "mergedAt": "2026-11-13T22:41:17Z",
+  "number": 2055,
+  "runDate": "2026-11-14T00:10:00Z",
+  "status": "excluded",
+  "title": "[docs] Document FoundryModel.Nvidia provider family"
+}

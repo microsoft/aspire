@@ -6,7 +6,9 @@
   "changeType": "Improvements",
   "communityContributors": [],
   "description": "Dev tunnel resources now report ready much more promptly by observing the tunnel host's console output directly, instead of relying solely on slower service-based reconciliation. Lifecycle events like stops, disconnects, reconnects, and host takeovers now update port resources and URL availability correctly.",
-  "docsPrs": [],
+  "docsPrs": [
+    1839
+  ],
   "docsRequired": false,
   "emoji": "⚡",
   "firstMergedAt": "2026-10-07T18:50:35Z",

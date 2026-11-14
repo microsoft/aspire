@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents Helm minimum version (#21590)",
+  "mergedAt": "2026-11-13T22:41:35Z",
+  "number": 2012,
+  "runDate": "2026-11-14T00:10:00Z",
+  "status": "included",
+  "title": "[docs] Lower minimum Helm version to 4.0.0"
+}

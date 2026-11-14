@@ -1,0 +1,19 @@
+{
+  "area": "Templates",
+  "areaEmoji": "📄",
+  "backport": true,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Project and single-file templates and `aspire init` no longer add the redundant `AspireUseCliBundle` setting, since current AppHost SDKs enable the CLI bundle by default.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🧹",
+  "firstMergedAt": "2026-11-13T20:45:55Z",
+  "lastMergedAt": "2026-11-13T20:45:55Z",
+  "name": "Removed redundant CLI bundle opt-ins from templates",
+  "owner": "eerhardt",
+  "prs": [
+    22226
+  ]
+}
