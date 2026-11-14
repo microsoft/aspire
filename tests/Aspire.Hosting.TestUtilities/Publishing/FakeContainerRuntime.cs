@@ -48,6 +48,7 @@ public sealed class FakeContainerRuntime(bool shouldFail = false, bool isRunning
     public string? InspectedImageDigest { get; set; }
     public string? InspectedImageOperatingSystem { get; set; }
     public string? InspectedImageArchitecture { get; set; }
+    public IReadOnlyList<ComposeServiceInfo>? ComposeServices { get; set; }
 
     public Task<bool> CheckIfRunningAsync(CancellationToken cancellationToken)
     {
@@ -184,7 +185,7 @@ public sealed class FakeContainerRuntime(bool shouldFail = false, bool isRunning
 
     public Task<IReadOnlyList<ComposeServiceInfo>?> ComposeListServicesAsync(ComposeOperationContext context, CancellationToken cancellationToken)
     {
-        return Task.FromResult<IReadOnlyList<ComposeServiceInfo>?>(null);
+        return Task.FromResult(ComposeServices);
     }
 
     public Task<IContainerRuntime> ResolveAsync(CancellationToken cancellationToken = default)

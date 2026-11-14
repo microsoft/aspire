@@ -1,0 +1,17 @@
+﻿{
+  Summary: [
+    {
+      Key: api,
+      Value: http://localhost:23457,
+      EnableMarkdown: false
+    },
+    {
+      Key: env-dashboard,
+      Value: No public endpoints,
+      EnableMarkdown: false
+    }
+  ],
+  DashboardLogs: [
+    Successfully deployed **env-dashboard** to Docker Compose environment **env**. No public endpoints were configured.
+  ]
+}
