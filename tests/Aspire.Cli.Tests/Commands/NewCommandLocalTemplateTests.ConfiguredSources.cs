@@ -54,6 +54,8 @@ public partial class NewCommandLocalTemplateTests
     [InlineData("""{ "templateSources": null }""")]
     [InlineData("""{ "templates": { "not-a-source": true } }""")]
     [InlineData("""{ "unrelated": true }""")]
+    // Older CLIs stored the retired Go polyglot flag as a nested feature object.
+    [InlineData("""{ "features": { "stagingChannelEnabled": "true", "experimentalPolyglot": { "go": "true" } } }""")]
     public async Task ConfiguredSources_AbsentSettingHasNoSources(string json)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
