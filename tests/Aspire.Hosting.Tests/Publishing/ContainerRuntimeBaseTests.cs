@@ -452,6 +452,39 @@ public class ContainerRuntimeBaseTests
         Assert.False(result.TryGetManifest("linux", "amd64", out _));
     }
 
+    [Fact]
+    public void BuildAdditionalArguments_EmptyOrNull_ReturnsEmpty()
+    {
+        Assert.Empty(TestContainerRuntime.FormatAdditionalArguments(null));
+        Assert.Empty(TestContainerRuntime.FormatAdditionalArguments([]));
+    }
+
+    [Fact]
+    public void BuildAdditionalArguments_PreservesCommasSpacesAndQuotesAsTokens()
+    {
+        // Commas in a cache spec are data, not separators. Spaces and quotes must also stay inside
+        // the token instead of being treated as shell syntax.
+        var result = TestContainerRuntime.FormatAdditionalArguments(
+        [
+            "--cache-from",
+            "type=registry,ref=cr.example.com/app:cache",
+            "--cache-to",
+            "type=local,dest=/tmp/build cache",
+            "--opt",
+            "label=name\"quoted,mode=max"
+        ]);
+
+        Assert.Equal(
+        [
+            "--cache-from",
+            "type=registry,ref=cr.example.com/app:cache",
+            "--cache-to",
+            "type=local,dest=/tmp/build cache",
+            "--opt",
+            "label=name\"quoted,mode=max"
+        ], result);
+    }
+
     private sealed class TestContainerRuntime(IProcessRunner? processRunner = null, string? runtimeExecutable = null) : ContainerRuntimeBase<TestContainerRuntime>(NullLogger<TestContainerRuntime>.Instance, processRunner ?? new DefaultProcessRunner())
     {
         protected override string RuntimeExecutable => runtimeExecutable ?? (OperatingSystem.IsWindows() ? "cmd" : "sh");
@@ -478,6 +511,11 @@ public class ContainerRuntimeBaseTests
                 "Test command succeeded.",
                 "Test command failed with exit code {0}.",
                 cancellationToken);
+        }
+
+        public static List<string> FormatAdditionalArguments(IReadOnlyList<string>? additionalArguments)
+        {
+            return BuildAdditionalArguments(additionalArguments);
         }
 
         public Task<string> RunCommandForOutputAsync(CancellationToken cancellationToken = default)

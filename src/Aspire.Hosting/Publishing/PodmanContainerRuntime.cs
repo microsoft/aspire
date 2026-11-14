@@ -194,6 +194,10 @@ internal sealed class PodmanContainerRuntime : ContainerRuntimeBase<PodmanContai
         // Add stage if specified
         arguments.AddRange(BuildStage(stage));
 
+        // Caller-supplied tokens such as BuildKit --cache-from/--cache-to stay individual
+        // arguments. Joining them would split values that contain spaces.
+        arguments.AddRange(BuildAdditionalArguments(options?.AdditionalArguments));
+
         arguments.Add(contextPath);
 
         // Prepare environment variables for build secrets (only for environment-type secrets)
