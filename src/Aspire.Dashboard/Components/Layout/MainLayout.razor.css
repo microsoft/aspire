@@ -9,12 +9,12 @@
     white-space: nowrap;
 }
 
-::deep.layout > header a.application-name {
+::deep.layout > header .application-name {
     display: block;
     flex: 0 1 auto;
     min-width: 0;
     /* Long application names truncate with an ellipsis; the full name is in the tooltip. */
-    max-width: min(220px, 22vw);
+    max-width: min(280px, 22vw);
     height: 28px;
     padding: 0 2px;
     overflow: hidden;
@@ -33,14 +33,14 @@
     min-width: 8px;
 }
 
-::deep.layout a.logo {
+::deep.layout .logo {
     display: flex;
     align-items: center;
     width: 24px;
     height: 24px;
 }
 
-::deep.layout:has(a.logo:hover, a.application-name:hover) :is(a.logo, a.application-name) {
+::deep.layout:has(a.logo:hover, a.application-name:hover, a.brand-home:hover) :is(.logo, .application-name) {
     filter: brightness(var(--aspire-brand-hover-brightness));
 }
 
@@ -223,23 +223,17 @@
     ::deep.layout {
         grid-template-columns: minmax(0, 1fr);
         grid-template-rows: auto auto minmax(0, 1fr);
-        /* Banners are above the header rather than between it and the page. The resource list's column starts at
-           the brand in the header, and a banner under the header would cut it in two. */
         grid-template-areas:
-            "messagebar"
             "head"
+            "messagebar"
             "main";
-    }
-
-    ::deep.layout > .messagebar-container {
-        border-top: 0;
-        border-bottom: 1px solid var(--colorNeutralStroke1);
     }
 
     /* A hairline finishes the band's lower edge, across the whole header. */
     ::deep.layout > header {
         position: relative;
         padding-left: 0;
+        gap: 0;
     }
 
     ::deep.layout > header::after {
@@ -247,35 +241,39 @@
         position: absolute;
         inset: auto 0 0 0;
         height: 1px;
-        background: var(--colorNeutralStroke3);
+        background: light-dark(var(--colorNeutralStroke2), var(--colorNeutralStroke3));
         pointer-events: none;
     }
 
-    /* The brand is the home button. Hovering or focusing either of its links highlights the whole lockup, so the
-       logo, the name and the house read as one control. */
+    /* The header draws the separator; banners must not add a second line underneath it. */
+    ::deep.layout > .messagebar-container {
+        border-top: 0;
+    }
+
+    /* One link fills the brand's cell, including the padding between the logo, name and house. */
     ::deep.layout > header .brand-home {
         display: flex;
-        flex: 0 1 auto;
+        flex: 1 1 auto;
         align-items: center;
         min-width: 0;
-        height: 36px;
-        margin-inline-start: -6px;
-        padding: 0 8px 0 6px;
-        gap: var(--aspire-space-1);
-        border-radius: 8px;
+        height: 100%;
+        border-right: 1px solid light-dark(var(--colorNeutralStroke2), var(--colorNeutralStroke3));
+        color: inherit;
+        text-decoration: none;
     }
 
     /* Keyboard focus highlights it too. Focus left behind by a click doesn't: the highlight would stay on after
        arriving home. */
-    ::deep.layout > header .brand-home:is(:hover, :has(:focus-visible)) {
+    ::deep.layout > header .brand-home:is(:hover, :focus-visible) {
         background: var(--colorNeutralBackground3);
     }
 
     /* The name truncates in its own box, so the house after it is never the part that's cut off. */
-    ::deep.layout > header .brand-home > a.application-name {
+    ::deep.layout > header .brand-home > .application-name {
         display: flex;
         align-items: center;
-        gap: 6px;
+        padding: 0 12px;
+        gap: 20px;
     }
 
     ::deep.layout > header .brand-home .application-name-text {
@@ -287,9 +285,11 @@
     ::deep.layout > header .brand-home .application-home-icon {
         flex: 0 0 auto;
         color: var(--colorNeutralForeground3);
+        /* The house artwork sits about 0.5px above its SVG box's center because of uneven internal whitespace. */
+        transform: translateY(0.5px);
     }
 
-    ::deep.layout > header .brand-home:is(:hover, :has(:focus-visible), .current) .application-home-icon {
+    ::deep.layout > header .brand-home:is(:hover, :focus-visible, .current) .application-home-icon {
         color: var(--colorBrandForeground1);
     }
 
@@ -300,35 +300,36 @@
         box-sizing: border-box;
         min-width: 0;
         height: 100%;
-        padding-left: 12px;
-        gap: var(--aspire-space-1);
     }
 
     ::deep.layout > header .brand-logo-container {
         display: flex;
         align-items: center;
         justify-content: center;
-        flex: 0 0 24px;
-        width: 24px;
+        flex: 0 0 36px;
+        width: 36px;
         height: 100%;
-        margin-right: 4px;
     }
 
-    ::deep.layout > header .brand-logo-container > a.logo {
-        justify-content: center;
+    ::deep.layout > header .brand-logo-container > .logo {
+        justify-content: flex-end;
         flex: 0 0 24px;
+        margin-left: auto;
     }
 
     ::deep.layout > header > .header-context {
         display: flex;
         flex: 1 1 auto;
         align-items: center;
-        min-width: 0;
+        /* Reserve room for the compact tab picker when a long app name truncates. */
+        min-width: 170px;
         height: 100%;
-        margin-left: 16px;
         margin-right: auto;
-        padding-left: 16px;
-        border-left: 1px solid var(--colorNeutralStroke2);
+        padding-left: var(--aspire-space-2);
+    }
+
+    ::deep.layout > header > .header-context ~ * {
+        margin-left: var(--aspire-space-1);
     }
 
     ::deep.layout > header .resource-tabs-nav {
@@ -481,84 +482,4 @@
     inset-inline-end: 0.75rem;
     top: 0.5rem;
     text-decoration: none;
-}
-
-/* The resource list goes to the top of the page.
-
-   The header's brand is the head of the list's column: exactly as wide as the docked list, with the same edge, so
-   the column's line runs unbroken from the header to the footer. The tabs then start where the page
-   they switch starts, which shows what they are: views of what's selected in the list, not places beside it.
-
-   The brand keeps that width while the list is hidden or fills the page as the table, so the header doesn't move
-   when the list does: the house stays at the far end of the brand, and the tabs stay where they are.
-
-   The list is in ResourcesLayout, inside this layout's body, and is told apart by the classes on its root element:
-   no class while docked, "pane-collapsed" while it's hidden behind the page title, and "pane-full-canvas" while it
-   fills the page as the table (the dashboard's home). The docked width is --resource-pane-expanded-width, set on this
-   layout's root once the user resizes the list (see MainLayout.SetResourcePaneWidth); 420px is the same default as
-   in ResourcesLayout.razor.css. */
-@media (min-width: 769px) {
-    ::deep.layout {
-        --resource-pane-width: var(--resource-pane-expanded-width, 420px);
-    }
-
-    /* The brand gives way before the tabs do: in a window too narrow for both a wide list and the header's controls,
-       it narrows, its name truncating, rather than letting the tab picker spill over the header actions. The tabs keep
-       room for their compact picker (160px in ResourcesLayout.razor.css) and its padding. */
-    ::deep.layout > header > .header-brand {
-        flex: 0 1 var(--resource-pane-width);
-        min-width: 120px;
-        padding-left: 0;
-        border-right: 1px solid var(--colorNeutralStroke3);
-    }
-
-    ::deep.layout > header > .header-context {
-        min-width: 170px;
-    }
-
-    /* The whole brand is the home button, not only the logo and the name: its two links are stretched to cover the
-       cell between them, edge to edge and top to bottom, and the house is at the far end, beside the column's edge.
-       The paddings that kept the lockup off the cell's edges are inside the links, so they're clickable too. */
-    ::deep.layout > header > .header-brand > .brand-home {
-        flex: 1 1 auto;
-        align-self: stretch;
-        height: auto;
-        margin: 0;
-        padding: 0;
-        gap: 0;
-        border-radius: 0;
-    }
-
-    ::deep.layout > header > .header-brand .brand-logo-container {
-        flex: 0 0 36px;
-        width: 36px;
-        margin-right: 0;
-    }
-
-    ::deep.layout > header > .header-brand .brand-logo-container > a.logo {
-        flex: 1 1 auto;
-        justify-content: flex-end;
-        width: auto;
-        height: 100%;
-    }
-
-    /* The name can use the column's room rather than the header's fixed limit. */
-    ::deep.layout > header > .header-brand a.application-name {
-        flex: 1 1 auto;
-        align-self: stretch;
-        max-width: none;
-        height: auto;
-        padding: 0 12px 0 10px;
-    }
-
-    ::deep.layout > header > .header-brand .application-home-icon {
-        margin-inline-start: auto;
-    }
-
-    /* The brand's edge replaces the divider between the name and the tabs. */
-    ::deep.layout > header > .header-context {
-        margin-left: 0;
-        padding-left: 10px;
-        border-left: 0;
-    }
 }

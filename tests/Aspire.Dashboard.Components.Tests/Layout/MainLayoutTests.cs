@@ -56,10 +56,8 @@ public partial class MainLayoutTests : DashboardTestContext
         Assert.Equal(Resources.Layout.MainLayoutHelp, capturedParameters.Title);
     }
 
-    [Theory]
-    [InlineData(".logo")]
-    [InlineData(".application-name")]
-    public async Task Logo_OpensHomeWithoutRestoringSelection(string selector)
+    [Fact]
+    public async Task HeaderHome_OpensHomeWithoutRestoringSelection()
     {
         var stored = new Dictionary<string, object?>();
         SetupMainLayoutServices(
@@ -70,7 +68,7 @@ public partial class MainLayoutTests : DashboardTestContext
         var cut = Render<MainLayout>(builder => builder.Add(p => p.ViewportInformation,
             new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false)));
 
-        await cut.InvokeAsync(() => cut.Find($"header {selector}").Click());
+        await cut.InvokeAsync(() => cut.Find("header a.brand-home").Click());
 
         // Home is the table of every resource, at its own URL, not the overview at /resources.
         Assert.Equal(DashboardUrls.HomeUrl(), "/" + navigationManager.ToBaseRelativePath(navigationManager.Uri));
@@ -91,17 +89,18 @@ public partial class MainLayoutTests : DashboardTestContext
             new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false)));
 
         // The logo and the name are one lockup, with a house after the name that says where they go.
-        var brand = cut.Find("header .header-brand .brand-home");
-        Assert.Equal(["/", "/"], brand.QuerySelectorAll("a").Select(link => link.GetAttribute("href")));
-        Assert.Single(brand.QuerySelectorAll("a.application-name .application-home-icon"));
+        var brand = Assert.Single(cut.FindAll("header .header-brand a"));
+        Assert.Contains("brand-home", brand.ClassList);
+        Assert.Equal("/", brand.GetAttribute("href"));
+        Assert.Empty(brand.QuerySelectorAll("a, button"));
+        Assert.Single(brand.QuerySelectorAll(".logo"));
+        Assert.Single(brand.QuerySelectorAll(".application-name .application-home-icon"));
         // While home is showing, the lockup is marked current, which fills the house in.
         Assert.Equal(expectCurrent, brand.ClassList.Contains("current"));
-        Assert.Equal(expectCurrent ? "page" : null, brand.QuerySelector("a.application-name")!.GetAttribute("aria-current"));
-        // The full name is the link's tooltip, so keyboard focus shows it as well as the pointer when it's truncated. It's
-        // below the link, which can span the list's column, so it doesn't cover the first tab.
-        var link = brand.QuerySelector("a.application-name")!;
-        Assert.False(string.IsNullOrEmpty(link.GetAttribute("data-tooltip")));
-        Assert.Equal("below", link.GetAttribute("data-tooltip-positioning"));
+        Assert.Equal(expectCurrent ? "page" : null, brand.GetAttribute("aria-current"));
+        // The tooltip gives the full name when it's truncated, below the link so it doesn't cover the adjacent tabs.
+        Assert.False(string.IsNullOrEmpty(brand.GetAttribute("data-tooltip")));
+        Assert.Equal("below", brand.GetAttribute("data-tooltip-positioning"));
     }
 
     [Theory]
