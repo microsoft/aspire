@@ -1229,8 +1229,7 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
                 [
                     "publish", projectPath, "--configuration", "Release", "/t:PublishContainer",
                     "--property:ContainerRepository=program", "--property:ContainerImageTag=latest",
-                    "--property:LocalRegistry=Docker", "--property:RuntimeIdentifier=linux-x64",
-                    "--property:ContainerRuntimeIdentifier=linux-x64"
+                    "--property:LocalRegistry=Docker", "--property:RuntimeIdentifier=linux-x64"
                 ],
                 publish.ArgumentList),
             query =>
@@ -1240,7 +1239,7 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
                     [
                         fileBased ? "build" : "msbuild", projectPath, "-p:Configuration=Release",
                         "-getProperty:ContainerWorkingDirectory", "-v:q",
-                        "--property:RuntimeIdentifier=linux-x64", "--property:ContainerRuntimeIdentifier=linux-x64"
+                        "--property:RuntimeIdentifier=linux-x64"
                     ],
                     query.ArgumentList);
             });
@@ -1249,6 +1248,106 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
         await Verify(dockerfile)
             .UseParameters(fileBased)
             .ScrubLinesWithReplace(line => Regex.Replace(line, "FROM program:temp-.*", "FROM program:temp-"));
+    }
+
+    [Theory]
+    [InlineData(false, ContainerTargetPlatform.WindowsAmd64, "win-x64", "win10-x64")]
+    [InlineData(true, ContainerTargetPlatform.WindowsAmd64, "win-x64", "win10-x64")]
+    [InlineData(false, ContainerTargetPlatform.WindowsAmd64, "win-x64", null)]
+    [InlineData(true, ContainerTargetPlatform.WindowsAmd64, "win-x64", null)]
+    [InlineData(false, ContainerTargetPlatform.LinuxAmd64, "linux-x64", null)]
+    [InlineData(true, ContainerTargetPlatform.LinuxAmd64, "linux-x64", null)]
+    [InlineData(false, ContainerTargetPlatform.LinuxArm64, "linux-arm64", null)]
+    [InlineData(true, ContainerTargetPlatform.LinuxArm64, "linux-arm64", null)]
+    [InlineData(false, null, "win-x64", "win10-x64")]
+    [InlineData(true, null, "win-x64", "win10-x64")]
+    public async Task BuildImageAsync_SinglePlatformRespectsProjectContainerRuntimeIdentifier(
+        bool fileBased,
+        ContainerTargetPlatform? targetPlatform,
+        string runtimeIdentifier,
+        string? projectContainerRuntimeIdentifier)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        using var workspace = TemporaryWorkspace.Create(output);
+        var processRunner = new TestProcessRunner();
+        processRunner.EnqueueResult();
+        processRunner.EnqueueResult(output: ["/custom-app"]);
+        builder.Services.AddSingleton<IProcessRunner>(processRunner);
+        builder.Services.AddFakeContainerRuntime(new FakeContainerRuntime(name: "Docker"));
+
+        var source = builder.AddContainer("assets", "assets-image")
+            .WithAnnotation(new ContainerFilesSourceAnnotation { SourcePath = "/assets" });
+        var projectPath = Path.Combine(workspace.WorkspaceRoot.FullName, fileBased ? "app.cs" : "app.csproj");
+        var resource = builder.AddResource(new ProjectResource("program"))
+            .WithAnnotation(new TestProjectMetadata(projectPath))
+            .WithAnnotation(new ContainerFilesDestinationAnnotation
+            {
+                Source = source.Resource,
+                DestinationPath = "wwwroot"
+            })
+            .WithContainerBuildOptions(context => context.TargetPlatform = targetPlatform);
+        using var app = builder.Build();
+        var imageBuilder = app.Services.GetRequiredService<IResourceContainerImageManager>();
+
+        await imageBuilder.BuildImageAsync(resource.Resource, TestContext.Current.CancellationToken);
+
+        Assert.Equal(2, processRunner.ProcessSpecs.Count);
+
+        // Execute the real SDK's defaulting target without publishing or pulling an image.
+        // Plain -getProperty evaluation does not run the target that defaults the container RID.
+        var probePath = Path.Combine(workspace.WorkspaceRoot.FullName, "properties.csproj");
+        await File.WriteAllTextAsync(probePath, $"""
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+                <EnableSdkContainerSupport>true</EnableSdkContainerSupport>
+                <ContainerBaseImage>mcr.microsoft.com/windows/nanoserver:ltsc2022</ContainerBaseImage>
+                <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">win-x64</RuntimeIdentifier>
+                <ContainerRuntimeIdentifier>{projectContainerRuntimeIdentifier}</ContainerRuntimeIdentifier>
+                <ContainerWorkingDirectory>/app</ContainerWorkingDirectory>
+                <ContainerWorkingDirectory Condition="'$(ContainerRuntimeIdentifier)' == 'win10-x64'">/custom-app</ContainerWorkingDirectory>
+              </PropertyGroup>
+            </Project>
+            """, TestContext.Current.CancellationToken);
+
+        foreach (var command in processRunner.ProcessSpecs)
+        {
+            var publishing = command.ArgumentList![0] == "publish";
+            var propertyArguments = command.ArgumentList
+                .Where(static argument => argument.StartsWith("--property:", StringComparison.Ordinal));
+            List<string> arguments =
+            [
+                "msbuild", probePath, "-nologo",
+                "-getProperty:RuntimeIdentifier,ContainerRuntimeIdentifier,ContainerWorkingDirectory",
+                .. propertyArguments
+            ];
+            if (publishing)
+            {
+                arguments.Add("-target:ComputeContainerBaseImage");
+            }
+
+            var probe = new ProcessSpec(DotnetFileAppProcess.ResolvedExecutablePath)
+            {
+                ArgumentList = arguments,
+                WorkingDirectory = workspace.WorkspaceRoot.FullName,
+                ThrowOnNonZeroReturnCode = true
+            };
+            var (pendingResult, processDisposable) = ProcessUtil.Run(probe);
+            await using (processDisposable)
+            {
+                var result = await pendingResult.WaitAsync(TestContext.Current.CancellationToken).DefaultTimeout();
+                Assert.Equal(0, result.ExitCode);
+                using var document = JsonDocument.Parse(string.Join(Environment.NewLine, result.ProcessOutput));
+                var properties = document.RootElement.GetProperty("Properties");
+                Assert.Equal(runtimeIdentifier, properties.GetProperty("RuntimeIdentifier").GetString());
+                Assert.Equal(
+                    projectContainerRuntimeIdentifier ?? (publishing ? runtimeIdentifier : ""),
+                    properties.GetProperty("ContainerRuntimeIdentifier").GetString());
+                Assert.Equal(
+                    projectContainerRuntimeIdentifier is null ? "/app" : "/custom-app",
+                    properties.GetProperty("ContainerWorkingDirectory").GetString());
+            }
+        }
     }
 
     [Theory]
@@ -1446,7 +1545,7 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
             Assert.Equal("Docker", properties.GetProperty("LocalRegistry").GetString());
             Assert.Equal(outputPath, properties.GetProperty("ContainerArchiveOutputPath").GetString());
             Assert.Equal("linux-x64", properties.GetProperty("RuntimeIdentifier").GetString());
-            Assert.Equal("linux-x64", properties.GetProperty("ContainerRuntimeIdentifier").GetString());
+            Assert.Equal("", properties.GetProperty("ContainerRuntimeIdentifier").GetString());
         }
     }
 
