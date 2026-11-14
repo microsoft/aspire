@@ -4,6 +4,7 @@
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Aspire.Cli.Agents;
 using Aspire.Cli.Resources;
 
 namespace Aspire.Cli.Utils.EnvironmentChecker;
@@ -53,7 +54,8 @@ internal sealed class DeprecatedAgentConfigCheck : IEnvironmentCheck
             try
             {
                 var content = File.ReadAllText(configPath);
-                var config = JsonNode.Parse(content)?.AsObject();
+                var config = JsonNode.Parse(content, documentOptions:
+                    location.Format is ConfigFormat.McpWithCommandArray ? ConfigurationHelper.ParseOptions : default)?.AsObject();
 
                 if (config is null)
                 {
@@ -68,7 +70,9 @@ internal sealed class DeprecatedAgentConfigCheck : IEnvironmentCheck
                         Name = GetCheckName(location.AgentName),
                         Status = EnvironmentCheckStatus.Warning,
                         Message = string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.DeprecatedConfigWarning, location.AgentName),
-                        Fix = AgentCommandStrings.DeprecatedConfigFix
+                        Fix = McpConfigFileHelper.CanUpdateDeprecatedCommand(config, location.ServersKey)
+                            ? AgentCommandStrings.DeprecatedConfigFix
+                            : string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.DeprecatedConfigManualFix, location.RelativePath)
                     });
                 }
             }
