@@ -997,6 +997,31 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public async Task ConnectionStringAvailableEventUsesCustomConnectionStringResolver()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        builder.WithTestAndResourceLogging(testOutputHelper);
+
+        var resource = builder.AddResource(new TestResourceWithConnectionString("test-resource", "runtime-connection-string")
+        {
+            ConnectionStringExpression = ReferenceExpression.Create($"expression-connection-string")
+        });
+
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var resourceNotificationService = ResourceNotificationServiceTestHelpers.Create();
+        var applicationEventing = new DistributedApplicationEventing();
+        var appOrchestrator = CreateOrchestrator(distributedAppModel, notificationService: resourceNotificationService, applicationEventing: applicationEventing);
+        await appOrchestrator.RunApplicationAsync();
+
+        await applicationEventing.PublishAsync(new ConnectionStringAvailableEvent(resource.Resource, app.Services), CancellationToken.None);
+
+        Assert.True(resourceNotificationService.TryGetCurrentState(resource.Resource.Name, out var currentState));
+        var connectionString = Assert.Single(currentState.Snapshot.Properties, p => p.Name == KnownProperties.Resource.ConnectionString);
+        Assert.Equal("runtime-connection-string", connectionString.Value);
+    }
+
+    [Fact]
     public async Task ConnectionStringAvailableEventUpdatesConnectionStringAndResolvablePropertiesWithoutDuplicates()
     {
         var builder = DistributedApplication.CreateBuilder();
@@ -1806,7 +1831,7 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
     private sealed class TestResourceWithConnectionString(string name, string connectionString, string? databaseName = null, string? host = null, ReferenceExpression? unresolvedProperty = null)
         : Resource(name), IResourceWithConnectionString
     {
-        public ReferenceExpression ConnectionStringExpression => ReferenceExpression.Create($"{connectionString}");
+        public ReferenceExpression ConnectionStringExpression { get; init; } = ReferenceExpression.Create($"{connectionString}");
 
         public ValueTask<string?> GetConnectionStringAsync(CancellationToken cancellationToken = default)
         {
