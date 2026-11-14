@@ -163,6 +163,11 @@ suite('MeaningfulEngagementReporter', () => {
         const subscriptions: vscode.Disposable[] = [];
         const terminal = new AspireTerminalProvider(subscriptions);
         const cliPath = sinon.stub(terminal, 'getAspireCliExecutablePath').rejects(new Error('CLI unavailable'));
+        sinon.stub(terminal, 'resolveAspireCliPath').callsFake(async target => ({
+            cliPath: await terminal.getAspireCliExecutablePath(target),
+            available: true,
+            source: 'path',
+        }));
         const config = new ConfigInfoProvider(terminal);
         sinon.stub(config, 'getConfigInfo').resolves(undefined);
         const spawn = sinon.stub(cli, 'spawnCliProcess').callsFake((_terminal, _command, args, options) => {

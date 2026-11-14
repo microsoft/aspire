@@ -2,22 +2,27 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import { aspireConfigFileName, getAppHostPathFromConfig, readJsonFile } from './cliTypes';
 import { extensionLogOutputChannel } from './logging';
-import { projectContentsReferencesRunnableAspireAppHost } from './appHostLanguage';
-import { appHostDiscoveryFindFilesMaxResults, getAppHostDiscoveryExcludeGlob } from './workspaceFileSearch';
+import { classifyAppHostPath, projectContentsReferencesRunnableAspireAppHost } from './appHostLanguage';
+import { appHostDiscoveryFindFilesMaxResults, appHostSourceFilePatterns, getAppHostDiscoveryExcludeGlob, isExcludedDiscoveryCandidate } from './workspaceFileSearch';
 import { FileSystemEntryDescriptorIndex, getFileSystemEntryDescriptor } from './paths/fileSystemIdentity';
 import type { CandidateAppHostDisplayInfo } from './appHostCandidateTypes';
 
-export async function findConfiguredAppHostPaths(workspaceFolder: vscode.WorkspaceFolder, cancellationToken?: vscode.CancellationToken): Promise<string[]> {
+export async function findConfiguredAppHostPaths(workspaceFolder: vscode.WorkspaceFolder, cancellationToken?: vscode.CancellationToken, options?: { readonly throwOnError: boolean }): Promise<string[]> {
     let newConfigFiles: vscode.Uri[];
     let legacySettingsFiles: vscode.Uri[];
     try {
         const excludePattern = getAppHostDiscoveryExcludeGlob();
+        // A truncated search cannot establish that the workspace has no configured AppHost.
+        const maxResults = options?.throwOnError ? undefined : appHostDiscoveryFindFilesMaxResults;
         [newConfigFiles, legacySettingsFiles] = await Promise.all([
-            vscode.workspace.findFiles(new vscode.RelativePattern(workspaceFolder, `**/${aspireConfigFileName}`), excludePattern, appHostDiscoveryFindFilesMaxResults, cancellationToken),
-            vscode.workspace.findFiles(new vscode.RelativePattern(workspaceFolder, '**/.aspire/settings.json'), excludePattern, appHostDiscoveryFindFilesMaxResults, cancellationToken),
+            vscode.workspace.findFiles(new vscode.RelativePattern(workspaceFolder, `**/${aspireConfigFileName}`), excludePattern, maxResults, cancellationToken),
+            vscode.workspace.findFiles(new vscode.RelativePattern(workspaceFolder, '**/.aspire/settings.json'), excludePattern, maxResults, cancellationToken),
         ]);
     }
     catch (error) {
+        if (options?.throwOnError) {
+            throw error;
+        }
         extensionLogOutputChannel.warn(`Failed to find AppHost configuration files: ${formatErrorMessage(error)}`);
         return [];
     }
@@ -37,11 +42,87 @@ export async function findConfiguredAppHostPaths(workspaceFolder: vscode.Workspa
                 configuredPaths.push(path.isAbsolute(appHostPath) ? appHostPath : path.join(path.dirname(uri.fsPath), appHostPath));
             }
         }
-        catch {
+        catch (error) {
+            if (options?.throwOnError) {
+                throw error;
+            }
         }
     }
 
     return configuredPaths;
+}
+
+export async function discoverSourceAppHostsFromWorkspaceFiles(workspaceFolder: vscode.WorkspaceFolder, cancellationToken: vscode.CancellationToken): Promise<CandidateAppHostDisplayInfo[]> {
+    const uris = await vscode.workspace.findFiles(
+        new vscode.RelativePattern(workspaceFolder, `{${appHostSourceFilePatterns.join(',')}}`),
+        getAppHostDiscoveryExcludeGlob(),
+        undefined,
+        cancellationToken);
+    return uris.map(uri => ({
+        path: uri.fsPath,
+        language: classifyAppHostPath(uri.fsPath),
+        status: 'possibly-unbuildable',
+    }));
+}
+
+export async function discoverConfiguredAppHostsFromWorkspaceFiles(workspaceFolder: vscode.WorkspaceFolder, cancellationToken: vscode.CancellationToken): Promise<CandidateAppHostDisplayInfo[]> {
+    const configuredPaths = await findConfiguredAppHostPaths(workspaceFolder, cancellationToken, { throwOnError: true });
+    const candidates: CandidateAppHostDisplayInfo[] = [];
+    const candidateDescriptors = new FileSystemEntryDescriptorIndex();
+    let unreadableTarget: Error | undefined;
+    for (const configuredPath of configuredPaths) {
+        if (cancellationToken.isCancellationRequested) {
+            throw new vscode.CancellationError();
+        }
+
+        const uri = vscode.Uri.file(configuredPath);
+        if (isExcludedDiscoveryCandidate(workspaceFolder, uri)) {
+            continue;
+        }
+
+        const isProject = ['.csproj', '.fsproj', '.vbproj'].includes(path.extname(configuredPath).toLowerCase());
+        const language = isProject ? getProjectLanguage(configuredPath) : classifyAppHostPath(configuredPath);
+        if (language === 'unknown') {
+            extensionLogOutputChannel.warn(`Workspace file fallback cannot validate configured AppHost ${configuredPath}: unsupported file type.`);
+            continue;
+        }
+
+        let contents: string;
+        try {
+            contents = Buffer.from(await vscode.workspace.fs.readFile(uri)).toString('utf8');
+        }
+        catch (error) {
+            extensionLogOutputChannel.warn(`Failed to read configured AppHost ${configuredPath}: ${formatErrorMessage(error)}`);
+            if (!isMissingConfiguredTarget(error)) {
+                unreadableTarget ??= new Error(`Failed to read configured AppHost ${configuredPath}: ${formatErrorMessage(error)}`);
+            }
+            continue;
+        }
+
+        if (isProject && !isAppHostProject(contents)) {
+            extensionLogOutputChannel.warn(`Ignoring configured project that does not reference a runnable Aspire AppHost: ${configuredPath}`);
+            continue;
+        }
+
+        const descriptor = getFileSystemEntryDescriptor(configuredPath);
+        if (candidateDescriptors.find(descriptor) !== undefined) {
+            continue;
+        }
+
+        // A readable configured source establishes presence, not buildability, without the CLI.
+        candidates.push({
+            path: configuredPath,
+            language,
+            status: isProject ? 'buildable' : 'possibly-unbuildable',
+        });
+        candidateDescriptors.add(descriptor);
+    }
+
+    if (candidates.length === 0 && unreadableTarget) {
+        throw unreadableTarget;
+    }
+
+    return candidates;
 }
 
 export async function discoverProjectAppHostsFromWorkspaceFiles(workspaceFolder: vscode.WorkspaceFolder): Promise<CandidateAppHostDisplayInfo[]> {
@@ -71,6 +152,10 @@ export async function discoverProjectAppHostsFromWorkspaceFiles(workspaceFolder:
         }
 
         const uri = vscode.Uri.file(configuredPath);
+        if (isExcludedDiscoveryCandidate(workspaceFolder, uri)) {
+            continue;
+        }
+
         const key = path.resolve(uri.fsPath);
         configuredProjectPaths.add(key);
         if (!projectPaths.has(key)) {
@@ -80,6 +165,7 @@ export async function discoverProjectAppHostsFromWorkspaceFiles(workspaceFolder:
     }
 
     const candidates: CandidateAppHostDisplayInfo[] = [];
+    let unreadableProject: Error | undefined;
     const candidateDescriptors = new FileSystemEntryDescriptorIndex();
     for (const uri of projectUris) {
         let projectContents: string;
@@ -88,6 +174,9 @@ export async function discoverProjectAppHostsFromWorkspaceFiles(workspaceFolder:
         }
         catch (error) {
             extensionLogOutputChannel.warn(`Failed to read possible AppHost project ${uri.fsPath}: ${formatErrorMessage(error)}`);
+            if (!configuredProjectPaths.has(path.resolve(uri.fsPath)) || !isMissingConfiguredTarget(error)) {
+                unreadableProject ??= new Error(`Failed to read possible AppHost project ${uri.fsPath}: ${formatErrorMessage(error)}`);
+            }
             continue;
         }
 
@@ -109,6 +198,10 @@ export async function discoverProjectAppHostsFromWorkspaceFiles(workspaceFolder:
         }
     }
 
+    if (candidates.length === 0 && unreadableProject) {
+        throw unreadableProject;
+    }
+
     return candidates;
 }
 
@@ -118,6 +211,11 @@ export function formatErrorMessage(error: unknown): string {
 
 function isAppHostProject(projectContents: string): boolean {
     return projectContentsReferencesRunnableAspireAppHost(projectContents);
+}
+
+function isMissingConfiguredTarget(error: unknown): boolean {
+    return error instanceof vscode.FileSystemError
+        && ['FileNotFound', 'FileIsADirectory', 'FileNotADirectory'].includes(error.code);
 }
 
 function getProjectLanguage(projectPath: string): string {

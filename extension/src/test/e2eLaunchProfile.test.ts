@@ -2317,7 +2317,9 @@ cleanupTemporaryRunRoot();`, {
         assert.ok(!workspaceTargetProofSource.includes('const wrapperPath = path.join(folderPath, `aspire-${folderName}`);'));
         const workspaceRouting = getTestBlock(workspaceTargetProofSource, 'isolates folder terminals and keeps global commands window scoped');
         assert.ok(workspaceRouting.includes("const folderC = createFolderFixture(runRoot, 'folder-c');"));
-        assert.ok(workspaceRouting.includes("const workspaceFolderLabels = ['folder-a', 'folder-b', 'folder-c'] as const;"));
+        assert.ok(workspaceRouting.includes("const eligibleWorkspaceFolderLabels = ['folder-b', 'folder-c'] as const;"));
+        assert.ok(workspaceRouting.includes("await invokeCreateWithAspireInitForFolder('folder-b', folderB, eligibleWorkspaceFolderLabels);"));
+        assert.ok(workspaceRouting.includes('await invokeCreateWithAspireInitCancellation(eligibleWorkspaceFolderLabels);'));
         assert.ok(workspaceRouting.includes("await invokeNewForFolder('folder-c', folderC);"));
         assert.ok(!workspaceRouting.includes("await invokeNewForFolder('folder-b', folderB);"));
         assert.ok(workspaceRouting.includes('assert.ok(!updateCommand.commandLine.includes(folderC.wrapperPath), updateCommand.commandLine);'));

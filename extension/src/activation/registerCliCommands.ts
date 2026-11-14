@@ -13,10 +13,10 @@ import { updateCommand, updateSelfCommand } from '../commands/update';
 import { settingsCommand } from '../commands/settings';
 import { openLocalSettingsCommand, openGlobalSettingsCommand } from '../commands/openSettings';
 import { installCliCommand, verifyCliInstalledCommand } from '../commands/walkthroughCommands';
-import { cliNotAvailable, dismissLabel, errorMessage, noAppHostInWorkspace, openCliInstallInstructions, selectWorkspaceFolderForAspireCommand } from '../loc/strings';
+import { cliNotAvailable, dismissLabel, errorMessage, noAppHostInWorkspace, openCliInstallInstructions } from '../loc/strings';
 import { classifyError, type HandledCommandOutcome, isCommandCancellation, withCommandTelemetry } from '../utils/telemetry';
-import { checkCliAvailableOrRedirect } from '../utils/workspace';
-import { CliPathResolutionTarget, windowCliPathTarget, workspaceFolderCliPathTarget } from '../utils/cliPathVariables';
+import { checkCliAvailableOrRedirect, selectCommandTarget } from '../utils/workspace';
+import { CliPathResolutionTarget, windowCliPathTarget } from '../utils/cliPathVariables';
 import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import { ConfigInfoProvider } from '../utils/configInfoProvider';
 import { AspireEditorCommandProvider } from '../editor/AspireEditorCommandProvider';
@@ -24,6 +24,7 @@ import { isE2eBridgeEnabled } from '../testing/e2eStateFileBridge';
 import { registerInstrumentedCommand } from './instrumentedCommand';
 import { AppHostCommandTarget, getAppHostArgs } from '../utils/appHostArgs';
 import { getCliPathTargetForUri } from '../utils/cliPathVariables';
+import type { AppHostDiscoveryService } from '../utils/appHostDiscovery';
 
 interface CommandInvocation {
   readonly target: CliPathResolutionTarget;
@@ -45,6 +46,7 @@ const cliCheckDeferredCommands = new Set([
 export function registerCliCommands(
   terminalProvider: AspireTerminalProvider,
   editorCommandProvider: AspireEditorCommandProvider,
+  appHostDiscoveryService: AppHostDiscoveryService,
   configInfoProvider: ConfigInfoProvider = new ConfigInfoProvider(terminalProvider),
 ): vscode.Disposable[] {
   const cliAddCommandRegistration = vscode.commands.registerCommand('aspire-vscode.add', () => tryExecuteCommand('aspire-vscode.add', terminalProvider, (tp, invocation, cliPath) => addCommand(tp, editorCommandProvider, invocation.appHost ?? {}, invocation.target, cliPath), () => selectAppHostCommandInvocation(editorCommandProvider)));
@@ -53,7 +55,7 @@ export function registerCliCommands(
   // Delegates to aspire-vscode.new / aspire-vscode.init above, so it doesn't go
   // through tryExecuteCommand itself — the delegated-to command owns its own CLI
   // availability check and telemetry.
-  const createWithAspireCommandRegistration = registerInstrumentedCommand('aspire-vscode.createWithAspire', 'tree', createWithAspireCommand);
+  const createWithAspireCommandRegistration = registerInstrumentedCommand('aspire-vscode.createWithAspire', 'tree', () => createWithAspireCommand(appHostDiscoveryService));
   const cliDeployCommandRegistration = vscode.commands.registerCommand('aspire-vscode.deploy', () => tryExecuteCommand('aspire-vscode.deploy', terminalProvider, () => deployCommand(editorCommandProvider)));
   const cliPublishCommandRegistration = vscode.commands.registerCommand('aspire-vscode.publish', () => tryExecuteCommand('aspire-vscode.publish', terminalProvider, () => publishCommand(editorCommandProvider)));
   const cliDoCommandRegistration = vscode.commands.registerCommand('aspire-vscode.do', () => tryExecuteCommand('aspire-vscode.do', terminalProvider, (_tp, invocation, cliPath) => doCommand(configInfoProvider, editorCommandProvider, invocation.appHost?.appHostPath, invocation.target, cliPath), () => selectAppHostCommandInvocation(editorCommandProvider, true)));
@@ -104,30 +106,6 @@ export function registerCliCommands(
     installCliRegistration,
     verifyCliInstalledRegistration,
   ];
-}
-
-export async function selectCommandTarget(): Promise<CliPathResolutionTarget> {
-  const activeUri = vscode.window.activeTextEditor?.document.uri;
-  const activeFolder = activeUri ? vscode.workspace.getWorkspaceFolder(activeUri) : undefined;
-  if (activeFolder) {
-    return workspaceFolderCliPathTarget(activeFolder);
-  }
-
-  const folders = vscode.workspace.workspaceFolders ?? [];
-  if (folders.length === 1) {
-    return workspaceFolderCliPathTarget(folders[0]);
-  }
-  if (folders.length > 1) {
-    const selected = await vscode.window.showWorkspaceFolderPick({
-      placeHolder: selectWorkspaceFolderForAspireCommand,
-    });
-    if (!selected) {
-      throw new vscode.CancellationError();
-    }
-    return workspaceFolderCliPathTarget(selected);
-  }
-
-  return windowCliPathTarget;
 }
 
 async function selectCommandInvocation(): Promise<CommandInvocation> {
