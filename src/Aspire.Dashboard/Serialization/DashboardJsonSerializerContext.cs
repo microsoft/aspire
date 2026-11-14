@@ -11,6 +11,7 @@ using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.Interaction;
 using Aspire.Dashboard.Model.ResourceGraph;
 using Aspire.Dashboard.Otlp.Http;
+using Aspire.Dashboard.Terminal;
 using Aspire.Dashboard.Utils;
 using Microsoft.FluentUI.AspNetCore.Components;
 
@@ -21,6 +22,7 @@ namespace Aspire.Dashboard.Serialization;
 [JsonSerializable(typeof(BrowserInfo))]
 [JsonSerializable(typeof(TerminalViewOptions))]
 [JsonSerializable(typeof(TerminalToolbarState))]
+[JsonSerializable(typeof(TerminalProgramStatus))]
 [JsonSerializable(typeof(TerminalSizePreset[]))]
 [JsonSerializable(typeof(AspireKeyboardShortcut))]
 [JsonSerializable(typeof(KeyCode[]))]
