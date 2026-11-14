@@ -1856,6 +1856,495 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         Assert.Equal(ProjectContent, unchangedContent);
     }
 
+    [Theory]
+    [InlineData("9.4.1")]
+    [InlineData("9.5.0")]
+    public async Task UpdateProjectFileAsync_UpdatesAppHostSdkInOtherProjectsOfTheSolution(string appHostSdkVersion)
+    {
+        // Regression test for https://github.com/microsoft/aspire/issues/11458: every project built with the
+        // AppHost must declare the same Aspire.AppHost.Sdk version, otherwise MSBuild reports MSB4240. The
+        // 9.5.0 case covers re-running `aspire update` after an earlier run only updated the AppHost.
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        var appHostProjectFile = new FileInfo(Path.Combine(workspace.CreateDirectory("Repro.AppHost").FullName, "Repro.AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostProjectFile.FullName, $"""
+            <Project Sdk="Aspire.AppHost.Sdk/{appHostSdkVersion}">
+              <PropertyGroup>
+                <OutputType>Exe</OutputType>
+                <TargetFramework>net9.0</TargetFramework>
+              </PropertyGroup>
+            </Project>
+            """);
+
+        var testsProjectFile = new FileInfo(Path.Combine(workspace.CreateDirectory("Repro.AppHost.Tests").FullName, "Repro.AppHost.Tests.csproj"));
+        await File.WriteAllTextAsync(testsProjectFile.FullName, """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <Sdk Name="Aspire.AppHost.Sdk" Version="9.4.1" />
+              <PropertyGroup>
+                <TargetFramework>net9.0</TargetFramework>
+              </PropertyGroup>
+              <ItemGroup>
+                <ProjectReference Include="..\Repro.AppHost\Repro.AppHost.csproj" />
+              </ItemGroup>
+            </Project>
+            """);
+
+        var secondAppHostProjectFile = new FileInfo(Path.Combine(workspace.CreateDirectory("Other.AppHost").FullName, "Other.AppHost.csproj"));
+        await File.WriteAllTextAsync(secondAppHostProjectFile.FullName, """
+            <Project Sdk="Aspire.AppHost.Sdk/9.4.1">
+              <PropertyGroup>
+                <OutputType>Exe</OutputType>
+                <TargetFramework>net9.0</TargetFramework>
+              </PropertyGroup>
+            </Project>
+            """);
+
+        // Explicit imports where only Sdk.targets is stale must still be detected and fully updated.
+        var mixedImportsProjectFile = new FileInfo(Path.Combine(workspace.CreateDirectory("Mixed").FullName, "Mixed.csproj"));
+        await File.WriteAllTextAsync(mixedImportsProjectFile.FullName, """
+            <Project>
+              <Import Project="Sdk.props" Sdk="Aspire.AppHost.Sdk" Version="9.5.0" />
+              <Import Project="Sdk.targets" Sdk="Aspire.AppHost.Sdk" Version="9.4.1" />
+            </Project>
+            """);
+
+        // A solution that does not contain the AppHost is not built with it and must be left alone.
+        const string UnrelatedProjectContent = """
+            <Project Sdk="Aspire.AppHost.Sdk/9.4.1">
+            </Project>
+            """;
+        var unrelatedProjectFile = new FileInfo(Path.Combine(workspace.CreateDirectory("Unrelated").FullName, "Unrelated.csproj"));
+        await File.WriteAllTextAsync(unrelatedProjectFile.FullName, UnrelatedProjectContent);
+
+        // Upper-case extension: solution discovery must not depend on the file system's case sensitivity.
+        var solutionFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "Repro.SLNX"));
+        await File.WriteAllTextAsync(solutionFile.FullName, "<Solution />");
+        var unrelatedSolutionFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "Unrelated.sln"));
+        await File.WriteAllTextAsync(unrelatedSolutionFile.FullName, string.Empty);
+
+        var restoredProjects = new List<string>();
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, config =>
+        {
+            config.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner
+            {
+                SearchPackagesAsyncCallback = (_, query, _, _, _, _, _, _, _, _) => query switch
+                {
+                    "Aspire.AppHost.Sdk" => (0, [new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.5.0", Source = PackageSources.NuGetOrg }]),
+                    _ => throw new InvalidOperationException($"Unexpected package query: {query}"),
+                },
+                GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) =>
+                {
+                    var itemsAndProperties = new JsonObject();
+                    itemsAndProperties.WithSdkVersion(appHostSdkVersion);
+                    return (0, JsonDocument.Parse(itemsAndProperties.ToJsonString()));
+                },
+                RestoreAsyncCallback = (project, _, _) =>
+                {
+                    restoredProjects.Add(project.FullName);
+                    return 0;
+                },
+                GetSolutionProjectsAsyncCallback = (solution, _, _) => solution.Name switch
+                {
+                    "Repro.SLNX" => (0, [appHostProjectFile, testsProjectFile, secondAppHostProjectFile, mixedImportsProjectFile]),
+                    "Unrelated.sln" => (0, [unrelatedProjectFile]),
+                    _ => throw new InvalidOperationException($"Unexpected solution: {solution.FullName}"),
+                }
+            };
+            config.InteractionServiceFactory = _ => new TestInteractionService { ConfirmCallback = (_, _) => true };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var channels = await provider.GetRequiredService<IPackagingService>().GetChannelsAsync().DefaultTimeout();
+        var projectUpdater = provider.GetRequiredService<IProjectUpdater>();
+        var updateResult = await projectUpdater.UpdateProjectAsync(CreateUpdateContext(appHostProjectFile, channels.Single(c => c.Name == "default"))).DefaultTimeout();
+
+        Assert.True(updateResult.UpdatedApplied);
+        Assert.Contains("""<Project Sdk="Aspire.AppHost.Sdk/9.5.0">""", await File.ReadAllTextAsync(appHostProjectFile.FullName));
+
+        // The test project keeps Microsoft.NET.Sdk; only the Aspire.AppHost.Sdk version is bumped.
+        var testsContent = await File.ReadAllTextAsync(testsProjectFile.FullName);
+        Assert.Contains("""<Project Sdk="Microsoft.NET.Sdk">""", testsContent);
+        Assert.Contains("""<Sdk Name="Aspire.AppHost.Sdk" Version="9.5.0" />""", testsContent);
+        Assert.DoesNotContain("9.4.1", testsContent);
+
+        Assert.Contains("""<Project Sdk="Aspire.AppHost.Sdk/9.5.0">""", await File.ReadAllTextAsync(secondAppHostProjectFile.FullName));
+        var mixedContent = await File.ReadAllTextAsync(mixedImportsProjectFile.FullName);
+        Assert.Contains("""<Import Project="Sdk.targets" Sdk="Aspire.AppHost.Sdk" Version="9.5.0" />""", mixedContent);
+        Assert.DoesNotContain("9.4.1", mixedContent);
+        Assert.Equal(UnrelatedProjectContent, await File.ReadAllTextAsync(unrelatedProjectFile.FullName));
+
+        // Edited projects are not in the AppHost's restore graph, so they are restored in the same transaction.
+        Assert.Equal(
+            [appHostProjectFile.FullName, testsProjectFile.FullName, secondAppHostProjectFile.FullName, mixedImportsProjectFile.FullName],
+            restoredProjects);
+    }
+
+    [Fact]
+    public async Task UpdateProjectFileAsync_RemovesLegacyAppHostReferenceFromOtherSolutionAppHostWithSharedCentralPackages()
+    {
+        // Both AppHosts use a versionless Aspire.Hosting.AppHost reference from a shared Directory.Packages.props.
+        // The selected AppHost's migration removes the central version, so the other AppHost must drop its
+        // reference too; otherwise its restore fails with NU1010 and the update is rolled back.
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        const string AppHostContent = """
+            <Project Sdk="Aspire.AppHost.Sdk/9.4.1">
+              <ItemGroup>
+                <PackageReference Include="Aspire.Hosting.AppHost" />
+              </ItemGroup>
+            </Project>
+            """;
+        var appHostProjectFile = new FileInfo(Path.Combine(workspace.CreateDirectory("First.AppHost").FullName, "First.AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostProjectFile.FullName, AppHostContent);
+        var otherAppHostProjectFile = new FileInfo(Path.Combine(workspace.CreateDirectory("Second.AppHost").FullName, "Second.AppHost.csproj"));
+        await File.WriteAllTextAsync(otherAppHostProjectFile.FullName, AppHostContent);
+        var directoryPackagesPropsFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "Directory.Packages.props"));
+        await File.WriteAllTextAsync(directoryPackagesPropsFile.FullName, """
+            <Project>
+              <PropertyGroup>
+                <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+              </PropertyGroup>
+              <ItemGroup>
+                <PackageVersion Include="Aspire.Hosting.AppHost" Version="9.4.1" />
+              </ItemGroup>
+            </Project>
+            """);
+        await File.WriteAllTextAsync(Path.Combine(workspace.WorkspaceRoot.FullName, "Repro.slnx"), "<Solution />");
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, config =>
+        {
+            config.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner
+            {
+                SearchPackagesAsyncCallback = (_, query, _, _, _, _, _, _, _, _) => query switch
+                {
+                    "Aspire.AppHost.Sdk" => (0, [new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.5.0", Source = PackageSources.NuGetOrg }]),
+                    "Aspire.Hosting.AppHost" => (0, [new NuGetPackageCli { Id = "Aspire.Hosting.AppHost", Version = "9.5.0", Source = PackageSources.NuGetOrg }]),
+                    _ => throw new InvalidOperationException($"Unexpected package query: {query}"),
+                },
+                GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) =>
+                {
+                    var itemsAndProperties = new JsonObject();
+                    itemsAndProperties.WithSdkVersion("9.4.1");
+                    return (0, JsonDocument.Parse(itemsAndProperties.ToJsonString()));
+                },
+                // Mirrors NU1010: a versionless reference without a central PackageVersion cannot be restored.
+                RestoreAsyncCallback = (project, _, _) =>
+                    File.ReadAllText(project.FullName).Contains("Aspire.Hosting.AppHost", StringComparison.Ordinal) &&
+                    !File.ReadAllText(directoryPackagesPropsFile.FullName).Contains("Aspire.Hosting.AppHost", StringComparison.Ordinal) ? 1 : 0,
+                GetSolutionProjectsAsyncCallback = (_, _, _) => (0, [appHostProjectFile, otherAppHostProjectFile]),
+            };
+            config.InteractionServiceFactory = _ => new TestInteractionService { ConfirmCallback = (_, _) => true };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var channels = await provider.GetRequiredService<IPackagingService>().GetChannelsAsync().DefaultTimeout();
+        var projectUpdater = provider.GetRequiredService<IProjectUpdater>();
+        var updateResult = await projectUpdater.UpdateProjectAsync(CreateUpdateContext(appHostProjectFile, channels.Single(c => c.Name == "default"))).DefaultTimeout();
+
+        Assert.True(updateResult.UpdatedApplied);
+        foreach (var project in new[] { appHostProjectFile, otherAppHostProjectFile })
+        {
+            var content = await File.ReadAllTextAsync(project.FullName);
+            Assert.Contains("""<Project Sdk="Aspire.AppHost.Sdk/9.5.0">""", content);
+            Assert.DoesNotContain("Aspire.Hosting.AppHost", content);
+        }
+        Assert.DoesNotContain("Aspire.Hosting.AppHost", await File.ReadAllTextAsync(directoryPackagesPropsFile.FullName));
+    }
+
+    [Fact]
+    public async Task UpdateProjectFileAsync_KeepsAppHostReferenceInOtherSolutionProjectThatSkipsImplicitReferences()
+    {
+        // With SkipAddAspireDefaultReferences=true (here coming from evaluation, e.g. Directory.Build.props) the SDK
+        // does not add Aspire.Hosting.AppHost implicitly, so the explicit reference is still required.
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostProjectFile = new FileInfo(Path.Combine(workspace.CreateDirectory("First.AppHost").FullName, "First.AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostProjectFile.FullName, """
+            <Project Sdk="Aspire.AppHost.Sdk/9.4.1">
+            </Project>
+            """);
+        var otherAppHostProjectFile = new FileInfo(Path.Combine(workspace.CreateDirectory("Second.AppHost").FullName, "Second.AppHost.csproj"));
+        await File.WriteAllTextAsync(otherAppHostProjectFile.FullName, """
+            <Project Sdk="Aspire.AppHost.Sdk/9.4.1">
+              <ItemGroup>
+                <PackageReference Include="Aspire.Hosting.AppHost" Version="9.4.1" />
+              </ItemGroup>
+            </Project>
+            """);
+        await File.WriteAllTextAsync(Path.Combine(workspace.WorkspaceRoot.FullName, "Repro.slnx"), "<Solution />");
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, config =>
+        {
+            config.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner
+            {
+                SearchPackagesAsyncCallback = (_, query, _, _, _, _, _, _, _, _) => query switch
+                {
+                    "Aspire.AppHost.Sdk" => (0, [new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.5.0", Source = PackageSources.NuGetOrg }]),
+                    _ => throw new InvalidOperationException($"Unexpected package query: {query}"),
+                },
+                GetProjectItemsAndPropertiesAsyncCallback = (project, _, _, _, _) =>
+                {
+                    var itemsAndProperties = new JsonObject();
+                    itemsAndProperties.WithSdkVersion("9.4.1");
+                    if (project.FullName == otherAppHostProjectFile.FullName)
+                    {
+                        itemsAndProperties.WithProperty("SkipAddAspireDefaultReferences", "true");
+                    }
+                    return (0, JsonDocument.Parse(itemsAndProperties.ToJsonString()));
+                },
+                GetSolutionProjectsAsyncCallback = (_, _, _) => (0, [appHostProjectFile, otherAppHostProjectFile]),
+            };
+            config.InteractionServiceFactory = _ => new TestInteractionService { ConfirmCallback = (_, _) => true };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var channels = await provider.GetRequiredService<IPackagingService>().GetChannelsAsync().DefaultTimeout();
+        var projectUpdater = provider.GetRequiredService<IProjectUpdater>();
+        var updateResult = await projectUpdater.UpdateProjectAsync(CreateUpdateContext(appHostProjectFile, channels.Single(c => c.Name == "default"))).DefaultTimeout();
+
+        Assert.True(updateResult.UpdatedApplied);
+        var content = await File.ReadAllTextAsync(otherAppHostProjectFile.FullName);
+        Assert.Contains("""<Project Sdk="Aspire.AppHost.Sdk/9.5.0">""", content);
+        Assert.Contains("""<PackageReference Include="Aspire.Hosting.AppHost" Version="9.4.1" />""", content);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task UpdateProjectFileAsync_RollsBackWhenRetainedSiblingReferenceLosesSharedCentralVersion(bool referenceInImportedFile)
+    {
+        // The second AppHost is already current but opts out of the implicit Aspire.Hosting.AppHost reference, so
+        // it keeps a versionless reference that relies on the shared central version the first AppHost's cleanup
+        // removes. It must be restored in the transaction so the update fails instead of reporting success.
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostProjectFile = new FileInfo(Path.Combine(workspace.CreateDirectory("First.AppHost").FullName, "First.AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostProjectFile.FullName, """
+            <Project Sdk="Aspire.AppHost.Sdk/9.4.1">
+              <ItemGroup>
+                <PackageReference Include="Aspire.Hosting.AppHost" />
+              </ItemGroup>
+            </Project>
+            """);
+        var otherAppHostDirectory = workspace.CreateDirectory("Second.AppHost");
+        var otherAppHostProjectFile = new FileInfo(Path.Combine(otherAppHostDirectory.FullName, "Second.AppHost.csproj"));
+        const string AppHostReference = """
+              <ItemGroup>
+                <PackageReference Include="Aspire.Hosting.AppHost" />
+              </ItemGroup>
+            """;
+        await File.WriteAllTextAsync(otherAppHostProjectFile.FullName, $"""
+            <Project Sdk="Aspire.AppHost.Sdk/9.5.0">
+              <PropertyGroup>
+                <SkipAddAspireDefaultReferences>true</SkipAddAspireDefaultReferences>
+              </PropertyGroup>
+            {(referenceInImportedFile ? string.Empty : AppHostReference)}
+            </Project>
+            """);
+        if (referenceInImportedFile)
+        {
+            await File.WriteAllTextAsync(Path.Combine(otherAppHostDirectory.FullName, "Directory.Build.targets"), $"""
+                <Project>
+                {AppHostReference}
+                </Project>
+                """);
+        }
+        var directoryPackagesPropsFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "Directory.Packages.props"));
+        const string DirectoryPackagesPropsContent = """
+            <Project>
+              <PropertyGroup>
+                <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+              </PropertyGroup>
+              <ItemGroup>
+                <PackageVersion Include="Aspire.Hosting.AppHost" Version="9.4.1" />
+              </ItemGroup>
+            </Project>
+            """;
+        await File.WriteAllTextAsync(directoryPackagesPropsFile.FullName, DirectoryPackagesPropsContent);
+        var originalAppHostContent = await File.ReadAllTextAsync(appHostProjectFile.FullName);
+        await File.WriteAllTextAsync(Path.Combine(workspace.WorkspaceRoot.FullName, "Repro.slnx"), "<Solution />");
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, config =>
+        {
+            config.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner
+            {
+                SearchPackagesAsyncCallback = (_, query, _, _, _, _, _, _, _, _) => query switch
+                {
+                    "Aspire.AppHost.Sdk" => (0, [new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.5.0", Source = PackageSources.NuGetOrg }]),
+                    "Aspire.Hosting.AppHost" => (0, [new NuGetPackageCli { Id = "Aspire.Hosting.AppHost", Version = "9.5.0", Source = PackageSources.NuGetOrg }]),
+                    _ => throw new InvalidOperationException($"Unexpected package query: {query}"),
+                },
+                GetProjectItemsAndPropertiesAsyncCallback = (project, _, _, _, _) =>
+                {
+                    var itemsAndProperties = new JsonObject();
+                    itemsAndProperties.WithSdkVersion("9.4.1");
+                    if (project.FullName == otherAppHostProjectFile.FullName)
+                    {
+                        itemsAndProperties.WithProperty("SkipAddAspireDefaultReferences", "true");
+                    }
+                    return (0, JsonDocument.Parse(itemsAndProperties.ToJsonString()));
+                },
+                // Mirrors NU1010: the second AppHost's versionless reference needs the central PackageVersion.
+                RestoreAsyncCallback = (project, _, _) =>
+                    project.FullName == otherAppHostProjectFile.FullName &&
+                    !File.ReadAllText(directoryPackagesPropsFile.FullName).Contains("Aspire.Hosting.AppHost", StringComparison.Ordinal) ? 1 : 0,
+                GetSolutionProjectsAsyncCallback = (_, _, _) => (0, [appHostProjectFile, otherAppHostProjectFile]),
+            };
+            config.InteractionServiceFactory = _ => new TestInteractionService { ConfirmCallback = (_, _) => true };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var channels = await provider.GetRequiredService<IPackagingService>().GetChannelsAsync().DefaultTimeout();
+        var projectUpdater = provider.GetRequiredService<IProjectUpdater>();
+        var exception = await Assert.ThrowsAsync<ProjectUpdaterException>(
+            () => projectUpdater.UpdateProjectAsync(CreateUpdateContext(appHostProjectFile, channels.Single(c => c.Name == "default"))).DefaultTimeout());
+
+        Assert.Contains(otherAppHostProjectFile.FullName, exception.Message);
+        Assert.Equal(originalAppHostContent, await File.ReadAllTextAsync(appHostProjectFile.FullName));
+        Assert.Equal(DirectoryPackagesPropsContent, await File.ReadAllTextAsync(directoryPackagesPropsFile.FullName));
+    }
+
+    [Fact]
+    public async Task UpdateProjectFileAsync_RollsBackWhenSiblingCleanupRemovesCentralVersionNeededByAnotherSibling()
+    {
+        // The AppHost doesn't use central package management. Two other AppHosts share their own
+        // Directory.Packages.props: the stale one gets its legacy reference and central version removed, and the
+        // current one opts out of the implicit reference and still needs that version. It must be restored in the
+        // transaction so the update fails instead of reporting success.
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostProjectFile = new FileInfo(Path.Combine(workspace.CreateDirectory("First.AppHost").FullName, "First.AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostProjectFile.FullName, """
+            <Project Sdk="Aspire.AppHost.Sdk/9.4.1">
+            </Project>
+            """);
+        var siblingsDirectory = workspace.CreateDirectory("Siblings");
+        var staleProjectFile = new FileInfo(Path.Combine(siblingsDirectory.CreateSubdirectory("Second.AppHost").FullName, "Second.AppHost.csproj"));
+        await File.WriteAllTextAsync(staleProjectFile.FullName, """
+            <Project Sdk="Aspire.AppHost.Sdk/9.4.1">
+              <ItemGroup>
+                <PackageReference Include="Aspire.Hosting.AppHost" />
+              </ItemGroup>
+            </Project>
+            """);
+        var retainedProjectFile = new FileInfo(Path.Combine(siblingsDirectory.CreateSubdirectory("Third.AppHost").FullName, "Third.AppHost.csproj"));
+        await File.WriteAllTextAsync(retainedProjectFile.FullName, """
+            <Project Sdk="Aspire.AppHost.Sdk/9.5.0">
+              <PropertyGroup>
+                <SkipAddAspireDefaultReferences>true</SkipAddAspireDefaultReferences>
+              </PropertyGroup>
+              <ItemGroup>
+                <PackageReference Include="Aspire.Hosting.AppHost" />
+              </ItemGroup>
+            </Project>
+            """);
+        var directoryPackagesPropsFile = new FileInfo(Path.Combine(siblingsDirectory.FullName, "Directory.Packages.props"));
+        const string DirectoryPackagesPropsContent = """
+            <Project>
+              <PropertyGroup>
+                <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+              </PropertyGroup>
+              <ItemGroup>
+                <PackageVersion Include="Aspire.Hosting.AppHost" Version="9.4.1" />
+              </ItemGroup>
+            </Project>
+            """;
+        await File.WriteAllTextAsync(directoryPackagesPropsFile.FullName, DirectoryPackagesPropsContent);
+        var originalAppHostContent = await File.ReadAllTextAsync(appHostProjectFile.FullName);
+        var originalStaleContent = await File.ReadAllTextAsync(staleProjectFile.FullName);
+        await File.WriteAllTextAsync(Path.Combine(workspace.WorkspaceRoot.FullName, "Repro.slnx"), "<Solution />");
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, config =>
+        {
+            config.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner
+            {
+                SearchPackagesAsyncCallback = (_, query, _, _, _, _, _, _, _, _) => query switch
+                {
+                    "Aspire.AppHost.Sdk" => (0, [new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.5.0", Source = PackageSources.NuGetOrg }]),
+                    "Aspire.Hosting.AppHost" => (0, [new NuGetPackageCli { Id = "Aspire.Hosting.AppHost", Version = "9.5.0", Source = PackageSources.NuGetOrg }]),
+                    _ => throw new InvalidOperationException($"Unexpected package query: {query}"),
+                },
+                GetProjectItemsAndPropertiesAsyncCallback = (project, _, _, _, _) =>
+                {
+                    var itemsAndProperties = new JsonObject();
+                    itemsAndProperties.WithSdkVersion("9.4.1");
+                    if (project.FullName == retainedProjectFile.FullName)
+                    {
+                        itemsAndProperties.WithProperty("SkipAddAspireDefaultReferences", "true");
+                    }
+                    return (0, JsonDocument.Parse(itemsAndProperties.ToJsonString()));
+                },
+                // Mirrors NU1010: the retained versionless reference needs the central PackageVersion.
+                RestoreAsyncCallback = (project, _, _) =>
+                    project.FullName == retainedProjectFile.FullName &&
+                    !File.ReadAllText(directoryPackagesPropsFile.FullName).Contains("Aspire.Hosting.AppHost", StringComparison.Ordinal) ? 1 : 0,
+                GetSolutionProjectsAsyncCallback = (_, _, _) => (0, [appHostProjectFile, staleProjectFile, retainedProjectFile]),
+            };
+            config.InteractionServiceFactory = _ => new TestInteractionService { ConfirmCallback = (_, _) => true };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var channels = await provider.GetRequiredService<IPackagingService>().GetChannelsAsync().DefaultTimeout();
+        var projectUpdater = provider.GetRequiredService<IProjectUpdater>();
+        var exception = await Assert.ThrowsAsync<ProjectUpdaterException>(
+            () => projectUpdater.UpdateProjectAsync(CreateUpdateContext(appHostProjectFile, channels.Single(c => c.Name == "default"))).DefaultTimeout());
+
+        Assert.Contains(retainedProjectFile.FullName, exception.Message);
+        Assert.Equal(originalAppHostContent, await File.ReadAllTextAsync(appHostProjectFile.FullName));
+        Assert.Equal(originalStaleContent, await File.ReadAllTextAsync(staleProjectFile.FullName));
+        Assert.Equal(DirectoryPackagesPropsContent, await File.ReadAllTextAsync(directoryPackagesPropsFile.FullName));
+    }
+
+    [Fact]
+    public async Task UpdateProjectFileAsync_RollsBackWhenOtherSolutionProjectFailsToRestore()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        const string AppHostContent = """
+            <Project Sdk="Aspire.AppHost.Sdk/9.4.1">
+            </Project>
+            """;
+        var appHostProjectFile = new FileInfo(Path.Combine(workspace.CreateDirectory("Repro.AppHost").FullName, "Repro.AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostProjectFile.FullName, AppHostContent);
+
+        const string TestsContent = """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <Sdk Name="Aspire.AppHost.Sdk" Version="9.4.1" />
+            </Project>
+            """;
+        var testsProjectFile = new FileInfo(Path.Combine(workspace.CreateDirectory("Repro.AppHost.Tests").FullName, "Repro.AppHost.Tests.csproj"));
+        await File.WriteAllTextAsync(testsProjectFile.FullName, TestsContent);
+        await File.WriteAllTextAsync(Path.Combine(workspace.WorkspaceRoot.FullName, "Repro.slnx"), "<Solution />");
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, config =>
+        {
+            config.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner
+            {
+                SearchPackagesAsyncCallback = (_, query, _, _, _, _, _, _, _, _) => query switch
+                {
+                    "Aspire.AppHost.Sdk" => (0, [new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.5.0", Source = PackageSources.NuGetOrg }]),
+                    _ => throw new InvalidOperationException($"Unexpected package query: {query}"),
+                },
+                GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) =>
+                {
+                    var itemsAndProperties = new JsonObject();
+                    itemsAndProperties.WithSdkVersion("9.4.1");
+                    return (0, JsonDocument.Parse(itemsAndProperties.ToJsonString()));
+                },
+                // The sibling cannot resolve the new SDK (for example from its own package sources).
+                RestoreAsyncCallback = (project, _, _) => project.FullName == testsProjectFile.FullName ? 1 : 0,
+                GetSolutionProjectsAsyncCallback = (_, _, _) => (0, [appHostProjectFile, testsProjectFile]),
+            };
+            config.InteractionServiceFactory = _ => new TestInteractionService { ConfirmCallback = (_, _) => true };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var channels = await provider.GetRequiredService<IPackagingService>().GetChannelsAsync().DefaultTimeout();
+        var projectUpdater = provider.GetRequiredService<IProjectUpdater>();
+        var exception = await Assert.ThrowsAsync<ProjectUpdaterException>(
+            () => projectUpdater.UpdateProjectAsync(CreateUpdateContext(appHostProjectFile, channels.Single(c => c.Name == "default"))).DefaultTimeout());
+
+        Assert.Contains(testsProjectFile.FullName, exception.Message);
+        Assert.Equal(AppHostContent, await File.ReadAllTextAsync(appHostProjectFile.FullName));
+        Assert.Equal(TestsContent, await File.ReadAllTextAsync(testsProjectFile.FullName));
+    }
+
     [Fact]
     public async Task UpdateProjectFileAsync_LegacyAppHostReferencesWithMixedCasing_StillRemoved()
     {
