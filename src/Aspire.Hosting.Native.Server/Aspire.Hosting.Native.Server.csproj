@@ -60,9 +60,12 @@
              RemoveProperties="PublishAot;RuntimeIdentifier;SelfContained">
       <Output TaskParameter="TargetOutputs" ItemName="_NativeCodeGenerationPath" />
     </MSBuild>
-    <Exec Command="&quot;$(DotNetTool)&quot; exec &quot;@(_NativeCodeGenerationPath)&quot; &quot;$(NativeGeneratedDirectory)&quot;" />
+    <!-- Design-time builds don't build project references, so run generation only when the built tool is available. -->
+    <Exec Condition="'$(DesignTimeBuild)' != 'true' or Exists('@(_NativeCodeGenerationPath)')"
+          Command="&quot;$(DotNetTool)&quot; exec &quot;@(_NativeCodeGenerationPath)&quot; &quot;$(NativeGeneratedDirectory)&quot;" />
     <ItemGroup>
-      <Compile Include="$(NativeGeneratedDirectory)NativeDispatch.g.cs" />
+      <Compile Include="$(NativeGeneratedDirectory)NativeDispatch.g.cs"
+               Condition="'$(DesignTimeBuild)' != 'true' or Exists('$(NativeGeneratedDirectory)NativeDispatch.g.cs')" />
     </ItemGroup>
   </Target>
 </Project>

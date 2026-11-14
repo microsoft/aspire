@@ -17,9 +17,12 @@
     <MSBuild Projects="../../../../src/Aspire.Hosting.Native.CodeGeneration/Aspire.Hosting.Native.CodeGeneration.csproj" Targets="GetTargetPath" Properties="Configuration=$(Configuration);TargetFramework=$(TargetFramework)">
       <Output TaskParameter="TargetOutputs" ItemName="_ProviderGenerator" />
     </MSBuild>
-    <Exec Command="&quot;$(DotNetTool)&quot; exec &quot;@(_ProviderGenerator)&quot; --provider &quot;@(_ProviderAssembly)&quot; example.csharp.external-api &quot;$(NativeProviderGeneratedDirectory)&quot;" />
+    <!-- Design-time builds don't build project references, so generation requires an existing tool and provider assembly. -->
+    <Exec Condition="'$(DesignTimeBuild)' != 'true' or (Exists('@(_ProviderGenerator)') and Exists('@(_ProviderAssembly)'))"
+          Command="&quot;$(DotNetTool)&quot; exec &quot;@(_ProviderGenerator)&quot; --provider &quot;@(_ProviderAssembly)&quot; example.csharp.external-api &quot;$(NativeProviderGeneratedDirectory)&quot;" />
     <ItemGroup>
-      <Compile Include="$(NativeProviderGeneratedDirectory)ProviderContract.g.cs" />
+      <Compile Include="$(NativeProviderGeneratedDirectory)ProviderContract.g.cs"
+               Condition="'$(DesignTimeBuild)' != 'true' or Exists('$(NativeProviderGeneratedDirectory)ProviderContract.g.cs')" />
     </ItemGroup>
   </Target>
 </Project>
