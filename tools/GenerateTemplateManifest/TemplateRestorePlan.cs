@@ -14,6 +14,7 @@ namespace GenerateTemplateManifest;
 
 internal sealed class TemplateRestorePlan
 {
+    private const string TemplateHostIdentifier = "dotnetcli";
     private readonly Dictionary<string, RestoreProject> _projects = new(StringComparer.Ordinal);
 
     internal IReadOnlyCollection<RestoreProject> Projects => _projects.Values;
@@ -52,7 +53,7 @@ internal sealed class TemplateRestorePlan
 
         var components = Microsoft.TemplateEngine.Edge.Components.AllComponents
             .Concat(Microsoft.TemplateEngine.Orchestrator.RunnableProjects.Components.AllComponents).ToList();
-        using var host = new DefaultTemplateEngineHost("dotnetcli", "1.0.0", builtIns: components);
+        using var host = new DefaultTemplateEngineHost(TemplateHostIdentifier, "1.0.0", builtIns: components);
         using var settings = new EngineEnvironmentSettings(host, virtualizeSettings: true,
             settingsLocation: Path.Combine(workDirectory, "template-hive"));
         using var manager = new TemplatePackageManager(settings);
@@ -119,6 +120,9 @@ internal sealed class TemplateRestorePlan
             {
                 "bool" => ["false", "true"],
                 "choice" => symbol["choices"]!.AsArray().Select(c => c!["choice"]!.GetValue<string>()).ToArray(),
+                // HostIdentifier is supplied by the rendering host, not an arbitrary user input.
+                // Match that fixed host rather than enumerating other hosts' configurations.
+                "string" when name == "HostIdentifier" => [TemplateHostIdentifier],
                 _ => throw new InvalidDataException($"Dependency input uses unbounded parameter '{name}'. Define finite coverage for it.")
             };
             configurations = configurations.SelectMany(c => values.Select(value =>
