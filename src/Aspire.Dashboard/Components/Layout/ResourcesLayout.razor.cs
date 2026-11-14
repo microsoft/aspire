@@ -1484,20 +1484,25 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         }
 
         // Rewrite the selection parameters one by one rather than rebuilding the query, so the order and encoding of
-        // the other parameters don't change. Form encoding writes spaces as "+", which UnescapeDataString keeps.
+        // the other parameters don't change. Keys and values are decoded and keys compared ignoring case, as
+        // QueryHelpers.ParseQuery does when ParseLocation reads the selection: "?Resource=ext" selects "ext" too, and
+        // leaving it would restore the old name from the query. Form encoding writes spaces as "+", which
+        // UnescapeDataString keeps.
         var parameters = query.Length > 0 ? query.Split('&') : [];
         for (var i = 0; i < parameters.Length; i++)
         {
             var separator = parameters[i].IndexOf('=');
             if (separator > 0 &&
-                string.Equals(parameters[i][..separator], DashboardUrls.ResourceSelectionQueryName, StringComparison.Ordinal) &&
-                renames.TryGetValue(Uri.UnescapeDataString(parameters[i][(separator + 1)..].Replace('+', ' ')), out var renamedParameter))
+                string.Equals(DecodeQueryComponent(parameters[i][..separator]), DashboardUrls.ResourceSelectionQueryName, StringComparison.OrdinalIgnoreCase) &&
+                renames.TryGetValue(DecodeQueryComponent(parameters[i][(separator + 1)..]), out var renamedParameter))
             {
                 parameters[i] = $"{DashboardUrls.ResourceSelectionQueryName}={Uri.EscapeDataString(renamedParameter)}";
             }
         }
 
         return string.Join('/', segments) + (queryIndex >= 0 ? "?" + string.Join('&', parameters) : string.Empty) + fragment;
+
+        static string DecodeQueryComponent(string value) => Uri.UnescapeDataString(value.Replace('+', ' '));
     }
 
     private IEnumerable<TelemetryOnlyResource> GetVisibleTelemetryResources() =>

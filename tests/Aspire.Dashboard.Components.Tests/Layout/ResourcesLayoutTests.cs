@@ -1144,9 +1144,14 @@ public class ResourcesLayoutTests : DashboardTestContext
 
     // Telemetry sources are named by service.name until a second instance shares it. Both are then named with their
     // instance ID ("ext-one", "ext-two"), and the selection must follow the source it pointed at rather than keep a
-    // name that no longer exists.
-    [Fact]
-    public async Task AppHost_SelectedTelemetrySourceFollowsRenameWhenAnotherInstanceStarts()
+    // name that no longer exists. The page's other state, such as the open chart and the pane, stays in the URL.
+    [Theory]
+    [InlineData("/metrics/resource/ext?meter=app&instrument=requests&pane=telemetry", "/metrics/resource/ext-one?meter=app&instrument=requests&pane=telemetry")]
+    // The selection query is read with decoded keys, ignoring case, so it must be renamed the same way: a query still
+    // naming "ext" would restore the old selection.
+    [InlineData("/metrics/resource/ext?Resource=ext&meter=app&pane=telemetry", "/metrics/resource/ext-one?resource=ext-one&meter=app&pane=telemetry")]
+    [InlineData("/structuredlogs?%72esource=ext&pane=telemetry", "/structuredlogs?resource=ext-one&pane=telemetry")]
+    public async Task AppHost_SelectedTelemetrySourceFollowsRenameWhenAnotherInstanceStarts(string url, string expectedUrl)
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
@@ -1155,7 +1160,7 @@ public class ResourcesLayoutTests : DashboardTestContext
             resourceChannelProvider: () => channel));
         await AddTelemetryAsync("ext", instanceId: "one");
         var navigation = Assert.IsType<BunitNavigationManager>(Services.GetRequiredService<NavigationManager>());
-        navigation.NavigateTo("/metrics/resource/ext?meter=app&instrument=requests&pane=telemetry");
+        navigation.NavigateTo(url);
 
         var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
         cut.WaitForAssertion(() =>
@@ -1172,9 +1177,8 @@ public class ResourcesLayoutTests : DashboardTestContext
             Assert.Equal("ext-one", cut.Instance.SelectedResourceName);
             Assert.Equal(["ext-one"], cut.FindAll(".resource-row-kind-telemetry.selected .resource-row-link").Select(link => link.GetAttribute("aria-label")));
         });
-        // The page's other state, such as the open chart and the pane, stays in the URL, and the rename replaces the
-        // history entry so Back doesn't return to the name that no longer exists.
-        Assert.Equal("/metrics/resource/ext-one?meter=app&instrument=requests&pane=telemetry", "/" + navigation.ToBaseRelativePath(navigation.Uri));
+        // The rename replaces the history entry so Back doesn't return to the name that no longer exists.
+        Assert.Equal(expectedUrl, "/" + navigation.ToBaseRelativePath(navigation.Uri));
         Assert.True(navigation.History.First().Options.ReplaceHistoryEntry);
     }
 
