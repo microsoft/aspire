@@ -5,6 +5,7 @@ const m = require('./auto-sec.js');
 const prs = JSON.parse(fs.readFileSync('.auto-sec/dependabot-prs-raw.json', 'utf8'));
 const alerts = JSON.parse(fs.readFileSync('.auto-sec/alerts.json', 'utf8'));
 const ok = new Set(['SUCCESS', 'SKIPPED', 'NEUTRAL']);
+const botLogin = process.env.AUTO_SEC_BOT_LOGIN || m.DEFAULT_BOT_LOGIN;
 const headText = (path, sha) => {
     const encoded = path.split('/').map(encodeURIComponent).join('/');
     return execFileSync('gh', ['api', '-H', 'Accept: application/vnd.github.raw', 'repos/' + process.env.REPO + '/contents/' + encoded + '?ref=' + sha],
@@ -41,12 +42,17 @@ const out = prs.map(pr => {
             }
         }
     }
+    const reviews = JSON.parse(execFileSync('gh', ['api', '--paginate', '--slurp', 'repos/' + process.env.REPO + '/pulls/' + pr.number + '/reviews?per_page=100'],
+        { encoding: 'utf8', maxBuffer: 256 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'] })).flat();
     return {
         number: pr.number,
         title: pr.title,
         head_ref: pr.headRefName,
         head_sha: pr.headRefOid,
         draft: pr.isDraft,
+        // The approval job skips these without spending its per-run quota, so requesting
+        // them again would crowd out PRs that still need a review.
+        already_approved: reviews.some(review => review.user?.login === botLogin && review.state === 'APPROVED' && review.commit_id === pr.headRefOid),
         ecosystem,
         updates,
         files,
