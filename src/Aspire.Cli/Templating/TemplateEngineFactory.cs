@@ -96,7 +96,13 @@ internal sealed partial class TemplateEngineFactory(
         // https://github.com/dotnet/sdk/blob/main/src/TemplateEngine/Microsoft.TemplateEngine.Edge/DefaultTemplateEngineHost.cs
         var components = Microsoft.TemplateEngine.Edge.Components.AllComponents
             .Concat(Microsoft.TemplateEngine.Orchestrator.RunnableProjects.Components.AllComponents).ToList();
-        var host = new TemplateEngineHost(components);
+        var diagnostics = new TemplateEngineLoggerProvider(logger);
+        // The engine host disposes its logger factory. Forward to the CLI logger without
+        // giving the host ownership of the application's shared logger factory.
+        var engineLoggerFactory = LoggerFactory.Create(builder => builder
+            .SetMinimumLevel(LogLevel.Trace)
+            .AddProvider(diagnostics));
+        var host = new TemplateEngineHost(components, engineLoggerFactory);
         _resources.Add(host);
         var settings = new EngineEnvironmentSettings(host, virtualizeSettings: true);
         _resources.Add(settings);
@@ -128,8 +134,11 @@ internal sealed partial class TemplateEngineFactory(
         cancellationToken.ThrowIfCancellationRequested();
         if (templates.Length == 0)
         {
+            var errors = diagnostics.Errors;
             throw new TemplateDiscoveryException(CliExitCodes.InvalidCommand,
-                string.Format(CultureInfo.CurrentCulture, NewCommandStrings.NoLocalTemplatesFound, fullPath));
+                errors.Length > 0
+                    ? string.Format(CultureInfo.CurrentCulture, NewCommandStrings.LocalTemplateLoadFailed, string.Join(Environment.NewLine, errors))
+                    : string.Format(CultureInfo.CurrentCulture, NewCommandStrings.NoLocalTemplatesFound, fullPath));
         }
 
         // Returned callbacks still use the engine's mounts. Keep them alive through generation;
