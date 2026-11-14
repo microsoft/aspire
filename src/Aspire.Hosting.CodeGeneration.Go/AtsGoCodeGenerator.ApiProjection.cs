@@ -1012,7 +1012,14 @@ internal sealed partial class AtsGoCodeGenerator
             members.AddRange(ProjectMembers(interfaceName, helpers.Where(helper => helper.Kind == GoDeclarationKind.Method), GoApiErrorModel.Returned));
         }
 
-        members.AddRange(ProjectMembers(interfaceName, [scope.ErrMethod], GoApiErrorModel.None));
+        var errMembers = ProjectMembers(interfaceName, [scope.ErrMethod], GoApiErrorModel.None);
+        if (string.Equals(typeId, AtsConstants.BuilderTypeId, StringComparison.Ordinal))
+        {
+            // The builder's generated Err overrides the promoted handle Err and reports every client error.
+            errMembers = errMembers.Select(err => err with { Summary = BuilderErrSummary }).ToList();
+        }
+
+        members.AddRange(errMembers);
         return members;
     }
 
