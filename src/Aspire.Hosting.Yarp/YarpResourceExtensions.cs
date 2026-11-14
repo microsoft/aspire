@@ -267,4 +267,22 @@ public static class YarpResourceExtensions
 
         return imageName;
     }
+    /// <summary>
+    /// Configures YARP for a IResourceWithEnvronment
+    /// </summary>
+    /// <param name="builder">The resource builder for an IResourceWithEnvronment.</param>
+    /// <param name="configurationBuilder">The callback to configure YARP</param>
+    /// <returns>The updated resource builder.</returns>
+    [AspireExport(RunSyncOnBackgroundThread = true)]
+    public static IResourceBuilder<IResourceWithEnvironment> WithYarp(this IResourceBuilder<IResourceWithEnvironment> builder, Action<IYarpConfigurationBuilder> configurationBuilder)
+    {
+        var configBuilder = new YarpProjectConfigurationBuilder(builder);
+        configurationBuilder(configBuilder);
+        return builder
+            .WithIconName("GlobeArrowForward")
+            .WithEnvironment(ctx =>
+            {
+                YarpEnvConfigGenerator.PopulateEnvVariables(ctx.EnvironmentVariables, configBuilder.Routes, configBuilder.Clusters);
+            });
+    }
 }
