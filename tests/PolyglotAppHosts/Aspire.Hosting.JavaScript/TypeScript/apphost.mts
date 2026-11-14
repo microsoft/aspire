@@ -66,6 +66,7 @@ await staticSiteApp.publishAsStaticWebsite({
     outputPath: 'dist',
     stripPrefix: true,
     targetEndpointName: 'http',
+    enableSpaFallback: false,
 });
 
 await builder.addJavaScriptApp('node-server-app', './node-server-app')

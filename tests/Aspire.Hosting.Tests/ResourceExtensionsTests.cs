@@ -5,6 +5,7 @@
 
 using Aspire.Dashboard.Model;
 using Aspire.Hosting.Ats;
+using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
@@ -67,6 +68,39 @@ public class ResourceExtensionsTests
         Assert.True(parent.Resource.HasAnnotationOfType<DummyAnnotation>());
         Assert.True(parent.Resource.TryGetAnnotationsOfType<DummyAnnotation>(out var annotations));
         Assert.Single(annotations);
+    }
+
+    [Fact]
+    public async Task DeferredEnvironmentCallbacksRunAfterOrdinaryCallbacksInRegistrationOrder()
+    {
+        var resource = new ContainerResource("test");
+        var calls = new List<string>();
+        var first = new EnvironmentCallbackAnnotation((EnvironmentCallbackContext _) => calls.Add("first"));
+        var deferredFirst = new EnvironmentCallbackAnnotation((EnvironmentCallbackContext _) => calls.Add("deferred-first"))
+        {
+            ExecuteAfterOtherCallbacks = true
+        };
+        var second = new EnvironmentCallbackAnnotation((EnvironmentCallbackContext _) => calls.Add("second"));
+        var deferredSecond = new EnvironmentCallbackAnnotation((EnvironmentCallbackContext _) => calls.Add("deferred-second"))
+        {
+            ExecuteAfterOtherCallbacks = true
+        };
+        resource.Annotations.Add(first);
+        resource.Annotations.Add(deferredFirst);
+        resource.Annotations.Add(second);
+        resource.Annotations.Add(deferredSecond);
+
+        Assert.True(resource.TryGetAnnotationsOfType<EnvironmentCallbackAnnotation>(out var annotations));
+        Assert.Collection(annotations,
+            annotation => Assert.Same(first, annotation),
+            annotation => Assert.Same(second, annotation),
+            annotation => Assert.Same(deferredFirst, annotation),
+            annotation => Assert.Same(deferredSecond, annotation));
+
+        await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(resource);
+        await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(resource);
+
+        Assert.Equal(["first", "second", "deferred-first", "deferred-second"], calls);
     }
 
     [Fact]

@@ -40,7 +40,7 @@ public class AddJavaScriptAppTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task VerifyDockerfileWhenPublishedAsStaticWebsiteWithoutSpaFallback()
+    public async Task VerifyDockerfileWhenPublishedAsStaticWebsiteWithDefaultOptions()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);

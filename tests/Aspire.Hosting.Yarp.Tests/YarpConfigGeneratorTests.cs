@@ -1,11 +1,16 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREPIPELINES003
+
 using System.Security.Authentication;
 using System.Text;
+using Aspire.Hosting.Publishing;
+using Aspire.Hosting.Tests;
 using Aspire.Hosting.Utils;
 using Aspire.Hosting.Yarp.Transforms;
 using Aspire.TestUtilities;
+using Microsoft.Extensions.DependencyInjection;
 using Yarp.ReverseProxy.Configuration;
 using Yarp.ReverseProxy.Forwarder;
 using Yarp.ReverseProxy.LoadBalancing;
@@ -294,5 +299,27 @@ public class YarpConfigGeneratorTests(ITestOutputHelper outputHelper)
 
         var content = await File.ReadAllTextAsync(composeFile);
         await Verify(content, "env");
+    }
+
+    [Fact]
+    public async Task DockerComposePreservesLateUserConfiguredClusterAlongsideSpaFallback()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        builder.AddDockerComposeEnvironment("docker-compose").WithDashboard(false);
+
+        builder.AddYarp("gateway")
+            .WithStaticFiles()
+            .WithSpaFallback()
+            .WithEnvironment("ReverseProxy__Clusters__aspireSpaFallback__Destinations__external__Address", "http://example.test")
+            .WithEnvironment("ReverseProxy__Routes__external__ClusterId", "aspireSpaFallback")
+            .WithEnvironment("ReverseProxy__Routes__external__Match__Path", "/external/{**catch-all}");
+
+        using var app = builder.Build();
+        await app.RunAsync();
+
+        var content = await File.ReadAllTextAsync(Path.Combine(workspace.Path, "docker-compose.yaml"));
+        await Verify(content, "yaml");
     }
 }

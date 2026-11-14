@@ -27,61 +27,63 @@ public sealed class JavaScriptPublishTests(ITestOutputHelper output)
         using var workspace = TemporaryWorkspace.Create(output);
         var localChannel = CliE2ETestHelpers.PrepareLocalChannel(repoRoot, strategy,
             ["Aspire.Hosting.CodeGeneration.TypeScript.", "Aspire.Hosting.JavaScript.", "Aspire.Hosting.Docker."]);
+        var appHostSha = Guid.NewGuid().ToString("N");
+        var composeProject = $"aspire-compose-{appHostSha[..8]}";
 
-        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: true, workspace: workspace);
-
-        var counter = new SequenceCounter();
-        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
-        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
-
-        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
-        await auto.InstallAspireCliAsync(strategy, counter);
-
-        // Create TS AppHost and add packages
-        await auto.TypeAsync("aspire init");
-        await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("Which language would you like to use?", timeout: TimeSpan.FromSeconds(30));
-        await auto.SelectAppHostLanguageAsync("TypeScript");
-        await auto.WaitUntilTextAsync("Created apphost.mts", timeout: TimeSpan.FromMinutes(2));
-        await auto.DeclineAgentInitPromptAsync(counter);
-
-        if (localChannel is not null)
+        try
         {
-            CliE2ETestHelpers.WriteLocalChannelSettings(workspace.WorkspaceRoot.FullName, localChannel.SdkVersion);
+            using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: true, workspace: workspace);
+
+            var counter = new SequenceCounter();
+            var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+            await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
+
+            await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+            await auto.InstallAspireCliAsync(strategy, counter);
+
+            // Create TS AppHost and add packages
+            await auto.TypeAsync("aspire init");
+            await auto.EnterAsync();
+            await auto.WaitUntilTextAsync("Which language would you like to use?", timeout: TimeSpan.FromSeconds(30));
+            await auto.SelectAppHostLanguageAsync("TypeScript");
+            await auto.WaitUntilTextAsync("Created apphost.mts", timeout: TimeSpan.FromMinutes(2));
+            await auto.DeclineAgentInitPromptAsync(counter);
+
+            if (localChannel is not null)
+            {
+                CliE2ETestHelpers.WriteLocalChannelSettings(workspace.WorkspaceRoot.FullName, localChannel.SdkVersion);
+            }
+
+            await auto.TypeAsync("aspire add Aspire.Hosting.JavaScript");
+            await auto.EnterAsync();
+            await auto.WaitForAspireAddCompletionAsync(counter, TimeSpan.FromSeconds(180));
+
+            await auto.TypeAsync("aspire add Aspire.Hosting.Docker");
+            await auto.EnterAsync();
+            await auto.WaitForAspireAddCompletionAsync(counter, TimeSpan.FromSeconds(180));
+
+            // Copy checked-in fixture apps and write the apphost
+            CopyFixtures(workspace);
+            WriteAppHost(workspace);
+
+            await auto.RunCommandAsync($"unset ASPIRE_PLAYGROUND; export AppHostSha={appHostSha}", counter);
+
+            await auto.TypeAsync("aspire deploy -o deploy-output --non-interactive");
+            await auto.EnterAsync();
+            await auto.WaitForPipelineSuccessAsync(timeout: TimeSpan.FromMinutes(5));
+            await auto.WaitForSuccessPromptAsync(counter);
+
+            // verify.sh captures diagnostics before asserting the deployed responses.
+            await auto.RunCommandAsync($"bash verify.sh {composeProject}", counter, TimeSpan.FromMinutes(5));
+
+            await auto.AspireDestroyAsync(counter);
         }
-
-        await auto.TypeAsync("aspire add Aspire.Hosting.JavaScript");
-        await auto.EnterAsync();
-        await auto.WaitForAspireAddCompletionAsync(counter, TimeSpan.FromSeconds(180));
-
-        await auto.TypeAsync("aspire add Aspire.Hosting.Docker");
-        await auto.EnterAsync();
-        await auto.WaitForAspireAddCompletionAsync(counter, TimeSpan.FromSeconds(180));
-
-        // Copy checked-in fixture apps and write the apphost
-        CopyFixtures(workspace);
-        WriteAppHost(workspace);
-
-        // Deploy
-        await auto.TypeAsync("unset ASPIRE_PLAYGROUND");
-        await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
-
-        await auto.TypeAsync("aspire deploy --non-interactive");
-        await auto.EnterAsync();
-        await auto.WaitForPipelineSuccessAsync(timeout: TimeSpan.FromMinutes(5));
-        await auto.WaitForSuccessPromptAsync(counter);
-
-        // Wait for services and verify — verify.sh captures diagnostics first, then asserts
-        await auto.TypeAsync("bash verify.sh");
-        await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("ALL_OK", timeout: TimeSpan.FromSeconds(90));
-        await auto.WaitForSuccessPromptAsync(counter);
-
-        // Clean up
-        await auto.TypeAsync("docker ps -q --filter label=com.docker.compose.project | xargs -r docker rm -f 2>/dev/null || true");
-        await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
+        finally
+        {
+            // The test shares the host's Docker daemon. Only clean up its uniquely named project,
+            // including when deployment fails before Aspire can persist its deployment state.
+            await LocalDeploymentTestHelpers.CleanupLabeledDockerResourcesAsync($"com.docker.compose.project={composeProject}", output);
+        }
     }
 
     [Fact]
@@ -162,12 +164,16 @@ public sealed class JavaScriptPublishTests(ITestOutputHelper output)
             await builder.addDockerComposeEnvironment('compose');
 
             const api = await builder.addNodeApp('api', './api', 'server.js')
-                .withHttpEndpoint({ port: 3001, env: 'PORT' })
+                .withHttpEndpoint({ targetPort: 3001, env: 'PORT' })
                 .withExternalHttpEndpoints();
 
             await builder.addViteApp('staticsite', './staticsite')
                 .withHttpEndpoint({ name: 'http', targetPort: 5000 })
                 .publishAsStaticWebsite({ apiPath: '/api', apiTarget: api })
+                .withExternalHttpEndpoints();
+
+            await builder.addViteApp('static-no-fallback', './staticsite')
+                .publishAsStaticWebsite({ enableSpaFallback: false })
                 .withExternalHttpEndpoints();
 
             await builder.addViteApp('nodeserver', './nodeserver')
