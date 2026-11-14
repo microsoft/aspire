@@ -2319,12 +2319,6 @@ public partial class FoundryModel
         /// Push the open model frontier with GPT-OSS models, released under the permissive Apache 2.0 license, allowing anyone to use, modify, and deploy them freely.
         /// </summary>
         [AspireValue("FoundryModels")]
-        public static readonly FoundryModel GptOss120b = new() { Name = "gpt-oss-120b", Version = "4", Format = "OpenAI" };
-
-        /// <summary>
-        /// Push the open model frontier with GPT-OSS models, released under the permissive Apache 2.0 license, allowing anyone to use, modify, and deploy them freely.
-        /// </summary>
-        [AspireValue("FoundryModels")]
         public static readonly FoundryModel GptOss20b = new() { Name = "gpt-oss-20b", Version = "11", Format = "OpenAI" };
 
         /// <summary>

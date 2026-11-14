@@ -2106,6 +2106,51 @@ public partial class FoundryModel
         public static readonly FoundryModel Qwen359b = new() { Name = "qwen3.5-9b", Version = "4", Format = "Microsoft" };
 
         /// <summary>
+        ///   <para>This model is an optimized version of Qwen3.8-27B to enable local text inference. This model uses RTN quantization with DFlash2 speculative decoding and requires Foundry Local 2.2.1 or later.</para>
+        ///   <para>
+        ///     <b>Model Description</b>
+        ///   </para>
+        ///   <list type="bullet">
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Developed by:</b> Microsoft</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Model type:</b> ONNX</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>License:</b> apache-2.0</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Model Description:</b> This is a conversion of the Qwen3.8-27B for local text inference.</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Disclaimer:</b> Model is only an optimization of the base model, any risk associated with the model is the responsibility of the user of the model. Please verify and test for your scenarios. There may be a slight difference in output from the base model with the optimizations applied. Note that optimizations applied are distinct from fine tuning and thus do not alter the intended uses or capabilities of the model.</para>
+        ///       </description>
+        ///     </item>
+        ///   </list>
+        ///   <para>
+        ///     <b>Base Model Information</b>
+        ///   </para>
+        ///   <para>See Hugging Face model <see href="https://huggingface.co/Qwen/Qwen3.8-27B">Qwen3.8-27B</see> for details.</para>
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel Qwen3827b = new() { Name = "qwen3.8-27b", Version = "1", Format = "Microsoft" };
+
+        /// <summary>
         ///   <para>This model is an optimized version of SmolLM3-3B to enable local inference. This model uses GPTQ quantization.</para>
         ///   <para>
         ///     <b>Model Description</b>
