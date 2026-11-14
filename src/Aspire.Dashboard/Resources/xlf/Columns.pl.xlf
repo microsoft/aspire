@@ -44,6 +44,11 @@ Aby uzyskać więcej informacji, zobacz https://aka.ms/aspire/container-runtime-
         <target state="translated">Nie można uruchomić {0}.</target>
         <note>{0} is a resource type</note>
       </trans-unit>
+      <trans-unit id="StateColumnResourceMissingParameters">
+        <source>Referenced parameters without values: {0}. Set their values in Parameters. Dependent resources may be unable to start until these values are supplied.</source>
+        <target state="new">Referenced parameters without values: {0}. Set their values in Parameters. Dependent resources may be unable to start until these values are supplied.</target>
+        <note>{0} is a comma-separated list of parameter resource names. Parameters is the name of the dashboard page used to edit parameter values.</note>
+      </trans-unit>
       <trans-unit id="StateColumnResourceNotStarted">
         <source>Resource is not configured to start automatically.</source>
         <target state="translated">Zasób nie został skonfigurowany tak, aby uruchamiać się automatycznie.</target>

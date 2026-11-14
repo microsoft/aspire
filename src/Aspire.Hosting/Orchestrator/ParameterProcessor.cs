@@ -212,6 +212,13 @@ public sealed class ParameterProcessor(
         {
             var value = parameterResource.ValueInternal;
 
+            if (parameterResource.CreateMissingValueException(value) is { } missingValueException)
+            {
+                // Keep initial empty values on the same pending path as absent configuration,
+                // so existing consumers can resume after the user supplies a value.
+                throw missingValueException;
+            }
+
             await parameterResource.SetValueAsync(value).ConfigureAwait(false);
         }
         catch (Exception ex)

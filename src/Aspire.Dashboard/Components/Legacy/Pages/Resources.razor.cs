@@ -276,8 +276,6 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
             {
                 await foreach (var changes in subscription.WithCancellation(_cts.Token).ConfigureAwait(false))
                 {
-                    var selectedResourceHasChanged = false;
-
                     foreach (var (changeType, resource) in changes)
                     {
                         if (changeType == ResourceViewModelChangeType.Upsert)
@@ -294,7 +292,6 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
                             if (string.Equals(PageViewModel.SelectedResource?.Name, resource.Name, StringComparisons.ResourceName))
                             {
                                 PageViewModel.SelectedResource = resource;
-                                selectedResourceHasChanged = true;
                             }
                         }
                         else if (changeType == ResourceViewModelChangeType.Delete)
@@ -309,10 +306,9 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
                     {
                         await UpdateResourceGraphResourcesAsync();
                         await _dataGrid.SafeRefreshDataAsync();
-                        if (selectedResourceHasChanged)
+                        if (PageViewModel.SelectedResource is not null)
                         {
-                            // Notify page that the selected resource parameter has changed.
-                            // This is required so the resource open in the details view is refreshed.
+                            // Details also depend on other resources, such as missing parameters.
                             StateHasChanged();
                         }
                     });

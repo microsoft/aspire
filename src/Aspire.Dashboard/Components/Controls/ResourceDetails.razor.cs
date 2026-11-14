@@ -167,8 +167,6 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
 
                 _displayedResourcePropertyViewModels.Add(new DisplayedResourcePropertyViewModel(displayedProperty, Loc, TimeProvider));
             }
-            AddStateDescriptionProperty(_resource);
-
             // Collapse details sections when they have no data.
             _isUrlsExpanded = GetUrls().Count > 0;
             _isEnvironmentVariablesExpanded = _resource.Environment.Any();
@@ -233,6 +231,8 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
             UpdateResourceActionsMenu();
         }
 
+        // Dependency updates can change the description without replacing the selected resource.
+        UpdateStateDescriptionProperty(Resource);
         UpdateTelemetryProperties();
     }
 
@@ -370,8 +370,10 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
         return ResourceUrlHelpers.GetUrls(Resource, includeInternalUrls: true, includeNonEndpointUrls: true);
     }
 
-    private void AddStateDescriptionProperty(ResourceViewModel resource)
+    private void UpdateStateDescriptionProperty(ResourceViewModel resource)
     {
+        _displayedResourcePropertyViewModels.RemoveAll(property =>
+            string.Equals(property.KnownProperty?.Key, StateDescriptionPropertyKey, StringComparisons.ResourcePropertyName));
         var stateViewModel = ResourceStateViewModel.GetStateViewModel(resource, ColumnsLoc);
         var stateDescription = ResourceStateViewModel.GetResourceStateTooltip(resource, ColumnsLoc, ResourceByName.Values);
 

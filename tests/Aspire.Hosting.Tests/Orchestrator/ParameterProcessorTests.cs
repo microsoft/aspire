@@ -120,6 +120,66 @@ public class ParameterProcessorTests
         Assert.False(parameterWithMissingValue.WaitForValueTcs.Task.IsCompleted);
     }
 
+    [Theory]
+    [InlineData("", false, false)]
+    [InlineData(null, false, false)]
+    [InlineData("", true, false)]
+    [InlineData(null, true, false)]
+    [InlineData("", true, true)]
+    [InlineData(null, true, true)]
+    public async Task InitializeParametersAsync_WithMissingInitialValue_ResolvesExistingConsumerFromPrompt(
+        string? initialValue, bool secret, bool connectionString)
+    {
+        var interactionService = new TestInteractionService { IsAvailable = true };
+        var notificationService = ResourceNotificationServiceTestHelpers.Create();
+        var parameterProcessor = CreateParameterProcessor(
+            notificationService: notificationService,
+            interactionService: interactionService);
+        var parameter = initialValue is null
+            ? CreateParameterWithMissingValue("optional-selector", secret)
+            : CreateParameterResource("optional-selector", initialValue, secret);
+        parameter.IsConnectionString = connectionString;
+        await using var updates = notificationService.WatchAsync().GetAsyncEnumerator();
+
+        await parameterProcessor.InitializeParametersAsync([parameter]).DefaultTimeout();
+
+        var consumer = parameter.GetValueAsync(CancellationToken.None).AsTask();
+        Assert.False(consumer.IsCompleted);
+        await updates.MoveNextAsync().DefaultTimeout();
+        Assert.Equal(KnownResourceStates.ValueMissing, updates.Current.Snapshot.State?.Text);
+
+        var messageBarInteraction = await interactionService.Interactions.Reader.ReadAsync().DefaultTimeout();
+        messageBarInteraction.CompletionTcs.SetResult(InteractionResult.Ok(true));
+        var inputsInteraction = await interactionService.Interactions.Reader.ReadAsync().DefaultTimeout();
+        inputsInteraction.Inputs[parameter.Name].Value = "resolved";
+        inputsInteraction.CompletionTcs.SetResult(InteractionResult.Ok(inputsInteraction.Inputs));
+
+        Assert.Equal("resolved", await consumer.DefaultTimeout());
+        await updates.MoveNextAsync().DefaultTimeout();
+        Assert.Equal(KnownResourceStates.Running, updates.Current.Snapshot.State?.Text);
+        AssertParameterValueProperty(updates.Current.Snapshot, "resolved", secret);
+    }
+
+    [Theory]
+    [InlineData("", false)]
+    [InlineData(null, false)]
+    [InlineData("", true)]
+    [InlineData(null, true)]
+    public async Task InitializeParametersAsync_WithOptionalInitialValue_DoesNotPrompt(string? initialValue, bool secret)
+    {
+        var interactionService = new TestInteractionService { IsAvailable = true };
+        var parameterProcessor = CreateParameterProcessor(interactionService: interactionService);
+        var parameter = initialValue is null
+            ? CreateParameterWithMissingValue("optional-selector", secret)
+            : CreateParameterResource("optional-selector", initialValue, secret);
+        parameter.Required = false;
+
+        await parameterProcessor.InitializeParametersAsync([parameter]).DefaultTimeout();
+
+        Assert.Equal(initialValue, await parameter.GetValueAsync(CancellationToken.None).DefaultTimeout());
+        Assert.False(interactionService.Interactions.Reader.TryRead(out _));
+    }
+
     [Fact]
     public async Task InitializeParametersAsync_WithMissingOptionalParameterValue_DoesNotPrompt()
     {
@@ -182,11 +242,15 @@ public class ParameterProcessorTests
         Assert.Equal("resolved", await parameter.GetValueAsync(CancellationToken.None).DefaultTimeout());
     }
 
-    [Fact]
-    public async Task SetValueAsync_WithMissingParameterValue_ResolvesParameter()
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public async Task SetValueAsync_WithMissingParameterValue_ResolvesParameter(string? initialValue)
     {
         var parameterProcessor = CreateParameterProcessor();
-        var parameter = CreateParameterWithMissingValue("programmaticParam");
+        var parameter = initialValue is null
+            ? CreateParameterWithMissingValue("programmaticParam")
+            : CreateParameterResource("programmaticParam", initialValue);
 
         await parameterProcessor.InitializeParametersAsync([parameter]).DefaultTimeout();
 
@@ -198,13 +262,17 @@ public class ParameterProcessorTests
         Assert.Equal("programmaticValue", await parameter.GetValueAsync(CancellationToken.None).DefaultTimeout());
     }
 
-    [Fact]
-    public async Task InitializeParametersAsync_WithMissingParameterValue_SetsExceptionWhenInteractionNotAvailable()
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    public async Task InitializeParametersAsync_WithMissingParameterValue_SetsExceptionWhenInteractionNotAvailable(string? initialValue)
     {
         // Arrange
         var interactionService = CreateInteractionService(disableDashboard: true);
         var parameterProcessor = CreateParameterProcessor(interactionService: interactionService);
-        var parameterWithMissingValue = CreateParameterWithMissingValue("missingParam");
+        var parameterWithMissingValue = initialValue is null
+            ? CreateParameterWithMissingValue("missingParam")
+            : CreateParameterResource("missingParam", initialValue);
 
         // Act
         await parameterProcessor.InitializeParametersAsync([parameterWithMissingValue]).DefaultTimeout();
