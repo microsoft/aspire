@@ -1,0 +1,137 @@
+﻿{
+  Capabilities: [
+    {
+      CapabilityId: Aspire.Hosting.Dotnet/addDotnetCliTool,
+      TargetTypeId: Aspire.Hosting/Aspire.Hosting.IDistributedApplicationBuilder,
+      ReturnType: Aspire.Hosting.Dotnet/Aspire.Hosting.Dotnet.DotnetCliToolResource,
+      Parameters: [
+        name,
+        packageId
+      ],
+      IsObsolete: false
+    },
+    {
+      CapabilityId: Aspire.Hosting.Dotnet/withToolIgnoreExistingFeeds,
+      TargetTypeId: Aspire.Hosting.Dotnet/Aspire.Hosting.Dotnet.DotnetCliToolResource,
+      ReturnType: Aspire.Hosting.Dotnet/Aspire.Hosting.Dotnet.DotnetCliToolResource,
+      Parameters: [],
+      IsObsolete: false
+    },
+    {
+      CapabilityId: Aspire.Hosting.Dotnet/withToolIgnoreFailedSources,
+      TargetTypeId: Aspire.Hosting.Dotnet/Aspire.Hosting.Dotnet.DotnetCliToolResource,
+      ReturnType: Aspire.Hosting.Dotnet/Aspire.Hosting.Dotnet.DotnetCliToolResource,
+      Parameters: [],
+      IsObsolete: false
+    },
+    {
+      CapabilityId: Aspire.Hosting.Dotnet/withToolPackage,
+      TargetTypeId: Aspire.Hosting.Dotnet/Aspire.Hosting.Dotnet.DotnetCliToolResource,
+      ReturnType: Aspire.Hosting.Dotnet/Aspire.Hosting.Dotnet.DotnetCliToolResource,
+      Parameters: [
+        packageId
+      ],
+      IsObsolete: false
+    },
+    {
+      CapabilityId: Aspire.Hosting.Dotnet/withToolPrerelease,
+      TargetTypeId: Aspire.Hosting.Dotnet/Aspire.Hosting.Dotnet.DotnetCliToolResource,
+      ReturnType: Aspire.Hosting.Dotnet/Aspire.Hosting.Dotnet.DotnetCliToolResource,
+      Parameters: [],
+      IsObsolete: false
+    },
+    {
+      CapabilityId: Aspire.Hosting.Dotnet/withToolSource,
+      TargetTypeId: Aspire.Hosting.Dotnet/Aspire.Hosting.Dotnet.DotnetCliToolResource,
+      ReturnType: Aspire.Hosting.Dotnet/Aspire.Hosting.Dotnet.DotnetCliToolResource,
+      Parameters: [
+        source
+      ],
+      IsObsolete: false
+    },
+    {
+      CapabilityId: Aspire.Hosting.Dotnet/withToolVersion,
+      TargetTypeId: Aspire.Hosting.Dotnet/Aspire.Hosting.Dotnet.DotnetCliToolResource,
+      ReturnType: Aspire.Hosting.Dotnet/Aspire.Hosting.Dotnet.DotnetCliToolResource,
+      Parameters: [
+        version
+      ],
+      IsObsolete: false
+    },
+    {
+      CapabilityId: Aspire.Hosting/addDotnetTool,
+      TargetTypeId: Aspire.Hosting/Aspire.Hosting.IDistributedApplicationBuilder,
+      ReturnType: Aspire.Hosting/Aspire.Hosting.ApplicationModel.DotnetToolResource,
+      Parameters: [
+        name,
+        packageId
+      ],
+      IsObsolete: true,
+      ObsoleteMessage: Use AddDotnetCliTool from the Aspire.Hosting.Dotnet package instead.
+    },
+    {
+      CapabilityId: Aspire.Hosting/withToolIgnoreExistingFeeds,
+      TargetTypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.DotnetToolResource,
+      ReturnType: Aspire.Hosting/Aspire.Hosting.ApplicationModel.DotnetToolResource,
+      Parameters: [],
+      IsObsolete: false
+    },
+    {
+      CapabilityId: Aspire.Hosting/withToolIgnoreFailedSources,
+      TargetTypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.DotnetToolResource,
+      ReturnType: Aspire.Hosting/Aspire.Hosting.ApplicationModel.DotnetToolResource,
+      Parameters: [],
+      IsObsolete: false
+    },
+    {
+      CapabilityId: Aspire.Hosting/withToolPackage,
+      TargetTypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.DotnetToolResource,
+      ReturnType: Aspire.Hosting/Aspire.Hosting.ApplicationModel.DotnetToolResource,
+      Parameters: [
+        packageId
+      ],
+      IsObsolete: false
+    },
+    {
+      CapabilityId: Aspire.Hosting/withToolPrerelease,
+      TargetTypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.DotnetToolResource,
+      ReturnType: Aspire.Hosting/Aspire.Hosting.ApplicationModel.DotnetToolResource,
+      Parameters: [],
+      IsObsolete: false
+    },
+    {
+      CapabilityId: Aspire.Hosting/withToolSource,
+      TargetTypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.DotnetToolResource,
+      ReturnType: Aspire.Hosting/Aspire.Hosting.ApplicationModel.DotnetToolResource,
+      Parameters: [
+        source
+      ],
+      IsObsolete: false
+    },
+    {
+      CapabilityId: Aspire.Hosting/withToolVersion,
+      TargetTypeId: Aspire.Hosting/Aspire.Hosting.ApplicationModel.DotnetToolResource,
+      ReturnType: Aspire.Hosting/Aspire.Hosting.ApplicationModel.DotnetToolResource,
+      Parameters: [
+        version
+      ],
+      IsObsolete: false
+    }
+  ],
+  GeneratedMethods: [
+    addDotnetCliTool(name: string, packageId: string): DotnetCliToolResourcePromise;,
+    addDotnetTool(name: string, packageId: string): DotnetToolResourcePromise;,
+    withToolIgnoreExistingFeeds(): DotnetCliToolResourcePromise;,
+    withToolIgnoreExistingFeeds(): DotnetToolResourcePromise;,
+    withToolIgnoreFailedSources(): DotnetCliToolResourcePromise;,
+    withToolIgnoreFailedSources(): DotnetToolResourcePromise;,
+    withToolPackage(packageId: string): DotnetCliToolResourcePromise;,
+    withToolPackage(packageId: string): DotnetToolResourcePromise;,
+    withToolPrerelease(): DotnetCliToolResourcePromise;,
+    withToolPrerelease(): DotnetToolResourcePromise;,
+    withToolSource(source: string): DotnetCliToolResourcePromise;,
+    withToolSource(source: string): DotnetToolResourcePromise;,
+    withToolVersion(version: string): DotnetCliToolResourcePromise;,
+    withToolVersion(version: string): DotnetToolResourcePromise;
+  ]
+}

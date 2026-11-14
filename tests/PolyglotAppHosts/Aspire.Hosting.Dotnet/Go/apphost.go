@@ -12,6 +12,17 @@ func main() {
 		log.Fatal(aspire.FormatError(err))
 	}
 
+	tool := builder.AddDotnetCliTool("tool", "dotnet-ef")
+	tool.WithToolPackage("dotnet-ef")
+	tool.WithToolVersion("10.0.*")
+	tool.WithToolPrerelease()
+	tool.WithToolSource("https://example.invalid/feed")
+	tool.WithToolIgnoreExistingFeeds()
+	tool.WithToolIgnoreFailedSources()
+	if err := tool.Err(); err != nil {
+		log.Fatal(aspire.FormatError(err))
+	}
+
 	project := builder.AddDotnetProject("project", "./src/Project/Project.csproj", &aspire.AddDotnetProjectOptions{
 		Options: &aspire.DotnetProjectOptions{LaunchProfileName: aspire.StringPtr("https")},
 	})

@@ -1098,13 +1098,23 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
         Assert.Null(snapshotEvent.Snapshot.State?.Style);
     }
 
-    [Fact]
-    public async Task OnResourceStarting_ToolResourceType_TransitionsToStarting()
+    [Theory]
+    [InlineData("custom")]
+    [InlineData("legacy")]
+    [InlineData("canonical")]
+    public async Task OnResourceStarting_ToolResourceType_TransitionsToStarting(string resourceKind)
     {
         var builder = DistributedApplication.CreateBuilder();
         builder.WithTestAndResourceLogging(testOutputHelper);
 
-        var resource = builder.AddResource(new CustomResource("tool"));
+#pragma warning disable ASPIREDOTNETTOOL, ASPIREDOTNETCLITOOL001 // Preserve Starting behavior for both tool contracts.
+        IResourceBuilder<IResource> resource = resourceKind switch
+        {
+            "legacy" => builder.AddDotnetTool("tool", "package"),
+            "canonical" => builder.AddDotnetCliTool("tool", "package"),
+            _ => builder.AddResource(new CustomResource("tool"))
+        };
+#pragma warning restore ASPIREDOTNETTOOL, ASPIREDOTNETCLITOOL001
 
         using var app = builder.Build();
         var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
@@ -1115,7 +1125,10 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
         var appOrchestrator = CreateOrchestrator(distributedAppModel, notificationService: resourceNotificationService, dcpEvents: events);
         await appOrchestrator.RunApplicationAsync();
 
-        await events.PublishAsync(new OnResourceStartingContext(CancellationToken.None, KnownResourceTypes.Tool, resource.Resource, "tool-dcp"));
+        var resourceType = resourceKind == "custom" ? KnownResourceTypes.Tool : resource.Resource.GetResourceType();
+        Assert.Equal(KnownResourceTypes.Tool, resourceType);
+
+        await events.PublishAsync(new OnResourceStartingContext(CancellationToken.None, resourceType, resource.Resource, "tool-dcp"));
 
         Assert.True(resourceNotificationService.TryGetCurrentState("tool-dcp", out var snapshotEvent));
         Assert.Equal(KnownResourceStates.Starting, snapshotEvent.Snapshot.State?.Text);

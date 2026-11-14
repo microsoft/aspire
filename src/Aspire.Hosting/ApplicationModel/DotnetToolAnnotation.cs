@@ -7,7 +7,9 @@ namespace Aspire.Hosting.ApplicationModel;
 /// <summary>
 /// Represents an annotation for dotnet tool resources.
 /// </summary>
+/// <remarks>For new code, use <c>DotnetCliToolAnnotation</c> from <c>Aspire.Hosting.Dotnet</c>.</remarks>
 [Experimental("ASPIREDOTNETTOOL", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+[Obsolete("Use DotnetCliToolAnnotation from the Aspire.Hosting.Dotnet package instead.")]
 public class DotnetToolAnnotation : IResourceAnnotation
 {
     /// <summary>

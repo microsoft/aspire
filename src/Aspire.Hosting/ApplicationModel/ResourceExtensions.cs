@@ -1913,7 +1913,7 @@ public static class ResourceExtensions
         }
     }
 
-#pragma warning disable ASPIREDOTNETTOOL // DotnetToolResource is experimental
+#pragma warning disable ASPIREDOTNETTOOL, ASPIRETOOLRESOURCE001, CS0618 // Preserve legacy classification alongside experimental tool resources.
     /// <summary>
     /// Gets the resource type string for the specified resource.
     /// </summary>
@@ -1923,6 +1923,7 @@ public static class ResourceExtensions
         ContainerResource => KnownResourceTypes.Container,
         ContainerExecutableResource => KnownResourceTypes.ContainerExec,
         DotnetToolResource => KnownResourceTypes.Tool,
+        ExecutableResource and IToolResource => KnownResourceTypes.Tool,
         ExecutableResource when resource.HasAnnotationOfType<IProjectMetadata>() => KnownResourceTypes.Project,
         ExecutableResource => KnownResourceTypes.Executable,
         ParameterResource => KnownResourceTypes.Parameter,
@@ -1930,5 +1931,5 @@ public static class ResourceExtensions
         ExternalServiceResource => KnownResourceTypes.ExternalService,
         _ => resource.GetType().Name
     };
-#pragma warning restore ASPIREDOTNETTOOL
+#pragma warning restore ASPIREDOTNETTOOL, ASPIRETOOLRESOURCE001, CS0618
 }

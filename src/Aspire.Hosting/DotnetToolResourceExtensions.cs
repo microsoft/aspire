@@ -1,8 +1,9 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable CS0618 // Legacy configuration methods remain required by EF callbacks.
+
 using System.Diagnostics.CodeAnalysis;
-using Aspire.Dashboard.Model;
 using Aspire.Hosting.ApplicationModel;
 using Microsoft.Extensions.DependencyInjection;
 using Aspire.Hosting.Utils;
@@ -12,11 +13,15 @@ namespace Aspire.Hosting;
 /// <summary>
 /// Provides extension methods for adding Dotnet Tool resources to the application model.
 /// </summary>
+/// <remarks>
+/// The <c>AddDotnetTool</c> factories remain available for existing C# binaries and generated clients.
+/// The <c>WithTool*</c> methods also remain supported by the legacy tool builder exposed through
+/// <c>AddEFMigrations</c>. For directly added tools, use <c>AddDotnetCliTool</c> from
+/// <c>Aspire.Hosting.Dotnet</c>.
+/// </remarks>
 [Experimental("ASPIREDOTNETTOOL", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public static class DotnetToolResourceExtensions
 {
-    internal const string ArgumentSeparator = "--";
-
     /// <summary>
     /// Adds a .NET tool resource to the application model.
     /// </summary>
@@ -26,6 +31,7 @@ public static class DotnetToolResourceExtensions
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
+    [Obsolete("Use AddDotnetCliTool from the Aspire.Hosting.Dotnet package instead.")]
     public static IResourceBuilder<DotnetToolResource> AddDotnetTool(this IDistributedApplicationBuilder builder, [ResourceName] string name, string packageId)
         => builder.AddDotnetTool(new DotnetToolResource(name, packageId));
 
@@ -39,79 +45,25 @@ public static class DotnetToolResourceExtensions
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
     /// <remarks>This method is not available in polyglot app hosts. Use the overload with name and packageId instead.</remarks>
     [AspireExportIgnore(Reason = "Open generic IResource constraint — not ATS-compatible.")]
+    [Obsolete("Use AddDotnetCliTool from the Aspire.Hosting.Dotnet package instead.")]
     public static IResourceBuilder<T> AddDotnetTool<T>(this IDistributedApplicationBuilder builder, T resource)
         where T : DotnetToolResource
     {
-#pragma warning disable ASPIREEXTENSION001 // WithLaunchToolArgs is experimental.
-        return builder.AddResource(resource)
-            .WithInitialState(new CustomResourceSnapshot
-            {
-                ResourceType = KnownResourceTypes.Tool,
-                Properties = []
-            })
-            .WithIconName("Toolbox")
-            .WithCommand("dotnet")
-            .WithLaunchToolArgs(BuildToolExecArguments, showInCommandLine: false)
-            .WithRequiredCommand("dotnet", context => ValidateDotnetSdkVersionAsync(context, resource.WorkingDirectory))
-            .OnBeforeResourceStarted(BeforeResourceStarted);
-#pragma warning restore ASPIREEXTENSION001
+        return DotnetToolHelpers.AddTool(builder, resource, BuildToolExecArguments,
+            static current => current.CreateSnapshotProperties(), ValidateDotnetSdkVersionAsync);
 
         void BuildToolExecArguments(CommandLineArgsCallbackContext x)
         {
             var toolConfig = resource.ToolConfiguration;
-            if (toolConfig == null)
+            if (toolConfig is null)
             {
                 // If the annotation has been removed, don't add any dotnet tool arguments.
                 return;
             }
 
-            x.Args.Add("tool");
-            x.Args.Add("exec");
-            x.Args.Add(toolConfig.PackageId);
-
-            var sourceArg = toolConfig.IgnoreExistingFeeds ? "--source" : "--add-source";
-
-            foreach (var source in toolConfig.Sources)
-            {
-                x.Args.Add(sourceArg);
-                x.Args.Add(source);
-            }
-
-            if (toolConfig.IgnoreFailedSources)
-            {
-                x.Args.Add("--ignore-failed-sources");
-            }
-
-            if (toolConfig.Version is not null)
-            {
-                x.Args.Add("--version");
-                x.Args.Add(toolConfig.Version);
-            }
-            else if (toolConfig.Prerelease)
-            {
-                x.Args.Add("--prerelease");
-            }
-
-            x.Args.Add("--yes");
-            x.Args.Add(ArgumentSeparator);
+            DotnetToolHelpers.AddArguments(x, toolConfig.PackageId, toolConfig.Version, toolConfig.Prerelease,
+                toolConfig.Sources, toolConfig.IgnoreExistingFeeds, toolConfig.IgnoreFailedSources);
         }
-
-        //TODO: Move to WithConfigurationFinalizer once merged - https://github.com/microsoft/aspire/pull/13200
-        async Task BeforeResourceStarted(T resource, BeforeResourceStartedEvent evt, CancellationToken ct)
-        {
-            var rns = evt.Services.GetRequiredService<ResourceNotificationService>();
-            var properties = resource.CreateSnapshotProperties().ToArray();
-            if (properties.Length == 0)
-            {
-                return;
-            }
-
-            await rns.PublishUpdateAsync(resource, x => x with
-            {
-                Properties = x.Properties.SetResourcePropertyRange(properties)
-            }).ConfigureAwait(false);
-        }
-
     }
 
     /// <summary>
@@ -207,6 +159,7 @@ public static class DotnetToolResourceExtensions
         return builder;
     }
 
+#pragma warning disable ASPIRECOMMAND001 // Retained SDK validation uses the experimental command-validation contract.
     internal static async Task<RequiredCommandValidationResult> ValidateDotnetSdkVersionAsync(RequiredCommandValidationContext context, string workingDirectory)
     {
         var versionProvider = context.Services.GetRequiredService<IDotnetSdkVersionProvider>();
@@ -214,11 +167,7 @@ public static class DotnetToolResourceExtensions
             workingDirectory,
             context.CancellationToken).ConfigureAwait(false);
 
-        if (version?.Major < 10)
-        {
-            return RequiredCommandValidationResult.Failure($"DotnetToolResource requires dotnet SDK 10 or higher to run. Detected version: {version}");
-        }
-
-        return RequiredCommandValidationResult.Success();
+        return DotnetToolHelpers.ValidateSdkVersion(version, nameof(DotnetToolResource));
     }
+#pragma warning restore ASPIRECOMMAND001
 }

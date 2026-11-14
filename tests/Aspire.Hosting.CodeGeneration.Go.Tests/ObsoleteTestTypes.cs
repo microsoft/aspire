@@ -3,8 +3,8 @@
 
 namespace Aspire.Hosting.CodeGeneration.Go.Tests;
 
-// These obsolete types are intentionally referenced by non-obsolete members to verify that the Go
-// generator preserves types required by active wire signatures while hiding obsolete declarations.
+// Retained callable APIs require their wire types even when those types are obsolete.
+// Unused obsolete types and obsolete data members are still filtered.
 #pragma warning disable CS0612, CS0618
 
 [AspireDto]

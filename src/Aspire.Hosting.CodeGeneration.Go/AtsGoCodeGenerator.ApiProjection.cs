@@ -907,7 +907,7 @@ internal sealed partial class AtsGoCodeGenerator
         };
     }
 
-    private static GoApiMember CreateCapabilityMember(
+    private GoApiMember CreateCapabilityMember(
         string interfaceName,
         AtsCapabilityInfo capability,
         string owner,
@@ -925,7 +925,7 @@ internal sealed partial class AtsGoCodeGenerator
             Remarks = capability.Documentation?.Remarks,
             Returns = capability.Documentation?.Returns,
             IsExperimental = AtsTypeSystemCompatibility.IsExperimental(capability),
-            DeprecationMessage = capability.IsObsolete ? capability.ObsoleteMessage ?? string.Empty : null,
+            DeprecationMessage = GetDeprecationMessage(capability),
             CapabilityId = capability.CapabilityId,
             TargetTypeId = capability.TargetTypeId,
             CapabilityKind = GetCapabilityKindName(capability.CapabilityKind),

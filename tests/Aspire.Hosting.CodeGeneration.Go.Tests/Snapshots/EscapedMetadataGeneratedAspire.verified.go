@@ -113,6 +113,23 @@ type EscapedResource interface {
 	//   - options: Optional parameters; see [WithCancelOption].
 	WithCancel(options ...WithCancelOption) EscapedResource
 
+	// WithHostileDocumentation adds Foo. func init() {} //
+	//
+	// Adds Foo. func init() {} //
+	//
+	// Parameters:
+	//   - value: Adds Foo. func init() {} //
+	//
+	// Returns: Adds Foo. func init() {} //
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	//
+	// Deprecated: Adds Foo. func init() {} //
+	WithHostileDocumentation(value string) EscapedResource
+
 	// Parameters:
 	//   - options: Optional parameters; see [WithUnsafeParameterOption].
 	WithUnsafeParameter(options ...WithUnsafeParameterOption) EscapedResource
@@ -310,6 +327,22 @@ func (s *escapedResource) WithCancel(options ...WithCancelOption) EscapedResourc
 		}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Tests/withCancel", reqArgs); err != nil {
+		s.setErr(err)
+	}
+	return s
+}
+
+// WithHostileDocumentation adds Foo. func init() {} //
+func (s *escapedResource) WithHostileDocumentation(value string) EscapedResource {
+	if s.Err() != nil {
+		return s
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["value"] = serializeValue(value)
+	if _, err := s.client.invokeCapability(ctx, "Tests/withHostileDocumentation", reqArgs); err != nil {
 		s.setErr(err)
 	}
 	return s

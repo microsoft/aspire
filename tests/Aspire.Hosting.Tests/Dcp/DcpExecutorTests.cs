@@ -626,17 +626,23 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData()]
-    [InlineData("--arg1", "foo")]
-    public async Task CreateExecutable_ToolHasCommandLineArgs_AnnotationsAdded(params string[] toolArgs)
+    [InlineData(false)]
+    [InlineData(false, "--arg1", "foo")]
+    [InlineData(true)]
+    [InlineData(true, "--arg1", "foo")]
+    public async Task CreateExecutable_ToolHasCommandLineArgs_AnnotationsAdded(bool canonical, params string[] toolArgs)
     {
         var builder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
         {
             AssemblyName = typeof(DistributedApplicationTests).Assembly.FullName
         });
 
-        var resourceBuilder = builder.AddDotnetTool("tool", "package")
-            .WithArgs(toolArgs);
+#pragma warning disable ASPIREDOTNETCLITOOL001 // Exercise both tool families with the same DCP contract.
+        IResourceBuilder<ExecutableResource> resourceBuilder = canonical
+            ? builder.AddDotnetCliTool("tool", "package")
+            : builder.AddDotnetTool("tool", "package");
+#pragma warning restore ASPIREDOTNETCLITOOL001
+        resourceBuilder.WithArgs(toolArgs);
 
         var kubernetesService = new TestKubernetesService();
         using var app = builder.Build();
@@ -663,14 +669,20 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public async Task DotnetToolResource_ExtensionMode_OwnedLaunchToolArgsAreWithheldAndRespectCommandLineVisibility(bool showInCommandLine)
+    [InlineData(true, false)]
+    [InlineData(false, false)]
+    [InlineData(true, true)]
+    [InlineData(false, true)]
+    public async Task DotnetToolResource_ExtensionMode_OwnedLaunchToolArgsAreWithheldAndRespectCommandLineVisibility(bool showInCommandLine, bool canonical)
     {
         var builder = DistributedApplication.CreateBuilder();
 
-        builder.AddDotnetTool("tool", "package")
-            .WithArgs("app-arg")
+#pragma warning disable ASPIREDOTNETCLITOOL001 // Exercise both tool families with the same DCP contract.
+        IResourceBuilder<ExecutableResource> tool = canonical
+            ? builder.AddDotnetCliTool("tool", "package")
+            : builder.AddDotnetTool("tool", "package");
+#pragma warning restore ASPIREDOTNETCLITOOL001
+        tool.WithArgs("app-arg")
             .WithLaunchToolArgs(
                 static context =>
                 {
@@ -717,14 +729,20 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public async Task DotnetToolResource_ProcessMode_LaunchToolArgsReplaceBuiltInInvocation(bool showInCommandLine)
+    [InlineData(true, false)]
+    [InlineData(false, false)]
+    [InlineData(true, true)]
+    [InlineData(false, true)]
+    public async Task DotnetToolResource_ProcessMode_LaunchToolArgsReplaceBuiltInInvocation(bool showInCommandLine, bool canonical)
     {
         var builder = DistributedApplication.CreateBuilder();
 
-        builder.AddDotnetTool("tool", "package")
-            .WithArgs("app-arg")
+#pragma warning disable ASPIREDOTNETCLITOOL001 // Exercise both tool families with the same DCP contract.
+        IResourceBuilder<ExecutableResource> tool = canonical
+            ? builder.AddDotnetCliTool("tool", "package")
+            : builder.AddDotnetTool("tool", "package");
+#pragma warning restore ASPIREDOTNETCLITOOL001
+        tool.WithArgs("app-arg")
             .WithArgs(static context => context.Args.Insert(0, "prepended-arg"))
             .WithLaunchToolArgs(
                 static context =>
@@ -9360,6 +9378,13 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         var dotnetTool = new DotnetToolResource("test-tool", "SomePackage.Id");
 #pragma warning restore ASPIREDOTNETTOOL
         Assert.Equal(KnownResourceTypes.Tool, DcpExecutor.GetResourceType(dcpExecutable, dotnetTool));
+
+#pragma warning disable ASPIREDOTNETCLITOOL001 // Verify canonical tools use the same orchestration kind.
+        var cliTool = new Dotnet.DotnetCliToolResource("cli-tool", "SomePackage.Id");
+        Assert.Equal(KnownResourceTypes.Tool, DcpExecutor.GetResourceType(dcpExecutable, cliTool));
+        cliTool.Annotations.Remove(Assert.Single(cliTool.Annotations.OfType<Dotnet.DotnetCliToolAnnotation>()));
+        Assert.Equal(KnownResourceTypes.Tool, DcpExecutor.GetResourceType(dcpExecutable, cliTool));
+#pragma warning restore ASPIREDOTNETCLITOOL001
     }
 
     [Fact]

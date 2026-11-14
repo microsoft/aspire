@@ -128,6 +128,16 @@ type DocumentedResource interface {
 	//   - first item
 	WithHeading() DocumentedResource
 
+	// WithLegacyDocumentation adds the legacy documentation.
+	//
+	// Deprecated: This API is obsolete.
+	WithLegacyDocumentation() DocumentedResource
+
+	// WithObsoleteDocumentation adds documentation using the legacy convention.
+	//
+	// Deprecated: Use WithDocumentation instead.
+	WithObsoleteDocumentation(name string) DocumentedResource
+
 	// WithPreviewDocumentation adds preview documentation.
 	//
 	// # Experimental
@@ -135,6 +145,19 @@ type DocumentedResource interface {
 	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
 	// release.
 	WithPreviewDocumentation() DocumentedResource
+
+	// WithPreviewStatus sets the preview status.
+	//
+	// Parameters:
+	//   - status: The status to set.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	//
+	// Deprecated: Use WithDocumentation instead.
+	WithPreviewStatus(status DocumentedStatus) DocumentedResource
 
 	// WithSpecialText handles <special> characters & line endings. The second line
 	// follows a CRLF. The third line follows a CR.
@@ -193,8 +216,17 @@ func (s *documentedResource) WithDocumentation(name string, settings *Documented
 // WithHeading adds a heading.
 func (s *documentedResource) WithHeading() DocumentedResource { ... }
 
+// WithLegacyDocumentation adds the legacy documentation.
+func (s *documentedResource) WithLegacyDocumentation() DocumentedResource { ... }
+
+// WithObsoleteDocumentation adds documentation using the legacy convention.
+func (s *documentedResource) WithObsoleteDocumentation(name string) DocumentedResource { ... }
+
 // WithPreviewDocumentation adds preview documentation.
 func (s *documentedResource) WithPreviewDocumentation() DocumentedResource { ... }
+
+// WithPreviewStatus sets the preview status.
+func (s *documentedResource) WithPreviewStatus(status DocumentedStatus) DocumentedResource { ... }
 
 // WithSpecialText handles <special> characters & line endings. The second line
 // follows a CRLF. The third line follows a CR.

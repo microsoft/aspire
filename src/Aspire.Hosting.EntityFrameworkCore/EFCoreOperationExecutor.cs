@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREDOTNETTOOL
+#pragma warning disable CS0618 // EF operations intentionally retain the legacy tool resource.
 #pragma warning disable ASPIREPROJECTS001, ASPIREEXTENSION001
 
 using System.Globalization;
