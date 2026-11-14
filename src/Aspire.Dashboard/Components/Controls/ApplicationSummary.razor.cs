@@ -47,11 +47,13 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
     private readonly CancellationTokenSource _cts = new();
     private Task? _resourceSubscriptionTask;
     private Task? _activityRefreshTask;
+    private Task? _telemetryRefreshTask;
     private Subscription? _logsSubscription;
     private Subscription? _tracesSubscription;
     private Subscription? _metricsSubscription;
     private Dictionary<ResourceKey, int>? _unviewedErrorCounts;
     private HomeTelemetry? _telemetry;
+    private readonly object _telemetryRefreshLock = new();
     private int _telemetryRefreshPending;
     private bool _isLoaded;
     private IReadOnlyList<string>? _scopedResourceNames;
@@ -253,44 +255,56 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
 
     private void QueueTelemetryRefresh()
     {
-        // Single-flight: the gate (1) is held through delay, load and publish. Notifications that
-        // arrive while a refresh is running set the dirty flag (2) so exactly one trailing refresh runs.
-        if (Interlocked.CompareExchange(ref _telemetryRefreshPending, 1, 0) != 0)
+        // Serialize refresh admission with disposal so it can await the final queued refresh.
+        lock (_telemetryRefreshLock)
         {
-            Interlocked.CompareExchange(ref _telemetryRefreshPending, 2, 1);
-            return;
+            if (_isDisposing)
+            {
+                return;
+            }
+
+            // Single-flight: the gate (1) is held through delay, load and publish. Notifications that
+            // arrive while a refresh is running set the dirty flag (2) so exactly one trailing refresh runs.
+            if (Interlocked.CompareExchange(ref _telemetryRefreshPending, 1, 0) != 0)
+            {
+                Interlocked.CompareExchange(ref _telemetryRefreshPending, 2, 1);
+                return;
+            }
+
+            var cancellationToken = _cts.Token;
+            _telemetryRefreshTask = Task.Run(() => RefreshTelemetryAsync(cancellationToken), CancellationToken.None);
         }
+    }
 
-        _ = Task.Run(async () =>
+    private async Task RefreshTelemetryAsync(CancellationToken cancellationToken)
+    {
+        try
         {
-            try
+            do
             {
-                do
-                {
-                    await Task.Delay(s_telemetryRefreshDelay, _cts.Token).ConfigureAwait(false);
-                    Interlocked.Exchange(ref _telemetryRefreshPending, 1);
+                await Task.Delay(s_telemetryRefreshDelay, cancellationToken).ConfigureAwait(false);
+                Interlocked.Exchange(ref _telemetryRefreshPending, 1);
 
-                    var telemetry = await LoadTelemetryAsync(_cts.Token).ConfigureAwait(false);
-                    var unviewedErrorCounts = TelemetryRepository.GetResourceUnviewedErrorLogsCount();
-                    await InvokeAsync(() =>
-                    {
-                        _telemetry = telemetry;
-                        _unviewedErrorCounts = unviewedErrorCounts;
-                        StateHasChanged();
-                    }).ConfigureAwait(false);
-                }
-                while (Interlocked.CompareExchange(ref _telemetryRefreshPending, 0, 1) == 2);
+                var telemetry = await LoadTelemetryAsync(cancellationToken).ConfigureAwait(false);
+                var unviewedErrorCounts = TelemetryRepository.GetResourceUnviewedErrorLogsCount();
+                await InvokeAsync(() =>
+                {
+                    _telemetry = telemetry;
+                    _unviewedErrorCounts = unviewedErrorCounts;
+                    StateHasChanged();
+                }).ConfigureAwait(false);
             }
-            catch (OperationCanceledException)
-            {
-                Interlocked.Exchange(ref _telemetryRefreshPending, 0);
-            }
-            catch (Exception ex)
-            {
-                Interlocked.Exchange(ref _telemetryRefreshPending, 0);
-                Logger.LogWarning(ex, "Error loading telemetry for the home page.");
-            }
-        }, CancellationToken.None);
+            while (Interlocked.CompareExchange(ref _telemetryRefreshPending, 0, 1) == 2);
+        }
+        catch (OperationCanceledException)
+        {
+            Interlocked.Exchange(ref _telemetryRefreshPending, 0);
+        }
+        catch (Exception ex)
+        {
+            Interlocked.Exchange(ref _telemetryRefreshPending, 0);
+            Logger.LogWarning(ex, "Error loading telemetry for the home page.");
+        }
     }
 
     private async Task<HomeTelemetry> LoadTelemetryAsync(CancellationToken cancellationToken)
@@ -877,7 +891,13 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        _isDisposing = true;
+        Task? telemetryRefreshTask;
+        lock (_telemetryRefreshLock)
+        {
+            _isDisposing = true;
+            telemetryRefreshTask = _telemetryRefreshTask;
+        }
+
         ViewPreferences.Changed -= OnViewPreferencesChanged;
         _cts.Cancel();
         _logsSubscription?.Dispose();
@@ -885,6 +905,7 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
         _metricsSubscription?.Dispose();
         await TaskHelpers.WaitIgnoreCancelAsync(_resourceSubscriptionTask);
         await TaskHelpers.WaitIgnoreCancelAsync(_activityRefreshTask);
+        await TaskHelpers.WaitIgnoreCancelAsync(telemetryRefreshTask);
         _resourcesInteropReference?.Dispose();
         if (_jsModule is not null)
         {
