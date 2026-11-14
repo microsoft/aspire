@@ -131,7 +131,7 @@ public sealed class SettingsDialogTests : DashboardTestContext
         var labels = new List<string>
         {
             "System", "Light", "Dark",
-            "Comfortable", "Compact",
+            "Compact", "Comfortable",
             "Summary", "Graph",
             "System", "12-hour", "24-hour",
             "New dashboard"
