@@ -327,6 +327,7 @@ public sealed class ResourcePaneFullCanvasTests(ResourceTagPaneTests.TaggedResou
 
             // The data tabs go home too, as their close button did.
             await page.GotoAsync("/consolelogs/resource/tag-a");
+            await Assertions.Expect(page.Locator(".resources-layout")).ToHaveAttributeAsync("data-pane-interactions-ready", "true");
             await Assertions.Expect(page.Locator(".resources-layout")).ToHaveAttributeAsync("data-escape-home", "true");
             await page.Keyboard.PressAsync("Escape");
             await Assertions.Expect(page).ToHaveURLAsync(ResourcePaneNavigation.HomeUrl);
@@ -335,6 +336,7 @@ public sealed class ResourcePaneFullCanvasTests(ResourceTagPaneTests.TaggedResou
             // A tab with keyboard focus doesn't get it back in the strip re-created at home, where it would show its
             // focus ring.
             await page.GotoAsync("/resources/tag-a");
+            await Assertions.Expect(page.Locator(".resources-layout")).ToHaveAttributeAsync("data-pane-interactions-ready", "true");
             await Assertions.Expect(page.Locator(".resources-layout")).ToHaveAttributeAsync("data-escape-home", "true");
             await overview.FocusAsync();
             await Assertions.Expect(overview).ToBeFocusedAsync();

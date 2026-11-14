@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Globalization;
 using System.Text;
 using Aspire.Dashboard.Components.Dialogs;
 using Aspire.Dashboard.Configuration;
@@ -540,35 +539,6 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
     // Whether the dashboard's home, "/", is showing: the table of every resource.
     private bool IsHome =>
         NavigationManager.ToBaseRelativePath(NavigationManager.ToAbsoluteUri(NavigationManager.Uri).GetLeftPart(UriPartial.Path)).Trim('/').Length == 0;
-
-    private int? _resourcePaneWidth;
-
-    /// <summary>
-    /// Sets the width the user gave the docked resource list, or <see langword="null"/> for its default width.
-    /// </summary>
-    /// <remarks>
-    /// The list is in <see cref="ResourcesLayout"/>, inside this layout's body, but the header's brand sits on top of
-    /// the list's column and has to be exactly as wide. CSS custom properties only inherit downwards, so the nested
-    /// layout reports the width and it's set on the root element both of them are under.
-    /// </remarks>
-    internal void SetResourcePaneWidth(int? widthPx)
-    {
-        if (_resourcePaneWidth == widthPx)
-        {
-            return;
-        }
-
-        _resourcePaneWidth = widthPx;
-        StateHasChanged();
-    }
-
-    private string GetLayoutStyle()
-    {
-        var overflow = _isNavMenuOpen ? "overflow: hidden;" : string.Empty;
-        return _resourcePaneWidth is { } width && ViewportInformation.IsDesktop
-            ? string.Create(CultureInfo.InvariantCulture, $"{overflow}--resource-pane-expanded-width: {width}px")
-            : overflow;
-    }
 
     private async Task LaunchRecordingsAsync()
     {

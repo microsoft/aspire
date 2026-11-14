@@ -16,14 +16,14 @@ internal static class ResourcePaneNavigation
     /// <summary>
     /// The brand in the header, which is the home button on desktop.
     /// </summary>
-    public static ILocator HomeLink(IPage page) => page.Locator("header .brand-home a.application-name");
+    public static ILocator HomeLink(IPage page) => page.Locator("header a.brand-home");
 
     /// <summary>
     /// What switches between a page with the list docked beside it and the home table: the brand while the list is
     /// docked, and the table's "All resources" row, which docks it again, at home. Exactly one of them matches.
     /// </summary>
     public static ILocator TableToggle(IPage page) =>
-        page.Locator(".layout:not(:has(.pane-full-canvas)) header .brand-home a.application-name, .pane-full-canvas .resource-row-all .resource-row-link");
+        page.Locator(".layout:not(:has(.pane-full-canvas)) header a.brand-home, .pane-full-canvas .resource-row-all .resource-row-link");
 
     /// <summary>
     /// Goes to the home table with the brand, as a user would on desktop.

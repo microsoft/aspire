@@ -2405,45 +2405,62 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
     }
 
     [Theory]
-    // The brand is as wide as the saved list.
-    [InlineData(1440, false)]
-    // Too narrow for a list that wide and the header's controls: the brand narrows so the tab picker keeps its room.
-    [InlineData(800, true)]
-    [InlineData(769, true)]
+    [InlineData(1440)]
+    [InlineData(800)]
+    [InlineData(769)]
     [OuterloopTest("Resource-intensive Playwright browser test")]
-    public async Task Header_BrandGivesWayBeforeTheTabPickerOverlapsHeaderActions(int width, bool brandNarrows)
+    public async Task Header_PaneResizeKeepsBrandWidthIndependentAndTabsClearOfHeaderActions(int width)
     {
         await RunTestAsync(async page =>
         {
             await page.AddInitScriptAsync($"localStorage.setItem('{BrowserStorageKeys.ResourcePaneWidth}', '560')");
             await page.SetViewportSizeAsync(width, 900);
             await page.GotoAsync("/resources/cache");
-            await Assertions.Expect(page.Locator(".resource-pane-resizer")).ToHaveAttributeAsync("aria-valuenow", "560");
+            var resizer = page.Locator(".resource-pane-resizer");
+            await Assertions.Expect(resizer).ToHaveAttributeAsync("aria-valuenow", "560");
+            await Assertions.Expect(resizer).ToHaveAttributeAsync("tabindex", "0");
+            await Assertions.Expect(page.Locator(".resource-tabs-nav")).ToBeVisibleAsync();
+            await page.EvaluateAsync("() => document.fonts.ready");
 
-            var boxes = await page.EvaluateAsync<double[]>("""
-                () => {
-                    const box = el => el.getBoundingClientRect();
-                    const header = document.querySelector('.layout > header');
-                    const brand = box(header.querySelector(':scope > .header-brand'));
-                    const nav = header.querySelector('.resource-tabs-nav');
-                    // Whichever navigation shows: the strip, its overflow button, or the compact picker.
-                    const shown = [...nav.querySelectorAll('fluent-tab:not([hidden]), .resource-tabs-overflow-button, .resource-tabs-compact-button')]
-                        .map(box).filter(r => r.width > 0 && r.height > 0);
-                    const tabsRight = Math.max(...shown.map(r => r.right));
-                    const actions = [...header.children].filter(el => el.matches('.header-context ~ *')).map(box).filter(r => r.width > 0);
-                    const actionsLeft = Math.min(...actions.map(r => r.left));
-                    return [brand.width, tabsRight, actionsLeft];
-                }
-                """);
-            if (brandNarrows)
+            var brand = page.Locator(".layout > header > .header-brand");
+            var restoredBrand = await brand.BoundingBoxAsync();
+            Assert.NotNull(restoredBrand);
+            Assert.InRange(restoredBrand.Width, 1, 559);
+            await AssertTabsClearOfActionsAsync();
+
+            await resizer.PressAsync("Home");
+            await Assertions.Expect(resizer).ToHaveAttributeAsync("aria-valuenow", "300");
+            var resizedPane = await page.Locator(".resource-pane").BoundingBoxAsync();
+            Assert.NotNull(resizedPane);
+            Assert.InRange(resizedPane.Width, 299.5, 300.5);
+            var resizedBrand = await brand.BoundingBoxAsync();
+            Assert.NotNull(resizedBrand);
+            Assert.InRange(resizedBrand.Width, restoredBrand.Width - 0.5, restoredBrand.Width + 0.5);
+            await AssertTabsClearOfActionsAsync();
+
+            async Task AssertTabsClearOfActionsAsync()
             {
-                Assert.True(boxes[0] < 559, $"The brand is {boxes[0]}px wide, as wide as the list.");
+                // Tab overflow is measured on an animation frame after the header is rendered or resized.
+                await AsyncTestHelpers.AssertIsTrueRetryAsync(async () =>
+                {
+                    var boxes = await page.EvaluateAsync<double[]>("""
+                        () => {
+                            const box = el => el.getBoundingClientRect();
+                            const header = document.querySelector('.layout > header');
+                            const nav = header.querySelector('.resource-tabs-nav');
+                            // Whichever navigation shows: the strip, its overflow button, or the compact picker.
+                            const shown = [...nav.querySelectorAll('fluent-tab:not([hidden]), .resource-tabs-overflow-button, .resource-tabs-compact-button')]
+                                .map(box).filter(r => r.width > 0 && r.height > 0);
+                            const tabsRight = Math.max(...shown.map(r => r.right));
+                            const actions = [...header.children].filter(el => el.matches('.header-context ~ *')).map(box).filter(r => r.width > 0);
+                            const actionsLeft = Math.min(...actions.map(r => r.left));
+                            return [tabsRight, actionsLeft];
+                        }
+                        """);
+
+                    return boxes[0] > 0 && boxes[0] <= boxes[1] + 0.5;
+                }, "The tabs overlap the header actions.");
             }
-            else
-            {
-                Assert.InRange(boxes[0], 559.5, 560.5);
-            }
-            Assert.True(boxes[1] <= boxes[2] + 0.5, $"The tabs end at {boxes[1]}, past the header actions at {boxes[2]}.");
         });
     }
 
