@@ -1,0 +1,20 @@
+﻿{
+  "status": {
+    "phase": "Active",
+    "conditions": [
+      {
+        "lastTransitionTime": "2026-11-09T12:00:00Z",
+        "message": "Ready",
+        "observedGeneration": 1,
+        "reason": "NamespaceActive",
+        "status": "True",
+        "type": "Ready"
+      }
+    ]
+  },
+  "metadata": {
+    "name": "resource"
+  },
+  "apiVersion": "usvc-dev.developer.microsoft.com/v2",
+  "kind": "Namespace"
+}

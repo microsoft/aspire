@@ -30,7 +30,7 @@ using Polly.Timeout;
 
 namespace Aspire.Hosting.Tests.Dcp;
 
-public class KubernetesServiceTests(DcpApiServerCertificateFixture certificateFixture) : IClassFixture<DcpApiServerCertificateFixture>
+public partial class KubernetesServiceTests(DcpApiServerCertificateFixture certificateFixture) : IClassFixture<DcpApiServerCertificateFixture>
 {
     [Fact]
     public async Task CleanupResourcesAsync_UsesSystemTime_WhenApplicationTimeProviderIsReplaced()

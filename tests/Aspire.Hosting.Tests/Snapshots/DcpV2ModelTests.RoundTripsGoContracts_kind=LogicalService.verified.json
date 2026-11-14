@@ -1,0 +1,38 @@
+﻿{
+  "spec": {
+    "protocol": "UDP",
+    "address": "::1",
+    "port": 8080,
+    "addressAllocationMode": "IPv6ZeroOne"
+  },
+  "status": {
+    "phase": "Ready",
+    "effectiveAddresses": [
+      {
+        "address": "127.0.0.1",
+        "port": 8080
+      },
+      {
+        "address": "::1",
+        "port": 8080
+      }
+    ],
+    "proxylessEndpointRef": "app/backend",
+    "conditions": [
+      {
+        "lastTransitionTime": "2026-11-09T12:00:00Z",
+        "message": "Ready",
+        "observedGeneration": 1,
+        "reason": "ServiceReady",
+        "status": "True",
+        "type": "Ready"
+      }
+    ]
+  },
+  "metadata": {
+    "name": "resource",
+    "namespace": "app"
+  },
+  "apiVersion": "usvc-dev.developer.microsoft.com/v2",
+  "kind": "LogicalService"
+}

@@ -37,6 +37,7 @@ internal sealed class TestKubernetesService : IKubernetesService
     public string StoppedContainerState { get; set; } = ContainerState.Exited;
 
     private readonly List<Channel<(WatchEventType, CustomResource)>> _watchChannels = [];
+    private readonly Dictionary<(Type Type, string Namespace, string Name), CustomResource> _resources = [];
     private readonly Func<CustomResource, string, bool?, Stream> _startStream;
     private readonly bool _ignoreDeletes;
     private readonly Action<CustomResource>? _beforeCreate;
@@ -76,27 +77,24 @@ internal sealed class TestKubernetesService : IKubernetesService
 
     public Task<T> GetAsync<T>(string name, string? namespaceParameter = null, CancellationToken _ = default) where T : CustomResource, IKubernetesStaticMetadata
     {
-        if (DeletedResources.Contains(name))
+        namespaceParameter = KubernetesService.GetMetadataFor<T>().GetNamespace(namespaceParameter);
+        lock (CreatedResources)
         {
-            throw new HttpOperationException("Not found")
+            if (_resources.TryGetValue((typeof(T), namespaceParameter ?? "", name), out var resource))
             {
-                Response = new HttpResponseMessageWrapper(new HttpResponseMessage { StatusCode = System.Net.HttpStatusCode.NotFound }, "Not found")
-            };
+                return Task.FromResult((T)resource);
+            }
         }
 
-        var res = CreatedResources.OfType<T>().FirstOrDefault(r =>
-            r.Metadata.Name == name &&
-            string.Equals(r.Metadata.NamespaceProperty ?? string.Empty, namespaceParameter ?? string.Empty)
-        );
-        if (res == null)
+        throw new HttpOperationException("Not found")
         {
-            throw new ArgumentException($"Resource '{namespaceParameter ?? ""}/{name}' not found");
-        }
-        return Task.FromResult(res);
+            Response = new HttpResponseMessageWrapper(new HttpResponseMessage { StatusCode = System.Net.HttpStatusCode.NotFound }, "Not found")
+        };
     }
 
     public async Task<T> CreateAsync<T>(T obj, CancellationToken cancellationToken = default) where T : CustomResource, IKubernetesStaticMetadata
     {
+        var namespaceParameter = KubernetesService.GetMetadataFor<T>().GetNamespace(obj.Namespace());
         _beforeCreate?.Invoke(obj);
         if (_beforeCreateAsync is not null)
         {
@@ -140,6 +138,7 @@ internal sealed class TestKubernetesService : IKubernetesService
             var modifiedResources = AllocateProxylessContainerServicePorts(res);
             StampResourceUid(res);
             StampResourceVersion(res);
+            _resources[(typeof(T), namespaceParameter ?? "", res.Metadata.Name)] = res;
             CreatedResources.Enqueue(res);
             foreach (var c in _watchChannels)
             {
@@ -215,7 +214,7 @@ internal sealed class TestKubernetesService : IKubernetesService
     {
         lock (CreatedResources)
         {
-            foreach (var res in CreatedResources.Where(r => !DeletedResources.Contains(r.Metadata.Name)))
+            foreach (var res in _resources.Values)
             {
                 foreach (var c in _watchChannels)
                 {
@@ -288,41 +287,44 @@ internal sealed class TestKubernetesService : IKubernetesService
 
     public async Task<T> DeleteAsync<T>(string name, string? namespaceParameter = null, CancellationToken cancellationToken = default) where T : CustomResource, IKubernetesStaticMetadata
     {
-        try
+        var resource = await GetAsync<T>(name, namespaceParameter, cancellationToken);
+        if (!_ignoreDeletes)
         {
-            var resource = await GetAsync<T>(name, namespaceParameter, cancellationToken);
-            if (!_ignoreDeletes)
-            {
-                DeletedResources.Enqueue(name);
-            }
-            return resource;
+            MarkResourceDeleted(resource);
         }
-        catch (Exception ex)
+
+        return resource;
+    }
+
+    public void MarkResourceDeleted(CustomResource resource)
+    {
+        lock (CreatedResources)
         {
-            throw new HttpOperationException(ex.Message)
-            {
-                Response = new HttpResponseMessageWrapper(new HttpResponseMessage { StatusCode = System.Net.HttpStatusCode.NotFound }, ex.Message)
-            };
+            _resources.Remove((resource.GetType(), resource.Namespace() ?? "", resource.Metadata.Name));
+            DeletedResources.Enqueue(resource.Metadata.Name);
         }
     }
 
     public Task<List<T>> ListAsync<T>(string? namespaceParameter = null, CancellationToken cancellationToken = default) where T : CustomResource, IKubernetesStaticMetadata
     {
-        var res = CreatedResources.OfType<T>().Where(r =>
-            string.Equals(r.Metadata.NamespaceProperty ?? string.Empty, namespaceParameter ?? string.Empty)
-        );
-        return Task.FromResult(res.ToList());
+        namespaceParameter = KubernetesService.GetMetadataFor<T>().GetNamespace(namespaceParameter);
+        lock (CreatedResources)
+        {
+            return Task.FromResult(_resources.Values.OfType<T>().Where(r =>
+                string.IsNullOrEmpty(namespaceParameter) || r.Namespace() == namespaceParameter).ToList());
+        }
     }
 
     public async IAsyncEnumerable<(WatchEventType, T)> WatchAsync<T>(string? namespaceParameter = null, [EnumeratorCancellation] CancellationToken cancellationToken = default) where T : CustomResource, IKubernetesStaticMetadata
     {
+        namespaceParameter = KubernetesService.GetMetadataFor<T>().GetNamespace(namespaceParameter);
         var chan = Channel.CreateUnbounded<(WatchEventType, CustomResource)>();
         var watchIndex = _watchCounts.AddOrUpdate(typeof(T), 1, static (_, count) => count + 1);
 
         lock (CreatedResources)
         {
             _watchChannels.Add(chan);
-            foreach (var res in CreatedResources.OfType<T>())
+            foreach (var res in _resources.Values.OfType<T>())
             {
                 // Deliver a copy, the same way the other fan-out sites do, so the content of this event is
                 // fixed at the moment it is produced instead of tracking later changes to the resource.
@@ -336,7 +338,7 @@ internal sealed class TestKubernetesService : IKubernetesService
             while (true)
             {
                 var (evtType, res) = await chan.Reader.ReadAsync(cancellationToken);
-                if (res is T tRes)
+                if (res is T tRes && (string.IsNullOrEmpty(namespaceParameter) || res.Namespace() == namespaceParameter))
                 {
                     var context = new WatchEventContext(typeof(T), watchIndex, evtType, res);
                     if (_beforeWatchEventAsync is not null)
@@ -379,10 +381,11 @@ internal sealed class TestKubernetesService : IKubernetesService
         long? skip = null
     ) where T : CustomResource, IKubernetesStaticMetadata
     {
+        KubernetesService.GetMetadataFor<T>().GetNamespace(obj.Namespace());
         return Task.FromResult(_startStream(obj, logStreamType, follow));
     }
 
-    public Task<T> PatchAsync<T>(T obj, V1Patch patch, CancellationToken cancellationToken = default) where T : CustomResource, IKubernetesStaticMetadata
+    public async Task<T> PatchAsync<T>(T obj, V1Patch patch, CancellationToken cancellationToken = default) where T : CustomResource, IKubernetesStaticMetadata
     {
         // Not a complete implementation; tests currently use patching to stop resources
         // and to update container tunnel proxy configuration.
@@ -391,14 +394,7 @@ internal sealed class TestKubernetesService : IKubernetesService
         {
             var jsonPatch = (JsonArray)patch.Content;
 
-            var res = CreatedResources.OfType<T>().FirstOrDefault(r =>
-                r.Metadata.Name == obj.Metadata.Name &&
-                string.Equals(r.Metadata.NamespaceProperty, obj.Metadata.NamespaceProperty)
-            );
-            if (res == null)
-            {
-                throw new ArgumentException($"Resource '{obj.Metadata.NamespaceProperty}/{obj.Metadata.Name}' not found");
-            }
+            var res = await GetAsync<T>(obj.Metadata.Name, obj.Namespace(), cancellationToken);
 
             // Serialize against the runtime type because callers can patch through the CustomResource base type.
             var resourceType = res.GetType();
@@ -472,11 +468,22 @@ internal sealed class TestKubernetesService : IKubernetesService
                 PushResourceModified(proxy);
             }
 
-            return Task.FromResult(res);
+            if (obj.ApiVersion == Aspire.Hosting.Dcp.Model.V2.Dcp.GroupVersion.ToString())
+            {
+                lock (CreatedResources)
+                {
+                    StampResourceVersion(result);
+                    _resources[(typeof(T), obj.Namespace() ?? "", obj.Metadata.Name)] = result;
+                }
+
+                return result;
+            }
+
+            return res;
         }
 
         // Fall back to doing noting.
-        return Task.FromResult(obj);
+        return obj;
     }
 
     public Task StopServerAsync(string resourceCleanup = "Full", CancellationToken cancellation = default)
