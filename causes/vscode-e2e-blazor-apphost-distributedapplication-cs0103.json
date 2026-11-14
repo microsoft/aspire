@@ -1,0 +1,15 @@
+{
+  "id": "vscode-e2e-blazor-apphost-distributedapplication-cs0103",
+  "type": "main-repository-breakage",
+  "title": "VS Code extension E2E Blazor AppHost fails to compile: DistributedApplication does not exist (CS0103)",
+  "error_pattern": "AspireE2E.Blazor.AppHost\\AppHost.cs(7,15): error CS0103: The name 'DistributedApplication' does not exist in the current context",
+  "occurrences": [
+    {
+      "run_id": 43568134492,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/43568134492",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, browser-debugger)",
+      "observed_at": "2026-11-14T07:46:53Z",
+      "pr_number": 0
+    }
+  ]
+}
