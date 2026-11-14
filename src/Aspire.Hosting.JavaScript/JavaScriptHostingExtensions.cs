@@ -2005,6 +2005,7 @@ public static partial class JavaScriptHostingExtensions
         appDirectory = PathNormalizer.NormalizePathForCurrentPlatform(Path.Combine(builder.AppHostDirectory, appDirectory));
         var appHostId = builder.Configuration["AppHost:Sha256"]![..10].ToLowerInvariant();
         var resource = new ViteAppResource(name, "npm", appDirectory);
+        resource.Annotations.Add(new ViteAppAnnotation());
 
         var resourceBuilder = builder.CreateDefaultJavaScriptAppBuilder(
             resource,
