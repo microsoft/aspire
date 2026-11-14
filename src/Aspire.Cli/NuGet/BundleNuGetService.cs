@@ -371,16 +371,20 @@ internal sealed class BundleNuGetService : INuGetService
         (string Id, string Version) package,
         NuGetPackageOperationConfiguration configuration,
         string globalPackagesFolder,
+        bool bypassCaches,
         CancellationToken cancellationToken)
     {
-        var directory = Directory.CreateTempSubdirectory("aspire-package-acquisition-");
+        var directory = bypassCaches
+            ? DirectoryHelper.CreateWithOwnerOnlyPermissions(Path.Combine(
+                globalPackagesFolder, $".sdk-acquisition-{Guid.NewGuid():N}"))
+            : Directory.CreateTempSubdirectory("aspire-package-acquisition-");
         try
         {
             var settings = GetNuGetSettings(configuration.EffectiveWorkingDirectory.FullName, protectIntegrationSources: false, cancellationToken);
             await _nuGetClient.AcquirePackageAsync(
                 package, directory.FullName,
                 configuration.EffectiveWorkingDirectory.FullName, globalPackagesFolder,
-                settings.SensitiveSourceValues, cancellationToken);
+                settings.SensitiveSourceValues, bypassCaches, cancellationToken);
         }
         catch (NuGetOperationException exception)
         {

@@ -152,18 +152,23 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
     }
 
     [Theory]
-    [InlineData("AppHost.csproj", "stable", false, "success")]
-    [InlineData("apphost.cs", "stable", false, "success")]
-    [InlineData("AppHost.csproj", "stable", true, "success")]
-    [InlineData("apphost.cs", "stable", true, "success")]
-    [InlineData("AppHost.csproj", "stable", false, "decline")]
-    [InlineData("apphost.cs", "stable", false, "decline")]
-    [InlineData("AppHost.csproj", "stable", false, "restore")]
-    [InlineData("apphost.cs", "stable", false, "restore")]
-    [InlineData("AppHost.csproj", "default", false, "success")]
-    [InlineData("apphost.cs", "default", false, "success")]
+    [InlineData("AppHost.csproj", "stable", false, "success", false)]
+    [InlineData("apphost.cs", "stable", false, "success", false)]
+    [InlineData("AppHost.csproj", "stable", true, "success", false)]
+    [InlineData("apphost.cs", "stable", true, "success", false)]
+    [InlineData("AppHost.csproj", "stable", false, "decline", false)]
+    [InlineData("apphost.cs", "stable", false, "decline", false)]
+    [InlineData("AppHost.csproj", "stable", false, "restore", true)]
+    [InlineData("apphost.cs", "stable", false, "restore", true)]
+    [InlineData("AppHost.csproj", "default", false, "success", false)]
+    [InlineData("apphost.cs", "default", false, "success", false)]
+    [InlineData("AppHost.csproj", "stable", false, "success", true)]
+    [InlineData("apphost.cs", "stable", false, "success", true)]
+    [InlineData("AppHost.csproj", "default", false, "restore", false)]
+    [InlineData("apphost.cs", "default", false, "restore", false)]
+    [InlineData("AppHost.csproj", "stable", false, "decline", true)]
     public async Task UpdateAsync_AmbientChannelsSynchronizeSdkMetadataAfterSuccessfulRestore(
-        string fileName, string channelName, bool sdkAlreadyCurrent, string outcome)
+        string fileName, string channelName, bool sdkAlreadyCurrent, string outcome, bool dryRun)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = await CreateAppHostAsync(workspace, fileName);
@@ -175,28 +180,66 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
         var targetVersion = sdkAlreadyCurrent ? "9.4.1" : "9.4.2";
         var restoreCount = 0;
         var runner = CreateRunner(projectFile, hasExplicitChannel: false);
-        runner.GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) => CreatePackageEvaluation();
+        string? validationRoot = null;
+        runner.GetProjectItemsAndPropertiesAsyncCallbackWithTargets = (file, _, properties, _, options, _) =>
+        {
+            Assert.Null(options.EnvironmentVariables);
+            return properties.Contains("RestoreConfigFile", StringComparer.Ordinal)
+                ? (0, TestDotNetCliRunner.CreateRestoreSettingsOutput(file, properties))
+                : CreatePackageEvaluation();
+        };
         runner.SearchPackagesAsyncCallback = (directory, query, _, _, _, _, _, _, _, _) =>
         {
             Assert.Equal(projectFile.DirectoryName, directory.FullName);
             return (0, [new NuGetPackageCli { Id = query, Version = targetVersion, Source = PackageSources.NuGetOrg }]);
         };
-        runner.AddPackageAsyncCallback = (file, _, version, _, noRestore, _, _) =>
+        runner.AddPackageAsyncCallback = (file, _, version, _, noRestore, options, _) =>
         {
             Assert.True(noRestore);
+            if (dryRun)
+            {
+                Assert.NotNull(options.EnvironmentVariables);
+                Assert.Equal(originalProject, File.ReadAllBytes(file.FullName + ".aspire-backup"));
+            }
             File.WriteAllText(file.FullName, File.ReadAllText(file.FullName).Replace("9.4.1", version, StringComparison.Ordinal));
             return 0;
         };
-        runner.RestoreAsyncCallback = (_, _, _) =>
+        string? packagesDirectory = null;
+        runner.RestoreAsyncCallback = (_, options, _) =>
         {
+            Assert.True(dryRun || channelName == "default", "Explicit channel updates only restore during a dry run.");
+            if (dryRun)
+            {
+                packagesDirectory = options.EnvironmentVariables!["NUGET_PACKAGES"];
+                Assert.Equal(packagesDirectory, options.IsolatedRestorePackagesDirectory?.FullName);
+                var restoreDirectory = Path.GetDirectoryName(packagesDirectory)!;
+                Assert.Equal(validationRoot, Path.GetDirectoryName(restoreDirectory));
+                if (!OperatingSystem.IsWindows())
+                {
+                    var ownerOnly = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute;
+                    Assert.Equal(ownerOnly, File.GetUnixFileMode(validationRoot!));
+                    Assert.Equal(ownerOnly, File.GetUnixFileMode(restoreDirectory));
+                }
+            }
             Assert.Equal(originalConfig, File.ReadAllText(configPath));
             restoreCount++;
             return outcome == "restore" ? 1 : 0;
         };
         using var provider = CreateServices(workspace, runner).BuildServiceProvider();
+        if (dryRun)
+        {
+            validationRoot = Path.Combine(
+                provider.GetRequiredService<CliExecutionContext>().AspireHomeDirectory.FullName, "cache", "update-validation");
+            Directory.CreateDirectory(validationRoot);
+            if (!OperatingSystem.IsWindows())
+            {
+                File.SetUnixFileMode(validationRoot, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute
+                    | UnixFileMode.GroupRead | UnixFileMode.OtherRead);
+            }
+        }
         var interaction = Assert.IsType<TestInteractionService>(provider.GetRequiredService<IInteractionService>());
         interaction.ConfirmCallback = (_, _) => outcome != "decline";
-        var context = await CreateContextAsync(provider, projectFile, channelName, hasExplicitChannel: channelName == "stable");
+        var context = await CreateContextAsync(provider, projectFile, channelName, hasExplicitChannel: channelName == "stable", dryRun);
         var updater = provider.GetRequiredService<IProjectUpdater>();
         if (outcome == "restore")
         {
@@ -206,10 +249,10 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
         else
         {
             var result = await updater.UpdateProjectAsync(context, TestContext.Current.CancellationToken);
-            Assert.Equal(outcome == "success", result.UpdatedApplied);
+            Assert.Equal(outcome == "success" && !dryRun, result.UpdatedApplied);
         }
 
-        if (outcome == "success")
+        if (outcome == "success" && !dryRun)
         {
             var config = AspireConfigFile.Load(workspace.Path);
             Assert.NotNull(config);
@@ -223,10 +266,114 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
             Assert.Equal(originalConfig, await File.ReadAllTextAsync(configPath));
             Assert.Equal(originalProject, await File.ReadAllBytesAsync(projectFile.FullName));
         }
-        Assert.Equal(outcome == "decline" || sdkAlreadyCurrent ? 0 : 1, restoreCount);
-        Assert.Equal([UpdateCommandStrings.PerformUpdatesPrompt],
+        Assert.Equal((!dryRun && (outcome == "decline" || sdkAlreadyCurrent || channelName == "stable")) ? 0 : 1, restoreCount);
+        Assert.Equal(dryRun ? [] : new[] { UpdateCommandStrings.PerformUpdatesPrompt },
             interaction.BooleanPromptCalls.Select(static call => call.PromptText));
         Assert.Empty(interaction.FilePathPromptCalls);
+        Assert.False(File.Exists(projectFile.FullName + ".aspire-backup"));
+        if (packagesDirectory is not null)
+        {
+            var restoreDirectory = Path.GetDirectoryName(packagesDirectory)!;
+            Assert.False(Directory.Exists(restoreDirectory));
+            Assert.False(File.Exists(restoreDirectory + ".lock"));
+            Assert.Empty(Directory.EnumerateFileSystemEntries(validationRoot!));
+        }
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task UpdateAsync_DryRunUsesAmbientEvaluationForImportedSdkAndColdCandidateRestore(bool restoreSucceeds)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var projectFile = await CreateAppHostAsync(workspace, "AppHost.csproj");
+        var project = System.Xml.Linq.XDocument.Load(projectFile.FullName);
+        project.Root!.Element("Sdk")!.Remove();
+        await File.WriteAllTextAsync(projectFile.FullName, project.ToString());
+        var propsPath = Path.Combine(workspace.Path, "Directory.Build.props");
+        const string originalProps = """<Project><Sdk Name="Aspire.AppHost.Sdk" Version="9.4.1" /></Project>""";
+        await File.WriteAllTextAsync(propsPath, originalProps);
+        var originalProject = await File.ReadAllBytesAsync(projectFile.FullName);
+        var configFile = await WriteCurrentPolicyAsync(workspace, "https://old.example/v3/index.json", configureCache: false);
+        var originalConfig = await File.ReadAllBytesAsync(configFile.FullName);
+        const string newSource = "https://new.example/v3/index.json";
+        var evaluationCount = 0;
+        var restoreCount = 0;
+        var runner = CreateRunner(projectFile, hasExplicitChannel: false);
+        runner.GetProjectItemsAndPropertiesAsyncCallbackWithTargets = (file, _, properties, _, options, _) =>
+        {
+            // The original SDK resolves only with ambient caches. Isolating planning loses
+            // the evaluated DirectoryBuildPropsPath before the replacement SDK can be staged.
+            if (options.EnvironmentVariables is not null)
+            {
+                return (1, null);
+            }
+            Assert.Equal(originalProps, File.ReadAllText(propsPath));
+            evaluationCount++;
+            if (properties.Contains("RestoreConfigFile", StringComparer.Ordinal))
+            {
+                return (0, TestDotNetCliRunner.CreateRestoreSettingsOutput(file, properties));
+            }
+            var output = new JsonObject()
+                .WithSdkVersion("9.4.1")
+                .WithProperty("_UsingAspireAppHostSdk", "true")
+                .WithProperty("DirectoryBuildPropsPath", propsPath)
+                .WithPackageReference("Aspire.Hosting.Redis", "9.4.1");
+            return (0, JsonDocument.Parse(output.ToJsonString()));
+        };
+        runner.SearchPackagesAsyncCallback = (directory, query, _, _, _, _, _, _, _, _) =>
+        {
+            Assert.Equal([newSource], NuGetTestHelper.GetEligiblePackageSources(directory.FullName, query));
+            return (0, [new NuGetPackageCli { Id = query, Version = "9.4.2", Source = newSource }]);
+        };
+        runner.GetNuGetConfigPathsAsyncCallback = (_, _, _) => (0, [configFile.FullName]);
+        runner.AddPackageAsyncCallback = (file, _, version, _, noRestore, options, _) =>
+        {
+            Assert.True(noRestore);
+            Assert.NotNull(options.EnvironmentVariables);
+            File.WriteAllText(file.FullName, File.ReadAllText(file.FullName).Replace("9.4.1", version, StringComparison.Ordinal));
+            return 0;
+        };
+        runner.RestoreAsyncCallback = (_, options, _) =>
+        {
+            Assert.NotNull(options.EnvironmentVariables);
+            Assert.Equal(options.EnvironmentVariables["NUGET_PACKAGES"], options.IsolatedRestorePackagesDirectory?.FullName);
+            Assert.NotNull(options.NuGetRestoreTargetsFile);
+            Assert.Equal([newSource], NuGetTestHelper.GetEligiblePackageSources(
+                options.NuGetRestoreTargetsFile.DirectoryName!, "Aspire.AppHost.Sdk"));
+            var declaration = System.Xml.Linq.XDocument.Load(propsPath);
+            Assert.Equal("9.4.2", declaration.Root!.Element("Sdk")!.Attribute("Version")!.Value);
+            Assert.Equal(originalProps, File.ReadAllText(propsPath + ".aspire-backup"));
+            Assert.Equal(originalConfig, File.ReadAllBytes(configFile.FullName));
+            restoreCount++;
+            return restoreSucceeds ? 0 : 1;
+        };
+        var client = new FakeNuGetClient { GetSettingsCallback = NuGetTestHelper.CreateClient().GetSettings };
+        using var provider = CreateServices(workspace, runner, client).BuildServiceProvider();
+        var channel = PackageChannel.CreateExplicitChannel(
+            "daily", PackageChannelQuality.Both, [new("Aspire*", newSource)],
+            provider.GetRequiredService<INuGetPackageCache>(), new TestFeatures(), NullLogger.Instance);
+        var updater = provider.GetRequiredService<IProjectUpdater>();
+        var context = CreateContext(projectFile, channel, hasExplicitChannel: true, dryRun: true);
+
+        if (restoreSucceeds)
+        {
+            var result = await updater.UpdateProjectAsync(context, TestContext.Current.CancellationToken);
+            Assert.False(result.UpdatedApplied);
+        }
+        else
+        {
+            await Assert.ThrowsAsync<ProjectUpdaterException>(() =>
+                updater.UpdateProjectAsync(context, TestContext.Current.CancellationToken));
+        }
+
+        Assert.True(evaluationCount > 0);
+        Assert.Equal(1, restoreCount);
+        Assert.True(client.LastAcquisitionBypassedCaches);
+        Assert.Equal(originalProps, await File.ReadAllTextAsync(propsPath));
+        Assert.Equal(originalProject, await File.ReadAllBytesAsync(projectFile.FullName));
+        Assert.Equal(originalConfig, await File.ReadAllBytesAsync(configFile.FullName));
+        Assert.False(File.Exists(propsPath + ".aspire-backup"));
     }
 
     [Theory]
@@ -331,7 +478,7 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
         var channel = PackageChannel.CreateExplicitChannel(
             "daily", PackageChannelQuality.Both, [new("Aspire*", newSource)],
             provider.GetRequiredService<INuGetPackageCache>(), new TestFeatures(), NullLogger.Instance);
-        var context = CreateContext(projectFile, channel, hasExplicitChannel: true);
+        var context = CreateContext(projectFile, channel, hasExplicitChannel: true, dryRun: outcome == "restore");
         var updater = provider.GetRequiredService<IProjectUpdater>();
         if (outcome == "success")
         {
@@ -358,8 +505,9 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
         }
 
         Assert.Equal(2, inspectionCount);
-        Assert.Equal(outcome is "success" or "restore"
-            ? ["bootstrap", "policy", "package", "restore"]
+        Assert.Equal(outcome == "restore", client.LastAcquisitionBypassedCaches);
+        Assert.Equal(outcome == "success" ? ["bootstrap", "policy", "package"]
+            : outcome == "restore" ? ["bootstrap", "policy", "package", "restore"]
             : ["bootstrap", "policy"], calls);
         Assert.Empty(Directory.EnumerateDirectories(Path.Combine(workspace.Path, ".aspire"), ".aspire-nuget-config-*"));
     }
@@ -781,7 +929,7 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
             context, TestContext.Current.CancellationToken);
 
         Assert.True(result.UpdatedApplied);
-        Assert.Equal(1, restoreCount);
+        Assert.Equal(0, restoreCount);
         AssertUpdatedSdk(provider, projectFile);
         Assert.Equal(expectedSources.Order(),
             NuGetTestHelper.GetEligiblePackageSources(workspace.Path, "Aspire.Hosting.Redis").Order());
@@ -878,7 +1026,7 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
             context, TestContext.Current.CancellationToken);
 
         Assert.True(result.UpdatedApplied);
-        Assert.Equal(1, restoreCount);
+        Assert.Equal(hasExplicitChannel ? 0 : 1, restoreCount);
         AssertUpdatedSdk(provider, projectFile);
         Assert.Equal(expectedSources.Order(),
             NuGetTestHelper.GetEligiblePackageSources(workspace.Path, "Aspire.Hosting.Redis").Order());
@@ -902,9 +1050,11 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
     }
 
     [Theory]
-    [InlineData("AppHost.csproj")]
-    [InlineData("apphost.cs")]
-    public async Task UpdateAsync_ExplicitSameChannelWithDifferentFeedRestoresWithoutVersionChanges(string fileName)
+    [InlineData("AppHost.csproj", false)]
+    [InlineData("apphost.cs", false)]
+    [InlineData("AppHost.csproj", true)]
+    [InlineData("apphost.cs", true)]
+    public async Task UpdateAsync_FeedOnlyUpdateRestoresOnlyDuringDryRun(string fileName, bool dryRun)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = await CreateAppHostAsync(workspace, fileName);
@@ -926,12 +1076,13 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
         runner.RestoreAsyncCallback = (file, options, _) =>
         {
             Assert.Equal(projectFile.FullName, file.FullName);
-            Assert.Null(options.EnvironmentVariables);
+            Assert.NotNull(options.EnvironmentVariables);
             Assert.Equal(originalConfig, File.ReadAllBytes(configFile.FullName));
             Assert.NotNull(options.NuGetRestoreTargetsFile);
             Assert.Equal([newSource], NuGetTestHelper.GetEligiblePackageSources(options.NuGetRestoreTargetsFile.DirectoryName!, "Aspire.AppHost.Sdk"));
             Assert.Equal([newSource], NuGetTestHelper.GetEligiblePackageSources(options.NuGetRestoreTargetsFile.DirectoryName!, "Aspire.Hosting.Redis"));
             restoreCount++;
+            Assert.True(dryRun);
             return 0;
         };
         using var provider = CreateServices(workspace, runner, new FakeNuGetClient
@@ -945,12 +1096,20 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
             """{ "channel": "staging", "sdkVersion": "9.4.1" }""");
 
         var result = await provider.GetRequiredService<IProjectUpdater>().UpdateProjectAsync(
-            CreateContext(projectFile, channel, hasExplicitChannel: true), TestContext.Current.CancellationToken);
+            CreateContext(projectFile, channel, hasExplicitChannel: true, dryRun), TestContext.Current.CancellationToken);
 
-        Assert.True(result.UpdatedApplied);
-        Assert.Equal(1, restoreCount);
+        Assert.Equal(!dryRun, result.UpdatedApplied);
+        Assert.Equal(dryRun ? 1 : 0, restoreCount);
         Assert.Equal(originalProject, await File.ReadAllBytesAsync(projectFile.FullName));
-        Assert.Equal([newSource], NuGetTestHelper.GetEligiblePackageSources(projectFile.DirectoryName!, "Aspire.Hosting.Redis"));
+        Assert.Equal([dryRun ? "https://old.example/v3/index.json" : newSource],
+            NuGetTestHelper.GetEligiblePackageSources(projectFile.DirectoryName!, "Aspire.Hosting.Redis"));
+        var interaction = Assert.IsType<TestInteractionService>(provider.GetRequiredService<IInteractionService>());
+        if (dryRun)
+        {
+            Assert.Empty(interaction.BooleanPromptCalls);
+            Assert.Empty(interaction.FilePathPromptCalls);
+            Assert.Equal(originalConfig, await File.ReadAllBytesAsync(configFile.FullName));
+        }
     }
 
     [Theory]
@@ -1110,7 +1269,8 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
             Channel = channel,
             HasExplicitChannel = true,
             ConfirmBinding = PromptBinding.CreateDefault(true),
-            NuGetConfigDirBinding = PromptBinding.CreateDefault<string?>(projectFile.DirectoryName)
+            NuGetConfigDirBinding = PromptBinding.CreateDefault<string?>(projectFile.DirectoryName),
+            DryRun = outcome == "restore"
         };
         var updater = provider.GetRequiredService<IProjectUpdater>();
         if (outcome == "restore")
@@ -1134,13 +1294,13 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
             return;
         }
 
-        Assert.Equal([UpdateCommandStrings.PerformUpdatesPrompt, UpdateCommandStrings.ApplyChangesToNuGetConfig],
+        Assert.Equal(outcome == "restore" ? [] : new[] { UpdateCommandStrings.PerformUpdatesPrompt, UpdateCommandStrings.ApplyChangesToNuGetConfig },
             interaction.BooleanPromptCalls.Select(static call => call.PromptText));
         Assert.Equal(0,
             interaction.DisplayedPlainText.Count(text => text == string.Format(
                 CultureInfo.InvariantCulture, UpdateCommandStrings.MappingAddedFormat, "*")));
         Assert.Equal(originalParent, await File.ReadAllBytesAsync(parentConfig.FullName));
-        Assert.Equal(outcome == "decline" ? 0 : 1, restoreCount);
+        Assert.Equal(outcome == "restore" ? 1 : 0, restoreCount);
         Assert.Equal(outcome == "decline" || mappingOnly ? 0 : 1, packageEditCount);
         if (outcome is "success" or "mapping-only")
         {
@@ -1282,11 +1442,12 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
             AppHostFile = projectFile,
             Channel = channel,
             HasExplicitChannel = true,
+            DryRun = outcome is "restore" or "cancel" or "stale-config" or "stale-project",
             ConfirmBinding = PromptBinding.CreateDefault(true),
             NuGetConfigDirBinding = PromptBinding.CreateDefault<string?>(null),
             AdditionalUpdateSteps = [new PackageUpdateStep("Tool update", () =>
             {
-                Assert.Equal("restore", calls[^1]);
+                Assert.Equal("package", calls[^1]);
                 Assert.Equal([newSource], NuGetTestHelper.GetEligiblePackageSources(projectFile.DirectoryName!, "Aspire.Hosting.Redis"));
                 calls.Add("tool");
                 return outcome == "commit"
@@ -1301,7 +1462,7 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
             Assert.True(result.UpdatedApplied);
             AssertUpdatedSdk(provider, projectFile);
             Assert.Equal([newSource], NuGetTestHelper.GetEligiblePackageSources(projectFile.DirectoryName!, "Aspire.Hosting.Redis"));
-            Assert.Equal(["discover:Aspire.AppHost.Sdk", "discover:Aspire.Hosting.Redis", "bootstrap", "package", "restore", "tool"], calls);
+            Assert.Equal(["discover:Aspire.AppHost.Sdk", "discover:Aspire.Hosting.Redis", "bootstrap", "package", "tool"], calls);
         }
         else
         {
@@ -1404,12 +1565,13 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
         {
             GetSettingsCallback = NuGetTestHelper.CreateClient().GetSettings
         });
-        services.AddSingleton(TestExecutionContextHelper.CreateExecutionContext(invocationDirectory));
+        services.AddSingleton(TestExecutionContextHelper.CreateExecutionContext(
+            invocationDirectory, aspireHomeDirectory: workspace.CreateDirectory("aspire-home")));
         using var provider = services.BuildServiceProvider();
         var channel = PackageChannel.CreateExplicitChannel(
             "daily", PackageChannelQuality.Both, [new("Aspire*", "https://new.example/v3/index.json")],
             provider.GetRequiredService<INuGetPackageCache>(), new TestFeatures(), NullLogger.Instance);
-        var context = CreateContext(project, channel, hasExplicitChannel: true);
+        var context = CreateContext(project, channel, hasExplicitChannel: true, dryRun: !succeeds);
         var updater = provider.GetRequiredService<IProjectUpdater>();
         if (succeeds)
         {
@@ -1436,10 +1598,16 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
             }
         }
         var interaction = Assert.IsType<TestInteractionService>(provider.GetRequiredService<IInteractionService>());
-        Assert.Equal(Path.GetDirectoryName(configPath),
-            Assert.Single(interaction.FilePathPromptCalls).DefaultValue);
+        if (succeeds)
+        {
+            Assert.Equal(Path.GetDirectoryName(configPath), Assert.Single(interaction.FilePathPromptCalls).DefaultValue);
+        }
+        else
+        {
+            Assert.Empty(interaction.FilePathPromptCalls);
+        }
         Assert.Empty(invocationDirectory.EnumerateFileSystemInfos());
-        Assert.True(restored);
+        Assert.Equal(!succeeds, restored);
         Assert.Empty(Directory.EnumerateFiles(workspace.Path, ".aspire-nuget-candidate-*"));
     }
 
@@ -1512,11 +1680,15 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
     }
 
     [Theory]
-    [InlineData("AppHost.csproj", false)]
-    [InlineData("apphost.cs", false)]
-    [InlineData("AppHost.csproj", true)]
-    [InlineData("apphost.cs", true)]
-    public async Task UpdateAsync_RefusesUnsafeChannelFeedBeforeEdits(string fileName, bool disabledSource)
+    [InlineData("AppHost.csproj", false, false)]
+    [InlineData("apphost.cs", false, false)]
+    [InlineData("AppHost.csproj", true, false)]
+    [InlineData("apphost.cs", true, false)]
+    [InlineData("AppHost.csproj", false, true)]
+    [InlineData("apphost.cs", false, true)]
+    [InlineData("AppHost.csproj", true, true)]
+    [InlineData("apphost.cs", true, true)]
+    public async Task UpdateAsync_RefusesUnsafeChannelFeedBeforeEdits(string fileName, bool disabledSource, bool dryRun)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = await CreateAppHostAsync(workspace, fileName);
@@ -1551,7 +1723,7 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
         var updater = provider.GetRequiredService<IProjectUpdater>();
 
         var error = await Assert.ThrowsAsync<ProjectUpdaterException>(() =>
-            updater.UpdateProjectAsync(CreateContext(projectFile, channel, hasExplicitChannel: true),
+            updater.UpdateProjectAsync(CreateContext(projectFile, channel, hasExplicitChannel: true, dryRun),
                 TestContext.Current.CancellationToken));
 
         Assert.Equal(string.Format(CultureInfo.CurrentCulture,
@@ -1559,7 +1731,7 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
         Assert.Equal(originalConfig, await File.ReadAllTextAsync(configPath));
         Assert.Equal(originalProject, await File.ReadAllBytesAsync(projectFile.FullName));
         var interaction = Assert.IsType<TestInteractionService>(provider.GetRequiredService<IInteractionService>());
-        Assert.Equal([UpdateCommandStrings.PerformUpdatesPrompt],
+        Assert.Equal(dryRun ? [] : new[] { UpdateCommandStrings.PerformUpdatesPrompt },
             interaction.BooleanPromptCalls.Select(static call => call.PromptText));
     }
 
@@ -1622,7 +1794,7 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
             CreateContext(projectFile, channel, hasExplicitChannel: true), TestContext.Current.CancellationToken);
 
         Assert.True(result.UpdatedApplied);
-        Assert.Equal(1, restoreCount);
+        Assert.Equal(0, restoreCount);
         AssertUpdatedSdk(provider, projectFile);
         Assert.Equal(originalConfig, await File.ReadAllTextAsync(configPath));
         var interaction = Assert.IsType<TestInteractionService>(provider.GetRequiredService<IInteractionService>());
@@ -1701,7 +1873,7 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
             CreateContext(projectFile, channel, hasExplicitChannel: true), TestContext.Current.CancellationToken);
 
         Assert.True(result.UpdatedApplied);
-        Assert.True(restored);
+        Assert.False(restored);
         Assert.Equal(parent, await File.ReadAllTextAsync(parentPath));
         var document = System.Xml.Linq.XDocument.Load(configPath);
         Assert.Equal([source], document.Root!.Element("packageSources")!.Elements("add")
@@ -1758,19 +1930,20 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
     }
 
     private static async Task<UpdatePackagesContext> CreateContextAsync(
-        IServiceProvider provider, FileInfo projectFile, string channelName, bool hasExplicitChannel)
+        IServiceProvider provider, FileInfo projectFile, string channelName, bool hasExplicitChannel, bool dryRun = false)
     {
         var channels = await provider.GetRequiredService<IPackagingService>()
             .GetChannelsAsync(TestContext.Current.CancellationToken);
-        return CreateContext(projectFile, channels.Single(channel => channel.Name == channelName), hasExplicitChannel);
+        return CreateContext(projectFile, channels.Single(channel => channel.Name == channelName), hasExplicitChannel, dryRun);
     }
 
-    private static UpdatePackagesContext CreateContext(FileInfo projectFile, PackageChannel channel, bool hasExplicitChannel)
+    private static UpdatePackagesContext CreateContext(FileInfo projectFile, PackageChannel channel, bool hasExplicitChannel, bool dryRun = false)
         => new()
         {
             AppHostFile = projectFile,
             Channel = channel,
             HasExplicitChannel = hasExplicitChannel,
+            DryRun = dryRun,
             ConfirmBinding = PromptBinding.CreateDefault(true),
             NuGetConfigDirBinding = PromptBinding.CreateDefault<string?>(null)
         };

@@ -123,6 +123,13 @@ Automatic SDK rewrites are limited to unconditional declarations. Conditional
 SDK declarations that cannot be safely classified require an explicit version
 edit; source fallback does not guess whether their MSBuild conditions are active.
 
+Explicit channel updates apply confirmed changes without a validation restore.
+Use `aspire update --channel <channel> --dry-run` to validate with temporary
+NuGet caches instead, without proposing or applying changes. Configuration
+conflicts still fail in either mode. Dry runs restore source files from adjacent
+backups; leftover backups require separate consent to replace. See the
+[update validation details](../../docs/specs/polyglot-integration-restore.md#shared-policy-previews-and-net-persistence).
+
 ## Configured template sources
 
 Register named local directories or Git repositories in the
