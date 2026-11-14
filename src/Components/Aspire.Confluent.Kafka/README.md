@@ -124,6 +124,10 @@ To configure `Confluent.Kafka` builders (for example to setup custom serializers
 
 You can refer to [`ProducerBuilder<TKey, TValue>`](https://docs.confluent.io/platform/current/clients/confluent-kafka-dotnet/_site/api/Confluent.Kafka.ProducerBuilder-2.html) and [`ConsumerBuilder<TKey, TValue>`](https://docs.confluent.io/platform/current/clients/confluent-kafka-dotnet/_site/api/Confluent.Kafka.ConsumerBuilder-2.html) api documentation for more information.
 
+## Telemetry changes in Aspire 17.0
+
+Aspire 17.0 introduces **breaking changes to Kafka metric names, attributes, and span names and kinds**. Existing dashboards, alerts, and queries may need updating. Public .NET registration APIs and settings are unchanged.
+
 ## AppHost extensions
 
 In your AppHost project, install the `Aspire.Hosting.Kafka` library with [NuGet](https://www.nuget.org):
