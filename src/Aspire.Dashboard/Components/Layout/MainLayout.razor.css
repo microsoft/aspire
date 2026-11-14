@@ -201,10 +201,6 @@
     initial-value: 0px;
 }
 
-::deep .header-right {
-    margin-left: auto;
-}
-
 /* The header is a band darker than the page, so the app's name and the tabs read as the frame around it. Its pieces
    (the band, and on phones the logo's cell and the app bar) share one color. In the dark theme the shell background
    is pure black, which is too harsh beside the page, so the band is the page's own color taken about halfway to
@@ -276,7 +272,7 @@
     ::deep.layout > header .brand-home > .application-name {
         display: flex;
         align-items: center;
-        padding: 0 12px;
+        padding: 0 16px 0 12px;
         gap: 20px;
     }
 
@@ -309,16 +305,14 @@
     ::deep.layout > header .brand-logo-container {
         display: flex;
         align-items: center;
-        justify-content: center;
+        justify-content: flex-end;
         flex: 0 0 36px;
         width: 36px;
         height: 100%;
     }
 
     ::deep.layout > header .brand-logo-container > .logo {
-        justify-content: flex-end;
         flex: 0 0 24px;
-        margin-left: auto;
     }
 
     ::deep.layout > header > .header-context {
@@ -424,41 +418,10 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        background-color: var(--aspire-header-background);
-    }
-
-    ::deep.layout > .fluent-appbar {
-        grid-area: nav;
-        overflow-y: auto;
-        background: var(--aspire-header-background);
-    }
-
-    ::deep.layout > .aspire-icon {
         padding-left: 15px;
         padding-right: 10px;
         background-color: var(--aspire-header-background);
     }
-
-    ::deep.layout > .aspire-icon fluent-anchor {
-        margin-left: 5px;
-    }
-
-    ::deep .aspire-icon fluent-anchor.logo::part(control) {
-        padding: 0;
-        border: none;
-    }
-
-    ::deep .aspire-icon fluent-anchor.logo,
-    ::deep .aspire-icon fluent-anchor.logo::part(control),
-    ::deep .aspire-icon fluent-anchor.logo::part(content) {
-        height: 24px;
-        width: 24px;
-    }
-
-}
-
-::deep.layout > .aspire-icon fluent-anchor[appearance=stealth].logo::part(control) {
-    background-color: var(--aspire-header-background);
 }
 
 #blazor-error-ui {
