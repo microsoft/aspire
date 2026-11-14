@@ -3,42 +3,64 @@
   "Main/CodeIssue/CodeIssue/CodeIssue/overlap=True": [],
   "Main/CodeIssue/CodeIssue/Flaky/overlap=False": [],
   "Main/CodeIssue/CodeIssue/Flaky/overlap=True": [],
+  "Main/CodeIssue/CodeIssue/Unresolved/overlap=False": [],
+  "Main/CodeIssue/CodeIssue/Unresolved/overlap=True": [],
   "Main/CodeIssue/CodeIssue/none/overlap=False": [],
   "Main/CodeIssue/CodeIssue/none/overlap=True": [],
   "Main/CodeIssue/FlakyTest/CodeIssue/overlap=False": [],
   "Main/CodeIssue/FlakyTest/CodeIssue/overlap=True": [],
   "Main/CodeIssue/FlakyTest/Flaky/overlap=False": [],
   "Main/CodeIssue/FlakyTest/Flaky/overlap=True": [],
+  "Main/CodeIssue/FlakyTest/Unresolved/overlap=False": [],
+  "Main/CodeIssue/FlakyTest/Unresolved/overlap=True": [],
   "Main/CodeIssue/FlakyTest/none/overlap=False": [],
   "Main/CodeIssue/FlakyTest/none/overlap=True": [],
   "Main/CodeIssue/MainRepositoryBreakage/CodeIssue/overlap=False": [],
   "Main/CodeIssue/MainRepositoryBreakage/CodeIssue/overlap=True": [],
   "Main/CodeIssue/MainRepositoryBreakage/Flaky/overlap=False": [],
   "Main/CodeIssue/MainRepositoryBreakage/Flaky/overlap=True": [],
+  "Main/CodeIssue/MainRepositoryBreakage/Unresolved/overlap=False": [],
+  "Main/CodeIssue/MainRepositoryBreakage/Unresolved/overlap=True": [],
   "Main/CodeIssue/MainRepositoryBreakage/none/overlap=False": [],
   "Main/CodeIssue/MainRepositoryBreakage/none/overlap=True": [],
   "Main/CodeIssue/TransientInfrastructure/CodeIssue/overlap=False": [],
   "Main/CodeIssue/TransientInfrastructure/CodeIssue/overlap=True": [],
   "Main/CodeIssue/TransientInfrastructure/Flaky/overlap=False": [],
   "Main/CodeIssue/TransientInfrastructure/Flaky/overlap=True": [],
+  "Main/CodeIssue/TransientInfrastructure/Unresolved/overlap=False": [],
+  "Main/CodeIssue/TransientInfrastructure/Unresolved/overlap=True": [],
   "Main/CodeIssue/TransientInfrastructure/none/overlap=False": [],
   "Main/CodeIssue/TransientInfrastructure/none/overlap=True": [],
+  "Main/CodeIssue/Unresolved/CodeIssue/overlap=False": [],
+  "Main/CodeIssue/Unresolved/CodeIssue/overlap=True": [],
+  "Main/CodeIssue/Unresolved/Flaky/overlap=False": [],
+  "Main/CodeIssue/Unresolved/Flaky/overlap=True": [],
+  "Main/CodeIssue/Unresolved/Unresolved/overlap=False": [],
+  "Main/CodeIssue/Unresolved/Unresolved/overlap=True": [],
+  "Main/CodeIssue/Unresolved/none/overlap=False": [],
+  "Main/CodeIssue/Unresolved/none/overlap=True": [],
   "Main/CodeIssue/none/CodeIssue/overlap=False": [],
   "Main/CodeIssue/none/CodeIssue/overlap=True": [],
   "Main/CodeIssue/none/Flaky/overlap=False": [],
   "Main/CodeIssue/none/Flaky/overlap=True": [],
+  "Main/CodeIssue/none/Unresolved/overlap=False": [],
+  "Main/CodeIssue/none/Unresolved/overlap=True": [],
   "Main/CodeIssue/none/none/overlap=False": [],
   "Main/CodeIssue/none/none/overlap=True": [],
   "Main/FlakyTest/CodeIssue/CodeIssue/overlap=False": [],
   "Main/FlakyTest/CodeIssue/CodeIssue/overlap=True": [],
   "Main/FlakyTest/CodeIssue/Flaky/overlap=False": [],
   "Main/FlakyTest/CodeIssue/Flaky/overlap=True": [],
+  "Main/FlakyTest/CodeIssue/Unresolved/overlap=False": [],
+  "Main/FlakyTest/CodeIssue/Unresolved/overlap=True": [],
   "Main/FlakyTest/CodeIssue/none/overlap=False": [],
   "Main/FlakyTest/CodeIssue/none/overlap=True": [],
   "Main/FlakyTest/FlakyTest/CodeIssue/overlap=False": [],
   "Main/FlakyTest/FlakyTest/CodeIssue/overlap=True": [],
   "Main/FlakyTest/FlakyTest/Flaky/overlap=False": [],
   "Main/FlakyTest/FlakyTest/Flaky/overlap=True": [],
+  "Main/FlakyTest/FlakyTest/Unresolved/overlap=False": [],
+  "Main/FlakyTest/FlakyTest/Unresolved/overlap=True": [],
   "Main/FlakyTest/FlakyTest/none/overlap=False": [],
   "Main/FlakyTest/FlakyTest/none/overlap=True": [],
   "Main/FlakyTest/MainRepositoryBreakage/CodeIssue/overlap=False": [],
@@ -49,6 +71,8 @@
   "Main/FlakyTest/MainRepositoryBreakage/Flaky/overlap=True": [
     "mixed"
   ],
+  "Main/FlakyTest/MainRepositoryBreakage/Unresolved/overlap=False": [],
+  "Main/FlakyTest/MainRepositoryBreakage/Unresolved/overlap=True": [],
   "Main/FlakyTest/MainRepositoryBreakage/none/overlap=False": [],
   "Main/FlakyTest/MainRepositoryBreakage/none/overlap=True": [],
   "Main/FlakyTest/TransientInfrastructure/CodeIssue/overlap=False": [],
@@ -59,8 +83,22 @@
   "Main/FlakyTest/TransientInfrastructure/Flaky/overlap=True": [
     "flaky-test"
   ],
+  "Main/FlakyTest/TransientInfrastructure/Unresolved/overlap=False": [],
+  "Main/FlakyTest/TransientInfrastructure/Unresolved/overlap=True": [],
   "Main/FlakyTest/TransientInfrastructure/none/overlap=False": [],
   "Main/FlakyTest/TransientInfrastructure/none/overlap=True": [],
+  "Main/FlakyTest/Unresolved/CodeIssue/overlap=False": [],
+  "Main/FlakyTest/Unresolved/CodeIssue/overlap=True": [],
+  "Main/FlakyTest/Unresolved/Flaky/overlap=False": [
+    "unresolved"
+  ],
+  "Main/FlakyTest/Unresolved/Flaky/overlap=True": [
+    "unresolved"
+  ],
+  "Main/FlakyTest/Unresolved/Unresolved/overlap=False": [],
+  "Main/FlakyTest/Unresolved/Unresolved/overlap=True": [],
+  "Main/FlakyTest/Unresolved/none/overlap=False": [],
+  "Main/FlakyTest/Unresolved/none/overlap=True": [],
   "Main/FlakyTest/none/CodeIssue/overlap=False": [],
   "Main/FlakyTest/none/CodeIssue/overlap=True": [],
   "Main/FlakyTest/none/Flaky/overlap=False": [
@@ -69,18 +107,24 @@
   "Main/FlakyTest/none/Flaky/overlap=True": [
     "flaky-test"
   ],
+  "Main/FlakyTest/none/Unresolved/overlap=False": [],
+  "Main/FlakyTest/none/Unresolved/overlap=True": [],
   "Main/FlakyTest/none/none/overlap=False": [],
   "Main/FlakyTest/none/none/overlap=True": [],
   "Main/MainRepositoryBreakage/CodeIssue/CodeIssue/overlap=False": [],
   "Main/MainRepositoryBreakage/CodeIssue/CodeIssue/overlap=True": [],
   "Main/MainRepositoryBreakage/CodeIssue/Flaky/overlap=False": [],
   "Main/MainRepositoryBreakage/CodeIssue/Flaky/overlap=True": [],
+  "Main/MainRepositoryBreakage/CodeIssue/Unresolved/overlap=False": [],
+  "Main/MainRepositoryBreakage/CodeIssue/Unresolved/overlap=True": [],
   "Main/MainRepositoryBreakage/CodeIssue/none/overlap=False": [],
   "Main/MainRepositoryBreakage/CodeIssue/none/overlap=True": [],
   "Main/MainRepositoryBreakage/FlakyTest/CodeIssue/overlap=False": [],
   "Main/MainRepositoryBreakage/FlakyTest/CodeIssue/overlap=True": [],
   "Main/MainRepositoryBreakage/FlakyTest/Flaky/overlap=False": [],
   "Main/MainRepositoryBreakage/FlakyTest/Flaky/overlap=True": [],
+  "Main/MainRepositoryBreakage/FlakyTest/Unresolved/overlap=False": [],
+  "Main/MainRepositoryBreakage/FlakyTest/Unresolved/overlap=True": [],
   "Main/MainRepositoryBreakage/FlakyTest/none/overlap=False": [],
   "Main/MainRepositoryBreakage/FlakyTest/none/overlap=True": [],
   "Main/MainRepositoryBreakage/MainRepositoryBreakage/CodeIssue/overlap=False": [
@@ -95,6 +139,8 @@
   "Main/MainRepositoryBreakage/MainRepositoryBreakage/Flaky/overlap=True": [
     "mixed"
   ],
+  "Main/MainRepositoryBreakage/MainRepositoryBreakage/Unresolved/overlap=False": [],
+  "Main/MainRepositoryBreakage/MainRepositoryBreakage/Unresolved/overlap=True": [],
   "Main/MainRepositoryBreakage/MainRepositoryBreakage/none/overlap=False": [
     "main-repository-breakage"
   ],
@@ -113,11 +159,33 @@
   "Main/MainRepositoryBreakage/TransientInfrastructure/Flaky/overlap=True": [
     "mixed"
   ],
+  "Main/MainRepositoryBreakage/TransientInfrastructure/Unresolved/overlap=False": [],
+  "Main/MainRepositoryBreakage/TransientInfrastructure/Unresolved/overlap=True": [],
   "Main/MainRepositoryBreakage/TransientInfrastructure/none/overlap=False": [
     "mixed"
   ],
   "Main/MainRepositoryBreakage/TransientInfrastructure/none/overlap=True": [
     "mixed"
+  ],
+  "Main/MainRepositoryBreakage/Unresolved/CodeIssue/overlap=False": [
+    "unresolved"
+  ],
+  "Main/MainRepositoryBreakage/Unresolved/CodeIssue/overlap=True": [
+    "unresolved"
+  ],
+  "Main/MainRepositoryBreakage/Unresolved/Flaky/overlap=False": [
+    "unresolved"
+  ],
+  "Main/MainRepositoryBreakage/Unresolved/Flaky/overlap=True": [
+    "unresolved"
+  ],
+  "Main/MainRepositoryBreakage/Unresolved/Unresolved/overlap=False": [],
+  "Main/MainRepositoryBreakage/Unresolved/Unresolved/overlap=True": [],
+  "Main/MainRepositoryBreakage/Unresolved/none/overlap=False": [
+    "unresolved"
+  ],
+  "Main/MainRepositoryBreakage/Unresolved/none/overlap=True": [
+    "unresolved"
   ],
   "Main/MainRepositoryBreakage/none/CodeIssue/overlap=False": [
     "main-repository-breakage"
@@ -131,6 +199,8 @@
   "Main/MainRepositoryBreakage/none/Flaky/overlap=True": [
     "mixed"
   ],
+  "Main/MainRepositoryBreakage/none/Unresolved/overlap=False": [],
+  "Main/MainRepositoryBreakage/none/Unresolved/overlap=True": [],
   "Main/MainRepositoryBreakage/none/none/overlap=False": [
     "main-repository-breakage"
   ],
@@ -141,12 +211,16 @@
   "Main/TransientInfrastructure/CodeIssue/CodeIssue/overlap=True": [],
   "Main/TransientInfrastructure/CodeIssue/Flaky/overlap=False": [],
   "Main/TransientInfrastructure/CodeIssue/Flaky/overlap=True": [],
+  "Main/TransientInfrastructure/CodeIssue/Unresolved/overlap=False": [],
+  "Main/TransientInfrastructure/CodeIssue/Unresolved/overlap=True": [],
   "Main/TransientInfrastructure/CodeIssue/none/overlap=False": [],
   "Main/TransientInfrastructure/CodeIssue/none/overlap=True": [],
   "Main/TransientInfrastructure/FlakyTest/CodeIssue/overlap=False": [],
   "Main/TransientInfrastructure/FlakyTest/CodeIssue/overlap=True": [],
   "Main/TransientInfrastructure/FlakyTest/Flaky/overlap=False": [],
   "Main/TransientInfrastructure/FlakyTest/Flaky/overlap=True": [],
+  "Main/TransientInfrastructure/FlakyTest/Unresolved/overlap=False": [],
+  "Main/TransientInfrastructure/FlakyTest/Unresolved/overlap=True": [],
   "Main/TransientInfrastructure/FlakyTest/none/overlap=False": [],
   "Main/TransientInfrastructure/FlakyTest/none/overlap=True": [],
   "Main/TransientInfrastructure/MainRepositoryBreakage/CodeIssue/overlap=False": [
@@ -157,6 +231,8 @@
   ],
   "Main/TransientInfrastructure/MainRepositoryBreakage/Flaky/overlap=False": [],
   "Main/TransientInfrastructure/MainRepositoryBreakage/Flaky/overlap=True": [],
+  "Main/TransientInfrastructure/MainRepositoryBreakage/Unresolved/overlap=False": [],
+  "Main/TransientInfrastructure/MainRepositoryBreakage/Unresolved/overlap=True": [],
   "Main/TransientInfrastructure/MainRepositoryBreakage/none/overlap=False": [
     "mixed"
   ],
@@ -167,21 +243,153 @@
   "Main/TransientInfrastructure/TransientInfrastructure/CodeIssue/overlap=True": [],
   "Main/TransientInfrastructure/TransientInfrastructure/Flaky/overlap=False": [],
   "Main/TransientInfrastructure/TransientInfrastructure/Flaky/overlap=True": [],
+  "Main/TransientInfrastructure/TransientInfrastructure/Unresolved/overlap=False": [],
+  "Main/TransientInfrastructure/TransientInfrastructure/Unresolved/overlap=True": [],
   "Main/TransientInfrastructure/TransientInfrastructure/none/overlap=False": [
     "transient-infra"
   ],
   "Main/TransientInfrastructure/TransientInfrastructure/none/overlap=True": [
     "transient-infra"
   ],
+  "Main/TransientInfrastructure/Unresolved/CodeIssue/overlap=False": [
+    "unresolved"
+  ],
+  "Main/TransientInfrastructure/Unresolved/CodeIssue/overlap=True": [
+    "unresolved"
+  ],
+  "Main/TransientInfrastructure/Unresolved/Flaky/overlap=False": [],
+  "Main/TransientInfrastructure/Unresolved/Flaky/overlap=True": [],
+  "Main/TransientInfrastructure/Unresolved/Unresolved/overlap=False": [],
+  "Main/TransientInfrastructure/Unresolved/Unresolved/overlap=True": [],
+  "Main/TransientInfrastructure/Unresolved/none/overlap=False": [
+    "unresolved"
+  ],
+  "Main/TransientInfrastructure/Unresolved/none/overlap=True": [
+    "unresolved"
+  ],
   "Main/TransientInfrastructure/none/CodeIssue/overlap=False": [],
   "Main/TransientInfrastructure/none/CodeIssue/overlap=True": [],
   "Main/TransientInfrastructure/none/Flaky/overlap=False": [],
   "Main/TransientInfrastructure/none/Flaky/overlap=True": [],
+  "Main/TransientInfrastructure/none/Unresolved/overlap=False": [],
+  "Main/TransientInfrastructure/none/Unresolved/overlap=True": [],
   "Main/TransientInfrastructure/none/none/overlap=False": [
     "transient-infra"
   ],
   "Main/TransientInfrastructure/none/none/overlap=True": [
     "transient-infra"
+  ],
+  "Main/Unresolved/CodeIssue/CodeIssue/overlap=False": [],
+  "Main/Unresolved/CodeIssue/CodeIssue/overlap=True": [],
+  "Main/Unresolved/CodeIssue/Flaky/overlap=False": [],
+  "Main/Unresolved/CodeIssue/Flaky/overlap=True": [],
+  "Main/Unresolved/CodeIssue/Unresolved/overlap=False": [],
+  "Main/Unresolved/CodeIssue/Unresolved/overlap=True": [],
+  "Main/Unresolved/CodeIssue/none/overlap=False": [],
+  "Main/Unresolved/CodeIssue/none/overlap=True": [],
+  "Main/Unresolved/FlakyTest/CodeIssue/overlap=False": [],
+  "Main/Unresolved/FlakyTest/CodeIssue/overlap=True": [],
+  "Main/Unresolved/FlakyTest/Flaky/overlap=False": [],
+  "Main/Unresolved/FlakyTest/Flaky/overlap=True": [],
+  "Main/Unresolved/FlakyTest/Unresolved/overlap=False": [],
+  "Main/Unresolved/FlakyTest/Unresolved/overlap=True": [],
+  "Main/Unresolved/FlakyTest/none/overlap=False": [],
+  "Main/Unresolved/FlakyTest/none/overlap=True": [],
+  "Main/Unresolved/MainRepositoryBreakage/CodeIssue/overlap=False": [
+    "unresolved"
+  ],
+  "Main/Unresolved/MainRepositoryBreakage/CodeIssue/overlap=True": [
+    "unresolved"
+  ],
+  "Main/Unresolved/MainRepositoryBreakage/Flaky/overlap=False": [
+    "unresolved"
+  ],
+  "Main/Unresolved/MainRepositoryBreakage/Flaky/overlap=True": [
+    "unresolved"
+  ],
+  "Main/Unresolved/MainRepositoryBreakage/Unresolved/overlap=False": [
+    "unresolved"
+  ],
+  "Main/Unresolved/MainRepositoryBreakage/Unresolved/overlap=True": [
+    "unresolved"
+  ],
+  "Main/Unresolved/MainRepositoryBreakage/none/overlap=False": [
+    "unresolved"
+  ],
+  "Main/Unresolved/MainRepositoryBreakage/none/overlap=True": [
+    "unresolved"
+  ],
+  "Main/Unresolved/TransientInfrastructure/CodeIssue/overlap=False": [
+    "unresolved"
+  ],
+  "Main/Unresolved/TransientInfrastructure/CodeIssue/overlap=True": [
+    "unresolved"
+  ],
+  "Main/Unresolved/TransientInfrastructure/Flaky/overlap=False": [
+    "unresolved"
+  ],
+  "Main/Unresolved/TransientInfrastructure/Flaky/overlap=True": [
+    "unresolved"
+  ],
+  "Main/Unresolved/TransientInfrastructure/Unresolved/overlap=False": [
+    "unresolved"
+  ],
+  "Main/Unresolved/TransientInfrastructure/Unresolved/overlap=True": [
+    "unresolved"
+  ],
+  "Main/Unresolved/TransientInfrastructure/none/overlap=False": [
+    "unresolved"
+  ],
+  "Main/Unresolved/TransientInfrastructure/none/overlap=True": [
+    "unresolved"
+  ],
+  "Main/Unresolved/Unresolved/CodeIssue/overlap=False": [
+    "unresolved"
+  ],
+  "Main/Unresolved/Unresolved/CodeIssue/overlap=True": [
+    "unresolved"
+  ],
+  "Main/Unresolved/Unresolved/Flaky/overlap=False": [
+    "unresolved"
+  ],
+  "Main/Unresolved/Unresolved/Flaky/overlap=True": [
+    "unresolved"
+  ],
+  "Main/Unresolved/Unresolved/Unresolved/overlap=False": [
+    "unresolved"
+  ],
+  "Main/Unresolved/Unresolved/Unresolved/overlap=True": [
+    "unresolved"
+  ],
+  "Main/Unresolved/Unresolved/none/overlap=False": [
+    "unresolved"
+  ],
+  "Main/Unresolved/Unresolved/none/overlap=True": [
+    "unresolved"
+  ],
+  "Main/Unresolved/none/CodeIssue/overlap=False": [
+    "unresolved"
+  ],
+  "Main/Unresolved/none/CodeIssue/overlap=True": [
+    "unresolved"
+  ],
+  "Main/Unresolved/none/Flaky/overlap=False": [
+    "unresolved"
+  ],
+  "Main/Unresolved/none/Flaky/overlap=True": [
+    "unresolved"
+  ],
+  "Main/Unresolved/none/Unresolved/overlap=False": [
+    "unresolved"
+  ],
+  "Main/Unresolved/none/Unresolved/overlap=True": [
+    "unresolved"
+  ],
+  "Main/Unresolved/none/none/overlap=False": [
+    "unresolved"
+  ],
+  "Main/Unresolved/none/none/overlap=True": [
+    "unresolved"
   ],
   "PullRequest/CodeIssue/CodeIssue/CodeIssue/overlap=False": [
     "code-issue"
@@ -195,6 +403,8 @@
   "PullRequest/CodeIssue/CodeIssue/Flaky/overlap=True": [
     "mixed"
   ],
+  "PullRequest/CodeIssue/CodeIssue/Unresolved/overlap=False": [],
+  "PullRequest/CodeIssue/CodeIssue/Unresolved/overlap=True": [],
   "PullRequest/CodeIssue/CodeIssue/none/overlap=False": [
     "code-issue"
   ],
@@ -205,12 +415,16 @@
   "PullRequest/CodeIssue/FlakyTest/CodeIssue/overlap=True": [],
   "PullRequest/CodeIssue/FlakyTest/Flaky/overlap=False": [],
   "PullRequest/CodeIssue/FlakyTest/Flaky/overlap=True": [],
+  "PullRequest/CodeIssue/FlakyTest/Unresolved/overlap=False": [],
+  "PullRequest/CodeIssue/FlakyTest/Unresolved/overlap=True": [],
   "PullRequest/CodeIssue/FlakyTest/none/overlap=False": [],
   "PullRequest/CodeIssue/FlakyTest/none/overlap=True": [],
   "PullRequest/CodeIssue/MainRepositoryBreakage/CodeIssue/overlap=False": [],
   "PullRequest/CodeIssue/MainRepositoryBreakage/CodeIssue/overlap=True": [],
   "PullRequest/CodeIssue/MainRepositoryBreakage/Flaky/overlap=False": [],
   "PullRequest/CodeIssue/MainRepositoryBreakage/Flaky/overlap=True": [],
+  "PullRequest/CodeIssue/MainRepositoryBreakage/Unresolved/overlap=False": [],
+  "PullRequest/CodeIssue/MainRepositoryBreakage/Unresolved/overlap=True": [],
   "PullRequest/CodeIssue/MainRepositoryBreakage/none/overlap=False": [],
   "PullRequest/CodeIssue/MainRepositoryBreakage/none/overlap=True": [],
   "PullRequest/CodeIssue/TransientInfrastructure/CodeIssue/overlap=False": [
@@ -225,11 +439,33 @@
   "PullRequest/CodeIssue/TransientInfrastructure/Flaky/overlap=True": [
     "mixed"
   ],
+  "PullRequest/CodeIssue/TransientInfrastructure/Unresolved/overlap=False": [],
+  "PullRequest/CodeIssue/TransientInfrastructure/Unresolved/overlap=True": [],
   "PullRequest/CodeIssue/TransientInfrastructure/none/overlap=False": [
     "mixed"
   ],
   "PullRequest/CodeIssue/TransientInfrastructure/none/overlap=True": [
     "mixed"
+  ],
+  "PullRequest/CodeIssue/Unresolved/CodeIssue/overlap=False": [
+    "unresolved"
+  ],
+  "PullRequest/CodeIssue/Unresolved/CodeIssue/overlap=True": [
+    "unresolved"
+  ],
+  "PullRequest/CodeIssue/Unresolved/Flaky/overlap=False": [
+    "unresolved"
+  ],
+  "PullRequest/CodeIssue/Unresolved/Flaky/overlap=True": [
+    "unresolved"
+  ],
+  "PullRequest/CodeIssue/Unresolved/Unresolved/overlap=False": [],
+  "PullRequest/CodeIssue/Unresolved/Unresolved/overlap=True": [],
+  "PullRequest/CodeIssue/Unresolved/none/overlap=False": [
+    "unresolved"
+  ],
+  "PullRequest/CodeIssue/Unresolved/none/overlap=True": [
+    "unresolved"
   ],
   "PullRequest/CodeIssue/none/CodeIssue/overlap=False": [
     "code-issue"
@@ -243,6 +479,8 @@
   "PullRequest/CodeIssue/none/Flaky/overlap=True": [
     "mixed"
   ],
+  "PullRequest/CodeIssue/none/Unresolved/overlap=False": [],
+  "PullRequest/CodeIssue/none/Unresolved/overlap=True": [],
   "PullRequest/CodeIssue/none/none/overlap=False": [
     "code-issue"
   ],
@@ -257,18 +495,24 @@
   "PullRequest/FlakyTest/CodeIssue/Flaky/overlap=True": [
     "mixed"
   ],
+  "PullRequest/FlakyTest/CodeIssue/Unresolved/overlap=False": [],
+  "PullRequest/FlakyTest/CodeIssue/Unresolved/overlap=True": [],
   "PullRequest/FlakyTest/CodeIssue/none/overlap=False": [],
   "PullRequest/FlakyTest/CodeIssue/none/overlap=True": [],
   "PullRequest/FlakyTest/FlakyTest/CodeIssue/overlap=False": [],
   "PullRequest/FlakyTest/FlakyTest/CodeIssue/overlap=True": [],
   "PullRequest/FlakyTest/FlakyTest/Flaky/overlap=False": [],
   "PullRequest/FlakyTest/FlakyTest/Flaky/overlap=True": [],
+  "PullRequest/FlakyTest/FlakyTest/Unresolved/overlap=False": [],
+  "PullRequest/FlakyTest/FlakyTest/Unresolved/overlap=True": [],
   "PullRequest/FlakyTest/FlakyTest/none/overlap=False": [],
   "PullRequest/FlakyTest/FlakyTest/none/overlap=True": [],
   "PullRequest/FlakyTest/MainRepositoryBreakage/CodeIssue/overlap=False": [],
   "PullRequest/FlakyTest/MainRepositoryBreakage/CodeIssue/overlap=True": [],
   "PullRequest/FlakyTest/MainRepositoryBreakage/Flaky/overlap=False": [],
   "PullRequest/FlakyTest/MainRepositoryBreakage/Flaky/overlap=True": [],
+  "PullRequest/FlakyTest/MainRepositoryBreakage/Unresolved/overlap=False": [],
+  "PullRequest/FlakyTest/MainRepositoryBreakage/Unresolved/overlap=True": [],
   "PullRequest/FlakyTest/MainRepositoryBreakage/none/overlap=False": [],
   "PullRequest/FlakyTest/MainRepositoryBreakage/none/overlap=True": [],
   "PullRequest/FlakyTest/TransientInfrastructure/CodeIssue/overlap=False": [],
@@ -279,8 +523,22 @@
   "PullRequest/FlakyTest/TransientInfrastructure/Flaky/overlap=True": [
     "flaky-test"
   ],
+  "PullRequest/FlakyTest/TransientInfrastructure/Unresolved/overlap=False": [],
+  "PullRequest/FlakyTest/TransientInfrastructure/Unresolved/overlap=True": [],
   "PullRequest/FlakyTest/TransientInfrastructure/none/overlap=False": [],
   "PullRequest/FlakyTest/TransientInfrastructure/none/overlap=True": [],
+  "PullRequest/FlakyTest/Unresolved/CodeIssue/overlap=False": [],
+  "PullRequest/FlakyTest/Unresolved/CodeIssue/overlap=True": [],
+  "PullRequest/FlakyTest/Unresolved/Flaky/overlap=False": [
+    "unresolved"
+  ],
+  "PullRequest/FlakyTest/Unresolved/Flaky/overlap=True": [
+    "unresolved"
+  ],
+  "PullRequest/FlakyTest/Unresolved/Unresolved/overlap=False": [],
+  "PullRequest/FlakyTest/Unresolved/Unresolved/overlap=True": [],
+  "PullRequest/FlakyTest/Unresolved/none/overlap=False": [],
+  "PullRequest/FlakyTest/Unresolved/none/overlap=True": [],
   "PullRequest/FlakyTest/none/CodeIssue/overlap=False": [],
   "PullRequest/FlakyTest/none/CodeIssue/overlap=True": [],
   "PullRequest/FlakyTest/none/Flaky/overlap=False": [
@@ -289,36 +547,56 @@
   "PullRequest/FlakyTest/none/Flaky/overlap=True": [
     "flaky-test"
   ],
+  "PullRequest/FlakyTest/none/Unresolved/overlap=False": [],
+  "PullRequest/FlakyTest/none/Unresolved/overlap=True": [],
   "PullRequest/FlakyTest/none/none/overlap=False": [],
   "PullRequest/FlakyTest/none/none/overlap=True": [],
   "PullRequest/MainRepositoryBreakage/CodeIssue/CodeIssue/overlap=False": [],
   "PullRequest/MainRepositoryBreakage/CodeIssue/CodeIssue/overlap=True": [],
   "PullRequest/MainRepositoryBreakage/CodeIssue/Flaky/overlap=False": [],
   "PullRequest/MainRepositoryBreakage/CodeIssue/Flaky/overlap=True": [],
+  "PullRequest/MainRepositoryBreakage/CodeIssue/Unresolved/overlap=False": [],
+  "PullRequest/MainRepositoryBreakage/CodeIssue/Unresolved/overlap=True": [],
   "PullRequest/MainRepositoryBreakage/CodeIssue/none/overlap=False": [],
   "PullRequest/MainRepositoryBreakage/CodeIssue/none/overlap=True": [],
   "PullRequest/MainRepositoryBreakage/FlakyTest/CodeIssue/overlap=False": [],
   "PullRequest/MainRepositoryBreakage/FlakyTest/CodeIssue/overlap=True": [],
   "PullRequest/MainRepositoryBreakage/FlakyTest/Flaky/overlap=False": [],
   "PullRequest/MainRepositoryBreakage/FlakyTest/Flaky/overlap=True": [],
+  "PullRequest/MainRepositoryBreakage/FlakyTest/Unresolved/overlap=False": [],
+  "PullRequest/MainRepositoryBreakage/FlakyTest/Unresolved/overlap=True": [],
   "PullRequest/MainRepositoryBreakage/FlakyTest/none/overlap=False": [],
   "PullRequest/MainRepositoryBreakage/FlakyTest/none/overlap=True": [],
   "PullRequest/MainRepositoryBreakage/MainRepositoryBreakage/CodeIssue/overlap=False": [],
   "PullRequest/MainRepositoryBreakage/MainRepositoryBreakage/CodeIssue/overlap=True": [],
   "PullRequest/MainRepositoryBreakage/MainRepositoryBreakage/Flaky/overlap=False": [],
   "PullRequest/MainRepositoryBreakage/MainRepositoryBreakage/Flaky/overlap=True": [],
+  "PullRequest/MainRepositoryBreakage/MainRepositoryBreakage/Unresolved/overlap=False": [],
+  "PullRequest/MainRepositoryBreakage/MainRepositoryBreakage/Unresolved/overlap=True": [],
   "PullRequest/MainRepositoryBreakage/MainRepositoryBreakage/none/overlap=False": [],
   "PullRequest/MainRepositoryBreakage/MainRepositoryBreakage/none/overlap=True": [],
   "PullRequest/MainRepositoryBreakage/TransientInfrastructure/CodeIssue/overlap=False": [],
   "PullRequest/MainRepositoryBreakage/TransientInfrastructure/CodeIssue/overlap=True": [],
   "PullRequest/MainRepositoryBreakage/TransientInfrastructure/Flaky/overlap=False": [],
   "PullRequest/MainRepositoryBreakage/TransientInfrastructure/Flaky/overlap=True": [],
+  "PullRequest/MainRepositoryBreakage/TransientInfrastructure/Unresolved/overlap=False": [],
+  "PullRequest/MainRepositoryBreakage/TransientInfrastructure/Unresolved/overlap=True": [],
   "PullRequest/MainRepositoryBreakage/TransientInfrastructure/none/overlap=False": [],
   "PullRequest/MainRepositoryBreakage/TransientInfrastructure/none/overlap=True": [],
+  "PullRequest/MainRepositoryBreakage/Unresolved/CodeIssue/overlap=False": [],
+  "PullRequest/MainRepositoryBreakage/Unresolved/CodeIssue/overlap=True": [],
+  "PullRequest/MainRepositoryBreakage/Unresolved/Flaky/overlap=False": [],
+  "PullRequest/MainRepositoryBreakage/Unresolved/Flaky/overlap=True": [],
+  "PullRequest/MainRepositoryBreakage/Unresolved/Unresolved/overlap=False": [],
+  "PullRequest/MainRepositoryBreakage/Unresolved/Unresolved/overlap=True": [],
+  "PullRequest/MainRepositoryBreakage/Unresolved/none/overlap=False": [],
+  "PullRequest/MainRepositoryBreakage/Unresolved/none/overlap=True": [],
   "PullRequest/MainRepositoryBreakage/none/CodeIssue/overlap=False": [],
   "PullRequest/MainRepositoryBreakage/none/CodeIssue/overlap=True": [],
   "PullRequest/MainRepositoryBreakage/none/Flaky/overlap=False": [],
   "PullRequest/MainRepositoryBreakage/none/Flaky/overlap=True": [],
+  "PullRequest/MainRepositoryBreakage/none/Unresolved/overlap=False": [],
+  "PullRequest/MainRepositoryBreakage/none/Unresolved/overlap=True": [],
   "PullRequest/MainRepositoryBreakage/none/none/overlap=False": [],
   "PullRequest/MainRepositoryBreakage/none/none/overlap=True": [],
   "PullRequest/TransientInfrastructure/CodeIssue/CodeIssue/overlap=False": [
@@ -329,6 +607,8 @@
   ],
   "PullRequest/TransientInfrastructure/CodeIssue/Flaky/overlap=False": [],
   "PullRequest/TransientInfrastructure/CodeIssue/Flaky/overlap=True": [],
+  "PullRequest/TransientInfrastructure/CodeIssue/Unresolved/overlap=False": [],
+  "PullRequest/TransientInfrastructure/CodeIssue/Unresolved/overlap=True": [],
   "PullRequest/TransientInfrastructure/CodeIssue/none/overlap=False": [
     "mixed"
   ],
@@ -339,32 +619,168 @@
   "PullRequest/TransientInfrastructure/FlakyTest/CodeIssue/overlap=True": [],
   "PullRequest/TransientInfrastructure/FlakyTest/Flaky/overlap=False": [],
   "PullRequest/TransientInfrastructure/FlakyTest/Flaky/overlap=True": [],
+  "PullRequest/TransientInfrastructure/FlakyTest/Unresolved/overlap=False": [],
+  "PullRequest/TransientInfrastructure/FlakyTest/Unresolved/overlap=True": [],
   "PullRequest/TransientInfrastructure/FlakyTest/none/overlap=False": [],
   "PullRequest/TransientInfrastructure/FlakyTest/none/overlap=True": [],
   "PullRequest/TransientInfrastructure/MainRepositoryBreakage/CodeIssue/overlap=False": [],
   "PullRequest/TransientInfrastructure/MainRepositoryBreakage/CodeIssue/overlap=True": [],
   "PullRequest/TransientInfrastructure/MainRepositoryBreakage/Flaky/overlap=False": [],
   "PullRequest/TransientInfrastructure/MainRepositoryBreakage/Flaky/overlap=True": [],
+  "PullRequest/TransientInfrastructure/MainRepositoryBreakage/Unresolved/overlap=False": [],
+  "PullRequest/TransientInfrastructure/MainRepositoryBreakage/Unresolved/overlap=True": [],
   "PullRequest/TransientInfrastructure/MainRepositoryBreakage/none/overlap=False": [],
   "PullRequest/TransientInfrastructure/MainRepositoryBreakage/none/overlap=True": [],
   "PullRequest/TransientInfrastructure/TransientInfrastructure/CodeIssue/overlap=False": [],
   "PullRequest/TransientInfrastructure/TransientInfrastructure/CodeIssue/overlap=True": [],
   "PullRequest/TransientInfrastructure/TransientInfrastructure/Flaky/overlap=False": [],
   "PullRequest/TransientInfrastructure/TransientInfrastructure/Flaky/overlap=True": [],
+  "PullRequest/TransientInfrastructure/TransientInfrastructure/Unresolved/overlap=False": [],
+  "PullRequest/TransientInfrastructure/TransientInfrastructure/Unresolved/overlap=True": [],
   "PullRequest/TransientInfrastructure/TransientInfrastructure/none/overlap=False": [
     "transient-infra"
   ],
   "PullRequest/TransientInfrastructure/TransientInfrastructure/none/overlap=True": [
     "transient-infra"
   ],
+  "PullRequest/TransientInfrastructure/Unresolved/CodeIssue/overlap=False": [
+    "unresolved"
+  ],
+  "PullRequest/TransientInfrastructure/Unresolved/CodeIssue/overlap=True": [
+    "unresolved"
+  ],
+  "PullRequest/TransientInfrastructure/Unresolved/Flaky/overlap=False": [],
+  "PullRequest/TransientInfrastructure/Unresolved/Flaky/overlap=True": [],
+  "PullRequest/TransientInfrastructure/Unresolved/Unresolved/overlap=False": [],
+  "PullRequest/TransientInfrastructure/Unresolved/Unresolved/overlap=True": [],
+  "PullRequest/TransientInfrastructure/Unresolved/none/overlap=False": [
+    "unresolved"
+  ],
+  "PullRequest/TransientInfrastructure/Unresolved/none/overlap=True": [
+    "unresolved"
+  ],
   "PullRequest/TransientInfrastructure/none/CodeIssue/overlap=False": [],
   "PullRequest/TransientInfrastructure/none/CodeIssue/overlap=True": [],
   "PullRequest/TransientInfrastructure/none/Flaky/overlap=False": [],
   "PullRequest/TransientInfrastructure/none/Flaky/overlap=True": [],
+  "PullRequest/TransientInfrastructure/none/Unresolved/overlap=False": [],
+  "PullRequest/TransientInfrastructure/none/Unresolved/overlap=True": [],
   "PullRequest/TransientInfrastructure/none/none/overlap=False": [
     "transient-infra"
   ],
   "PullRequest/TransientInfrastructure/none/none/overlap=True": [
     "transient-infra"
+  ],
+  "PullRequest/Unresolved/CodeIssue/CodeIssue/overlap=False": [
+    "unresolved"
+  ],
+  "PullRequest/Unresolved/CodeIssue/CodeIssue/overlap=True": [
+    "unresolved"
+  ],
+  "PullRequest/Unresolved/CodeIssue/Flaky/overlap=False": [
+    "unresolved"
+  ],
+  "PullRequest/Unresolved/CodeIssue/Flaky/overlap=True": [
+    "unresolved"
+  ],
+  "PullRequest/Unresolved/CodeIssue/Unresolved/overlap=False": [
+    "unresolved"
+  ],
+  "PullRequest/Unresolved/CodeIssue/Unresolved/overlap=True": [
+    "unresolved"
+  ],
+  "PullRequest/Unresolved/CodeIssue/none/overlap=False": [
+    "unresolved"
+  ],
+  "PullRequest/Unresolved/CodeIssue/none/overlap=True": [
+    "unresolved"
+  ],
+  "PullRequest/Unresolved/FlakyTest/CodeIssue/overlap=False": [],
+  "PullRequest/Unresolved/FlakyTest/CodeIssue/overlap=True": [],
+  "PullRequest/Unresolved/FlakyTest/Flaky/overlap=False": [],
+  "PullRequest/Unresolved/FlakyTest/Flaky/overlap=True": [],
+  "PullRequest/Unresolved/FlakyTest/Unresolved/overlap=False": [],
+  "PullRequest/Unresolved/FlakyTest/Unresolved/overlap=True": [],
+  "PullRequest/Unresolved/FlakyTest/none/overlap=False": [],
+  "PullRequest/Unresolved/FlakyTest/none/overlap=True": [],
+  "PullRequest/Unresolved/MainRepositoryBreakage/CodeIssue/overlap=False": [],
+  "PullRequest/Unresolved/MainRepositoryBreakage/CodeIssue/overlap=True": [],
+  "PullRequest/Unresolved/MainRepositoryBreakage/Flaky/overlap=False": [],
+  "PullRequest/Unresolved/MainRepositoryBreakage/Flaky/overlap=True": [],
+  "PullRequest/Unresolved/MainRepositoryBreakage/Unresolved/overlap=False": [],
+  "PullRequest/Unresolved/MainRepositoryBreakage/Unresolved/overlap=True": [],
+  "PullRequest/Unresolved/MainRepositoryBreakage/none/overlap=False": [],
+  "PullRequest/Unresolved/MainRepositoryBreakage/none/overlap=True": [],
+  "PullRequest/Unresolved/TransientInfrastructure/CodeIssue/overlap=False": [
+    "unresolved"
+  ],
+  "PullRequest/Unresolved/TransientInfrastructure/CodeIssue/overlap=True": [
+    "unresolved"
+  ],
+  "PullRequest/Unresolved/TransientInfrastructure/Flaky/overlap=False": [
+    "unresolved"
+  ],
+  "PullRequest/Unresolved/TransientInfrastructure/Flaky/overlap=True": [
+    "unresolved"
+  ],
+  "PullRequest/Unresolved/TransientInfrastructure/Unresolved/overlap=False": [
+    "unresolved"
+  ],
+  "PullRequest/Unresolved/TransientInfrastructure/Unresolved/overlap=True": [
+    "unresolved"
+  ],
+  "PullRequest/Unresolved/TransientInfrastructure/none/overlap=False": [
+    "unresolved"
+  ],
+  "PullRequest/Unresolved/TransientInfrastructure/none/overlap=True": [
+    "unresolved"
+  ],
+  "PullRequest/Unresolved/Unresolved/CodeIssue/overlap=False": [
+    "unresolved"
+  ],
+  "PullRequest/Unresolved/Unresolved/CodeIssue/overlap=True": [
+    "unresolved"
+  ],
+  "PullRequest/Unresolved/Unresolved/Flaky/overlap=False": [
+    "unresolved"
+  ],
+  "PullRequest/Unresolved/Unresolved/Flaky/overlap=True": [
+    "unresolved"
+  ],
+  "PullRequest/Unresolved/Unresolved/Unresolved/overlap=False": [
+    "unresolved"
+  ],
+  "PullRequest/Unresolved/Unresolved/Unresolved/overlap=True": [
+    "unresolved"
+  ],
+  "PullRequest/Unresolved/Unresolved/none/overlap=False": [
+    "unresolved"
+  ],
+  "PullRequest/Unresolved/Unresolved/none/overlap=True": [
+    "unresolved"
+  ],
+  "PullRequest/Unresolved/none/CodeIssue/overlap=False": [
+    "unresolved"
+  ],
+  "PullRequest/Unresolved/none/CodeIssue/overlap=True": [
+    "unresolved"
+  ],
+  "PullRequest/Unresolved/none/Flaky/overlap=False": [
+    "unresolved"
+  ],
+  "PullRequest/Unresolved/none/Flaky/overlap=True": [
+    "unresolved"
+  ],
+  "PullRequest/Unresolved/none/Unresolved/overlap=False": [
+    "unresolved"
+  ],
+  "PullRequest/Unresolved/none/Unresolved/overlap=True": [
+    "unresolved"
+  ],
+  "PullRequest/Unresolved/none/none/overlap=False": [
+    "unresolved"
+  ],
+  "PullRequest/Unresolved/none/none/overlap=True": [
+    "unresolved"
   ]
 }
