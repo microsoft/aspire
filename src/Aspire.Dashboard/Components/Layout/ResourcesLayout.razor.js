@@ -900,7 +900,7 @@ export function registerResourceContextMenu(layoutElement, dotNetRef) {
         // Clicking the brand's link, rather than navigating here, keeps one way home: the brand clears the stored
         // selection, holds a tab chosen while home loads, and grows the list across the page (see
         // MainLayout.GoToAllResourcesAsync). The brand is in the page header, outside the layout element.
-        const home = document.querySelector('header .brand-home a.application-name');
+        const home = document.querySelector('header a.brand-home');
         if (home && home.getClientRects().length > 0 && !home.closest('[inert]')) {
             event.preventDefault();
             // A tab that has focus, such as one moved to with the keyboard, would get it back in the strip re-created

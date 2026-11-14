@@ -313,7 +313,7 @@ public sealed class ResourcePaneMotionTests(ResourcePaneResponsiveTests.Metadata
                                 layout.querySelector('[data-resource-name="frontend"] .resource-row-link').click();
                                 break;
                             case 'reverse':
-                                document.querySelector('header .brand-home a.application-name').click();
+                                document.querySelector('header a.brand-home').click();
                                 break;
                             case 'back':
                                 history.back();
