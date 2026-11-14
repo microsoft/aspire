@@ -10,6 +10,10 @@ on:
       extensionVersionOverride:
         required: false
         type: string
+    outputs:
+      run_combined_report_contract:
+        description: Whether the selected matrix includes analyzer or infrastructure tests
+        value: ${{ jobs.setup_for_tests.outputs.run_combined_report_contract }}
 
 permissions:
   actions: read
@@ -32,6 +36,9 @@ jobs:
       # the upload instead of repeating the literal path.
       SELECT_TESTS_COMMENT_FILE: ${{ github.workspace }}/artifacts/select-tests-comment.md
     outputs:
+      run_combined_report_contract: >-
+        ${{ contains(fromJSON(steps.generate_tests_matrix.outputs.all_tests || '{"include":[]}').include.*.projectName, 'Infrastructure.Tests') ||
+            contains(fromJSON(steps.generate_tests_matrix.outputs.all_tests || '{"include":[]}').include.*.projectName, 'AnalyzeCiFailure.Tests') }}
       tests_matrix_no_nugets: ${{ steps.split_matrix.outputs.tests_matrix_no_nugets }}
       tests_matrix_requires_nugets_linux: ${{ steps.split_matrix.outputs.tests_matrix_requires_nugets_linux }}
       tests_matrix_requires_nugets_windows: ${{ steps.split_matrix.outputs.tests_matrix_requires_nugets_windows }}
