@@ -91,9 +91,118 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
 
         var expected = new List<string> { "build", buildProjectPath, "-mt" };
         AddExpectedConfiguration(builder, expected);
+        AddExpectedBuildLog(builder, buildResource, expected);
         Assert.Equal(expected, args);
         Assert.Equal(1, versionProvider.CallCount);
         Assert.Equal(buildResource.WorkingDirectory, Assert.Single(versionProvider.WorkingDirectories));
+    }
+
+    [Fact]
+    public async Task CoordinatedBuildWaitsForBuildStillRunningInSameBuildDirectory()
+    {
+        // `aspire stop` returns once the AppHost exits, but its coordinated `dotnet build` keeps running.
+        // A following `aspire start` must not build the same projects concurrently.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path,
+            outputHelper);
+        UseDotnetSdkVersion(builder, null);
+        var projectPath = CreateProject(workspace.Path, "Api", "Api.csproj");
+        builder.AddDotnetProject("api", projectPath, options => options.ExcludeLaunchProfile = true);
+        await using var app = builder.Build();
+
+        var buildResource = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
+        await EventingTestHelpers.SubscribeEventingSubscribersAsync(
+            app,
+            TestContext.Current.CancellationToken);
+        await builder.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(buildResource, app.Services),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(GetExpectedBuildLogPath(builder, buildResource), buildResource.BuildLogPath);
+        var logsDirectory = Directory.CreateDirectory(Path.Combine(buildResource.BuildDirectory, "logs")).FullName;
+        var finishedBuildLogPath = Path.Combine(logsDirectory, "1.__dotnet-project-build.log");
+        File.WriteAllText(finishedBuildLogPath, "finished");
+
+        // Hold the log the same way MSBuild's file logger does for the previous AppHost's build.
+        var runningBuildLog = OpenBuildLogLikeMSBuild(Path.Combine(logsDirectory, "2.__dotnet-project-build.log"));
+        Task<IExecutionConfigurationResult> argumentsTask;
+        var logger = new WaitingForBuildLogger();
+        try
+        {
+            using var waitingCts = new CancellationTokenSource(TestConstants.LongTimeoutTimeSpan);
+            argumentsTask = EvaluateArgumentsAsync(buildResource, app.Services, logger, waitingCts.Token);
+            await logger.Waiting.WaitAsync(waitingCts.Token);
+            Assert.False(argumentsTask.IsCompleted);
+        }
+        finally
+        {
+            runningBuildLog.Dispose();
+        }
+
+        var result = await argumentsTask.WaitAsync(TestConstants.LongTimeoutTimeSpan, TestContext.Current.CancellationToken);
+        Assert.Null(result.Exception);
+        var expected = new List<string> { "build", Assert.IsType<string>(result.Arguments.ElementAt(1).Value) };
+        AddExpectedConfiguration(builder, expected);
+        AddExpectedBuildLog(builder, buildResource, expected);
+        Assert.Equal(expected, result.Arguments.Select(argument => argument.Value));
+        Assert.False(File.Exists(finishedBuildLogPath));
+    }
+
+    [Fact]
+    public async Task CoordinatedBuildUsesItsOwnFileLogWhenRunningBuildOutlastsWait()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = workspace.Path,
+            outputHelper);
+        UseDotnetSdkVersion(builder, null);
+        var projectPath = CreateProject(workspace.Path, "Api", "Api.csproj");
+        builder.AddDotnetProject("api", projectPath, options => options.ExcludeLaunchProfile = true);
+        await using var app = builder.Build();
+
+        var buildResource = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
+        buildResource.RunningBuildWaitTimeout = TimeSpan.Zero;
+        await EventingTestHelpers.SubscribeEventingSubscribersAsync(
+            app,
+            TestContext.Current.CancellationToken);
+        await builder.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(buildResource, app.Services),
+            TestContext.Current.CancellationToken);
+
+        var logsDirectory = Directory.CreateDirectory(Path.Combine(buildResource.BuildDirectory, "logs")).FullName;
+        using var runningBuildLog = OpenBuildLogLikeMSBuild(Path.Combine(logsDirectory, "1.__dotnet-project-build.log"));
+        var logger = new WaitingForBuildLogger();
+        var result = await EvaluateArgumentsAsync(
+            buildResource,
+            app.Services,
+            logger,
+            TestContext.Current.CancellationToken).WaitAsync(TestConstants.LongTimeoutTimeSpan, TestContext.Current.CancellationToken);
+
+        Assert.True(logger.Waiting.IsCompleted);
+        Assert.Null(result.Exception);
+        var expected = new List<string> { "build", Assert.IsType<string>(result.Arguments.ElementAt(1).Value) };
+        AddExpectedConfiguration(builder, expected);
+        AddExpectedBuildLog(builder, buildResource, expected);
+        Assert.Equal(expected, result.Arguments.Select(argument => argument.Value));
+
+        // Building anyway must not fail logger initialization on the log the still-running build holds.
+        using var buildLog = OpenBuildLogLikeMSBuild(Assert.IsType<string>(buildResource.BuildLogPath));
+    }
+
+    [Theory]
+    [InlineData("a;b")]
+    [InlineData("a=b")]
+    public void CoordinatedBuildOmitsFileLogWhenBuildDirectoryCannotBeALoggerParameter(string directoryName)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var buildResource = new DotnetProjectBuildResource(
+            "build",
+            workspace.Path,
+            Path.Combine(workspace.Path, directoryName, ".aspire", "build"),
+            TimeProvider.System);
+
+        Assert.Null(buildResource.BuildLogPath);
     }
 
     [Theory]
@@ -123,6 +232,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
 
         var expected = new List<string> { "build", Assert.IsType<string>(args[1]) };
         AddExpectedConfiguration(builder, expected);
+        AddExpectedBuildLog(builder, buildResource, expected);
         Assert.Equal(expected, args);
     }
 
@@ -171,6 +281,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         }
 
         AddExpectedConfiguration(builder, firstExpected);
+        AddExpectedBuildLog(builder, buildResource, firstExpected);
         Assert.Equal(firstExpected, firstArgs);
 
         File.WriteAllText(
@@ -188,6 +299,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         }
 
         AddExpectedConfiguration(builder, secondExpected);
+        AddExpectedBuildLog(builder, buildResource, secondExpected);
         Assert.Equal(secondExpected, secondArgs);
         Assert.Equal(2, processRunner.ProcessSpecs.Count);
     }
@@ -888,6 +1000,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         var projectBuildArgs = await ArgumentEvaluator.GetArgumentListAsync(projectBuild, app.Services);
         var expectedProjectBuildArgs = new List<string> { "build", projectBuildTarget, "-mt" };
         AddExpectedConfiguration(builder, expectedProjectBuildArgs);
+        AddExpectedBuildLog(builder, projectBuild, expectedProjectBuildArgs);
         Assert.Equal(expectedProjectBuildArgs, projectBuildArgs);
         var fileBuildArgs = await ArgumentEvaluator.GetArgumentListAsync(fileBuild, app.Services);
         var expectedFileBuildArgs = new List<string> { "build", fileBuildTarget, "-mt" };
@@ -3377,7 +3490,9 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         var args = await ArgumentEvaluator.GetArgumentListAsync(buildResource, app.Services);
         Assert.Equal("build", args[0]);
         Assert.EndsWith(".proj", Assert.IsType<string>(args[1]), StringComparison.Ordinal);
-        Assert.Equal(["--configuration", "DebugLocal"], args[2..]);
+        List<string> expectedTail = ["--configuration", "DebugLocal"];
+        AddExpectedBuildLog(builder, buildResource, expectedTail);
+        Assert.Equal(expectedTail, args[2..]);
     }
 
     [Fact]
@@ -3407,7 +3522,9 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
 
         var buildResource = Assert.Single(builder.Resources.OfType<DotnetProjectBuildResource>());
         var args = await ArgumentEvaluator.GetArgumentListAsync(buildResource, app.Services);
-        Assert.Equal(["--configuration", "ActiveConfiguration"], args[2..]);
+        List<string> expectedTail = ["--configuration", "ActiveConfiguration"];
+        AddExpectedBuildLog(builder, buildResource, expectedTail);
+        Assert.Equal(expectedTail, args[2..]);
     }
 
     [Fact]
@@ -5223,6 +5340,42 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         await coordinator.MaterializeBuildPlan(model, app.Services);
     }
 
+    private static Task<IExecutionConfigurationResult> EvaluateArgumentsAsync(
+        IResource resource,
+        IServiceProvider services,
+        ILogger logger,
+        CancellationToken cancellationToken)
+    {
+        var executionContext = new DistributedApplicationExecutionContext(
+            new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run)
+            {
+                Services = services,
+            });
+
+        return ExecutionConfigurationBuilder.Create(resource)
+            .WithArgumentsConfig()
+            .BuildAsync(executionContext, logger, cancellationToken);
+    }
+
+    private sealed class WaitingForBuildLogger : ILogger
+    {
+        private readonly TaskCompletionSource _waiting = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public Task Waiting => _waiting.Task;
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+        {
+            if (formatter(state, exception).StartsWith("Waiting for a coordinated build", StringComparison.Ordinal))
+            {
+                _waiting.TrySetResult();
+            }
+        }
+    }
+
     private static Task<IExecutionConfigurationResult> EvaluateEnvironmentAsync(
         IResource resource,
         IServiceProvider services,
@@ -5261,6 +5414,22 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
 
         return [.. matchingFiles];
     }
+
+    private static void AddExpectedBuildLog(IDistributedApplicationBuilder builder, IResource buildResource, List<string> expected)
+    {
+        expected.Add($"-flp9:LogFile={GetExpectedBuildLogPath(builder, buildResource)};Verbosity=minimal");
+    }
+
+    private static FileStream OpenBuildLogLikeMSBuild(string path) =>
+        new(path, FileMode.Create, FileAccess.Write, FileShare.Read);
+
+    private static string GetExpectedBuildLogPath(IDistributedApplicationBuilder builder, IResource buildResource) =>
+        Path.Combine(
+            builder.Configuration["Aspire:Store:Path"]!,
+            ".aspire",
+            "build",
+            "logs",
+            $"{Environment.ProcessId}.{buildResource.Name}.log");
 
     private static void AddExpectedConfiguration(IDistributedApplicationBuilder builder, List<string> expected)
     {
