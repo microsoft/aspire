@@ -38,6 +38,41 @@ public class ParentProcessWatchdogTests
     }
 
     [Fact]
+    public void GetExpectedParentStartTimeUnix_UsesLegacyValueWhenNoStableVariableIsConfigured()
+    {
+        // The extension-host watchdog only supplies the legacy seconds value; there is no stable
+        // millisecond identity to read.
+        var environment = new Dictionary<string, string?>
+        {
+            [KnownConfigNames.CliParentProcessStarted] = "1000"
+        };
+
+        var startTime = ParentProcessWatchdog.GetExpectedParentStartTimeUnix(
+            environment.GetValueOrDefault,
+            stableStartVariable: null,
+            KnownConfigNames.CliParentProcessStarted,
+            out var useRuntimeStartTime);
+
+        Assert.Equal(1000, startTime);
+        Assert.True(useRuntimeStartTime);
+    }
+
+    [Fact]
+    public void GetExpectedParentStartTimeUnix_FallsBackToPidOnlyWhenNoStartTimeIsConfigured()
+    {
+        var environment = new Dictionary<string, string?>();
+
+        var startTime = ParentProcessWatchdog.GetExpectedParentStartTimeUnix(
+            environment.GetValueOrDefault,
+            stableStartVariable: null,
+            legacyStartVariable: null,
+            out var useRuntimeStartTime);
+
+        Assert.Null(startTime);
+        Assert.True(useRuntimeStartTime);
+    }
+
+    [Fact]
     public async Task ParentExitedCallback_StillForceExitsWhenCancellationCallbackThrows()
     {
         using var operationCts = new CancellationTokenSource();

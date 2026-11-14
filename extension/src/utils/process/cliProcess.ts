@@ -70,6 +70,26 @@ export function mergeCliSpawnEnvironment(env: Record<string, string | undefined>
     }
 }
 
+/**
+ * Environment that lets a long-running CLI command (`aspire ps --follow`, `aspire describe --follow`)
+ * watch the extension host and exit when the host disappears.
+ *
+ * Without it, a force-killed extension host (which never runs `deactivate`) leaves the CLI running as
+ * an orphan, and an idle `--follow` command never writes to its broken stdout pipe, so it never
+ * discovers that nobody is reading. On Windows the tracked child is the `cmd.exe` shim rather than the
+ * CLI itself, so the extension cannot reliably kill that grandchild from its side.
+ *
+ * The start time helps the CLI reject a recycled PID. `process.uptime()` is accurate enough for the
+ * watchdog's one-second tolerance.
+ */
+export function getCliParentWatchdogEnvironment(): EnvVar[] {
+    const startedAtUnixSeconds = Math.floor((Date.now() - process.uptime() * 1000) / 1000);
+    return [
+        { name: EnvironmentVariables.ASPIRE_CLI_PARENT_PID, value: String(process.pid) },
+        { name: EnvironmentVariables.ASPIRE_CLI_PARENT_STARTED, value: String(startedAtUnixSeconds) },
+    ];
+}
+
 export function spawnCliProcess(terminalProvider: AspireTerminalProvider, command: string, args?: string[], options?: SpawnProcessOptions): ChildProcessWithoutNullStreams {
     const workingDirectory = options?.workingDirectory ?? vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? process.cwd();
     const env: Record<string, string | undefined> = {};

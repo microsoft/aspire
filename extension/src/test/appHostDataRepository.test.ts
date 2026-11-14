@@ -243,6 +243,54 @@ suite('AppHostDataRepository', () => {
         repository.dispose();
     });
 
+    test('follow streams watch the extension host so an orphaned CLI exits', async () => {
+        const appHostPath = '/workspace/AppHost.csproj';
+        const workspaceFoldersStub = stubWorkspaceFolders([{
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        }]);
+        const candidateChangeEmitter = new vscode.EventEmitter<vscode.WorkspaceFolder>();
+        const appHostDiscoveryService = {
+            onDidChangeDiscoveryState: () => ({ dispose: () => { } }),
+            onDidChangeCandidates: candidateChangeEmitter.event,
+            discover: async () => [{
+                path: appHostPath,
+                language: 'csharp',
+                status: 'buildable',
+                selected: true,
+            }],
+            dispose: () => { },
+        };
+        const repository = new AppHostDataRepository(terminalProvider, appHostDiscoveryService as unknown as AppHostDiscoveryService);
+
+        try {
+            repository.activate();
+            repository.setPanelVisible(true);
+            await waitForCondition(() => repository.workspaceAppHostPath === appHostPath, 'expected workspace AppHost');
+            const describeCall = await startDescribeForRunningAppHost(appHostPath);
+            const psCall = spawnStub.getCalls().find(call => {
+                const args = call.args[2] as string[];
+                return args[0] === 'ps' && args.includes('--follow');
+            });
+            assert.ok(psCall, 'expected an aspire ps --follow watch to be running');
+
+            for (const call of [psCall, describeCall]) {
+                const env = (call.args[3] as cliModule.SpawnProcessOptions).env ?? [];
+                assert.deepStrictEqual(env.map(variable => variable.name), [
+                    'ASPIRE_CLI_PARENT_PID',
+                    'ASPIRE_CLI_PARENT_STARTED',
+                ]);
+                assert.strictEqual(env[0].value, String(process.pid));
+                assert.match(env[1].value, /^\d+$/);
+            }
+        } finally {
+            repository.dispose();
+            candidateChangeEmitter.dispose();
+            workspaceFoldersStub.restore();
+        }
+    });
+
     test('keeps ps polling active after a workspace-folder change while discovery is stuck', async () => {
         const workspaceFoldersStub = stubWorkspaceFolders([{
             uri: vscode.Uri.file('/workspace'),
