@@ -30,6 +30,11 @@ internal sealed class CopilotAppInstallationDetector(
     private const string WindowsExecutableName = "github.exe";
     private const string MacOSAppBundleName = "GitHub Copilot.app";
     private const string LinuxApplicationsDirectoryName = "applications";
+    private static readonly string[] s_linuxAppImageNames =
+    [
+        "GitHub-Copilot-linux-x64.AppImage",
+        "GitHub-Copilot-linux-arm64.AppImage",
+    ];
 
     /// <inheritdoc />
     public string? GetInstallationMarker()
@@ -80,6 +85,8 @@ internal sealed class CopilotAppInstallationDetector(
                     return desktopEntry;
                 }
             }
+
+            return FindLinuxAppImage();
         }
 
         return null;
@@ -119,6 +126,34 @@ internal sealed class CopilotAppInstallationDetector(
         }
 
         return applicationsDirectories.Distinct(StringComparer.Ordinal).ToArray();
+    }
+
+    private string? FindLinuxAppImage()
+    {
+        // Before first launch, an AppImage has no desktop registration. Check the official
+        // filenames in ~/Applications and absolute PATH directories without executing the GUI
+        // or recursively searching the user's files: https://github.com/github/app#install.
+        var directories = new List<string>
+        {
+            Path.Combine(executionContext.HomeDirectory.FullName, "Applications"),
+        };
+        var path = environment.GetEnvironmentVariable("PATH") ?? string.Empty;
+        directories.AddRange(path.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries)
+            .Where(Path.IsPathFullyQualified));
+
+        foreach (var directory in directories.Distinct(StringComparer.Ordinal))
+        {
+            foreach (var fileName in s_linuxAppImageNames)
+            {
+                var candidate = Path.Combine(directory, fileName);
+                if (File.Exists(candidate))
+                {
+                    return candidate;
+                }
+            }
+        }
+
+        return null;
     }
 
     private static string? FindLinuxDesktopEntry(string applicationsDirectory)

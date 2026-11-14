@@ -12,6 +12,35 @@ namespace Aspire.Cli.Tests.Agents;
 
 public class CopilotAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
 {
+    [Fact]
+    public async Task ScanAsync_WithUnlaunchedPortableApp_DetectsAppWithoutCli()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appPath = Path.Combine(workspace.CreateDirectory("Applications").FullName, "GitHub-Copilot-linux-arm64.AppImage");
+        await File.WriteAllTextAsync(appPath, string.Empty, TestContext.Current.CancellationToken);
+        var environment = TestEnvironment.CreateLinux(new Dictionary<string, string?>
+        {
+            ["XDG_DATA_HOME"] = workspace.CreateDirectory("xdg-home").FullName,
+            ["XDG_DATA_DIRS"] = workspace.CreateDirectory("xdg-system").FullName,
+        });
+        var runner = new FakeCopilotCliRunner(null);
+        var detector = new CopilotAppInstallationDetector(environment,
+            TestExecutionContextHelper.CreateExecutionContext(workspace.WorkspaceRoot, homeDirectory: workspace.WorkspaceRoot));
+        var scanner = new CopilotAgentEnvironmentScanner(runner, detector, environment,
+            NullLogger<CopilotAgentEnvironmentScanner>.Instance);
+        var context = new AgentEnvironmentScanContext
+        {
+            WorkingDirectory = workspace.WorkspaceRoot,
+            RepositoryRoot = workspace.WorkspaceRoot
+        };
+        var before = Directory.GetFileSystemEntries(workspace.WorkspaceRoot.FullName, "*", SearchOption.AllDirectories);
+
+        Assert.Equal(AgentEnvironment.CopilotApp,
+            await scanner.ScanAsync(context, TestContext.Current.CancellationToken).DefaultTimeout());
+        Assert.True(runner.WasCalled);
+        Assert.Equal(before, Directory.GetFileSystemEntries(workspace.WorkspaceRoot.FullName, "*", SearchOption.AllDirectories));
+    }
+
     [Theory]
     [InlineData(true, false)]
     [InlineData(false, true)]

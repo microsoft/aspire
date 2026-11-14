@@ -66,6 +66,7 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
     [InlineData("global", false, false, nameof(AgentEnvironment.ClaudeCode), "claude")]
     [InlineData("project", false, true, nameof(AgentEnvironment.OpenCode), "opencode")]
     [InlineData("global", false, true, nameof(AgentEnvironment.OpenCode), "opencode")]
+    [InlineData("global", true, true, nameof(AgentEnvironment.CopilotApp) + "," + nameof(AgentEnvironment.ClaudeCode), "copilot,claude")]
     public async Task AgentInit_DefaultsUseDetectionOrCopilotFallback_IndependentOfAssetsAndScope(
         string scope, bool configureAspire, bool configureMcp, string? detectedEnvironmentName, string expectedClients)
     {
