@@ -48,6 +48,13 @@ card shows are driven by its lane and its signal pills:
 
 ## What it does
 
+- **Grid or rows** — use the **Dashboard layout** selector in the toolbar to switch
+  between the existing card grid and full-width rows in Review, Issues, Ship, and
+  Health. This changes presentation only: each card becomes one row with the
+  same information, links, signals, and actions, in the same order. Section
+  counts, display limits, and collapsed sections are unchanged; no items are
+  added, removed, or re-sorted. Content wraps on narrow screens. The choice
+  follows you across canvas reloads and sessions.
 - **Review mode** — buckets every open PR across your watched repos into lanes:
   Needs your review, Ready to merge, CI failing, Unresolved feedback, and Your PRs.
 - **Issues mode** — Assigned to you, Your issues, Needs triage, Recently active,

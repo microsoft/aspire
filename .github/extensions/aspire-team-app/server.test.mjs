@@ -491,6 +491,40 @@ test("auto-apply preference is persisted without recomputing the dashboard", asy
   assert.equal(cached.dashboard.seq, seeded.dashboard.seq, "changing the toolbar preference must not recompute GitHub data");
 });
 
+test("layout changes persist and reach other canvases without recomputing dashboard data", async (t) => {
+  await resetTestHome();
+  const server = await import(`./server.mjs?test=layout-${Date.now()}`);
+  const entry = await server.startInstance("layout-test", () => {});
+  const other = await server.startInstance("layout-other", () => {});
+  const abort = new AbortController();
+  t.after(async () => {
+    abort.abort();
+    await server.stopInstance("layout-test");
+    await server.stopInstance("layout-other");
+  });
+  const seeded = await (await fetch(new URL("api/state", entry.url))).json();
+  const events = await fetch(new URL("events", other.url), { signal: abort.signal });
+  const reader = events.body.getReader();
+  for (const layout of ["rows", "grid"]) {
+    const pushed = readSseUntil(reader, "preferences");
+    const response = await postJson(entry.url, "api/layout", { layout });
+    assert.equal(response.status, 200);
+    assert.equal((await response.json()).prefs.layout, layout);
+    const records = await pushed;
+    assert.equal(parseSseData(records.find((record) => record.startsWith("event: preferences"))).layout, layout);
+    assert.equal(JSON.parse(await readFile(preferencesPath, "utf8")).layout, layout);
+    const cached = await (await fetch(new URL("api/state", other.url))).json();
+    assert.equal(cached.prefs.layout, layout);
+    assert.equal(cached.dashboard.seq, seeded.dashboard.seq);
+  }
+  for (const layout of ["invalid", null, 1]) {
+    const response = await postJson(entry.url, "api/layout", { layout });
+    assert.equal(response.status, 400);
+    assert.equal((await response.json()).error, "layout must be grid or rows");
+    assert.equal(JSON.parse(await readFile(preferencesPath, "utf8")).layout, "grid");
+  }
+});
+
 test("dashboard change detection ignores refresh metadata but detects semantic changes", async () => {
   const { dashboardChanged } = await import(`./server.mjs?test=dashboard-change-${Date.now()}`);
   const previous = { seq: 1, fetchedAt: "2026-08-06T00:00:00Z", counts: { prs: 2 }, lanes: [{ id: "ready" }] };
