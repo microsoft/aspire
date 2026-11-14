@@ -1,0 +1,81 @@
+# Prepare the manifest tree for a dry run. ESRP submission is not configured.
+parameters:
+  - name: manifestArtifactPath
+    type: string
+  - name: packageIdentifier
+    type: string
+  - name: dryRun
+    type: boolean
+
+steps:
+  - powershell: |
+      if ('${{ parameters.dryRun }}' -ne 'true') {
+        Write-Error "WinGet ESRP preparation only supports DryRun=true. ESRP publishing is not configured."
+        exit 1
+      }
+    displayName: '🟣Require WinGet ESRP dry run'
+
+  # Reuse the normal version extraction and ReleaseNotesUrl preparation, while
+  # forcing its submission step off regardless of the caller's parameters.
+  - template: publish-winget.yml
+    parameters:
+      manifestArtifactPath: ${{ parameters.manifestArtifactPath }}
+      packageIdentifier: ${{ parameters.packageIdentifier }}
+      dryRun: true
+
+  - powershell: |
+      $ErrorActionPreference = 'Stop'
+      $manifestDir = $env:WINGET_MANIFEST_DIR
+      $packageId = $env:WINGET_PACKAGE_ID
+      $version = $env:WINGET_VERSION
+
+      # The common preparation step reads YAML text such as PackageVersion: "13.3.0".
+      # Remove matching quotes before using the version as a directory name.
+      if ($version -match '^"([^"]+)"$' -or $version -match "^'([^']+)'$") {
+        $version = $Matches[1]
+      }
+
+      if ($packageId -notmatch '^[A-Za-z0-9][A-Za-z0-9-]*(\.[A-Za-z0-9][A-Za-z0-9-]*)+$') {
+        throw "Invalid WinGet package identifier: $packageId"
+      }
+      if ($version -notmatch '^[A-Za-z0-9][A-Za-z0-9._+-]*$' -or $version.EndsWith('.')) {
+        throw "Invalid WinGet package version: $version"
+      }
+
+      foreach ($name in @("$packageId.yaml", "$packageId.installer.yaml")) {
+        if (-not (Test-Path -LiteralPath (Join-Path $manifestDir $name) -PathType Leaf)) {
+          throw "Missing required WinGet manifest: $name"
+        }
+      }
+      $locales = @(Get-ChildItem -LiteralPath $manifestDir -File -Filter "$packageId.locale.*.yaml")
+      if ($locales.Count -eq 0) {
+        throw "No locale manifests found for $packageId in $manifestDir"
+      }
+
+      $submissionRoot = Join-Path $env:STAGING_DIRECTORY 'winget-esrp'
+      if (Test-Path -LiteralPath $submissionRoot) {
+        Remove-Item -LiteralPath $submissionRoot -Recurse -Force
+      }
+
+      # WinGet's repository layout is manifests/<first letter>/<identifier>/<version>.
+      $destination = Join-Path $submissionRoot 'manifests'
+      $segments = @($packageId.Substring(0, 1).ToLowerInvariant()) + $packageId.Split('.') + @($version)
+      foreach ($segment in $segments) {
+        $destination = Join-Path $destination $segment
+      }
+      New-Item -ItemType Directory -Path $destination -Force | Out-Null
+      Get-ChildItem -LiteralPath $manifestDir -File -Filter '*.yaml' | ForEach-Object {
+        Copy-Item -LiteralPath $_.FullName -Destination $destination
+      }
+
+      Write-Host "Prepared WinGet manifests at $destination"
+      Get-ChildItem -LiteralPath $destination -File | Sort-Object Name | ForEach-Object {
+        Write-Host "  $($_.Name)"
+      }
+      Write-Host "Dry run only: ESRP was not invoked and no WinGet PR was submitted."
+    displayName: '🟣Prepare WinGet ESRP manifest tree'
+    env:
+      WINGET_MANIFEST_DIR: $(WinGetManifestDir)
+      WINGET_PACKAGE_ID: ${{ parameters.packageIdentifier }}
+      WINGET_VERSION: $(WinGetVersion)
+      STAGING_DIRECTORY: $(Build.StagingDirectory)

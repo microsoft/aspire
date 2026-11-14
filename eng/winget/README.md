@@ -65,6 +65,11 @@ submission. The release WinGet job repeats the same startup check whenever that
 job is selected, including dry-run and non-production-branch builds, while the
 submission step remains limited to non-dry-run production builds.
 
+An experimental `UseEsrpForWinGet` option prepares the manifest tree only when
+`DryRun=true`; it does not invoke ESRP or submit a PR. The existing
+`wingetcreate` path remains the default. See the [release process](../../docs/release-process.md#winget-esrp-preparation)
+for the remaining ESRP prerequisites.
+
 ## Validation model
 
 Aspire CI relies on the upstream
