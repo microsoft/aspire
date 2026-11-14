@@ -52,6 +52,20 @@ internal sealed class ResourceTerminalCatalog : IAsyncDisposable
     }
 
     /// <summary>
+    /// Gets whether disposal has automation handles to disconnect.
+    /// </summary>
+    public bool HasHandles
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _handles.Count > 0 || _retiringHandles.Count > 0;
+            }
+        }
+    }
+
+    /// <summary>
     /// Builds the stable identifier for a resource terminal.
     /// </summary>
     public static string BuildId(string resourceName, int replicaIndex)
