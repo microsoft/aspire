@@ -11,8 +11,10 @@ using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
+using Aspire.Hosting.Backchannel;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using InvocationConfiguration = System.CommandLine.InvocationConfiguration;
 
 namespace Aspire.Cli.Tests.Commands;
@@ -32,6 +34,33 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, exitCode);
+    }
+
+    [Fact]
+    public async Task ResourceCommand_WithExplicitAppHost_ClosesConnectionBeforeExit()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost", "AppHost.csproj"));
+        appHostFile.Directory!.Create();
+        File.WriteAllText(appHostFile.FullName, "<Project />");
+        using var server = TestResolverBackchannelServer.Start(appHostFile.FullName, processId: 1234);
+        Func<string, string, int, ILogger, IReadOnlyList<IAppHostSocket>> findSockets = (_, _, _, _) => [server.AppHostSocket];
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        services.AddTransient(sp => ActivatorUtilities.CreateInstance<AppHostConnectionResolver>(sp, findSockets));
+        await using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"resource api restart --apphost \"{appHostFile.FullName}\" --non-interactive");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        // The explicit --apphost connection is not owned by the backchannel monitor, so the command must
+        // close it. Otherwise it stays open until process exit, and the AppHost observes a reset.
+        var executed = Assert.Single(server.Target.ExecutedCommands);
+        Assert.Equal("api", executed.ResourceName);
+        await server.WaitForClientDisconnectAsync().DefaultTimeout();
     }
 
     [Fact]

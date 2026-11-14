@@ -20,9 +20,19 @@ namespace Aspire.Cli.Backchannel;
 /// <summary>
 /// Result of resolving an AppHost connection.
 /// </summary>
-internal sealed class AppHostConnectionResult
+/// <remarks>
+/// Dispose the result when the command is done with the connection. Disposal releases connections the
+/// resolver created for the caller and leaves connections borrowed from the backchannel monitor open,
+/// because the monitor owns their lifetime.
+/// </remarks>
+internal sealed class AppHostConnectionResult : IDisposable, IAsyncDisposable
 {
     public IAppHostAuxiliaryBackchannel? Connection { get; init; }
+
+    /// <summary>
+    /// Gets whether disposing this result disposes <see cref="Connection"/>.
+    /// </summary>
+    public bool OwnsConnection { get; init; }
 
     [MemberNotNullWhen(true, nameof(Connection))]
     [MemberNotNullWhen(false, nameof(ErrorMessage))]
@@ -34,6 +44,33 @@ internal sealed class AppHostConnectionResult
 
     [MemberNotNullWhen(true, nameof(ExitCode))]
     public bool IsProjectResolutionError => ExitCode is CliExitCodes.FailedToFindProject or CliExitCodes.SdkNotInstalled;
+
+    public void Dispose()
+    {
+        if (OwnsConnection)
+        {
+            Connection?.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Closes an owned connection gracefully so the AppHost sees a clean disconnect.
+    /// </summary>
+    public ValueTask DisposeAsync()
+    {
+        if (!OwnsConnection)
+        {
+            return ValueTask.CompletedTask;
+        }
+
+        if (Connection is IAsyncDisposable asyncDisposable)
+        {
+            return asyncDisposable.DisposeAsync();
+        }
+
+        Connection?.Dispose();
+        return ValueTask.CompletedTask;
+    }
 }
 
 /// <summary>
@@ -179,7 +216,9 @@ internal sealed class AppHostConnectionResolver(
                             continue;
                         }
 
-                        var result = new AppHostConnectionResult { Connection = connection };
+                        // This connection is not registered with the backchannel monitor, so the caller
+                        // must close it. Leaving it open until process exit resets the AppHost's side.
+                        var result = new AppHostConnectionResult { Connection = connection, OwnsConnection = true };
                         StoreAppHostCliLogFilePath(result);
                         return result;
                     }

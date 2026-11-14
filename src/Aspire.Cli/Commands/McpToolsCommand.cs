@@ -42,7 +42,7 @@ internal sealed class McpToolsCommand : BaseCommand
         var passedAppHostProjectFile = parseResult.GetValue(s_appHostOption);
         var format = parseResult.GetValue(s_formatOption);
 
-        var result = await _connectionResolver.ResolveConnectionAsync(
+        await using var result = await _connectionResolver.ResolveConnectionAsync(
             passedAppHostProjectFile,
             SharedCommandStrings.ScanningForRunningAppHosts,
             string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.SelectAppHost, "list MCP tools for"),

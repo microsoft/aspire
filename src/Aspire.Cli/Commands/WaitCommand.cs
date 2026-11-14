@@ -80,7 +80,7 @@ internal sealed class WaitCommand : BaseCommand
         }
 
         // Resolve connection to a running AppHost
-        var result = await _connectionResolver.ResolveConnectionAsync(
+        await using var result = await _connectionResolver.ResolveConnectionAsync(
             passedAppHostProjectFile,
             SharedCommandStrings.ScanningForRunningAppHosts,
             string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.SelectAppHost, WaitCommandStrings.SelectAppHostAction),
