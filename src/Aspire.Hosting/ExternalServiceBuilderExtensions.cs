@@ -136,7 +136,11 @@ public static class ExternalServiceBuilderExtensions
                     {
                         url = resource.UrlParameter is null
                                 ? null
-                                : await resource.UrlParameter.GetValueAsync(ct).ConfigureAwait(false);
+                                : await resource.UrlParameter.GetValueAsync(new ValueProviderContext
+                                {
+                                    ExecutionContext = e.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
+                                    Caller = resource
+                                }, ct).ConfigureAwait(false);
                     }
                     catch (Exception ex)
                     {

@@ -616,10 +616,10 @@ public static class MongoDBBuilderExtensions
             .WithAnnotation(new MongoDBServerKeyFileAnnotation(keyValue, keyFilePath))
             .WithContainerFiles(
                 destinationPath: keyFileDirectory,
-                callback: async (_, ct) => [new ContainerFile
+                callback: async (context, ct) => [new ContainerFile
                 {
                     Name = keyFileName,
-                    Contents = await keyValue.GetValueAsync(ct).ConfigureAwait(false),
+                    Contents = await keyValue.GetValueAsync(new ValueProviderContext { ExecutionContext = builder.ApplicationBuilder.ExecutionContext, Caller = context.Model }, ct).ConfigureAwait(false),
                     Mode = UnixFileMode.UserRead,
                 }],
                 // NOTE: 999 is the default user and group id used by the official MongoDB container image for the mongod process

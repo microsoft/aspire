@@ -897,6 +897,8 @@ public class ResourceNotificationService : IDisposable
 
             var newState = stateFactory(previousState);
 
+            newState = UpdateParameterWaitState(notificationState, newState);
+
             if (!string.Equals(newState.State?.Text, KnownResourceStates.Waiting, StringComparisons.ResourceState))
             {
                 newState = newState with
@@ -1018,6 +1020,90 @@ public class ResourceNotificationService : IDisposable
         }
 
         return Task.CompletedTask;
+    }
+
+    internal async ValueTask<string?> WaitForParameterAsync(IResource resource, ParameterResource parameter, ValueTask<string?> valueTask)
+    {
+        // Capture instance IDs once so cancellation removes waits from the instances that registered
+        // them, even if the resource's replica set changes in the meantime.
+        var resourceIds = resource.GetResolvedResourceNames();
+        var registeredCount = 0;
+        try
+        {
+            foreach (var resourceId in resourceIds)
+            {
+                await PublishUpdateAsync(resource, resourceId, snapshot =>
+                {
+                    var state = GetResourceNotificationState(resourceId, resource);
+                    var waits = state.ParameterWaits ??= new(StringComparers.ResourceName);
+                    waits.TryGetValue(parameter.Name, out var count);
+                    waits[parameter.Name] = count + 1;
+                    registeredCount++;
+                    return snapshot;
+                }).ConfigureAwait(false);
+            }
+
+            return await valueTask.ConfigureAwait(false);
+        }
+        finally
+        {
+            for (var i = 0; i < registeredCount; i++)
+            {
+                var resourceId = resourceIds[i];
+                await PublishUpdateAsync(resource, resourceId, snapshot =>
+                {
+                    var waits = GetResourceNotificationState(resourceId, resource).ParameterWaits!;
+                    var count = waits[parameter.Name];
+                    if (count == 1)
+                    {
+                        waits.Remove(parameter.Name);
+                    }
+                    else
+                    {
+                        waits[parameter.Name] = count - 1;
+                    }
+
+                    return snapshot;
+                }).ConfigureAwait(false);
+            }
+        }
+    }
+
+    private static CustomResourceSnapshot UpdateParameterWaitState(ResourceNotificationState notificationState, CustomResourceSnapshot snapshot)
+    {
+        if (notificationState.ParameterWaits is null)
+        {
+            return snapshot;
+        }
+
+        // Custom resources also use Waiting during initialization. Do not replace dependency waits:
+        // leaving Waiting releases WaitFor, even when the dependency is not ready yet.
+        if (snapshot.State?.Text == KnownResourceStates.Starting ||
+            (snapshot.State?.Text == KnownResourceStates.Waiting && !notificationState.Resource.HasAnnotationOfType<WaitAnnotation>()))
+        {
+            notificationState.StateBeforeParameterWait = snapshot.State;
+        }
+        else if (snapshot.State?.Text != KnownResourceStates.UnresolvedParameters)
+        {
+            notificationState.StateBeforeParameterWait = null;
+            return snapshot with { Properties = snapshot.Properties.RemoveResourceProperty(KnownProperties.Resource.UnresolvedParameters) };
+        }
+
+        if (notificationState.ParameterWaits is { Count: > 0 } waits)
+        {
+            return snapshot with
+            {
+                State = new(KnownResourceStates.UnresolvedParameters, KnownResourceStateStyles.Warn),
+                Properties = snapshot.Properties.SetResourceProperty(
+                    KnownProperties.Resource.UnresolvedParameters, waits.Keys.Order(StringComparers.ResourceName).ToArray())
+            };
+        }
+
+        return snapshot with
+        {
+            State = notificationState.StateBeforeParameterWait ?? snapshot.State,
+            Properties = snapshot.Properties.RemoveResourceProperty(KnownProperties.Resource.UnresolvedParameters)
+        };
     }
 
     private void RecordResourceLifecycleMilestones(
@@ -1460,6 +1546,8 @@ public class ResourceNotificationService : IDisposable
         public long GetNextVersion() => _lastVersion++;
         public CustomResourceSnapshot? LastSnapshot { get; set; }
         public IResource Resource { get; } = resource;
+        public Dictionary<string, int>? ParameterWaits { get; set; }
+        public ResourceStateSnapshot? StateBeforeParameterWait { get; set; }
         // These profiling fields stay unset unless startup profiling is enabled. Keep the event list
         // lazy so normal resource notifications do not allocate milestone storage for every resource.
         public DateTimeOffset? FirstObservedAt { get; set; }

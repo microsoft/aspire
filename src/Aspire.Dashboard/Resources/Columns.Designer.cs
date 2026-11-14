@@ -161,6 +161,15 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Waiting for parameters: {0}.
+        /// </summary>
+        public static string StateColumnResourceWaitingForParameters {
+            get {
+                return ResourceManager.GetString("StateColumnResourceWaitingForParameters", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Unknown.
         /// </summary>
         public static string UnknownStateLabel {

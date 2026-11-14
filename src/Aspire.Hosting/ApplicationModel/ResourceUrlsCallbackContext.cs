@@ -68,7 +68,7 @@ public class ResourceUrlsCallbackContext(DistributedApplicationExecutionContext 
     /// Gets the editor used to manipulate displayed URLs in polyglot callbacks.
     /// </summary>
     [AspireExport("ResourceUrlsCallbackContext.urls", MethodName = "urls")]
-    internal ResourceUrlsEditor UrlsEditor => new(ExecutionContext, Urls, CancellationToken);
+    internal ResourceUrlsEditor UrlsEditor => new(ExecutionContext, Resource, Urls, CancellationToken);
 
     /// <summary>
     /// Gets the logger facade used by polyglot callbacks.

@@ -130,6 +130,11 @@ internal static class ResourceViewModelExtensions
         return resource.TryGetCustomDataStringArray(KnownProperties.Resource.WaitingFor, out dependencies) && dependencies.Length > 0;
     }
 
+    public static bool TryGetUnresolvedParameters(this ResourceViewModel resource, out ImmutableArray<string> parameters)
+    {
+        return resource.TryGetCustomDataStringArray(KnownProperties.Resource.UnresolvedParameters, out parameters) && parameters.Length > 0;
+    }
+
     public static bool TryGetResolvedWaitingForDependencies(
         this ResourceViewModel resource,
         IEnumerable<ResourceViewModel> allResources,
