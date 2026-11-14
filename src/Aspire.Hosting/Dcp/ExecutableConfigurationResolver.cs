@@ -12,11 +12,11 @@ namespace Aspire.Hosting.Dcp;
 
 internal sealed class ExecutableConfigurationResult(
     IExecutionConfigurationResult configuration,
-    ExecutablePemCertificates? pemCertificates)
+    List<PemCertificate>? certificates)
 {
     public IExecutionConfigurationResult Configuration { get; } = configuration;
 
-    public ExecutablePemCertificates? PemCertificates { get; } = pemCertificates;
+    public List<PemCertificate>? Certificates { get; } = certificates;
 }
 
 internal sealed class ExecutableConfigurationResolver(
@@ -29,19 +29,19 @@ internal sealed class ExecutableConfigurationResolver(
     private readonly IAspireStore _aspireStore = aspireStore;
 
     public async Task<ExecutableConfigurationResult> ResolveAsync(
-        RenderedModelResource<Executable> renderedResource,
+        IResource resource,
+        string instanceName,
         ILogger resourceLogger,
         IExecutionConfigurationGatherer preparationGatherer,
         CancellationToken cancellationToken)
     {
-        var executable = renderedResource.DcpResource;
-        var certificatesRootDirectory = GetCertificatesRootDirectory(renderedResource, executable);
+        var certificatesRootDirectory = GetCertificatesRootDirectory(resource, instanceName);
         var bundleOutputPath = Path.Join(certificatesRootDirectory, "cert.pem");
         var customBundleOutputPath = Path.Join(certificatesRootDirectory, "bundles");
         var certificatesOutputPath = Path.Join(certificatesRootDirectory, "certs");
         var baseServerAuthOutputPath = Path.Join(certificatesRootDirectory, "private");
 
-        var configuration = await ExecutionConfigurationBuilder.Create(renderedResource.ModelResource)
+        var configuration = await ExecutionConfigurationBuilder.Create(resource)
             .WithArgumentsConfig()
             .WithEnvironmentVariablesConfig()
             .WithCertificateTrustConfig(scope =>
@@ -85,16 +85,12 @@ internal sealed class ExecutableConfigurationResolver(
             .BuildAsync(_executionContext, resourceLogger, cancellationToken)
             .ConfigureAwait(false);
 
-        ExecutablePemCertificates? pemCertificates = null;
+        List<PemCertificate>? certificates = null;
         if (configuration.TryGetAdditionalData<CertificateTrustExecutionConfigurationData>(out var certificateTrustConfiguration) &&
             certificateTrustConfiguration.Scope != CertificateTrustScope.None &&
             certificateTrustConfiguration.Certificates.Count > 0)
         {
-            pemCertificates = new ExecutablePemCertificates
-            {
-                Certificates = CertificateUtilities.BuildPemCertificateList(certificateTrustConfiguration.Certificates),
-                ContinueOnError = true,
-            };
+            certificates = CertificateUtilities.BuildPemCertificateList(certificateTrustConfiguration.Certificates);
 
             if (certificateTrustConfiguration.CustomBundlesFactories.Count > 0)
             {
@@ -146,7 +142,7 @@ internal sealed class ExecutableConfigurationResolver(
             }
         }
 
-        return new(configuration, pemCertificates);
+        return new(configuration, certificates);
     }
 
     private static void CreatePrivateDirectory(string path)
@@ -166,14 +162,14 @@ internal sealed class ExecutableConfigurationResolver(
     }
 
     private string GetCertificatesRootDirectory(
-        RenderedModelResource<Executable> renderedResource,
-        Executable executable)
+        IResource resource,
+        string instanceName)
     {
-        if (renderedResource.ModelResource.GetLifetimeType() == Lifetime.Persistent)
+        if (resource.GetLifetimeType() == Lifetime.Persistent)
         {
-            return Path.Join(_aspireStore.BasePath, "dcp", "executables", executable.Metadata.Name, "certificates");
+            return Path.Join(_aspireStore.BasePath, "dcp", "executables", instanceName, "certificates");
         }
 
-        return Path.Join(_locations.DcpSessionDir, executable.Metadata.Name);
+        return Path.Join(_locations.DcpSessionDir, instanceName);
     }
 }

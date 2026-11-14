@@ -88,7 +88,7 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerNetw
 
             EnsureRequiredAnnotations(container);
 
-            var containerObjectInstance = DcpExecutor.GetDcpInstance(container, instanceIndex: 0);
+            var containerObjectInstance = DcpResourceLifecycle.GetDcpInstance(container, instanceIndex: 0);
             var ctr = Container.Create(containerObjectInstance.Name, containerImageName);
 
             ctr.Spec.ContainerName = containerObjectInstance.Name;
@@ -114,7 +114,7 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerNetw
             ctr.Annotate(CustomResource.ResourceNameAnnotation, container.Name);
             ctr.Annotate(CustomResource.OtelServiceNameAnnotation, container.Name);
             ctr.Annotate(CustomResource.OtelServiceInstanceIdAnnotation, container.GetOtelServiceInstanceId(containerObjectInstance));
-            DcpExecutor.SetInitialResourceState(container, ctr);
+            DcpModelUtilities.SetInitialResourceState(container, ctr);
 
             var aanns = container.Annotations.OfType<ContainerNetworkAliasAnnotation>().ToImmutableArray();
             if (aanns.Any(a => a.Network != KnownNetworkIdentifiers.DefaultAspireContainerNetwork))
@@ -182,7 +182,7 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerNetw
         foreach (var containerExecutable in modelContainerExecutableResources)
         {
             EnsureRequiredAnnotations(containerExecutable);
-            var exeInstance = DcpExecutor.GetDcpInstance(containerExecutable, instanceIndex: 0);
+            var exeInstance = DcpResourceLifecycle.GetDcpInstance(containerExecutable, instanceIndex: 0);
 
             var containerDcpName = containerExecutable.TargetContainerResource!.GetResolvedResourceName();
 
@@ -196,7 +196,7 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerNetw
             containerExec.Annotate(CustomResource.OtelServiceNameAnnotation, containerExecutable.Name);
             containerExec.Annotate(CustomResource.OtelServiceInstanceIdAnnotation, containerExecutable.GetOtelServiceInstanceId(exeInstance));
             containerExec.Annotate(CustomResource.ResourceNameAnnotation, containerExecutable.Name);
-            DcpExecutor.SetInitialResourceState(containerExecutable, containerExec);
+            DcpModelUtilities.SetInitialResourceState(containerExecutable, containerExec);
 
             var exeAppResource = new RenderedModelResource<ContainerExec>(containerExecutable, containerExec);
             _appResources.Add(exeAppResource);
@@ -369,47 +369,12 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerNetw
     private async Task<(IExecutionConfigurationResult, ContainerPemCertificates?, List<ContainerCreateFileSystem>?)>
     BuildContainerConfiguration(RenderedModelResource<Container> cr, ILogger resourceLogger, CancellationToken cancellationToken)
     {
-        var certificatesDestination = ContainerCertificatePathsAnnotation.DefaultCustomCertificatesDestination;
-        var bundlePaths = ContainerCertificatePathsAnnotation.DefaultCertificateBundlePaths.ToList();
-        var certificateDirsPaths = ContainerCertificatePathsAnnotation.DefaultCertificateDirectoriesPaths.ToList();
-
-        if (cr.ModelResource.TryGetLastAnnotation<ContainerCertificatePathsAnnotation>(out var pathsAnnotation))
-        {
-            certificatesDestination = pathsAnnotation.CustomCertificatesDestination ?? certificatesDestination;
-            bundlePaths = pathsAnnotation.DefaultCertificateBundles ?? bundlePaths;
-            certificateDirsPaths = pathsAnnotation.DefaultCertificateDirectories ?? certificateDirsPaths;
-        }
-
+        var resolved = await ContainerConfigurationResolver.ResolveAsync(
+            cr.ModelResource, _executionContext, resourceLogger, cancellationToken).ConfigureAwait(false);
+        var configuration = resolved.Configuration;
+        var certificatesDestination = resolved.CertificatesDestination;
+        var bundlePaths = resolved.DefaultCertificateBundlePaths;
         var serverAuthCertificatesBasePath = $"{certificatesDestination}/private";
-
-        var configuration = await ExecutionConfigurationBuilder.Create(cr.ModelResource)
-            .WithArgumentsConfig()
-            .WithEnvironmentVariablesConfig()
-            .WithCertificateTrustConfig(scope =>
-            {
-                var dirs = new List<string> { certificatesDestination + "/certs" };
-                if (scope == CertificateTrustScope.Append)
-                {
-                    dirs.AddRange(certificateDirsPaths!);
-                }
-
-                return new()
-                {
-                    CertificateBundlePath = ReferenceExpression.Create($"{certificatesDestination}/cert.pem"),
-                    CertificateDirectoriesPath = ReferenceExpression.Create($"{string.Join(':', dirs)}"),
-                    RootCertificatesPath = certificatesDestination,
-                    IsContainer = true,
-                };
-            })
-            .WithHttpsCertificateConfig(cert => new()
-            {
-                CertificatePath = ReferenceExpression.Create($"{serverAuthCertificatesBasePath}/{cert.Thumbprint}.crt"),
-                KeyPath = ReferenceExpression.Create($"{serverAuthCertificatesBasePath}/{cert.Thumbprint}.key"),
-                CertificateWithKeyPath = ReferenceExpression.Create($"{serverAuthCertificatesBasePath}/{cert.Thumbprint}.pem"),
-                PfxPath = ReferenceExpression.Create($"{serverAuthCertificatesBasePath}/{cert.Thumbprint}.pfx"),
-            })
-            .BuildAsync(_executionContext, resourceLogger, cancellationToken)
-            .ConfigureAwait(false);
 
         List<ContainerFileSystemEntry> customBundleFiles = new();
 

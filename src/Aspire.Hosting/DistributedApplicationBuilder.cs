@@ -613,6 +613,8 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
             _innerBuilder.Services.AddSingleton<AppHostLocalStateStore>();
             _innerBuilder.Services.AddSingleton<PersistentPortAllocationStore>();
             _innerBuilder.Services.AddSingleton<PersistentPortAllocator>();
+            _innerBuilder.Services.AddSingleton<DcpEndpointAllocator>();
+            _innerBuilder.Services.AddSingleton<DcpResourceLifecycle>();
             _innerBuilder.Services.AddSingleton<ContainerNetworkEndpointProvisioner>();
             _innerBuilder.Services.AddSingleton<ExecutableConfigurationResolver>();
             _innerBuilder.Services.AddSingleton<ExecutableLaunchPolicy>();
