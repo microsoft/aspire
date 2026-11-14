@@ -92,6 +92,30 @@ For this example, `aspire publish` writes `registry.example.com/apps/api:latest`
 
 Literal registry values and non-secret parameter defaults can be resolved during publishing. Registry values that require provisioning, secrets, or parameters without defaults remain deferred, with `<resource>:latest` as the published placeholder. `aspire deploy` resolves the image names again after provisioning and supplies them through a Helm values override file. If deploying the published chart yourself, supply the deferred image values to Helm.
 
+### Consuming generated charts from a deployment publisher
+
+C# deployment pipeline extensions can read `KubernetesEnvironmentResource.HelmChartPublishingResult`
+from a step that depends on `publish-{environment.Name}`. For AKS, use
+`AzureKubernetesEnvironmentResource.KubernetesEnvironment` to access the actual chart-producing
+environment; do not register a second Kubernetes environment.
+
+The result is `null` until chart generation succeeds. It contains the chart's `OutputPath` and
+read-only mappings for `Parameters`, `ValueProviders`, `Images`, and `CrossReferences`.
+Each mapping preserves `Section`, `ResourceKey`, and `ValueKey` as separate dictionary keys.
+Parameter, provider, and image-resource objects retain their original identity; publishing the
+result does not evaluate them or materialize secrets.
+
+Resolve parameters and provisioned value providers only in the external publisher's appropriate
+deployment phase. Resolve image resources with `ContainerImageReference` after registries are
+available. Composite cross-reference templates contain Helm expressions such as
+`{{ .Values.secrets.cache.password }}` that must be substituted using the resolved parameter
+mappings. Merely copying `values.yaml` does not resolve these deferred values.
+
+Every successful publish produces a new metadata snapshot. Previous snapshots do not change,
+but referenced application-model objects and files in the output directory are not copied.
+Starting a new publish clears the current result; a failed publish leaves it `null`.
+This API generates no additional deployment steps and does not provision infrastructure.
+
 ### Volumes
 
 Use a target-neutral volume when the Kubernetes environment's default storage policy is sufficient:
