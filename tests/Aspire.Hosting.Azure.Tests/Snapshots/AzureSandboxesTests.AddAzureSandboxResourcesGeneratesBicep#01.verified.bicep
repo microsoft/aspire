@@ -57,4 +57,6 @@ output name string = workergroup.name
 
 output location string = workergroup.location
 
+output tenantId string = tenant().tenantId
+
 output imagePullIdentityClientId string = workergroup_mi.properties.clientId

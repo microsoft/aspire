@@ -231,12 +231,13 @@ builder.Build().Run();
             // The fixture has no registered accounts yet. Patch only test CA trust; all EAB
             // configuration and both Secrets must have come from the actual Aspire deploy.
             output.WriteLine("Verifying fresh ACME registration with required EAB...");
+            var trustPatchFile = $"{pebbleDirectory}/trust.json";
             await auto.TypeAsync(
                 "test -z \"$(kubectl get clusterissuer pebble-valid -o jsonpath='{.status.acme.uri}')\" && " +
                 $"kubectl apply -f \"{pebbleDirectory}/pebble.json\" && " +
                 "kubectl rollout status deployment/pebble-acme -n cert-manager-chart --timeout=180s && " +
-                $"kubectl patch clusterissuer pebble-valid --type=merge --patch-file \"{pebbleDirectory}/trust.json\" && " +
-                $"kubectl patch clusterissuer pebble-invalid --type=merge --patch-file \"{pebbleDirectory}/trust.json\" && " +
+                PatchClusterIssuerWithRetry("pebble-valid", trustPatchFile) + " && " +
+                PatchClusterIssuerWithRetry("pebble-invalid", trustPatchFile) + " && " +
                 "kubectl wait clusterissuer/pebble-valid --for=condition=Ready --timeout=300s && " +
                 "test -n \"$(kubectl get clusterissuer pebble-valid -o jsonpath='{.status.acme.uri}')\" && " +
                 "EAB_ACCOUNT_UID=$(kubectl get secret pebble-valid-account-key -n cert-manager-chart -o jsonpath='{.metadata.uid}') && " +
@@ -413,6 +414,18 @@ builder.Build().Run();
             TriggerCleanupResourceGroup(resourceGroupName);
         }
     }
+
+    // Every ClusterIssuer update is validated by cert-manager's admission webhook, which the AKS API server
+    // reaches over the cluster network. That call can fail transiently, even right after an earlier request
+    // through the same webhook succeeded:
+    //   Error from server (InternalError): Internal error occurred: failed calling webhook "webhook.cert-manager.io":
+    //   failed to call webhook: Post "https://cert-manager-chart-webhook.cert-manager-chart.svc:443/validate?timeout=30s": EOF
+    // The webhook runs before the object is persisted and every attempt sends the same merge patch, so
+    // retrying is idempotent. The subshell keeps the retry state out of the interactive shell.
+    private static string PatchClusterIssuerWithRetry(string issuer, string patchFile) =>
+        "(OK=0; for i in $(seq 1 10); do " +
+        $"kubectl patch clusterissuer {issuer} --type=merge --patch-file \"{patchFile}\" && OK=1 && break; " +
+        "sleep 10; done; test \"$OK\" = 1)";
 
     private void TriggerCleanupResourceGroup(string resourceGroupName)
     {
