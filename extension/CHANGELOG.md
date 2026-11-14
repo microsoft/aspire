@@ -1,5 +1,20 @@
 # Aspire VS Code Extension Changelog
 
+## v1.26.0
+
+<!-- aspire-ext-changelog-done from=363db70eac9ade5a43ae35ed7890d3d6ba165ba6 to=f67e764c2de5c325abefe6271c2e5395a36ea984 base=1.25.0 -->
+
+### Features
+
+- Add an Open resource source action for source-backed AppHost resources ([#20463](https://github.com/microsoft/aspire/pull/20463)).
+- Persist stable AppHost ports and isolate AppHosts across worktrees ([#21013](https://github.com/microsoft/aspire/pull/21013)).
+
+### Fixes
+
+- Fix resource name resolution when attaching a debugger to a resource ([#21416](https://github.com/microsoft/aspire/pull/21416)).
+- Stop the extension from polling when idle ([#21890](https://github.com/microsoft/aspire/pull/21890)).
+- Give the `aspire --version` probe a 30 second budget to avoid false timeouts ([#21912](https://github.com/microsoft/aspire/pull/21912)).
+
 ## v1.25.0
 
 <!-- aspire-ext-changelog-done from=92a66a541b19c5b6347d551ab76053177b7b1217 to=52afb3acb7ad2af5529804361e9b8ffcd1b9d3d3 base=1.24.0 -->
