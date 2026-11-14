@@ -1,15 +1,206 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIRECERTIFICATES001
+
 using System.Text.Json;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Java.Tests;
 
 public class AddQuarkusAppTests
 {
+    [Fact]
+    public async Task AddQuarkusApp_WithoutAPassword_ServesHttpsOnTheEndpointPortFromPemFiles()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
+        using var tempDir = new TempJavaAppDirectory();
+        tempDir.Write("pom.xml", "<project/>");
+
+        var app = builder.AddQuarkusApp("inventory", tempDir.Path);
+        using var application = builder.Build();
+
+        var envVars = await RunHttpsCertificateCallbackAsync(app.Resource, application.Services, password: null, "/certs");
+
+        Assert.Equal("disabled", envVars["QUARKUS_HTTP_INSECURE_REQUESTS"]);
+        Assert.Equal("/certs/cert.pem", ((ReferenceExpression)envVars["QUARKUS_HTTP_SSL_CERTIFICATE_FILES"]).ValueExpression);
+        Assert.Equal("/certs/key.pem", ((ReferenceExpression)envVars["QUARKUS_HTTP_SSL_CERTIFICATE_KEY_FILES"]).ValueExpression);
+        Assert.False(envVars.ContainsKey("QUARKUS_HTTP_SSL_CERTIFICATE_KEY_STORE_FILE"));
+
+        // The HTTPS listener has to move onto the port Aspire allocated for the endpoint, because the plain
+        // HTTP listener that normally owns it is switched off.
+        var sslPort = Assert.IsType<EndpointReferenceExpression>(envVars["QUARKUS_HTTP_SSL_PORT"]);
+        Assert.Equal(EndpointProperty.TargetPort, sslPort.Property);
+        Assert.Equal("http", sslPort.Endpoint.EndpointName);
+    }
+
+    [Fact]
+    public async Task AddQuarkusApp_WithAPassword_UsesThePkcs12KeyStore()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
+        using var tempDir = new TempJavaAppDirectory();
+        tempDir.Write("pom.xml", "<project/>");
+
+        var app = builder.AddQuarkusApp("inventory", tempDir.Path);
+        using var application = builder.Build();
+
+        var password = builder.AddParameter("cert-password", "secret");
+        var envVars = await RunHttpsCertificateCallbackAsync(app.Resource, application.Services, password.Resource, "/certs");
+
+        Assert.Equal("/certs/cert.pfx", ((ReferenceExpression)envVars["QUARKUS_HTTP_SSL_CERTIFICATE_KEY_STORE_FILE"]).ValueExpression);
+        Assert.Equal("PKCS12", envVars["QUARKUS_HTTP_SSL_CERTIFICATE_KEY_STORE_FILE_TYPE"]);
+        Assert.Same(password.Resource, envVars["QUARKUS_HTTP_SSL_CERTIFICATE_KEY_STORE_PASSWORD"]);
+        Assert.False(envVars.ContainsKey("QUARKUS_HTTP_SSL_CERTIFICATE_FILES"));
+        Assert.False(envVars.ContainsKey("QUARKUS_HTTP_SSL_CERTIFICATE_KEY_FILES"));
+    }
+
+    [Fact]
+    public void AddQuarkusApp_DoesNotUseAnHttpsCertificateByDefault()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        using var tempDir = new TempJavaAppDirectory();
+        tempDir.Write("pom.xml", "<project/>");
+
+        var app = builder.AddQuarkusApp("inventory", tempDir.Path);
+
+        var annotation = Assert.Single(app.Resource.Annotations.OfType<HttpsCertificateAnnotation>());
+        Assert.Null(annotation.Certificate);
+        Assert.False(annotation.UseDeveloperCertificate);
+    }
+
+    [Fact]
+    public void AddQuarkusApp_UsesTheDeveloperCertificateWhenOptedIn()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        using var tempDir = new TempJavaAppDirectory();
+        tempDir.Write("pom.xml", "<project/>");
+
+        var app = builder.AddQuarkusApp("inventory", tempDir.Path).WithHttpsDeveloperCertificate();
+
+        var annotation = Assert.Single(app.Resource.Annotations.OfType<HttpsCertificateAnnotation>());
+        Assert.True(annotation.UseDeveloperCertificate);
+    }
+
+    [Fact]
+    public async Task AddQuarkusApp_WithAnEmptyPassword_FailsInsteadOfServingATlsListenerNoClientCanReach()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
+        using var tempDir = new TempJavaAppDirectory();
+        tempDir.Write("pom.xml", "<project/>");
+
+        var app = builder.AddQuarkusApp("inventory", tempDir.Path);
+        using var application = builder.Build();
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => RunHttpsCertificateCallbackAsync(app.Resource, application.Services, ReferenceExpression.Create($""), "/certs"));
+
+        Assert.Contains("'inventory'", ex.Message);
+        Assert.Contains("empty", ex.Message);
+    }
+
+    [Fact]
+    public async Task AddQuarkusApp_SwitchesTheEndpointToHttpsWhenOptedIn()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
+        using var tempDir = new TempJavaAppDirectory();
+        tempDir.Write("pom.xml", "<project/>");
+
+        var app = builder.AddQuarkusApp("inventory", tempDir.Path).WithHttpsDeveloperCertificate();
+        using var application = builder.Build();
+
+        await PublishBeforeStartAsync(builder, application);
+
+        Assert.Equal("https", GetHttpEndpoint(app.Resource).UriScheme);
+    }
+
+    [Fact]
+    public async Task AddQuarkusApp_KeepsTheEndpointOnHttpByDefault()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
+        using var tempDir = new TempJavaAppDirectory();
+        tempDir.Write("pom.xml", "<project/>");
+
+        var app = builder.AddQuarkusApp("inventory", tempDir.Path);
+        using var application = builder.Build();
+
+        await PublishBeforeStartAsync(builder, application);
+
+        Assert.Equal("http", GetHttpEndpoint(app.Resource).UriScheme);
+    }
+
+    [Fact]
+    [SkipOnPlatform(TestPlatforms.AnyUnix, "A backslash is only a path separator on Windows")]
+    public async Task AddQuarkusApp_WithWindowsCertificatePaths_ResolvesThemWithForwardSlashes()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
+        using var tempDir = new TempJavaAppDirectory();
+        tempDir.Write("pom.xml", "<project/>");
+
+        var app = builder.AddQuarkusApp("inventory", tempDir.Path);
+        using var application = builder.Build();
+
+        var envVars = await RunHttpsCertificateCallbackAsync(app.Resource, application.Services, password: null, @"C:\Users\dev\certs");
+
+        var certificate = (ReferenceExpression)envVars["QUARKUS_HTTP_SSL_CERTIFICATE_FILES"];
+        var key = (ReferenceExpression)envVars["QUARKUS_HTTP_SSL_CERTIFICATE_KEY_FILES"];
+        Assert.Equal("C:/Users/dev/certs/cert.pem", await certificate.GetValueAsync(TestContext.Current.CancellationToken));
+        Assert.Equal("C:/Users/dev/certs/key.pem", await key.GetValueAsync(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    [SkipOnPlatform(TestPlatforms.Windows, "A backslash is only a path separator on Windows")]
+    public async Task AddQuarkusApp_WithBackslashesInCertificatePaths_LeavesThemAloneOutsideWindows()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
+        using var tempDir = new TempJavaAppDirectory();
+        tempDir.Write("pom.xml", "<project/>");
+
+        var app = builder.AddQuarkusApp("inventory", tempDir.Path);
+        using var application = builder.Build();
+
+        var envVars = await RunHttpsCertificateCallbackAsync(app.Resource, application.Services, password: null, "/certs/a\\b");
+
+        var certificate = (ReferenceExpression)envVars["QUARKUS_HTTP_SSL_CERTIFICATE_FILES"];
+        Assert.Equal("/certs/a\\b/cert.pem", await certificate.GetValueAsync(TestContext.Current.CancellationToken));
+    }
+
+    private static Task PublishBeforeStartAsync(IDistributedApplicationBuilder builder, DistributedApplication application) =>
+        builder.Eventing.PublishAsync(
+            new BeforeStartEvent(application.Services, application.Services.GetRequiredService<DistributedApplicationModel>()),
+            TestContext.Current.CancellationToken);
+
+    private static EndpointAnnotation GetHttpEndpoint(IResource resource) =>
+        resource.Annotations.OfType<EndpointAnnotation>().Single(e => e.Name == "http");
+
+    private static async Task<Dictionary<string, object>> RunHttpsCertificateCallbackAsync(IResource resource, IServiceProvider services, IValueProvider? password, string certDir)
+    {
+        var annotation = Assert.Single(resource.Annotations.OfType<HttpsCertificateConfigurationCallbackAnnotation>());
+
+        var envVars = new Dictionary<string, object>();
+        await annotation.Callback(new HttpsCertificateConfigurationCallbackAnnotationContext
+        {
+            ExecutionContext = new DistributedApplicationExecutionContext(
+                new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run)
+                {
+                    Services = services
+                }),
+            Resource = resource,
+            Arguments = [],
+            EnvironmentVariables = envVars,
+            CertificatePath = ReferenceExpression.Create($"{certDir}/cert.pem"),
+            KeyPath = ReferenceExpression.Create($"{certDir}/key.pem"),
+            CertificateWithKeyPath = ReferenceExpression.Create($"{certDir}/combined.pem"),
+            PfxPath = ReferenceExpression.Create($"{certDir}/cert.pfx"),
+            Password = password,
+            CancellationToken = TestContext.Current.CancellationToken
+        });
+
+        return envVars;
+    }
+
     [Theory]
     [InlineData("pom.xml", "maven")]
     [InlineData("build.gradle", "gradle")]
