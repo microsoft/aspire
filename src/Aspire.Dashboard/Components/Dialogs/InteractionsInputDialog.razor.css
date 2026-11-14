@@ -51,6 +51,7 @@
     display: flex;
     flex-direction: column;
     row-gap: var(--aspire-space-1);
+    margin-bottom: var(--aspire-space-2);
 }
 
 .interaction-input-dialog .interaction-input ::deep .input-description {

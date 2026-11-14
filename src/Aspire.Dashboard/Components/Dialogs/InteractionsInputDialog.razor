@@ -226,17 +226,15 @@
                                             }
                                         </div>
                                     }
-                                    else
-                                    {
-                                        <FluentButton Id="@inputId" Appearance="ButtonAppearance.Primary" Class="aspire-button"
-                                                      AutoFocus="@IsFirstInput(input.ViewModel)"
-                                                      IconStart="@(new Icons.Regular.Size16.FolderOpen())"
-                                                      Disabled="input.ViewModel.InputDisabled"
-                                                      aria-label="@input.ViewModel.Input.Label"
-                                                      aria-describedby="@(input.ViewModel.Input.Required ? $"{inputId}-required {input.DescriptionId}".TrimEnd() : input.DescriptionId)">
-                                            @GetFileButtonText(input.ViewModel)
-                                        </FluentButton>
-                                    }
+                                    @* Always render the anchor: FluentInputFile opens the file picker from it, so users can replace uploaded files. *@
+                                    <FluentButton Id="@inputId" Appearance="ButtonAppearance.Primary" Class="aspire-button"
+                                                  AutoFocus="@IsFirstInput(input.ViewModel)"
+                                                  IconStart="@(new Icons.Regular.Size16.FolderOpen())"
+                                                  Disabled="input.ViewModel.InputDisabled"
+                                                  aria-label="@input.ViewModel.Input.Label"
+                                                  aria-describedby="@(input.ViewModel.Input.Required ? $"{inputId}-required {input.DescriptionId}".TrimEnd() : input.DescriptionId)">
+                                        @GetFileButtonText(input.ViewModel)
+                                    </FluentButton>
                                     <ValidationMessage For="@(() => input.ViewModel.Value)" />
                                 </div>
                             </InteractionInputField>
