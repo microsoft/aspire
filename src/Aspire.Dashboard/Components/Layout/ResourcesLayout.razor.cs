@@ -1372,11 +1372,137 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             }
         }
 
+        var previousTelemetryOnlyResources = _telemetryOnlyResources;
         _telemetryOnlyResources = telemetryResources
             .Where(r => !appModelKeys.Contains(r.ResourceKey))
             .Select(r => new TelemetryOnlyResource(OtlpHelpers.GetResourceName(r, telemetryResources), r))
             .OrderBy(r => r.Name, StringComparers.ResourceName)
             .ToList();
+        FollowRenamedTelemetryOnlyResources(previousTelemetryOnlyResources);
+    }
+
+    /// <summary>
+    /// Keeps selected telemetry sources selected when their display name changes. A source is named by its
+    /// service.name ("ext") while it's the only one with that name. When another instance starts sending telemetry,
+    /// <see cref="OtlpHelpers.GetResourceName"/> appends the instance IDs to both ("ext-one", "ext-two"), and the
+    /// reverse happens when the other instance is removed. The selection and the URL hold display names, so without
+    /// this the selection would point at a name that no longer exists. The source's <see cref="ResourceKey"/> doesn't
+    /// change, so it identifies the renamed row.
+    /// </summary>
+    /// <remarks>
+    /// App model resources aren't affected: their names come from the resource service, not from telemetry.
+    /// </remarks>
+    private void FollowRenamedTelemetryOnlyResources(List<TelemetryOnlyResource> previousTelemetryOnlyResources)
+    {
+        if (!_hasLocation || _selectedResourceNames.Count == 0 || previousTelemetryOnlyResources.Count == 0)
+        {
+            return;
+        }
+
+        Dictionary<string, string>? renames = null;
+        foreach (var name in _selectedResourceNames)
+        {
+            if (IsKnownResourceName(name) ||
+                previousTelemetryOnlyResources.FirstOrDefault(r => string.Equals(r.Name, name, StringComparisons.ResourceName)) is not { } previous ||
+                _telemetryOnlyResources.FirstOrDefault(r => r.Resource.ResourceKey == previous.Resource.ResourceKey) is not { } current ||
+                string.Equals(current.Name, name, StringComparisons.ResourceName))
+            {
+                continue;
+            }
+
+            (renames ??= new(StringComparers.ResourceName))[name] = current.Name;
+        }
+
+        if (renames is null)
+        {
+            return;
+        }
+
+        // Update the selection now rather than when the new location arrives, so the renders in between (the caller
+        // renders right after this) don't show the selection as not found.
+        _selectedResourceNames = _selectedResourceNames
+            .Select(name => renames.GetValueOrDefault(name, name))
+            .Distinct(StringComparers.ResourceName)
+            .ToList();
+        if (RouteResourceName is not null && renames.TryGetValue(RouteResourceName, out var routeResourceName))
+        {
+            RouteResourceName = routeResourceName;
+        }
+
+        // A trace detail URL can keep the selection without naming it, in which case there's nothing to rewrite.
+        var currentUrl = "/" + NavigationManager.ToBaseRelativePath(NavigationManager.Uri);
+        var renamedUrl = RenameResourcesInUrl(currentUrl, renames);
+        if (!string.Equals(currentUrl, renamedUrl, StringComparison.Ordinal))
+        {
+            // Replace the history entry: going back to the old name would select a source that no longer exists.
+            NavigationManager.NavigateTo(renamedUrl, new NavigationOptions { ReplaceHistoryEntry = true });
+        }
+    }
+
+    /// <summary>
+    /// Renames resources in a dashboard URL, keeping everything else in it as it is, such as the open chart on the
+    /// metrics page or the pane. Resources are named in the path and in the selection query, for example:
+    /// <code>
+    ///   /metrics/resource/ext?meter=app&amp;instrument=requests&amp;pane=telemetry
+    ///   /structuredlogs?resource=ext&amp;resource=api&amp;filters=...
+    ///   /resources/ext
+    /// </code>
+    /// Only the path segment that <see cref="ParseLocation"/> reads as the resource is renamed, so a trace ID in
+    /// <c>/traces/detail/{traceId}</c> or a query value that happens to equal a resource name stays unchanged.
+    /// </summary>
+    private static string RenameResourcesInUrl(string url, IReadOnlyDictionary<string, string> renames)
+    {
+        var fragment = string.Empty;
+        var fragmentIndex = url.IndexOf('#');
+        if (fragmentIndex >= 0)
+        {
+            fragment = url[fragmentIndex..];
+            url = url[..fragmentIndex];
+        }
+
+        var query = string.Empty;
+        var queryIndex = url.IndexOf('?');
+        if (queryIndex >= 0)
+        {
+            query = url[(queryIndex + 1)..];
+            url = url[..queryIndex];
+        }
+
+        var segments = url.Split('/');
+        // The path starts with "/", so segments[0] is empty: "/metrics/resource/ext" is ["", "metrics", "resource", "ext"].
+        var resourceSegment = segments switch
+        {
+            [_, var page, var resourceName, ..] when string.Equals(page, DashboardUrls.ResourceOverviewBasePath, StringComparisons.UrlPath) &&
+                resourceName.Length > 0 => 2,
+            [_, _, var resource, var resourceName, ..] when string.Equals(resource, "resource", StringComparisons.UrlPath) &&
+                resourceName.Length > 0 => 3,
+            _ => -1
+        };
+        if (resourceSegment >= 0 && renames.TryGetValue(Uri.UnescapeDataString(segments[resourceSegment]), out var renamedSegment))
+        {
+            segments[resourceSegment] = Uri.EscapeDataString(renamedSegment);
+        }
+
+        // Rewrite the selection parameters one by one rather than rebuilding the query, so the order and encoding of
+        // the other parameters don't change. Keys and values are decoded and keys compared ignoring case, as
+        // QueryHelpers.ParseQuery does when ParseLocation reads the selection: "?Resource=ext" selects "ext" too, and
+        // leaving it would restore the old name from the query. Form encoding writes spaces as "+", which
+        // UnescapeDataString keeps.
+        var parameters = query.Length > 0 ? query.Split('&') : [];
+        for (var i = 0; i < parameters.Length; i++)
+        {
+            var separator = parameters[i].IndexOf('=');
+            if (separator > 0 &&
+                string.Equals(DecodeQueryComponent(parameters[i][..separator]), DashboardUrls.ResourceSelectionQueryName, StringComparison.OrdinalIgnoreCase) &&
+                renames.TryGetValue(DecodeQueryComponent(parameters[i][(separator + 1)..]), out var renamedParameter))
+            {
+                parameters[i] = $"{DashboardUrls.ResourceSelectionQueryName}={Uri.EscapeDataString(renamedParameter)}";
+            }
+        }
+
+        return string.Join('/', segments) + (queryIndex >= 0 ? "?" + string.Join('&', parameters) : string.Empty) + fragment;
+
+        static string DecodeQueryComponent(string value) => Uri.UnescapeDataString(value.Replace('+', ' '));
     }
 
     private IEnumerable<TelemetryOnlyResource> GetVisibleTelemetryResources() =>
