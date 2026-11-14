@@ -3042,6 +3042,67 @@ public static partial class JavaScriptHostingExtensions
                 return Task.CompletedTask;
             });
 
+            // An explicitly started app must not start its installer during AppHost startup. WithExplicitStart()
+            // can be applied after the package manager method, including from BeforeStartEvent callbacks registered
+            // later, so decide in a before-start pipeline step, which runs after every BeforeStartEvent subscriber
+            // and lifecycle hook but before DCP creates the installer.
+            resource.ApplicationBuilder.Pipeline.AddStep(
+                $"{installerName}-defer-with-explicit-start-parent",
+                _ =>
+                {
+                    if (ShouldDeferInstallerWithParent(resource.Resource, installer))
+                    {
+                        installerBuilder
+                            .WithExplicitStart()
+                            .WithAnnotation(new InstallerDeferredWithParentAnnotation());
+                    }
+
+                    return Task.CompletedTask;
+                },
+                requiredBy: WellKnownPipelineSteps.BeforeStart);
+
+            // When the deferred installer's parent is started, start the installer too so the parent's
+            // WaitForCompletion dependency can be satisfied. Builder-time subscriptions run before the
+            // orchestrator's WaitFor handler, which is registered when the application starts.
+            var installerStartLock = new SemaphoreSlim(1, 1);
+            resource.OnBeforeResourceStarted(async (parent, e, cancellationToken) =>
+            {
+                // Only start installers this integration deferred. An installer the app author made explicit-start,
+                // for example with WithNpm(install: false), stays manual even if the app waits for it.
+                if (!ParentWaitsForInstaller(parent, installer) ||
+                    !installer.TryGetLastAnnotation<InstallerDeferredWithParentAnnotation>(out _))
+                {
+                    return;
+                }
+
+                await installerStartLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+                try
+                {
+                    // Resources are initialized concurrently, so the parent can be started before the installer
+                    // publishes its initial state. Wait for that state rather than treating it as already started.
+                    var notificationService = e.Services.GetRequiredService<ResourceNotificationService>();
+                    var installerEvent = await notificationService.WaitForResourceAsync(
+                        installer.Name,
+                        re => !string.IsNullOrEmpty(re.Snapshot.State?.Text),
+                        cancellationToken).ConfigureAwait(false);
+                    if (installerEvent.Snapshot.State?.Text != KnownResourceStates.NotStarted)
+                    {
+                        return;
+                    }
+
+                    var commandService = e.Services.GetRequiredService<ResourceCommandService>();
+                    var result = await commandService.ExecuteCommandAsync(installer, KnownResourceCommands.StartCommand, cancellationToken).ConfigureAwait(false);
+                    if (!result.Success)
+                    {
+                        throw new InvalidOperationException($"Failed to start installer resource '{installer.Name}' for '{parent.Name}': {result.Message}");
+                    }
+                }
+                finally
+                {
+                    installerStartLock.Release();
+                }
+            });
+
             if (install)
             {
                 // Make the parent resource wait for the installer to complete
@@ -3057,6 +3118,17 @@ public static partial class JavaScriptHostingExtensions
             resource.WithAnnotation(new JavaScriptPackageInstallerAnnotation(installer));
         }
     }
+
+    private static bool ParentWaitsForInstaller(IResource parent, JavaScriptInstallerResource installer) =>
+        parent.Annotations.OfType<WaitAnnotation>().Any(w => w.Resource == installer);
+
+    private static bool ShouldDeferInstallerWithParent(IResource parent, JavaScriptInstallerResource installer) =>
+        parent.TryGetLastAnnotation<ExplicitStartupAnnotation>(out _) &&
+        ParentWaitsForInstaller(parent, installer) &&
+        !installer.TryGetLastAnnotation<ExplicitStartupAnnotation>(out _);
+
+    // Marks an installer that was made explicit-start only because its explicit-start parent waits for it.
+    private sealed class InstallerDeferredWithParentAnnotation : IResourceAnnotation;
 
     private static void DisableExistingInstaller<TResource>(IResourceBuilder<TResource> resource) where TResource : JavaScriptAppResource
     {
