@@ -2,8 +2,18 @@
 
 ## v1.26.0
 
-<!-- aspire-ext-changelog from=363db70eac9ade5a43ae35ed7890d3d6ba165ba6 to=f67e764c2de5c325abefe6271c2e5395a36ea984 base=1.25.0 -->
-_Release notes are being generated automatically and will replace this placeholder shortly. If this line is still here after the `extension-changelog` workflow runs, copy the deterministic commit list from the pull request description into this entry before merging._
+<!-- aspire-ext-changelog-done from=363db70eac9ade5a43ae35ed7890d3d6ba165ba6 to=f67e764c2de5c325abefe6271c2e5395a36ea984 base=1.25.0 -->
+
+### Features
+
+- Add an Open resource source action for source-backed AppHost resources ([#20463](https://github.com/microsoft/aspire/pull/20463)).
+- Persist stable AppHost ports and isolate AppHosts across worktrees ([#21013](https://github.com/microsoft/aspire/pull/21013)).
+
+### Fixes
+
+- Fix resource name resolution when attaching a debugger to a resource ([#21416](https://github.com/microsoft/aspire/pull/21416)).
+- Stop the extension from polling when idle ([#21890](https://github.com/microsoft/aspire/pull/21890)).
+- Give the `aspire --version` probe a 30 second budget to avoid false timeouts ([#21912](https://github.com/microsoft/aspire/pull/21912)).
 
 ## v1.25.0
 
