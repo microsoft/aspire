@@ -1542,6 +1542,41 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
+    [InlineData(".vscode/mcp.json", """{"servers":{"aspire":{"type":"stdio","command":"aspire","args":["agent","mcp"]}}}""", false, true)]
+    [InlineData(".github/copilot/mcp.json", """{"servers":{"aspire":{"type":"stdio","command":"aspire","args":["agent","mcp"]}}}""", false, true)]
+    [InlineData(".vscode/mcp.json", """{"servers":{"aspire":{"type":"stdio","command":"aspire","args":["agent","mcp"]}}}""", true, true)]
+    [InlineData(".vscode/mcp.json", """{"servers":{"aspire":null}}""", false, false)]
+    [InlineData(".vscode/mcp.json", """{"servers":{}}""", false, false)]
+    [InlineData(".vscode/mcp.json", "{broken", false, false)]
+    public async Task AgentInit_ProjectScopeRepairOnlyCopilotMcp_RefreshesHook(string relativePath, string content, bool malformedPrimaryConfig, bool expectHook)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var homeDirectory = workspace.CreateDirectory("fake-home");
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(workspace.WorkspaceRoot, homeDirectory: homeDirectory);
+        var hooks = new TestTelemetryHookConfigurator();
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ => executionContext;
+            options.TelemetryHookConfiguratorFactory = _ => hooks;
+        });
+        services.AddSingleton<IEnvironment>(new TestEnvironment());
+        using var provider = services.BuildServiceProvider();
+        var mcpPath = Path.Combine(workspace.WorkspaceRoot.FullName, relativePath.Replace('/', Path.DirectorySeparatorChar));
+        Directory.CreateDirectory(Path.GetDirectoryName(mcpPath)!);
+        await File.WriteAllTextAsync(mcpPath, content);
+        if (malformedPrimaryConfig)
+        {
+            await File.WriteAllTextAsync(Path.Combine(workspace.WorkspaceRoot.FullName, ".mcp.json"), "{broken");
+        }
+
+        var result = provider.GetRequiredService<RootCommand>().Parse(
+            "agent init --agents copilot --scope project --skills none --mcp=false");
+        Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
+        Assert.Equal(expectHook ? ["copilot"] : [], hooks.SelectedClientIds);
+        Assert.Equal(content, await File.ReadAllTextAsync(mcpPath));
+    }
+
+    [Theory]
     [InlineData("global", true)]
     [InlineData("project", false)]
     public async Task AgentInit_NothingSelectedWithVsCodeUserMcp_RespectsScope(string scope, bool expectHook)
