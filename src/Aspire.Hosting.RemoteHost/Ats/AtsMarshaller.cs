@@ -48,6 +48,7 @@ internal sealed class AtsMarshaller
     {
         public string? CapabilityId { get; init; }
         public string? ParameterName { get; init; }
+        public TimeSpan? CallbackTimeout { get; init; }
     }
 
     // NOTE: ReferenceHandler.IgnoreCycles prevents JsonException when serializing DTOs
@@ -339,7 +340,7 @@ internal sealed class AtsMarshaller
 
         try
         {
-            var proxy = _callbackProxyFactory.Value.CreateProxy(callbackId, callbackType);
+            var proxy = _callbackProxyFactory.Value.CreateProxy(callbackId, callbackType, context.CallbackTimeout);
             return proxy ?? throw CapabilityException.InvalidArgument(
                 context.CapabilityId ?? "unknown",
                 context.ParameterName ?? "unknown",

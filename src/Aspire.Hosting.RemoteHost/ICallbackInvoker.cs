@@ -22,6 +22,11 @@ internal interface ICallbackInvoker
     Task<TResult> InvokeAsync<TResult>(string callbackId, JsonNode? args, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Invokes a callback with an explicit timeout instead of the configured default.
+    /// </summary>
+    Task<TResult> InvokeAsync<TResult>(string callbackId, JsonNode? args, CancellationToken cancellationToken, TimeSpan timeout);
+
+    /// <summary>
     /// Invokes a callback that returns no value.
     /// </summary>
     /// <param name="callbackId">The callback ID registered on the client.</param>

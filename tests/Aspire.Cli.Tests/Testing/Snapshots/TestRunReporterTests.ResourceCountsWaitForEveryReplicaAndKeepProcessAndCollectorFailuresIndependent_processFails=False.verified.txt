@@ -1,0 +1,10 @@
+﻿[
+  Tests are running,
+  Resource [teal]tests (tests-1)[/]: Finished (exit code 0),
+  Resource [teal]tests (tests-2)[/]: Running,
+  Test [teal]tests[/] / [blue]fixture[/]: [green]passed[/],
+  Resource [teal]tests (tests-2)[/]: Exited (exit code 0),
+  Resource [teal]tests[/]: [red]failed[/]; [green]1[/] passed, [red]0[/] failed, [yellow]0[/] other,
+  Test run [red]failed[/],
+  Published test results: [green]1[/] passed, [red]0[/] failed, [yellow]0[/] skipped
+]

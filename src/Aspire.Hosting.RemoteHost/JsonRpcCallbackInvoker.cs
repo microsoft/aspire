@@ -85,7 +85,7 @@ internal sealed class JsonRpcCallbackInvoker : ICallbackInvoker, IDisposable, IA
     public Task<TResult> InvokeAsync<TResult>(string callbackId, JsonNode? args, CancellationToken cancellationToken = default)
         => InvokeAsync<TResult>(callbackId, args, cancellationToken, _callbackTimeout);
 
-    internal async Task<TResult> InvokeAsync<TResult>(string callbackId, JsonNode? args, CancellationToken cancellationToken, TimeSpan timeout)
+    public async Task<TResult> InvokeAsync<TResult>(string callbackId, JsonNode? args, CancellationToken cancellationToken, TimeSpan timeout)
     {
         if (_clientRpc is null)
         {

@@ -26,6 +26,7 @@ public sealed class ProcessInvocationOptionsTests
             NuGetRestoreTargetsFile = new FileInfo(Path.Combine(Path.GetFullPath("."), "Candidate.targets")),
             LaunchProfile = "E2E",
             StartDebugSession = true,
+            DisableExtensionLaunch = true,
             Debug = true,
             SuppressLogging = true,
             // Non-default: this property initializes to true, so false is the "changed" value.

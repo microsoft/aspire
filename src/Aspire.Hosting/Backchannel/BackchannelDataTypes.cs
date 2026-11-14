@@ -16,6 +16,56 @@ using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Protocol;
 
+/// <summary>
+/// Describes an observed test resource instance without framework-specific test results.
+/// </summary>
+internal sealed record TestResourceState
+{
+    public required string ResourceName { get; init; }
+    public string? ResourceId { get; init; }
+    public string? State { get; init; }
+    public int? ExitCode { get; init; }
+    public int ExpectedReplicas { get; init; } = 1;
+    public string Outcome { get; init; } = "pending";
+}
+
+/// <summary>
+/// Streams test resource observations followed by an authoritative aggregate completion.
+/// </summary>
+internal sealed class TestRunEvent
+{
+    public TestResourceState? Resource { get; init; }
+    public PublishedTestResult? Result { get; init; }
+    public TestCollectionState? Collection { get; init; }
+    public bool? Passed { get; init; }
+}
+
+internal sealed record PublishedTestResult
+{
+    public required string ResourceName { get; init; }
+    public required string Name { get; init; }
+    public required string Outcome { get; init; }
+    public double? DurationMilliseconds { get; init; }
+    public string? Message { get; init; }
+
+    // Published timeouts/cancellations fail testing without cancelling the command itself.
+    internal bool IsFailure() => Outcome switch
+    {
+        "passed" or "skipped" => false,
+        "failed" or "inconclusive" or "error" or "timedOut" or "cancelled" => true,
+        _ => throw new InvalidOperationException("The AppHost sent an invalid published test outcome.")
+    };
+}
+
+internal sealed record TestCollectionState
+{
+    public required string ResourceName { get; init; }
+    public string? OutputPath { get; init; }
+    public int CollectorCount { get; init; }
+    public required string Status { get; init; }
+    public string? Error { get; init; }
+}
+
 // =============================================================================
 // Auxiliary Backchannel Contract Rules:
 //

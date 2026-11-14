@@ -2002,8 +2002,10 @@ public class AspireRegistrations {
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceEndpointsAllocatedEvent", (h, c) -> new ResourceEndpointsAllocatedEvent(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceReadyEvent", (h, c) -> new ResourceReadyEvent(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceStoppedEvent", (h, c) -> new ResourceStoppedEvent(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceTestingContext", (h, c) -> new ResourceTestingContext(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceUrlsCallbackContext", (h, c) -> new ResourceUrlsCallbackContext(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceUrlsEditor", (h, c) -> new ResourceUrlsEditor(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.TestingContext", (h, c) -> new TestingContext(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.Docker.DockerfileBuilder", (h, c) -> new DockerfileBuilder(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.Docker.DockerfileStage", (h, c) -> new DockerfileStage(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerRegistryResource", (h, c) -> new ContainerRegistryResource(h, c));
@@ -3550,6 +3552,28 @@ public class CSharpAppResource extends ProjectResource {
             reqArgs.put("configure", configureId);
         }
         getClient().invokeCapability("Aspire.Hosting/withTerminal", reqArgs);
+        return this;
+    }
+
+    public CSharpAppResource withTesting() {
+        return withTesting(null);
+    }
+
+    /** Marks a resource for testing with an optional runtime result collector. */
+    public CSharpAppResource withTesting(AspireAction1<ResourceTestingContext> callback) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = callback == null ? null : getClient().registerCallback(args -> {
+            var arg = (ResourceTestingContext) args[0];
+            callback.invoke(arg);
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/withTesting", reqArgs);
         return this;
     }
 
@@ -5999,6 +6023,28 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         return this;
     }
 
+    public ContainerRegistryResource withTesting() {
+        return withTesting(null);
+    }
+
+    /** Marks a resource for testing with an optional runtime result collector. */
+    public ContainerRegistryResource withTesting(AspireAction1<ResourceTestingContext> callback) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = callback == null ? null : getClient().registerCallback(args -> {
+            var arg = (ResourceTestingContext) args[0];
+            callback.invoke(arg);
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/withTesting", reqArgs);
+        return this;
+    }
+
     /** Adds a pipeline step to the resource that will be executed during deployment. */
     public ContainerRegistryResource withPipelineStepFactory(String stepName, AspireAction1<PipelineStepContext> callback, WithPipelineStepFactoryOptions optionsBag) {
         var dependsOn = optionsBag == null ? null : optionsBag.getDependsOn();
@@ -8007,6 +8053,28 @@ public class ContainerResource extends ResourceBuilderBase {
             reqArgs.put("configure", configureId);
         }
         getClient().invokeCapability("Aspire.Hosting/withTerminal", reqArgs);
+        return this;
+    }
+
+    public ContainerResource withTesting() {
+        return withTesting(null);
+    }
+
+    /** Marks a resource for testing with an optional runtime result collector. */
+    public ContainerResource withTesting(AspireAction1<ResourceTestingContext> callback) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = callback == null ? null : getClient().registerCallback(args -> {
+            var arg = (ResourceTestingContext) args[0];
+            callback.invoke(arg);
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/withTesting", reqArgs);
         return this;
     }
 
@@ -10850,6 +10918,28 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    public DotnetToolResource withTesting() {
+        return withTesting(null);
+    }
+
+    /** Marks a resource for testing with an optional runtime result collector. */
+    public DotnetToolResource withTesting(AspireAction1<ResourceTestingContext> callback) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = callback == null ? null : getClient().registerCallback(args -> {
+            var arg = (ResourceTestingContext) args[0];
+            callback.invoke(arg);
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/withTesting", reqArgs);
+        return this;
+    }
+
     /** Adds a pipeline step to the resource that will be executed during deployment. */
     public DotnetToolResource withPipelineStepFactory(String stepName, AspireAction1<PipelineStepContext> callback, WithPipelineStepFactoryOptions optionsBag) {
         var dependsOn = optionsBag == null ? null : optionsBag.getDependsOn();
@@ -13391,6 +13481,28 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
+    public ExecutableResource withTesting() {
+        return withTesting(null);
+    }
+
+    /** Marks a resource for testing with an optional runtime result collector. */
+    public ExecutableResource withTesting(AspireAction1<ResourceTestingContext> callback) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = callback == null ? null : getClient().registerCallback(args -> {
+            var arg = (ResourceTestingContext) args[0];
+            callback.invoke(arg);
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/withTesting", reqArgs);
+        return this;
+    }
+
     /** Adds a pipeline step to the resource that will be executed during deployment. */
     public ExecutableResource withPipelineStepFactory(String stepName, AspireAction1<PipelineStepContext> callback, WithPipelineStepFactoryOptions optionsBag) {
         var dependsOn = optionsBag == null ? null : optionsBag.getDependsOn();
@@ -14574,6 +14686,28 @@ public class ExternalServiceResource extends ResourceBuilderBase {
             reqArgs.put("configure", configureId);
         }
         getClient().invokeCapability("Aspire.Hosting/withTerminal", reqArgs);
+        return this;
+    }
+
+    public ExternalServiceResource withTesting() {
+        return withTesting(null);
+    }
+
+    /** Marks a resource for testing with an optional runtime result collector. */
+    public ExternalServiceResource withTesting(AspireAction1<ResourceTestingContext> callback) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = callback == null ? null : getClient().registerCallback(args -> {
+            var arg = (ResourceTestingContext) args[0];
+            callback.invoke(arg);
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/withTesting", reqArgs);
         return this;
     }
 
@@ -19516,6 +19650,28 @@ public class ParameterResource extends ResourceBuilderBase {
         return this;
     }
 
+    public ParameterResource withTesting() {
+        return withTesting(null);
+    }
+
+    /** Marks a resource for testing with an optional runtime result collector. */
+    public ParameterResource withTesting(AspireAction1<ResourceTestingContext> callback) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = callback == null ? null : getClient().registerCallback(args -> {
+            var arg = (ResourceTestingContext) args[0];
+            callback.invoke(arg);
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/withTesting", reqArgs);
+        return this;
+    }
+
     /** Adds a pipeline step to the resource that will be executed during deployment. */
     public ParameterResource withPipelineStepFactory(String stepName, AspireAction1<PipelineStepContext> callback, WithPipelineStepFactoryOptions optionsBag) {
         var dependsOn = optionsBag == null ? null : optionsBag.getDependsOn();
@@ -21962,6 +22118,28 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
+    public ProjectResource withTesting() {
+        return withTesting(null);
+    }
+
+    /** Marks a resource for testing with an optional runtime result collector. */
+    public ProjectResource withTesting(AspireAction1<ResourceTestingContext> callback) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = callback == null ? null : getClient().registerCallback(args -> {
+            var arg = (ResourceTestingContext) args[0];
+            callback.invoke(arg);
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/withTesting", reqArgs);
+        return this;
+    }
+
     /** Adds a pipeline step to the resource that will be executed during deployment. */
     public ProjectResource withPipelineStepFactory(String stepName, AspireAction1<PipelineStepContext> callback, WithPipelineStepFactoryOptions optionsBag) {
         var dependsOn = optionsBag == null ? null : optionsBag.getDependsOn();
@@ -23585,6 +23763,78 @@ public class ResourceStoppedEvent extends HandleWrapperBase {
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ResourceStoppedEvent.services", reqArgs);
         return (IServiceProvider) result;
+    }
+
+}
+
+// ===== aspire/ResourceTestingContext.java =====
+// ResourceTestingContext.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.HashMap;
+import java.util.Map;
+
+/** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceTestingContext. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public class ResourceTestingContext extends HandleWrapperBase {
+    ResourceTestingContext(Handle handle, AspireClient client) {
+        super(handle, client);
+    }
+
+    /** Gets the context for the containing testing invocation. */
+    public TestingContext testingContext() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ResourceTestingContext.testingContext", reqArgs);
+        return (TestingContext) result;
+    }
+
+    /** Gets the logical resource name associated with every result published through this context. */
+    public String resourceName() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ResourceTestingContext.resourceName", reqArgs);
+        return (String) result;
+    }
+
+    /** Gets the absolute host path to this resource's private output directory. */
+    public String outputPath() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ResourceTestingContext.outputPath", reqArgs);
+        return (String) result;
+    }
+
+    /** Gets the token used to cancel collection. */
+    public CancellationToken cancellationToken() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ResourceTestingContext.cancellationToken", reqArgs);
+        return (CancellationToken) result;
+    }
+
+    public boolean waitForCompletionAsync() {
+        return waitForCompletionAsync(null);
+    }
+
+    /** Waits until every replica of this resource has reached an authoritative terminal outcome. */
+    public boolean waitForCompletionAsync(CancellationToken cancellationToken) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        if (cancellationToken != null) {
+            reqArgs.put("cancellationToken", cancellationToken);
+        }
+        var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/waitForCompletionAsync", reqArgs);
+        return (Boolean) result;
+    }
+
+    /** Publishes an observed test result for this resource. */
+    public void publishResult(TestResult result) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("result", AspireClient.serializeValue(result));
+        getClient().invokeCapability("Aspire.Hosting.ApplicationModel/publishResult", reqArgs);
     }
 
 }
@@ -25577,6 +25827,28 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    public TestDatabaseResource withTesting() {
+        return withTesting(null);
+    }
+
+    /** Marks a resource for testing with an optional runtime result collector. */
+    public TestDatabaseResource withTesting(AspireAction1<ResourceTestingContext> callback) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = callback == null ? null : getClient().registerCallback(args -> {
+            var arg = (ResourceTestingContext) args[0];
+            callback.invoke(arg);
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/withTesting", reqArgs);
+        return this;
+    }
+
     /** Adds a pipeline step to the resource that will be executed during deployment. */
     public TestDatabaseResource withPipelineStepFactory(String stepName, AspireAction1<PipelineStepContext> callback, WithPipelineStepFactoryOptions optionsBag) {
         var dependsOn = optionsBag == null ? null : optionsBag.getDependsOn();
@@ -26332,6 +26604,38 @@ public class TestNestedDto implements JsonSerializable {
         map.put("tags", AspireClient.serializeValue(tags));
         map.put("counts", AspireClient.serializeValue(counts));
         return map;
+    }
+}
+
+// ===== aspire/TestOutcome.java =====
+// TestOutcome.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+/** TestOutcome enum. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public enum TestOutcome implements WireValueEnum {
+    FAILED("Failed"),
+    PASSED("Passed"),
+    SKIPPED("Skipped"),
+    INCONCLUSIVE("Inconclusive"),
+    ERROR("Error"),
+    TIMED_OUT("TimedOut"),
+    CANCELLED("Cancelled");
+
+    private final String value;
+
+    TestOutcome(String value) {
+        this.value = value;
+    }
+
+    public String getValue() { return value; }
+
+    public static TestOutcome fromValue(String value) {
+        for (TestOutcome e : values()) {
+            if (e.value.equals(value)) return e;
+        }
+        throw new IllegalArgumentException("Unknown value: " + value);
     }
 }
 
@@ -27923,6 +28227,28 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    public TestRedisResource withTesting() {
+        return withTesting(null);
+    }
+
+    /** Marks a resource for testing with an optional runtime result collector. */
+    public TestRedisResource withTesting(AspireAction1<ResourceTestingContext> callback) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = callback == null ? null : getClient().registerCallback(args -> {
+            var arg = (ResourceTestingContext) args[0];
+            callback.invoke(arg);
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/withTesting", reqArgs);
+        return this;
+    }
+
     /** Adds a pipeline step to the resource that will be executed during deployment. */
     public TestRedisResource withPipelineStepFactory(String stepName, AspireAction1<PipelineStepContext> callback, WithPipelineStepFactoryOptions optionsBag) {
         var dependsOn = optionsBag == null ? null : optionsBag.getDependsOn();
@@ -28804,6 +29130,55 @@ public enum TestResourceStatus implements WireValueEnum {
             if (e.value.equals(value)) return e;
         }
         throw new IllegalArgumentException("Unknown value: " + value);
+    }
+}
+
+// ===== aspire/TestResult.java =====
+// TestResult.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.HashMap;
+import java.util.Map;
+
+/** TestResult DTO. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public class TestResult implements JsonSerializable {
+    private String name;
+    private TestOutcome outcome;
+    private Number duration;
+    private String message;
+
+    public String getName() { return name; }
+    public void setName(String value) { this.name = value; }
+    public TestOutcome getOutcome() { return outcome; }
+    public void setOutcome(TestOutcome value) { this.outcome = value; }
+    public Number getDuration() { return duration; }
+    public void setDuration(Number value) { this.duration = value; }
+    public String getMessage() { return message; }
+    public void setMessage(String value) { this.message = value; }
+
+    @SuppressWarnings("unchecked")
+    public static TestResult fromMap(Map<String, Object> map) {
+        var value = new TestResult();
+        var nameValue = map.get("name");
+        value.setName((String) nameValue);
+        var outcomeValue = map.get("outcome");
+        value.setOutcome(TestOutcome.fromValue((String) outcomeValue));
+        var durationValue = map.get("duration");
+        value.setDuration(durationValue == null ? null : ((Number) durationValue).doubleValue());
+        var messageValue = map.get("message");
+        value.setMessage(messageValue == null ? null : (String) messageValue);
+        return value;
+    }
+
+    public Map<String, Object> toMap() {
+        Map<String, Object> map = new HashMap<>();
+        map.put("name", AspireClient.serializeValue(name));
+        map.put("outcome", AspireClient.serializeValue(outcome));
+        map.put("duration", AspireClient.serializeValue(duration));
+        map.put("message", AspireClient.serializeValue(message));
+        return map;
     }
 }
 
@@ -30453,6 +30828,28 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
+    public TestVaultResource withTesting() {
+        return withTesting(null);
+    }
+
+    /** Marks a resource for testing with an optional runtime result collector. */
+    public TestVaultResource withTesting(AspireAction1<ResourceTestingContext> callback) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = callback == null ? null : getClient().registerCallback(args -> {
+            var arg = (ResourceTestingContext) args[0];
+            callback.invoke(arg);
+            var __aspireCallbackArguments = new HashMap<String, Object>();
+            __aspireCallbackArguments.put("p0", arg);
+            return __aspireCallbackArguments;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        getClient().invokeCapability("Aspire.Hosting/withTesting", reqArgs);
+        return this;
+    }
+
     /** Adds a pipeline step to the resource that will be executed during deployment. */
     public TestVaultResource withPipelineStepFactory(String stepName, AspireAction1<PipelineStepContext> callback, WithPipelineStepFactoryOptions optionsBag) {
         var dependsOn = optionsBag == null ? null : optionsBag.getDependsOn();
@@ -31007,6 +31404,31 @@ public class TestVaultResource extends ContainerResource {
         reqArgs.put("middleware", AspireClient.serializeValue(middleware));
         getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/withMergeRouteMiddleware", reqArgs);
         return this;
+    }
+
+}
+
+// ===== aspire/TestingContext.java =====
+// TestingContext.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.HashMap;
+import java.util.Map;
+
+/** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.TestingContext. */
+@SuppressWarnings({"all", "unchecked", "serial"})
+public class TestingContext extends HandleWrapperBase {
+    TestingContext(Handle handle, AspireClient client) {
+        super(handle, client);
+    }
+
+    /** Gets the absolute host path to the unique output directory for this invocation. */
+    public String outputPath() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting.ApplicationModel/TestingContext.outputPath", reqArgs);
+        return (String) result;
     }
 
 }
@@ -32135,6 +32557,7 @@ public final class WithVolumeOptions {
 .aspire/modules/aspire/ResourceNotificationService.java
 .aspire/modules/aspire/ResourceReadyEvent.java
 .aspire/modules/aspire/ResourceStoppedEvent.java
+.aspire/modules/aspire/ResourceTestingContext.java
 .aspire/modules/aspire/ResourceUrlAnnotation.java
 .aspire/modules/aspire/ResourceUrlsCallbackContext.java
 .aspire/modules/aspire/ResourceUrlsEditor.java
@@ -32150,12 +32573,15 @@ public final class WithVolumeOptions {
 .aspire/modules/aspire/TestEnvironmentContext.java
 .aspire/modules/aspire/TestMutableCollectionContext.java
 .aspire/modules/aspire/TestNestedDto.java
+.aspire/modules/aspire/TestOutcome.java
 .aspire/modules/aspire/TestPersistenceMode.java
 .aspire/modules/aspire/TestRedisResource.java
 .aspire/modules/aspire/TestResourceContext.java
 .aspire/modules/aspire/TestResourceStatus.java
+.aspire/modules/aspire/TestResult.java
 .aspire/modules/aspire/TestReturnValueContext.java
 .aspire/modules/aspire/TestVaultResource.java
+.aspire/modules/aspire/TestingContext.java
 .aspire/modules/aspire/UpdateCommandStateContext.java
 .aspire/modules/aspire/UpdateCommandStateResourceSnapshot.java
 .aspire/modules/aspire/UrlDisplayLocation.java
