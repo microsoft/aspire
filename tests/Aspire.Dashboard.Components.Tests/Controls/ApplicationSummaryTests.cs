@@ -415,7 +415,50 @@ public class ApplicationSummaryTests : DashboardTestContext
         Assert.Equal(queries, Volatile.Read(ref context.RequestQueries.Count));
     }
 
-    private async Task<LiveSummaryContext> RenderLiveSummaryAsync(GroupOverview overview)
+    [Fact]
+    public async Task Live_DisposalWaitsForInFlightRefreshAndRejectsLateCallback()
+    {
+        var requestStarted = new TaskCompletionSource<CancellationToken>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseRequest = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var logsCallback = new TaskCompletionSource<Func<Task>>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var context = await RenderLiveSummaryAsync(
+            GroupOverview.Summary,
+            async (_, cancellationToken) =>
+            {
+                requestStarted.TrySetResult(cancellationToken);
+                await releaseRequest.Task;
+                cancellationToken.ThrowIfCancellationRequested();
+                return new GetRequestSpansResponse { Items = [], TotalItemCount = 0 };
+            },
+            callback => logsCallback.TrySetResult(callback));
+
+        var cancellationToken = await requestStarted.Task.WaitAsync(DefaultWaitTimeout);
+        var disposalTask = DisposeComponentsAsync();
+        try
+        {
+            Assert.True(cancellationToken.IsCancellationRequested);
+            Assert.False(disposalTask.IsCompleted);
+        }
+        finally
+        {
+            releaseRequest.TrySetResult(true);
+        }
+
+        await disposalTask.WaitAsync(DefaultWaitTimeout);
+
+        var queryCount = Volatile.Read(ref context.RequestQueries.Count);
+        await (await logsCallback.Task.WaitAsync(DefaultWaitTimeout))();
+        context.Timers.Advance(TimeSpan.FromSeconds(30));
+
+        // Longer than the delay before a queued refresh runs.
+        await Task.Delay(TimeSpan.FromSeconds(2));
+        Assert.Equal(queryCount, Volatile.Read(ref context.RequestQueries.Count));
+    }
+
+    private async Task<LiveSummaryContext> RenderLiveSummaryAsync(
+        GroupOverview overview,
+        Func<GetRequestSpansRequest, CancellationToken, Task<GetRequestSpansResponse>>? getRequestSpansAsyncHandler = null,
+        Action<Func<Task>>? onNewLogsRegistered = null)
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         var timers = new FakeTimeProvider();
@@ -435,8 +478,9 @@ public class ApplicationSummaryTests : DashboardTestContext
                         GetRequestSpansAsyncHandler = (request, token) =>
                         {
                             Interlocked.Increment(ref requestQueries.Count);
-                            return inner.GetRequestSpansAsync(request, token);
-                        }
+                            return getRequestSpansAsyncHandler?.Invoke(request, token) ?? inner.GetRequestSpansAsync(request, token);
+                        },
+                        OnNewLogsRegistered = onNewLogsRegistered
                     };
                 });
             });
