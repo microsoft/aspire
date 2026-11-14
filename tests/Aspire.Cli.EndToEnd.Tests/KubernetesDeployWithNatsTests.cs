@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.EndToEnd.Tests.Helpers;
-using Aspire.TestUtilities;
 using Hex1b.Automation;
 using Xunit;
 
@@ -17,7 +16,6 @@ public sealed class KubernetesDeployWithNatsTests(ITestOutputHelper output)
 
     [Fact]
     [CaptureWorkspaceOnFailure]
-    [QuarantinedTest("https://github.com/microsoft/aspire/issues/15789")]
     public async Task DeployK8sWithNats()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
@@ -82,15 +80,22 @@ public sealed class KubernetesDeployWithNatsTests(ITestOutputHelper output)
                 var app = builder.Build();
                 app.MapDefaultEndpoints();
 
-                app.MapGet("/test-deployment", (INatsConnection nats) =>
+                // NatsConnection connects lazily, so exercise a publish+subscribe round-trip to
+                // establish the connection and verify the deployed credentials are accepted.
+                app.MapGet("/test-deployment", async (INatsConnection nats) =>
                 {
-                    var status = nats.ConnectionState;
+                    var subject = $"test.{Guid.NewGuid():N}";
+                    await using var subscription = await nats.SubscribeCoreAsync<string>(subject);
+                    await nats.PublishAsync(subject, "hello-from-k8s");
 
-                    if (status == NatsConnectionState.Open)
+                    using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+                    var message = await subscription.Msgs.ReadAsync(cts.Token);
+
+                    if (message.Data == "hello-from-k8s")
                     {
-                        return Results.Ok("PASSED: NATS connection is open");
+                        return Results.Ok("PASSED: NATS publish+subscribe works");
                     }
-                    return Results.Problem($"FAILED: NATS connection state is {status}");
+                    return Results.Problem($"FAILED: unexpected NATS message '{message.Data}'");
                 });
 
                 app.Run();

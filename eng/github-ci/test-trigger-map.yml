@@ -773,6 +773,7 @@ affected_project_rules:
       - Aspire.Hosting.Kubernetes
       - Aspire.Hosting.MongoDB
       - Aspire.Hosting.MySql
+      - Aspire.Hosting.Nats
       - Aspire.Hosting.PostgreSQL
       - Aspire.Hosting.Python
       - Aspire.Hosting.RabbitMQ
@@ -785,6 +786,7 @@ affected_project_rules:
       - Aspire.Microsoft.Data.SqlClient
       - Aspire.MongoDB.Driver
       - Aspire.MySqlConnector
+      - Aspire.NATS.Net
       - Aspire.Npgsql
       - Aspire.Npgsql.EntityFrameworkCore.PostgreSQL
       - Aspire.RabbitMQ.Client

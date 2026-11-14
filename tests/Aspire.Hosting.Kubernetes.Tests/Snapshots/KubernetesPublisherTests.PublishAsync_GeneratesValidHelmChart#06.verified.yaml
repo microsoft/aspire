@@ -25,7 +25,7 @@ spec:
                 name: "myapp-secrets"
           args:
             - "--cs"
-            - "Url={{ .Values.config.myapp.param0 }}, Secret={{ .Values.secrets.myapp.param1 }}"
+            - {{ tpl "Url={{ .Values.config.myapp.param0 }}, Secret={{ .Values.secrets.myapp.param1 }}" . | quote }}
           ports:
             - name: "http"
               protocol: "TCP"
