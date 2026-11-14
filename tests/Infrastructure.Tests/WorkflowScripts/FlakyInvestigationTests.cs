@@ -1,0 +1,62 @@
+// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+
+using System.Diagnostics;
+using Aspire.TestUtilities;
+using Xunit;
+
+namespace Infrastructure.Tests;
+
+[Trait("Category", "AgenticWorkflow")]
+public sealed class FlakyInvestigationTests(ITestOutputHelper testOutput)
+{
+    [Fact]
+    [RequiresTools(["python"])]
+    [SkipOnPlatform(TestPlatforms.Linux | TestPlatforms.OSX | TestPlatforms.FreeBSD, "Uses the Windows Python executable.")]
+    public Task ControllerBehaviorPassesOnWindows() => RunTestsAsync("python");
+
+    [Fact]
+    [RequiresTools(["python3"])]
+    [SkipOnPlatform(TestPlatforms.Windows, "Uses the Unix Python executable.")]
+    public Task ControllerBehaviorPassesOnUnix() => RunTestsAsync("python3");
+
+    private async Task RunTestsAsync(string python)
+    {
+        var startInfo = new ProcessStartInfo(python)
+        {
+            WorkingDirectory = RepoRoot.Path,
+            RedirectStandardError = true,
+            RedirectStandardOutput = true,
+            UseShellExecute = false,
+        };
+        startInfo.ArgumentList.Add("-m");
+        startInfo.ArgumentList.Add("unittest");
+        startInfo.ArgumentList.Add("discover");
+        startInfo.ArgumentList.Add("-s");
+        startInfo.ArgumentList.Add(".github/scripts/flaky_investigation");
+        startInfo.ArgumentList.Add("-p");
+        startInfo.ArgumentList.Add("test_*.py");
+        startInfo.ArgumentList.Add("-v");
+
+        using var process = Process.Start(startInfo)
+            ?? throw new InvalidOperationException($"Failed to start {python}.");
+        var stdoutTask = process.StandardOutput.ReadToEndAsync();
+        var stderrTask = process.StandardError.ReadToEndAsync();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(2));
+        try
+        {
+            await process.WaitForExitAsync(timeout.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            process.Kill(entireProcessTree: true);
+            throw;
+        }
+
+        var stdout = await stdoutTask;
+        var stderr = await stderrTask;
+        testOutput.WriteLine(stdout);
+        testOutput.WriteLine(stderr);
+        Assert.True(process.ExitCode == 0, $"{python} exited with {process.ExitCode}.\n{stdout}\n{stderr}");
+    }
+}
