@@ -1010,7 +1010,7 @@ public static class AtsCapabilityScanner
     /// Detects method name collisions after capability expansion. Since ATS doesn't support method
     /// overloading, each (TargetTypeId, MethodName) pair must be unique. When a concrete target has
     /// a target-specific export, it shadows matching generic exports only for that target. Ambiguous
-    /// collisions still remove later capabilities and emit warnings.
+    /// collisions remove later capabilities from only the colliding target and emit warnings.
     /// </summary>
     private static void FilterMethodNameCollisions(List<AtsCapabilityInfo> capabilities, List<AtsDiagnostic> diagnostics)
     {
@@ -1029,7 +1029,6 @@ public static class AtsCapabilityScanner
             return;
         }
 
-        var capabilitiesToRemove = new HashSet<string>();
         var expandedTargetsToRemove = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
 
         foreach (var collisionGroup in collisionGroups)
@@ -1075,7 +1074,15 @@ public static class AtsCapabilityScanner
             // First capability keeps original name, others are removed
             for (var i = 1; i < capIds.Count; i++)
             {
-                capabilitiesToRemove.Add(capIds[i]);
+                // Scope the removal to the colliding target. The capability may still be valid
+                // (and unambiguous) for other receivers that it expands to.
+                if (!expandedTargetsToRemove.TryGetValue(capIds[i], out var removedTargetIds))
+                {
+                    removedTargetIds = new(StringComparer.Ordinal);
+                    expandedTargetsToRemove[capIds[i]] = removedTargetIds;
+                }
+
+                removedTargetIds.Add(targetTypeId);
 
                 diagnostics.Add(AtsDiagnostic.Warning(
                     $"Method '{methodName}' on target '{targetTypeId}' has collisions ({conflictingIdsStr}). '{capIds[i]}' was removed. Use [AspireExport(MethodName = \"uniqueName\")] to set an explicit name.",
@@ -1093,9 +1100,8 @@ public static class AtsCapabilityScanner
             }
         }
 
-        capabilities.RemoveAll(c =>
-            capabilitiesToRemove.Contains(c.CapabilityId) ||
-            (c.TargetTypeId is not null && c.ExpandedTargetTypes.Count == 0));
+        // A capability is dropped only once it has no remaining targets.
+        capabilities.RemoveAll(c => c.TargetTypeId is not null && c.ExpandedTargetTypes.Count == 0);
     }
 
     /// <summary>
