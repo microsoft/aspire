@@ -187,7 +187,8 @@
     <value>Restoring packages...</value>
   </data>
   <data name="FailedToRestoreAfterUpdateFormat" xml:space="preserve">
-    <value>Failed to restore packages for project {0} after update.</value>
+    <value>Validation restore for {0} channel update failed for project {1}. The update was not applied. Review the restore output for details.</value>
+    <comment>{0} = Channel name. {1} = AppHost file path.</comment>
   </data>
   <data name="FailedToRegenerateSdkAfterUpdateFormat" xml:space="preserve">
     <value>Update failed regenerating the SDK code for project {0}. Configuration changes were not persisted.</value>

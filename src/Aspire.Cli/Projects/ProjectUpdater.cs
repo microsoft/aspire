@@ -340,23 +340,31 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
             {
                 // Validate the complete updated graph, not old versions against a new feed or a
                 // half-updated graph. Native restore retains each referenced project's own settings.
-                await interactionService.ShowStatusAsync(
+                // A single restore covers every applied step, so its NuGet/MSBuild diagnostics are the
+                // only way to tell which update broke the graph. Capture both streams (restore reports
+                // errors on stdout) and surface them before the failure rolls the edited files back.
+                var restoreOutput = new OutputCollector();
+                var restoreExitCode = await interactionService.ShowStatusAsync(
                     UpdateCommandStrings.RestoringPackagesAfterUpdate,
                     async () =>
                     {
                         await transaction.VerifyAsync(cancellationToken);
-                        var restoreExitCode = await runner.RestoreAsync(projectFile, new()
+                        return await runner.RestoreAsync(projectFile, new()
                         {
                             NuGetRestoreTargetsFile = restorePreview?.TargetsFile ?? repairedRestorePreview?.TargetsFile,
+                            StandardOutputCallback = restoreOutput.AppendOutput,
+                            StandardErrorCallback = restoreOutput.AppendError,
                             IsolatedRestorePackagesDirectory = dryRunRestore is null ? null : new DirectoryInfo(dryRunRestore.PackagesDirectory),
                             EnvironmentVariables = dryRunRestore?.EnvironmentVariables
                         }, cancellationToken);
-                        if (restoreExitCode != 0)
-                        {
-                            throw new ProjectUpdaterException(string.Format(CultureInfo.InvariantCulture, UpdateCommandStrings.FailedToRestoreAfterUpdateFormat, projectFile.FullName));
-                        }
-                        return 0;
                     });
+                if (restoreExitCode != 0)
+                {
+                    // Display native diagnostics like dotnet restore, but do not persist them in
+                    // CLI logs because they can contain credential-bearing package source URLs.
+                    interactionService.DisplayLines(restoreOutput.GetLines());
+                    throw new ProjectUpdaterException(string.Format(CultureInfo.InvariantCulture, UpdateCommandStrings.FailedToRestoreAfterUpdateFormat, channel.Name, projectFile.FullName));
+                }
             }
 
             await transaction.VerifyAsync(cancellationToken);
