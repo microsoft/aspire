@@ -46,14 +46,7 @@
             <div class="header-context">
                 <SectionOutlet SectionName="@HeaderContextSectionName" />
             </div>
-            @if (RunStore.SupportsRunSelection && UseRunMenu)
-            {
-                <DashboardRunMenu SelectedRunId="@RunSelection.SelectedRun.RunId"
-                                  SelectedRunIsCurrent="@RunSelection.SelectedRun.IsCurrent"
-                                  SelectedRunStartedAtUtc="@RunSelection.SelectedRun.StartedAtUtc"
-                                  SelectedRunIdChanged="@SwitchDashboardRunAsync" />
-            }
-            else if (RunStore.SupportsRunSelection)
+            @if (RunStore.SupportsRunSelection)
             {
                 var selectedRun = RunSelection.SelectedRun;
                 @if (!selectedRun.IsCurrent)
@@ -108,14 +101,7 @@
                 <ApplicationName/>
             </a>
             <div class="flex-filler"></div>
-            @if (RunStore.SupportsRunSelection && UseRunMenu)
-            {
-                <DashboardRunMenu SelectedRunId="@RunSelection.SelectedRun.RunId"
-                                  SelectedRunIsCurrent="@RunSelection.SelectedRun.IsCurrent"
-                                  SelectedRunStartedAtUtc="@RunSelection.SelectedRun.StartedAtUtc"
-                                  SelectedRunIdChanged="@SwitchDashboardRunAsync" />
-            }
-            else if (RunStore.SupportsRunSelection)
+            @if (RunStore.SupportsRunSelection)
             {
                 var selectedRun = RunSelection.SelectedRun;
                 <DashboardRunSelect ButtonId="@RunSelectButtonId"
