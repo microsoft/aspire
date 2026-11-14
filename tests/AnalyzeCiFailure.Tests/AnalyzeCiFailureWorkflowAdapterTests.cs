@@ -11,6 +11,101 @@ namespace Infrastructure.Tests;
 public sealed class AnalyzeCiFailureWorkflowAdapterTests
 {
     [Theory]
+    [InlineData("Build test project")]
+    [InlineData("Set up WSLC (Windows)")]
+    public void ConfirmedPreTestFailureRetainsProducerWithoutRequiringReports(string failedStep)
+    {
+        var job = AnalyzeCiFailureFixtures.CreatePreTestFailureJob(failedStep);
+
+        var plan = Assert.Single(new AspireCiWorkflowConventions().DescribeTestArtifacts(job, runAttempt: 2));
+
+        Assert.Equal("Tests / No-package tests / Infrastructure (ubuntu-latest)", plan.JobName);
+        Assert.Equal("logs-Infrastructure-ubuntu-latest", plan.ArtifactName);
+        Assert.Equal(TestArtifactFormat.Trx, plan.Format);
+        Assert.False(plan.RequiresResults);
+        Assert.False(plan.ReservesBudget);
+        Assert.Empty(TestResultArtifacts.Select([], [plan], "2026-09-04T12:00:00Z", "2026-09-04T12:02:00Z"));
+    }
+
+    [Theory]
+    [InlineData("job", "conclusion", "cancelled")]
+    [InlineData("job", "conclusion", "timed_out")]
+    [InlineData("job", "conclusion", null)]
+    [InlineData("job", "status", "in_progress")]
+    [InlineData("job", "status", null)]
+    [InlineData("setup", "conclusion", "success")]
+    [InlineData("setup", "conclusion", "cancelled")]
+    [InlineData("setup", "conclusion", "timed_out")]
+    [InlineData("setup", "status", "in_progress")]
+    [InlineData("setup", "number", null)]
+    [InlineData("test", "conclusion", "failure")]
+    [InlineData("test", "conclusion", "success")]
+    [InlineData("test", "conclusion", "cancelled")]
+    [InlineData("test", "conclusion", "timed_out")]
+    [InlineData("test", "conclusion", null)]
+    [InlineData("test", "status", "in_progress")]
+    [InlineData("test", "status", "queued")]
+    [InlineData("test", "status", null)]
+    [InlineData("test", "name", "Unknown test execution")]
+    [InlineData("test", "number", null)]
+    [InlineData("upload", "status", "in_progress")]
+    [InlineData("upload", "conclusion", "failure")]
+    [InlineData("upload", "conclusion", null)]
+    public void UncertainOrStartedExecutionStillRequiresResults(string target, string field, string? value)
+    {
+        var job = AnalyzeCiFailureFixtures.CreatePreTestFailureJob();
+        var steps = job["steps"]!.AsArray();
+        var node = target switch
+        {
+            "setup" => steps[0]!,
+            "test" => steps[3]!,
+            "upload" => steps[5]!,
+            _ => job,
+        };
+        node[field] = value;
+
+        var plan = Assert.Single(new AspireCiWorkflowConventions().DescribeTestArtifacts(job, runAttempt: 2));
+
+        Assert.True(plan.RequiresResults);
+        Assert.Throws<ValidationException>(() =>
+            TestResultArtifacts.Select([], [plan], "2026-09-04T12:00:00Z", "2026-09-04T12:02:00Z"));
+    }
+
+    [Theory]
+    [InlineData("missing")]
+    [InlineData("empty")]
+    [InlineData("missing-test")]
+    [InlineData("duplicate-test")]
+    [InlineData("late-failure")]
+    public void IncompleteOrInconsistentStepInventoryCannotProveTestsWereSkipped(string scenario)
+    {
+        var job = AnalyzeCiFailureFixtures.CreatePreTestFailureJob();
+        var steps = job["steps"]!.AsArray();
+        switch (scenario)
+        {
+            case "missing":
+                job.Remove("steps");
+                break;
+            case "empty":
+                steps.Clear();
+                break;
+            case "missing-test":
+                steps.RemoveAt(3);
+                break;
+            case "duplicate-test":
+                steps.Add(steps[3]!.DeepClone());
+                break;
+            case "late-failure":
+                steps[0]!["number"] = 7;
+                break;
+        }
+
+        var plan = Assert.Single(new AspireCiWorkflowConventions().DescribeTestArtifacts(job, runAttempt: 2));
+
+        Assert.True(plan.RequiresResults);
+    }
+
+    [Theory]
     [InlineData("Tests / No-package tests / Infrastructure (ubuntu-latest)", false, "logs-Infrastructure-ubuntu-latest", "Trx", "Required")]
     [InlineData("Custom / Other (windows-latest)", true, "logs-Other-windows-latest", "Trx", "Required")]
     [InlineData("Tests / VS Code extension E2E (Linux, debug)", false, "extension-e2e-diagnostics-linux-x64-debug-attempt2", "Mocha", "OptionalDiagnostics")]
