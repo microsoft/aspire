@@ -760,6 +760,12 @@ internal sealed class BundleService(
                 continue;
             }
 
+            if (dir == BundleDiscovery.DashboardDirectoryName && !IsLegacyDashboardLayoutDirectory(legacyPath))
+            {
+                logger.LogDebug("Skipping removal of {Path} because it is not a legacy dashboard layout directory or contains dashboard data.", legacyPath);
+                continue;
+            }
+
             try
             {
                 FileDeleteHelper.TryDeleteDirectory(legacyPath);
@@ -770,6 +776,30 @@ internal sealed class BundleService(
                 logger.LogDebug(ex, "Could not remove legacy path {Path}; will retry next run.", legacyPath);
             }
         }
+    }
+
+    // $ASPIRE_HOME/dashboard is also the dashboard's default persistent data root (see
+    // DashboardRunStore), so only treat it as a legacy layout directory when it contains the
+    // dashboard executable and none of the dashboard's persisted data directories.
+    private static readonly string[] s_dashboardDataDirectoryNames = ["runs", "resumes", "apps"];
+
+    private static bool IsLegacyDashboardLayoutDirectory(string dashboardPath)
+    {
+        var dashboardExe = Path.Combine(dashboardPath, BundleDiscovery.GetExecutableFileName(BundleDiscovery.DashboardExecutableName));
+        if (!File.Exists(dashboardExe))
+        {
+            return false;
+        }
+
+        foreach (var dataDirectoryName in s_dashboardDataDirectoryNames)
+        {
+            if (Directory.Exists(Path.Combine(dashboardPath, dataDirectoryName)))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /// <summary>
