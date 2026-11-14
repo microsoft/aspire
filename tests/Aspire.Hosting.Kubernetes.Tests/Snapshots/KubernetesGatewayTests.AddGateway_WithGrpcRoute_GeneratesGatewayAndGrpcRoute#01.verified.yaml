@@ -1,0 +1,17 @@
+﻿---
+apiVersion: "gateway.networking.k8s.io/v1"
+kind: "GRPCRoute"
+metadata:
+  name: "public-grpcroute"
+spec:
+  parentRefs:
+    - name: "public"
+  rules:
+    - matches:
+        - method:
+            type: "Exact"
+            service: "greet.Greeter"
+            method: "SayHello"
+      backendRefs:
+        - name: "greeter-service"
+          port: 50051
