@@ -24,6 +24,15 @@
         }
       }
     },
+    "hiddenParameter": {
+      "type": "parameter.v0",
+      "value": "{hiddenParameter.inputs.value}",
+      "inputs": {
+        "value": {
+          "type": "string"
+        }
+      }
+    },
     "cs": {
       "type": "value.v0",
       "connectionString": "sql={sql.bindings.tcp.url};rows={insertionrows.value}"

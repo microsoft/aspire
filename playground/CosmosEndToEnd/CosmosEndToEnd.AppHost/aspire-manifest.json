@@ -40,6 +40,7 @@
         "ENTRIES_DATABASENAME": "db",
         "ENTRIES_CONTAINERNAME": "staging-entries",
         "ConnectionStrings__user-todo": "{user-todo.connectionString}",
+        "ConnectionStrings__user_todo": "{user-todo.connectionString}",
         "USER_TODO_URI": "{cosmos.outputs.connectionString}",
         "USER_TODO_DATABASENAME": "db",
         "USER_TODO_CONTAINERNAME": "UserTodo"
