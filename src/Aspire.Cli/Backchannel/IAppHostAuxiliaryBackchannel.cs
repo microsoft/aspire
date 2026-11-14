@@ -70,6 +70,11 @@ internal interface IAppHostAuxiliaryBackchannel : IDisposable
     bool SupportsResourceSnapshotVersionsV1 { get; }
 
     /// <summary>
+    /// Gets a value indicating whether resource command file arguments are supported.
+    /// </summary>
+    bool SupportsResourceCommandFilesV1 { get; }
+
+    /// <summary>
     /// Gets the Dashboard URLs from the AppHost.
     /// </summary>
     /// <param name="cancellationToken">Cancellation token.</param>
