@@ -189,6 +189,10 @@ internal static partial class AppKit
         nint charactersIgnoringModifiers, byte isRepeat, ushort keyCode);
 
     [LibraryImport(ObjC, EntryPoint = "objc_msgSend")]
+    public static partial nint CreateMouseEvent(nint receiver, nint selector, nuint type, NativePoint location,
+        nuint modifierFlags, double timestamp, nint windowNumber, nint context, nint eventNumber, nint clickCount, float pressure);
+
+    [LibraryImport(ObjC, EntryPoint = "objc_msgSend")]
     public static partial void PostEvent(nint receiver, nint selector, nint nativeEvent, byte atStart);
 
     [LibraryImport(ObjC, EntryPoint = "objc_msgSend")]

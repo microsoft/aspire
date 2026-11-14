@@ -882,6 +882,11 @@ internal sealed unsafe partial class TrayApplication
                 NativeMethods.ReleaseCapture();
                 ApplyPanelResponse(_panel.PointerUp(x, y));
                 return 0;
+            case NativeMethods.WmRightButtonUp:
+                // Context menus on Windows open on release, not press. DefWindowProc would turn an
+                // unhandled release into WM_CONTEXTMENU; the panel shows its own action list instead.
+                ApplyPanelResponse(_panel.SecondaryClick(x, y));
+                return 0;
             case NativeMethods.WmMouseWheel:
                 // WHEEL_DELTA (120) per notch; a positive delta means the wheel moved away from the user.
                 var delta = unchecked((short)((wParam >> 16) & 0xFFFF));

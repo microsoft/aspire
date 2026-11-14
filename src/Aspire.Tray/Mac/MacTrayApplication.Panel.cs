@@ -20,6 +20,8 @@ internal sealed partial class MacTrayApplication
     private const long RightMouseDownEvent = 3;
     private const long ShiftKeyMask = 1 << 17;
     private const long CommandKeyMask = 1 << 20;
+    // NSEventModifierFlagControl.
+    private const long ControlKeyMask = 1L << 18;
     private const double PanelScreenMargin = 8;
 
     private readonly Dictionary<PanelFontRole, nint> _panelFonts = [];
@@ -56,6 +58,7 @@ internal sealed partial class MacTrayApplication
             ("mouseExited:", (nint)(delegate* unmanaged[Cdecl]<nint, nint, nint, void>)&OnPanelMouseExited),
             ("mouseDown:", (nint)(delegate* unmanaged[Cdecl]<nint, nint, nint, void>)&OnPanelMouseDown),
             ("mouseUp:", (nint)(delegate* unmanaged[Cdecl]<nint, nint, nint, void>)&OnPanelMouseUp),
+            ("rightMouseDown:", (nint)(delegate* unmanaged[Cdecl]<nint, nint, nint, void>)&OnPanelRightMouseDown),
             ("scrollWheel:", (nint)(delegate* unmanaged[Cdecl]<nint, nint, nint, void>)&OnPanelScroll),
             ("keyDown:", (nint)(delegate* unmanaged[Cdecl]<nint, nint, nint, void>)&OnPanelKeyDown)
         })
@@ -639,7 +642,17 @@ internal sealed partial class MacTrayApplication
                 break;
             case "down":
                 var (dx, dy) = GetPanelPoint(nativeEvent);
-                response = _panel.PointerDown(dx, dy);
+                // A view without a context menu receives Control-click as a plain mouseDown: with the
+                // Control modifier; treat it as the right-click it stands for. Its mouseUp: still
+                // follows and finds nothing pressed, so it does nothing.
+                response = (AppKit.GetInt64(nativeEvent, AppKit.Selector("modifierFlags")) & ControlKeyMask) != 0
+                    ? _panel.SecondaryClick(dx, dy)
+                    : _panel.PointerDown(dx, dy);
+                break;
+            case "secondary":
+                // Context menus on macOS open on press, not release.
+                var (sx, sy) = GetPanelPoint(nativeEvent);
+                response = _panel.SecondaryClick(sx, sy);
                 break;
             case "up":
                 var (ux, uy) = GetPanelPoint(nativeEvent);
@@ -940,6 +953,10 @@ internal sealed partial class MacTrayApplication
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static void OnPanelMouseUp(nint self, nint selector, nint nativeEvent)
         => RouteView(self, app => app.HandlePanelEvent("up", nativeEvent));
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static void OnPanelRightMouseDown(nint self, nint selector, nint nativeEvent)
+        => RouteView(self, app => app.HandlePanelEvent("secondary", nativeEvent));
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static void OnPanelScroll(nint self, nint selector, nint nativeEvent)
