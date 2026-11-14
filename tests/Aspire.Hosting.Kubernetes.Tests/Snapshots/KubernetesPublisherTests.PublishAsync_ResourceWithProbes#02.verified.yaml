@@ -24,7 +24,7 @@ spec:
             periodSeconds: 5
             timeoutSeconds: 1
             httpGet:
-              scheme: "https"
+              scheme: "HTTPS"
               path: "/health"
               port: {{ .Values.parameters.project1.port_https | int }}
           name: "project1"
@@ -35,7 +35,7 @@ spec:
             periodSeconds: 5
             timeoutSeconds: 1
             httpGet:
-              scheme: "https"
+              scheme: "HTTPS"
               path: "/ready"
               port: {{ .Values.parameters.project1.port_https | int }}
           envFrom:
