@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { dayMs } from "./constants.mjs";
+import { dayMs, urgentReviewLabel } from "./constants.mjs";
 import { loadDashboard } from "./github.mjs";
 
 const originalFetch = globalThis.fetch;
@@ -10,34 +10,84 @@ test.afterEach(() => {
   globalThis.fetch = originalFetch;
 });
 
-test("Needs attention serializes a strict ten-card prefix and the complete deduplicated remainder", async () => {
-  for (const count of [0, 4, 10, 11, 25]) {
-    const createdAt = isoAgo(3 * dayMs);
-    const nodes = Array.from({ length: count }, (_, index) => {
-      const node = prNode(index + 1, isoAgo(hourMs));
-      node.createdAt = createdAt;
-      return node;
-    });
-    // Equal readiness timestamps and reversed responses exercise the ordinal PR-number tie
-    // across the split; duplicate accounts must not duplicate either side.
-    mockPullRequests(nodes.toReversed());
-    const dashboard = JSON.parse(JSON.stringify(await loadDashboard({
-      accounts: [
-        { token: "first", login: "davidfowl", repos: ["microsoft/aspire"] },
-        { token: "second", login: "joperezr", repos: ["microsoft/aspire"] },
-      ],
-      mode: "review", prefs: { reviewLimit: 50 }, dismissed: [], reviewLimit: 50,
-    })));
-    const { focus, focusRemainder, focusTotal, focusLimit } = dashboard.attention;
-    const positions = Array.from({ length: count }, (_, index) => index + 1);
-    assert.deepEqual(dashboard.errors, []);
-    assert.equal(dashboard.reviewLimit, 10);
-    assert.equal(focusLimit, 10);
-    assert.equal(focusTotal, count);
-    assert.deepEqual(focus.map((item) => item.queuePosition), positions.slice(0, 10));
-    assert.deepEqual(focusRemainder.map((item) => item.queuePosition), positions.slice(10));
-    assert.deepEqual([...focus, ...focusRemainder].map((item) => item.pr.number), positions);
+test("PR queue serializes a strict ten-card prefix and complete deduplicated urgent-first remainder", async () => {
+  for (const count of [0, 1, 9, 10, 11, 25]) {
+    for (const urgentCount of new Set([0, Math.min(3, count), Math.min(11, count), count])) {
+      const createdAt = isoAgo(3 * dayMs);
+      const nodes = Array.from({ length: count }, (_, index) => {
+        const node = prNode(index + 1, isoAgo(hourMs));
+        node.createdAt = createdAt;
+        node.labels.nodes = index >= count - urgentCount ? [{ name: urgentReviewLabel }] : [];
+        return node;
+      });
+      // Equal readiness timestamps and reversed responses exercise the ordinal PR-number tie
+      // across the split; duplicate accounts must not duplicate either side.
+      mockPullRequests(nodes.toReversed());
+      const dashboard = JSON.parse(JSON.stringify(await loadDashboard({
+        accounts: [
+          { token: "first", login: "davidfowl", repos: ["microsoft/aspire"] },
+          { token: "second", login: "joperezr", repos: ["microsoft/aspire"] },
+        ],
+        mode: "review", prefs: { reviewLimit: 50 }, dismissed: [], reviewLimit: 50,
+      })));
+      const { focus, focusRemainder, focusTotal, focusLimit } = dashboard.attention;
+      const positions = Array.from({ length: count }, (_, index) => index + 1);
+      assert.deepEqual(dashboard.errors, []);
+      assert.equal(dashboard.reviewLimit, 10);
+      assert.equal(focusLimit, 10);
+      assert.equal(focusTotal, count);
+      assert.deepEqual(focus.map((item) => item.queuePosition), positions.slice(0, 10));
+      assert.deepEqual(focusRemainder.map((item) => item.queuePosition), positions.slice(10));
+      const order = [...positions.filter((n) => n > count - urgentCount), ...positions.filter((n) => n <= count - urgentCount)];
+      assert.deepEqual([...focus, ...focusRemainder].map((item) => [item.pr.number, item.urgent]),
+        order.map((n) => [n, n > count - urgentCount]));
+    }
   }
+});
+
+test("PRs at positions 16, 17, and 18 jump to 1, 2, and 3, then return when urgency is removed", async () => {
+  const now = Date.now();
+  const nodes = Array.from({ length: 20 }, (_, index) => ({
+    ...prNode(index + 1, isoAgo(hourMs)),
+    createdAt: new Date(now - (30 - index) * dayMs).toISOString(),
+  }));
+  mockPullRequests(nodes.toReversed());
+  const original = (await loadReview()).attention;
+  const allCards = (attention) => [...attention.focus, ...attention.focusRemainder];
+  assert.deepEqual(allCards(original).map((item) => item.pr.number), Array.from({ length: 20 }, (_, i) => i + 1));
+  for (const number of [16, 17, 18]) {
+    nodes[number - 1].labels.nodes = [{ name: urgentReviewLabel }];
+    nodes[number - 1].updatedAt = new Date().toISOString();
+  }
+  const promoted = (await loadReview()).attention;
+  assert.deepEqual(promoted.focus.map((item) => item.pr.number), [16, 17, 18, 1, 2, 3, 4, 5, 6, 7]);
+  assert.deepEqual(promoted.focusRemainder.map((item) => item.pr.number), [8, 9, 10, 11, 12, 13, 14, 15, 19, 20]);
+  assert.deepEqual(allCards(promoted).map((item) => item.queuePosition), Array.from({ length: 20 }, (_, i) => i + 1));
+  for (const number of [16, 17, 18]) nodes[number - 1].labels.nodes = [];
+  const restored = (await loadReview()).attention;
+  assert.deepEqual(allCards(restored).map((item) => [item.pr.number, item.pr.firstReadyForReviewAt, item.urgent]),
+    allCards(original).map((item) => [item.pr.number, item.pr.firstReadyForReviewAt, false]));
+});
+
+test("urgency uses existing labels across watched repositories and hosts without merging distinct PRs", async () => {
+  globalThis.fetch = async (url, options) => {
+    const { variables } = JSON.parse(options.body);
+    const host = new URL(url).host === "ghe.example.com" ? "ghe.example.com" : "github.com";
+    const node = prNode(1, isoAgo(hourMs));
+    node.url = `https://${host}/microsoft/${variables.name}/pull/1`;
+    node.labels.nodes = host === "ghe.example.com" || variables.name === "dcp" ? [{ name: "REVIEW-urgent" }] : [];
+    return jsonResponse({ data: { repository: { pullRequests: { nodes: [node] } } } });
+  };
+  const { attention, errors } = await loadReview([
+    { token: "public", login: "davidfowl", repos: ["microsoft/aspire", "microsoft/dcp"] },
+    { token: "enterprise", login: "joperezr", repos: ["microsoft/aspire"], graphql: "https://ghe.example.com/api/graphql" },
+  ]);
+  assert.deepEqual(errors, []);
+  assert.deepEqual(attention.focus.map((item) => [item.pr.url, item.urgent]), [
+    ["https://ghe.example.com/microsoft/aspire/pull/1", true],
+    ["https://github.com/microsoft/dcp/pull/1", true],
+    ["https://github.com/microsoft/aspire/pull/1", false],
+  ]);
 });
 
 test("review debt stays eligible in the remainder without spilling into the top ten or losing non-debt PRs", async () => {
@@ -122,7 +172,7 @@ test("loadDashboard ranks review-ready PRs by time waiting for review", async ()
   assert.deepEqual(reviewQueue.items.map((item) => item.pr.number), [2, 1]);
 });
 
-test("Needs attention orders by first readiness, distinguishing PRs opened ready from drafts", async () => {
+test("PR queue orders by first readiness, distinguishing PRs opened ready from drafts", async () => {
   const openedReady = prNode(1, isoAgo(hourMs));
   openedReady.createdAt = isoAgo(10 * dayMs);
   openedReady.readinessTransitions = transitionHistory([
@@ -157,7 +207,7 @@ test("Needs attention orders by first readiness, distinguishing PRs opened ready
   assert.equal(draft.firstReadyForReviewAt, null);
 });
 
-test("Needs attention paginates draft and ready transitions on the account's GitHub host", async () => {
+test("PR queue paginates draft and ready transitions on the account's GitHub host", async () => {
   const nodes = [prNode(1, isoAgo(hourMs)), prNode(2, isoAgo(2 * hourMs))];
   const histories = [
     [
@@ -202,7 +252,7 @@ test("Needs attention paginates draft and ready transitions on the account's Git
   assert.deepEqual(requests.map((variables) => variables.after ?? null), [null, "history-1", "history-2"]);
 });
 
-test("Needs attention keeps first-readiness order across human and Copilot review rounds and other activity", async () => {
+test("PR queue keeps first-readiness order across human and Copilot review rounds and other activity", async () => {
   const older = prNode(1, isoAgo(2 * dayMs), isoAgo(5 * dayMs));
   const newer = prNode(2, isoAgo(dayMs));
   newer.createdAt = isoAgo(3 * dayMs);
@@ -226,7 +276,7 @@ test("Needs attention keeps first-readiness order across human and Copilot revie
   }
 });
 
-test("Needs attention retains the same relative order across repository fetch completion and watched scopes", async () => {
+test("PR queue retains the same relative order across repository fetch completion and watched scopes", async () => {
   const createdAt = isoAgo(3 * dayMs);
   const first = prNode(10, isoAgo(hourMs));
   const second = prNode(2, isoAgo(2 * hourMs));
@@ -261,7 +311,7 @@ test("missing or inconsistent readiness history surfaces an error without guessi
     unknown.readinessTransitions = history;
     mockPullRequests([unknown, prNode(2, isoAgo(dayMs))]);
     const dashboard = await loadReview();
-    assert.deepEqual(dashboard.errors, [`microsoft/aspire#1: first readiness unavailable; omitted from Needs attention. ${error}`]);
+    assert.deepEqual(dashboard.errors, [`microsoft/aspire#1: first readiness unavailable; omitted from PR queue. ${error}`]);
     assert.deepEqual(dashboard.attention.focus.map((item) => item.pr.number), [2]);
     const unranked = dashboard.attention.buckets.find((bucket) => bucket.label === "Quick wins").items.find((item) => item.pr.number === 1);
     assert.equal(unranked.pr.firstReadyForReviewAt, null);
@@ -287,7 +337,7 @@ test("readiness pagination failures, repeated cursors, and the safety bound are 
     };
     const dashboard = await loadReview();
     const error = failure === "request" ? "Timeline access denied" : "Incomplete draft/ready transition history";
-    assert.deepEqual(dashboard.errors, [`microsoft/aspire#1: first readiness unavailable; omitted from Needs attention. ${error}`]);
+    assert.deepEqual(dashboard.errors, [`microsoft/aspire#1: first readiness unavailable; omitted from PR queue. ${error}`]);
     assert.deepEqual(dashboard.attention.focus, []);
     assert.equal(calls, failure === "limit" ? 24 : 1);
   }

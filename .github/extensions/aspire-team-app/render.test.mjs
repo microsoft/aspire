@@ -49,7 +49,7 @@ test("render keeps the current dashboard visible and surfaces later load errors"
   assert.match(app.innerHTML, /GitHub accounts/);
 });
 
-test("Needs attention renders only its prefix and offers a collapsed, action-free remainder for position lookup", () => {
+test("PR queue renders only its prefix and offers a collapsed, action-free remainder for position lookup", () => {
   const { app, api } = createRendererHarness({ fetch: () => new Promise(() => {}) });
   for (const count of [0, 4, 10, 11, 25]) {
     api.setState(reviewDashboard(count));
@@ -63,14 +63,51 @@ test("Needs attention renders only its prefix and offers a collapsed, action-fre
       assert.match(remainder[1], /aria-controls="later-in-queue-body" aria-expanded="false"/);
       assert.match(remainder[1], /id="later-in-queue-body" inert/);
       assert.match(remainder[1], new RegExp('<span class="sect-count">' + (count - 10) + "</span>"));
-      assert.match(remainder[1], /Prioritize the first 10 in Needs attention for review/);
+      assert.match(remainder[1], /Prioritize the first 10 in PR queue for review/);
       assert.deepEqual([...remainder[1].matchAll(/<li value="(\d+)">/g)].map((match) => Number(match[1])), positions.slice(10));
       assert.equal([...remainder[1].matchAll(/<a href=/g)].length, count - 10);
       assert.equal([...remainder[1].matchAll(/class="card-actions"/g)].length, 0);
     }
-    assert.match(app.innerHTML, /First readiness, oldest first\. Blocked PRs keep their priority when they return\./);
+    assert.match(app.innerHTML, /Urgent PRs first; first readiness, oldest first within each group\./);
   }
   assert.match(STYLES, /\.focus-queue \{[^}]*display: grid;[^}]*grid-template-columns: repeat\(auto-fill, minmax\(min\(100%, 280px\), 1fr\)\)/);
+});
+
+test("PR queue leads the review board even when personal picks exist", () => {
+  const { app, api } = createRendererHarness({ fetch: () => new Promise(() => {}) });
+  const dashboard = reviewDashboard(11);
+  dashboard.attention.forMe = [dashboard.attention.focus[0]];
+  api.setState(dashboard);
+  api.render();
+  assert.deepEqual([...app.innerHTML.matchAll(/<section class="(?:qpanel|sect-group)[^"]*" data-(?:q|sect)="([^"]+)"/g)]
+    .map((match) => match[1]), ["pr-queue", "later-in-queue", "for-you", "outside-focus"]);
+  assert.match(app.innerHTML, /<span class="qtitle">PR queue<\/span>/);
+  assert.match(app.innerHTML, />11<\/b> in PR queue/);
+  assert.doesNotMatch(app.innerHTML, /Needs attention|needs attention/);
+});
+
+test("urgent queue cards and collapsed lookup entries have visible text badges without adding full cards", () => {
+  const { app, api } = createRendererHarness({ fetch: () => new Promise(() => {}) });
+  const dashboard = reviewDashboard(14);
+  const all = [...dashboard.attention.focus, ...dashboard.attention.focusRemainder];
+  for (const item of all.slice(0, 12)) item.urgent = true;
+  api.setState(dashboard);
+  api.render();
+  const queue = app.innerHTML.match(/<ol class="focus-queue"[^>]*>([\s\S]*?)<\/ol>/)[1];
+  const remainder = app.innerHTML.match(/data-sect="later-in-queue">([\s\S]*?)<\/section>/)[1];
+  assert.equal([...queue.matchAll(/class="card card-urgent"/g)].length, 10);
+  assert.equal([...queue.matchAll(/class="urgent-badge"[^>]*>Urgent<\/span>/g)].length, 10);
+  assert.match(queue, /title="review-urgent label: prioritized ahead of regular eligible PRs\."/);
+  assert.equal([...remainder.matchAll(/class="urgent-badge"[^>]*>Urgent<\/span>/g)].length, 2);
+  assert.match(remainder, /aria-expanded="false"/);
+  assert.deepEqual([...remainder.matchAll(/<li value="(\d+)">/g)].map((match) => Number(match[1])), [11, 12, 13, 14]);
+  assert.equal([...remainder.matchAll(/class="card(?: |")/g)].length, 0);
+  assert.match(app.innerHTML, /aria-label="PR queue, urgent first, then first-readiness order"/);
+  api.setPrefs(rendererPrefs());
+  api.setView("settings");
+  api.render();
+  assert.match(app.innerHTML, /Eligible PRs labeled <b>review-urgent<\/b> come first/);
+  assert.match(app.innerHTML, /Removing the label restores first-readiness order/);
 });
 
 test("remainder expansion and collapse survive refresh, including a remainder that arrives after initial load", () => {
@@ -111,7 +148,7 @@ test("remainder expansion and collapse survive refresh, including a remainder th
   assert.match(app.innerHTML, /id="later-in-queue-body" inert/);
 });
 
-test("resizing the review board cannot redistribute Needs attention into masonry columns", () => {
+test("resizing the review board cannot redistribute PR queue into masonry columns", () => {
   // Only legacy .grid panels participate in the JavaScript column redistribution.
   // The ordered list keeps its DOM/tab order at every responsive width.
   const queried = [];
@@ -123,7 +160,7 @@ test("resizing the review board cannot redistribute Needs attention into masonry
     queuePosition: position,
     pr: { number: position, title: `PR ${position}`, url: `https://github.com/microsoft/aspire/pull/${position}`, repository: "microsoft/aspire", author: "davidfowl" },
   }));
-  const markup = api.queuePanel({ id: "needs-attention", title: "Needs attention", items, numbered: true });
+  const markup = api.queuePanel({ id: "pr-queue", title: "PR queue", items, numbered: true });
   api.setState(reviewDashboard(13));
   api.render();
   const board = app.innerHTML;
@@ -132,7 +169,7 @@ test("resizing the review board cannot redistribute Needs attention into masonry
     queried.length = 0;
     api.layoutGrids();
     assert.deepEqual(queried, [".grid"]);
-    assert.equal(api.queuePanel({ id: "needs-attention", title: "Needs attention", items, numbered: true }), markup);
+    assert.equal(api.queuePanel({ id: "pr-queue", title: "PR queue", items, numbered: true }), markup);
     api.render();
     assert.equal(app.innerHTML, board);
   }
@@ -360,7 +397,7 @@ test("focusCardActions layers review-debt / review context with signal actions",
   assert.equal(mineChanges.map((a) => a.kind).join(","), "address-feedback,discuss-review");
   assert.equal(mineChanges[0].label, "Address feedback");
 
-  // The "Your PRs outside Needs attention" lane tags the same case with an "Author response" pill,
+  // The "Your PRs outside PR queue" lane tags the same case with an "Author response" pill,
   // which also qualifies even without review state on the card.
   const mineAuthorPill = api.focusCardActions({ pr: { isMine: true }, signals: [{ label: "Author response" }] });
   assert.equal(mineAuthorPill.map((a) => a.kind).join(","), "address-feedback,discuss-review");
