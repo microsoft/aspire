@@ -107,6 +107,48 @@ public class MauiEnvironmentHelperTests
     }
 
     [Fact]
+    public void GenerateAndroidTargetsFileContent_WithoutLaunchSignal_OmitsSignalTarget()
+    {
+        var content = MauiEnvironmentHelper.GenerateAndroidTargetsFileContent(new Dictionary<string, string> { ["KEY"] = "value" });
+        var doc = XDocument.Parse(content);
+
+        Assert.DoesNotContain(doc.Descendants("Target"), t => t.Attribute("Name")?.Value == "AspireWriteAndroidLaunchSignal");
+    }
+
+    [Fact]
+    public void GenerateAndroidTargetsFileContent_WithLaunchSignal_WritesSignalAfterComputeRunArguments()
+    {
+        var content = MauiEnvironmentHelper.GenerateAndroidTargetsFileContent([], "/tmp/aspire/launch-signal.txt");
+        var doc = XDocument.Parse(content);
+
+        var target = doc.Descendants("Target").Single(t => t.Attribute("Name")?.Value == "AspireWriteAndroidLaunchSignal");
+        Assert.Equal("ComputeRunArguments", target.Attribute("AfterTargets")?.Value);
+
+        var packageProperties = target.Element("PropertyGroup")!.Elements("_AspireAndroidPackage").ToList();
+        Assert.Equal("$(_AndroidPackage)", packageProperties[0].Value);
+        Assert.Equal("$(ApplicationId)", packageProperties[1].Value);
+        Assert.Equal("'$(_AspireAndroidPackage)' == ''", packageProperties[1].Attribute("Condition")?.Value);
+
+        var writeLines = target.Element("WriteLinesToFile")!;
+        Assert.Equal("/tmp/aspire/launch-signal.txt", writeLines.Attribute("File")?.Value);
+        Assert.Equal(
+            "adb-tool-path=$(AdbToolPath);adb-tool-exe=$(AdbToolExe);adb-target=$(AdbTarget);package=$(_AspireAndroidPackage)",
+            writeLines.Attribute("Lines")?.Value);
+    }
+
+    [Fact]
+    public void GenerateAndroidTargetsFileContent_WithLaunchSignal_EscapesSignalPath()
+    {
+        var content = MauiEnvironmentHelper.GenerateAndroidTargetsFileContent([], "/tmp/a;b$c@d%e'f/launch-signal.txt");
+        var doc = XDocument.Parse(content);
+
+        var writeLines = doc.Descendants("Target")
+            .Single(t => t.Attribute("Name")?.Value == "AspireWriteAndroidLaunchSignal")
+            .Element("WriteLinesToFile")!;
+        Assert.Equal("/tmp/a%3Bb%24c%40d%25e%27f/launch-signal.txt", writeLines.Attribute("File")?.Value);
+    }
+
+    [Fact]
     public void GenerateiOSTargetsFileContent_ProducesValidXml()
     {
         var envVars = new Dictionary<string, string>

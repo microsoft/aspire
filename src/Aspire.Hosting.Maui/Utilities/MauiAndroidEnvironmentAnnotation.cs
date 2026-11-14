@@ -4,6 +4,7 @@
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Eventing;
 using Aspire.Hosting.Lifecycle;
+using Aspire.Hosting.Maui.Annotations;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -80,11 +81,16 @@ internal sealed class MauiAndroidEnvironmentSubscriber(
             // restarts receive environment values changed since the previous launch.
             resource.Annotations.Add(new CommandLineArgsCallbackAnnotation(async context =>
             {
+                var launchSignalFilePath = resource.TryGetLastAnnotation<MauiAndroidLaunchSignalAnnotation>(out var launchSignal)
+                    ? launchSignal.FilePath
+                    : null;
+
                 var generatedFilePath = await MauiEnvironmentHelper.CreateAndroidEnvironmentTargetsFileAsync(
                     environmentTargetsDirectory,
                     resource,
                     executionContext,
                     logger,
+                    launchSignalFilePath,
                     context.CancellationToken
                 ).ConfigureAwait(false);
 
