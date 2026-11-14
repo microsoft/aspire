@@ -135,6 +135,50 @@ public class CliHostEnvironmentTests
         Assert.False(env.SupportsInteractiveInput);
     }
 
+    [Theory]
+    [InlineData(false, null, null, false)]
+    [InlineData(true, null, null, true)]
+    [InlineData(true, "localhost:1234", "true", false)]
+    [InlineData(true, "localhost:1234", "false", true)]
+    [InlineData(true, "localhost:1234", null, true)]
+    public void IsPromptInputRedirected_AccountsForRedirectedInputAndExtensionPrompts(bool isInputRedirected, string? extensionEndpoint, string? extensionPromptEnabled, bool expected)
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["ASPIRE_EXTENSION_ENDPOINT"] = extensionEndpoint,
+                ["ASPIRE_EXTENSION_PROMPT_ENABLED"] = extensionPromptEnabled
+            })
+            .Build();
+
+        var env = new CliHostEnvironment(configuration, nonInteractive: false, isOutputRedirected: false, isInputRedirected: isInputRedirected, isErrorRedirected: false);
+
+        Assert.Equal(expected, env.IsPromptInputRedirected);
+    }
+
+    [Theory]
+    [InlineData(false, false, null, null, false)]
+    [InlineData(true, false, null, null, true)]
+    [InlineData(false, true, null, null, true)]
+    [InlineData(true, false, "localhost:1234", "true", false)]
+    [InlineData(false, true, "localhost:1234", "true", false)]
+    [InlineData(true, false, "localhost:1234", "false", true)]
+    [InlineData(false, true, "localhost:1234", "false", true)]
+    public void IsPromptOutputRedirected_AccountsForRedirectedOutputAndExtensionPrompts(bool isOutputRedirected, bool isErrorRedirected, string? extensionEndpoint, string? extensionPromptEnabled, bool expected)
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["ASPIRE_EXTENSION_ENDPOINT"] = extensionEndpoint,
+                ["ASPIRE_EXTENSION_PROMPT_ENABLED"] = extensionPromptEnabled
+            })
+            .Build();
+
+        var env = new CliHostEnvironment(configuration, nonInteractive: false, isOutputRedirected: isOutputRedirected, isInputRedirected: false, isErrorRedirected: isErrorRedirected);
+
+        Assert.Equal(expected, env.IsPromptOutputRedirected);
+    }
+
     [Fact]
     public void SupportsInteractiveInput_ReturnsTrue_WhenExtensionPromptsEnabledInCI()
     {

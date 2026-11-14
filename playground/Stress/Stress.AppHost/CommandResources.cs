@@ -166,6 +166,36 @@ internal static class CommandResources
                     }
                 ]
             });
+        // Every input has a default value. `aspire resource argument-commands greet` prompts for each
+        // input (pre-filled with its default) like the dashboard; `--non-interactive` uses the defaults.
+        argumentCommands.WithCommand(
+            name: "greet",
+            displayName: "Greet",
+            executeCommand: c =>
+            {
+                var name = c.Arguments.GetString("name") ?? "Aspire";
+                var punctuation = c.Arguments.GetString("punctuation") ?? "!";
+                var greeting = string.Join(" ", Enumerable.Repeat($"Hello, {name}{punctuation}", c.Arguments.GetInt32("times")));
+                return Task.FromResult(CommandResults.Success($"Greeted {name}.", greeting));
+            },
+            commandOptions: new CommandOptions
+            {
+                Description = "Command whose inputs all have default values.",
+                IconName = "PersonChat",
+                Arguments =
+                [
+                    new InteractionInput { Name = "name", Label = "Name", InputType = InputType.Text, Value = "Aspire" },
+                    new InteractionInput { Name = "times", Label = "Times", InputType = InputType.Number, Value = "1" },
+                    new InteractionInput
+                    {
+                        Name = "punctuation",
+                        Label = "Punctuation",
+                        InputType = InputType.Choice,
+                        Value = "!",
+                        Options = [KeyValuePair.Create("!", "Exclamation"), KeyValuePair.Create(".", "Period")]
+                    }
+                ]
+            });
         argumentCommands.WithCommand(
             name: "echo-arguments",
             displayName: "Echo arguments",
