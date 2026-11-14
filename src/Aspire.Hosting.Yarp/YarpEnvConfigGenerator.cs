@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
 using System.Reflection;
 using System.Security.Authentication;
 using Aspire.Hosting.Yarp;
@@ -68,6 +69,19 @@ internal class YarpEnvConfigGenerator
         else if (obj is Version version)
         {
             environmentVariables.Add(prefix, version.ToString());
+        }
+        else if (obj is TimeSpan timeSpan)
+        {
+            // TimeSpan isn't a primitive, so without this branch it falls through to the reflection branch and is
+            // flattened into TICKS, SECONDS, TOTALSECONDS, ... child keys that YARP ignores. YARP reads TimeSpan
+            // settings (e.g. HttpRequest:ActivityTimeout) from a single value using
+            // TimeSpan.ParseExact(value, "c", CultureInfo.InvariantCulture), so the value must use the constant ("c")
+            // format, which is also culture-insensitive and keeps full tick precision:
+            //   00:00:30, 1.02:03:04.0050000, -00:00:05
+            // See https://github.com/dotnet/yarp/blob/v2.3.0/src/ReverseProxy/Configuration/ConfigProvider/ConfigurationReadingExtensions.cs,
+            // https://learn.microsoft.com/dotnet/standard/base-types/standard-timespan-format-strings#the-constant-c-format-specifier
+            // and https://github.com/microsoft/aspire/issues/21905.
+            environmentVariables.Add(prefix, timeSpan.ToString("c", CultureInfo.InvariantCulture));
         }
         else if (obj is SslProtocols sslProtocols)
         {
