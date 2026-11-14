@@ -2,7 +2,9 @@
 
 ## Status
 
-The extension includes a **disabled-by-default** usefulness pilot. It will not prompt or collect survey data until the campaign is enabled after privacy and reporting review.
+The extension's one-time usefulness pilot is configured as **enabled**, with campaign ID `usefulness-pilot-v1`, question ID `aspire-usefulness-v1`, and a finite expiry of **January 4, 2027 at 23:59:59 UTC** (`2027-01-04T23:59:59.000Z`). At or after that instant, no invitation or result is sent. Existing telemetry and feedback consent gates still apply.
+
+This configuration does not establish that privacy and reporting review or production ingestion verification is complete. The launch prerequisites below still require confirmation before shipping the enabled campaign.
 
 ## Question and metric
 
@@ -38,6 +40,6 @@ Unit coverage is in `usefulnessSurvey.test.ts` and the telemetry tests. It cover
 
 ## Launch and reporting
 
-Before enabling the campaign, confirm classification, retention, dataset access, backend receipt, and a reporting owner. Set a finite expiry. There is no remote kill switch; rollback requires an extension update.
+Before shipping the enabled campaign, confirm classification, retention, dataset access, backend receipt, and a reporting owner. These prerequisites are not verified by campaign configuration or local tests. The campaign has the finite expiry listed above. There is no remote kill switch; rollback requires an extension update.
 
 Calculate `100 * yes / (yes + no)` from approved, deduplicated results for a specific campaign, question version, cohort, and period. Zero answers means no data, not 0%. Show the answer count and uncertainty alongside the rate; keep dismissals and permanent suppressions separate. Exclude test traffic and separate internal, external, and unknown cohorts. Invitation events represent dispatch, not confirmed visibility, and delivery is best effort.
