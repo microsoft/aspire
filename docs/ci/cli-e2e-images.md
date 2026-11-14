@@ -29,6 +29,33 @@ Consumer workflows download image artifacts into `${{ github.workspace }}/cli-e2
 
 The reusable image build workflow also has an `uploadImageArtifacts` input. It defaults to `true` for test workflows because each isolated test job needs the image tarballs. Cache-warming workflows set it to `false` so they only build the images and export BuildKit cache layers.
 
+### Bounded apt mirror fallback
+
+Both test builds and the cache warmer run `eng/scripts/build-cli-e2e-images.sh`.
+Each image (.NET, polyglot base, Java and Go) first uses the Azure Ubuntu apt
+mirror, with a five-minute limit. A failed or timed-out primary attempt retries
+once with the Dockerfile's default Ubuntu apt sources. The fallback's failure
+exit code and both attempts' output are preserved; there is no third attempt.
+
+The job still has a 45-minute cap. Four primary attempts can consume at most
+20 minutes plus two minutes of cancellation grace, leaving 23 minutes for
+fallback builds, setup, saving and uploading images. This prevents a slow but
+successful apt transfer from consuming the entire job before fallback runs.
+Observed throttled transfers took 38-41 minutes for 82-108 MB.
+
+The Node.js build supervisor signals the Docker client's process group with `TERM` so
+BuildKit can cancel the build session before fallback starts. If the client
+cannot stop within another 30 seconds, the supervisor kills the process group and the
+script fails without fallback: a forced kill cannot establish that the remote
+build acknowledged cancellation. Interrupts, termination and supervisor execution
+errors also fail without retrying.
+
+The mirror configuration script preserves the base image's original Ubuntu
+sources before replacing them. An empty mirror restores those files, including
+in derived Java/Go images, without changing third-party repositories. A
+supervisor tracks external cancellation independently of its deadline, including
+signals during cleanup and clients that exit with an ordinary failure code.
+
 ## Cross-PR BuildKit cache
 
 The image build workflow exports BuildKit layers to the GitHub Actions cache with stable scopes:
