@@ -1,0 +1,7 @@
+﻿{
+  "type": "azure.bicep.v0",
+  "path": "consumer.module.bicep",
+  "params": {
+    "frontdoor_outputs_id": "{frontdoor.outputs.id}"
+  }
+}
