@@ -15,6 +15,7 @@ Aspire.Hosting.EntityFrameworkCore/EFMigrationResource.migrationOutputDirectory(
 Aspire.Hosting.EntityFrameworkCore/EFMigrationResource.migrationsProjectPath(context: Aspire.Hosting.EntityFrameworkCore/Aspire.Hosting.EntityFrameworkCore.EFMigrationResource) -> string
 Aspire.Hosting.EntityFrameworkCore/EFMigrationResource.projectResource(context: Aspire.Hosting.EntityFrameworkCore/Aspire.Hosting.EntityFrameworkCore.EFMigrationResource) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ProjectResource
 Aspire.Hosting.EntityFrameworkCore/EFMigrationResource.publishBundleContainer(context: Aspire.Hosting.EntityFrameworkCore/Aspire.Hosting.EntityFrameworkCore.EFMigrationResource) -> boolean
+Aspire.Hosting.EntityFrameworkCore/EFMigrationResource.resourceTypeDisplayName(context: Aspire.Hosting.EntityFrameworkCore/Aspire.Hosting.EntityFrameworkCore.EFMigrationResource) -> string
 Aspire.Hosting.EntityFrameworkCore/EFMigrationResource.scriptIdempotent(context: Aspire.Hosting.EntityFrameworkCore/Aspire.Hosting.EntityFrameworkCore.EFMigrationResource) -> boolean
 Aspire.Hosting.EntityFrameworkCore/EFMigrationResource.scriptNoTransactions(context: Aspire.Hosting.EntityFrameworkCore/Aspire.Hosting.EntityFrameworkCore.EFMigrationResource) -> boolean
 Aspire.Hosting.EntityFrameworkCore/EFMigrationResource.setBundleBaseImage(context: Aspire.Hosting.EntityFrameworkCore/Aspire.Hosting.EntityFrameworkCore.EFMigrationResource, value: string) -> Aspire.Hosting.EntityFrameworkCore/Aspire.Hosting.EntityFrameworkCore.EFMigrationResource

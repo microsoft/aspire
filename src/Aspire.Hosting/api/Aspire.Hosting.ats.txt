@@ -199,9 +199,13 @@ Aspire.Hosting/Aspire.Hosting.ApplicationModel.ProcessCommandSpecExportData # AT
   WorkingDirectory: string # The working directory for the process.
 Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceUrlAnnotation # A URL that should be displayed for a resource.
   DisplayLocation: enum:Aspire.Hosting.ApplicationModel.UrlDisplayLocation # Locations where this URL should be shown on the dashboard. Defaults to `SummaryAndDetails`.
+  DisplayOrder?: number # Gets or sets the display order of the URL. Higher values mean sort higher in the list.
   DisplayText: string # The name of the URL. When rendered as a link this will be used as the linked text.
   Endpoint?: Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference # The endpoint associated with this URL. Can be `null` if this URL is not associated with an endpoint.
   Url: string # The URL. When rendered as a link this will be used as the link target.
+Aspire.Hosting/Aspire.Hosting.ApplicationModel.TerminalOptions # Options for configuring a terminal session.
+  Columns: number # Gets or sets the initial number of columns for the terminal. The value must be greater than zero. Defaults to 132.
+  Rows: number # Gets or sets the initial number of rows for the terminal. The value must be greater than zero. Defaults to 50.
 Aspire.Hosting/Aspire.Hosting.ApplicationModel.UpdateCommandStateResourceSnapshot # Resource snapshot data exposed to polyglot command state callbacks.
   ExitCode?: number # The exit code of the resource.
   HealthStatus?: enum:Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus # The current health status for the resource.
@@ -345,7 +349,7 @@ enum:Aspire.Hosting.ApplicationModel.CertificateTrustScope = None | Append | Ove
 enum:Aspire.Hosting.ApplicationModel.CommandResultFormat = Text | Json | Markdown
 enum:Aspire.Hosting.ApplicationModel.ContainerLifetime = Session | Persistent
 enum:Aspire.Hosting.ApplicationModel.ContainerMountType = BindMount | Volume
-enum:Aspire.Hosting.ApplicationModel.EndpointProperty = Url | Host | IPV4Host | Port | Scheme | TargetPort | HostAndPort | TlsEnabled
+enum:Aspire.Hosting.ApplicationModel.EndpointProperty = Url | Host | IPV4Host | Port | Scheme | TargetPort | HostAndPort | TlsEnabled | BrowserOrigins | PrimaryBrowserOrigin
 enum:Aspire.Hosting.ApplicationModel.HttpCommandResultMode = None | Auto | Json | Text
 enum:Aspire.Hosting.ApplicationModel.IconVariant = Regular | Filled
 enum:Aspire.Hosting.ApplicationModel.ImagePullPolicy = Default | Always | Missing | Never
@@ -397,6 +401,7 @@ Aspire.Hosting.ApplicationModel/BeforeResourceStartedEvent.services(context: Asp
 Aspire.Hosting.ApplicationModel/BeforeStartEvent.model(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.BeforeStartEvent) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.DistributedApplicationModel
 Aspire.Hosting.ApplicationModel/BeforeStartEvent.services(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.BeforeStartEvent) -> System.ComponentModel/System.IServiceProvider
 Aspire.Hosting.ApplicationModel/build(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpressionBuilder) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression
+Aspire.Hosting.ApplicationModel/clear(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandLineArgsEditor) -> void
 Aspire.Hosting.ApplicationModel/CommandLineArgsCallbackContext.args(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandLineArgsCallbackContext) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandLineArgsEditor
 Aspire.Hosting.ApplicationModel/CommandLineArgsCallbackContext.executionContext(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandLineArgsCallbackContext) -> Aspire.Hosting/Aspire.Hosting.DistributedApplicationExecutionContext
 Aspire.Hosting.ApplicationModel/CommandLineArgsCallbackContext.log(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandLineArgsCallbackContext) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.LogFacade
@@ -443,6 +448,7 @@ Aspire.Hosting.ApplicationModel/DockerfileBuilderCallbackContext.cancellationTok
 Aspire.Hosting.ApplicationModel/DockerfileBuilderCallbackContext.resource(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.DockerfileBuilderCallbackContext) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource
 Aspire.Hosting.ApplicationModel/DockerfileBuilderCallbackContext.services(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.DockerfileBuilderCallbackContext) -> System.ComponentModel/System.IServiceProvider
 Aspire.Hosting.ApplicationModel/DockerfileFactoryContext.resource(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.DockerfileFactoryContext) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource
+Aspire.Hosting.ApplicationModel/EndpointReference.browserOrigins(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReferenceExpression
 Aspire.Hosting.ApplicationModel/EndpointReference.endpointName(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference) -> string
 Aspire.Hosting.ApplicationModel/EndpointReference.errorMessage(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference) -> string
 Aspire.Hosting.ApplicationModel/EndpointReference.excludeReferenceEndpoint(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference) -> boolean
@@ -455,6 +461,7 @@ Aspire.Hosting.ApplicationModel/EndpointReference.isHttp(context: Aspire.Hosting
 Aspire.Hosting.ApplicationModel/EndpointReference.isHttps(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference) -> boolean
 Aspire.Hosting.ApplicationModel/EndpointReference.isHttpSchemeNamedEndpoint(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference) -> boolean
 Aspire.Hosting.ApplicationModel/EndpointReference.port(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference) -> number
+Aspire.Hosting.ApplicationModel/EndpointReference.primaryBrowserOrigin(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReferenceExpression
 Aspire.Hosting.ApplicationModel/EndpointReference.property(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference, property: enum:Aspire.Hosting.ApplicationModel.EndpointProperty) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReferenceExpression
 Aspire.Hosting.ApplicationModel/EndpointReference.resource(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEndpoints
 Aspire.Hosting.ApplicationModel/EndpointReference.scheme(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference) -> string
@@ -521,6 +528,8 @@ Aspire.Hosting.ApplicationModel/InitializeResourceEvent.logger(context: Aspire.H
 Aspire.Hosting.ApplicationModel/InitializeResourceEvent.notifications(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.InitializeResourceEvent) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceNotificationService
 Aspire.Hosting.ApplicationModel/InitializeResourceEvent.resource(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.InitializeResourceEvent) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource
 Aspire.Hosting.ApplicationModel/InitializeResourceEvent.services(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.InitializeResourceEvent) -> System.ComponentModel/System.IServiceProvider
+Aspire.Hosting.ApplicationModel/ParameterResource.setValueAsync(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource, value?: string, cancellationToken?: cancellationToken) -> void
+Aspire.Hosting.ApplicationModel/ParameterResource.tryGetCurrentValue(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource) -> string
 Aspire.Hosting.ApplicationModel/ReferenceExpressionBuilder.isEmpty(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpressionBuilder) -> boolean
 Aspire.Hosting.ApplicationModel/RequiredCommandValidationContext.cancellationToken(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.RequiredCommandValidationContext) -> cancellationToken
 Aspire.Hosting.ApplicationModel/RequiredCommandValidationContext.failure(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.RequiredCommandValidationContext, validationMessage: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.RequiredCommandValidationResult
@@ -701,7 +710,9 @@ Aspire.Hosting/getResourceName() -> string
 Aspire.Hosting/getResourceNotificationService() -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceNotificationService
 Aspire.Hosting/getResources() -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource[]
 Aspire.Hosting/getSection(key: string) -> Microsoft.Extensions.Configuration.Abstractions/Microsoft.Extensions.Configuration.IConfigurationSection
+Aspire.Hosting/getSerializedAnnotation(annotationId: string) -> string
 Aspire.Hosting/getUserSecretsManager() -> Aspire.Hosting/Aspire.Hosting.IUserSecretsManager
+Aspire.Hosting/hasSerializedAnnotation(annotationId: string) -> boolean
 Aspire.Hosting/IDistributedApplicationBuilder.appHostDirectory(context: Aspire.Hosting/Aspire.Hosting.IDistributedApplicationBuilder) -> string
 Aspire.Hosting/IDistributedApplicationBuilder.environment(context: Aspire.Hosting/Aspire.Hosting.IDistributedApplicationBuilder) -> Microsoft.Extensions.Hosting.Abstractions/Microsoft.Extensions.Hosting.IHostEnvironment
 Aspire.Hosting/IDistributedApplicationBuilder.eventing(context: Aspire.Hosting/Aspire.Hosting.IDistributedApplicationBuilder) -> Aspire.Hosting/Aspire.Hosting.Eventing.IDistributedApplicationEventing
@@ -785,6 +796,7 @@ Aspire.Hosting/waitForResourceStates(resourceName: string, targetStates: string[
 Aspire.Hosting/waitForStart(dependency: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource, waitBehavior?: enum:Aspire.Hosting.ApplicationModel.WaitBehavior) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithWaitSupport
 Aspire.Hosting/withArgs(args: string[]) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithArgs
 Aspire.Hosting/withArgsCallback(callback: callback) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithArgs
+Aspire.Hosting/withArgsReplace(args: string[]) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithArgs
 Aspire.Hosting/withArgumentsConfig() -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IExecutionConfigurationBuilder
 Aspire.Hosting/withBindMount(source: string, target: string, isReadOnly?: boolean) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource
 Aspire.Hosting/withBuildArg(name: string, value: string|Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource
@@ -792,6 +804,7 @@ Aspire.Hosting/withBuilderChildRelationship(child: Aspire.Hosting/Aspire.Hosting
 Aspire.Hosting/withBuilderParentRelationship(parent: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource
 Aspire.Hosting/withBuilderRelationship(resourceBuilder: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource, type: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource
 Aspire.Hosting/withCertificateTrustConfig(configContextFactory: callback) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IExecutionConfigurationBuilder
+Aspire.Hosting/withCertificateTrustEnvironment(certificateBundleEnvironmentVariable: string, certificateDirectoriesEnvironmentVariable?: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithArgs
 Aspire.Hosting/withCertificateTrustScope(scope: enum:Aspire.Hosting.ApplicationModel.CertificateTrustScope) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment
 Aspire.Hosting/withCommand(name: string, displayName: string, executeCommand: callback, commandOptions?: Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandOptions) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource
 Aspire.Hosting/withComputeEnvironment(computeEnvironmentResource: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IComputeEnvironmentResource) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IComputeResource
@@ -808,6 +821,7 @@ Aspire.Hosting/withContainerRuntimeArgs(args: string[]) -> Aspire.Hosting/Aspire
 Aspire.Hosting/withCustomInput(options: Aspire.Hosting/Aspire.Hosting.Ats.ParameterCustomInputOptions) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource
 Aspire.Hosting/withDescription(description: string, enableMarkdown?: boolean) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource
 Aspire.Hosting/withDeveloperCertificateTrust(trust: boolean) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment
+Aspire.Hosting/withDisplayOrder(order: number) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource
 Aspire.Hosting/withDockerfile(contextPath: string, dockerfilePath?: string, stage?: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource
 Aspire.Hosting/withDockerfileBaseImage(buildImage?: string, runtimeImage?: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource
 Aspire.Hosting/withDockerfileBuilder(contextPath: string, callback: callback, stage?: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource
@@ -821,6 +835,7 @@ Aspire.Hosting/withEnvironment(name: string, value: string|Aspire.Hosting/Aspire
 Aspire.Hosting/withEnvironmentCallback(callback: callback) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment
 Aspire.Hosting/withEnvironmentVariablesConfig() -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IExecutionConfigurationBuilder
 Aspire.Hosting/withExecutableCommand(command: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecutableResource
+Aspire.Hosting/withExecutableDebugSupport(launchConfigurationType: string, scriptPath: string, runtimeExecutable?: string, launchMethod?: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecutableResource
 Aspire.Hosting/withExecutableVolume(target: string, name: string, env: string, isReadOnly?: boolean) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecutableResource
 Aspire.Hosting/withExplicitStart() -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource
 Aspire.Hosting/withExternalHttpEndpoints() -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEndpoints
@@ -847,8 +862,10 @@ Aspire.Hosting/withImageTag(tag: string) -> Aspire.Hosting/Aspire.Hosting.Applic
 Aspire.Hosting/withLifetime(lifetime: enum:Aspire.Hosting.ApplicationModel.ContainerLifetime) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource
 Aspire.Hosting/withLifetimeOf(sourceBuilder: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource
 Aspire.Hosting/withMcpServer(path?: string, endpointName?: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEndpoints
+Aspire.Hosting/withOptional() -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource
 Aspire.Hosting/withOtlpExporter(protocol?: enum:Aspire.Hosting.OtlpProtocol) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment
 Aspire.Hosting/withoutHttpsCertificate() -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment
+Aspire.Hosting/withOutputDiffing(targetStep?: string, diffStepName?: string, description?: string) -> Aspire.Hosting/Aspire.Hosting.IDistributedApplicationBuilder
 Aspire.Hosting/withParameterBuildSecret(name: string, value: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource
 Aspire.Hosting/withParameterHttpsDeveloperCertificate(password?: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment
 Aspire.Hosting/withParentProcessLifetime(parentProcessId: number) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource
@@ -863,16 +880,21 @@ Aspire.Hosting/withReferenceEnvironment(options: Aspire.Hosting/Aspire.Hosting.A
 Aspire.Hosting/withRemoteImageName(remoteImageName: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IComputeResource
 Aspire.Hosting/withRemoteImageTag(remoteImageTag: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IComputeResource
 Aspire.Hosting/withReplicas(replicas: number) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ProjectResource
+Aspire.Hosting/withRequired(required?: boolean) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource
 Aspire.Hosting/withRequiredCommand(command: string, helpLink?: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource
 Aspire.Hosting/withRequiredCommandValidation(command: string, validationCallback: callback, helpLink?: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource
+Aspire.Hosting/withResourceTypeDisplayName(resourceTypeDisplayName: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource
+Aspire.Hosting/withSerializedAnnotation(annotationId: string, json: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource
 Aspire.Hosting/withSessionLifetime() -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource
-Aspire.Hosting/withTerminal() -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource
+Aspire.Hosting/withTags(tags: string[]) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource
+Aspire.Hosting/withTerminal(configure?: callback) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource
 Aspire.Hosting/withToolIgnoreExistingFeeds() -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.DotnetToolResource
 Aspire.Hosting/withToolIgnoreFailedSources() -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.DotnetToolResource
 Aspire.Hosting/withToolPackage(packageId: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.DotnetToolResource
 Aspire.Hosting/withToolPrerelease() -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.DotnetToolResource
 Aspire.Hosting/withToolSource(source: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.DotnetToolResource
 Aspire.Hosting/withToolVersion(version: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.DotnetToolResource
+Aspire.Hosting/withTrait(name: string, value: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource
 Aspire.Hosting/withUrl(url: string|Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression, displayText?: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource
 Aspire.Hosting/withUrlForEndpoint(endpointName: string, callback: callback) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource
 Aspire.Hosting/withUrls(callback: callback) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource
