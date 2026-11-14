@@ -35,6 +35,7 @@
     <PackageVersion Include="Microsoft.Azure.Cosmos" Version="3.63.2" />
     <PackageVersion Include="Microsoft.Azure.Kusto.Data" Version="14.2.2" />
     <PackageVersion Include="Microsoft.Azure.Kusto.Ingest" Version="14.2.2" />
+    <PackageVersion Include="Microsoft.Azure.ContainerApps.Sandbox" Version="1.0.0-beta.1" />
     <PackageVersion Include="Microsoft.Azure.SignalR" Version="1.33.1" />
     <PackageVersion Include="Microsoft.Azure.SignalR.Management" Version="1.33.1" />
     <PackageVersion Include="Microsoft.Azure.StackExchangeRedis" Version="3.3.1" />

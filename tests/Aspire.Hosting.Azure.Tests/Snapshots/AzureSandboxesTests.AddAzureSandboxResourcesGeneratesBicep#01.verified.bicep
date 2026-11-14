@@ -57,4 +57,4 @@ output name string = workergroup.name
 
 output location string = workergroup.location
 
-output imagePullIdentityClientId string = workergroup_mi.properties.clientId
+output imagePullIdentityId string = workergroup_mi.id
