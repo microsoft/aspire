@@ -147,15 +147,72 @@ public class EnvironmentCheckerTests
     public async Task CheckAllAsync_CallerCancellationPropagates()
     {
         var blockedCheck = new TaskCompletionSource<IReadOnlyList<EnvironmentCheckResult>>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var timeProvider = new SignalingFakeTimeProvider(EnvironmentChecker.s_cancelledCheckCleanupTimeout);
         var checker = new EnvironmentChecker(
             [new TestEnvironmentCheck(0, _ => blockedCheck.Task)],
             NullLogger<EnvironmentChecker>.Instance,
-            checkTimeout: TimeSpan.FromSeconds(5),
-            totalTimeout: TimeSpan.FromSeconds(10));
+            checkTimeout: TimeSpan.FromMinutes(1),
+            totalTimeout: TimeSpan.FromMinutes(2),
+            timeProvider);
         using var cancellationTokenSource = new CancellationTokenSource();
         cancellationTokenSource.Cancel();
 
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(
-            () => checker.CheckAllAsync(cancellationTokenSource.Token));
+        var checkAllTask = checker.CheckAllAsync(cancellationTokenSource.Token);
+
+        // A check that ignores cancellation must not keep the caller waiting beyond the cleanup budget.
+        await timeProvider.TimerCreated.Task.DefaultTimeout();
+        timeProvider.Advance(EnvironmentChecker.s_cancelledCheckCleanupTimeout);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => checkAllTask).DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task CheckAllAsync_CallerCancellationWaitsForCancelledCheckCleanup()
+    {
+        var checkStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var cleanupStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseCleanup = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var cleanupCompleted = false;
+        var timeProvider = new SignalingFakeTimeProvider(EnvironmentChecker.s_cancelledCheckCleanupTimeout);
+        var checker = new EnvironmentChecker(
+            [
+                new TestEnvironmentCheck(0, async cancellationToken =>
+                {
+                    // Models DcpConnectionChecker: cancellation interrupts the probe, then disposal kills the
+                    // DCP process tree it started. The caller must not exit while that cleanup is in progress.
+                    try
+                    {
+                        checkStarted.SetResult();
+                        await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+                        return [];
+                    }
+                    finally
+                    {
+                        cleanupStarted.SetResult();
+                        await releaseCleanup.Task;
+                        cleanupCompleted = true;
+                    }
+                }),
+            ],
+            NullLogger<EnvironmentChecker>.Instance,
+            checkTimeout: TimeSpan.FromMinutes(1),
+            totalTimeout: TimeSpan.FromMinutes(2),
+            timeProvider);
+        using var cancellationTokenSource = new CancellationTokenSource();
+
+        var checkAllTask = checker.CheckAllAsync(cancellationTokenSource.Token);
+        await checkStarted.Task.DefaultTimeout();
+
+        cancellationTokenSource.Cancel();
+        await cleanupStarted.Task.DefaultTimeout();
+
+        // The checker must start waiting for the cleanup rather than completing while it is in progress.
+        var firstCompleted = await Task.WhenAny(checkAllTask, timeProvider.TimerCreated.Task).DefaultTimeout();
+        Assert.Same(timeProvider.TimerCreated.Task, firstCompleted);
+        Assert.False(checkAllTask.IsCompleted);
+
+        releaseCleanup.SetResult();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => checkAllTask).DefaultTimeout();
+        Assert.True(cleanupCompleted);
     }
 }
