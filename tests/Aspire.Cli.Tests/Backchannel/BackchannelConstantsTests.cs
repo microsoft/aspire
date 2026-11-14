@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.ComponentModel;
 using Aspire.Hosting.Backchannel;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -224,6 +225,18 @@ public class BackchannelConstantsTests(ITestOutputHelper outputHelper)
         var exists = BackchannelConstants.ProcessExists(invalidPid);
 
         Assert.False(exists);
+    }
+
+    [Fact]
+    public void ProcessExists_ReturnsTrueWhenProcessAccessIsDenied()
+    {
+        // On Windows, Process.HasExited throws Win32Exception (5) "Access is denied" for processes
+        // the caller can't open (for example, an elevated AppHost or a PID reused by a system service).
+        // Access denied isn't evidence that the process exited, so it must be treated as running and
+        // must not escape and abort socket discovery.
+        var exists = BackchannelConstants.ProcessExists(1234, static _ => throw new Win32Exception(5));
+
+        Assert.True(exists);
     }
 
     [Fact]
