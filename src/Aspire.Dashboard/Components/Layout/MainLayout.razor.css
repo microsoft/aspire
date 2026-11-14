@@ -107,7 +107,7 @@
 ::deep.layout > .messagebar-container > .top-messagebar {
     flex: 1 1 auto;
     min-width: 0;
-    padding: 8px;
+    padding: 8px 8px 4px;
     gap: var(--aspire-space-1);
 }
 
@@ -248,6 +248,10 @@
     /* The header draws the separator; banners must not add a second line underneath it. */
     ::deep.layout > .messagebar-container {
         border-top: 0;
+    }
+
+    ::deep.layout > .messagebar-container > .top-messagebar {
+        padding-inline: var(--layout-left-padding) var(--layout-right-padding);
     }
 
     /* One link fills the brand's cell, including the padding between the logo, name and house. */
