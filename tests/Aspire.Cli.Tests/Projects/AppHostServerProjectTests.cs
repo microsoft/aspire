@@ -55,6 +55,32 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
         Assert.Equal(project.GetInstanceIdentifier(), DotNetBasedAppHostServerProject.GetDefaultInstanceIdentifier(path));
     }
 
+    [Fact]
+    public async Task BuildAsync_DisablesAutomaticResponseFiles()
+    {
+        var buildCount = 0;
+        var runner = new TestDotNetCliRunner
+        {
+            BuildAsyncCallback = (projectFile, noRestore, options, _) =>
+            {
+                buildCount++;
+                Assert.Equal(DotNetBasedAppHostServerProject.ProjectFileName, projectFile.Name);
+                Assert.False(noRestore);
+                Assert.True(options.NoAutoResponse);
+                return 0;
+            }
+        };
+        var project = new DotNetBasedAppHostServerProject(
+            _workspace.WorkspaceRoot.FullName, "test.sock", _workspace.WorkspaceRoot.FullName,
+            runner, MockPackagingServiceFactory.Create(), new TestProcessExecutionFactory(),
+            new TestEnvironment(), NullLogger<DotNetBasedAppHostServerProject>.Instance);
+
+        var (success, _) = await project.BuildAsync().DefaultTimeout();
+
+        Assert.True(success);
+        Assert.Equal(1, buildCount);
+    }
+
         [Fact]
         public async Task CreateProjectFiles_RestoreRootConfigDirectory_PreservesRelativeSources()
         {

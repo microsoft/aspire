@@ -2,11 +2,13 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text;
+using Aspire.Dashboard.Authentication;
 using Aspire.Dashboard.Components.Dialogs;
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Options;
 using Microsoft.FluentUI.AspNetCore.Components;
@@ -115,12 +117,17 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
     [CascadingParameter]
     public required ViewportInformation ViewportInformation { get; set; }
 
+    [CascadingParameter]
+    public Task<AuthenticationState>? AuthenticationState { get; set; }
+
     private bool IsTerminalDockEnabled => !_isSwitchingRuns && DashboardClient.IsEnabled && !DashboardClient.IsReadOnly;
 
     private Task ToggleTerminalDockAsync() => _terminalDock?.ToggleAsync() ?? Task.CompletedTask;
 
     protected override async Task OnInitializedAsync()
     {
+        await DashboardAuthenticationState.EnsureAuthenticatedAsync(Options.CurrentValue, AuthenticationState);
+
         ViewPreferences.Changed += OnViewPreferencesChanged;
         await ViewPreferences.EnsureLoadedAsync();
 

@@ -693,7 +693,8 @@ extends:
               ne(dependencies.build_sign_native.outputs['BuildNative_linux_x64.ComputeVars.installerChannel'], 'stable'),
               or(
                 eq(variables['Build.SourceBranch'], 'refs/heads/main'),
-                startsWith(variables['Build.SourceBranch'], 'refs/heads/release/')
+                startsWith(variables['Build.SourceBranch'], 'refs/heads/release/'),
+                startsWith(variables['Build.SourceBranch'], 'refs/heads/internal/release/')
               )
             )
           )
