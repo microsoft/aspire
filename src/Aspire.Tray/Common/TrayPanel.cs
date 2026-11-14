@@ -70,6 +70,7 @@ internal sealed class TrayPanel
 
     private TrayViewState _state;
     private TrayViewState? _pendingState;
+    private bool _revealInteractionAfterUpdate;
     private TrayPanelPalette _palette;
     private TrayPanelScene? _scene;
     private double _maxHeight = DefaultMaxHeight;
@@ -83,6 +84,7 @@ internal sealed class TrayPanel
     private List<PanelAccessibleElement> _accessible = [];
     private bool _focusVisible;
     private bool? _recentExpanded;
+    private readonly HashSet<(PanelSection Section, TrayApplicationKey Application)> _expandedApplications = [];
     private PanelConfirm? _confirm;
     private PanelSettings? _settings;
     private (PanelSection Section, AppHostId Host)? _actions;
@@ -273,6 +275,7 @@ internal sealed class TrayPanel
             _pendingState = state;
             return false;
         }
+        _revealInteractionAfterUpdate = ShouldRevealInteractionAfterUpdate();
         _state = state;
         _scene = null;
         return true;
@@ -297,6 +300,7 @@ internal sealed class TrayPanel
         _actions = null;
         _openInExpanded = false;
         _settings = null;
+        _revealInteractionAfterUpdate = false;
         _scene = null;
     }
 
@@ -315,6 +319,7 @@ internal sealed class TrayPanel
         var action = Activate(target);
         if (_pendingState is not null)
         {
+            _revealInteractionAfterUpdate = ShouldRevealInteractionAfterUpdate();
             _state = _pendingState;
             _pendingState = null;
         }
@@ -378,6 +383,7 @@ internal sealed class TrayPanel
         _pressed = null;
         if (_pendingState is not null)
         {
+            _revealInteractionAfterUpdate = ShouldRevealInteractionAfterUpdate();
             _state = _pendingState;
             _pendingState = null;
         }
@@ -463,7 +469,7 @@ internal sealed class TrayPanel
     }
 
     private static bool IsPrimary(PanelTargetKind kind)
-        => kind is PanelTargetKind.Row or PanelTargetKind.ToggleRecent or PanelTargetKind.Documentation
+        => kind is PanelTargetKind.Row or PanelTargetKind.ToggleApplication or PanelTargetKind.ToggleRecent or PanelTargetKind.Documentation
             or PanelTargetKind.Settings or PanelTargetKind.Quit or PanelTargetKind.ConfirmCancel or PanelTargetKind.Back
             or PanelTargetKind.LaunchAtSignIn || IsActionItem(kind);
 
@@ -665,6 +671,14 @@ internal sealed class TrayPanel
         }
         switch (target.Kind)
         {
+            case PanelTargetKind.ToggleApplication when target.Key.Application is { } application:
+                var applicationKey = (target.Key.Section, application);
+                if (!_expandedApplications.Add(applicationKey))
+                {
+                    _expandedApplications.Remove(applicationKey);
+                }
+                _scene = null;
+                return null;
             // Clicking the row itself does nothing, whatever the AppHost's state, so it behaves
             // the same for running and stopped AppHosts; its buttons carry the actions. The row
             // stays a target so hover and keyboard focus reveal those buttons.
@@ -739,6 +753,26 @@ internal sealed class TrayPanel
         }
     }
 
+    private bool ShouldRevealInteractionAfterUpdate()
+    {
+        if (_actions is null && _confirm is null)
+        {
+            return false;
+        }
+        // Preserve visible interactions, but do not undo an intentional scroll away from
+        // the card every time a discovery heartbeat updates health.
+        var controls = Scene.Targets.Where(IsActiveInteractionTarget).ToArray();
+        var target = controls.FirstOrDefault(target => target.Key == _focus);
+        return target is not null && _viewport.Contains(target.Bounds)
+            || _focus is null && controls.Any(target => _viewport.Contains(target.Bounds));
+    }
+
+    private bool IsActiveInteractionTarget(PanelHitTarget target)
+        => _confirm is { } confirm
+            ? IsConfirmTarget(target.Kind) && target.Key.Section == confirm.Section && target.Key.Host == confirm.Host?.Id
+            : _actions is { } actions && target.Key.Section == actions.Section && target.Key.Host == actions.Host
+                && (IsActionItem(target.Kind) || target.Kind is PanelTargetKind.Row or PanelTargetKind.More);
+
     private TrayPanelScene Build()
     {
         var palette = _palette;
@@ -774,9 +808,10 @@ internal sealed class TrayPanel
         }
         _contentHeight = y + ListBottomPadding;
 
-        void Add(ListItemKind kind, double height, PanelSection section, AppHostMenuItem? host, PanelTargetKind target = default)
+        void Add(ListItemKind kind, double height, PanelSection section, AppHostMenuItem? host, PanelTargetKind target = default,
+            TrayAppHostGroup? application = null, bool nested = false)
         {
-            items.Add(new(kind, y, height, section, host, target));
+            items.Add(new(kind, y, height, section, host, target, application, nested));
             y += height;
         }
 
@@ -800,15 +835,35 @@ internal sealed class TrayPanel
             {
                 return;
             }
-            foreach (var host in hosts)
+            foreach (var application in TrayAppHostGroup.Create(hosts))
             {
-                var confirming = _confirm is { Kind: PanelConfirmKind.RemoveMissing } confirm
-                    && confirm.Section == section && confirm.Host?.Id == host.Id;
-                Add(confirming ? ListItemKind.Confirm : ListItemKind.Row, confirming ? ConfirmHeight : RowHeight, section, host);
-                if (!confirming && _actions == (section, host.Id))
+                if (application.IsGroup)
                 {
-                    var count = GetRowActions(host, section).Count;
-                    Add(ListItemKind.Actions, count * ActionItemHeight + 2 * ActionListPadding + ActionListGap, section, host);
+                    // Discovery can turn a singleton with an open interaction into a group.
+                    // Keep its card visible, including asynchronous missing-file confirmations.
+                    if (application.Hosts.Any(host => _actions == (section, host.Id)
+                        || (_confirm is { Kind: PanelConfirmKind.RemoveMissing } confirm
+                            && confirm.Section == section && confirm.Host?.Id == host.Id)))
+                    {
+                        _expandedApplications.Add((section, application.Key!.Value));
+                    }
+                    Add(ListItemKind.Application, RowHeight, section, null, application: application);
+                    if (!_expandedApplications.Contains((section, application.Key!.Value)))
+                    {
+                        continue;
+                    }
+                }
+                foreach (var host in application.Hosts)
+                {
+                    var confirming = _confirm is { Kind: PanelConfirmKind.RemoveMissing } confirm
+                        && confirm.Section == section && confirm.Host?.Id == host.Id;
+                    Add(confirming ? ListItemKind.Confirm : ListItemKind.Row, confirming ? ConfirmHeight : RowHeight, section, host,
+                        nested: application.IsGroup);
+                    if (!confirming && _actions == (section, host.Id))
+                    {
+                        var count = GetRowActions(host, section).Count;
+                        Add(ListItemKind.Actions, count * ActionItemHeight + 2 * ActionListPadding + ActionListGap, section, host);
+                    }
                 }
             }
         }
@@ -862,8 +917,12 @@ internal sealed class TrayPanel
             commands.Add(new FillPathCommand(PanelPath.Rectangle(new(0, _viewport.Y, Width, 1)), palette.Separator));
         }
 
-        var duplicateNames = running.GroupBy(host => host.DisplayName, StringComparer.OrdinalIgnoreCase)
+        var visibleRunning = items.Where(item => item.Kind == ListItemKind.Row && item.Section == PanelSection.Running)
+            .Select(item => item.Host!).ToArray();
+        var duplicateNames = visibleRunning.GroupBy(host => host.DisplayName, StringComparer.OrdinalIgnoreCase)
             .Where(group => group.Count() > 1).Select(group => group.Key).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var duplicatePaths = visibleRunning.GroupBy(host => host.Id.AppHostPath, TrayAppHostPath.Comparer)
+            .Where(group => group.Count() > 1).Select(group => group.Key).ToHashSet(TrayAppHostPath.Comparer);
         commands.Add(new PushClipCommand(_viewport));
         var hidden = new List<PanelCommand>();
         foreach (var item in items)
@@ -889,7 +948,12 @@ internal sealed class TrayPanel
                     break;
                 case ListItemKind.Row:
                     AddRow(sink, targets, item.Host!, item.Section, top, live,
-                        item.Section == PanelSection.Running && duplicateNames.Contains(item.Host!.DisplayName), palette);
+                        item.Section == PanelSection.Running && (duplicateNames.Contains(item.Host!.DisplayName)
+                            || duplicatePaths.Contains(item.Host!.Id.AppHostPath)),
+                        palette, item.Nested);
+                    break;
+                case ListItemKind.Application:
+                    AddApplication(sink, targets, item.Application!, item.Section, top, live, palette);
                     break;
                 case ListItemKind.Confirm:
                     AddConfirm(sink, targets, _confirm!, item.Host, top, palette);
@@ -917,6 +981,33 @@ internal sealed class TrayPanel
 
         AddFooter(commands, targets, footer, palette);
         commands.Add(new StrokePathCommand(PanelPath.RoundedRect(panel.Inset(0.5, 0.5), CornerRadius - 0.5), palette.Border, 1));
+
+        if (_revealInteractionAfterUpdate)
+        {
+            _revealInteractionAfterUpdate = false;
+            var controls = targets.Where(IsActiveInteractionTarget).ToArray();
+            if (controls.Length > 0)
+            {
+                // Inserting a group header can move a focused card below the fold. Prefer
+                // the whole card's controls, or the focused control if the card cannot fit.
+                var top = controls.Min(target => target.Bounds.Y) - 4;
+                var bottom = controls.Max(target => target.Bounds.Bottom) + 4;
+                if (bottom - top > _viewport.Height)
+                {
+                    var control = controls.FirstOrDefault(target => target.Key == _focus) ?? controls[0];
+                    top = control.Bounds.Y - 4;
+                    bottom = control.Bounds.Bottom + 4;
+                }
+                var scroll = _scroll + (bottom > _viewport.Bottom ? bottom - _viewport.Bottom
+                    : top < _viewport.Y ? top - _viewport.Y : 0);
+                scroll = Math.Clamp(scroll, 0, Math.Max(0, _contentHeight - _viewport.Height));
+                if (scroll != _scroll)
+                {
+                    _scroll = scroll;
+                    return Build();
+                }
+            }
+        }
 
         // Forget hover and focus on targets that disappeared, such as a row that was removed.
         if (_focus is { } focus && !targets.Any(target => target.Key == focus))
@@ -993,11 +1084,17 @@ internal sealed class TrayPanel
             var span = new PanelRect(0, top, Width, item.Height);
             switch (item.Kind)
             {
+                case ListItemKind.Application:
+                    Line(top + RowHeight / 2, "application", span);
+                    Line(top + 17, "application name", span);
+                    Line(top + 35, "application detail", span);
+                    Box(new(EdgeMargin, top + RowHeight / 2 - 10, 20, 20), "application status");
+                    break;
                 case ListItemKind.Row:
                     Line(top + RowHeight / 2, "row", span);
                     Line(top + 17, "name", span);
                     Line(top + 35, "detail", span);
-                    Box(new(EdgeMargin, top + RowHeight / 2 - 10, 20, 20), "status");
+                    Box(new(item.Nested ? TextLeft : EdgeMargin, top + RowHeight / 2 - 10, 20, 20), "status");
                     // The buttons' icons, drawn while the row is hovered or focused.
                     for (var i = 0; i < (item.Host!.Id.AppHostPid != 0 ? 3 : 2); i++)
                     {
@@ -1167,8 +1264,36 @@ internal sealed class TrayPanel
         }
     }
 
+    private void AddApplication(List<PanelCommand> commands, List<PanelHitTarget> targets, TrayAppHostGroup application,
+        PanelSection section, double top, bool live, TrayPanelPalette palette)
+    {
+        var expanded = _expandedApplications.Contains((section, application.Key!.Value));
+        var key = new PanelTargetKey(PanelTargetKind.ToggleApplication, section, null) { Application = application.Key };
+        var row = new PanelRect(RowInset, top + 2, Width - 2 * RowInset, RowHeight - 4);
+        AddInteractionFill(commands, key, row, palette, includeFocus: false);
+        var status = application.Status(live);
+        var statusText = status switch
+        {
+            PanelStatusGlyph.Healthy => "Healthy",
+            PanelStatusGlyph.Warning => "Needs attention",
+            PanelStatusGlyph.Unhealthy => "Unhealthy",
+            PanelStatusGlyph.Busy => "Starting or stopping",
+            PanelStatusGlyph.Stopped => "Stopped",
+            _ => "Status unavailable"
+        };
+        TrayPanelGlyphs.AddStatus(commands, status, new(EdgeMargin, top + 16, 20, 20), palette);
+        commands.Add(new TextCommand(new(TextLeft, top + 8, TrailingCenter - TextLeft - 20, 18), application.Name,
+            PanelFontRole.Name, palette.TextPrimary));
+        commands.Add(new TextCommand(new(TextLeft, top + 27, TrailingCenter - TextLeft - 20, 16),
+            $"{application.Hosts.Count} instances", PanelFontRole.Body, palette.TextSecondary));
+        TrayPanelGlyphs.AddIcon(commands, expanded ? PanelIcon.ChevronDown : PanelIcon.ChevronRight,
+            new(TrailingCenter - 8, top + 18, 16, 16), palette.TextSecondary);
+        AddTarget(targets, key, row, $"{(expanded ? "Hide" : "Show")} {application.Hosts.Count} instances of {application.Name}",
+            true, null, description: statusText);
+    }
+
     private void AddRow(List<PanelCommand> commands, List<PanelHitTarget> targets, AppHostMenuItem host, PanelSection section,
-        double top, bool live, bool showPid, TrayPanelPalette palette)
+        double top, bool live, bool showPid, TrayPanelPalette palette, bool nested)
     {
         var rowKey = new PanelTargetKey(PanelTargetKind.Row, section, host.Id);
         var row = new PanelRect(RowInset, top + 2, Width - 2 * RowInset, RowHeight - 4);
@@ -1182,18 +1307,21 @@ internal sealed class TrayPanel
             commands.Add(new FillPathCommand(PanelPath.RoundedRect(row, 6), palette.Hover));
         }
 
-        TrayPanelGlyphs.AddStatus(commands, GetStatusGlyph(host, live), new(20, top + 16, 20, 20), palette);
+        TrayPanelGlyphs.AddStatus(commands, GetStatusGlyph(host, live), new(nested ? TextLeft : EdgeMargin, top + 16, 20, 20), palette);
 
         var buttons = host.Id.AppHostPid != 0
             ? new[] { PanelTargetKind.Dashboard, PanelTargetKind.Stop, PanelTargetKind.More }
             : [PanelTargetKind.Start, PanelTargetKind.More];
         var textRight = RowContentRight - buttons.Length * ButtonSize - (buttons.Length - 1) * ButtonGap - 8;
         var (detail, isError) = GetRowDetail(host, live, showPid);
-        commands.Add(new TextCommand(new(TextLeft, top + 8, textRight - TextLeft, 18), host.DisplayName, PanelFontRole.Name, palette.TextPrimary));
-        commands.Add(new TextCommand(new(TextLeft, top + 27, textRight - TextLeft, 16), detail, PanelFontRole.Body,
+        var textLeft = nested ? NestedTextLeft : TextLeft;
+        commands.Add(new TextCommand(new(textLeft, top + 8, textRight - textLeft, 18), host.DisplayName, PanelFontRole.Name, palette.TextPrimary));
+        commands.Add(new TextCommand(new(textLeft, top + 27, textRight - textLeft, 16), detail, PanelFontRole.Body,
             isError ? palette.Danger : palette.TextSecondary, Truncation: isError ? PanelTruncation.End : PanelTruncation.Middle));
 
-        AddTarget(targets, rowKey, row, GetRowAccessibleName(host, detail), true, host);
+        AddTarget(targets, rowKey, row, GetRowAccessibleName(host, detail), true, host,
+            description: nested ? host.Id.AppHostPath : null,
+            tooltip: nested ? $"{host.DisplayName}\n{host.Checkout!.Directory}" : null);
         var x = RowContentRight - buttons.Length * ButtonSize - (buttons.Length - 1) * ButtonGap;
         foreach (var kind in buttons)
         {
@@ -1617,6 +1745,7 @@ internal sealed class TrayPanel
 
     private enum ListItemKind
     {
+        Application,
         Empty,
         SectionHeader,
         Row,
@@ -1628,7 +1757,7 @@ internal sealed class TrayPanel
 
     /// <summary>One item of the scrolled list. <see cref="Target"/> tells Settings items apart.</summary>
     private readonly record struct ListItem(ListItemKind Kind, double Y, double Height, PanelSection Section, AppHostMenuItem? Host,
-        PanelTargetKind Target);
+        PanelTargetKind Target, TrayAppHostGroup? Application, bool Nested);
 
     /// <summary>A pending inline confirmation. <see cref="Host"/> is null for Clear recent.</summary>
     private sealed record PanelConfirm(PanelConfirmKind Kind, PanelSection Section, AppHostMenuItem? Host);
