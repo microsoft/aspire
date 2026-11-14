@@ -272,7 +272,7 @@ public static class PostgresBuilderExtensions
                         new ContainerFile
                         {
                             Name = "servers.json",
-                            Contents = await WritePgAdminServerJson(postgresInstances, cancellationToken).ConfigureAwait(false),
+                            Contents = await WritePgAdminServerJson(postgresInstances, new ValueProviderContext { ExecutionContext = builder.ApplicationBuilder.ExecutionContext, Caller = context.Model }, cancellationToken).ConfigureAwait(false),
                         },
                     ];
                 });
@@ -398,7 +398,7 @@ public static class PostgresBuilderExtensions
                                 new ContainerDirectory
                                 {
                                     Name = "bookmarks",
-                                    Entries = await WritePgWebBookmarks(postgresInstances, ct).ConfigureAwait(false)
+                                    Entries = await WritePgWebBookmarks(postgresInstances, new ValueProviderContext { ExecutionContext = builder.ApplicationBuilder.ExecutionContext, Caller = context.Model }, ct).ConfigureAwait(false)
                                 },
                             ],
                         },
@@ -682,7 +682,7 @@ public static class PostgresBuilderExtensions
         });
     }
 
-    private static async Task<IEnumerable<ContainerFileSystemItem>> WritePgWebBookmarks(IEnumerable<PostgresDatabaseResource> postgresInstances, CancellationToken cancellationToken)
+    private static async Task<IEnumerable<ContainerFileSystemItem>> WritePgWebBookmarks(IEnumerable<PostgresDatabaseResource> postgresInstances, ValueProviderContext context, CancellationToken cancellationToken)
     {
         var bookmarkFiles = new List<ContainerFileSystemItem>();
 
@@ -690,9 +690,9 @@ public static class PostgresBuilderExtensions
         {
             var user = postgresDatabase.Parent.UserNameParameter is null
             ? "postgres"
-            : await postgresDatabase.Parent.UserNameParameter.GetValueAsync(cancellationToken).ConfigureAwait(false);
+            : await postgresDatabase.Parent.UserNameParameter.GetValueAsync(context, cancellationToken).ConfigureAwait(false);
 
-            var password = await postgresDatabase.Parent.PasswordParameter.GetValueAsync(cancellationToken).ConfigureAwait(false) ?? "password";
+            var password = await postgresDatabase.Parent.PasswordParameter.GetValueAsync(context, cancellationToken).ConfigureAwait(false) ?? "password";
 
             // PgAdmin assumes Postgres is being accessed over a default Aspire container network and hardcodes the resource address
             // This will need to be refactored once updated service discovery APIs are available
@@ -715,7 +715,7 @@ public static class PostgresBuilderExtensions
         return bookmarkFiles;
     }
 
-    private static async Task<string> WritePgAdminServerJson(IEnumerable<PostgresServerResource> postgresInstances, CancellationToken cancellationToken)
+    private static async Task<string> WritePgAdminServerJson(IEnumerable<PostgresServerResource> postgresInstances, ValueProviderContext context, CancellationToken cancellationToken)
     {
         using var stream = new MemoryStream();
         using var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true });
@@ -730,8 +730,8 @@ public static class PostgresBuilderExtensions
             var endpoint = postgresInstance.PrimaryEndpoint;
             var userName = postgresInstance.UserNameParameter is null
                 ? "postgres"
-                : await postgresInstance.UserNameParameter.GetValueAsync(cancellationToken).ConfigureAwait(false);
-            var password = await postgresInstance.PasswordParameter.GetValueAsync(cancellationToken).ConfigureAwait(false);
+                : await postgresInstance.UserNameParameter.GetValueAsync(context, cancellationToken).ConfigureAwait(false);
+            var password = await postgresInstance.PasswordParameter.GetValueAsync(context, cancellationToken).ConfigureAwait(false);
 
             writer.WriteStartObject($"{serverIndex}");
             writer.WriteString("Name", postgresInstance.Name);

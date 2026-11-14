@@ -55,6 +55,11 @@ internal class ResourceStateViewModel(string text, Icon icon, Color color)
                 color = Color.Warning;
             }
         }
+        else if (resource.KnownState is KnownResourceState.UnresolvedParameters)
+        {
+            icon = new Icons.Filled.Size16.Warning();
+            color = Color.Warning;
+        }
         else if (resource.IsUnusableTransitoryState() || resource.IsUnknownState() || resource.IsNotStarted())
         {
             icon = new Icons.Filled.Size16.CircleHint(); // A dashed, hollow circle.
@@ -129,6 +134,11 @@ internal class ResourceStateViewModel(string text, Icon icon, Color color)
         {
             // DCP reports the container runtime is unhealthy. Most likely the container runtime (e.g. Docker) isn't running.
             return loc[nameof(Columns.StateColumnResourceContainerRuntimeUnhealthy)];
+        }
+        else if (resource.KnownState is KnownResourceState.UnresolvedParameters &&
+            resource.TryGetUnresolvedParameters(out var parameters))
+        {
+            return loc.GetString(nameof(Columns.StateColumnResourceWaitingForParameters), string.Join(", ", parameters));
         }
         else if (resource.IsWaiting())
         {

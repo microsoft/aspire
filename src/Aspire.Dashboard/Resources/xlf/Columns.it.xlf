@@ -59,6 +59,11 @@ Per altre informazioni, vedere https://aka.ms/aspire/container-runtime-unhealthy
         <target state="translated">In attesa delle dipendenze: {0}</target>
         <note>{0} is a comma-separated list of dependency resource names.</note>
       </trans-unit>
+      <trans-unit id="StateColumnResourceWaitingForParameters">
+        <source>Waiting for parameters: {0}</source>
+        <target state="new">Waiting for parameters: {0}</target>
+        <note>{0} is a comma-separated list of unresolved parameter resource names.</note>
+      </trans-unit>
       <trans-unit id="UnknownStateLabel">
         <source>Unknown</source>
         <target state="translated">Sconosciuto</target>

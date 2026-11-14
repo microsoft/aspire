@@ -6,6 +6,7 @@ using System.Globalization;
 using System.Runtime.ExceptionServices;
 using Aspire.Dashboard.Model;
 using Aspire.Hosting.Resources;
+using Microsoft.Extensions.DependencyInjection;
 using static Aspire.Hosting.Resources.MessageStrings;
 
 namespace Aspire.Hosting.ApplicationModel;
@@ -548,12 +549,25 @@ public class ParameterResource : Resource, IExpressionValue
     /// <summary>
     /// Gets the value of the parameter asynchronously, waiting if necessary for the value to be set.
     /// </summary>
-    public ValueTask<string?> GetValueAsync(ValueProviderContext _, CancellationToken cancellationToken)
+    /// <param name="context">The context identifying the resource requesting the value.</param>
+    /// <param name="cancellationToken">The cancellation token to observe while waiting for the value.</param>
+    /// <returns>The parameter value when it becomes available.</returns>
+    /// <remarks>
+    /// In run mode, an unresolved value is reported on <see cref="ValueProviderContext.Caller"/> while
+    /// it is starting. Pass the caller and execution context when resolving parameters in resource callbacks.
+    /// </remarks>
+    public ValueTask<string?> GetValueAsync(ValueProviderContext context, CancellationToken cancellationToken)
     {
-        // It might look like this does not provide any additional functionality over GetValueAsync,
-        // but we need to ensure that types derived from ParameterResource implement IValueProvider.GetValueAsync(ValueProviderContext, CancellationToken)
-        // using WaitForValueTcs, and not via an interface default implementation.
-        return GetValueAsync(cancellationToken);
+        var valueTask = GetValueAsync(cancellationToken);
+        if (!valueTask.IsCompleted &&
+            context.Caller is { } caller && caller != this &&
+            context.ExecutionContext is { IsRunMode: true } executionContext &&
+            executionContext.ServicesOrNull?.GetService<ResourceNotificationService>() is { } notifications)
+        {
+            return notifications.WaitForParameterAsync(caller, this, valueTask);
+        }
+
+        return valueTask;
     }
 
     /// <summary>

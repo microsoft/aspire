@@ -332,7 +332,7 @@ public static class RedisBuilderExtensions
                     var hostString = $"{(hostsVariableBuilder.Length > 0 ? "," : string.Empty)}{redisInstance.Name}:{redisInstance.Name}:{endpoint.TargetPort}:0";
                     if (redisInstance.PasswordParameter is not null)
                     {
-                        var password = await redisInstance.PasswordParameter.GetValueAsync(ct).ConfigureAwait(false);
+                        var password = await redisInstance.PasswordParameter.GetValueAsync(new ValueProviderContext { ExecutionContext = builder.ApplicationBuilder.ExecutionContext, Caller = e.Resource }, ct).ConfigureAwait(false);
                         hostString += $":{password}";
                     }
                     hostsVariableBuilder.Append(hostString);

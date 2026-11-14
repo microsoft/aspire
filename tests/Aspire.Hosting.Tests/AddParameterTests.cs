@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Reflection;
+using Aspire.Dashboard.Model;
 using Aspire.Hosting.Publishing;
 using Aspire.Hosting.Resources;
 using Aspire.Hosting.Utils;
@@ -14,6 +15,275 @@ namespace Aspire.Hosting.Tests;
 [Trait("Partition", "5")]
 public class AddParameterTests
 {
+    [Fact]
+    public async Task ContextualParameterWaitsAreCountedPerCaller()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var first = builder.AddParameter("first", secret: true).Resource;
+        var second = builder.AddParameter("second").Resource;
+        first.EnsureValueTask();
+        second.EnsureValueTask();
+        var caller = builder.AddExecutable("caller", "unused", ".").Resource;
+        var other = builder.AddExecutable("other", "unused", ".").Resource;
+        using var app = builder.Build();
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
+        using var canceledRead = CancellationTokenSource.CreateLinkedTokenSource(cts.Token);
+        var startingState = new ResourceStateSnapshot(KnownResourceStates.Starting, KnownResourceStateStyles.Info);
+        await app.ResourceNotifications.PublishUpdateAsync(caller, s => s with { State = startingState });
+        await app.ResourceNotifications.PublishUpdateAsync(other, s => s with { State = startingState });
+        var context = new ValueProviderContext { ExecutionContext = builder.ExecutionContext, Caller = caller };
+        var otherContext = new ValueProviderContext { ExecutionContext = builder.ExecutionContext, Caller = other };
+
+        var canceled = first.GetValueAsync(context, canceledRead.Token).AsTask();
+        var firstRead = ((IValueProvider)first).GetValueAsync(context, cts.Token).AsTask();
+        var secondRead = second.GetValueAsync(context, cts.Token).AsTask();
+        var otherRead = first.GetValueAsync(otherContext, cts.Token).AsTask();
+        AssertParameterWaitState(app, caller, KnownResourceStates.UnresolvedParameters, "first", "second");
+        AssertParameterWaitState(app, other, KnownResourceStates.UnresolvedParameters, "first");
+
+        // A replayed startup snapshot must not hide an outstanding read.
+        await app.ResourceNotifications.PublishUpdateAsync(caller, s => s with { State = startingState });
+        canceledRead.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => canceled).DefaultTimeout();
+        AssertParameterWaitState(app, caller, KnownResourceStates.UnresolvedParameters, "first", "second");
+
+        await first.SetValueAsync("secret-value");
+        Assert.Equal("secret-value", await firstRead.DefaultTimeout());
+        Assert.Equal("secret-value", await otherRead.DefaultTimeout());
+        AssertParameterWaitState(app, caller, KnownResourceStates.UnresolvedParameters, "second");
+        AssertParameterWaitState(app, other, KnownResourceStates.Starting);
+
+        await second.SetValueAsync("second-value");
+        Assert.Equal("second-value", await secondRead.DefaultTimeout());
+        AssertParameterWaitState(app, caller, KnownResourceStates.Starting);
+        Assert.True(app.ResourceNotifications.TryGetCurrentState(caller.Name, out var state));
+        Assert.Equal(startingState, state.Snapshot.State);
+    }
+
+    [Theory]
+    [InlineData("Running")]
+    [InlineData("FailedToStart")]
+    [InlineData("Exited")]
+    [InlineData("Stopping")]
+    [InlineData("Waiting")]
+    [InlineData("Building")]
+    [InlineData("NotStarted")]
+    public async Task CompletingParameterWaitDoesNotOverwriteNewerState(string newerState)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var parameter = builder.AddParameter("parameter").Resource;
+        parameter.EnsureValueTask();
+        var caller = builder.AddExecutable("caller", "unused", ".")
+            .WaitFor(builder.AddExecutable("dependency", "unused", ".")).Resource;
+        using var app = builder.Build();
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
+        await app.ResourceNotifications.PublishUpdateAsync(caller, s => s with { State = KnownResourceStates.Starting });
+        var read = parameter.GetValueAsync(new ValueProviderContext { ExecutionContext = builder.ExecutionContext, Caller = caller }, cts.Token).AsTask();
+        AssertParameterWaitState(app, caller, KnownResourceStates.UnresolvedParameters, "parameter");
+
+        await app.ResourceNotifications.PublishUpdateAsync(caller, s => s with { State = newerState });
+        AssertParameterWaitState(app, caller, newerState);
+        await parameter.SetValueAsync("value");
+        Assert.Equal("value", await read.DefaultTimeout());
+        AssertParameterWaitState(app, caller, newerState);
+    }
+
+    [Fact]
+    public async Task ParameterWaitRestoresCustomResourceInitializationState()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var parameter = builder.AddParameter("parameter").Resource;
+        parameter.EnsureValueTask();
+        var caller = builder.AddExternalService("remote", builder.CreateResourceBuilder(parameter)).Resource;
+        using var app = builder.Build();
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
+        await app.ResourceNotifications.PublishUpdateAsync(caller, s => s with { State = KnownResourceStates.Waiting });
+
+        var read = parameter.GetValueAsync(new ValueProviderContext { ExecutionContext = builder.ExecutionContext, Caller = caller }, cts.Token).AsTask();
+        AssertParameterWaitState(app, caller, KnownResourceStates.UnresolvedParameters, "parameter");
+        await parameter.SetValueAsync("https://example.com");
+        Assert.Equal("https://example.com", await read.DefaultTimeout());
+        AssertParameterWaitState(app, caller, KnownResourceStates.Waiting);
+    }
+
+    [Fact]
+    public async Task FaultedParameterWaitIsRemovedAndExceptionIsPreserved()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var parameter = builder.AddParameter("parameter").Resource;
+        parameter.EnsureValueTask();
+        var caller = builder.AddExecutable("caller", "unused", ".").Resource;
+        using var app = builder.Build();
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
+        await app.ResourceNotifications.PublishUpdateAsync(caller, s => s with { State = KnownResourceStates.Starting });
+        var context = new ValueProviderContext { ExecutionContext = builder.ExecutionContext, Caller = caller };
+        var read = parameter.GetValueAsync(context, cts.Token).AsTask();
+        AssertParameterWaitState(app, caller, KnownResourceStates.UnresolvedParameters, "parameter");
+
+        var error = new InvalidOperationException("Failed to load parameter.");
+        await parameter.SetExceptionAsync(error);
+        Assert.Same(error, await Assert.ThrowsAsync<InvalidOperationException>(() => read).DefaultTimeout());
+        AssertParameterWaitState(app, caller, KnownResourceStates.Starting);
+        Assert.Same(error, await Assert.ThrowsAsync<InvalidOperationException>(() => parameter.GetValueAsync(context, cts.Token).AsTask()));
+        AssertParameterWaitState(app, caller, KnownResourceStates.Starting);
+    }
+
+    [Theory]
+    [InlineData("environment")]
+    [InlineData("arguments")]
+    [InlineData("callback")]
+    [InlineData("external-service")]
+    [InlineData("connection-string")]
+    public async Task StartupParameterWaitsFollowActualValueResolution(string source)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var selected = builder.AddParameter("selected");
+        var unused = builder.AddParameter("unused");
+        var condition = builder.AddParameter("condition", "true");
+        selected.Resource.EnsureValueTask();
+        unused.Resource.EnsureValueTask();
+        var expression = ReferenceExpression.CreateConditional(
+            condition.Resource, "true", ReferenceExpression.Create($"{selected}"), ReferenceExpression.Create($"{unused}"));
+        var caller = builder.AddExecutable("caller", "unused", ".");
+        var callbackCount = 0;
+        switch (source)
+        {
+            case "environment":
+                caller.WithEnvironment("VALUE", expression);
+                break;
+            case "arguments":
+                caller.WithArgs(expression);
+                break;
+            case "callback":
+                caller.WithEnvironment(async context =>
+                {
+                    callbackCount++;
+                    context.EnvironmentVariables["VALUE"] = (await selected.Resource.GetValueAsync(
+                        new ValueProviderContext { ExecutionContext = context.ExecutionContext, Caller = context.Resource },
+                        context.CancellationToken))!;
+                });
+                break;
+            case "external-service":
+                caller.WithEnvironment("VALUE", builder.AddExternalService("remote", selected));
+                break;
+            case "connection-string":
+                caller.WithReference(builder.AddResource(new ConnectionStringResource("connection", expression)));
+                break;
+        }
+        using var app = builder.Build();
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
+        await app.ResourceNotifications.PublishUpdateAsync(caller.Resource, s => s with { State = KnownResourceStates.Starting });
+        AssertParameterWaitState(app, caller.Resource, KnownResourceStates.Starting);
+
+        var configuration = ExecutionConfigurationBuilder.Create(caller.Resource)
+            .WithArgumentsConfig().WithEnvironmentVariablesConfig()
+            .BuildAsync(builder.ExecutionContext, cancellationToken: cts.Token);
+        AssertParameterWaitState(app, caller.Resource, KnownResourceStates.UnresolvedParameters, "selected");
+
+        await selected.Resource.SetValueAsync("https://example.com");
+        var result = await configuration.DefaultTimeout();
+        Assert.Null(result.Exception);
+        AssertParameterWaitState(app, caller.Resource, KnownResourceStates.Starting);
+        Assert.False(unused.Resource.WaitForValueTcs!.Task.IsCompleted);
+        Assert.Equal(source == "callback" ? 1 : 0, callbackCount);
+    }
+
+    [Fact]
+    public async Task ContextFreeAndPublishParameterReadsDoNotReportCallerWaits()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var parameter = builder.AddParameter("parameter").Resource;
+        parameter.EnsureValueTask();
+        var caller = builder.AddExecutable("caller", "unused", ".").Resource;
+        using var app = builder.Build();
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
+        await app.ResourceNotifications.PublishUpdateAsync(caller, s => s with { State = KnownResourceStates.Starting });
+
+        var reads = new[]
+        {
+            parameter.GetValueAsync(new ValueProviderContext { ExecutionContext = builder.ExecutionContext }, cts.Token).AsTask(),
+            parameter.GetValueAsync(new ValueProviderContext { Caller = caller }, cts.Token).AsTask(),
+            parameter.GetValueAsync(new ValueProviderContext { Caller = caller, ExecutionContext = new(DistributedApplicationOperation.Publish) }, cts.Token).AsTask(),
+            parameter.GetValueAsync(cts.Token).AsTask()
+        };
+        AssertParameterWaitState(app, caller, KnownResourceStates.Starting);
+        await parameter.SetValueAsync("value");
+        Assert.Equal(["value", "value", "value", "value"], await Task.WhenAll(reads).DefaultTimeout());
+        AssertParameterWaitState(app, caller, KnownResourceStates.Starting);
+    }
+
+    [Fact]
+    public async Task ConnectionStringParameterWaitsAreRemovedFromOriginalReplicaIds()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var parameter = Assert.IsAssignableFrom<ParameterResource>(builder.AddConnectionString("connection").Resource);
+        parameter.EnsureValueTask();
+        var caller = builder.AddExecutable("caller", "unused", ".")
+            .WithAnnotation(new DcpInstancesAnnotation([new("caller-first", "first", 0), new("caller-second", "second", 1)]));
+        using var app = builder.Build();
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
+        await app.ResourceNotifications.PublishUpdateAsync(caller.Resource, s => s with { State = KnownResourceStates.Starting });
+        var read = ((IValueProvider)parameter).GetValueAsync(
+            new ValueProviderContext { ExecutionContext = builder.ExecutionContext, Caller = caller.Resource }, cts.Token).AsTask();
+        foreach (var id in new[] { "caller-first", "caller-second" })
+        {
+            Assert.True(app.ResourceNotifications.TryGetCurrentState(id, out var state));
+            Assert.Equal(KnownResourceStates.UnresolvedParameters, state.Snapshot.State?.Text);
+        }
+
+        caller.WithAnnotation(new DcpInstancesAnnotation([new("caller-replacement", "replacement", 0)]), ResourceAnnotationMutationBehavior.Replace);
+        await app.ResourceNotifications.PublishUpdateAsync(caller.Resource, "caller-second", s => s with { State = KnownResourceStates.Running });
+        cts.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => read).DefaultTimeout();
+        Assert.True(app.ResourceNotifications.TryGetCurrentState("caller-first", out var first));
+        Assert.Equal(KnownResourceStates.Starting, first.Snapshot.State?.Text);
+        Assert.True(app.ResourceNotifications.TryGetCurrentState("caller-second", out var second));
+        Assert.Equal(KnownResourceStates.Running, second.Snapshot.State?.Text);
+        Assert.Empty(first.Snapshot.Properties.Where(p => p.Name == KnownProperties.Resource.UnresolvedParameters));
+        Assert.Empty(second.Snapshot.Properties.Where(p => p.Name == KnownProperties.Resource.UnresolvedParameters));
+        Assert.False(app.ResourceNotifications.TryGetCurrentState("caller-replacement", out _));
+    }
+
+    [Fact]
+    public async Task PgAdminReportsItsOwnParameterWaitWhileGeneratingConfiguration()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var password = builder.AddParameter("password", secret: true);
+        var postgres = builder.AddPostgres("postgres", password: password).WithPgAdmin();
+        using var app = builder.Build();
+        password.Resource.EnsureValueTask();
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
+        var pgadmin = Assert.Single(builder.Resources, r => r.Name == "pgadmin");
+        await app.ResourceNotifications.PublishUpdateAsync(pgadmin, s => s with { State = KnownResourceStates.Starting });
+        var callback = Assert.Single(pgadmin.Annotations.OfType<ContainerFileSystemCallbackAnnotation>());
+
+        var files = callback.Callback(new() { Model = pgadmin, Services = app.Services }, cts.Token);
+        AssertParameterWaitState(app, pgadmin, KnownResourceStates.UnresolvedParameters, "password");
+        Assert.False(app.ResourceNotifications.TryGetCurrentState(postgres.Resource.Name, out _));
+
+        await password.Resource.SetValueAsync("password-value");
+        Assert.Single(await files.DefaultTimeout());
+        AssertParameterWaitState(app, pgadmin, KnownResourceStates.Starting);
+    }
+
+    private static void AssertParameterWaitState(DistributedApplication app, IResource resource, string expectedState, params string[] parameters)
+    {
+        Assert.True(app.ResourceNotifications.TryGetCurrentState(resource.Name, out var state));
+        Assert.Equal(expectedState, state.Snapshot.State?.Text);
+        var property = state.Snapshot.Properties.SingleOrDefault(p => p.Name == KnownProperties.Resource.UnresolvedParameters);
+        if (parameters.Length == 0)
+        {
+            Assert.Null(property);
+        }
+        else
+        {
+            Assert.NotNull(property);
+            Assert.Equal(parameters, Assert.IsType<string[]>(property.Value));
+            Assert.False(property.IsSensitive);
+            Assert.Equal(KnownResourceStateStyles.Warn, state.Snapshot.State?.Style);
+        }
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
