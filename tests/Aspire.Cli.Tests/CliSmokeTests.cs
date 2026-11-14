@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Cli.Commands;
+using Aspire.Hosting;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.DotNet.RemoteExecutor;
 
@@ -163,6 +165,37 @@ public class CliSmokeTests(ITestOutputHelper outputHelper)
         }, options: s_remoteInvokeOptions);
 
         outputHelper.WriteLine(result.Process.StandardOutput.ReadToEnd());
+    }
+
+    [Fact]
+    public void FailedOneShotQueryKeepsAutomaticLog()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var home = workspace.CreateDirectory("aspire-home");
+
+        var remoteInvokeOptions = new RemoteInvokeOptions();
+        remoteInvokeOptions.StartInfo.RedirectStandardOutput = true;
+        remoteInvokeOptions.StartInfo.WorkingDirectory = workspace.Path;
+        remoteInvokeOptions.StartInfo.Environment[KnownConfigNames.AspireHome] = home.FullName;
+
+        // A test started from an editor terminal would otherwise route the child's output through
+        // the extension backchannel instead of the console.
+        foreach (var name in remoteInvokeOptions.StartInfo.Environment.Keys.Where(AppHostLauncher.IsExtensionEnvironmentVariable).ToList())
+        {
+            remoteInvokeOptions.StartInfo.Environment.Remove(name);
+        }
+
+        // A `ps` snapshot without `--follow` is rejected before any AppHost is scanned, so this
+        // failure never touches AppHosts running on the machine.
+        using var result = RemoteExecutor.Invoke(async () =>
+        {
+            var exitCode = await Program.Main(["ps", "--output", "snapshot", "--non-interactive", "--nologo"]).DefaultTimeout();
+            Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+        }, options: remoteInvokeOptions);
+
+        outputHelper.WriteLine(result.Process.StandardOutput.ReadToEnd());
+
+        Assert.Single(Directory.GetFiles(Path.Combine(home.FullName, "logs"), "cli_*.log"));
     }
 
 #if DEBUG

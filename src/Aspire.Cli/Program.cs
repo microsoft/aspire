@@ -167,6 +167,31 @@ public class Program
         return null;
     }
 
+    /// <summary>
+    /// Determines whether a successful one-shot command's automatic log can be deleted at exit.
+    /// Commands opt in through <see cref="BaseCommand.DiscardsLogOnSuccess"/>. Logs are kept when the user
+    /// asked for diagnostics (<c>--debug</c>, <c>--log-level</c>, or <c>--log-file</c>), when the command
+    /// does not opt in, such as follow modes, or when the run was cancelled. Cancellation is checked
+    /// separately so a cancelled run that still reports success keeps its log.
+    /// </summary>
+    /// <remarks>
+    /// The diagnostic options are checked in the parse result rather than the raw-argument pre-parse in
+    /// <see cref="ParseLoggingOptions"/>, which only recognizes the space-separated form, so inline forms
+    /// such as <c>--log-level=Debug</c> also keep the log. Only explicitly passed options count, and their
+    /// values are never read. Help and version actions clear parse errors and return success, so an invalid
+    /// value such as <c>--log-level bogus</c> or a bare <c>--log-file</c> can reach this check, where reading
+    /// the value would throw. Implicit results are skipped because System.CommandLine creates one for options
+    /// with a default value, such as <c>--debug</c>.
+    /// </remarks>
+    internal static bool ShouldDiscardLogOnSuccess(int exitCode, bool cancellationRequested, ParseResult parseResult)
+        => exitCode == CliExitCodes.Success
+            && !cancellationRequested
+            && parseResult.GetResult(RootCommand.DebugOption) is not { Implicit: false }
+            && parseResult.GetResult(RootCommand.DebugLevelOption) is not { Implicit: false }
+            && parseResult.GetResult(RootCommand.s_logFileOption) is not { Implicit: false }
+            && parseResult.CommandResult.Command is BaseCommand command
+            && command.DiscardsLogOnSuccess(parseResult);
+
     private static async Task<string> GetGlobalSettingsPathAsync(ILogger logger, bool migrate, CancellationToken cancellationToken)
     {
         var usersAspirePath = GetUsersAspirePath();
@@ -1379,6 +1404,13 @@ public class Program
                         exitCode = CliExitCodes.DashboardFailure;
                     }
                 }
+            }
+
+            if (profileCaptureOptions is null && ShouldDiscardLogOnSuccess(exitCode, cancellationManager.Token.IsCancellationRequested, parseResult))
+            {
+                // The provider deletes the file when it is disposed after the shutdown below, and
+                // keeps it if anything logs a warning or error before then.
+                startupContext.FileLoggerProvider.DeleteOnDisposeIfNoWarnings();
             }
 
             return exitCode;

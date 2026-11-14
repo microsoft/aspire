@@ -144,6 +144,8 @@ internal sealed class DescribeCommand : BaseCommand
     protected override bool IsMachineReadableFormatRequested(ParseResult parseResult) =>
         parseResult.GetValue(s_formatOption) is ResourceOutputFormat.Json or ResourceOutputFormat.Mermaid;
 
+    internal override bool DiscardsLogOnSuccess(ParseResult parseResult) => !parseResult.GetValue(s_followOption);
+
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         using var activity = Telemetry.StartDiagnosticActivity(Name);

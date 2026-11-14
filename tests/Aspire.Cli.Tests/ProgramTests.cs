@@ -139,6 +139,62 @@ public class ProgramTests(ITestOutputHelper outputHelper)
         Assert.Null(result);
     }
 
+    [Theory]
+    [InlineData("ps", CliExitCodes.Success, true)]
+    [InlineData("ps --format json", CliExitCodes.Success, true)]
+    [InlineData("describe", CliExitCodes.Success, true)]
+    [InlineData("ps", CliExitCodes.FailedToFindProject, false)]
+    [InlineData("ps --follow", CliExitCodes.Success, false)]
+    [InlineData("describe --follow", CliExitCodes.Success, false)]
+    [InlineData("ps --debug", CliExitCodes.Success, false)]
+    [InlineData("ps -d", CliExitCodes.Success, false)]
+    [InlineData("ps --log-level Debug", CliExitCodes.Success, false)]
+    [InlineData("ps --log-level=Debug", CliExitCodes.Success, false)]
+    [InlineData("ps --log-level:Debug", CliExitCodes.Success, false)]
+    [InlineData("ps -l Debug", CliExitCodes.Success, false)]
+    [InlineData("ps --log-file cli.log", CliExitCodes.Success, false)]
+    [InlineData("ps --log-file=cli.log", CliExitCodes.Success, false)]
+    [InlineData("run", CliExitCodes.Success, false)]
+    public void ShouldDiscardLogOnSuccess_OnlyForCleanOneShotQueries(string commandLine, int exitCode, bool expected)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+        var parseResult = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>().Parse(commandLine.Split(' '));
+
+        Assert.Empty(parseResult.Errors);
+        Assert.Equal(expected, Program.ShouldDiscardLogOnSuccess(exitCode, cancellationRequested: false, parseResult));
+    }
+
+    [Theory]
+    [InlineData("ps")]
+    [InlineData("describe")]
+    public void ShouldDiscardLogOnSuccess_KeepsLog_WhenCancelledWithSuccessExitCode(string commandLine)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+        var parseResult = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>().Parse(commandLine.Split(' '));
+
+        Assert.Empty(parseResult.Errors);
+        Assert.False(Program.ShouldDiscardLogOnSuccess(CliExitCodes.Success, cancellationRequested: true, parseResult));
+    }
+
+    [Theory]
+    [InlineData("--version --log-level bogus")]
+    [InlineData("--version --log-file")]
+    [InlineData("ps --help --log-level bogus")]
+    [InlineData("describe --help --log-level bogus")]
+    public void ShouldDiscardLogOnSuccess_KeepsLog_WhenDiagnosticOptionValueIsInvalid(string commandLine)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+        var parseResult = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>().Parse(commandLine.Split(' '));
+
+        Assert.False(Program.ShouldDiscardLogOnSuccess(CliExitCodes.Success, cancellationRequested: false, parseResult));
+    }
+
     [Fact]
     public void BuildAnsiConsole_DoesNotReenablePlaygroundFormatting_WhenHostDisablesAnsi()
     {
