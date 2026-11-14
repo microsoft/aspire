@@ -39,6 +39,15 @@ public sealed class TestTriggerMapTests
         Assert.Empty(result.Jobs);
     }
 
+    [Fact]
+    public void SharedArgumentParserSelectsAllConsumers()
+    {
+        var result = SelectWithRealMap(".github/workflows/parse-command-line.py");
+
+        Assert.True(result.SelectsAll);
+        Assert.Empty(result.UnmatchedFiles);
+    }
+
     [Theory]
     [InlineData("tests/Aspire.Dashboard.Playwright.Tests/Integration/Playwright/Pages/ResourcesTests.cs", "Aspire.Dashboard.Playwright.Tests")]
     [InlineData("tests/Aspire.EndToEnd.Tests/IntegrationTests.cs", "Aspire.EndToEnd.Tests")]

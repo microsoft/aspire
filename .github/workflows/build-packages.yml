@@ -21,9 +21,11 @@ jobs:
         env:
           VERSION_OVERRIDE_ARG: ${{ inputs.versionOverrideArg }}
         run: |
-          # Overrides contain whitespace-separated MSBuild switches, such as /p:VersionSuffix=pr.123.gabcdef12.
-          # Split them as arguments without evaluating caller-supplied values as shell code.
-          read -r -a versionOverrideArgs <<< "$VERSION_OVERRIDE_ARG"
+          args_file="$RUNNER_TEMP/version-arguments"
+          trap 'rm -f "$args_file"' EXIT
+          python3 .github/workflows/parse-command-line.py --format nul VERSION_OVERRIDE_ARG > "$args_file"
+          version_args=()
+          while IFS= read -r -d '' arg; do version_args+=("$arg"); done < "$args_file"
           ./build.sh \
             -restore \
             -build \
@@ -34,7 +36,7 @@ jobs:
             -p:SkipTestProjects=true \
             -p:SkipBundleDeps=true \
             -p:SkipNativeBuild=true \
-            "${versionOverrideArgs[@]}"
+            "${version_args[@]}"
 
       - name: Generate template component manifest
         shell: pwsh

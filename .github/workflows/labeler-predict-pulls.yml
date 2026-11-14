@@ -88,9 +88,10 @@ jobs:
         id: get-pulls
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          WORKFLOW_NAME: ${{ github.workflow }}
         run: |
           # Get the last successful schedule run's timestamp (minus 5 minutes for overlap)
-          last_run=$(gh run list --repo ${{ github.repository }} --workflow "${{ github.workflow }}" --event schedule --status success --limit 1 --json updatedAt --jq '.[0].updatedAt // empty')
+          last_run=$(gh run list --repo ${{ github.repository }} --workflow "$WORKFLOW_NAME" --event schedule --status success --limit 1 --json updatedAt --jq '.[0].updatedAt // empty')
 
           if [ -n "$last_run" ]; then
             # Subtract 5 minutes from the last run timestamp for overlap

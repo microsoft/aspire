@@ -81,7 +81,17 @@ jobs:
       - name: Build native bundle and CLI packages
         shell: pwsh
         run: |
-          $dotnetScript = if ($IsWindows) { "./dotnet.cmd" } else { "./dotnet.sh" }
+          $ErrorActionPreference = 'Stop'
+          $python = if ($IsWindows) { 'python' } else { 'python3' }
+          $versionArgsJson = & $python .github/workflows/parse-command-line.py VERSION_OVERRIDE_ARG
+          if ($LASTEXITCODE -ne 0) { throw 'Invalid versionOverrideArg.' }
+          $versionArgs = @($versionArgsJson | ConvertFrom-Json)
+          $dotnetScript = './dotnet.sh'
+          if ($IsWindows) {
+            . ./eng/common/tools.ps1
+            $dotnetScript = Join-Path (InitializeDotNetCli -install:$true -createSdkLocationFile:$true) 'dotnet.exe'
+            $env:DOTNET_SKIP_FIRST_TIME_EXPERIENCE = '1'
+          }
           $arguments = @(
             "msbuild",
             "eng/Bundle.proj",
@@ -95,11 +105,7 @@ jobs:
             "/p:AspireCliChannel=$env:ASPIRE_CLI_CHANNEL",
             "/bl:$env:GITHUB_WORKSPACE/artifacts/log/$env:BUILD_CONFIGURATION/BuildNativeBundle.binlog"
           )
-          if (-not [string]::IsNullOrWhiteSpace($env:VERSION_OVERRIDE_ARG)) {
-            # The caller supplies whitespace-separated switches without spaces in values,
-            # e.g. /p:VersionSuffix=pr.123.gabcdef12 /p:DotNetFinalVersionKind=prerelease.
-            $arguments += $env:VERSION_OVERRIDE_ARG.Trim() -split '\s+'
-          }
+          $arguments += $versionArgs
 
           & $dotnetScript @arguments
           if ($LASTEXITCODE -ne 0) {
