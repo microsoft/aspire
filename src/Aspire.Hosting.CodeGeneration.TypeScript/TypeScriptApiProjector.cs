@@ -271,10 +271,14 @@ internal sealed partial class TypeScriptApiProjector
         // This must happen AFTER wrapper class names are populated so types resolve correctly.
         // Options names are public TypeScript API. Allocate collision suffixes after sorting by the
         // stable capability identity so a combined context produces byte-identical output regardless
-        // of the order in which package capabilities were discovered.
+        // of the order in which package capabilities were discovered. Canonical capabilities (whose
+        // capability name is the projected method name) register before aliases so they own the
+        // method-named interface even when an alias ID sorts first; RegisterOptionsInterface then
+        // moves aliases with different options to capability-named interfaces.
         foreach (var cap in builders
             .SelectMany(builder => builder.Capabilities)
-            .OrderBy(capability => capability.CapabilityId, StringComparer.Ordinal))
+            .OrderBy(capability => string.Equals(GetCapabilityName(capability.CapabilityId), capability.MethodName, StringComparison.Ordinal) ? 0 : 1)
+            .ThenBy(capability => capability.CapabilityId, StringComparer.Ordinal))
         {
             var (_, optionalParams) = SeparateParameters(cap.Parameters);
             if (optionalParams.Count > 0 && !TryGetDirectOptionsParameter(optionalParams, out _))
