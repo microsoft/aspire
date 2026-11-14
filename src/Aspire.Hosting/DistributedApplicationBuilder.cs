@@ -621,7 +621,11 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
             _innerBuilder.Services.AddSingleton<ExecutableCreator>();
             _innerBuilder.Services.AddSingleton<ContainerCreator>();
             _innerBuilder.Services.AddSingleton<DcpExecutor>();
-            _innerBuilder.Services.AddSingleton<IDcpExecutor>(sp => sp.GetRequiredService<DcpExecutor>());
+            _innerBuilder.Services.AddSingleton<DcpExecutorV2>();
+            _innerBuilder.Services.AddSingleton<DcpWorkloadCreatorV2>();
+            _innerBuilder.Services.AddSingleton<IDcpExecutor>(sp => sp.GetRequiredService<IOptions<DcpOptions>>().Value.UseV2
+                ? sp.GetRequiredService<DcpExecutorV2>()
+                : sp.GetRequiredService<DcpExecutor>());
             _innerBuilder.Services.AddSingleton<DcpExecutorEvents>();
             _innerBuilder.Services.AddSingleton<DcpHost>();
             _innerBuilder.Services.AddSingleton<IDcpDependencyCheckService, DcpDependencyCheck>();

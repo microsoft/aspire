@@ -112,34 +112,13 @@ internal sealed class ResourceLogSource<TResource>(
         {
             var streamTasks = new List<Task>();
 
-            var startupStderrStream = await kubernetesService.GetLogStreamAsync(resource, Logs.StreamTypeStartupStdErr, cancellationToken, follow: follow, timestamps: true).ConfigureAwait(false);
-            var startupStdoutStream = await kubernetesService.GetLogStreamAsync(resource, Logs.StreamTypeStartupStdOut, cancellationToken, follow: follow, timestamps: true).ConfigureAwait(false);
-
-            var startupStdoutStreamTask = Task.Run(() => StreamLogsAsync(startupStdoutStream, isError: false, parseDcpLogs: false), cancellationToken);
-            streamTasks.Add(startupStdoutStreamTask);
-
-            var startupStderrStreamTask = Task.Run(() => StreamLogsAsync(startupStderrStream, isError: false, parseDcpLogs: false), cancellationToken);
-            streamTasks.Add(startupStderrStreamTask);
-
-            // Terminal-backed Executables bridge stdout/stderr through the PTY instead of DCP log files.
-            // DCP rejects those sources while keeping startup and system logs available.
-            // https://github.com/microsoft/dcp/blob/main/internal/logs/stdiologs/stdio_log_streamer.go
-            if (resource is not Executable { Spec.Terminal: not null })
+            foreach (var source in ResourceLogSources.GetSources(resource))
             {
-                var stdoutStream = await kubernetesService.GetLogStreamAsync(resource, Logs.StreamTypeStdOut, cancellationToken, follow: follow, timestamps: true).ConfigureAwait(false);
-                var stderrStream = await kubernetesService.GetLogStreamAsync(resource, Logs.StreamTypeStdErr, cancellationToken, follow: follow, timestamps: true).ConfigureAwait(false);
-
-                var stdoutStreamTask = Task.Run(() => StreamLogsAsync(stdoutStream, isError: false, parseDcpLogs: false), cancellationToken);
-                streamTasks.Add(stdoutStreamTask);
-
-                var stderrStreamTask = Task.Run(() => StreamLogsAsync(stderrStream, isError: true, parseDcpLogs: false), cancellationToken);
-                streamTasks.Add(stderrStreamTask);
+                var stream = await kubernetesService.GetLogStreamAsync(resource, source, cancellationToken, follow: follow, timestamps: true).ConfigureAwait(false);
+                streamTasks.Add(Task.Run(() => StreamLogsAsync(stream,
+                    isError: source == Logs.StreamTypeStdErr,
+                    parseDcpLogs: source == Logs.StreamTypeSystem), cancellationToken));
             }
-
-            var systemStream = await kubernetesService.GetLogStreamAsync(resource, Logs.StreamTypeSystem, cancellationToken, follow: follow, timestamps: true).ConfigureAwait(false);
-
-            var systemStreamTask = Task.Run(() => StreamLogsAsync(systemStream, isError: false, parseDcpLogs: true), cancellationToken);
-            streamTasks.Add(systemStreamTask);
 
             // End the enumeration when all streams have been read to completion.
             async Task WaitForStreamsToCompleteAsync()
@@ -161,7 +140,7 @@ internal sealed class ResourceLogSource<TResource>(
         }
     }
 
-    private static async IAsyncEnumerable<string> ReadLogLinesAsync(Stream stream, [EnumeratorCancellation] CancellationToken cancellationToken)
+    internal static async IAsyncEnumerable<string> ReadLogLinesAsync(Stream stream, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         using var sr = new StreamReader(stream, leaveOpen: false);
         var sb = new StringBuilder();
@@ -201,7 +180,7 @@ internal sealed class ResourceLogSource<TResource>(
         }
     }
 
-    private static string NormalizeCarriageReturns(string line)
+    internal static string NormalizeCarriageReturns(string line)
     {
         if (!line.Contains('\r'))
         {

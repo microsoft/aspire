@@ -73,6 +73,11 @@ internal sealed class DcpOptions
     public bool RandomizePorts { get; set; }
 
     /// <summary>
+    /// Uses the experimental DCP V2 execution pipeline for this application run. Defaults to false.
+    /// </summary>
+    public bool UseV2 { get; set; }
+
+    /// <summary>
     /// Whether randomized isolated-mode ports should use the persistent allocation store.
     /// </summary>
     public bool PersistPortsInIsolatedMode { get; set; }
@@ -397,6 +402,7 @@ internal class ConfigureDefaultDcpOptions(
         }
 
         options.RandomizePorts = dcpPublisherConfiguration.GetValue(nameof(options.RandomizePorts), options.RandomizePorts);
+        options.UseV2 = dcpPublisherConfiguration.GetValue(nameof(options.UseV2), options.UseV2);
         options.PersistPortsInIsolatedMode = configuration.GetValue(KnownConfigNames.PersistPortsInIsolatedMode, options.PersistPortsInIsolatedMode);
         options.ProxylessEndpointPortRangeStart = dcpPublisherConfiguration.GetValue(nameof(options.ProxylessEndpointPortRangeStart), options.ProxylessEndpointPortRangeStart);
         options.ProxylessEndpointPortRangeEnd = dcpPublisherConfiguration.GetValue(nameof(options.ProxylessEndpointPortRangeEnd), options.ProxylessEndpointPortRangeEnd);

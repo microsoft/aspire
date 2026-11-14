@@ -177,6 +177,44 @@ public partial class KubernetesServiceTests
         Assert.Equal([$"POST {collectionPath}", $"GET {collectionPath}/resource"], requests.ToArray());
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task DeleteWithUidPreconditionPreservesReplacements(bool conflict)
+    {
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
+        var (service, kubeconfigPath, fileSystem) = CreateService();
+        using var disposableFileSystem = fileSystem;
+        using var disposableService = service;
+        var resource = V2.Namespace.Create("app");
+        resource.Metadata.Uid = "owned-namespace";
+        var requests = new ConcurrentQueue<string>();
+        await using var server = await StartServerAsync(cts.Token, requestHandler: async context =>
+        {
+            requests.Enqueue($"{context.Request.Method} {context.Request.Path}");
+            var options = KubernetesJson.Deserialize<V1DeleteOptions>(await new StreamReader(context.Request.Body).ReadToEndAsync(context.RequestAborted));
+            Assert.Equal("owned-namespace", options.Preconditions.Uid);
+            if (conflict)
+            {
+                await WriteStatusAsync(context, StatusCodes.Status409Conflict, "Conflict");
+            }
+            else
+            {
+                await context.Response.WriteAsync(KubernetesJson.Serialize(resource), context.RequestAborted);
+            }
+        });
+        WriteKubeconfig(kubeconfigPath, server.Port);
+        if (conflict)
+        {
+            await Assert.ThrowsAsync<k8s.Autorest.HttpOperationException>(() => service.DeleteAsync(resource, cts.Token));
+        }
+        else
+        {
+            Assert.Equal(resource.Metadata.Uid, (await service.DeleteAsync(resource, cts.Token)).Metadata.Uid);
+        }
+        Assert.Equal(["DELETE /apis/usvc-dev.developer.microsoft.com/v2/namespaces/app"], requests.ToArray());
+    }
+
     [Fact]
     public async Task NamespaceRejectsNamespacedOperations()
     {
