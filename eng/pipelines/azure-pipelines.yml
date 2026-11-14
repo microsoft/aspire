@@ -119,6 +119,13 @@ extends:
     featureFlags:
       autoEnablePREfastWithNewRuleset: false
       autoEnableRoslynWithNewRuleset: false
+      # Public Go modules must use the 1ES credential provider/proxy, not
+      # proxy.golang.org. Enable it on the same builds as the Go scan stage.
+      # https://aka.ms/goproxy
+      ${{ if and(ne(variables['_RunAsPublic'], 'true'), eq(variables['Build.SourceBranch'], 'refs/heads/main')) }}:
+        golang:
+          internalModuleProxy:
+            enabled: true
     sdl:
       componentgovernance:
         # Exclude .packages folder from CG scanning. This folder contains older versions of our own
@@ -341,6 +348,24 @@ extends:
             GitHubOrg: microsoft
             MirrorRepo: aspire
             MirrorBranch: main
+
+    # Compiled-language scans need real Go/Java compilation, not just the
+    # managed build that embeds their templates and SDK runtime sources.
+    # Keep these jobs parallel with Assemble; they consume same-build artifacts
+    # and do not need packages to have been published to a feed.
+    - stage: polyglot_codeql
+      displayName: Go and Java CodeQL
+      dependsOn:
+        - build
+        - build_sign_native
+      condition: and(succeeded(), ne(variables['_RunAsPublic'], 'true'), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+      jobs:
+      - template: /eng/pipelines/templates/polyglot-codeql.yml@self
+        parameters:
+          language: go
+      - template: /eng/pipelines/templates/polyglot-codeql.yml@self
+        parameters:
+          language: java
 
     # ----------------------------------------------------------------
     # Assemble: stage native CLI archives + managed packages together,
