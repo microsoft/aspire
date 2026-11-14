@@ -509,6 +509,39 @@ public sealed class TestTriggerMapTests
         Assert.Equal(expectedTargets.Order(StringComparer.Ordinal), actualTargets);
     }
 
+    [Fact]
+    public void CliE2eImageRoutingExcludesOuterloopPodmanImageFromRegularTargets()
+    {
+        var cliE2eImage = SelectWithRealMap("tests/Shared/Docker/Dockerfile.e2e");
+
+        Assert.False(cliE2eImage.SelectsAll);
+        Assert.Empty(cliE2eImage.UnmatchedFiles);
+        Assert.Equal(["Aspire.Cli.EndToEnd.Tests"], cliE2eImage.TestProjects);
+        Assert.Empty(cliE2eImage.Jobs);
+
+        var podmanImage = SelectWithRealMap("tests/Shared/Docker/Dockerfile.e2e-podman");
+
+        Assert.False(podmanImage.SelectsAll);
+        Assert.Empty(podmanImage.UnmatchedFiles);
+        Assert.Empty(podmanImage.TestProjects);
+        Assert.Empty(podmanImage.Jobs);
+    }
+
+    [Theory]
+    [InlineData("tests/Shared/TemplatesTesting/data/deleted-fixture_cs", "Aspire.Templates.Tests")]
+    [InlineData("tests/Shared/TestCertificates/deleted-certificate.pfx", "Aspire.Dashboard.Tests")]
+    public void DeletedSharedInputsStillReachConsumersWithoutHeadGraphOwnership(string path, string consumer)
+    {
+        Assert.False(File.Exists(Path.Combine(RepoRoot.Path, path)));
+
+        var result = SelectWithRealMap(path);
+
+        Assert.False(result.SelectsAll);
+        Assert.Empty(result.UnmatchedFiles);
+        Assert.Contains(consumer, result.TestProjects);
+        Assert.Empty(result.Jobs);
+    }
+
     [Theory]
     [InlineData("src/Aspire.Hosting.CodeGeneration.TypeScript/Resources/integration-host.mts")]
     [InlineData("src/Aspire.Hosting.CodeGeneration.TypeScript/Resources/transport.mts")]
@@ -1038,6 +1071,28 @@ public sealed class TestTriggerMapTests
     }
 
     [Fact]
+    public void TestArchiveSupportFilesSelectEveryRegularNuGetConsumerWithoutJobs()
+    {
+        GraphAffectedProjects.EnsureMSBuildRegistered();
+        var consumers = LoadArtifactConsumingTestProjectMetadata(Path.Combine(RepoRoot.Path, "Aspire.slnx"))
+            .Where(project => !project.SkipTests && project.RequiresNugets)
+            .Select(project => project.Name)
+            .ToArray();
+        Assert.NotEmpty(consumers);
+
+        // run-tests archives RequiresNugets projects for execution outside the repository.
+        foreach (var path in new[] { "tests/Shared/EmptyProject.proj", "tests/Shared/nuget-with-package-source-mapping.config" })
+        {
+            var result = SelectWithRealMap(path);
+
+            Assert.False(result.SelectsAll);
+            Assert.Empty(result.UnmatchedFiles);
+            Assert.Empty(result.Jobs);
+            Assert.All(consumers, consumer => Assert.Contains(consumer, result.TestProjects, StringComparer.Ordinal));
+        }
+    }
+
+    [Fact]
     public void ArtifactProducerWorkflowSelectsEverySelectorGatedArtifactConsumingJob()
     {
         var workflow = new YamlStream();
@@ -1230,12 +1285,13 @@ public sealed class TestTriggerMapTests
                 || IsTrue(node.ProjectInstance.GetPropertyValue("RequiresCliArchive")))
             .Select(node => new ArtifactConsumingTestProject(
                 Path.GetFileNameWithoutExtension(node.ProjectInstance.FullPath)!,
-                IsTrue(node.ProjectInstance.GetPropertyValue("SkipTests"))))
+                IsTrue(node.ProjectInstance.GetPropertyValue("SkipTests")),
+                IsTrue(node.ProjectInstance.GetPropertyValue("RequiresNugets"))))
             .GroupBy(project => project.Name, StringComparer.Ordinal)
             .Select(group => group.First());
     }
 
-    private sealed record ArtifactConsumingTestProject(string Name, bool SkipTests);
+    private sealed record ArtifactConsumingTestProject(string Name, bool SkipTests, bool RequiresNugets);
 
     private static bool IsMatrixTestProject(string projectPath)
     {

@@ -45,9 +45,16 @@ For selector implementation changes, also read
    or fixture declarations and compare them with production selector output.
    Guard against empty or incomplete discovery within the documented scan scope
    and cover its supported syntax.
-   Use representative real-map positives and deliberate exclusions for distinct
-   routing boundaries, not an acceptance case for every YAML entry. Keep broad
-   Layer 1 graph-to-dependent-test coverage and representative CLI-bundle and
+   Do not add a test that merely repeats a simple `path_rules` entry: the map
+   already states that relationship, and duplicating it adds maintenance cost
+   without an independent check. Add tests when they protect behavior the
+   configuration alone does not establish, such as deleted paths that have no
+   HEAD graph ownership, consumer sets discovered independently of the map, or
+   distinct selector mechanisms with meaningful exclusion boundaries. Prefer
+   one generic discovery-based test over enumerating individual files or rules.
+   Weigh how likely the dependency is to change and the impact of a missed
+   route against the cost of maintaining and running the test. Keep broad Layer
+   1 graph-to-dependent-test coverage and representative CLI-bundle and
    Polyglot cases. Synthetic maps cover selector-engine and CLI failure modes.
    Different mechanisms are not interchangeable merely because targets match.
 
