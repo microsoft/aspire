@@ -1,0 +1,15 @@
+{
+  "id": "dashboard-live-disposal-refresh-count-mismatch",
+  "type": "main-repository-breakage",
+  "title": "ApplicationSummaryTests.Live_DisposalStopsPeriodicRefresh fails: query count changed after disposal",
+  "error_pattern": "Assert.Equal() Failure: Values differ\nExpected: 1\nActual:   2\n   at Aspire.Dashboard.Components.Tests.Controls.ApplicationSummaryTests.Live_DisposalStopsPeriodicRefresh() line 415",
+  "occurrences": [
+    {
+      "run_id": 43529725415,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/43529725415",
+      "job": "Tests / No-package tests (regular, Aspire.Dashboard.Components.Tests, Dashboard.Components, Dashboard.Com... / Dashboard.Components (windows-latest)",
+      "observed_at": "2026-11-14T00:21:20Z",
+      "pr_number": 0
+    }
+  ]
+}

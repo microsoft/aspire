@@ -1,0 +1,136 @@
+{
+  "run_id": 43529725415,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/43529725415",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-14T00:21:20Z",
+  "verdict": "main-repository-breakage",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 22274,
+    "title": "Label the Aspire tray as Preview instead of Experimental",
+    "author": "sebastienros",
+    "state": "closed",
+    "head_branch": "sebros/aspire-tray-experimental-status-5f50bb",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/22274",
+    "merged_at": "2026-11-13T23:47:33Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "67d9ff015544d7ad6b6f61d856b3e54dce9854a5",
+    "failed_sha": "f67e764c2de5c325abefe6271c2e5395a36ea984",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "8f6e42f40e26e1cc1dc20749db477e530240387f",
+        "message": "Fix 404 when switching language in the previous dashboard (#22261) ## Description Switching language in the previous dashboard (Settings > Language, with the previous experience selected) showed a 404 page. The settings dialog navigates to `/api/set-language?language=...&redirectUrl=...` with a forced page load, the same as the new dashboard. The legacy layout registers a location-changing handler that rewrites unprefixed navigations below `/legacy`, so links shared with the new experience stay ",
+        "html_url": "https://github.com/microsoft/aspire/commit/8f6e42f40e26e1cc1dc20749db477e530240387f",
+        "pull_request": {
+          "number": 22261,
+          "title": "Fix 404 when switching language in the previous dashboard",
+          "url": "https://github.com/microsoft/aspire/pull/22261",
+          "merged_at": "2026-11-13T17:25:35Z"
+        }
+      },
+      {
+        "sha": "8e63008ed19461f5a4005c109f72edd13a03b8aa",
+        "message": "Fix clipped graph controls and hide the game in the previous dashboard (#22264) ## Description In the previous dashboard experience, the resource graph controls (export, zoom in, zoom out, reset) were clipped by the bottom of the viewport and couldn't be clicked. The graph sized its SVG `viewBox` from `.resources-summary-layout`. On the new overview that element contains only the graph, but on the previous experience's Resources page it also contains the tab header row. The SVG had no CSS height",
+        "html_url": "https://github.com/microsoft/aspire/commit/8e63008ed19461f5a4005c109f72edd13a03b8aa",
+        "pull_request": {
+          "number": 22264,
+          "title": "Fix clipped graph controls and hide the game in the previous dashboard",
+          "url": "https://github.com/microsoft/aspire/pull/22264",
+          "merged_at": "2026-11-13T18:00:01Z"
+        }
+      },
+      {
+        "sha": "619426b657f96225ccf1b08d93e03a5ff648daa0",
+        "message": "Show only the absolute time in dashboard relative-time tooltips (#22263) ## Description Tooltips on relative times in the new dashboard repeated the text they were attached to, for example `Started 1m ago (11/13/2026 8:30:43 AM)` on a row that already reads \"Started 1m ago\". They now show only the exact time, in a browser-like medium format: `Nov 13, 2026, 11:03 AM`. Affected tooltips: - Resource rows, in the sidebar and in the full resource list. The accessible name keeps the visible age, `Star",
+        "html_url": "https://github.com/microsoft/aspire/commit/619426b657f96225ccf1b08d93e03a5ff648daa0",
+        "pull_request": {
+          "number": 22263,
+          "title": "Show only the absolute time in dashboard relative-time tooltips",
+          "url": "https://github.com/microsoft/aspire/pull/22263",
+          "merged_at": "2026-11-13T20:07:05Z"
+        }
+      },
+      {
+        "sha": "d8dbb412aff1bccee88448cff23aff50a70f699f",
+        "message": "Remove static Aspire skill copies during aspire agent init (#22080) ## Description Older Aspire CLIs copied Aspire skills into project and user-profile skill folders such as `.agents/skills/aspire`. Configured skill sources (the `microsoft/aspire-skills` plugin for Copilot and Claude Code, or the OpenCode catalog) replace those copies, but the copies go stale and nothing removes them. On main, `aspire doctor` and `aspire agent init` only tell users to delete them by hand, and many users do not n",
+        "html_url": "https://github.com/microsoft/aspire/commit/d8dbb412aff1bccee88448cff23aff50a70f699f",
+        "pull_request": {
+          "number": 22080,
+          "title": "Remove static Aspire skill copies during aspire agent init",
+          "url": "https://github.com/microsoft/aspire/pull/22080",
+          "merged_at": "2026-11-13T20:52:07Z"
+        }
+      },
+      {
+        "sha": "45a477e268e8041aa2a6dbc85dc6254db8d37c7e",
+        "message": "Keep resource picker popup width consistent (#22229)",
+        "html_url": "https://github.com/microsoft/aspire/commit/45a477e268e8041aa2a6dbc85dc6254db8d37c7e",
+        "pull_request": {
+          "number": 22229,
+          "title": "Keep resource picker popup width consistent",
+          "url": "https://github.com/microsoft/aspire/pull/22229",
+          "merged_at": "2026-11-13T22:47:31Z"
+        }
+      },
+      {
+        "sha": "f67e764c2de5c325abefe6271c2e5395a36ea984",
+        "message": "Label the Aspire tray as Preview instead of Experimental (#22274) ## Description The tray was the only bundled app labeled **Experimental**. The dashboard (`aspire dashboard`) and the terminal (`aspire terminal`) also ship in the CLI bundle and are labeled **Preview**, and aspire.dev uses `Preview` badges for all 16 pre-release command pages. This PR makes the tray match: - `aspire tray`, `tray start` and `tray stop` help descriptions now end in `(Preview)`, the same as `aspire dashboard`. - The",
+        "html_url": "https://github.com/microsoft/aspire/commit/f67e764c2de5c325abefe6271c2e5395a36ea984",
+        "pull_request": {
+          "number": 22274,
+          "title": "Label the Aspire tray as Preview instead of Experimental",
+          "url": "https://github.com/microsoft/aspire/pull/22274",
+          "merged_at": "2026-11-13T23:47:33Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Build native CLI archive (Windows ARM64) / Build CLI (win-arm64)",
+      "id": 132244170028,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/43529725415/job/132244170028",
+      "classification": "main-repository-breakage",
+      "reason": "Build CLI (win-arm64) fails: expected aspire binary not found after extracting CLI zip (Common.projitems line 217).",
+      "failed_steps": [
+        "Build native bundle and CLI packages"
+      ]
+    },
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Dashboard.Components.Tests, Dashboard.Components, Dashboard.Com... / Dashboard.Components (windows-latest)",
+      "id": 132244846026,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/43529725415/job/132244846026",
+      "classification": "main-repository-breakage",
+      "reason": "ApplicationSummaryTests.Live_DisposalStopsPeriodicRefresh assertion failed (Expected 1, Actual 2) with no independent transient evidence.",
+      "failed_steps": [
+        "Run tests (Windows)"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Dashboard.Components.Tests.Controls.ApplicationSummaryTests.Live_DisposalStopsPeriodicRefresh",
+      "job": "Tests / No-package tests (regular, Aspire.Dashboard.Components.Tests, Dashboard.Components, Dashboard.Com... / Dashboard.Components (windows-latest)",
+      "error": "Assert.Equal() Failure: Values differ\nExpected: 1\nActual:   2",
+      "stack_trace": "   at Aspire.Dashboard.Components.Tests.Controls.ApplicationSummaryTests.Live_DisposalStopsPeriodicRefresh() in /_/tests/Aspire.Dashboard.Components.Tests/Controls/ApplicationSummaryTests.cs:line 415\n--- End of stack trace from previous location ---",
+      "standard_output": "Temporary workspace created at: C:\\Users\\runneradmin\\AppData\\Local\\Temp\\Aspire.Dashboard.Components.Tests\\Workspace\\set552od.taj\nDisposing temporary workspace at: C:\\Users\\runneradmin\\AppData\\Local\\Temp\\Aspire.Dashboard.Components.Tests\\Workspace\\set552od.taj\n",
+      "standard_error": "",
+      "classification": "code-issue",
+      "reason": "Deterministic assertion failure at ApplicationSummaryTests.cs line 415; no independent transient evidence.",
+      "job_id": 132244846026,
+      "execution_id": "7db6da5b-bb0d-40f7-9ee2-abe88ae3aec3",
+      "result_file": "00001.trx",
+      "result_format": "trx"
+    }
+  ],
+  "causes": [
+    "cli-win-arm64-extracted-tool-binary-missing",
+    "dashboard-live-disposal-refresh-count-mismatch"
+  ]
+}
