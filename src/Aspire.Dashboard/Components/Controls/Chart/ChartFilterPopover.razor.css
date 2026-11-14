@@ -1,10 +1,10 @@
 .chart-filter-popover-container ::deep .chart-filter-popover::part(dialog) {
     position-anchor: var(--chart-filter-anchor);
-    /* Fluent sets the dialog insets inline; the anchor position must override them. */
-    top: anchor(bottom) !important;
-    right: anchor(right) !important;
-    bottom: auto !important;
-    left: auto !important;
+    /* Fluent sets the dialog insets inline, so reset them. Position with position-area rather than
+       !important anchor() insets: important author declarations take precedence over position-try
+       fallbacks, which would stop flip-block from opening the popover above its trigger. */
+    inset: auto !important;
+    position-area: block-end span-inline-start;
     position-try-fallbacks: flip-block;
     box-sizing: border-box;
     max-width: 400px;
