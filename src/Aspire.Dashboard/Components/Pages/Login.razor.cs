@@ -114,6 +114,7 @@ public partial class Login : IAsyncDisposable, IComponentWithTelemetry
         return UrlValidationHelper.IsSafeRedirectUrl(ReturnUrl) ? ReturnUrl : DashboardUrls.HomeUrl();
     }
 
+    // CodeQL [SM04595] False positive: a Blazor component's method isn't an endpoint, and [AllowAnonymous] is intentional so the login page is reachable before sign-in.
     public async ValueTask DisposeAsync()
     {
         await JSInteropHelpers.SafeDisposeAsync(_jsModule);

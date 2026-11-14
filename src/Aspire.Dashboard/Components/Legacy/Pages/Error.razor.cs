@@ -35,6 +35,7 @@ public partial class Error : IComponentWithTelemetry, IDisposable
         UpdateTelemetryProperties();
     }
 
+    // CodeQL [SM04595] False positive: a Blazor component's method isn't an endpoint, and [AllowAnonymous] is intentional so the error page is reachable before sign-in.
     public void UpdateTelemetryProperties()
     {
         TelemetryContext.UpdateTelemetryProperties([
@@ -42,6 +43,7 @@ public partial class Error : IComponentWithTelemetry, IDisposable
         ], Logger);
     }
 
+    // CodeQL [SM04595] False positive: a Blazor component's method isn't an endpoint, and [AllowAnonymous] is intentional so the error page is reachable before sign-in.
     public void Dispose()
     {
         TelemetryContext.Dispose();
