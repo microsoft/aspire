@@ -686,113 +686,12 @@ public partial class AzureKubernetesEnvironmentResource
     }
 
     /// <summary>
-    /// Reads the global Azure deployment state without requiring a subscription to be present.
-    /// </summary>
-    internal static async Task<(string? SubscriptionId, string? ResourceGroup)> TryGetAzureDeploymentStateAsync(
-        IServiceProvider services,
-        CancellationToken cancellationToken)
-    {
-        var deploymentStateManager = services.GetRequiredService<IDeploymentStateManager>();
-        var azureState = await deploymentStateManager.AcquireSectionAsync("Azure", cancellationToken).ConfigureAwait(false);
-
-        // Use ToString() rather than GetValue<string>() to match how AzureEnvironmentResource reads
-        // these same keys, and because GetValue<string>() throws if hand-edited state stores a
-        // non-string JSON value.
-        return (azureState.Data["SubscriptionId"]?.ToString(), azureState.Data["ResourceGroup"]?.ToString());
-    }
-
-    /// <summary>
-    /// Resolves a scope value that may be a literal string or a deferred value such as a
-    /// <see cref="ParameterResource"/> or a <see cref="BicepOutputReference"/>.
-    /// </summary>
-    /// <remarks>
-    /// Matches <c>BicepProvisioner.ResolveScopeValueAsync</c>, including its refusal to accept a
-    /// null result from a provider. Falling back to the app's own subscription in that case would
-    /// be worse than failing: provisioning would have thrown, while the credential fetch would
-    /// quietly target the wrong scope and could adopt a same-named cluster there. Empty is rejected
-    /// for the same reason, since the string.IsNullOrEmpty checks downstream would treat it as
-    /// unpinned. Nothing upstream rejects empty (the scope constructors and
-    /// <c>AsExistingInResourceGroup</c> only guard against null), so a literal is checked too.
-    /// </remarks>
-    internal static async Task<string?> ResolveScopeValueAsync(object? value, CancellationToken cancellationToken)
-        => value switch
-        {
-            null => null,
-            string { Length: > 0 } s => s,
-            IValueProvider provider when
-                await provider.GetValueAsync(cancellationToken).ConfigureAwait(false) is { Length: > 0 } resolved => resolved,
-            string or IValueProvider => throw new InvalidOperationException(
-                "The Azure resource scope value cannot be null or empty."),
-            _ => throw new NotSupportedException(
-                $"The Azure scope value type {value.GetType()} is not supported.")
-        };
-
-    /// <summary>
-    /// Resolves the subscription and resource group that this AKS cluster actually lives in.
-    /// </summary>
-    /// <remarks>
-    /// A cluster adopted with <c>AsExistingInResourceGroup(...)</c> can sit in a different
-    /// subscription and resource group than the one Aspire deploys the rest of the app into, and the
-    /// cluster's Bicep reference targets that scope. The Azure CLI calls here have to agree with it,
-    /// otherwise we would authenticate against the wrong subscription and could even find a
-    /// same-named cluster in the wrong place. Values the resource does not pin fall back to the
-    /// global deployment state.
-    /// </remarks>
-    internal static async Task<(string SubscriptionId, string? ResourceGroup)> ResolveDeploymentScopeAsync(
-        object? scopedSubscription,
-        object? scopedResourceGroup,
-        IServiceProvider services,
-        CancellationToken cancellationToken)
-    {
-        var subscriptionId = await ResolveScopeValueAsync(scopedSubscription, cancellationToken).ConfigureAwait(false);
-        var resourceGroup = await ResolveScopeValueAsync(scopedResourceGroup, cancellationToken).ConfigureAwait(false);
-
-        // Fully pinned by the resource, so the global deployment state is irrelevant and must not be
-        // required. This matters because the app's own subscription may legitimately be absent when
-        // every Azure resource is an adopted existing one.
-        if (!string.IsNullOrEmpty(subscriptionId) && !string.IsNullOrEmpty(resourceGroup))
-        {
-            return (subscriptionId, resourceGroup);
-        }
-
-        var (globalSubscriptionId, globalResourceGroup) =
-            await TryGetAzureDeploymentStateAsync(services, cancellationToken).ConfigureAwait(false);
-
-        var pinnedSubscription = !string.IsNullOrEmpty(subscriptionId);
-        subscriptionId = pinnedSubscription ? subscriptionId : globalSubscriptionId;
-
-        if (string.IsNullOrEmpty(subscriptionId))
-        {
-            throw new InvalidOperationException(
-                "Could not resolve the Azure subscription selected for deployment. " +
-                "Ensure Azure provisioning has completed, or set the Azure:SubscriptionId configuration value.");
-        }
-
-        if (string.IsNullOrEmpty(resourceGroup))
-        {
-            // The saved resource group only names a group inside the saved subscription. Inheriting it
-            // across a subscription boundary would point at a group that may not exist there, or worse
-            // at an unrelated group that happens to share the name, so force discovery instead.
-            resourceGroup = pinnedSubscription && !string.Equals(subscriptionId, globalSubscriptionId, StringComparison.OrdinalIgnoreCase)
-                ? null
-                : globalResourceGroup;
-        }
-
-        return (subscriptionId, resourceGroup);
-    }
-
-    /// <summary>
     /// Gets the resource group the cluster lives in, preferring an already-resolved one and falling
     /// back to an Azure CLI query.
     /// </summary>
     /// <remarks>
-    /// <paramref name="savedResourceGroup"/> is the resource group from the resolved deployment
-    /// scope, which may have come from <c>AzureBicepResource.Scope</c> or an
-    /// <c>ExistingAzureResourceAnnotation</c> rather than from deployment state. It is null when the
-    /// resource group is genuinely unknown: either deployment state predates it being recorded, or
-    /// <see cref="ResolveDeploymentScopeAsync"/> deliberately dropped it because the resource pins a
-    /// different subscription than the app deploys into, where the saved name would be meaningless
-    /// or, worse, match an unrelated group.
+    /// <paramref name="savedResourceGroup"/> is the resource group from the cluster's resource ID.
+    /// When it is unavailable, discovery is restricted to <paramref name="subscriptionId"/>.
     /// <para>
     /// <paramref name="runAzCommandAsync"/> is injected so tests can verify that the Azure CLI
     /// fallback is scoped to the resolved subscription without invoking the real az CLI.
