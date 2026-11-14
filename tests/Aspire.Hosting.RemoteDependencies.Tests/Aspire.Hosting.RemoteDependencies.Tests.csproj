@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
+  </PropertyGroup>
+  <ItemGroup>
+    <Using Include="Aspire.Hosting" />
+    <Using Include="Aspire.Hosting.ApplicationModel" />
+    <ProjectReference Include="../../src/Aspire.Hosting/Aspire.Hosting.csproj" />
+    <Compile Include="../../playground/RemoteDependencies/RemoteDependencies.AppHost/SshTarget.cs" Link="SshTarget.cs" />
+    <Compile Include="../../playground/RemoteDependencies/RemoteDependencies.AppHost/RemoteRedisResource.cs" Link="RemoteRedisResource.cs" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,16 @@
+Port 22
+ListenAddress 0.0.0.0
+HostKey /etc/ssh/ssh_host_ed25519_key
+PermitRootLogin prohibit-password
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+PubkeyAuthentication yes
+StrictModes yes
+AuthorizedKeysFile /root/.ssh/authorized_keys
+AllowTcpForwarding local
+PermitOpen 127.0.0.1:*
+GatewayPorts no
+X11Forwarding no
+AllowAgentForwarding no
+PermitTunnel no
+LogLevel VERBOSE
