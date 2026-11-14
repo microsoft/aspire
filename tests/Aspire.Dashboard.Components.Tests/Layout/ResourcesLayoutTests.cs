@@ -14,6 +14,7 @@ using Aspire.Dashboard.Tests.Shared;
 using Aspire.Dashboard.Utils;
 using Aspire.Tests.Shared.DashboardModel;
 using Bunit;
+using Bunit.TestDoubles;
 using Google.Protobuf.WellKnownTypes;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Sections;
@@ -1139,6 +1140,42 @@ public class ResourcesLayoutTests : DashboardTestContext
         string[] toggled = initiallyListed ? ["cache"] : ["cache", "browser"];
         cut.WaitForAssertion(() => Assert.Equal(toggled, cut.FindAll(".resource-row:not(.resource-row-all) .resource-row-link").Select(link => link.GetAttribute("aria-label"))));
         Assert.Equal(initiallyListed ? string.Empty : "TelemetrySources", stored[BrowserStorageKeys.ResourcePaneKinds]);
+    }
+
+    // Telemetry sources are named by service.name until a second instance shares it. Both are then named with their
+    // instance ID ("ext-one", "ext-two"), and the selection must follow the source it pointed at rather than keep a
+    // name that no longer exists.
+    [Fact]
+    public async Task AppHost_SelectedTelemetrySourceFollowsRenameWhenAnotherInstanceStarts()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("cache")],
+            resourceChannelProvider: () => channel));
+        await AddTelemetryAsync("ext", instanceId: "one");
+        var navigation = Assert.IsType<BunitNavigationManager>(Services.GetRequiredService<NavigationManager>());
+        navigation.NavigateTo("/metrics/resource/ext?meter=app&instrument=requests&pane=telemetry");
+
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() =>
+        {
+            Assert.True(cut.Instance.IsLoaded);
+            Assert.Equal("ext", cut.Instance.SelectedResourceName);
+            Assert.Equal(["ext"], cut.FindAll(".resource-row-kind-telemetry.selected .resource-row-link").Select(link => link.GetAttribute("aria-label")));
+        });
+
+        await AddTelemetryAsync("ext", instanceId: "two");
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal("ext-one", cut.Instance.SelectedResourceName);
+            Assert.Equal(["ext-one"], cut.FindAll(".resource-row-kind-telemetry.selected .resource-row-link").Select(link => link.GetAttribute("aria-label")));
+        });
+        // The page's other state, such as the open chart and the pane, stays in the URL, and the rename replaces the
+        // history entry so Back doesn't return to the name that no longer exists.
+        Assert.Equal("/metrics/resource/ext-one?meter=app&instrument=requests&pane=telemetry", "/" + navigation.ToBaseRelativePath(navigation.Uri));
+        Assert.True(navigation.History.First().Options.ReplaceHistoryEntry);
     }
 
     [Fact]
@@ -3041,10 +3078,13 @@ public class ResourcesLayoutTests : DashboardTestContext
         Assert.True(cut.Find(".resources-layout").ClassList.Contains("drawer-open"));
     }
 
-    private Task AddTelemetryAsync(string name)
+    private Task AddTelemetryAsync(string name, string? instanceId = null)
     {
-        var resource = CreateResource(name);
-        resource.Attributes.Remove(resource.Attributes.Single(attribute => attribute.Key == OtlpResource.SERVICE_INSTANCE_ID));
+        var resource = CreateResource(name, instanceId);
+        if (instanceId is null)
+        {
+            resource.Attributes.Remove(resource.Attributes.Single(attribute => attribute.Key == OtlpResource.SERVICE_INSTANCE_ID));
+        }
         return Services.GetRequiredService<SqliteTelemetryRepository>().AddLogsAsync(new AddContext(),
         [
             new ResourceLogs
