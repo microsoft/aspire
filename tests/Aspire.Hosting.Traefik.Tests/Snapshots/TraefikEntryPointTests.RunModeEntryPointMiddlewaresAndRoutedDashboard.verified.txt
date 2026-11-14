@@ -1,0 +1,42 @@
+﻿{
+  Args: [
+    --entrypoints.web.address=:80,
+    --entrypoints.websecure.address=:443,
+    --entrypoints.traefik.address=:8080,
+    --entrypoints.websecure.http.tls=true,
+    --entrypoints.websecure.http.middlewares=security-headers@file,limit@file,
+    --global.checknewversion=false,
+    --global.sendanonymoususage=false,
+    --ping=true,
+    --providers.file.directory=/etc/traefik/dynamic,
+    --api.dashboard=true,
+    --api.insecure=true
+  ],
+  Yaml:
+http:
+  routers:
+    traefik-dashboard:
+      rule: Host(`traefik.dev.localhost`)
+      entryPoints:
+      - websecure
+      service: api@internal
+      middlewares:
+      - dashboard-auth
+      tls: {}
+  middlewares:
+    security-headers:
+      headers:
+        stsSeconds: 31536000
+        frameDeny: true
+        contentTypeNosniff: true
+        referrerPolicy: strict-origin-when-cross-origin
+    limit:
+      rateLimit:
+        average: 100
+        burst: 50
+    dashboard-auth:
+      basicAuth:
+        users:
+        - admin:{SHA}0DPiKuNIrrVmD8IUCuw1hQxNqZc=
+
+}

@@ -1,0 +1,70 @@
+﻿services:
+  traefik:
+    image: "docker.io/library/traefik:v3.7"
+    command:
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--entrypoints.traefik.address=:8080"
+      - "--entrypoints.websecure.http.tls.certresolver=letsencrypt"
+      - "--entrypoints.websecure.http.tls.domains[0].main=${DOMAIN}"
+      - "--entrypoints.websecure.http.tls.domains[0].sans=*.${DOMAIN}"
+      - "--global.checknewversion=false"
+      - "--global.sendanonymoususage=false"
+      - "--ping=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker.constraints=Label(`aspire.traefik.traefik`, `true`)"
+      - "--certificatesresolvers.letsencrypt.acme.email=admin@example.com"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+      - "--certificatesresolvers.letsencrypt.acme.dnschallenge.provider=cloudflare"
+      - "--certificatesresolvers.letsencrypt.acme.dnschallenge.resolvers=1.1.1.1:53,8.8.8.8:53"
+      - "--certificatesresolvers.letsencrypt.acme.dnschallenge.propagation.delaybeforechecks=10s"
+      - "--certificatesresolvers.http.acme.email=admin@example.com"
+      - "--certificatesresolvers.http.acme.storage=/letsencrypt/acme.json"
+      - "--certificatesresolvers.http.acme.httpchallenge=true"
+      - "--certificatesresolvers.http.acme.httpchallenge.entrypoint=web"
+    environment:
+      CF_DNS_API_TOKEN: "${CLOUDFLARE_TOKEN}"
+    ports:
+      - "80:80"
+      - "443:443"
+    expose:
+      - "8080"
+    volumes:
+      - type: "bind"
+        target: "/var/run/docker.sock"
+        source: "/var/run/docker.sock"
+        read_only: true
+      - type: "volume"
+        target: "/letsencrypt"
+        source: "aspire.hosting.testutilities-53c8d7322c-traefik-letsencrypt"
+        read_only: false
+    networks:
+      - "aspire"
+  api:
+    image: "myregistry/api:latest"
+    expose:
+      - "8080"
+    networks:
+      - "aspire"
+    labels:
+      traefik.enable: "true"
+      aspire.traefik.traefik: "true"
+      traefik.http.routers.api.rule: "Host(`api.${DOMAIN}`)"
+      traefik.http.routers.api.entrypoints: "websecure"
+      traefik.http.routers.api.service: "api"
+      traefik.http.routers.api.tls: "true"
+      traefik.http.routers.api.tls.certresolver: "letsencrypt"
+      traefik.http.services.api.loadbalancer.server.port: "8080"
+      traefik.http.routers.api-2.rule: "Host(`api.example.org`)"
+      traefik.http.routers.api-2.entrypoints: "websecure"
+      traefik.http.routers.api-2.service: "api-2"
+      traefik.http.routers.api-2.tls: "true"
+      traefik.http.routers.api-2.tls.certresolver: "http"
+      traefik.http.services.api-2.loadbalancer.server.port: "8080"
+networks:
+  aspire:
+    driver: "bridge"
+volumes:
+  aspire.hosting.testutilities-53c8d7322c-traefik-letsencrypt:
+    driver: "local"

@@ -1,0 +1,61 @@
+﻿services:
+  traefik:
+    image: "docker.io/library/traefik:v3.7"
+    command:
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.traefik.address=:8080"
+      - "--global.checknewversion=false"
+      - "--global.sendanonymoususage=false"
+      - "--ping=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker.constraints=Label(`aspire.traefik.traefik`, `true`)"
+    ports:
+      - "80:80"
+    expose:
+      - "8080"
+    volumes:
+      - type: "bind"
+        target: "/var/run/docker.sock"
+        source: "/var/run/docker.sock"
+        read_only: true
+    networks:
+      - "aspire"
+  web:
+    image: "myregistry/web:latest"
+    expose:
+      - "8080"
+    networks:
+      - "aspire"
+    labels:
+      traefik.enable: "true"
+      aspire.traefik.traefik: "true"
+      traefik.http.routers.web.rule: "Host(`web.example.com`)"
+      traefik.http.routers.web.entrypoints: "web"
+      traefik.http.routers.web.service: "web"
+      traefik.http.services.web.loadbalancer.server.port: "8080"
+      traefik.http.services.web.loadbalancer.passhostheader: "false"
+      traefik.http.services.web.loadbalancer.sticky.cookie: "true"
+      traefik.http.services.web.loadbalancer.sticky.cookie.name: "app$$affinity"
+      traefik.http.services.web.loadbalancer.sticky.cookie.secure: "false"
+      traefik.http.services.web.loadbalancer.sticky.cookie.httponly: "false"
+      traefik.http.services.web.loadbalancer.healthcheck.path: "/ready"
+      traefik.http.services.web.loadbalancer.healthcheck.interval: "10s"
+      traefik.http.services.web.loadbalancer.healthcheck.timeout: "2s"
+  grpc:
+    image: "myregistry/grpc:latest"
+    expose:
+      - "8080"
+    networks:
+      - "aspire"
+    labels:
+      traefik.enable: "true"
+      aspire.traefik.traefik: "true"
+      traefik.http.routers.grpc.rule: "Host(`grpc.example.com`)"
+      traefik.http.routers.grpc.entrypoints: "web"
+      traefik.http.routers.grpc.service: "grpc"
+      traefik.http.services.grpc.loadbalancer.server.port: "8080"
+      traefik.http.services.grpc.loadbalancer.server.scheme: "h2c"
+networks:
+  aspire:
+    driver: "bridge"

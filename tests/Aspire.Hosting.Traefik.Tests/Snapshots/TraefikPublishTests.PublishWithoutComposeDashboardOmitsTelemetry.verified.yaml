@@ -1,0 +1,39 @@
+﻿services:
+  traefik:
+    image: "docker.io/library/traefik:v3.7"
+    command:
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.traefik.address=:8080"
+      - "--global.checknewversion=false"
+      - "--global.sendanonymoususage=false"
+      - "--ping=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker.constraints=Label(`aspire.traefik.traefik`, `true`)"
+    ports:
+      - "80:80"
+    expose:
+      - "8080"
+    volumes:
+      - type: "bind"
+        target: "/var/run/docker.sock"
+        source: "/var/run/docker.sock"
+        read_only: true
+    networks:
+      - "aspire"
+  whoami:
+    image: "traefik/whoami:latest"
+    expose:
+      - "80"
+    networks:
+      - "aspire"
+    labels:
+      traefik.enable: "true"
+      aspire.traefik.traefik: "true"
+      traefik.http.routers.whoami.rule: "Host(`whoami.example.com`)"
+      traefik.http.routers.whoami.entrypoints: "web"
+      traefik.http.routers.whoami.service: "whoami"
+      traefik.http.services.whoami.loadbalancer.server.port: "80"
+networks:
+  aspire:
+    driver: "bridge"

@@ -1,0 +1,61 @@
+﻿{
+  Args: [
+    --entrypoints.web.address=:80,
+    --entrypoints.websecure.address=:443,
+    --entrypoints.traefik.address=:8080,
+    --entrypoints.postgres.address=:5432,
+    --entrypoints.dns.address=:53/udp,
+    --entrypoints.websecure.http.tls=true,
+    --global.checknewversion=false,
+    --global.sendanonymoususage=false,
+    --ping=true,
+    --providers.file.directory=/etc/traefik/dynamic
+  ],
+  Yaml:
+tcp:
+  routers:
+    db:
+      entryPoints:
+      - postgres
+      service: db
+      rule: HostSNI(`*`)
+    messaging:
+      entryPoints:
+      - websecure
+      service: messaging
+      rule: HostSNI(`amqp.dev.localhost`)
+      tls: {}
+    messaging-2:
+      entryPoints:
+      - websecure
+      service: messaging-2
+      rule: HostSNI(`amqps.dev.localhost`)
+      priority: 10
+      tls:
+        passthrough: true
+  services:
+    db:
+      loadBalancer:
+        servers:
+        - address: db:5432
+    messaging:
+      loadBalancer:
+        servers:
+        - address: messaging:5672
+    messaging-2:
+      loadBalancer:
+        servers:
+        - address: messaging:5671
+udp:
+  routers:
+    dns:
+      entryPoints:
+      - dns
+      service: dns
+  services:
+    dns:
+      loadBalancer:
+        servers:
+        - address: dns:53
+
+}
