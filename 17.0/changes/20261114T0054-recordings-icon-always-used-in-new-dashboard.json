@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "\ud83d\udcca",
+  "backport": true,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "A stale saved recordings-style preference can no longer make the new dashboard show the old \"Live run\" dropdown; the new dashboard always uses the recordings icon and panel.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83c\udf9e\ufe0f",
+  "firstMergedAt": "2026-11-14T00:54:01Z",
+  "lastMergedAt": "2026-11-14T00:54:01Z",
+  "name": "New dashboard always shows recordings icon",
+  "owner": "JamesNK",
+  "prs": [
+    22278
+  ]
+}

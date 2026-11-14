@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Dashboard change (backport)",
+  "mergedAt": "2026-11-14T00:54:01Z",
+  "number": 22278,
+  "runDate": "2026-11-14T06:10:00Z",
+  "status": "included",
+  "title": "[release/17.0] Remove obsolete dashboard recordings style preference"
+}

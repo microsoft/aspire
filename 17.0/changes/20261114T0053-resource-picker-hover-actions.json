@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "\ud83d\udcca",
+  "backport": true,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Comfortable resource-picker rows now reveal action buttons on hover, keyboard focus, or open menu, and action rails reserve space only for buttons that are present, giving more room to names and status text.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\uddb1\ufe0f",
+  "firstMergedAt": "2026-11-14T00:53:20Z",
+  "lastMergedAt": "2026-11-14T00:53:20Z",
+  "name": "Resource picker actions appear on hover",
+  "owner": "JamesNK",
+  "prs": [
+    22239
+  ]
+}

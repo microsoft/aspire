@@ -1,14 +1,16 @@
 {
   "area": "Integrations",
-  "areaEmoji": "🔌",
+  "areaEmoji": "\ud83d\udd0c",
   "backport": false,
   "breaking": false,
   "changeType": "Improvements",
   "communityContributors": [],
   "description": "`Aspire.Hosting.Dotnet` now participates in Aspire's normal stable versioning starting with 17.0, allowing stable integrations to depend on it.",
-  "docsPrs": [],
+  "docsPrs": [
+    2039
+  ],
   "docsRequired": true,
-  "emoji": "📦",
+  "emoji": "\ud83d\udce6",
   "firstMergedAt": "2026-11-03T05:04:24Z",
   "lastMergedAt": "2026-11-03T05:04:24Z",
   "name": "Aspire.Hosting.Dotnet joins stable versioning",
