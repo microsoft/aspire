@@ -50,8 +50,15 @@ import {
     codeLensResourceValueMissing,
     codeLensSetUpDebugger,
     debuggerSetupNotification,
+    codeLensHideGuidance,
+    codeLensHideDebuggerHints,
+    codeLensHideDebuggerHintsTooltip,
+    codeLensHideJavaLaunchGuidanceTooltip,
+    codeLensHideRustLaunchGuidanceTooltip,
+    codeLensHideSpringBootGuidanceTooltip,
 } from '../loc/strings';
 import { DebuggerInstallHint, getDebuggerInstallHintForResource } from '../debugger/debuggerInstallHints';
+import { CodeLensGuidanceSetting, isCodeLensGuidanceEnabled } from './codeLensGuidance';
 
 /**
  * Extension that contributes the Spring Boot Dashboard view. Its Run/Debug buttons start the
@@ -99,18 +106,24 @@ const entryPointWarningsByLanguage: ReadonlyMap<string, {
     readonly alreadyRunningTooltip: string;
     readonly useAspire: string;
     readonly useAspireTooltip: string;
+    readonly setting: CodeLensGuidanceSetting;
+    readonly hideTooltip: string;
 }> = new Map([
     ['rust', {
         alreadyRunning: codeLensRustAppHostAlreadyRunning,
         alreadyRunningTooltip: codeLensRustAppHostAlreadyRunningTooltip,
         useAspire: codeLensRustAppHostUseAspire,
         useAspireTooltip: codeLensRustAppHostUseAspireTooltip,
+        setting: 'enableCodeLensRustLaunchGuidance',
+        hideTooltip: codeLensHideRustLaunchGuidanceTooltip,
     }],
     ['java', {
         alreadyRunning: codeLensJavaAppHostAlreadyRunning,
         alreadyRunningTooltip: codeLensJavaAppHostAlreadyRunningTooltip,
         useAspire: codeLensJavaAppHostUseAspire,
         useAspireTooltip: codeLensJavaAppHostUseAspireTooltip,
+        setting: 'enableCodeLensJavaLaunchGuidance',
+        hideTooltip: codeLensHideJavaLaunchGuidanceTooltip,
     }],
 ]);
 
@@ -156,6 +169,11 @@ export class AspireCodeLensProvider implements vscode.CodeLensProvider {
         this._disposables.push(
             _treeProvider.onDidChangeTreeData(() => this._onDidChangeCodeLenses.fire()),
             vscode.extensions.onDidChange(() => this._onDidChangeCodeLenses.fire()),
+            vscode.workspace.onDidChangeConfiguration(e => {
+                if (e.affectsConfiguration('aspire')) {
+                    this._onDidChangeCodeLenses.fire();
+                }
+            }),
         );
     }
 
@@ -262,7 +280,7 @@ export class AspireCodeLensProvider implements vscode.CodeLensProvider {
                     if (match) {
                         this._addStateLenses(lenses, lineRange, match.resource, match.appHost);
                         const debuggerInstallHint = getDebuggerInstallHintForResource(match.resource);
-                        if (match.resource.state === ResourceState.Running && debuggerInstallHint) {
+                        if (match.resource.state === ResourceState.Running && debuggerInstallHint && isCodeLensGuidanceEnabled('enableCodeLensDebuggerHints')) {
                             this._addDebuggerInstallHintLens(lenses, lineRange, debuggerInstallHint);
                         }
                     }
@@ -289,6 +307,7 @@ export class AspireCodeLensProvider implements vscode.CodeLensProvider {
             tooltip: debuggerSetupNotification(hint.debuggerName),
             arguments: [hint],
         }));
+        addHideGuidanceLens(lenses, range, 'enableCodeLensDebuggerHints', codeLensHideDebuggerHints, codeLensHideDebuggerHintsTooltip);
     }
 
     /**
@@ -311,7 +330,7 @@ export class AspireCodeLensProvider implements vscode.CodeLensProvider {
         document: vscode.TextDocument,
         parser: AppHostResourceParser | undefined,
     ): Promise<void> {
-        if (!this._isExtensionInstalled(springBootDashboardExtensionId)) {
+        if (!isCodeLensGuidanceEnabled('enableCodeLensSpringBootGuidance') || !this._isExtensionInstalled(springBootDashboardExtensionId)) {
             return;
         }
 
@@ -351,6 +370,7 @@ export class AspireCodeLensProvider implements vscode.CodeLensProvider {
                 command: '',
                 tooltip: codeLensSpringBootDashboardBypassesAspireTooltip,
             }));
+            addHideGuidanceLens(lenses, range, 'enableCodeLensSpringBootGuidance', codeLensHideGuidance, codeLensHideSpringBootGuidanceTooltip);
         }
     }
 
@@ -369,7 +389,7 @@ export class AspireCodeLensProvider implements vscode.CodeLensProvider {
         const runningAppHostPath = this._resolveAppHostPathForDocument(document, workspaceAppHostPath, workspaceResources);
 
         const entryPointWarning = entryPointWarningsByLanguage.get(document.languageId);
-        if (entryPointWarning) {
+        if (entryPointWarning && isCodeLensGuidanceEnabled(entryPointWarning.setting)) {
             const entryPointLine = await parser.findAppHostEntryPointLine?.(document) ?? builderLine;
             const range = new vscode.Range(entryPointLine, 0, entryPointLine, 0);
             // The tree only holds running AppHosts, so revealing a stopped one has nothing to select.
@@ -387,6 +407,7 @@ export class AspireCodeLensProvider implements vscode.CodeLensProvider {
                     command: '',
                     tooltip: entryPointWarning.useAspireTooltip,
                 }));
+            addHideGuidanceLens(lenses, range, entryPointWarning.setting, codeLensHideGuidance, entryPointWarning.hideTooltip);
         }
 
         // Dashboard and log actions require a concretely-running AppHost path. In particular,
@@ -576,6 +597,15 @@ export class AspireCodeLensProvider implements vscode.CodeLensProvider {
         this._disposables.forEach(d => d.dispose());
         this._onDidChangeCodeLenses.dispose();
     }
+}
+
+function addHideGuidanceLens(lenses: vscode.CodeLens[], range: vscode.Range, setting: CodeLensGuidanceSetting, title: string, tooltip: string): void {
+    lenses.push(new vscode.CodeLens(range, {
+        title,
+        command: 'aspire-vscode.hideCodeLensGuidance',
+        tooltip,
+        arguments: [setting],
+    }));
 }
 
 function getEnabledCommand(commands: Record<string, ResourceCommandJson>, ...commandNames: string[]): ResourceCommandJson | undefined {

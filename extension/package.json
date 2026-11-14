@@ -805,6 +805,11 @@
         "category": "Aspire"
       },
       {
+        "command": "aspire-vscode.hideCodeLensGuidance",
+        "title": "%command.hideCodeLensGuidance%",
+        "category": "Aspire"
+      },
+      {
         "command": "aspire-vscode.codeLensDebugPipelineStep",
         "title": "%command.codeLensDebugPipelineStep%",
         "category": "Aspire"
@@ -1008,6 +1013,10 @@
         },
         {
           "command": "aspire-vscode.installDebuggerExtension",
+          "when": "false"
+        },
+        {
+          "command": "aspire-vscode.hideCodeLensGuidance",
           "when": "false"
         },
         {
@@ -1387,6 +1396,30 @@
           "type": "boolean",
           "default": true,
           "description": "%configuration.aspire.enableCodeLens%",
+          "scope": "window"
+        },
+        "aspire.enableCodeLensSpringBootGuidance": {
+          "type": "boolean",
+          "default": true,
+          "description": "%configuration.aspire.enableCodeLensSpringBootGuidance%",
+          "scope": "window"
+        },
+        "aspire.enableCodeLensJavaLaunchGuidance": {
+          "type": "boolean",
+          "default": true,
+          "description": "%configuration.aspire.enableCodeLensJavaLaunchGuidance%",
+          "scope": "window"
+        },
+        "aspire.enableCodeLensRustLaunchGuidance": {
+          "type": "boolean",
+          "default": true,
+          "description": "%configuration.aspire.enableCodeLensRustLaunchGuidance%",
+          "scope": "window"
+        },
+        "aspire.enableCodeLensDebuggerHints": {
+          "type": "boolean",
+          "default": true,
+          "description": "%configuration.aspire.enableCodeLensDebuggerHints%",
           "scope": "window"
         },
         "aspire.enableGutterDecorations": {
