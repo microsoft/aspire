@@ -11,14 +11,27 @@ namespace Aspire.Hosting
     public static partial class AzureFunctionsProjectResourceExtensions
     {
         [AspireExport]
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZUREFUNCTIONS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        public static ApplicationModel.IResourceBuilder<Azure.AzureFunctionsAppResource> AddAzureFunctionsApp(this IDistributedApplicationBuilder builder, string name, string appDirectory, Azure.AzureFunctionsLanguage language) { throw null; }
+
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Azure.AzureFunctionsProjectResource> AddAzureFunctionsProject(this IDistributedApplicationBuilder builder, string name, string projectPath) { throw null; }
 
         [AspireExportIgnore(Reason = "TProject : IProjectMetadata is a .NET-specific generic constraint not compatible with ATS. Use the project path overload instead.")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureFunctionsProjectResource> AddAzureFunctionsProject<TProject>(this IDistributedApplicationBuilder builder, string name)
             where TProject : IProjectMetadata, new() { throw null; }
 
+        [AspireExport("withAzureFunctionsAppHostStorage", MethodName = "withHostStorage")]
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZUREFUNCTIONS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        public static ApplicationModel.IResourceBuilder<Azure.AzureFunctionsAppResource> WithHostStorage(this ApplicationModel.IResourceBuilder<Azure.AzureFunctionsAppResource> builder, ApplicationModel.IResourceBuilder<Azure.AzureStorageResource> storage) { throw null; }
+
         [AspireExport]
         public static ApplicationModel.IResourceBuilder<Azure.AzureFunctionsProjectResource> WithHostStorage(this ApplicationModel.IResourceBuilder<Azure.AzureFunctionsProjectResource> builder, ApplicationModel.IResourceBuilder<Azure.AzureStorageResource> storage) { throw null; }
+
+        [AspireExportIgnore(Reason = "IResourceWithAzureFunctionsConfig is an internal interface constraint not compatible with ATS.")]
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZUREFUNCTIONS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        public static ApplicationModel.IResourceBuilder<Azure.AzureFunctionsAppResource> WithReference<TSource>(this ApplicationModel.IResourceBuilder<Azure.AzureFunctionsAppResource> destination, ApplicationModel.IResourceBuilder<TSource> source, string? connectionName = null)
+            where TSource : ApplicationModel.IResourceWithConnectionString, Azure.IResourceWithAzureFunctionsConfig { throw null; }
 
         [AspireExportIgnore(Reason = "IResourceWithAzureFunctionsConfig is an internal interface constraint not compatible with ATS.")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureFunctionsProjectResource> WithReference<TSource>(this ApplicationModel.IResourceBuilder<Azure.AzureFunctionsProjectResource> destination, ApplicationModel.IResourceBuilder<TSource> source, string? connectionName = null)
@@ -59,7 +72,29 @@ namespace Aspire.Hosting
 
 namespace Aspire.Hosting.Azure
 {
-    public partial class AzureFunctionsProjectResource : ApplicationModel.ProjectResource, ApplicationModel.IResourceWithCustomWithReference<AzureFunctionsProjectResource>, ApplicationModel.IResource
+    [AspireExport(ExposeProperties = true)]
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZUREFUNCTIONS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public partial class AzureFunctionsAppResource : ApplicationModel.ExecutableResource, IResourceWithServiceDiscovery, ApplicationModel.IResourceWithEndpoints, ApplicationModel.IResource, ApplicationModel.IResourceWithCustomWithReference<AzureFunctionsAppResource>
+    {
+        public AzureFunctionsAppResource(string name, string command, string appDirectory, AzureFunctionsLanguage language) : base(default!, default!, default!) { }
+
+        public string AppDirectory { get { throw null; } }
+
+        public AzureFunctionsLanguage Language { get { throw null; } }
+
+        public string WorkerRuntime { get { throw null; } }
+
+        static ApplicationModel.IResourceBuilder<TDestination>? ApplicationModel.IResourceWithCustomWithReference<AzureFunctionsAppResource>.TryWithReference<TDestination>(ApplicationModel.IResourceBuilder<TDestination> builder, ApplicationModel.IResourceBuilder<ApplicationModel.IResource> source, string? connectionName, bool optional, string? name) { throw null; }
+    }
+
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZUREFUNCTIONS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public enum AzureFunctionsLanguage
+    {
+        TypeScript = 0,
+        JavaScript = 1
+    }
+
+    public partial class AzureFunctionsProjectResource : ApplicationModel.ProjectResource, ApplicationModel.IResource, ApplicationModel.IResourceWithCustomWithReference<AzureFunctionsProjectResource>
     {
         public AzureFunctionsProjectResource(string name) : base(default!) { }
 

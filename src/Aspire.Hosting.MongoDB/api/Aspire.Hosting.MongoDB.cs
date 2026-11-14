@@ -96,6 +96,8 @@ namespace Aspire.Hosting.ApplicationModel
 
         public MongoDBServerResource Parent { get { throw null; } }
 
+        public override string ResourceTypeDisplayName { get { throw null; } }
+
         public ReferenceExpression UriExpression { get { throw null; } }
 
         System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties() { throw null; }
@@ -110,6 +112,8 @@ namespace Aspire.Hosting.ApplicationModel
         public ReferenceExpression ConnectionStringExpression { get { throw null; } }
 
         public System.Collections.Generic.IEnumerable<MongoDBServerResource> Members { get { throw null; } }
+
+        public override string ResourceTypeDisplayName { get { throw null; } }
 
         public ParameterResource SharedKeyFileParameter { get { throw null; } }
 
@@ -144,6 +148,8 @@ namespace Aspire.Hosting.ApplicationModel
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIREMONGODB001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         public string? ReplicaSetName { get { throw null; } }
 
+        public override string ResourceTypeDisplayName { get { throw null; } }
+
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIREMONGODB001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         public bool TlsEnabled { get { throw null; } }
 
@@ -162,5 +168,9 @@ namespace Aspire.Hosting.MongoDB
     public sealed partial class MongoExpressContainerResource : ApplicationModel.ContainerResource
     {
         public MongoExpressContainerResource(string name) : base(default!, default) { }
+
+        public ApplicationModel.EndpointReference PrimaryEndpoint { get { throw null; } }
+
+        public override string ResourceTypeDisplayName { get { throw null; } }
     }
 }

@@ -65,6 +65,8 @@ namespace Aspire.Hosting.Azure
 
         public AzureEventHubResource Parent { get { throw null; } }
 
+        public override string ResourceTypeDisplayName { get { throw null; } }
+
         System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, ApplicationModel.ReferenceExpression>> ApplicationModel.IResourceWithConnectionString.GetConnectionProperties() { throw null; }
 
         void IResourceWithAzureFunctionsConfig.ApplyAzureFunctionsConfiguration(System.Collections.Generic.IDictionary<string, object> target, string connectionName) { }
@@ -84,6 +86,8 @@ namespace Aspire.Hosting.Azure
 
         public long? PartitionCount { get { throw null; } set { } }
 
+        public override string ResourceTypeDisplayName { get { throw null; } }
+
         System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, ApplicationModel.ReferenceExpression>> ApplicationModel.IResourceWithConnectionString.GetConnectionProperties() { throw null; }
 
         void IResourceWithAzureFunctionsConfig.ApplyAzureFunctionsConfiguration(System.Collections.Generic.IDictionary<string, object> target, string connectionName) { }
@@ -96,6 +100,8 @@ namespace Aspire.Hosting.Azure
         public override ApplicationModel.ResourceAnnotationCollection Annotations { get { throw null; } }
 
         public override string Name { get { throw null; } }
+
+        public override string ResourceTypeDisplayName { get { throw null; } }
     }
 
     [AspireExport]
@@ -116,6 +122,8 @@ namespace Aspire.Hosting.Azure
         public BicepOutputReference NameOutputReference { get { throw null; } }
 
         public ApplicationModel.ReferenceExpression? Port { get { throw null; } }
+
+        public override string ResourceTypeDisplayName { get { throw null; } }
 
         public ApplicationModel.ReferenceExpression UriExpression { get { throw null; } }
 

@@ -118,11 +118,9 @@ namespace Aspire.Hosting
         public static ApplicationModel.IResourceBuilder<ApplicationModel.ContainerResource> AddDockerfile(this IDistributedApplicationBuilder builder, string name, string contextPath, string? dockerfilePath = null, string? stage = null) { throw null; }
 
         [AspireExportIgnore(Reason = "This synchronous overload is excluded from the polyglot surface; only the async callback overload is exported.")]
-        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.ContainerResource> AddDockerfileBuilder(this IDistributedApplicationBuilder builder, string name, string contextPath, System.Action<ApplicationModel.DockerfileBuilderCallbackContext> callback, string? stage = null) { throw null; }
 
         [AspireExport]
-        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.ContainerResource> AddDockerfileBuilder(this IDistributedApplicationBuilder builder, string name, string contextPath, System.Func<ApplicationModel.DockerfileBuilderCallbackContext, System.Threading.Tasks.Task> callback, string? stage = null) { throw null; }
 
         [AspireExportIgnore(Reason = "Polyglot AppHosts use the async callback overload.")]
@@ -192,17 +190,14 @@ namespace Aspire.Hosting
             where T : ApplicationModel.ContainerResource { throw null; }
 
         [AspireExport]
-        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         public static ApplicationModel.IResourceBuilder<T> WithDockerfileBaseImage<T>(this ApplicationModel.IResourceBuilder<T> builder, string? buildImage = null, string? runtimeImage = null)
             where T : ApplicationModel.IResource { throw null; }
 
         [AspireExportIgnore(Reason = "This synchronous overload is excluded from the polyglot surface; only the async callback overload is exported.")]
-        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         public static ApplicationModel.IResourceBuilder<T> WithDockerfileBuilder<T>(this ApplicationModel.IResourceBuilder<T> builder, string contextPath, System.Action<ApplicationModel.DockerfileBuilderCallbackContext> callback, string? stage = null)
             where T : ApplicationModel.ContainerResource { throw null; }
 
         [AspireExport]
-        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         public static ApplicationModel.IResourceBuilder<T> WithDockerfileBuilder<T>(this ApplicationModel.IResourceBuilder<T> builder, string contextPath, System.Func<ApplicationModel.DockerfileBuilderCallbackContext, System.Threading.Tasks.Task> callback, string? stage = null)
             where T : ApplicationModel.ContainerResource { throw null; }
 
@@ -246,6 +241,7 @@ namespace Aspire.Hosting
         public static ApplicationModel.IResourceBuilder<T> WithLifetime<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.ContainerLifetime lifetime)
             where T : ApplicationModel.ContainerResource { throw null; }
 
+        [System.Runtime.CompilerServices.OverloadResolutionPriority(1)]
         [AspireExportIgnore(Reason = "Polyglot export is via CoreExports.WithVolume which reorders parameters.")]
         public static ApplicationModel.IResourceBuilder<T> WithVolume<T>(this ApplicationModel.IResourceBuilder<T> builder, string? name, string target, bool isReadOnly = false)
             where T : ApplicationModel.ContainerResource { throw null; }
@@ -395,6 +391,12 @@ namespace Aspire.Hosting
         [AspireExportIgnore(Reason = "Complex generic delegates with event/CancellationToken types — not ATS-compatible.")]
         public static ApplicationModel.IResourceBuilder<T> OnResourceStopped<T>(this ApplicationModel.IResourceBuilder<T> builder, System.Func<T, ApplicationModel.ResourceStoppedEvent, System.Threading.CancellationToken, System.Threading.Tasks.Task> callback)
             where T : ApplicationModel.IResource { throw null; }
+
+        [AspireExportIgnore(Reason = "Endpoint allocation completion is used by .NET resource integrations.")]
+        public static System.Threading.Tasks.Task PublishResourceEndpointsAllocatedAsync(this Eventing.IDistributedApplicationEventing eventing, ApplicationModel.ResourceEndpointsAllocatedEvent @event, Eventing.EventDispatchBehavior dispatchBehavior, System.Threading.CancellationToken cancellationToken) { throw null; }
+
+        [AspireExportIgnore(Reason = "Endpoint allocation completion is used by .NET resource integrations.")]
+        public static System.Threading.Tasks.Task PublishResourceEndpointsAllocatedAsync(this Eventing.IDistributedApplicationEventing eventing, ApplicationModel.ResourceEndpointsAllocatedEvent @event, System.Threading.CancellationToken cancellationToken) { throw null; }
     }
 
     public partial class DistributedApplicationException : System.Exception
@@ -636,10 +638,8 @@ namespace Aspire.Hosting
 
         DistributedApplicationExecutionContext ExecutionContext { get; }
 
-        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREFILESYSTEM001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         IFileSystemService FileSystemService { get; }
 
-        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPIPELINES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         Pipelines.IDistributedApplicationPipeline Pipeline { get; }
 
         ApplicationModel.IResourceCollection Resources { get; }
@@ -647,7 +647,6 @@ namespace Aspire.Hosting
         [AspireExportIgnore(Reason = "IServiceCollection is not exported to ATS. Use IDistributedApplicationBuilder.addEventingSubscriber or tryAddEventingSubscriber for ATS event subscriber registration.")]
         Microsoft.Extensions.DependencyInjection.IServiceCollection Services { get; }
 
-        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREUSERSECRETS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         IUserSecretsManager UserSecretsManager { get; }
 
         ApplicationModel.IResourceBuilder<T> AddResource<T>(T resource)
@@ -658,7 +657,6 @@ namespace Aspire.Hosting
             where T : ApplicationModel.IResource;
     }
 
-    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREFILESYSTEM001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public partial interface IFileSystemService
     {
         ITempFileSystemService TempDirectory { get; }
@@ -865,6 +863,9 @@ namespace Aspire.Hosting
         System.Collections.Generic.IReadOnlyDictionary<string, string> BuildEnvironment { get; }
 
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIREEXTENSION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        ProjectBuildTarget? BuildTarget { get; }
+
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREEXTENSION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         string? BuildWorkingDirectory { get; }
 
         bool IsFileBasedApp { get; }
@@ -884,7 +885,6 @@ namespace Aspire.Hosting
     {
     }
 
-    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREFILESYSTEM001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public partial interface ITempFileSystemService
     {
         TempFile CreateTempFile(string? fileName = null);
@@ -892,7 +892,6 @@ namespace Aspire.Hosting
     }
 
     [AspireExport(ExposeProperties = true, ExposeMethods = true)]
-    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREUSERSECRETS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public partial interface IUserSecretsManager
     {
         string FilePath { get; }
@@ -1029,6 +1028,8 @@ namespace Aspire.Hosting
         public System.Threading.Tasks.Task InitializeParametersAsync(System.Collections.Generic.IEnumerable<ApplicationModel.ParameterResource> parameterResources, bool waitForResolution = false) { throw null; }
 
         public System.Threading.Tasks.Task SetParameterAsync(ApplicationModel.ParameterResource parameterResource, System.Threading.CancellationToken cancellationToken = default) { throw null; }
+
+        public System.Threading.Tasks.Task SetValueAsync(ApplicationModel.ParameterResource parameterResource, string value, bool saveToUserSecrets = false, System.Threading.CancellationToken cancellationToken = default) { throw null; }
     }
 
     public static partial class ParameterResourceBuilderExtensions
@@ -1059,6 +1060,10 @@ namespace Aspire.Hosting
 
         public static ApplicationModel.ParameterResource CreateParameter(IDistributedApplicationBuilder builder, string name, bool secret) { throw null; }
 
+        public static ApplicationModel.ParameterResource CreateParameter(Microsoft.Extensions.Configuration.IConfiguration configuration, string name, bool secret, string? defaultValue) { throw null; }
+
+        public static ApplicationModel.ParameterResource CreateParameter(Microsoft.Extensions.Configuration.IConfiguration configuration, string name, bool secret) { throw null; }
+
         [System.Obsolete("PublishAsConnectionString only works with the manifest publisher and is obsolete. Use AddConnectionString in publish-mode app model code instead.")]
         [AspireExport]
         public static ApplicationModel.IResourceBuilder<T> PublishAsConnectionString<T>(this ApplicationModel.IResourceBuilder<T> builder)
@@ -1069,6 +1074,34 @@ namespace Aspire.Hosting
 
         [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> WithDescription(this ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> builder, string description, bool enableMarkdown = false) { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> WithOptional(this ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> builder) { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> WithRequired(this ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> builder, bool required = true) { throw null; }
+    }
+
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPIPELINES005", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public static partial class PipelineOutputDiffingExtensions
+    {
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPIPELINES005", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        [AspireExportIgnore(Reason = "Polyglot callbacks can't construct and return PipelineStep instances. Use the parameter-based overload instead.")]
+        public static IDistributedApplicationBuilder WithOutputDiffing(this IDistributedApplicationBuilder builder, System.Func<Pipelines.PipelineStep> createStep) { throw null; }
+
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPIPELINES005", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        [AspireExport]
+        public static IDistributedApplicationBuilder WithOutputDiffing(this IDistributedApplicationBuilder builder, string targetStep = "publish", string? diffStepName = null, string? description = null) { throw null; }
+
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPIPELINES005", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        [AspireExportIgnore(Reason = "Custom output providers use .NET snapshot and service types.")]
+        public static IDistributedApplicationBuilder WithOutputDiffing<TSnapshot, TSnapshotter, TComparer>(this IDistributedApplicationBuilder builder, System.Func<Pipelines.PipelineStep> createStep)
+            where TSnapshotter : class, Pipelines.IPipelineOutputSnapshotter<TSnapshot> where TComparer : class, Pipelines.IPipelineOutputComparer<TSnapshot> { throw null; }
+
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPIPELINES005", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        [AspireExportIgnore(Reason = "Custom output providers use .NET snapshot and service types.")]
+        public static IDistributedApplicationBuilder WithOutputDiffing<TSnapshot, TSnapshotter, TComparer>(this IDistributedApplicationBuilder builder, string targetStep = "publish", string? diffStepName = null, string? description = null)
+            where TSnapshotter : class, Pipelines.IPipelineOutputSnapshotter<TSnapshot> where TComparer : class, Pipelines.IPipelineOutputComparer<TSnapshot> { throw null; }
     }
 
     [System.Diagnostics.CodeAnalysis.Experimental("ASPIREINTERACTION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
@@ -1085,34 +1118,50 @@ namespace Aspire.Hosting
         public System.Func<ProgressContext, System.Threading.Tasks.Task>? Work { get { throw null; } set { } }
     }
 
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREEXTENSION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public sealed partial class ProjectBuildTarget
+    {
+        public ProjectBuildTarget(string targetPath, bool useAppHost) { }
+
+        public string TargetPath { get { throw null; } }
+
+        public bool UseAppHost { get { throw null; } }
+    }
+
     public static partial class ProjectResourceBuilderExtensions
     {
-        [System.Diagnostics.CodeAnalysis.Experimental("ASPIRECSHARPAPPS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        [System.Obsolete("Use AddDotnetProject from the Aspire.Hosting.Dotnet package instead.")]
         [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addCSharpApp dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.CSharpAppResource> AddCSharpApp(this IDistributedApplicationBuilder builder, string name, string path, System.Action<ProjectResourceOptions> configure) { throw null; }
 
-        [System.Diagnostics.CodeAnalysis.Experimental("ASPIRECSHARPAPPS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        [System.Obsolete("Use AddDotnetProject from the Aspire.Hosting.Dotnet package instead.")]
         [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addCSharpApp dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.ProjectResource> AddCSharpApp(this IDistributedApplicationBuilder builder, string name, string path) { throw null; }
 
         [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addProject dispatcher export.")]
+        [System.Obsolete("Use AddDotnetProject from the Aspire.Hosting.Dotnet package instead.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.ProjectResource> AddProject(this IDistributedApplicationBuilder builder, string name, string projectPath, System.Action<ProjectResourceOptions> configure) { throw null; }
 
         [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addProject dispatcher export.")]
+        [System.Obsolete("Use AddDotnetProject from the Aspire.Hosting.Dotnet package instead.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.ProjectResource> AddProject(this IDistributedApplicationBuilder builder, string name, string projectPath, string? launchProfileName) { throw null; }
 
         [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addProject dispatcher export.")]
+        [System.Obsolete("Use AddDotnetProject from the Aspire.Hosting.Dotnet package instead.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.ProjectResource> AddProject(this IDistributedApplicationBuilder builder, string name, string projectPath) { throw null; }
 
         [AspireExportIgnore(Reason = "Uses IProjectMetadata generic constraint which is a .NET-specific type.")]
+        [System.Obsolete("Use AddDotnetProject from the Aspire.Hosting.Dotnet package instead.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.ProjectResource> AddProject<TProject>(this IDistributedApplicationBuilder builder, string name, System.Action<ProjectResourceOptions> configure)
             where TProject : IProjectMetadata, new() { throw null; }
 
         [AspireExportIgnore(Reason = "Uses IProjectMetadata generic constraint which is a .NET-specific type.")]
+        [System.Obsolete("Use AddDotnetProject from the Aspire.Hosting.Dotnet package instead.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.ProjectResource> AddProject<TProject>(this IDistributedApplicationBuilder builder, string name, string? launchProfileName)
             where TProject : IProjectMetadata, new() { throw null; }
 
         [AspireExportIgnore(Reason = "Uses IProjectMetadata generic constraint which is a .NET-specific type.")]
+        [System.Obsolete("Use AddDotnetProject from the Aspire.Hosting.Dotnet package instead.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.ProjectResource> AddProject<TProject>(this IDistributedApplicationBuilder builder, string name)
             where TProject : IProjectMetadata, new() { throw null; }
 
@@ -1252,6 +1301,7 @@ namespace Aspire.Hosting
             where T : ApplicationModel.IResource { throw null; }
 
         [AspireExport]
+        [System.Runtime.CompilerServices.OverloadResolutionPriority(1)]
         public static ApplicationModel.IResourceBuilder<T> WithCommand<T>(this ApplicationModel.IResourceBuilder<T> builder, string name, string displayName, System.Func<ApplicationModel.ExecuteCommandContext, System.Threading.Tasks.Task<ApplicationModel.ExecuteCommandResult>> executeCommand, ApplicationModel.CommandOptions? commandOptions = null)
             where T : ApplicationModel.IResource { throw null; }
 
@@ -1284,6 +1334,7 @@ namespace Aspire.Hosting
         public static ApplicationModel.IResourceBuilder<T> WithDebugSupport<T, TLaunchConfiguration>(this ApplicationModel.IResourceBuilder<T> builder, System.Func<ApplicationModel.LaunchConfigurationCallbackContext, System.Threading.Tasks.Task<TLaunchConfiguration>> launchConfigurationProducer, string launchConfigurationType)
             where T : ApplicationModel.IResource { throw null; }
 
+        [System.Runtime.CompilerServices.OverloadResolutionPriority(-1)]
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIREEXTENSION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         [AspireExportIgnore(Reason = "Generic debug launch configuration support is not part of the ATS surface.")]
         public static ApplicationModel.IResourceBuilder<T> WithDebugSupport<T, TLaunchConfiguration>(this ApplicationModel.IResourceBuilder<T> builder, System.Func<string, TLaunchConfiguration> launchConfigurationProducer, string launchConfigurationType)
@@ -1417,12 +1468,10 @@ namespace Aspire.Hosting
         public static ApplicationModel.IResourceBuilder<T> WithHttpHealthCheck<T>(this ApplicationModel.IResourceBuilder<T> builder, string? path = null, int? statusCode = null, string? endpointName = null)
             where T : ApplicationModel.IResourceWithEndpoints { throw null; }
 
-        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPROBES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         [AspireExportIgnore(Reason = "Func<EndpointReference> delegate — not ATS-compatible.")]
         public static ApplicationModel.IResourceBuilder<T> WithHttpProbe<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.ProbeType type, System.Func<ApplicationModel.EndpointReference>? endpointSelector, string? path = null, int? initialDelaySeconds = null, int? periodSeconds = null, int? timeoutSeconds = null, int? failureThreshold = null, int? successThreshold = null)
             where T : ApplicationModel.IResourceWithEndpoints, ApplicationModel.IResourceWithProbes { throw null; }
 
-        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPROBES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         [AspireExportIgnore(Reason = "Use the ATS export stub with renamed probeType parameter instead.")]
         public static ApplicationModel.IResourceBuilder<T> WithHttpProbe<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.ProbeType type, string? path = null, int? initialDelaySeconds = null, int? periodSeconds = null, int? timeoutSeconds = null, int? failureThreshold = null, int? successThreshold = null, string? endpointName = null)
             where T : ApplicationModel.IResourceWithEndpoints, ApplicationModel.IResourceWithProbes { throw null; }
@@ -1587,6 +1636,10 @@ namespace Aspire.Hosting
         public static ApplicationModel.IResourceBuilder<T> WithRemoteImageTag<T>(this ApplicationModel.IResourceBuilder<T> builder, string remoteImageTag)
             where T : ApplicationModel.IComputeResource { throw null; }
 
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<T> WithResourceTypeDisplayName<T>(this ApplicationModel.IResourceBuilder<T> builder, string resourceTypeDisplayName)
+            where T : ApplicationModel.IResource { throw null; }
+
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPERSISTENCE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         [AspireExport]
         public static ApplicationModel.IResourceBuilder<T> WithSessionLifetime<T>(this ApplicationModel.IResourceBuilder<T> builder)
@@ -1602,6 +1655,10 @@ namespace Aspire.Hosting
 
         [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withUrl dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<T> WithUrl<T>(this ApplicationModel.IResourceBuilder<T> builder, string url, string? displayText = null)
+            where T : ApplicationModel.IResource { throw null; }
+
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the endpoint name overload for withUrlForEndpoint.")]
+        public static ApplicationModel.IResourceBuilder<T> WithUrlForEndpoint<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.EndpointReference endpoint, System.Action<ApplicationModel.ResourceUrlAnnotation> callback)
             where T : ApplicationModel.IResource { throw null; }
 
         [AspireExport]
@@ -1621,6 +1678,21 @@ namespace Aspire.Hosting
             where T : ApplicationModel.IResource { throw null; }
     }
 
+    public static partial class ResourceTraitBuilderExtensions
+    {
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<T> WithDisplayOrder<T>(this ApplicationModel.IResourceBuilder<T> builder, int order)
+            where T : ApplicationModel.IResource { throw null; }
+
+        [AspireExportIgnore(Reason = "ReadOnlySpan is not supported by ATS; use the withTags array adapter for polyglot SDKs.")]
+        public static ApplicationModel.IResourceBuilder<T> WithTags<T>(this ApplicationModel.IResourceBuilder<T> builder, scoped params System.ReadOnlySpan<string> tags)
+            where T : ApplicationModel.IResource { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<T> WithTrait<T>(this ApplicationModel.IResourceBuilder<T> builder, string name, string value)
+            where T : ApplicationModel.IResource { throw null; }
+    }
+
     [System.Diagnostics.CodeAnalysis.Experimental("ASPIREWATCH001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireDto]
     public sealed partial class RunConfiguration
@@ -1628,7 +1700,6 @@ namespace Aspire.Hosting
         public bool WatchEnabled { get { throw null; } init { } }
     }
 
-    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREFILESYSTEM001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public abstract partial class TempDirectory : System.IDisposable
     {
         public abstract string Path { get; }
@@ -1636,7 +1707,6 @@ namespace Aspire.Hosting
         public abstract void Dispose();
     }
 
-    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREFILESYSTEM001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public abstract partial class TempFile : System.IDisposable
     {
         public abstract string Path { get; }
@@ -1660,8 +1730,7 @@ namespace Aspire.Hosting
 
     public static partial class TerminalResourceBuilderExtensions
     {
-        [System.Diagnostics.CodeAnalysis.Experimental("ASPIRETERMINAL001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-        [AspireExportIgnore(Reason = "Polyglot AppHosts use the parameterless withTerminal dispatcher export.")]
+        [AspireExport(RunSyncOnBackgroundThread = true)]
         public static ApplicationModel.IResourceBuilder<T> WithTerminal<T>(this ApplicationModel.IResourceBuilder<T> builder, System.Action<ApplicationModel.TerminalOptions>? configure = null)
             where T : ApplicationModel.IResource { throw null; }
     }
@@ -2589,6 +2658,8 @@ namespace Aspire.Hosting.ApplicationModel
 
         public required string ResourceType { get { throw null; } init { } }
 
+        public string ResourceTypeDisplayName { get { throw null; } init { } }
+
         public System.DateTime? StartTimeStamp { get { throw null; } init { } }
 
         public ResourceStateSnapshot? State { get { throw null; } init { } }
@@ -2642,6 +2713,13 @@ namespace Aspire.Hosting.ApplicationModel
     {
     }
 
+    public sealed partial class DisplayOrderAnnotation : IResourceAnnotation
+    {
+        public DisplayOrderAnnotation(int order) { }
+
+        public int Order { get { throw null; } }
+    }
+
     [System.Diagnostics.DebuggerDisplay("Resources = {Resources.Count}")]
     [AspireExport]
     public partial class DistributedApplicationModel
@@ -2676,7 +2754,6 @@ namespace Aspire.Hosting.ApplicationModel
         public object? Value { get { throw null; } init { } }
     }
 
-    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public partial class DockerfileBaseImageAnnotation : IResourceAnnotation
     {
         public string? BuildImage { get { throw null; } set { } }
@@ -2713,7 +2790,6 @@ namespace Aspire.Hosting.ApplicationModel
         public System.Threading.Tasks.Task MaterializeDockerfileAsync(DockerfileFactoryContext context, System.Threading.CancellationToken cancellationToken) { throw null; }
     }
 
-    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public partial class DockerfileBuilderCallbackAnnotation : IResourceAnnotation
     {
         public DockerfileBuilderCallbackAnnotation() { }
@@ -2722,12 +2798,10 @@ namespace Aspire.Hosting.ApplicationModel
 
         public System.Collections.Generic.IReadOnlyList<System.Func<DockerfileBuilderCallbackContext, System.Threading.Tasks.Task>> Callbacks { get { throw null; } }
 
-        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         public void AddCallback(System.Func<DockerfileBuilderCallbackContext, System.Threading.Tasks.Task> callback) { }
     }
 
     [AspireExport(ExposeProperties = true)]
-    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public partial class DockerfileBuilderCallbackContext
     {
         public DockerfileBuilderCallbackContext(IResource resource, Docker.DockerfileBuilder builder, System.IServiceProvider services, System.Threading.CancellationToken cancellationToken) { }
@@ -2866,7 +2940,6 @@ namespace Aspire.Hosting.ApplicationModel
     {
     }
 
-    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPROBES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public sealed partial class EndpointProbeAnnotation : ProbeAnnotation
     {
         public required EndpointReference EndpointReference { get { throw null; } init { } }
@@ -2883,7 +2956,9 @@ namespace Aspire.Hosting.ApplicationModel
         Scheme = 4,
         TargetPort = 5,
         HostAndPort = 6,
-        TlsEnabled = 7
+        TlsEnabled = 7,
+        BrowserOrigins = 8,
+        PrimaryBrowserOrigin = 9
     }
 
     [AspireExport(ExposeProperties = true, ExposeMethods = true)]
@@ -2901,6 +2976,8 @@ namespace Aspire.Hosting.ApplicationModel
         string IManifestExpressionProvider.ValueExpression { get { throw null; } }
 
         System.Collections.Generic.IEnumerable<object> IValueWithReferences.References { get { throw null; } }
+
+        public EndpointReferenceExpression BrowserOrigins { get { throw null; } }
 
         public NetworkIdentifier? ContextNetworkID { get { throw null; } }
 
@@ -2925,6 +3002,8 @@ namespace Aspire.Hosting.ApplicationModel
         public bool IsHttpSchemeNamedEndpoint { get { throw null; } }
 
         public int Port { get { throw null; } }
+
+        public EndpointReferenceExpression PrimaryBrowserOrigin { get { throw null; } }
 
         public IResourceWithEndpoints Resource { get { throw null; } }
 
@@ -3406,7 +3485,6 @@ namespace Aspire.Hosting.ApplicationModel
         Filled = 1
     }
 
-    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPROJECTS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public partial interface IDotnetProgramResource : IResource
     {
     }
@@ -3593,7 +3671,6 @@ namespace Aspire.Hosting.ApplicationModel
         T Parent { get; }
     }
 
-    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPROBES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public partial interface IResourceWithProbes : IResource
     {
     }
@@ -3837,6 +3914,7 @@ namespace Aspire.Hosting.ApplicationModel
         public abstract void WriteToManifest(Publishing.ManifestPublishingContext context);
     }
 
+    [AspireExport]
     public partial class ParameterResource : Resource, IExpressionValue, IValueProvider, IManifestExpressionProvider
     {
         public ParameterResource(string name, System.Func<ParameterDefault?, string> callback, bool secret = false) : base(default!) { }
@@ -3849,6 +3927,8 @@ namespace Aspire.Hosting.ApplicationModel
 
         public bool IsConnectionString { get { throw null; } set { } }
 
+        public bool Required { get { throw null; } set { } }
+
         public bool Secret { get { throw null; } }
 
         [System.Obsolete("Use GetValueAsync for async access or pass the ParameterResource directly to methods that accept it (e.g., environment variables).")]
@@ -3859,6 +3939,18 @@ namespace Aspire.Hosting.ApplicationModel
         public System.Threading.Tasks.ValueTask<string?> GetValueAsync(ValueProviderContext _, System.Threading.CancellationToken cancellationToken) { throw null; }
 
         public System.Threading.Tasks.ValueTask<string?> GetValueAsync(System.Threading.CancellationToken cancellationToken) { throw null; }
+
+        public System.Threading.Tasks.Task SetExceptionAsync(System.Exception exception, System.Threading.CancellationToken cancellationToken = default) { throw null; }
+
+        [AspireExport("ParameterResource.setValueAsync", MethodName = "setValueAsync")]
+        public System.Threading.Tasks.Task SetValueAsync(string? value = null, System.Threading.CancellationToken cancellationToken = default) { throw null; }
+
+        [AspireExportIgnore(Reason = "Uses out parameter which is not ATS-compatible.")]
+        public bool TryGetCurrentValue(out string? value) { throw null; }
+
+        public bool TrySetException(System.Exception exception) { throw null; }
+
+        public bool TrySetValue(string? value) { throw null; }
     }
 
     [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPERSISTENCE001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
@@ -3892,7 +3984,6 @@ namespace Aspire.Hosting.ApplicationModel
         public int AllocatePort() { throw null; }
     }
 
-    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPROBES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public abstract partial class ProbeAnnotation : IResourceAnnotation
     {
         public int FailureThreshold { get { throw null; } init { } }
@@ -3908,7 +3999,6 @@ namespace Aspire.Hosting.ApplicationModel
         public required ProbeType Type { get { throw null; } init { } }
     }
 
-    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPROBES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public enum ProbeType
     {
         Startup = 0,
@@ -4301,6 +4391,8 @@ namespace Aspire.Hosting.ApplicationModel
         public virtual ResourceAnnotationCollection Annotations { get { throw null; } }
 
         public virtual string Name { get { throw null; } }
+
+        public virtual string ResourceTypeDisplayName { get { throw null; } }
     }
 
     public sealed partial class ResourceAnnotationCollection : System.Collections.ObjectModel.Collection<IResourceAnnotation>
@@ -4661,13 +4753,20 @@ namespace Aspire.Hosting.ApplicationModel
         public System.IServiceProvider Services { get { throw null; } }
     }
 
+    public sealed partial class ResourceTypeDisplayNameAnnotation : IResourceAnnotation
+    {
+        public ResourceTypeDisplayNameAnnotation(string resourceTypeDisplayName) { }
+
+        public string ResourceTypeDisplayName { get { throw null; } }
+    }
+
     [System.Diagnostics.DebuggerDisplay("Url = {Url}, DisplayText = {DisplayText}")]
     [AspireDto]
     public sealed partial class ResourceUrlAnnotation : IResourceAnnotation
     {
-        [System.Obsolete("DisplayOrder was incorrectly created as a field. It will be re-added as a property in a future Aspire version.")]
-        public int? DisplayOrder;
         public UrlDisplayLocation DisplayLocation { get { throw null; } set { } }
+
+        public int? DisplayOrder { get { throw null; } set { } }
 
         public string? DisplayText { get { throw null; } set { } }
 
@@ -4737,14 +4836,12 @@ namespace Aspire.Hosting.ApplicationModel
         public string? WorkingDirectory { get { throw null; } set { } }
     }
 
-    [System.Diagnostics.CodeAnalysis.Experimental("ASPIRETERMINAL001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [AspireDto]
     public sealed partial class TerminalOptions
     {
         public int Columns { get { throw null; } set { } }
 
         public int Rows { get { throw null; } set { } }
-
-        public bool ShowTerminalHost { get { throw null; } set { } }
     }
 
     [System.Diagnostics.CodeAnalysis.Experimental("ASPIRETERMINAL001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
@@ -4773,6 +4870,15 @@ namespace Aspire.Hosting.ApplicationModel
         public System.Threading.Tasks.ValueTask DisposeAsync() { throw null; }
 
         public bool TryGetTerminal(string terminalId, out AspireTerminal? terminal) { throw null; }
+    }
+
+    public sealed partial class TraitAnnotation : IResourceAnnotation
+    {
+        public TraitAnnotation(string name, string value) { }
+
+        public string Name { get { throw null; } }
+
+        public string Value { get { throw null; } }
     }
 
     [AspireExport(ExposeProperties = true)]
@@ -4880,37 +4986,29 @@ namespace Aspire.Hosting.ApplicationModel.Docker
     public static partial class ContainerFilesExtensions
     {
         [AspireExportIgnore(Reason = "Polyglot-facing wrappers are exported from DockerfileBuilderExports with a curated signature.")]
-        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         public static DockerfileStage AddContainerFiles(this DockerfileStage stage, IResource resource, string rootDestinationPath, Microsoft.Extensions.Logging.ILogger? logger) { throw null; }
 
         [AspireExportIgnore(Reason = "Polyglot-facing wrappers are exported from DockerfileBuilderExports with a curated signature.")]
-        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         public static DockerfileBuilder AddContainerFilesStages(this DockerfileBuilder builder, IResource resource, Microsoft.Extensions.Logging.ILogger? logger) { throw null; }
     }
 
     [AspireExport]
-    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public partial class DockerfileBuilder
     {
         public System.Collections.Generic.IReadOnlyList<DockerfileStage> Stages { get { throw null; } }
 
-        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         public DockerfileBuilder Arg(string name, string defaultValue) { throw null; }
 
-        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         public DockerfileBuilder Arg(string name) { throw null; }
 
-        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         public DockerfileStage From(string image, string stageName) { throw null; }
 
-        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         public DockerfileStage From(string image) { throw null; }
 
         public System.Threading.Tasks.Task WriteAsync(System.IO.StreamWriter writer, System.Threading.CancellationToken cancellationToken = default) { throw null; }
     }
 
     [AspireExport]
-    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public partial class DockerfileStage : DockerfileStatement
     {
         public DockerfileStage(string? stageName, string imageReference) { }
@@ -4919,58 +5017,41 @@ namespace Aspire.Hosting.ApplicationModel.Docker
 
         public System.Collections.Generic.IList<DockerfileStatement> Statements { get { throw null; } }
 
-        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         public DockerfileStage Arg(string name, string defaultValue) { throw null; }
 
-        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         public DockerfileStage Arg(string name) { throw null; }
 
-        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         public DockerfileStage Cmd(string[] command) { throw null; }
 
-        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         public DockerfileStage Comment(string comment) { throw null; }
 
-        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         public DockerfileStage Copy(string source, string destination, string chown) { throw null; }
 
-        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         public DockerfileStage Copy(string source, string destination) { throw null; }
 
-        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         public DockerfileStage CopyFrom(string stage, string source, string destination, string chown) { throw null; }
 
-        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         public DockerfileStage CopyFrom(string from, string source, string destination) { throw null; }
 
-        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         public DockerfileStage EmptyLine() { throw null; }
 
-        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         public DockerfileStage Entrypoint(string[] command) { throw null; }
 
-        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         public DockerfileStage Env(string name, string value) { throw null; }
 
-        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         public DockerfileStage Expose(int port) { throw null; }
 
-        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         public DockerfileStage Run(string command) { throw null; }
 
-        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         public DockerfileStage RunWithMounts(string command, params string[] mounts) { throw null; }
 
-        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         public DockerfileStage User(string user) { throw null; }
 
-        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         public DockerfileStage WorkDir(string path) { throw null; }
 
         public override System.Threading.Tasks.Task WriteStatementAsync(System.IO.StreamWriter writer, System.Threading.CancellationToken cancellationToken = default) { throw null; }
     }
 
-    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public abstract partial class DockerfileStatement
     {
         public abstract System.Threading.Tasks.Task WriteStatementAsync(System.IO.StreamWriter writer, System.Threading.CancellationToken cancellationToken = default);
@@ -5110,7 +5191,6 @@ namespace Aspire.Hosting.Pipelines
         CompletedWithError = 3
     }
 
-    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPIPELINES002", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public sealed partial class DeploymentStateSection
     {
         public DeploymentStateSection(string sectionName, System.Text.Json.Nodes.JsonObject? data, long version) { }
@@ -5124,7 +5204,6 @@ namespace Aspire.Hosting.Pipelines
         public void SetValue(string value) { }
     }
 
-    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPIPELINES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static partial class DistributedApplicationPipelineExtensions
     {
         [AspireExport]
@@ -5134,7 +5213,6 @@ namespace Aspire.Hosting.Pipelines
         public static IDistributedApplicationPipeline WithFinalAction(this IDistributedApplicationPipeline pipeline, string stepName, System.Func<PipelineStepContext, System.Threading.Tasks.Task> action) { throw null; }
     }
 
-    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPIPELINES002", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public partial interface IDeploymentStateManager
     {
         string? StateFilePath { get; }
@@ -5146,7 +5224,6 @@ namespace Aspire.Hosting.Pipelines
         System.Threading.Tasks.Task SaveSectionAsync(DeploymentStateSection section, System.Threading.CancellationToken cancellationToken = default);
     }
 
-    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPIPELINES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public partial interface IDistributedApplicationPipeline
     {
         void AddPipelineConfiguration(System.Func<PipelineConfigurationContext, System.Threading.Tasks.Task> callback);
@@ -5155,7 +5232,6 @@ namespace Aspire.Hosting.Pipelines
         System.Threading.Tasks.Task ExecuteAsync(PipelineContext context);
     }
 
-    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPIPELINES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public partial interface IPipelineActivityReporter
     {
         System.Threading.Tasks.Task CompletePublishAsync(PublishCompletionOptions? options = null, System.Threading.CancellationToken cancellationToken = default);
@@ -5165,7 +5241,12 @@ namespace Aspire.Hosting.Pipelines
         System.Threading.Tasks.Task<IReportingStep> CreateStepAsync(string title, System.Threading.CancellationToken cancellationToken = default);
     }
 
-    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPIPELINES004", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPIPELINES005", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public partial interface IPipelineOutputComparer<TSnapshot>
+    {
+        System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<PipelineOutputChange>> CompareAsync(TSnapshot before, TSnapshot after, System.Threading.CancellationToken cancellationToken);
+    }
+
     public partial interface IPipelineOutputService
     {
         string GetOutputDirectory();
@@ -5174,7 +5255,12 @@ namespace Aspire.Hosting.Pipelines
         string GetTempDirectory(ApplicationModel.IResource resource);
     }
 
-    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPIPELINES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPIPELINES005", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public partial interface IPipelineOutputSnapshotter<TSnapshot>
+    {
+        System.Threading.Tasks.Task<TSnapshot> CaptureAsync(string outputDirectory, System.Threading.CancellationToken cancellationToken);
+    }
+
     public partial interface IReportingStep : System.IAsyncDisposable
     {
         System.Threading.Tasks.Task CompleteAsync(MarkdownString completionText, CompletionState completionState = CompletionState.Completed, System.Threading.CancellationToken cancellationToken = default);
@@ -5187,7 +5273,6 @@ namespace Aspire.Hosting.Pipelines
         void Log(Microsoft.Extensions.Logging.LogLevel logLevel, string message);
     }
 
-    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPIPELINES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public partial interface IReportingTask : System.IAsyncDisposable
     {
         System.Threading.Tasks.Task CompleteAsync(MarkdownString completionMessage, CompletionState completionState = CompletionState.Completed, System.Threading.CancellationToken cancellationToken = default);
@@ -5196,7 +5281,6 @@ namespace Aspire.Hosting.Pipelines
         System.Threading.Tasks.Task UpdateAsync(string statusText, System.Threading.CancellationToken cancellationToken = default);
     }
 
-    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPIPELINES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public sealed partial class MarkdownString
     {
         public MarkdownString(string value) { }
@@ -5206,7 +5290,6 @@ namespace Aspire.Hosting.Pipelines
         public override string ToString() { throw null; }
     }
 
-    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPIPELINES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public sealed partial class NullPublishingActivityReporter : IPipelineActivityReporter
     {
         public System.Threading.Tasks.Task CompletePublishAsync(PublishCompletionOptions? options = null, System.Threading.CancellationToken cancellationToken = default) { throw null; }
@@ -5217,7 +5300,6 @@ namespace Aspire.Hosting.Pipelines
         public System.Threading.Tasks.Task<IReportingStep> CreateStepAsync(string title, System.Threading.CancellationToken cancellationToken = default) { throw null; }
     }
 
-    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPIPELINES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public partial class PipelineConfigurationAnnotation : ApplicationModel.IResourceAnnotation
     {
         public PipelineConfigurationAnnotation(System.Action<PipelineConfigurationContext> callback) { }
@@ -5227,7 +5309,6 @@ namespace Aspire.Hosting.Pipelines
         public System.Func<PipelineConfigurationContext, System.Threading.Tasks.Task> Callback { get { throw null; } }
     }
 
-    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPIPELINES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExport]
     public partial class PipelineConfigurationContext
     {
@@ -5247,7 +5328,6 @@ namespace Aspire.Hosting.Pipelines
         public System.Collections.Generic.IEnumerable<PipelineStep> GetSteps(string tag) { throw null; }
     }
 
-    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPIPELINES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExport(ExposeProperties = true)]
     public sealed partial class PipelineContext
     {
@@ -5261,12 +5341,14 @@ namespace Aspire.Hosting.Pipelines
 
         public ApplicationModel.DistributedApplicationModel Model { get { throw null; } }
 
+        [AspireExportIgnore(Reason = "The selected execution graph is runtime-only pipeline metadata.")]
+        public System.Collections.Generic.IReadOnlyList<PipelineStep> SelectedSteps { get { throw null; } }
+
         public System.IServiceProvider Services { get { throw null; } }
 
         public PipelineSummary Summary { get { throw null; } }
     }
 
-    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPIPELINES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public partial class PipelineOptions
     {
         public bool ClearCache { get { throw null; } set { } }
@@ -5280,7 +5362,48 @@ namespace Aspire.Hosting.Pipelines
         public string? Step { get { throw null; } set { } }
     }
 
-    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPIPELINES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPIPELINES005", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public sealed partial class PipelineOutputChange
+    {
+        public PipelineOutputChange(PipelineOutputChangeKind kind, string path) { }
+
+        public PipelineOutputChangeKind Kind { get { throw null; } }
+
+        public string Path { get { throw null; } }
+    }
+
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPIPELINES005", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public enum PipelineOutputChangeKind
+    {
+        Added = 0,
+        Changed = 1,
+        Removed = 2
+    }
+
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPIPELINES005", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public enum PipelineOutputDiffMode
+    {
+        Auto = 0,
+        Git = 1,
+        FileSystem = 2
+    }
+
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPIPELINES005", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public sealed partial class PipelineOutputDiffOptions
+    {
+        public PipelineOutputDiffMode Mode { get { throw null; } set { } }
+
+        public System.Collections.Generic.IList<PipelineOutputDiffRule> Rules { get { throw null; } }
+    }
+
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPIPELINES005", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public sealed partial class PipelineOutputDiffRule
+    {
+        public string Action { get { throw null; } set { } }
+
+        public string Pattern { get { throw null; } set { } }
+    }
+
     [System.Diagnostics.DebuggerDisplay("{DebuggerToString(),nq}")]
     [AspireExport(ExposeProperties = true)]
     public partial class PipelineStep
@@ -5311,7 +5434,6 @@ namespace Aspire.Hosting.Pipelines
         public void RequiredBy(string stepName) { }
     }
 
-    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPIPELINES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public partial class PipelineStepAnnotation : ApplicationModel.IResourceAnnotation
     {
         public PipelineStepAnnotation(System.Func<PipelineStepFactoryContext, PipelineStep> factory) { }
@@ -5325,7 +5447,6 @@ namespace Aspire.Hosting.Pipelines
         public System.Threading.Tasks.Task<System.Collections.Generic.IEnumerable<PipelineStep>> CreateStepsAsync(PipelineStepFactoryContext context) { throw null; }
     }
 
-    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPIPELINES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExport(ExposeProperties = true)]
     public sealed partial class PipelineStepContext
     {
@@ -5346,7 +5467,6 @@ namespace Aspire.Hosting.Pipelines
         public PipelineSummary Summary { get { throw null; } }
     }
 
-    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPIPELINES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static partial class PipelineStepExtensions
     {
         [AspireExportIgnore(Reason = "Use PipelineStep.dependsOn on each step in the collection, or mutate PipelineStep.dependsOnSteps directly.")]
@@ -5368,7 +5488,6 @@ namespace Aspire.Hosting.Pipelines
         public static System.Collections.Generic.IEnumerable<PipelineStep> RequiredBy(this System.Collections.Generic.IEnumerable<PipelineStep> steps, string stepName) { throw null; }
     }
 
-    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPIPELINES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExport(ExposeProperties = true)]
     public partial class PipelineStepFactoryContext
     {
@@ -5377,7 +5496,6 @@ namespace Aspire.Hosting.Pipelines
         public required ApplicationModel.IResource Resource { get { throw null; } init { } }
     }
 
-    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPIPELINES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static partial class PipelineStepFactoryExtensions
     {
         [AspireExport]
@@ -5409,7 +5527,6 @@ namespace Aspire.Hosting.Pipelines
             where T : ApplicationModel.IResource { throw null; }
     }
 
-    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPIPELINES001", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
     [AspireExport(ExposeMethods = true)]
     public sealed partial class PipelineSummary
     {
@@ -5421,7 +5538,6 @@ namespace Aspire.Hosting.Pipelines
         public void Add(string key, string value) { }
     }
 
-    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPIPELINES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public sealed partial class PipelineSummaryItem
     {
         public PipelineSummaryItem(string key, string value, bool enableMarkdown) { }
@@ -5433,7 +5549,6 @@ namespace Aspire.Hosting.Pipelines
         public string Value { get { throw null; } }
     }
 
-    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPIPELINES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public sealed partial class PublishCompletionOptions
     {
         public string? CompletionMessage { get { throw null; } set { } }
@@ -5443,7 +5558,6 @@ namespace Aspire.Hosting.Pipelines
         public System.Collections.Generic.IReadOnlyList<PipelineSummaryItem>? PipelineSummary { get { throw null; } set { } }
     }
 
-    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPIPELINES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExportIgnore(Reason = "Convenience wrapper over pipeline APIs — use the dedicated ATS pipeline exports instead.")]
     public static partial class PublishingExtensions
     {
@@ -5476,7 +5590,6 @@ namespace Aspire.Hosting.Pipelines
         public static System.Threading.Tasks.Task<IReportingTask> WarnAsync(this IReportingTask task, string? message = null, System.Threading.CancellationToken cancellationToken = default) { throw null; }
     }
 
-    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPIPELINES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static partial class WellKnownPipelineSteps
     {
         [AspireValue("WellKnownPipelineSteps")]
@@ -5511,7 +5624,6 @@ namespace Aspire.Hosting.Pipelines
         public const string ValidateComputeEnvironments = "validate-compute-environments";
     }
 
-    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREPIPELINES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static partial class WellKnownPipelineTags
     {
         [AspireValue("WellKnownPipelineTags")]
@@ -5751,6 +5863,8 @@ namespace Aspire.Hosting.Publishing
         public string ManifestPath { get { throw null; } }
 
         public System.Text.Json.Utf8JsonWriter Writer { get { throw null; } }
+
+        public string GetManifestExpression(ApplicationModel.IManifestExpressionProvider value) { throw null; }
 
         public string? GetManifestRelativePath(string? path) { throw null; }
 

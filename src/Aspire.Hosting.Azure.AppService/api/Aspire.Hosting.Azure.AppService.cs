@@ -55,13 +55,15 @@ namespace Aspire.Hosting
 
 namespace Aspire.Hosting.Azure
 {
-    public partial class AzureAppServiceEnvironmentResource : AzureProvisioningResource, IAzureComputeEnvironmentResource, ApplicationModel.IComputeEnvironmentResource, ApplicationModel.IResource, IAzureContainerRegistry, ApplicationModel.IContainerRegistry, IAzureDelegatedSubnetResource
+    public partial class AzureAppServiceEnvironmentResource : AzureProvisioningResource, IAzureComputeEnvironmentResource, ApplicationModel.IComputeEnvironmentResource, ApplicationModel.IResource, IAzureContainerRegistry, ApplicationModel.IContainerRegistry, IAzureDelegatedSubnetResource, IAzureCdnPrivateLinkTarget
     {
         public AzureAppServiceEnvironmentResource(string name, System.Action<AzureResourceInfrastructure> configureInfrastructure) : base(default!, default!) { }
 
         ApplicationModel.ReferenceExpression ApplicationModel.IContainerRegistry.Endpoint { get { throw null; } }
 
         ApplicationModel.ReferenceExpression ApplicationModel.IContainerRegistry.Name { get { throw null; } }
+
+        string IAzureCdnPrivateLinkTarget.PrivateLinkGroupId { get { throw null; } }
 
         IAzureContainerRegistryResource? IAzureComputeEnvironmentResource.ContainerRegistry { get { throw null; } }
 
@@ -79,7 +81,13 @@ namespace Aspire.Hosting.Azure
 
         public BicepOutputReference NameOutputReference { get { throw null; } }
 
+        public override string ResourceTypeDisplayName { get { throw null; } }
+
         public override global::Azure.Provisioning.Primitives.ProvisionableResource AddAsExistingResource(AzureResourceInfrastructure infra) { throw null; }
+
+        BicepOutputReference IAzureCdnPrivateLinkTarget.GetPrivateLinkLocation(ApplicationModel.IResource origin) { throw null; }
+
+        BicepOutputReference IAzureCdnPrivateLinkTarget.GetPrivateLinkResourceId(ApplicationModel.IResource origin) { throw null; }
 
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIRECOMPUTE002", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         public ApplicationModel.ReferenceExpression GetEndpointPropertyExpression(ApplicationModel.EndpointReferenceExpression endpointReferenceExpression) { throw null; }
@@ -98,6 +106,8 @@ namespace Aspire.Hosting.Azure
     public partial class AzureAppServiceWebSiteResource : AzureProvisioningResource
     {
         public AzureAppServiceWebSiteResource(string name, System.Action<AzureResourceInfrastructure> configureInfrastructure, ApplicationModel.IResource targetResource) : base(default!, default!) { }
+
+        public override string ResourceTypeDisplayName { get { throw null; } }
 
         public ApplicationModel.IResource TargetResource { get { throw null; } }
     }
