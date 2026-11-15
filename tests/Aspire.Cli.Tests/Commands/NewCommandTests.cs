@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Xml.Linq;
 using Aspire.Cli.Agents;
 using Aspire.Cli.Agents.AspireSkills;
+using Aspire.Cli.Agents.ClaudeCode;
 using Aspire.Cli.Utils;
 using Aspire.Cli.Commands;
 using RootCommand = Aspire.Cli.Commands.RootCommand;
@@ -84,7 +85,6 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
             options.FeatureFlagsFactory = _ =>
             {
                 var features = new TestFeatures();
-                features.SetFeature(KnownFeatures.ExperimentalPolyglotGo, true);
                 features.SetFeature(KnownFeatures.ExperimentalPolyglotJava, true);
                 features.SetFeature(KnownFeatures.ExperimentalPolyglotPython, true);
                 features.SetFeature(KnownFeatures.ExperimentalPolyglotRust, true);
@@ -959,6 +959,59 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task NewCommandWithoutTemplateOffersGoWithoutFeatureFlags()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var scaffoldedLanguageId = string.Empty;
+        (string Name, string Description)[]? promptedTemplates = null;
+
+        var services = CreateServiceCollection(workspace, options =>
+        {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
+            options.InteractionServiceFactory = _ => new TestInteractionService
+            {
+                PromptForSelectionCallback = (promptText, choices, choiceFormatter, cancellationToken) =>
+                    promptText == "Which language would you like to use?"
+                        ? choices.Cast<object>().Single(choice => string.Equals(choiceFormatter(choice), KnownLanguageId.GoDisplayName, StringComparison.Ordinal))
+                        : choices.Cast<object>().First()
+            };
+            options.NewCommandPrompterFactory = (sp) =>
+            {
+                var interactionService = sp.GetRequiredService<IInteractionService>();
+                var prompter = new TestNewCommandPrompter(interactionService);
+                prompter.PromptForTemplateCallback = templates =>
+                {
+                    promptedTemplates = templates.Select(t => (t.Name, t.Description)).ToArray();
+                    return templates.Single(t => t.Name.Equals(KnownTemplateId.CSharpEmptyAppHost, StringComparison.OrdinalIgnoreCase));
+                };
+
+                return prompter;
+            };
+        });
+
+        services.AddSingleton<IScaffoldingService>(new TestScaffoldingService
+        {
+            ScaffoldAsyncCallback = (context, cancellationToken) =>
+            {
+                scaffoldedLanguageId = context.Language.LanguageId.Value;
+                File.WriteAllText(Path.Combine(context.TargetDirectory.FullName, "apphost.go"), "// test apphost");
+                return Task.FromResult(true);
+            }
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<NewCommand>();
+        var result = command.Parse("new --name TestApp --output ./output");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal(KnownLanguageId.Go, scaffoldedLanguageId);
+        Assert.NotNull(promptedTemplates);
+        Assert.Contains((KnownTemplateId.GoStarter, "Starter App (Go API/React, Go AppHost)"), promptedTemplates);
+        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "output", "apphost.go")));
+    }
+
+    [Fact]
     public void NewCommandTemplateSubcommandsListTechnicalNamesForNonInteractiveFlows()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -988,7 +1041,6 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
             options.FeatureFlagsFactory = _ =>
             {
                 var features = new TestFeatures();
-                features.SetFeature(KnownFeatures.ExperimentalPolyglotGo, true);
                 features.SetFeature(KnownFeatures.ExperimentalPolyglotJava, true);
                 features.SetFeature(KnownFeatures.ExperimentalPolyglotPython, true);
                 features.SetFeature(KnownFeatures.ExperimentalPolyglotRust, true);
@@ -1056,9 +1108,9 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.NotNull(promptedLanguages);
         Assert.Contains(KnownLanguageId.CSharpDisplayName, promptedLanguages);
         Assert.Contains("TypeScript (Node.js)", promptedLanguages);
+        Assert.Contains(KnownLanguageId.GoDisplayName, promptedLanguages);
         Assert.DoesNotContain(KnownLanguageId.PythonDisplayName, promptedLanguages);
         Assert.DoesNotContain(KnownLanguageId.JavaDisplayName, promptedLanguages);
-        Assert.DoesNotContain(KnownLanguageId.GoDisplayName, promptedLanguages);
         Assert.DoesNotContain(KnownLanguageId.RustDisplayName, promptedLanguages);
     }
 
@@ -1120,7 +1172,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.Contains("TypeScript (Node.js)", promptedLanguages);
         Assert.Contains(KnownLanguageId.PythonDisplayName, promptedLanguages);
         Assert.Contains(KnownLanguageId.JavaDisplayName, promptedLanguages);
-        Assert.DoesNotContain(KnownLanguageId.GoDisplayName, promptedLanguages);
+        Assert.Contains(KnownLanguageId.GoDisplayName, promptedLanguages);
         Assert.DoesNotContain(KnownLanguageId.RustDisplayName, promptedLanguages);
     }
 
@@ -1328,7 +1380,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     [InlineData("typescript", null, "apphost.mts")]
     [InlineData("java", "experimentalPolyglotJava", "AppHost.java")]
     [InlineData("python", "experimentalPolyglotPython", "apphost.py")]
-    [InlineData("go", "experimentalPolyglotGo", "apphost.go")]
+    [InlineData("go", null, "apphost.go")]
     [InlineData("rust", "experimentalPolyglotRust", "apphost.rs")]
     public async Task NewCommandWithEmptyTemplateAndSourceOverridePersistsSourceForLaterRestore(string language, string? featureFlag, string scaffoldFileName)
     {
@@ -1582,6 +1634,34 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task NewCommandWithExplicitGoEmptyTemplateCreatesGoAppHost()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        string? scaffoldedLanguageId = null;
+
+        var services = CreateServiceCollection(workspace);
+
+        services.AddSingleton<IScaffoldingService>(new TestScaffoldingService
+        {
+            ScaffoldAsyncCallback = (context, cancellationToken) =>
+            {
+                scaffoldedLanguageId = context.Language.LanguageId.Value;
+                File.WriteAllText(Path.Combine(context.TargetDirectory.FullName, "apphost.go"), "// test apphost");
+                return Task.FromResult(true);
+            }
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<NewCommand>();
+        var result = command.Parse("new aspire-go-empty --name TestApp --output ./output --localhost-tld false");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal(KnownLanguageId.Go, scaffoldedLanguageId);
+        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "output", "apphost.go")));
+    }
+
+    [Fact]
     public async Task NewCommandWithExplicitCSharpEmptyTemplateCreatesCSharpAppHost()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -1636,10 +1716,14 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData("13.6.1", false)]
-    [InlineData("17.0.0-preview.1", true)]
-    [InlineData("17.0.0", true)]
-    public async Task NewCommandCSharpTemplateUsesVersionCompatibleDirectives(string version, bool packageOnly)
+    [InlineData("13.6.1", false, true)]
+    [InlineData("17.0.0-preview.1.26479.11", true, true)]
+    [InlineData("17.0.0-preview.1.26552.6", true, true)]
+    [InlineData("17.0.0-pr.21564", true, true)]
+    [InlineData("17.0.0", true, false)]
+    [InlineData("17.1.0-preview.1", true, false)]
+    [InlineData("17.1.0-pr.21564", true, false)]
+    public async Task NewCommandCSharpTemplateUsesVersionCompatibleDirectives(string version, bool packageOnly, bool explicitBundle)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var cache = new FakeNuGetPackageCache
@@ -1657,19 +1741,25 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
         var content = await File.ReadAllTextAsync(Path.Combine(workspace.WorkspaceRoot.FullName, "output", "apphost.cs"));
-        Assert.Contains("#:property AspireUseCliBundle=true", content);
-        Assert.DoesNotContain("{{", content);
-        if (packageOnly)
+        var directives = packageOnly
+            ? $"""
+                #:package Aspire.Hosting.AppHost@{version}
+                #:package Aspire.Hosting.Dotnet@{version}
+                """
+            : $"#:sdk Aspire.AppHost.Sdk@{version}";
+        if (explicitBundle)
         {
-            Assert.Contains($"#:package Aspire.Hosting.AppHost@{version}", content);
-            Assert.Contains($"#:package Aspire.Hosting.Dotnet@{version}", content);
-            Assert.DoesNotContain("#:sdk", content);
+            directives += "\n#:property AspireUseCliBundle=true";
         }
-        else
-        {
-            Assert.Contains($"#:sdk Aspire.AppHost.Sdk@{version}", content);
-            Assert.DoesNotContain("#:package", content);
-        }
+
+        var expected = $$"""
+            {{directives}}
+
+            var builder = DistributedApplication.CreateBuilder(args);
+
+            builder.Build().Run();
+            """;
+        Assert.Equal(expected.ReplaceLineEndings("\n"), content.ReplaceLineEndings("\n").TrimEnd('\n'));
     }
 
     [Fact]
@@ -2447,6 +2537,8 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.NotNull(availableTemplatesMessage);
         Assert.Contains(KnownTemplateId.TypeScriptEmptyAppHost, availableTemplatesMessage);
         Assert.Contains(KnownTemplateId.JavaEmptyAppHost, availableTemplatesMessage);
+        Assert.Contains(KnownTemplateId.GoEmptyAppHost, availableTemplatesMessage);
+        Assert.Contains(KnownTemplateId.GoStarter, availableTemplatesMessage);
     }
 
     [Fact]
@@ -3432,10 +3524,12 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var homeDirectory = workspace.CreateDirectory("fake-home");
+        var hooks = new TestTelemetryHookConfigurator();
         var services = CreateServiceCollection(workspace, options =>
         {
             options.CliExecutionContextFactory = _ => TestExecutionContextHelper.CreateExecutionContext(
                 workspace.WorkspaceRoot, identityChannel: PackageChannelNames.Stable, homeDirectory: homeDirectory);
+            options.TelemetryHookConfiguratorFactory = _ => hooks;
         });
         using var provider = services.BuildServiceProvider();
 
@@ -3446,6 +3540,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.True(AspireSkillsRemoteConfiguration.HasPluginRegistration(
             [configurationPath], [SkillSource.BuiltIn]));
         Assert.Equal([configurationPath], Directory.EnumerateFiles(homeDirectory.FullName, "*", SearchOption.AllDirectories));
+        Assert.Equal([ClaudeCodeAgentClient.ClientId], hooks.SelectedClientIds);
         var outputDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, "output");
         Assert.False(Directory.Exists(Path.Combine(outputDirectory, ".claude", "skills")));
         Assert.False(Directory.Exists(Path.Combine(outputDirectory, ".agents", "skills")));

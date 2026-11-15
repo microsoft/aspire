@@ -297,6 +297,13 @@ Every outcome other than `stopped` has a nonzero exit code. Without
 
 ### `aspire describe`
 
+The standard table's **Type** column shows the resource's type display name, such as
+`Redis` or `PostgreSQL Server`. Integrations supply defaults from their resource classes;
+`.WithResourceTypeDisplayName("ASP.NET Core")` overrides the label for an individual resource.
+Resources without a specific label, and older AppHosts that do not supply this metadata,
+fall back to the technical resource type. This is presentation metadata only: it does not
+change resource identity, service discovery, or OpenTelemetry's `service.name`.
+
 `aspire resources` is an alias for `aspire describe`. Use `--format mermaid` to export a resource graph snapshot directly to stdout:
 
 ```bash
@@ -317,6 +324,7 @@ Progress and informational messages go to stderr, so redirection captures only M
       "name": "api",
       "displayName": "api",
       "resourceType": "Project",
+      "resourceTypeDisplayName": "ASP.NET Core",
       "state": "Running",
       "stateStyle": "success",
       "healthStatus": "Healthy",
@@ -343,8 +351,8 @@ Progress and informational messages go to stderr, so redirection captures only M
 `aspire describe --format json --follow` emits NDJSON. Each line is a resource object, not the snapshot wrapper:
 
 ```json
-{"name":"api","displayName":"api","resourceType":"Project","state":"Starting","stateStyle":"info"}
-{"name":"api","displayName":"api","resourceType":"Project","state":"Running","stateStyle":"success","healthStatus":"Healthy"}
+{"name":"api","displayName":"api","resourceType":"Project","resourceTypeDisplayName":"ASP.NET Core","state":"Starting","stateStyle":"info"}
+{"name":"api","displayName":"api","resourceType":"Project","resourceTypeDisplayName":"ASP.NET Core","state":"Running","stateStyle":"success","healthStatus":"Healthy"}
 ```
 
 #### Resource fields
@@ -356,6 +364,7 @@ Progress and informational messages go to stderr, so redirection captures only M
 | `name` | Stable resource name. |
 | `displayName` | User-facing resource name. |
 | `resourceType` | Resource type, such as `Project`, `Container`, or `Executable`. |
+| `resourceTypeDisplayName` | Human-readable type label, such as `Redis` or `PostgreSQL Server`. Falls back to `resourceType` when no label is supplied. Not a stable discriminator for behavior. |
 | `uid` | Resource unique ID, when available. |
 | `state` | Current resource state. |
 | `stateStyle` | UI style hint for the state. |
@@ -820,3 +829,19 @@ Each entry in `capabilities` includes an `isExperimental` boolean indicating whe
 The top-level fields are `schemaVersion`, `language`, `generator`, `package`, `modules`, and `declarations`. The language exporter owns the schema; the CLI passes it through without reshaping it.
 
 TypeScript (`--language typescript`) and Go (`--language go`) ship exporters. The Go exporter projects through the same code paths as the Go SDK generator, so every `declaration` is the Go the generator emits, including the surface that is written by hand rather than discovered from capabilities: `Build()` on the builder, the `Get`, `Required`, `Value`, and `RequiredValue` helpers on interaction input collections, `Err()` on every handle, `ToMap()` on options and DTO structs, and the runtime types. Go `modules[].items[]` have kind `function`, `interface`, `augmentation`, `dto`, `options`, `enum`, `variable`, or `type`; an `augmentation` lists the members a package adds to a type that another package declares. Capability-backed members carry `capabilityId`, and members that the generator writes itself are marked `synthesized`. The top-level `declarations` hold the Go fragments that signatures refer to. Go names are resolved over the exported package and the types it references, not over a whole app host. When an app host combines integrations whose names collide, the generated SDK can qualify a name that this reference gives bare, and an `options` struct that several packages could share is documented by each package under its own `typeId`. The `Any<Type>` interfaces, which accept a handle type or any type derived from it, follow the same rule: one exists only when the set holds a type derived from its base, so a signature here can name a handle interface where an app host that includes the derived type's integration accepts `Any<Type>`.
+
+Go field and constant members include `type` (the declared Go type) and `optional` (a boolean), additive to schema version 1. This includes DTO fields, options fields, runtime fields, enum constants, and exported value leaves. DTO optionality comes from ATS property metadata: neither a pointer type nor the generated `omitempty` tag alone means the property can be omitted. Options fields are optional; constants and exported value leaves are not. Consumers do not need to parse `declaration` to recover these values.
+
+For example, an options field is exported as:
+
+```json
+{
+  "id": "WithPersistenceOptions.Mode",
+  "kind": "field",
+  "name": "Mode",
+  "declaration": "Mode *TestPersistenceMode `json:\"mode,omitempty\"`",
+  "jsonName": "mode",
+  "type": "*TestPersistenceMode",
+  "optional": true
+}
+```

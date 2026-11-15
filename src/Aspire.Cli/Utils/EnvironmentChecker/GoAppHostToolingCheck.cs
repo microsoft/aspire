@@ -153,8 +153,7 @@ internal sealed partial class GoAppHostToolingCheck : IEnvironmentCheck
 
         // Look for apphost.go directly. DetectLanguageRecursiveAsync returns only the first language that
         // matches, and C# matches any *.csproj, so a Go AppHost beside an ordinary service project would be
-        // reported as C#. GetLanguageById returns null while experimentalPolyglotGo is off, which keeps the
-        // lookup gated on the flag.
+        // reported as C#. Resolve Go explicitly before recursive language detection.
         var goLanguage = _languageDiscovery.GetLanguageById(new LanguageId(KnownLanguageId.Go));
         var discoveredPath = goLanguage?.FindInDirectory(_executionContext.WorkingDirectory.FullName);
         return discoveredPath is not null ? new FileInfo(discoveredPath) : null;
@@ -207,12 +206,12 @@ internal sealed partial class GoAppHostToolingCheck : IEnvironmentCheck
                 $"Install Go {MinimumGoVersion} or later, or put the {requiredToolchain} toolchain on PATH, then rerun 'aspire doctor'.");
         }
 
-        // With the default GOTOOLCHAIN=auto, `go run` downloads the toolchain that go.mod requires.
+        // With GOTOOLCHAIN=auto, Go checks PATH before downloading the required toolchain.
         return CreateVersionResult(
             appHostFile,
             version,
             EnvironmentCheckStatus.Warning,
-            $"Go {version} is installed. Go downloads the Go {MinimumGoVersion} toolchain the first time the AppHost runs, which needs network access.",
+            $"Go {version} is installed. Go uses a newer toolchain from PATH or downloads the Go {MinimumGoVersion} toolchain the first time the AppHost runs. Downloading requires network access.",
             $"Install Go {MinimumGoVersion} or later to avoid the download, then rerun 'aspire doctor'.");
     }
 

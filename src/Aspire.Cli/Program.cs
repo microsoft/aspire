@@ -4,6 +4,7 @@
 using System.CommandLine;
 using System.Diagnostics;
 using System.Globalization;
+using System.Net;
 using System.Text;
 using System.Text.Json;
 using Aspire.Cli.Acquisition;
@@ -565,14 +566,7 @@ public class Program
         builder.Services.AddSingleton<ResourceColorMap>();
         builder.Services.AddMemoryCache();
 
-        // aspire.dev documentation services.
-        builder.Services.AddSingleton<IDocsCache, DocsCache>();
-        builder.Services.AddHttpClient<IDocsFetcher, DocsFetcher>();
-        builder.Services.AddSingleton<IDocsIndexService, DocsIndexService>();
-        builder.Services.AddSingleton<IDocsSearchService, DocsSearchService>();
-        builder.Services.AddSingleton<IApiDocsCache, ApiDocsCache>();
-        builder.Services.AddHttpClient<IApiDocsFetcher, ApiDocsFetcher>();
-        builder.Services.AddSingleton<IApiDocsIndexService, ApiDocsIndexService>();
+        AddDocumentationServices(builder.Services);
 
         // Bundle layout services (for polyglot apphost without .NET SDK).
         // Registered before NuGetPackageCache so the factory can choose implementation.
@@ -683,6 +677,7 @@ public class Program
         builder.Services.AddSingleton<IEnvironmentCheck, DeprecatedAgentConfigCheck>();
         builder.Services.AddSingleton<IEnvironmentCheck, LegacySettingsFileCheck>();
         builder.Services.AddSingleton<IEnvironmentCheck, PendingMigrationsCheck>();
+        builder.Services.AddSingleton<IEnvironmentCheck, AspireSkillsCheck>();
         builder.Services.AddSingleton<IEnvironmentCheck, VsCodeExtensionCheck>();
         builder.Services.AddSingleton<IEnvironmentChecker, EnvironmentChecker>();
 
@@ -796,6 +791,19 @@ public class Program
         var homeDirectory = GetUsersAspirePath(processPath);
         var sdksPath = Path.Combine(homeDirectory, "sdks");
         return new DirectoryInfo(sdksPath);
+    }
+
+    internal static void AddDocumentationServices(IServiceCollection services)
+    {
+        services.AddSingleton<IDocsCache, DocsCache>();
+        services.AddHttpClient<IDocsFetcher, DocsFetcher>()
+            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AutomaticDecompression = DecompressionMethods.All });
+        services.AddSingleton<IDocsIndexService, DocsIndexService>();
+        services.AddSingleton<IDocsSearchService, DocsSearchService>();
+        services.AddSingleton<IApiDocsCache, ApiDocsCache>();
+        services.AddHttpClient<IApiDocsFetcher, ApiDocsFetcher>()
+            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AutomaticDecompression = DecompressionMethods.All });
+        services.AddSingleton<IApiDocsIndexService, ApiDocsIndexService>();
     }
 
     internal static CliExecutionContext BuildCliExecutionContext(bool debugMode, LogLevel? consoleLogLevel, string logsDirectory, string logFilePath, IIdentityResolver identityResolver, string? processPath = null)

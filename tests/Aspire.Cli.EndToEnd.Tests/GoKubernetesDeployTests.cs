@@ -24,7 +24,7 @@ public sealed class GoKubernetesDeployTests(ITestOutputHelper output)
         using var workspace = TemporaryWorkspace.Create(output);
 
         var clusterName = KubernetesDeployTestHelpers.GenerateUniqueClusterName();
-        const string k8sNamespace = "default";
+        var k8sNamespace = $"test-{clusterName[..16]}";
 
         output.WriteLine($"Cluster name: {clusterName}");
         output.WriteLine($"Namespace: {k8sNamespace}");
@@ -38,7 +38,6 @@ public sealed class GoKubernetesDeployTests(ITestOutputHelper output)
         await auto.InstallAspireCliAsync(strategy, counter);
 
         await auto.VerifyPullRequestCliVersionAsync(counter);
-        await auto.EnableExperimentalGoSupportAsync(counter);
 
         try
         {
@@ -65,11 +64,6 @@ public sealed class GoKubernetesDeployTests(ITestOutputHelper output)
             // Regenerate the Go SDK with Kubernetes types
             await auto.RunCommandAsync("aspire restore --non-interactive", counter, TimeSpan.FromMinutes(3));
 
-            // The starter ships api/go.mod without a go.sum, and its "go mod tidy" resource only runs
-            // under "aspire run". The generated Dockerfile builds from go.mod and go.sum alone, so
-            // the container build needs the go.sum that "go mod tidy" writes.
-            await auto.RunCommandAsync("(cd api && go mod tidy)", counter, TimeSpan.FromMinutes(3));
-
             // =====================================================================
             // Phase 3: Modify apphost.go to add Kubernetes environment
             // =====================================================================
@@ -78,9 +72,6 @@ public sealed class GoKubernetesDeployTests(ITestOutputHelper output)
 
             output.WriteLine($"Looking for apphost.go at: {appHostFilePath}");
 
-            // The AppHost passes no WithHelm callback: a Configure func inside the generated Go options
-            // struct panics the options merge (https://github.com/microsoft/aspire/issues/18080), so the
-            // Helm defaults apply (namespace "default", chart version 0.1.0).
             GoAppHostTestHelpers.InsertBeforeBuild(
                 appHostFilePath,
                 """
@@ -88,8 +79,14 @@ public sealed class GoKubernetesDeployTests(ITestOutputHelper output)
                 registryEndpoint := builder.AddParameter("registryendpoint")
                 builder.AddContainerRegistry("registry", registryEndpoint)
 
-                // Add Kubernetes environment (Helm is the default deployment engine)
-                builder.AddKubernetesEnvironment("env")
+                namespace := builder.AddParameter("namespace")
+                chartVersion := builder.AddParameter("chartversion")
+                builder.AddKubernetesEnvironment("env").WithHelm(aspire.HelmConfigure(
+                    func(helm aspire.HelmChartOptions) {
+                        helm.WithNamespace(namespace)
+                        helm.WithChartVersion(chartVersion)
+                    },
+                ))
                 """);
             output.WriteLine("Modified apphost.go with Kubernetes environment configuration");
 
@@ -102,6 +99,8 @@ public sealed class GoKubernetesDeployTests(ITestOutputHelper output)
                 parameterResponses:
                 [
                     ("registryendpoint", "localhost:5001"),
+                    ("namespace", k8sNamespace),
+                    ("chartversion", "0.1.0"),
                 ]);
 
             // =====================================================================
@@ -112,13 +111,41 @@ public sealed class GoKubernetesDeployTests(ITestOutputHelper output)
             // Selecting by that label makes a chart without the workload fail the test: "kubectl wait" exits 1 with
             // "no matching resources found" when nothing matches, whereas "kubectl get pods" succeeds on an empty
             // namespace and Helm's --wait only waits for workloads that are in the chart.
-            foreach (var resourceName in new[] { "api", "cache" })
+            foreach (var resourceName in new[] { "app", "cache" })
             {
                 await auto.RunCommandAsync(
                     $"kubectl wait --for=condition=Ready pod -n {k8sNamespace} -l app.kubernetes.io/component={resourceName} --timeout=180s",
                     counter,
                     TimeSpan.FromMinutes(4));
             }
+
+            // The frontend is a build-only resource whose output is copied into the API container.
+            // A separate workload would expose the wrong production model and duplicate the public surface.
+            await auto.RunCommandAsync(
+                $"frontend_workloads=$(kubectl get deployments,pods,services -n {k8sNamespace} -l app.kubernetes.io/component=frontend -o name) && test -z \"$frontend_workloads\"",
+                counter);
+
+            // Verify the API container serves the SPA, one of its compiled assets, and the API endpoint
+            // from the same origin. Vite emits the entry script as:
+            //   <script type="module" crossorigin src="/assets/index-<hash>.js"></script>
+            await auto.RunCommandAsync(
+                $$"""
+                (service_port=$(kubectl get service app-service -n {{k8sNamespace}} -o jsonpath='{.spec.ports[0].port}'); \
+                kubectl port-forward -n {{k8sNamespace}} service/app-service 18081:$service_port > port-forward.log 2>&1 & \
+                forward_pid=$!; trap 'kill "$forward_pid" 2>/dev/null || true' EXIT; \
+                found=0; for i in $(seq 1 30); do \
+                if curl --connect-timeout 2 --max-time 5 -fsS http://localhost:18081/ -o index.html && \
+                asset=$(node -e 'const fs = require("node:fs"); const html = fs.readFileSync("index.html", "utf8"); const match = html.match(/<script[^>]+src="([^"]+\.js)"/); if (!match) process.exit(1); process.stdout.write(match[1]);') && \
+                curl --connect-timeout 2 --max-time 5 -fsS "http://localhost:18081$asset" -o frontend.js && \
+                test -s frontend.js && \
+                curl --connect-timeout 2 --max-time 5 -fsS http://localhost:18081/api/weatherforecast -o weather.json && \
+                node -e 'const assert = require("node:assert/strict"); const weather = require("./weather.json"); assert.equal(weather.length, 5); for (const forecast of weather) { assert.equal(typeof forecast.temperatureC, "number"); assert.equal(typeof forecast.summary, "string"); }'; \
+                then found=1; break; fi; \
+                echo "Attempt $i: deployed Go starter is not ready, retrying..."; sleep 5; done; \
+                test "$found" = 1)
+                """,
+                counter,
+                TimeSpan.FromMinutes(6));
 
             // =====================================================================
             // Phase 6: Cleanup

@@ -59,6 +59,12 @@ Without the C# extension, `disableLaunchProfile: true` has no effect and display
 
 Aspire can bring together C#, TypeScript and JavaScript, Python, Go, Java, containers, databases, cloud resources, and more. Browse the [integration gallery](https://aspire.dev/integrations/gallery/) to find the pieces your app needs.
 
+### Go AppHost debugging (Preview)
+
+Go AppHosts support resource CodeLens and gutter state indicators. Debugging an `apphost.go` requires the [Go extension](https://marketplace.visualstudio.com/items?itemName=golang.Go) and [Delve](https://github.com/go-delve/delve). If Go debugger support is missing or disabled, **Debug** offers setup instead of starting the AppHost without a debugger; **Run Without Debugging** remains available. The same setup check applies to Java and Rust AppHosts.
+
+The Go extension selects the debugger's Go toolchain through its own settings (`go.goroot` and `go.alternateTools`), while Aspire CLI resolves `go` on its environment's `PATH`. Keep those selections aligned when using multiple Go installations. Aspire does not override the Go extension's toolchain settings.
+
 ## Chat tools for agents
 
 The extension contributes `aspire_apphost_start`, `aspire_apphost_stop`, and `aspire_resource_debug` language model tools. They only accept AppHosts and resources already discovered in a trusted workspace, reject arbitrary or absolute paths, and ask the user to confirm before acting. Resource debugging attaches to a running resource, including .NET and Go resources started with **Run Without Debugging** in VS Code; it does not start or restart one.

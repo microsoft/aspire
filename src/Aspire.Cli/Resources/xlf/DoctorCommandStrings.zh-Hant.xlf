@@ -27,6 +27,16 @@
         <target state="translated">Aspire</target>
         <note />
       </trans-unit>
+      <trans-unit id="AspireSkillsFix">
+        <source>Delete these files, then run 'aspire agent init --skills aspire'.</source>
+        <target state="new">Delete these files, then run 'aspire agent init --skills aspire'.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="AspireSkillsInspectionFailedMessage">
+        <source>Could not inspect local Aspire skills</source>
+        <target state="new">Could not inspect local Aspire skills</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ChannelSuffixFormat">
         <source> (channel: {0})</source>
         <target state="translated"> (通道: {0})</target>
@@ -527,6 +537,11 @@
         <target state="translated">環境檢查在 {0} 秒後逾時。</target>
         <note>{0} is the total timeout in seconds.</note>
       </trans-unit>
+      <trans-unit id="FilesHeader">
+        <source>Files:</source>
+        <target state="new">Files:</target>
+        <note />
+      </trans-unit>
       <trans-unit id="HeaderInstallations">
         <source>Aspire CLI Installations</source>
         <target state="translated">Aspire CLI 安裝</target>
@@ -570,9 +585,8 @@ The legacy file continues to work — this is a non-blocking warning.</source>
         <note>{0} is the operating system display name and version, for example "Windows 10.0.22631", "macOS 26.0", or "Linux Ubuntu 24.04".</note>
       </trans-unit>
       <trans-unit id="PendingMigrationFix">
-        <source>Run 'aspire update --migrate' to apply the recommended migration.
-The current layout continues to work — this is a non-blocking warning.</source>
-        <target state="translated">執行 'aspire update --migrate' 以套用建議的移轉。
+        <source>Run 'aspire update --migrate' to apply the recommended migration.</source>
+        <target state="needs-review-translation">執行 'aspire update --migrate' 以套用建議的移轉。
 目前的版面配置會繼續作用 — 這是非封鎖警告。</target>
         <note />
       </trans-unit>

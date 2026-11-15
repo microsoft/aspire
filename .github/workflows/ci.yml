@@ -132,8 +132,8 @@ jobs:
   #   2. Runs the subset of Aspire.Cli.Tests classes that exercise version/channel/template
   #      version pinning logic against the stably-built CLI assemblies. These are the code
   #      paths most likely to behave differently when the CLI's own version label is stable.
-  #   3. Runs a small `aspire new aspire-empty` + `aspire restore` smoke script that
-  #      exercises the user-visible CLI flow against the locally-built stable feed,
+  #   3. Runs C#, Go, and Java template scaffolding + `aspire restore` smoke checks that
+  #      exercise the user-visible CLI flow against the locally-built stable feed,
   #      which is the scenario that has historically broken on stabilization branches.
   #
   # The job is gated to enabled PRs only. Push CI (including push to release branches with
@@ -150,8 +150,8 @@ jobs:
 
       - name: Build + pack with StabilizePackageVersion=true
         # SkipNativeBuild=true keeps this job fast (~5min): pack-time NU5104 detection
-        # doesn't need NativeAOT CLI binaries, and the moderate smoke below invokes the
-        # CLI via `dotnet run --project src/Aspire.Cli/Aspire.Cli.csproj`.
+        # doesn't need NativeAOT CLI binaries. The consumer smoke separately publishes
+        # a Release bundled driver so guest restores cannot substitute source projects.
         run: |
           ./build.sh -restore -build -ci -pack \
             -p:StabilizePackageVersion=true \

@@ -208,6 +208,18 @@
 ::deep .resource-graph-container {
     grid-area: resources-tab-content;
     position: relative; /* So graph buttons are position inside the container */
+    /* Keep the graph within the 1fr tab content row. Without this the row grows to the SVG's intrinsic height and the
+       absolutely positioned controls at the bottom end up below the clipped edge of .resource-tabs. */
+    min-height: 0;
+    overflow: hidden;
+}
+
+/* Size the SVG from the layout instead of from its viewBox aspect ratio. app-resourcegraph.js derives the viewBox from
+   this element's container, so an SVG sized by its viewBox would feed its own height back into the layout. */
+::deep .resource-graph {
+    display: block;
+    width: 100%;
+    height: 100%;
 }
 
 ::deep .resource-graph-controls {

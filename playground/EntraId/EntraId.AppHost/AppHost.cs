@@ -22,7 +22,7 @@ if (useExistingApplication)
     var webClientId = builder.AddParameter("entra-web-client-id")
         .WithDescription("The **Application (client) ID** shown on the Overview page of the existing app registration shared by the .NET and Node front ends. Enable **ID tokens (used for implicit and hybrid flows)** and configure both apps' redirect URIs as described in README.md. No client secret is required.", enableMarkdown: true);
 
-    entraWeb = builder.AddExistingEntraApplication("entra-web", tenantId, webClientId);
+    entraWeb = builder.AddExistingEntraIdApplication("entra-web", tenantId, webClientId);
 }
 else
 {
@@ -61,7 +61,7 @@ var nodeWeb = builder.AddNodeApp("nodefrontend", "../EntraId.NodeWeb", "server.m
     .WithReference(entraWeb);
 #pragma warning restore ASPIRECERTIFICATES001
 
-nodeWeb.WithEnvironment("NODE_WEB_BASE_URL", nodeWeb.GetEndpoint("https"));
+nodeWeb.WithEnvironment("NODE_WEB_BASE_URL", nodeWeb.GetEndpoint("https").PrimaryBrowserOrigin);
 
 // The callback paths are configured by each front end, so they are declared here; the host and port follow the endpoints.
 if (!useExistingApplication)

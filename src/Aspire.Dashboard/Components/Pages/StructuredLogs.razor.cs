@@ -242,6 +242,10 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
         };
 
         UpdateResources();
+        if (ResourcesLayout is { } layout)
+        {
+            layout.ResourcesChanged += OnLayoutResourcesChanged;
+        }
         _resourcesSubscription = TelemetryRepository.OnNewResources(() => InvokeAsync(() =>
         {
             UpdateResources();
@@ -279,6 +283,20 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
         _resources = TelemetryRepository.GetResources();
         _resourceViewModels = ResourcesSelectHelpers.CreateResources(_resources);
         _resourceViewModels.Insert(0, _allResource);
+    }
+
+    private void OnLayoutResourcesChanged()
+    {
+        if (ResourcesLayout?.GetSelectionTelemetryKeys(SelectedResourceNames) is not { } resourceKeys ||
+            ViewModel.ResourceKeys is { } current && current.SequenceEqual(resourceKeys))
+        {
+            return;
+        }
+
+        // The layout can finish loading its resource snapshot after the grid's first query.
+        ViewModel.ResourceKeys = resourceKeys;
+        ViewModel.ClearData();
+        _ = InvokeAsync(_dataGrid.SafeRefreshDataAsync);
     }
 
     private Task HandleSelectedResourceChangedAsync()
@@ -471,6 +489,10 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
 
     public void Dispose()
     {
+        if (ResourcesLayout is { } layout)
+        {
+            layout.ResourcesChanged -= OnLayoutResourcesChanged;
+        }
         _cts.Cancel();
         _resourcesSubscription?.Dispose();
         _logsSubscription?.Dispose();

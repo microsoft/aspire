@@ -92,6 +92,11 @@
         <target state="translated">Die Suchabfrage für Integrationen.</target>
         <note />
       </trans-unit>
+      <trans-unit id="IntegrationSourceExplanation">
+        <source>One or more integration sources are configured. An integration source lets an organization share integrations to customize your development experience.</source>
+        <target state="new">One or more integration sources are configured. An integration source lets an organization share integrations to customize your development experience.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="NoIntegrationPackagesFound">
         <source>No integration packages were found. Please check your internet connection or NuGet source configuration.</source>
         <target state="translated">Es wurden keine Integrationspakete gefunden. Überprüfen Sie Ihre Internetverbindung oder NuGet-Quellkonfiguration.</target>

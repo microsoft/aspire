@@ -735,6 +735,13 @@ public static partial class DevTunnelsResourceBuilderExtensions
         var portUri = portResource.LastKnownStatus?.PortUri
             ?? throw new InvalidOperationException("An active dev tunnel port must have an observed public URI.");
         var previousAddress = portResource.TunnelEndpointAnnotation.AllocatedEndpoint?.Address;
+
+        // Browser origins resolve from these finalized URL objects, not from dashboard snapshots.
+        foreach (var url in portResource.Annotations.OfType<ResourceUrlAnnotation>())
+        {
+            url.Url = UpdatePortUrl(url.Url, url.Endpoint?.EndpointName, url.DisplayText, previousAddress, portUri);
+        }
+
         portResource.TunnelEndpointAnnotation.AllocatedEndpoint = new(portResource.TunnelEndpointAnnotation, portUri.Host, 443);
 
         var wasAvailable = notifications.TryGetCurrentState(portResource.Name, out var previous)
@@ -748,7 +755,7 @@ public static partial class DevTunnelsResourceBuilderExtensions
                 Properties = [.. snapshot.Properties.Where(p => !IsDevTunnelUrlProperty(p.Name)), .. GetUrlProperties(portResource)],
                 Urls = [.. snapshot.Urls.Select(u => u with
                 {
-                    Url = UpdatePortUrl(u, previousAddress, portUri),
+                    Url = UpdatePortUrl(u.Url, u.Name, u.DisplayProperties.DisplayName, previousAddress, portUri),
                     IsInactive = false
                 })]
             }, portResource.Name, true, description)).ConfigureAwait(false);
@@ -761,22 +768,22 @@ public static partial class DevTunnelsResourceBuilderExtensions
         }
     }
 
-    private static string UpdatePortUrl(UrlSnapshot url, string? previousAddress, Uri portUri)
+    private static string UpdatePortUrl(string url, string? endpointName, string? displayName, string? previousAddress, Uri portUri)
     {
         if (previousAddress is null
             || string.Equals(previousAddress, portUri.Host, StringComparison.OrdinalIgnoreCase)
-            || !Uri.TryCreate(url.Url, UriKind.Absolute, out var currentUri))
+            || !Uri.TryCreate(url, UriKind.Absolute, out var currentUri))
         {
-            return url.Url;
+            return url;
         }
 
         string? replacementHost = null;
-        if (string.Equals(url.Name, DevTunnelPortResource.TunnelEndpointName, StringComparisons.EndpointAnnotationName)
+        if (string.Equals(endpointName, DevTunnelPortResource.TunnelEndpointName, StringComparisons.EndpointAnnotationName)
             && string.Equals(currentUri.Host, previousAddress, StringComparison.OrdinalIgnoreCase))
         {
             replacementHost = portUri.Host;
         }
-        else if (url.DisplayProperties.DisplayName == "Inspect"
+        else if (displayName == "Inspect"
             && GetInspectUrl(new UriBuilder(portUri) { Host = previousAddress }.Uri) is { } previousInspectUrl
             && string.Equals(currentUri.Host, new Uri(previousInspectUrl).Host, StringComparison.OrdinalIgnoreCase)
             && GetInspectUrl(portUri) is { } inspectUrl)
@@ -785,13 +792,13 @@ public static partial class DevTunnelsResourceBuilderExtensions
         }
         if (replacementHost is null)
         {
-            return url.Url;
+            return url;
         }
 
         // URL callbacks may add paths, queries, fragments, and multiple links for one endpoint.
         // Only migrate the endpoint-derived host; leave customized links and their suffixes intact.
         var updated = new UriBuilder(currentUri) { Host = replacementHost }.Uri;
-        return currentUri.PathAndQuery == "/" && currentUri.Fragment.Length == 0 && !url.Url.EndsWith('/')
+        return currentUri.PathAndQuery == "/" && currentUri.Fragment.Length == 0 && !url.EndsWith('/')
             ? updated.GetLeftPart(UriPartial.Authority)
             : updated.AbsoluteUri;
     }

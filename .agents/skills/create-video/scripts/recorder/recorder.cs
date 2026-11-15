@@ -17,7 +17,7 @@
 // The Playwright driver files exceed MAX_PATH under deep folders on Windows: build into a short path, in the user's
 // own profile (a shared temporary folder, such as /tmp, would let other users replace what runs). The hash of the
 // folder keeps the recorders of different workspaces apart.
-#:property BaseOutputPath="$([System.IO.Path]::Combine($([System.Environment]::GetFolderPath(SpecialFolder.UserProfile)), '.aspire-video', 'recorder', $([MSBuild]::StableStringHash($(MSBuildProjectDirectory)).ToString('x8')), 'bin'))$([System.IO.Path]::DirectorySeparatorChar)"
+#:property BaseOutputPath=$([System.IO.Path]::Combine($([System.Environment]::GetFolderPath(SpecialFolder.UserProfile)),'.aspire-video','recorder',$([MSBuild]::StableStringHash($(MSBuildProjectDirectory)).ToString('x8')),'bin'))$([System.IO.Path]::DirectorySeparatorChar)
 #:include Scene.cs
 #:include VsCode.cs
 #:include Dashboard.cs
@@ -126,7 +126,8 @@ static async Task ProbeAsync(IBrowser browser, string path, string script)
         IgnoreHTTPSErrors = true,
     });
     var page = await context.NewPageAsync();
-    await page.GotoAsync(Scenes.BaseUrl + path, new PageGotoOptions { WaitUntil = WaitUntilState.NetworkIdle });
+    // A Blazor circuit can keep a long-polling request open, so network idle is not a readiness signal.
+    await page.GotoAsync(Scenes.BaseUrl + path, new PageGotoOptions { WaitUntil = WaitUntilState.DOMContentLoaded });
     await Task.Delay(800);
     Console.WriteLine((await page.EvaluateAsync<JsonElement>(script)).ToString());
 

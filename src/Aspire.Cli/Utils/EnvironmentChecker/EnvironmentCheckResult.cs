@@ -97,6 +97,13 @@ internal sealed class EnvironmentCheckResult
     public string? Details { get; init; }
 
     /// <summary>
+    /// Gets optional file paths associated with the check.
+    /// </summary>
+    [JsonPropertyName("files")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<string>? Files { get; init; }
+
+    /// <summary>
     /// Gets optional structured metadata for programmatic consumption.
     /// </summary>
     /// <remarks>

@@ -11,6 +11,23 @@ namespace Aspire.Hosting.Radius.Tests;
 
 public class RadiusEnvironmentResourceTests
 {
+    [Theory]
+    [InlineData(EndpointProperty.BrowserOrigins)]
+    [InlineData(EndpointProperty.PrimaryBrowserOrigin)]
+    public void BrowserOriginsExplainWhyServiceDnsIsInsufficient(EndpointProperty property)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var environment = builder.AddRadiusEnvironment("env");
+        var web = builder.AddContainer("web", "image").WithHttpEndpoint(targetPort: 8080);
+
+        var error = Assert.Throws<NotSupportedException>(() =>
+            ((IComputeEnvironmentResource)environment.Resource).GetEndpointPropertyExpression(web.GetEndpoint("http").Property(property)));
+
+        Assert.Equal(
+            "Radius environment 'env' cannot provide browser origins for endpoint 'http' on resource 'web' because its service DNS is cluster-local and does not establish a browser-facing address. " +
+            "Supply an explicit deployment origin parameter or reference a public gateway endpoint.", error.Message);
+    }
+
     [Fact]
     public void Constructor_SetsName()
     {

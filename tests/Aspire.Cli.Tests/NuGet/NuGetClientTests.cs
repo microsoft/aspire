@@ -14,7 +14,10 @@ using Microsoft.Extensions.Logging.Testing;
 using NuGet.Configuration;
 using NuGet.ProjectModel;
 using NuGet.Packaging;
+using NuGet.Packaging.Core;
 using NuGet.Protocol;
+using NuGet.Protocol.Core.Types;
+using NuGet.Versioning;
 
 namespace Aspire.Cli.Tests.NuGet;
 
@@ -26,37 +29,77 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
     [InlineData(4001, true)]
     public async Task SearchAsync_BoundsPaginationAndReportsWhenResultsMayBeIncomplete(int packageCount, bool expectLimitReached)
     {
+        // Serve the pages from memory: a local folder feed re-reads every .nupkg for each page, which made
+        // this test take several minutes per case on macOS and pushed Aspire.Cli.Tests past its CI timeout.
+        // Real local-feed pagination is covered by SearchAsync_ReturnsAllRequestedPages.
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var feed = workspace.CreateDirectory("feed");
         var ids = Enumerable.Range(0, packageCount).Select(index => $"Paging.Package{index:D4}").ToArray();
-        var expectedIds = ids.ToHashSet(StringComparer.Ordinal);
-        foreach (var id in ids)
-        {
-            NuGetTestHelper.CreatePackage(feed, id, "1.0.0", new Dictionary<string, string>());
-        }
-
+        var searchResource = new PagedPackageSearchResource(ids);
         var client = new NuGetClient(new TestFeatures(), new TestEnvironment(), NullLogger<NuGetClient>.Instance)
         {
             AmbientSettingsLoader = NuGetTestHelper.LoadSettings,
-            MachineWideSettingsFactory = () => new TestMachineWideSettings(NullSettings.Instance)
+            MachineWideSettingsFactory = () => new TestMachineWideSettings(NullSettings.Instance),
+            SourceRepositoryFactory = source => Repository.CreateSource(
+                [new Lazy<INuGetResourceProvider>(() => new PagedPackageSearchResourceProvider(searchResource))],
+                source)
         };
 
         foreach (var (take, expectedLimitReached) in new[] { (3500, false), (4000, false), (int.MaxValue, expectLimitReached) })
         {
+            searchResource.Requests.Clear();
             var results = await client.SearchAsync(
                 "Paging.Package", prerelease: true, take,
-                explicitSources: [feed.FullName], nugetConfigPath: null,
+                explicitSources: ["https://paging.example/v3/index.json"], nugetConfigPath: null,
                 workingDirectory: workspace.Path, TestContext.Current.CancellationToken);
 
-            // Local feeds limit results before the client sorts them, so the bounded subset
-            // is not guaranteed to contain the first IDs in lexicographic order.
-            var packageIds = results.Packages.Select(package => package.Id).ToArray();
-            Assert.Equal(Math.Min(packageCount, Math.Min(take, 4000)), packageIds.Length);
-            Assert.Distinct(packageIds);
-            Assert.All(packageIds, packageId => Assert.Contains(packageId, expectedIds));
-            Assert.Equal(packageIds.Order(), packageIds);
+            var expectedCount = Math.Min(packageCount, Math.Min(take, NuGetSearchLimits.MaxResults));
+            Assert.Equal(ids.Take(expectedCount), results.Packages.Select(package => package.Id));
             Assert.Equal(expectedLimitReached, results.LimitReached);
+            Assert.Empty(results.FailedSources);
+            Assert.All(searchResource.Requests, request =>
+            {
+                Assert.InRange(request.Skip, 0, NuGetSearchLimits.MaxSkip);
+                Assert.InRange(request.Take, 1, NuGetSearchLimits.PageSize);
+            });
         }
+    }
+
+    private sealed class PagedPackageSearchResource(IReadOnlyList<string> ids) : PackageSearchResource
+    {
+        public List<(int Skip, int Take)> Requests { get; } = [];
+
+        public override bool SupportsPackageTypeFiltering => false;
+
+        public override Task<IEnumerable<IPackageSearchMetadata>> SearchAsync(
+            string searchTerm,
+            global::NuGet.Protocol.Core.Types.SearchFilter filters,
+            int skip,
+            int take,
+            global::NuGet.Common.ILogger log,
+            CancellationToken cancellationToken)
+        {
+            lock (Requests)
+            {
+                Requests.Add((skip, take));
+            }
+
+            var page = ids
+                .Where(id => id.Contains(searchTerm, StringComparison.OrdinalIgnoreCase))
+                .Skip(skip)
+                .Take(take)
+                .Select(id => PackageSearchMetadataBuilder
+                    .FromIdentity(new PackageIdentity(id, NuGetVersion.Parse("1.0.0")))
+                    .Build())
+                .ToArray();
+            return Task.FromResult<IEnumerable<IPackageSearchMetadata>>(page);
+        }
+    }
+
+    private sealed class PagedPackageSearchResourceProvider(PackageSearchResource resource)
+        : ResourceProvider(typeof(PackageSearchResource))
+    {
+        public override Task<Tuple<bool, INuGetResource?>> TryCreate(SourceRepository source, CancellationToken token)
+            => Task.FromResult(new Tuple<bool, INuGetResource?>(true, resource));
     }
 
     [Fact]
@@ -327,6 +370,99 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
             });
     }
 
+    [Theory]
+    [InlineData(false, false, false)]
+    [InlineData(false, false, true)]
+    [InlineData(false, true, false)]
+    [InlineData(false, true, true)]
+    [InlineData(true, false, false)]
+    [InlineData(true, false, true)]
+    [InlineData(true, true, false)]
+    [InlineData(true, true, true)]
+    public void ResolveSdkPackageSearchSourceNames_DistinguishesNamesFromLocations(
+        bool useLocalSources, bool mappingEnabled, bool reverseSourceOrder)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        const string packageId = "Aspire.Hosting.SourceProbe";
+        var selectedSource = useLocalSources
+            ? workspace.CreateDirectory("selected-feed").FullName
+            : "https://selected.example/v3/index.json";
+        var otherSource = useLocalSources
+            ? workspace.CreateDirectory("other-feed").FullName
+            : "https://other.example/v3/index.json";
+        var sources = new[]
+        {
+            new XElement("add", new XAttribute("key", "selected"), new XAttribute("value", selectedSource)),
+            new XElement("add", new XAttribute("key", selectedSource), new XAttribute("value", otherSource))
+        };
+        var config = new XElement("configuration",
+            new XElement("packageSources",
+                new XElement("clear"),
+                reverseSourceOrder ? sources.Reverse() : sources));
+        if (mappingEnabled)
+        {
+            config.Add(new XElement("packageSourceMapping",
+                new XElement("clear"),
+                new XElement("packageSource", new XAttribute("key", "selected"),
+                    new XElement("package", new XAttribute("pattern", packageId))),
+                new XElement("packageSource", new XAttribute("key", selectedSource),
+                    new XElement("package", new XAttribute("pattern", "*")))));
+        }
+        var configPath = Path.Combine(workspace.Path, "NuGet.Config");
+        config.Save(configPath);
+
+        var client = NuGetTestHelper.CreateClient();
+        var resolvedPackages = client.ResolveSdkPackageSearchSourceNames(
+            [
+                new() { Id = packageId, Version = "1.0.0", Source = "selected" },
+                new() { Id = packageId, Version = "9.0.0", Source = selectedSource }
+            ],
+            configPath,
+            workspace.Path);
+        Assert.Equal(
+            [(packageId, "1.0.0", selectedSource), (packageId, "9.0.0", otherSource)],
+            resolvedPackages.Select(package => (package.Id, package.Version, package.Source)));
+
+        var results = client.FilterPackageSearchResults(resolvedPackages, configPath, workspace.Path);
+
+        var expected = new List<(string Id, string Version, string Source)>
+        {
+            (packageId, "1.0.0", selectedSource)
+        };
+        if (!mappingEnabled)
+        {
+            expected.Add((packageId, "9.0.0", otherSource));
+        }
+        Assert.Equal(expected, results.Select(package => (package.Id, package.Version, package.Source)));
+    }
+
+    [Theory]
+    [InlineData("unknown")]
+    [InlineData("https://selected.example/v3/index.json")]
+    public void ResolveSdkPackageSearchSourceNames_RejectsUnknownNames(string sourceName)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var configPath = Path.Combine(workspace.Path, "NuGet.Config");
+        File.WriteAllText(configPath, """
+            <configuration>
+              <packageSources>
+                <clear />
+                <add key="selected" value="https://selected.example/v3/index.json" />
+              </packageSources>
+            </configuration>
+            """);
+        var logger = new FakeLogger<NuGetClient>();
+        var client = new NuGetClient(new TestFeatures(), new TestEnvironment(), logger);
+
+        var exception = Assert.Throws<NuGetOperationException>(() => client.ResolveSdkPackageSearchSourceNames(
+            [new() { Id = "Aspire.Hosting.SourceProbe", Version = "1.0.0", Source = sourceName }],
+            configPath, workspace.Path));
+
+        Assert.Equal(Resources.ErrorStrings.FailedToParsePackageSearchResults, exception.Output);
+        Assert.Equal($"NuGet package search returned an unknown source name '{sourceName}'.",
+            logger.Collector.LatestRecord.Message);
+    }
+
     [Fact]
     public async Task SearchAndRestoreHonorMachineWideMappings()
     {
@@ -377,16 +513,16 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
             GetEffectiveGlobalPackagesFolder(nugetConfigPath: null, workspace.WorkspaceRoot.FullName),
             packageId);
         Assert.Contains(machineSettings.GetConfigFilePaths().Single(), snapshot.ConfigPaths);
-        var sdkResults = client.FilterPackageSearchResults(
+        var resolvedSdkResults = client.ResolveSdkPackageSearchSourceNames(
             [
                 new() { Id = packageId, Version = "1.0.0", Source = "selected" },
-                new() { Id = packageId, Version = "1.0.0", Source = selectedFeed.FullName },
-                new() { Id = packageId, Version = "9.0.0", Source = "ambient" },
-                new() { Id = packageId, Version = "9.0.0", Source = ambientFeed.FullName }
+                new() { Id = packageId, Version = "9.0.0", Source = "ambient" }
             ],
             nugetConfigPath: null,
             workspace.WorkspaceRoot.FullName);
-        Assert.Equal(["selected", selectedFeed.FullName], sdkResults.Select(package => package.Source));
+        var sdkResults = client.FilterPackageSearchResults(
+            resolvedSdkResults, nugetConfigPath: null, workspace.WorkspaceRoot.FullName);
+        Assert.Equal([selectedFeed.FullName], sdkResults.Select(package => package.Source));
 
         var results = await client.SearchAsync(
             packageId,
@@ -405,7 +541,7 @@ public class NuGetClientTests(ITestOutputHelper outputHelper)
             framework: "net10.0",
             runtimeIdentifier: null,
             restoreDirectory.FullName,
-            sources: [],
+            sources: [sdkResults[0].Source],
             nugetConfigPaths: snapshot.ConfigPaths,
             workspace.WorkspaceRoot.FullName,
             globalPackagesFolderOverride: null,

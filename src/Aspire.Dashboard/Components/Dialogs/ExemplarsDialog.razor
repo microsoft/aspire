@@ -7,7 +7,7 @@
 
 <FluentDialogBody>
 <div style="max-height: 44vh; overflow-y: auto;">
-    <FluentDataGrid ItemsProvider="@EnumerableGridItemsProvider.Create(() => MetricView)"
+    <DisposalSafeFluentDataGrid ItemsProvider="@EnumerableGridItemsProvider.Create(() => MetricView)"
                     RowSize="DataGridRowSize.Medium"
                     GridTemplateColumns="2fr 1fr 1fr 1fr"
                     TGridItem="ChartExemplar">
@@ -33,6 +33,6 @@
                 @Loc[nameof(ControlsStrings.MetricTableNoMetricsFound)]
             </div>
         </EmptyContent>
-    </FluentDataGrid>
+    </DisposalSafeFluentDataGrid>
 </div>
 </FluentDialogBody>

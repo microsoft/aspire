@@ -6,7 +6,7 @@ using Aspire.Cli.Resources;
 namespace Aspire.Cli.Commands;
 
 /// <summary>
-/// Manages the experimental bundled macOS and Windows tray companion.
+/// Manages the experimental bundled desktop tray companion.
 /// </summary>
 internal sealed class TrayCommand : ParentCommand
 {
@@ -15,9 +15,10 @@ internal sealed class TrayCommand : ParentCommand
     public TrayCommand(TrayStartCommand startCommand, TrayStopCommand stopCommand, IEnvironment environment, CommonCommandServices services)
         : base("tray", TrayCommandStrings.Description, services)
     {
-        // The tray companion only ships for macOS and Windows, so keep it out of help elsewhere.
+        // Keep desktop-only commands out of help on unsupported operating systems.
         // TrayLifecycleService still rejects unsupported platforms because hidden commands remain invocable.
-        Hidden = !environment.IsMacOS() && !environment.IsWindows();
+        Hidden = (!environment.IsMacOS() && !environment.IsWindows() && !environment.IsLinux())
+            || environment.RuntimeIdentifier.StartsWith("linux-musl-", StringComparison.Ordinal);
 
         Subcommands.Add(startCommand);
         Subcommands.Add(stopCommand);

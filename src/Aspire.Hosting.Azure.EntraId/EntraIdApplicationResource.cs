@@ -2,7 +2,9 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREPIPELINES001 // Existing registrations remove the framework's provisioning annotations.
-#pragma warning disable ASPIREAZURE003 // Tenant-scoped resource annotations are experimental.
+#pragma warning disable ASPIREAZURE004 // Bicep extension declarations are experimental.
+#pragma warning disable ASPIREAZURE005 // IBicepOutputReferenceProvider is experimental.
+#pragma warning disable ASPIREAZURE007 // Tenant-scoped resource annotations are experimental.
 
 using System.Globalization;
 using System.IO.Hashing;
@@ -27,7 +29,7 @@ namespace Aspire.Hosting.Azure;
 /// </para>
 /// <para>
 /// Aspire creates new registrations using a resource-group-scoped Microsoft Graph Bicep deployment.
-/// Use <c>AddExistingEntraApplication</c> to reference an existing registration without deploying infrastructure.
+/// Use <c>AddExistingEntraIdApplication</c> to reference an existing registration without deploying infrastructure.
 /// Registration-only builder APIs throw on existing references. Converting a resource with
 /// <c>AsExistingApplication</c> also throws if registration-only configuration was already applied.
 /// Consumer configuration and explicit metadata describing existing API URIs and scopes remain supported.
@@ -243,7 +245,7 @@ public class EntraIdApplicationResource : AzureProvisioningResource, IResourceWi
         {
             throw new InvalidOperationException(
                 "Entra ID applications are identified by tenant ID and client ID, not by an Azure resource name or resource group. " +
-                "Use AddExistingEntraApplication(name, tenantId, clientId) to reference an existing registration without provisioning it.");
+                "Use AddExistingEntraIdApplication(name, tenantId, clientId) to reference an existing registration without provisioning it.");
         }
 
         if (Scope is { HasResourceGroup: false })
@@ -553,13 +555,17 @@ public class EntraIdApplicationResource : AzureProvisioningResource, IResourceWi
                 continue;
             }
 
-            if (value is IEntraIdDerivedRedirectUri derivedRedirectUri)
+            if (value is EntraIdEndpointRedirectUri endpointRedirect)
             {
-                // The value is only known when the parameter is resolved: after endpoint allocation when running
-                // locally, from the compute environment when deploying, or from the host parameter's value.
-                var uriParameter = derivedRedirectUri
-                    .CreateExpression()
-                    .AsProvisioningParameter(infrastructure, NextDerivedParameterName());
+                var origin = endpointRedirect.Origin().AsProvisioningParameter(infrastructure, NextDerivedParameterName());
+                literals.Add(BicepFunction.Interpolate($"{origin.Value}{endpointRedirect.Path}").Compile());
+                continue;
+            }
+
+            if (value is ReferenceExpression uriExpression)
+            {
+                // Keep runtime browser origins and deployment parameters/outputs deferred until resolution.
+                var uriParameter = uriExpression.AsProvisioningParameter(infrastructure, NextDerivedParameterName());
                 literals.Add(uriParameter.Value.Compile());
                 continue;
             }
@@ -799,14 +805,16 @@ public class EntraIdApplicationResource : AzureProvisioningResource, IResourceWi
     /// </remarks>
     public IReadOnlyList<ParameterResource> RedirectUriParameters => [.. _redirectUriValues.OfType<ParameterResource>()];
 
-    // Holds string or ParameterResource entries in the order they were added, so registration order matches call order.
+    // Keep literal, parameter, expression, and endpoint-derived entries in registration order.
     private readonly List<object> _redirectUriValues = [];
 
     internal void AddRedirectUri(string redirectUri) => _redirectUriValues.Add(redirectUri);
 
     internal void AddRedirectUri(ParameterResource redirectUri) => _redirectUriValues.Add(redirectUri);
 
-    internal void AddRedirectUri(IEntraIdDerivedRedirectUri redirectUri) => _redirectUriValues.Add(redirectUri);
+    internal void AddRedirectUri(ReferenceExpression redirectUri) => _redirectUriValues.Add(redirectUri);
+
+    internal void AddRedirectUri(EntraIdEndpointRedirectUri redirectUri) => _redirectUriValues.Add(redirectUri);
 
     /// <summary>
     /// Gets the application roles to declare on an application created by Aspire.

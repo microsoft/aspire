@@ -7,6 +7,7 @@ using System.Text.Json.Nodes;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
+using Aspire.Cli.Utils;
 
 namespace Aspire.Cli.Templating;
 
@@ -14,6 +15,7 @@ internal sealed class ConfiguredTemplateSourceService(
     IConfigurationService configurationService,
     ITemplateProvider templateProvider,
     IInteractionService interactionService,
+    CliExecutionContext executionContext,
     ConfigSourceService configSources)
 {
     internal async Task<IReadOnlyList<KeyValuePair<string, ConfiguredTemplateSource>>> GetSourcesAsync(CancellationToken cancellationToken)
@@ -63,6 +65,11 @@ internal sealed class ConfiguredTemplateSourceService(
             return [];
         }
 
+        interactionService.DisplayTemplateSources(sources.Select(source =>
+            (source.Value.DisplayName ?? source.Key,
+                source.Value.Template ?? throw new InvalidOperationException("A complete template source must have a location."))),
+            executionContext);
+
         List<ConfiguredTemplate> results = [];
         // The template engine owns mutable mount/resource state. Discover sequentially rather
         // than sharing a factory across concurrent source installations.
@@ -71,27 +78,15 @@ internal sealed class ConfiguredTemplateSourceService(
             cancellationToken.ThrowIfCancellationRequested();
             try
             {
-                var status = string.Format(CultureInfo.CurrentCulture, NewCommandStrings.SearchingTemplateSource, name);
                 var source = configuredSource.Template
                     ?? throw new InvalidOperationException("A complete template source must have a location.");
-                IEnumerable<ITemplate> templates;
-                if (source.Repository is null)
-                {
-                    templates = await interactionService.ShowStatusAsync(status,
-                        () => templateProvider.GetTemplatesAsync(source, cancellationToken));
-                }
-                else
-                {
-                    // Git owns its resolve/clone spinners; an enclosing status hides them.
-                    interactionService.DisplaySubtleMessage(status);
-                    templates = await templateProvider.GetTemplatesAsync(source, cancellationToken);
-                }
+                var templates = await templateProvider.GetTemplatesAsync(source, cancellationToken);
 
                 results.AddRange(templates
                     .Where(template => template.Name.Contains(query, StringComparison.OrdinalIgnoreCase) ||
                         template.Description.Contains(query, StringComparison.OrdinalIgnoreCase) ||
                         template.SearchDescription?.Contains(query, StringComparison.OrdinalIgnoreCase) is true)
-                    .Select(template => new ConfiguredTemplate(name, template, configuredSource.DisplayName)));
+                    .Select(template => new ConfiguredTemplate(name, template, configuredSource.DisplayName, source)));
             }
             catch (Exception ex) when (ex is TemplateDiscoveryException or IOException or UnauthorizedAccessException or ArgumentException)
             {
@@ -110,4 +105,4 @@ internal sealed class ConfiguredTemplateSourceService(
             CultureInfo.CurrentCulture, NewCommandStrings.TemplateSourceSearchFailed, source, message));
 }
 
-internal sealed record ConfiguredTemplate(string SourceName, ITemplate Template, string? SourceDisplayName);
+internal sealed record ConfiguredTemplate(string SourceName, ITemplate Template, string? SourceDisplayName, TemplateSource Source);

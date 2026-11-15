@@ -1,6 +1,6 @@
 ::deep.span-details-layout > .details-toolbar > .toolbar-end .span-details-actions,
 ::deep.span-details-layout > .details-toolbar > .toolbar-end .span-details-actions::part(control) {
-    border-radius: 6px;
+    border-radius: var(--aspire-radius-small);
 }
 
 ::deep .property-grid-container h4 {

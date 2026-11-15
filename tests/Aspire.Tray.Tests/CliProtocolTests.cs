@@ -41,6 +41,7 @@ public class CliProtocolTests
     [InlineData("healthy", "Healthy")]
     [InlineData("warning", "Warning")]
     [InlineData("unhealthy", "Unhealthy")]
+    [InlineData("no_resources", "NoResources")]
     [InlineData("future-health", "Unknown")]
     public void OptionalHealthMapsWithoutChangingProcessIdentity(string? health, string expected)
     {

@@ -22,7 +22,9 @@ internal sealed partial class FallbackProjectParser
     [GeneratedRegex(@"^[\t ]*#:sdk[\t ]+Aspire\.AppHost\.Sdk(?:@([\d\.\-+a-zA-Z]+|\*))?[\t ]*\r?$", RegexOptions.Multiline)]
     internal static partial Regex SdkDirectiveRegex();
 
-    [GeneratedRegex(@"^[\t ]*#:package[\t ]+([a-zA-Z0-9\._]+)@([\d\.\-+a-zA-Z]+|\*)[\t ]*\r?$", RegexOptions.Multiline)]
+    // The version is optional: with Central Package Management the version comes from
+    // Directory.Packages.props, so the directive is just "#:package Aspire.Hosting.AppHost".
+    [GeneratedRegex(@"^[\t ]*#:package[\t ]+([a-zA-Z0-9\._]+)(?:@([\d\.\-+a-zA-Z]+|\*))?[\t ]*\r?$", RegexOptions.Multiline)]
     private static partial Regex PackageDirectiveRegex();
 
     internal static bool HasAppHostPackageDirective(string content)
@@ -366,14 +368,14 @@ internal sealed partial class FallbackProjectParser
     {
         var packageReferences = new List<PackageReferenceInfo>();
 
-        // Match: #:package <PackageId>@<version>
+        // Match: #:package <PackageId>[@<version>]
         // Where version can be a semantic version or wildcard (*)
         var matches = PackageDirectiveRegex().Matches(fileContent);
 
         foreach (Match match in matches)
         {
             var identity = match.Groups[1].Value;
-            var version = match.Groups[2].Value;
+            var version = match.Groups[2].Success ? match.Groups[2].Value : string.Empty;
 
             var packageRef = new PackageReferenceInfo
             {

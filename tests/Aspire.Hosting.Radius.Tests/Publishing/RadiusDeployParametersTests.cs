@@ -19,6 +19,123 @@ namespace Aspire.Hosting.Radius.Tests.Publishing;
 /// </summary>
 public class RadiusDeployParametersTests
 {
+    [Theory]
+    [InlineData("http", false, false, EndpointProperty.BrowserOrigins)]
+    [InlineData("tcp", true, false, EndpointProperty.BrowserOrigins)]
+    [InlineData("http", true, true, EndpointProperty.BrowserOrigins)]
+    [InlineData("http", false, false, EndpointProperty.PrimaryBrowserOrigin)]
+    [InlineData("tcp", true, false, EndpointProperty.PrimaryBrowserOrigin)]
+    [InlineData("http", true, true, EndpointProperty.PrimaryBrowserOrigin)]
+    public async Task BrowserOriginsRejectUnsupportedEndpoints(string scheme, bool external, bool backingResource, EndpointProperty property)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var environment = builder.AddRadiusEnvironment("myenv");
+        IResourceBuilder<IResourceWithEndpoints> producer;
+        if (backingResource)
+        {
+            producer = builder.AddRedis("producer")
+                .WithHttpEndpoint(name: "endpoint", targetPort: 8080).WithExternalHttpEndpoints();
+        }
+        else
+        {
+            producer = builder.AddContainer("producer", "image")
+                .WithEndpoint(name: "endpoint", scheme: scheme, targetPort: 8080, isExternal: external);
+        }
+        builder.AddContainer("consumer", "image")
+            .WithEnvironment("ORIGINS", producer.GetEndpoint("endpoint").Property(property));
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        RadiusTestHelper.AttachDeploymentTargets(environment.Resource, model);
+        var infrastructure = new RadiusInfrastructureBuilder(environment.Resource, model,
+            new ResourceTypeMapper(NullLogger.Instance), NullLogger.Instance);
+
+        var error = await Assert.ThrowsAsync<NotSupportedException>(() =>
+            infrastructure.BuildAsync(app.Services.GetRequiredService<DistributedApplicationExecutionContext>(), default));
+
+        Assert.Equal(
+            "Radius cannot provide browser origins for endpoint 'endpoint' on resource 'producer' because it is not an external HTTP(S) workload endpoint. " +
+            "Reference an external HTTP(S) workload endpoint or supply an explicit origin parameter.", error.Message);
+        Assert.Empty(environment.Resource.Annotations.OfType<RadiusDeployParametersAnnotation>());
+    }
+
+    [Fact]
+    public async Task BrowserOriginInputsKeepDistinctEndpointIdentities()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var environment = builder.AddRadiusEnvironment("myenv");
+        var first = builder.AddContainer("a-b", "image").WithHttpEndpoint(name: "c", targetPort: 80).WithExternalHttpEndpoints();
+        var second = builder.AddContainer("a", "image").WithHttpEndpoint(name: "b-c", targetPort: 80).WithExternalHttpEndpoints();
+        builder.AddContainer("consumer", "image")
+            .WithEnvironment("FIRST", first.GetEndpoint("c").BrowserOrigins)
+            .WithEnvironment("SECOND", second.GetEndpoint("b-c").BrowserOrigins)
+            .WithEnvironment("REPEATED", first.GetEndpoint("c").BrowserOrigins);
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        RadiusTestHelper.AttachDeploymentTargets(environment.Resource, model);
+        var infrastructure = new RadiusInfrastructureBuilder(environment.Resource, model,
+            new ResourceTypeMapper(NullLogger.Instance), NullLogger.Instance);
+
+        var options = await infrastructure.BuildAsync(app.Services.GetRequiredService<DistributedApplicationExecutionContext>(), default);
+
+        var bindings = Assert.Single(environment.Resource.Annotations.OfType<RadiusDeployParametersAnnotation>()).Parameters;
+        Assert.Equal(2, bindings.Count);
+        var inputs = bindings.Values.ToArray();
+        Assert.NotEqual(inputs[0].Name, inputs[1].Name);
+        builder.Configuration[$"Parameters:{inputs[0].Name}"] = "https://first.example";
+        builder.Configuration[$"Parameters:{inputs[1].Name}"] = "https://second.example";
+        Assert.Equal("https://first.example", await inputs[0].GetValueAsync(default));
+        Assert.Equal("https://second.example", await inputs[1].GetValueAsync(default));
+        await Verify(BicepPostProcessor.CompileBicep(options, "myenv", NullLogger.Instance), "bicep");
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task BrowserOriginsUseRequiredInputsAndStandardDeployBindings(bool configured)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var environment = builder.AddRadiusEnvironment("myenv");
+        var web = builder.AddContainer("web", "image").WithHttpEndpoint(targetPort: 8080).WithExternalHttpEndpoints();
+        builder.AddContainer("consumer", "image")
+            .WithEnvironment("ORIGIN", web.GetEndpoint("http").PrimaryBrowserOrigin)
+            .WithEnvironment("ORIGINS", web.GetEndpoint("http").BrowserOrigins)
+            .WithEnvironment("CONFIG", ReferenceExpression.Create($"origin={web.GetEndpoint("http").PrimaryBrowserOrigin}"));
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        RadiusTestHelper.AttachDeploymentTargets(environment.Resource, model);
+        var infrastructure = new RadiusInfrastructureBuilder(environment.Resource, model,
+            new ResourceTypeMapper(NullLogger.Instance), NullLogger.Instance);
+
+        var options = await infrastructure.BuildAsync(app.Services.GetRequiredService<DistributedApplicationExecutionContext>(), default);
+
+        var bindings = Assert.Single(environment.Resource.Annotations.OfType<RadiusDeployParametersAnnotation>()).Parameters;
+        Assert.Equal(2, bindings.Count);
+        Assert.All(bindings.Values, parameter =>
+        {
+            Assert.True(parameter.Required);
+            Assert.Null(parameter.Default);
+        });
+        var step = new RadiusDeploymentPipelineStep(environment.Resource);
+        if (!configured)
+        {
+            await Assert.ThrowsAsync<MissingParameterValueException>(() => step.WriteDeployParametersFileAsync(NullLogger.Instance, default));
+            return;
+        }
+        builder.Configuration["Parameters:web-http-BrowserOrigins"] = "https://public.example,https://alias.example";
+        builder.Configuration["Parameters:web-http-PrimaryBrowserOrigin"] = "https://public.example";
+        var path = await step.WriteDeployParametersFileAsync(NullLogger.Instance, default);
+        Assert.NotNull(path);
+        try
+        {
+            await Verify(BicepPostProcessor.CompileBicep(options, "myenv", NullLogger.Instance), "bicep")
+                .AppendContentAsFile(await File.ReadAllTextAsync(path), "json").UseParameters(configured);
+        }
+        finally
+        {
+            RadiusDeploymentPipelineStep.DeleteDeployParametersFile(path, NullLogger.Instance);
+        }
+    }
+
     [Fact]
     public void BuildOptions_SurfacesBindings_ForParameterBoundRecipeParameter()
     {

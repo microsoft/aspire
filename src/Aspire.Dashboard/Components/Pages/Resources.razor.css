@@ -9,7 +9,7 @@
     align-items: center;
     justify-content: center;
     padding: 4px;
-    border-radius: 6px;
+    border-radius: var(--aspire-radius-small);
     text-decoration: none;
     --unread-logs-badge-color: #ffffff;
 }
@@ -128,14 +128,14 @@
 
 .resources-filter-popup-container ::deep .resources-filter-popup .filter-group > legend {
     font-family: var(--aspire-font-display);
-    font-size: 16px;
-    font-weight: 500;
+    font-size: var(--aspire-font-size-heading);
+    font-weight: var(--aspire-font-weight-semibold);
     line-height: 27px;
 }
 
 .resources-filter-popup-container ::deep .resources-filter-popup .filter-group > .fluent-stack-vertical {
     min-width: 0;
-    row-gap: 4px;
+    row-gap: var(--aspire-space-1);
     width: 100%;
 }
 
@@ -161,6 +161,19 @@
 ::deep .resource-graph-container {
     grid-area: resources-view-content;
     position: relative; /* So graph buttons are position inside the container */
+    /* Keep the graph within the 1fr view row. Without this the row grows to the SVG's intrinsic height and the
+       absolutely positioned controls at the bottom end up below the clipped edge of .resource-views. */
+    min-height: 0;
+    overflow: hidden;
+}
+
+/* Size the SVG from the layout instead of from its viewBox aspect ratio. app-resourcegraph.js derives the viewBox from
+   this element's container, so an SVG sized by its viewBox would feed its own height back into the layout. display:
+   block also removes the inline baseline gap, which would otherwise grow the container on every resize. */
+::deep .resource-graph {
+    display: block;
+    width: 100%;
+    height: 100%;
 }
 
 ::deep .resource-graph-controls {
@@ -168,7 +181,12 @@
     right: 30px;
     bottom: 30px;
     display: flex;
-    column-gap: 10px;
+    column-gap: var(--aspire-space-2);
+}
+
+::deep .resource-graph-controls.resource-graph-game-launch {
+    left: 30px;
+    right: auto;
 }
 
 ::deep .resource-graph-controls fluent-button {
@@ -203,7 +221,7 @@
 ::deep .resource-name {
     fill: var(--colorNeutralForeground1);
     stroke: var(--aspire-page-background);
-    font-size: 15px;
+    font-size: var(--aspire-font-size-large);
     text-anchor: middle;
     stroke-width: 0.5em;
     paint-order: stroke;
@@ -274,7 +292,7 @@
 
 ::deep .resource-endpoint {
     fill: var(--foreground-subtext-rest);
-    font-size: 11px;
+    font-size: var(--aspire-font-size-caption);
     text-anchor: middle;
 }
 

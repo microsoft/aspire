@@ -28,6 +28,7 @@ public interface ITelemetryRepository : IDisposable
     OtlpResource? GetResourceByCompositeName(string compositeName);
     OtlpResource? GetResource(ResourceKey key);
     List<OtlpResource> GetResources(ResourceKey key, bool includeUninstrumentedPeers = false);
+    Dictionary<ResourceKey, ResourceSignalAvailability> GetResourceSignalAvailability();
     Dictionary<ResourceKey, int> GetResourceUnviewedErrorLogsCount();
     void MarkViewedErrorLogs(ResourceKey? key);
 

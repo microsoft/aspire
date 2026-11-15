@@ -782,8 +782,16 @@ jobs:
           $debuggerBin = Join-Path $env:RUNNER_TEMP 'resource-debug-bin'
           New-Item -ItemType Directory -Path $debuggerBin -Force | Out-Null
           $env:GOBIN = $debuggerBin
-          $env:GOTOOLCHAIN = 'local'
-          go install github.com/go-delve/delve/cmd/dlv@v1.25.2
+          # Generated Go AppHosts require Go 1.26. Keep the CLI and Go extension on the same
+          # toolchain, and use Delve with Go 1.26 support instead of disabling its version check.
+          # https://github.com/go-delve/delve/blob/v1.27.2/pkg/goversion/compat.go
+          $env:GOTOOLCHAIN = 'go1.26.10'
+          go version
+          if ($LASTEXITCODE -ne 0) {
+            throw 'Could not provision Go 1.26.10 for AppHost debugging.'
+          }
+          "GOTOOLCHAIN=$env:GOTOOLCHAIN" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          go install github.com/go-delve/delve/cmd/dlv@v1.27.2
           if ($LASTEXITCODE -ne 0) {
             throw 'Could not install Delve for resource debugging.'
           }

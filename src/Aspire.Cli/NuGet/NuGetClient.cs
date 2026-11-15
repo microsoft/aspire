@@ -7,6 +7,7 @@ using System.IO.Hashing;
 using System.Text;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Packaging;
+using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
 using Microsoft.Extensions.Logging;
@@ -88,6 +89,8 @@ internal interface INuGetClient
 
     IReadOnlyList<NuGetPackage> FilterPackageSearchResults(IReadOnlyList<NuGetPackage> packages, string? nugetConfigPath, string workingDirectory);
 
+    IReadOnlyList<NuGetPackage> ResolveSdkPackageSearchSourceNames(IReadOnlyList<NuGetPackage> packages, string? nugetConfigPath, string workingDirectory);
+
     void WriteNuGetConfig(NuGetConfigOverlay configuration, string outputPath);
 
     void WriteNuGetConfig(NuGetConfigOverlay configuration, string outputPath, ReadOnlyMemory<byte>? originalContent);
@@ -156,6 +159,12 @@ internal sealed class NuGetClient(
     internal Func<string, IMachineWideSettings, ISettings> AmbientSettingsLoader { get; init; }
         = static (workingDirectory, machineWideSettings) =>
             Settings.LoadDefaultSettings(workingDirectory, configFileName: null, machineWideSettings);
+
+    /// <summary>
+    /// Creates the repository used to query a package source, allowing tests to supply in-memory protocol resources.
+    /// </summary>
+    internal Func<PackageSource, SourceRepository> SourceRepositoryFactory { get; init; }
+        = static source => Repository.Factory.GetCoreV3(source);
 
     public Task RestoreAsync(
         IReadOnlyList<(string Id, string Version)> packages,
@@ -543,7 +552,7 @@ internal sealed class NuGetClient(
                 // Filter each source's results before deduplication, otherwise an ineligible
                 // feed's higher version can discard the package that restore is allowed to use.
                 .SelectMany((result, index) => result.Packages.Where(package =>
-                    sourceFilter(package.Id, packageSources[index].Name)))
+                    sourceFilter(package.Id, packageSources[index].Source)))
                 .GroupBy(package => package.Id, StringComparer.OrdinalIgnoreCase)
                 .Select(group => group.OrderByDescending(package => package.Version).First())
                 .OrderBy(package => package.Id)
@@ -680,7 +689,7 @@ internal sealed class NuGetClient(
         INuGetLogger nuGetLogger,
         CancellationToken cancellationToken)
     {
-        var repository = Repository.Factory.GetCoreV3(source);
+        var repository = SourceRepositoryFactory(source);
         var searchResource = await repository.GetResourceAsync<PackageSearchResource>(cancellationToken).ConfigureAwait(false);
         if (searchResource is null)
         {
@@ -750,6 +759,36 @@ internal sealed class NuGetClient(
         return packages.Where(package => filter(package.Id, package.Source)).ToArray();
     }
 
+    public IReadOnlyList<NuGetPackage> ResolveSdkPackageSearchSourceNames(
+        IReadOnlyList<NuGetPackage> packages,
+        string? nugetConfigPath,
+        string workingDirectory)
+    {
+        var settings = LoadSearchSettings(nugetConfigPath, workingDirectory);
+        var sources = new PackageSourceProvider(settings).LoadPackageSources()
+            .ToDictionary(source => source.Name, StringComparer.OrdinalIgnoreCase);
+
+        // SDK JSON reports {"sourceName":"private-feed","packages":[...]} using the alias,
+        // even when that alias looks like another feed's URL. Resolve names only at this boundary.
+        // https://github.com/NuGet/NuGet.Client/blob/dev/src/NuGet.Core/NuGet.CommandLine.XPlat/Commands/PackageSearch/PackageSearchResultJsonRenderer.cs
+        return packages.Select(package =>
+        {
+            if (!sources.TryGetValue(package.Source, out var source))
+            {
+                logger.LogError("NuGet package search returned an unknown source name '{SourceName}'.",
+                    PackageSourceRedactor.RedactForDisplay(package.Source));
+                throw new NuGetOperationException(ErrorStrings.FailedToParsePackageSearchResults);
+            }
+
+            return new NuGetPackage
+            {
+                Id = package.Id,
+                Version = package.Version,
+                Source = source.Source
+            };
+        }).ToArray();
+    }
+
     private static Func<string, string, bool> CreatePackageSearchSourceFilter(
         ISettings settings,
         IReadOnlyList<PackageSource> sources)
@@ -760,17 +799,13 @@ internal sealed class NuGetClient(
             return static (_, _) => true;
         }
 
-        // SDK JSON uses {"sourceName":"private","packages":[{"id":"Aspire.Hosting.Redis",...}]};
-        // sourceName can also be a location. Resolve either spelling to NuGet's source alias.
-        // Native settings and credential-bearing PackageSource objects stay inside this boundary.
-        return (packageId, sourceNameOrLocation) =>
+        return (packageId, sourceLocation) =>
         {
             var allowedKeys = mapping.GetConfiguredPackageSources(packageId);
             return sources.Any(source =>
                 source.IsEnabled &&
                 allowedKeys.Contains(source.Name, StringComparer.OrdinalIgnoreCase) &&
-                (string.Equals(source.Name, sourceNameOrLocation, StringComparison.OrdinalIgnoreCase) ||
-                 PackageSourceIdentity.Comparer.Equals(source.Source, sourceNameOrLocation)));
+                PackageSourceIdentity.Comparer.Equals(source.Source, sourceLocation));
         };
     }
 

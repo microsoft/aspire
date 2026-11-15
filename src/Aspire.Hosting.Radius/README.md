@@ -90,6 +90,11 @@ builder.AddContainer("api", "myorg/api", "1.0")
 
 Untargeted resources surface a clear error from the core pipeline instead of being silently claimed by one environment.
 
+Browser-origin references to external HTTP(S) workload endpoints use required deployment inputs rather than cluster-local service DNS. Internal, non-HTTP(S), and recipe-backed resource endpoints are rejected.
+For example, `web.GetEndpoint("http").BrowserOrigins` reads `Parameters:web-http-BrowserOrigins`.
+The input accepts a comma-separated origin list and uses the normal Radius deployment-parameter file.
+`web.GetEndpoint("http").PrimaryBrowserOrigin` instead reads `Parameters:web-http-PrimaryBrowserOrigin`, a separate required input containing a single origin.
+
 ## Deploying to a cloud
 
 Everything above works against a plain Kubernetes cluster with Radius installed. To target Azure

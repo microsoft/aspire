@@ -43,12 +43,18 @@ public class PipelineOutputChangeTests
     [Fact]
     public void DiffingExportsOnlyConsumerContracts()
     {
-        var types = GetDiffingTypes().Select(type => type.Name).Order(StringComparer.Ordinal);
+        var types = GetDiffingTypes().Select(type => type.FullName).Order(StringComparer.Ordinal);
 
         Assert.Equal(new[]
         {
-            "IPipelineOutputComparer`1", "IPipelineOutputSnapshotter`1", "PipelineOutputChange", "PipelineOutputChangeKind", "PipelineOutputDiffMode",
-            "PipelineOutputDiffOptions", "PipelineOutputDiffRule", "PipelineOutputDiffingExtensions"
+            "Aspire.Hosting.PipelineOutputDiffingExtensions",
+            "Aspire.Hosting.Pipelines.IPipelineOutputComparer`1",
+            "Aspire.Hosting.Pipelines.IPipelineOutputSnapshotter`1",
+            "Aspire.Hosting.Pipelines.PipelineOutputChange",
+            "Aspire.Hosting.Pipelines.PipelineOutputChangeKind",
+            "Aspire.Hosting.Pipelines.PipelineOutputDiffMode",
+            "Aspire.Hosting.Pipelines.PipelineOutputDiffOptions",
+            "Aspire.Hosting.Pipelines.PipelineOutputDiffRule"
         }, types);
     }
 
@@ -79,7 +85,7 @@ public class PipelineOutputChangeTests
     }
 
     private static IEnumerable<Type> GetDiffingTypes() => typeof(PipelineOutputChange).Assembly.GetExportedTypes()
-        .Where(type => type.Namespace == typeof(PipelineOutputChange).Namespace &&
+        .Where(type => (type.Namespace == "Aspire.Hosting" || type.Namespace == "Aspire.Hosting.Pipelines") &&
             (type.Name.StartsWith("PipelineOutput", StringComparison.Ordinal) ||
                 type.Name.StartsWith("IPipelineOutput", StringComparison.Ordinal)) && type != typeof(IPipelineOutputService));
 }

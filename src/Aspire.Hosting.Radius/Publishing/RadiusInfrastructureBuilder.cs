@@ -17,9 +17,12 @@ using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Radius.Publishing.Constructs;
 using Aspire.Hosting.Radius.ResourceMapping;
 using Aspire.Hosting.Radius.Secrets;
+using Aspire.Hosting.Utils;
 using Azure.Provisioning;
 using Azure.Provisioning.Expressions;
 using Azure.Provisioning.Primitives;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.Radius.Publishing;
@@ -49,6 +52,7 @@ internal sealed class RadiusInfrastructureBuilder
     // These are emitted as top-level Bicep `param`s (secure when the source parameter is secret)
     // instead of inlining values, so no literal secret is written to the published artifact.
     private readonly Dictionary<string, ProvisioningParameter> _envParametersByName = new(StringComparer.Ordinal);
+    private readonly EndpointPropertyInputCache _endpointInputs = new();
 
     // Maps the emitted Bicep parameter identifier to its originating Aspire ParameterResource, so
     // the deploy step can resolve each value at deploy time and pass it via `rad deploy --parameters`.
@@ -4146,6 +4150,23 @@ internal sealed class RadiusInfrastructureBuilder
                 {
                     parts.Add(EnvPart.FromLiteral(ResolveEndpointUrl(endpointReference)));
                 }
+                return;
+            case EndpointReferenceExpression endpointReferenceExpression when endpointReferenceExpression.Property is
+                EndpointProperty.BrowserOrigins or EndpointProperty.PrimaryBrowserOrigin:
+                ThrowIfEndpointMissing(endpointReferenceExpression.Endpoint, owner);
+                var browserEndpoint = endpointReferenceExpression.Endpoint;
+                if (ResourceTypeMapper.IsBackingResource(ResolveToParent(browserEndpoint.Resource)) ||
+                    !browserEndpoint.EndpointAnnotation.IsExternal ||
+                    browserEndpoint.EndpointAnnotation.UriScheme is not ("http" or "https"))
+                {
+                    throw new NotSupportedException(
+                        $"Radius cannot provide browser origins for endpoint '{browserEndpoint.EndpointName}' on resource '{browserEndpoint.Resource.Name}' because it is not an external HTTP(S) workload endpoint. " +
+                        "Reference an external HTTP(S) workload endpoint or supply an explicit origin parameter.");
+                }
+                _endpointInputs.ReserveModelNames(_executionContext.Services.GetRequiredService<DistributedApplicationModel>().Resources);
+                var input = _endpointInputs.GetOrAdd(endpointReferenceExpression,
+                    _executionContext.Services.GetRequiredService<IConfiguration>());
+                parts.Add(ResolveParameterPart(input, referencedResource, allowRecipeSubstitutions: false));
                 return;
             case EndpointReferenceExpression endpointReferenceExpression:
                 ThrowIfEndpointMissing(endpointReferenceExpression.Endpoint, owner);

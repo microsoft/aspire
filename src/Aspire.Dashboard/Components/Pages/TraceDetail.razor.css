@@ -12,7 +12,7 @@
     grid-area: nav;
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--aspire-space-2);
     min-width: 0;
     max-width: 50cqw;
     /* Separates the trace identity from the trace stats that follow it in the same row. */
@@ -29,7 +29,7 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-weight: 600;
+    font-weight: var(--aspire-font-weight-semibold);
 }
 
 ::deep .trace-header-nav .trace-id {
@@ -40,8 +40,8 @@
 ::deep .trace-id {
     color: var(--colorNeutralForeground3);
     padding-left: 0.5rem;
-    font-size: 12px;
-    font-weight: normal;
+    font-size: var(--aspire-font-size-secondary);
+    font-weight: var(--aspire-font-weight-regular);
     line-height: 1;
 }
 
@@ -165,12 +165,12 @@
 
 ::deep .span-container .span-bar {
     height: 15px;
-    border-radius: 5px;
+    border-radius: var(--aspire-radius-small);
     grid-row: 1;
 }
 
 ::deep .span-container .span-bar-label {
-    font-size: 12px;
+    font-size: var(--aspire-font-size-secondary);
     color: var(--colorNeutralForeground3);
     padding: 0 0.5em;
     height: min-content;
@@ -194,7 +194,7 @@
 ::deep .uninstrumented-peer {
     padding-left: 0.25rem;
     color: var(--colorNeutralForeground3);
-    font-size: 12px;
+    font-size: var(--aspire-font-size-secondary);
 }
 
 ::deep .span-kind-icon {
@@ -240,7 +240,7 @@
     grid-template-columns: auto minmax(0, 1fr) auto;
     grid-template-areas: "nav details filters";
     align-items: center;
-    column-gap: 8px;
+    column-gap: var(--aspire-space-2);
     min-width: 0;
     width: 100%;
     box-sizing: border-box;
@@ -269,7 +269,7 @@
 
 ::deep .trace-header-overflow-badge {
     background-color: var(--colorNeutralBackground3);
-    border-radius: 6px;
+    border-radius: var(--aspire-radius-small);
     color: var(--colorNeutralForeground1);
 }
 
@@ -289,7 +289,7 @@
             "nav"
             "details"
             "filters";
-        row-gap: 8px;
+        row-gap: var(--aspire-space-2);
     }
 
     ::deep .trace-header-nav {

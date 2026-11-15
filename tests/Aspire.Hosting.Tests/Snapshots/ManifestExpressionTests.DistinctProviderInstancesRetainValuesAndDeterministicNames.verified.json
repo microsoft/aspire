@@ -1,0 +1,25 @@
+﻿{
+  "resources": {
+    "backend": {
+      "type": "container.v0",
+      "image": "image:latest",
+      "env": {
+        "FIRST": "{opaque}",
+        "VALUES": "{cond-enabled-value-71cdf305.connectionString}"
+      }
+    },
+    "enabled": {
+      "type": "parameter.v0",
+      "value": "{enabled.inputs.value}",
+      "inputs": {
+        "value": {
+          "type": "string"
+        }
+      }
+    },
+    "cond-enabled-value-71cdf305": {
+      "type": "value.v0",
+      "connectionString": "{opaque}|{opaque}|{opaque}"
+    }
+  }
+}
