@@ -1988,11 +1988,6 @@ export interface WithRequiredCommandValidationOptions {
     helpLink?: string;
 }
 
-export interface WithRequiredOptions {
-    /** A value indicating whether the parameter must have a value before it can be resolved. */
-    required?: boolean;
-}
-
 export interface WithTerminalOptions {
     /** An optional callback to configure the terminal options. */
     configure?: (obj: TerminalOptions) => Promise<void>;
@@ -9969,13 +9964,13 @@ export interface DistributedApplicationBuilder {
     /**
      * Adds a .NET project resource
      * @param options Additional options.
-     * @deprecated Use addDotnetProject from the Aspire.Hosting.Dotnet package instead.
+     * @deprecated Use addDotnetProject(name, path) from the Aspire.Hosting.Dotnet package instead.
      */
     addProject(name: string, projectPath: string, options?: AddProjectOptions): ProjectResourcePromise;
     /**
      * Adds a C# application resource
      * @param options Additional options.
-     * @deprecated Use addDotnetProject from the Aspire.Hosting.Dotnet package instead.
+     * @deprecated Use addDotnetProject(name, path) from the Aspire.Hosting.Dotnet package instead.
      */
     addCSharpApp(name: string, path: string, options?: AddCSharpAppOptions): CSharpAppResourcePromise;
     /**
@@ -10193,13 +10188,13 @@ export interface DistributedApplicationBuilderPromise extends PromiseLike<Distri
     /**
      * Adds a .NET project resource
      * @param options Additional options.
-     * @deprecated Use addDotnetProject from the Aspire.Hosting.Dotnet package instead.
+     * @deprecated Use addDotnetProject(name, path) from the Aspire.Hosting.Dotnet package instead.
      */
     addProject(name: string, projectPath: string, options?: AddProjectOptions): ProjectResourcePromise;
     /**
      * Adds a C# application resource
      * @param options Additional options.
-     * @deprecated Use addDotnetProject from the Aspire.Hosting.Dotnet package instead.
+     * @deprecated Use addDotnetProject(name, path) from the Aspire.Hosting.Dotnet package instead.
      */
     addCSharpApp(name: string, path: string, options?: AddCSharpAppOptions): CSharpAppResourcePromise;
     /**
@@ -10700,7 +10695,7 @@ class DistributedApplicationBuilderImpl implements DistributedApplicationBuilder
     /**
      * Adds a .NET project resource
      * @param options Additional options.
-     * @deprecated Use addDotnetProject from the Aspire.Hosting.Dotnet package instead.
+     * @deprecated Use addDotnetProject(name, path) from the Aspire.Hosting.Dotnet package instead.
      */
     addProject(name: string, projectPath: string, options?: AddProjectOptions): ProjectResourcePromise {
         let launchProfileOrOptions = options?.launchProfileOrOptions;
@@ -10722,7 +10717,7 @@ class DistributedApplicationBuilderImpl implements DistributedApplicationBuilder
     /**
      * Adds a C# application resource
      * @param optionsBag Additional options.
-     * @deprecated Use addDotnetProject from the Aspire.Hosting.Dotnet package instead.
+     * @deprecated Use addDotnetProject(name, path) from the Aspire.Hosting.Dotnet package instead.
      */
     addCSharpApp(name: string, path: string, optionsBag?: AddCSharpAppOptions): CSharpAppResourcePromise {
         let options = optionsBag?.options;
@@ -13361,20 +13356,23 @@ export interface ContainerRegistryResource {
      * @param name The case-sensitive trait name.
      * @param value The trait value. Do not include secrets.
      * @returns The resource builder.
+     * @experimental
      */
     withTrait(name: string, value: string): ContainerRegistryResourcePromise;
     /**
      * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
      * @param tags The tags, each up to 50 characters with single spaces between words.
      * @returns The resource builder.
+     * @experimental
      */
     withTags(tags: string[]): ContainerRegistryResourcePromise;
     /**
-     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
-     * @param position The default position. Lower values appear first.
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
+     * @experimental
      */
-    withDashboardPosition(position: number): ContainerRegistryResourcePromise;
+    withDisplayOrder(order: number): ContainerRegistryResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -13733,20 +13731,23 @@ export interface ContainerRegistryResourcePromise extends PromiseLike<ContainerR
      * @param name The case-sensitive trait name.
      * @param value The trait value. Do not include secrets.
      * @returns The resource builder.
+     * @experimental
      */
     withTrait(name: string, value: string): ContainerRegistryResourcePromise;
     /**
      * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
      * @param tags The tags, each up to 50 characters with single spaces between words.
      * @returns The resource builder.
+     * @experimental
      */
     withTags(tags: string[]): ContainerRegistryResourcePromise;
     /**
-     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
-     * @param position The default position. Lower values appear first.
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
+     * @experimental
      */
-    withDashboardPosition(position: number): ContainerRegistryResourcePromise;
+    withDisplayOrder(order: number): ContainerRegistryResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -14626,6 +14627,7 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
      * @param name The case-sensitive trait name.
      * @param value The trait value. Do not include secrets.
      * @returns The resource builder.
+     * @experimental
      */
     withTrait(name: string, value: string): ContainerRegistryResourcePromise {
         return new ContainerRegistryResourcePromiseImpl(this._withTraitInternal(name, value), this._client);
@@ -14645,28 +14647,30 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
      * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
      * @param tags The tags, each up to 50 characters with single spaces between words.
      * @returns The resource builder.
+     * @experimental
      */
     withTags(tags: string[]): ContainerRegistryResourcePromise {
         return new ContainerRegistryResourcePromiseImpl(this._withTagsInternal(tags), this._client);
     }
 
     /** @internal */
-    private async _withDashboardPositionInternal(position: number): Promise<ContainerRegistryResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, position };
+    private async _withDisplayOrderInternal(order: number): Promise<ContainerRegistryResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, order };
         const result = await this._client.invokeCapability<ContainerRegistryResourceHandle>(
-            'Aspire.Hosting/withDashboardPosition',
+            'Aspire.Hosting/withDisplayOrder',
             rpcArgs
         );
         return new ContainerRegistryResourceImpl(result, this._client);
     }
 
     /**
-     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
-     * @param position The default position. Lower values appear first.
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
+     * @experimental
      */
-    withDashboardPosition(position: number): ContainerRegistryResourcePromise {
-        return new ContainerRegistryResourcePromiseImpl(this._withDashboardPositionInternal(position), this._client);
+    withDisplayOrder(order: number): ContainerRegistryResourcePromise {
+        return new ContainerRegistryResourcePromiseImpl(this._withDisplayOrderInternal(order), this._client);
     }
 
     /** @internal */
@@ -15313,7 +15317,7 @@ const ContainerRegistryResourcePromiseImpl = $aspireCreateFluentPromiseClass<Con
     ["withHiddenOnCompletion"]: () => ContainerRegistryResourcePromiseImpl,
     ["withTrait"]: () => ContainerRegistryResourcePromiseImpl,
     ["withTags"]: () => ContainerRegistryResourcePromiseImpl,
-    ["withDashboardPosition"]: () => ContainerRegistryResourcePromiseImpl,
+    ["withDisplayOrder"]: () => ContainerRegistryResourcePromiseImpl,
     ["withTerminal"]: () => ContainerRegistryResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => ContainerRegistryResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => ContainerRegistryResourcePromiseImpl,
@@ -16061,20 +16065,23 @@ export interface ContainerResource {
      * @param name The case-sensitive trait name.
      * @param value The trait value. Do not include secrets.
      * @returns The resource builder.
+     * @experimental
      */
     withTrait(name: string, value: string): ContainerResourcePromise;
     /**
      * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
      * @param tags The tags, each up to 50 characters with single spaces between words.
      * @returns The resource builder.
+     * @experimental
      */
     withTags(tags: string[]): ContainerResourcePromise;
     /**
-     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
-     * @param position The default position. Lower values appear first.
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
+     * @experimental
      */
-    withDashboardPosition(position: number): ContainerResourcePromise;
+    withDisplayOrder(order: number): ContainerResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -16929,20 +16936,23 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      * @param name The case-sensitive trait name.
      * @param value The trait value. Do not include secrets.
      * @returns The resource builder.
+     * @experimental
      */
     withTrait(name: string, value: string): ContainerResourcePromise;
     /**
      * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
      * @param tags The tags, each up to 50 characters with single spaces between words.
      * @returns The resource builder.
+     * @experimental
      */
     withTags(tags: string[]): ContainerResourcePromise;
     /**
-     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
-     * @param position The default position. Lower values appear first.
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
+     * @experimental
      */
-    withDashboardPosition(position: number): ContainerResourcePromise;
+    withDisplayOrder(order: number): ContainerResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -19251,6 +19261,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
      * @param name The case-sensitive trait name.
      * @param value The trait value. Do not include secrets.
      * @returns The resource builder.
+     * @experimental
      */
     withTrait(name: string, value: string): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._withTraitInternal(name, value), this._client);
@@ -19270,28 +19281,30 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
      * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
      * @param tags The tags, each up to 50 characters with single spaces between words.
      * @returns The resource builder.
+     * @experimental
      */
     withTags(tags: string[]): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._withTagsInternal(tags), this._client);
     }
 
     /** @internal */
-    private async _withDashboardPositionInternal(position: number): Promise<ContainerResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, position };
+    private async _withDisplayOrderInternal(order: number): Promise<ContainerResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, order };
         const result = await this._client.invokeCapability<ContainerResourceHandle>(
-            'Aspire.Hosting/withDashboardPosition',
+            'Aspire.Hosting/withDisplayOrder',
             rpcArgs
         );
         return new ContainerResourceImpl(result, this._client);
     }
 
     /**
-     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
-     * @param position The default position. Lower values appear first.
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
+     * @experimental
      */
-    withDashboardPosition(position: number): ContainerResourcePromise {
-        return new ContainerResourcePromiseImpl(this._withDashboardPositionInternal(position), this._client);
+    withDisplayOrder(order: number): ContainerResourcePromise {
+        return new ContainerResourcePromiseImpl(this._withDisplayOrderInternal(order), this._client);
     }
 
     /** @internal */
@@ -20084,7 +20097,7 @@ const ContainerResourcePromiseImpl = $aspireCreateFluentPromiseClass<ContainerRe
     ["withRemoteImageTag"]: () => ContainerResourcePromiseImpl,
     ["withTrait"]: () => ContainerResourcePromiseImpl,
     ["withTags"]: () => ContainerResourcePromiseImpl,
-    ["withDashboardPosition"]: () => ContainerResourcePromiseImpl,
+    ["withDisplayOrder"]: () => ContainerResourcePromiseImpl,
     ["withTerminal"]: () => ContainerResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => ContainerResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => ContainerResourcePromiseImpl,
@@ -20674,20 +20687,23 @@ export interface CSharpAppResource {
      * @param name The case-sensitive trait name.
      * @param value The trait value. Do not include secrets.
      * @returns The resource builder.
+     * @experimental
      */
     withTrait(name: string, value: string): CSharpAppResourcePromise;
     /**
      * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
      * @param tags The tags, each up to 50 characters with single spaces between words.
      * @returns The resource builder.
+     * @experimental
      */
     withTags(tags: string[]): CSharpAppResourcePromise;
     /**
-     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
-     * @param position The default position. Lower values appear first.
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
+     * @experimental
      */
-    withDashboardPosition(position: number): CSharpAppResourcePromise;
+    withDisplayOrder(order: number): CSharpAppResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -21382,20 +21398,23 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      * @param name The case-sensitive trait name.
      * @param value The trait value. Do not include secrets.
      * @returns The resource builder.
+     * @experimental
      */
     withTrait(name: string, value: string): CSharpAppResourcePromise;
     /**
      * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
      * @param tags The tags, each up to 50 characters with single spaces between words.
      * @returns The resource builder.
+     * @experimental
      */
     withTags(tags: string[]): CSharpAppResourcePromise;
     /**
-     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
-     * @param position The default position. Lower values appear first.
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
+     * @experimental
      */
-    withDashboardPosition(position: number): CSharpAppResourcePromise;
+    withDisplayOrder(order: number): CSharpAppResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -23292,6 +23311,7 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
      * @param name The case-sensitive trait name.
      * @param value The trait value. Do not include secrets.
      * @returns The resource builder.
+     * @experimental
      */
     withTrait(name: string, value: string): CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._withTraitInternal(name, value), this._client);
@@ -23311,28 +23331,30 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
      * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
      * @param tags The tags, each up to 50 characters with single spaces between words.
      * @returns The resource builder.
+     * @experimental
      */
     withTags(tags: string[]): CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._withTagsInternal(tags), this._client);
     }
 
     /** @internal */
-    private async _withDashboardPositionInternal(position: number): Promise<CSharpAppResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, position };
+    private async _withDisplayOrderInternal(order: number): Promise<CSharpAppResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, order };
         const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
-            'Aspire.Hosting/withDashboardPosition',
+            'Aspire.Hosting/withDisplayOrder',
             rpcArgs
         );
         return new CSharpAppResourceImpl(result, this._client);
     }
 
     /**
-     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
-     * @param position The default position. Lower values appear first.
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
+     * @experimental
      */
-    withDashboardPosition(position: number): CSharpAppResourcePromise {
-        return new CSharpAppResourcePromiseImpl(this._withDashboardPositionInternal(position), this._client);
+    withDisplayOrder(order: number): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromiseImpl(this._withDisplayOrderInternal(order), this._client);
     }
 
     /** @internal */
@@ -24120,7 +24142,7 @@ const CSharpAppResourcePromiseImpl = $aspireCreateFluentPromiseClass<CSharpAppRe
     ["withRemoteImageTag"]: () => CSharpAppResourcePromiseImpl,
     ["withTrait"]: () => CSharpAppResourcePromiseImpl,
     ["withTags"]: () => CSharpAppResourcePromiseImpl,
-    ["withDashboardPosition"]: () => CSharpAppResourcePromiseImpl,
+    ["withDisplayOrder"]: () => CSharpAppResourcePromiseImpl,
     ["withTerminal"]: () => CSharpAppResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => CSharpAppResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => CSharpAppResourcePromiseImpl,
@@ -24753,20 +24775,23 @@ export interface DotnetToolResource {
      * @param name The case-sensitive trait name.
      * @param value The trait value. Do not include secrets.
      * @returns The resource builder.
+     * @experimental
      */
     withTrait(name: string, value: string): DotnetToolResourcePromise;
     /**
      * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
      * @param tags The tags, each up to 50 characters with single spaces between words.
      * @returns The resource builder.
+     * @experimental
      */
     withTags(tags: string[]): DotnetToolResourcePromise;
     /**
-     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
-     * @param position The default position. Lower values appear first.
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
+     * @experimental
      */
-    withDashboardPosition(position: number): DotnetToolResourcePromise;
+    withDisplayOrder(order: number): DotnetToolResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -25497,20 +25522,23 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      * @param name The case-sensitive trait name.
      * @param value The trait value. Do not include secrets.
      * @returns The resource builder.
+     * @experimental
      */
     withTrait(name: string, value: string): DotnetToolResourcePromise;
     /**
      * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
      * @param tags The tags, each up to 50 characters with single spaces between words.
      * @returns The resource builder.
+     * @experimental
      */
     withTags(tags: string[]): DotnetToolResourcePromise;
     /**
-     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
-     * @param position The default position. Lower values appear first.
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
+     * @experimental
      */
-    withDashboardPosition(position: number): DotnetToolResourcePromise;
+    withDisplayOrder(order: number): DotnetToolResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -27522,6 +27550,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
      * @param name The case-sensitive trait name.
      * @param value The trait value. Do not include secrets.
      * @returns The resource builder.
+     * @experimental
      */
     withTrait(name: string, value: string): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._withTraitInternal(name, value), this._client);
@@ -27541,28 +27570,30 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
      * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
      * @param tags The tags, each up to 50 characters with single spaces between words.
      * @returns The resource builder.
+     * @experimental
      */
     withTags(tags: string[]): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._withTagsInternal(tags), this._client);
     }
 
     /** @internal */
-    private async _withDashboardPositionInternal(position: number): Promise<DotnetToolResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, position };
+    private async _withDisplayOrderInternal(order: number): Promise<DotnetToolResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, order };
         const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
-            'Aspire.Hosting/withDashboardPosition',
+            'Aspire.Hosting/withDisplayOrder',
             rpcArgs
         );
         return new DotnetToolResourceImpl(result, this._client);
     }
 
     /**
-     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
-     * @param position The default position. Lower values appear first.
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
+     * @experimental
      */
-    withDashboardPosition(position: number): DotnetToolResourcePromise {
-        return new DotnetToolResourcePromiseImpl(this._withDashboardPositionInternal(position), this._client);
+    withDisplayOrder(order: number): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromiseImpl(this._withDisplayOrderInternal(order), this._client);
     }
 
     /** @internal */
@@ -28337,7 +28368,7 @@ const DotnetToolResourcePromiseImpl = $aspireCreateFluentPromiseClass<DotnetTool
     ["withRemoteImageTag"]: () => DotnetToolResourcePromiseImpl,
     ["withTrait"]: () => DotnetToolResourcePromiseImpl,
     ["withTags"]: () => DotnetToolResourcePromiseImpl,
-    ["withDashboardPosition"]: () => DotnetToolResourcePromiseImpl,
+    ["withDisplayOrder"]: () => DotnetToolResourcePromiseImpl,
     ["withTerminal"]: () => DotnetToolResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => DotnetToolResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => DotnetToolResourcePromiseImpl,
@@ -28937,20 +28968,23 @@ export interface ExecutableResource {
      * @param name The case-sensitive trait name.
      * @param value The trait value. Do not include secrets.
      * @returns The resource builder.
+     * @experimental
      */
     withTrait(name: string, value: string): ExecutableResourcePromise;
     /**
      * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
      * @param tags The tags, each up to 50 characters with single spaces between words.
      * @returns The resource builder.
+     * @experimental
      */
     withTags(tags: string[]): ExecutableResourcePromise;
     /**
-     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
-     * @param position The default position. Lower values appear first.
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
+     * @experimental
      */
-    withDashboardPosition(position: number): ExecutableResourcePromise;
+    withDisplayOrder(order: number): ExecutableResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -29642,20 +29676,23 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      * @param name The case-sensitive trait name.
      * @param value The trait value. Do not include secrets.
      * @returns The resource builder.
+     * @experimental
      */
     withTrait(name: string, value: string): ExecutableResourcePromise;
     /**
      * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
      * @param tags The tags, each up to 50 characters with single spaces between words.
      * @returns The resource builder.
+     * @experimental
      */
     withTags(tags: string[]): ExecutableResourcePromise;
     /**
-     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
-     * @param position The default position. Lower values appear first.
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
+     * @experimental
      */
-    withDashboardPosition(position: number): ExecutableResourcePromise;
+    withDisplayOrder(order: number): ExecutableResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -31557,6 +31594,7 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
      * @param name The case-sensitive trait name.
      * @param value The trait value. Do not include secrets.
      * @returns The resource builder.
+     * @experimental
      */
     withTrait(name: string, value: string): ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._withTraitInternal(name, value), this._client);
@@ -31576,28 +31614,30 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
      * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
      * @param tags The tags, each up to 50 characters with single spaces between words.
      * @returns The resource builder.
+     * @experimental
      */
     withTags(tags: string[]): ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._withTagsInternal(tags), this._client);
     }
 
     /** @internal */
-    private async _withDashboardPositionInternal(position: number): Promise<ExecutableResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, position };
+    private async _withDisplayOrderInternal(order: number): Promise<ExecutableResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, order };
         const result = await this._client.invokeCapability<ExecutableResourceHandle>(
-            'Aspire.Hosting/withDashboardPosition',
+            'Aspire.Hosting/withDisplayOrder',
             rpcArgs
         );
         return new ExecutableResourceImpl(result, this._client);
     }
 
     /**
-     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
-     * @param position The default position. Lower values appear first.
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
+     * @experimental
      */
-    withDashboardPosition(position: number): ExecutableResourcePromise {
-        return new ExecutableResourcePromiseImpl(this._withDashboardPositionInternal(position), this._client);
+    withDisplayOrder(order: number): ExecutableResourcePromise {
+        return new ExecutableResourcePromiseImpl(this._withDisplayOrderInternal(order), this._client);
     }
 
     /** @internal */
@@ -32366,7 +32406,7 @@ const ExecutableResourcePromiseImpl = $aspireCreateFluentPromiseClass<Executable
     ["withRemoteImageTag"]: () => ExecutableResourcePromiseImpl,
     ["withTrait"]: () => ExecutableResourcePromiseImpl,
     ["withTags"]: () => ExecutableResourcePromiseImpl,
-    ["withDashboardPosition"]: () => ExecutableResourcePromiseImpl,
+    ["withDisplayOrder"]: () => ExecutableResourcePromiseImpl,
     ["withTerminal"]: () => ExecutableResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => ExecutableResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => ExecutableResourcePromiseImpl,
@@ -32650,20 +32690,23 @@ export interface ExternalServiceResource {
      * @param name The case-sensitive trait name.
      * @param value The trait value. Do not include secrets.
      * @returns The resource builder.
+     * @experimental
      */
     withTrait(name: string, value: string): ExternalServiceResourcePromise;
     /**
      * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
      * @param tags The tags, each up to 50 characters with single spaces between words.
      * @returns The resource builder.
+     * @experimental
      */
     withTags(tags: string[]): ExternalServiceResourcePromise;
     /**
-     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
-     * @param position The default position. Lower values appear first.
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
+     * @experimental
      */
-    withDashboardPosition(position: number): ExternalServiceResourcePromise;
+    withDisplayOrder(order: number): ExternalServiceResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -33027,20 +33070,23 @@ export interface ExternalServiceResourcePromise extends PromiseLike<ExternalServ
      * @param name The case-sensitive trait name.
      * @param value The trait value. Do not include secrets.
      * @returns The resource builder.
+     * @experimental
      */
     withTrait(name: string, value: string): ExternalServiceResourcePromise;
     /**
      * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
      * @param tags The tags, each up to 50 characters with single spaces between words.
      * @returns The resource builder.
+     * @experimental
      */
     withTags(tags: string[]): ExternalServiceResourcePromise;
     /**
-     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
-     * @param position The default position. Lower values appear first.
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
+     * @experimental
      */
-    withDashboardPosition(position: number): ExternalServiceResourcePromise;
+    withDisplayOrder(order: number): ExternalServiceResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -33944,6 +33990,7 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
      * @param name The case-sensitive trait name.
      * @param value The trait value. Do not include secrets.
      * @returns The resource builder.
+     * @experimental
      */
     withTrait(name: string, value: string): ExternalServiceResourcePromise {
         return new ExternalServiceResourcePromiseImpl(this._withTraitInternal(name, value), this._client);
@@ -33963,28 +34010,30 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
      * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
      * @param tags The tags, each up to 50 characters with single spaces between words.
      * @returns The resource builder.
+     * @experimental
      */
     withTags(tags: string[]): ExternalServiceResourcePromise {
         return new ExternalServiceResourcePromiseImpl(this._withTagsInternal(tags), this._client);
     }
 
     /** @internal */
-    private async _withDashboardPositionInternal(position: number): Promise<ExternalServiceResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, position };
+    private async _withDisplayOrderInternal(order: number): Promise<ExternalServiceResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, order };
         const result = await this._client.invokeCapability<ExternalServiceResourceHandle>(
-            'Aspire.Hosting/withDashboardPosition',
+            'Aspire.Hosting/withDisplayOrder',
             rpcArgs
         );
         return new ExternalServiceResourceImpl(result, this._client);
     }
 
     /**
-     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
-     * @param position The default position. Lower values appear first.
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
+     * @experimental
      */
-    withDashboardPosition(position: number): ExternalServiceResourcePromise {
-        return new ExternalServiceResourcePromiseImpl(this._withDashboardPositionInternal(position), this._client);
+    withDisplayOrder(order: number): ExternalServiceResourcePromise {
+        return new ExternalServiceResourcePromiseImpl(this._withDisplayOrderInternal(order), this._client);
     }
 
     /** @internal */
@@ -34632,7 +34681,7 @@ const ExternalServiceResourcePromiseImpl = $aspireCreateFluentPromiseClass<Exter
     ["withHiddenOnCompletion"]: () => ExternalServiceResourcePromiseImpl,
     ["withTrait"]: () => ExternalServiceResourcePromiseImpl,
     ["withTags"]: () => ExternalServiceResourcePromiseImpl,
-    ["withDashboardPosition"]: () => ExternalServiceResourcePromiseImpl,
+    ["withDisplayOrder"]: () => ExternalServiceResourcePromiseImpl,
     ["withTerminal"]: () => ExternalServiceResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => ExternalServiceResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => ExternalServiceResourcePromiseImpl,
@@ -34708,13 +34757,14 @@ export interface ParameterResource {
      * The manifest publisher does not currently support optional parameters and throws a `DistributedApplicationException`.
      * @returns The configured resource builder.
      */
-    withOptional(): ParameterResourcePromise;
+    asOptional(): ParameterResourcePromise;
     /**
-     * Sets whether the parameter resource requires a value.
-     * @param options Additional options.
+     * Marks the parameter resource as required.
+     *
+     * Parameters are required by default. Use this method to make a parameter required again after it was marked with `AsOptional`.
      * @returns The configured resource builder.
      */
-    withRequired(options?: WithRequiredOptions): ParameterResourcePromise;
+    asRequired(): ParameterResourcePromise;
     /**
      * Sets a custom input for the parameter resource from a polyglot app host.
      * @param options Options used to customize the input for the parameter.
@@ -34936,20 +34986,23 @@ export interface ParameterResource {
      * @param name The case-sensitive trait name.
      * @param value The trait value. Do not include secrets.
      * @returns The resource builder.
+     * @experimental
      */
     withTrait(name: string, value: string): ParameterResourcePromise;
     /**
      * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
      * @param tags The tags, each up to 50 characters with single spaces between words.
      * @returns The resource builder.
+     * @experimental
      */
     withTags(tags: string[]): ParameterResourcePromise;
     /**
-     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
-     * @param position The default position. Lower values appear first.
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
+     * @experimental
      */
-    withDashboardPosition(position: number): ParameterResourcePromise;
+    withDisplayOrder(order: number): ParameterResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -35127,13 +35180,14 @@ export interface ParameterResourcePromise extends PromiseLike<ParameterResource>
      * The manifest publisher does not currently support optional parameters and throws a `DistributedApplicationException`.
      * @returns The configured resource builder.
      */
-    withOptional(): ParameterResourcePromise;
+    asOptional(): ParameterResourcePromise;
     /**
-     * Sets whether the parameter resource requires a value.
-     * @param options Additional options.
+     * Marks the parameter resource as required.
+     *
+     * Parameters are required by default. Use this method to make a parameter required again after it was marked with `AsOptional`.
      * @returns The configured resource builder.
      */
-    withRequired(options?: WithRequiredOptions): ParameterResourcePromise;
+    asRequired(): ParameterResourcePromise;
     /**
      * Sets a custom input for the parameter resource from a polyglot app host.
      * @param options Options used to customize the input for the parameter.
@@ -35355,20 +35409,23 @@ export interface ParameterResourcePromise extends PromiseLike<ParameterResource>
      * @param name The case-sensitive trait name.
      * @param value The trait value. Do not include secrets.
      * @returns The resource builder.
+     * @experimental
      */
     withTrait(name: string, value: string): ParameterResourcePromise;
     /**
      * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
      * @param tags The tags, each up to 50 characters with single spaces between words.
      * @returns The resource builder.
+     * @experimental
      */
     withTags(tags: string[]): ParameterResourcePromise;
     /**
-     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
-     * @param position The default position. Lower values appear first.
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
+     * @experimental
      */
-    withDashboardPosition(position: number): ParameterResourcePromise;
+    withDisplayOrder(order: number): ParameterResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -35594,10 +35651,10 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
     }
 
     /** @internal */
-    private async _withOptionalInternal(): Promise<ParameterResource> {
+    private async _asOptionalInternal(): Promise<ParameterResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         const result = await this._client.invokeCapability<ParameterResourceHandle>(
-            'Aspire.Hosting/withOptional',
+            'Aspire.Hosting/asOptional',
             rpcArgs
         );
         return new ParameterResourceImpl(result, this._client);
@@ -35611,29 +35668,28 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
      * The manifest publisher does not currently support optional parameters and throws a `DistributedApplicationException`.
      * @returns The configured resource builder.
      */
-    withOptional(): ParameterResourcePromise {
-        return new ParameterResourcePromiseImpl(this._withOptionalInternal(), this._client);
+    asOptional(): ParameterResourcePromise {
+        return new ParameterResourcePromiseImpl(this._asOptionalInternal(), this._client);
     }
 
     /** @internal */
-    private async _withRequiredInternal(required?: boolean): Promise<ParameterResource> {
+    private async _asRequiredInternal(): Promise<ParameterResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
-        if (required !== undefined) rpcArgs.required = required;
         const result = await this._client.invokeCapability<ParameterResourceHandle>(
-            'Aspire.Hosting/withRequired',
+            'Aspire.Hosting/asRequired',
             rpcArgs
         );
         return new ParameterResourceImpl(result, this._client);
     }
 
     /**
-     * Sets whether the parameter resource requires a value.
-     * @param options Additional options.
+     * Marks the parameter resource as required.
+     *
+     * Parameters are required by default. Use this method to make a parameter required again after it was marked with `AsOptional`.
      * @returns The configured resource builder.
      */
-    withRequired(options?: WithRequiredOptions): ParameterResourcePromise {
-        const required = options?.required;
-        return new ParameterResourcePromiseImpl(this._withRequiredInternal(required), this._client);
+    asRequired(): ParameterResourcePromise {
+        return new ParameterResourcePromiseImpl(this._asRequiredInternal(), this._client);
     }
 
     /** @internal */
@@ -36352,6 +36408,7 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
      * @param name The case-sensitive trait name.
      * @param value The trait value. Do not include secrets.
      * @returns The resource builder.
+     * @experimental
      */
     withTrait(name: string, value: string): ParameterResourcePromise {
         return new ParameterResourcePromiseImpl(this._withTraitInternal(name, value), this._client);
@@ -36371,28 +36428,30 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
      * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
      * @param tags The tags, each up to 50 characters with single spaces between words.
      * @returns The resource builder.
+     * @experimental
      */
     withTags(tags: string[]): ParameterResourcePromise {
         return new ParameterResourcePromiseImpl(this._withTagsInternal(tags), this._client);
     }
 
     /** @internal */
-    private async _withDashboardPositionInternal(position: number): Promise<ParameterResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, position };
+    private async _withDisplayOrderInternal(order: number): Promise<ParameterResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, order };
         const result = await this._client.invokeCapability<ParameterResourceHandle>(
-            'Aspire.Hosting/withDashboardPosition',
+            'Aspire.Hosting/withDisplayOrder',
             rpcArgs
         );
         return new ParameterResourceImpl(result, this._client);
     }
 
     /**
-     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
-     * @param position The default position. Lower values appear first.
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
+     * @experimental
      */
-    withDashboardPosition(position: number): ParameterResourcePromise {
-        return new ParameterResourcePromiseImpl(this._withDashboardPositionInternal(position), this._client);
+    withDisplayOrder(order: number): ParameterResourcePromise {
+        return new ParameterResourcePromiseImpl(this._withDisplayOrderInternal(order), this._client);
     }
 
     /** @internal */
@@ -37048,8 +37107,8 @@ const ParameterResourcePromiseImpl = $aspireCreateFluentPromiseClass<ParameterRe
     ["withContainerRegistry"]: () => ParameterResourcePromiseImpl,
     ["withDockerfileBaseImage"]: () => ParameterResourcePromiseImpl,
     ["withDescription"]: () => ParameterResourcePromiseImpl,
-    ["withOptional"]: () => ParameterResourcePromiseImpl,
-    ["withRequired"]: () => ParameterResourcePromiseImpl,
+    ["asOptional"]: () => ParameterResourcePromiseImpl,
+    ["asRequired"]: () => ParameterResourcePromiseImpl,
     ["withCustomInput"]: () => ParameterResourcePromiseImpl,
     ["withRequiredCommand"]: () => ParameterResourcePromiseImpl,
     ["withRequiredCommandValidation"]: () => ParameterResourcePromiseImpl,
@@ -37080,7 +37139,7 @@ const ParameterResourcePromiseImpl = $aspireCreateFluentPromiseClass<ParameterRe
     ["withHiddenOnCompletion"]: () => ParameterResourcePromiseImpl,
     ["withTrait"]: () => ParameterResourcePromiseImpl,
     ["withTags"]: () => ParameterResourcePromiseImpl,
-    ["withDashboardPosition"]: () => ParameterResourcePromiseImpl,
+    ["withDisplayOrder"]: () => ParameterResourcePromiseImpl,
     ["withTerminal"]: () => ParameterResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => ParameterResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => ParameterResourcePromiseImpl,
@@ -37669,20 +37728,23 @@ export interface ProjectResource {
      * @param name The case-sensitive trait name.
      * @param value The trait value. Do not include secrets.
      * @returns The resource builder.
+     * @experimental
      */
     withTrait(name: string, value: string): ProjectResourcePromise;
     /**
      * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
      * @param tags The tags, each up to 50 characters with single spaces between words.
      * @returns The resource builder.
+     * @experimental
      */
     withTags(tags: string[]): ProjectResourcePromise;
     /**
-     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
-     * @param position The default position. Lower values appear first.
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
+     * @experimental
      */
-    withDashboardPosition(position: number): ProjectResourcePromise;
+    withDisplayOrder(order: number): ProjectResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -38377,20 +38439,23 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      * @param name The case-sensitive trait name.
      * @param value The trait value. Do not include secrets.
      * @returns The resource builder.
+     * @experimental
      */
     withTrait(name: string, value: string): ProjectResourcePromise;
     /**
      * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
      * @param tags The tags, each up to 50 characters with single spaces between words.
      * @returns The resource builder.
+     * @experimental
      */
     withTags(tags: string[]): ProjectResourcePromise;
     /**
-     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
-     * @param position The default position. Lower values appear first.
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
+     * @experimental
      */
-    withDashboardPosition(position: number): ProjectResourcePromise;
+    withDisplayOrder(order: number): ProjectResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -40288,6 +40353,7 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
      * @param name The case-sensitive trait name.
      * @param value The trait value. Do not include secrets.
      * @returns The resource builder.
+     * @experimental
      */
     withTrait(name: string, value: string): ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._withTraitInternal(name, value), this._client);
@@ -40307,28 +40373,30 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
      * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
      * @param tags The tags, each up to 50 characters with single spaces between words.
      * @returns The resource builder.
+     * @experimental
      */
     withTags(tags: string[]): ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._withTagsInternal(tags), this._client);
     }
 
     /** @internal */
-    private async _withDashboardPositionInternal(position: number): Promise<ProjectResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, position };
+    private async _withDisplayOrderInternal(order: number): Promise<ProjectResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, order };
         const result = await this._client.invokeCapability<ProjectResourceHandle>(
-            'Aspire.Hosting/withDashboardPosition',
+            'Aspire.Hosting/withDisplayOrder',
             rpcArgs
         );
         return new ProjectResourceImpl(result, this._client);
     }
 
     /**
-     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
-     * @param position The default position. Lower values appear first.
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
+     * @experimental
      */
-    withDashboardPosition(position: number): ProjectResourcePromise {
-        return new ProjectResourcePromiseImpl(this._withDashboardPositionInternal(position), this._client);
+    withDisplayOrder(order: number): ProjectResourcePromise {
+        return new ProjectResourcePromiseImpl(this._withDisplayOrderInternal(order), this._client);
     }
 
     /** @internal */
@@ -41116,7 +41184,7 @@ const ProjectResourcePromiseImpl = $aspireCreateFluentPromiseClass<ProjectResour
     ["withRemoteImageTag"]: () => ProjectResourcePromiseImpl,
     ["withTrait"]: () => ProjectResourcePromiseImpl,
     ["withTags"]: () => ProjectResourcePromiseImpl,
-    ["withDashboardPosition"]: () => ProjectResourcePromiseImpl,
+    ["withDisplayOrder"]: () => ProjectResourcePromiseImpl,
     ["withTerminal"]: () => ProjectResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => ProjectResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => ProjectResourcePromiseImpl,
@@ -41868,20 +41936,23 @@ export interface TestDatabaseResource {
      * @param name The case-sensitive trait name.
      * @param value The trait value. Do not include secrets.
      * @returns The resource builder.
+     * @experimental
      */
     withTrait(name: string, value: string): TestDatabaseResourcePromise;
     /**
      * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
      * @param tags The tags, each up to 50 characters with single spaces between words.
      * @returns The resource builder.
+     * @experimental
      */
     withTags(tags: string[]): TestDatabaseResourcePromise;
     /**
-     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
-     * @param position The default position. Lower values appear first.
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
+     * @experimental
      */
-    withDashboardPosition(position: number): TestDatabaseResourcePromise;
+    withDisplayOrder(order: number): TestDatabaseResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -42736,20 +42807,23 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      * @param name The case-sensitive trait name.
      * @param value The trait value. Do not include secrets.
      * @returns The resource builder.
+     * @experimental
      */
     withTrait(name: string, value: string): TestDatabaseResourcePromise;
     /**
      * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
      * @param tags The tags, each up to 50 characters with single spaces between words.
      * @returns The resource builder.
+     * @experimental
      */
     withTags(tags: string[]): TestDatabaseResourcePromise;
     /**
-     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
-     * @param position The default position. Lower values appear first.
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
+     * @experimental
      */
-    withDashboardPosition(position: number): TestDatabaseResourcePromise;
+    withDisplayOrder(order: number): TestDatabaseResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -45057,6 +45131,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
      * @param name The case-sensitive trait name.
      * @param value The trait value. Do not include secrets.
      * @returns The resource builder.
+     * @experimental
      */
     withTrait(name: string, value: string): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._withTraitInternal(name, value), this._client);
@@ -45076,28 +45151,30 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
      * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
      * @param tags The tags, each up to 50 characters with single spaces between words.
      * @returns The resource builder.
+     * @experimental
      */
     withTags(tags: string[]): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._withTagsInternal(tags), this._client);
     }
 
     /** @internal */
-    private async _withDashboardPositionInternal(position: number): Promise<TestDatabaseResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, position };
+    private async _withDisplayOrderInternal(order: number): Promise<TestDatabaseResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, order };
         const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
-            'Aspire.Hosting/withDashboardPosition',
+            'Aspire.Hosting/withDisplayOrder',
             rpcArgs
         );
         return new TestDatabaseResourceImpl(result, this._client);
     }
 
     /**
-     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
-     * @param position The default position. Lower values appear first.
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
+     * @experimental
      */
-    withDashboardPosition(position: number): TestDatabaseResourcePromise {
-        return new TestDatabaseResourcePromiseImpl(this._withDashboardPositionInternal(position), this._client);
+    withDisplayOrder(order: number): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromiseImpl(this._withDisplayOrderInternal(order), this._client);
     }
 
     /** @internal */
@@ -45890,7 +45967,7 @@ const TestDatabaseResourcePromiseImpl = $aspireCreateFluentPromiseClass<TestData
     ["withRemoteImageTag"]: () => TestDatabaseResourcePromiseImpl,
     ["withTrait"]: () => TestDatabaseResourcePromiseImpl,
     ["withTags"]: () => TestDatabaseResourcePromiseImpl,
-    ["withDashboardPosition"]: () => TestDatabaseResourcePromiseImpl,
+    ["withDisplayOrder"]: () => TestDatabaseResourcePromiseImpl,
     ["withTerminal"]: () => TestDatabaseResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => TestDatabaseResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => TestDatabaseResourcePromiseImpl,
@@ -46657,20 +46734,23 @@ export interface TestRedisResource {
      * @param name The case-sensitive trait name.
      * @param value The trait value. Do not include secrets.
      * @returns The resource builder.
+     * @experimental
      */
     withTrait(name: string, value: string): TestRedisResourcePromise;
     /**
      * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
      * @param tags The tags, each up to 50 characters with single spaces between words.
      * @returns The resource builder.
+     * @experimental
      */
     withTags(tags: string[]): TestRedisResourcePromise;
     /**
-     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
-     * @param position The default position. Lower values appear first.
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
+     * @experimental
      */
-    withDashboardPosition(position: number): TestRedisResourcePromise;
+    withDisplayOrder(order: number): TestRedisResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -47609,20 +47689,23 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      * @param name The case-sensitive trait name.
      * @param value The trait value. Do not include secrets.
      * @returns The resource builder.
+     * @experimental
      */
     withTrait(name: string, value: string): TestRedisResourcePromise;
     /**
      * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
      * @param tags The tags, each up to 50 characters with single spaces between words.
      * @returns The resource builder.
+     * @experimental
      */
     withTags(tags: string[]): TestRedisResourcePromise;
     /**
-     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
-     * @param position The default position. Lower values appear first.
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
+     * @experimental
      */
-    withDashboardPosition(position: number): TestRedisResourcePromise;
+    withDisplayOrder(order: number): TestRedisResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -50034,6 +50117,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
      * @param name The case-sensitive trait name.
      * @param value The trait value. Do not include secrets.
      * @returns The resource builder.
+     * @experimental
      */
     withTrait(name: string, value: string): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._withTraitInternal(name, value), this._client);
@@ -50053,28 +50137,30 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
      * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
      * @param tags The tags, each up to 50 characters with single spaces between words.
      * @returns The resource builder.
+     * @experimental
      */
     withTags(tags: string[]): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._withTagsInternal(tags), this._client);
     }
 
     /** @internal */
-    private async _withDashboardPositionInternal(position: number): Promise<TestRedisResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, position };
+    private async _withDisplayOrderInternal(order: number): Promise<TestRedisResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, order };
         const result = await this._client.invokeCapability<TestRedisResourceHandle>(
-            'Aspire.Hosting/withDashboardPosition',
+            'Aspire.Hosting/withDisplayOrder',
             rpcArgs
         );
         return new TestRedisResourceImpl(result, this._client);
     }
 
     /**
-     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
-     * @param position The default position. Lower values appear first.
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
+     * @experimental
      */
-    withDashboardPosition(position: number): TestRedisResourcePromise {
-        return new TestRedisResourcePromiseImpl(this._withDashboardPositionInternal(position), this._client);
+    withDisplayOrder(order: number): TestRedisResourcePromise {
+        return new TestRedisResourcePromiseImpl(this._withDisplayOrderInternal(order), this._client);
     }
 
     /** @internal */
@@ -51144,7 +51230,7 @@ const TestRedisResourcePromiseImpl = $aspireCreateFluentPromiseClass<TestRedisRe
     ["withRemoteImageTag"]: () => TestRedisResourcePromiseImpl,
     ["withTrait"]: () => TestRedisResourcePromiseImpl,
     ["withTags"]: () => TestRedisResourcePromiseImpl,
-    ["withDashboardPosition"]: () => TestRedisResourcePromiseImpl,
+    ["withDisplayOrder"]: () => TestRedisResourcePromiseImpl,
     ["withTerminal"]: () => TestRedisResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => TestRedisResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => TestRedisResourcePromiseImpl,
@@ -51911,20 +51997,23 @@ export interface TestVaultResource {
      * @param name The case-sensitive trait name.
      * @param value The trait value. Do not include secrets.
      * @returns The resource builder.
+     * @experimental
      */
     withTrait(name: string, value: string): TestVaultResourcePromise;
     /**
      * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
      * @param tags The tags, each up to 50 characters with single spaces between words.
      * @returns The resource builder.
+     * @experimental
      */
     withTags(tags: string[]): TestVaultResourcePromise;
     /**
-     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
-     * @param position The default position. Lower values appear first.
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
+     * @experimental
      */
-    withDashboardPosition(position: number): TestVaultResourcePromise;
+    withDisplayOrder(order: number): TestVaultResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -52781,20 +52870,23 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      * @param name The case-sensitive trait name.
      * @param value The trait value. Do not include secrets.
      * @returns The resource builder.
+     * @experimental
      */
     withTrait(name: string, value: string): TestVaultResourcePromise;
     /**
      * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
      * @param tags The tags, each up to 50 characters with single spaces between words.
      * @returns The resource builder.
+     * @experimental
      */
     withTags(tags: string[]): TestVaultResourcePromise;
     /**
-     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
-     * @param position The default position. Lower values appear first.
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
+     * @experimental
      */
-    withDashboardPosition(position: number): TestVaultResourcePromise;
+    withDisplayOrder(order: number): TestVaultResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -55104,6 +55196,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
      * @param name The case-sensitive trait name.
      * @param value The trait value. Do not include secrets.
      * @returns The resource builder.
+     * @experimental
      */
     withTrait(name: string, value: string): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._withTraitInternal(name, value), this._client);
@@ -55123,28 +55216,30 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
      * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
      * @param tags The tags, each up to 50 characters with single spaces between words.
      * @returns The resource builder.
+     * @experimental
      */
     withTags(tags: string[]): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._withTagsInternal(tags), this._client);
     }
 
     /** @internal */
-    private async _withDashboardPositionInternal(position: number): Promise<TestVaultResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, position };
+    private async _withDisplayOrderInternal(order: number): Promise<TestVaultResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, order };
         const result = await this._client.invokeCapability<TestVaultResourceHandle>(
-            'Aspire.Hosting/withDashboardPosition',
+            'Aspire.Hosting/withDisplayOrder',
             rpcArgs
         );
         return new TestVaultResourceImpl(result, this._client);
     }
 
     /**
-     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
-     * @param position The default position. Lower values appear first.
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
+     * @experimental
      */
-    withDashboardPosition(position: number): TestVaultResourcePromise {
-        return new TestVaultResourcePromiseImpl(this._withDashboardPositionInternal(position), this._client);
+    withDisplayOrder(order: number): TestVaultResourcePromise {
+        return new TestVaultResourcePromiseImpl(this._withDisplayOrderInternal(order), this._client);
     }
 
     /** @internal */
@@ -55952,7 +56047,7 @@ const TestVaultResourcePromiseImpl = $aspireCreateFluentPromiseClass<TestVaultRe
     ["withRemoteImageTag"]: () => TestVaultResourcePromiseImpl,
     ["withTrait"]: () => TestVaultResourcePromiseImpl,
     ["withTags"]: () => TestVaultResourcePromiseImpl,
-    ["withDashboardPosition"]: () => TestVaultResourcePromiseImpl,
+    ["withDisplayOrder"]: () => TestVaultResourcePromiseImpl,
     ["withTerminal"]: () => TestVaultResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => TestVaultResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => TestVaultResourcePromiseImpl,
@@ -56516,20 +56611,23 @@ export interface Resource {
      * @param name The case-sensitive trait name.
      * @param value The trait value. Do not include secrets.
      * @returns The resource builder.
+     * @experimental
      */
     withTrait(name: string, value: string): ResourcePromise;
     /**
      * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
      * @param tags The tags, each up to 50 characters with single spaces between words.
      * @returns The resource builder.
+     * @experimental
      */
     withTags(tags: string[]): ResourcePromise;
     /**
-     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
-     * @param position The default position. Lower values appear first.
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
+     * @experimental
      */
-    withDashboardPosition(position: number): ResourcePromise;
+    withDisplayOrder(order: number): ResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -56888,20 +56986,23 @@ export interface ResourcePromise extends PromiseLike<Resource> {
      * @param name The case-sensitive trait name.
      * @param value The trait value. Do not include secrets.
      * @returns The resource builder.
+     * @experimental
      */
     withTrait(name: string, value: string): ResourcePromise;
     /**
      * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
      * @param tags The tags, each up to 50 characters with single spaces between words.
      * @returns The resource builder.
+     * @experimental
      */
     withTags(tags: string[]): ResourcePromise;
     /**
-     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
-     * @param position The default position. Lower values appear first.
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
+     * @experimental
      */
-    withDashboardPosition(position: number): ResourcePromise;
+    withDisplayOrder(order: number): ResourcePromise;
     /**
      * Adds an interactive terminal session to a resource with an optional callback to configure its initial dimensions.
      * @param options Additional options.
@@ -57782,6 +57883,7 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
      * @param name The case-sensitive trait name.
      * @param value The trait value. Do not include secrets.
      * @returns The resource builder.
+     * @experimental
      */
     withTrait(name: string, value: string): ResourcePromise {
         return new ResourcePromiseImpl(this._withTraitInternal(name, value), this._client);
@@ -57801,28 +57903,30 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
      * Adds AppHost-defined dashboard tags that users cannot remove. Repeated calls add tags.
      * @param tags The tags, each up to 50 characters with single spaces between words.
      * @returns The resource builder.
+     * @experimental
      */
     withTags(tags: string[]): ResourcePromise {
         return new ResourcePromiseImpl(this._withTagsInternal(tags), this._client);
     }
 
     /** @internal */
-    private async _withDashboardPositionInternal(position: number): Promise<Resource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, position };
+    private async _withDisplayOrderInternal(order: number): Promise<Resource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, order };
         const result = await this._client.invokeCapability<IResourceHandle>(
-            'Aspire.Hosting/withDashboardPosition',
+            'Aspire.Hosting/withDisplayOrder',
             rpcArgs
         );
         return new ResourceImpl(result, this._client);
     }
 
     /**
-     * Sets the default resource position in the dashboard. Saved dashboard ordering takes precedence.
-     * @param position The default position. Lower values appear first.
+     * Sets the default display order of the resource in lists of resources, such as the dashboard's. A saved ordering takes precedence. Repeated calls replace the order.
+     * @param order A relative sort key. Higher values appear first, consistent with `DisplayOrder`. Resources without a display order are treated as having an order of 0, so a negative value moves a resource after them.
      * @returns The resource builder.
+     * @experimental
      */
-    withDashboardPosition(position: number): ResourcePromise {
-        return new ResourcePromiseImpl(this._withDashboardPositionInternal(position), this._client);
+    withDisplayOrder(order: number): ResourcePromise {
+        return new ResourcePromiseImpl(this._withDisplayOrderInternal(order), this._client);
     }
 
     /** @internal */
@@ -58469,7 +58573,7 @@ const ResourcePromiseImpl = $aspireCreateFluentPromiseClass<Resource, ResourcePr
     ["withHiddenOnCompletion"]: () => ResourcePromiseImpl,
     ["withTrait"]: () => ResourcePromiseImpl,
     ["withTags"]: () => ResourcePromiseImpl,
-    ["withDashboardPosition"]: () => ResourcePromiseImpl,
+    ["withDisplayOrder"]: () => ResourcePromiseImpl,
     ["withTerminal"]: () => ResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => ResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => ResourcePromiseImpl,

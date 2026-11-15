@@ -46,9 +46,10 @@ public sealed partial class ResourceTagEditor : ComponentBase, IDisposable
 
     private string ListboxId => $"{_id}-listbox";
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
         TagStore.Changed += OnTagsChanged;
+        await TagStore.EnsureLoadedAsync();
     }
 
     protected override void OnParametersSet()
@@ -83,7 +84,7 @@ public sealed partial class ResourceTagEditor : ComponentBase, IDisposable
 
     private void OnTagsChanged()
     {
-        // Tags can change from another browser tab or the resource list, and the event can be raised on any thread.
+        // Tags can change from the resource list, or when tags saved by another tab are read, and the event can be raised on any thread.
         _ = InvokeAsync(() =>
         {
             UpdateTags();

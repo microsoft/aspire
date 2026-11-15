@@ -716,9 +716,6 @@
   <data name="SettingsDialogResourceListDensityCompact" xml:space="preserve">
     <value>Compact</value>
   </data>
-  <data name="SettingsDialogResourceListDensitySpacious" xml:space="preserve">
-    <value>Spacious</value>
-  </data>
   <data name="SettingsDialogTimeFormat" xml:space="preserve">
     <value>Time format</value>
   </data>

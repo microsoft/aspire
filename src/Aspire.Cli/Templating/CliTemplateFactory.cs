@@ -216,7 +216,7 @@ internal sealed partial class CliTemplateFactory : ITemplateFactory
 
             new CallbackTemplate(
                 KnownTemplateId.GoStarter,
-                "Starter App (Go API + Redis, Go AppHost)",
+                "Starter App (Go API/React, Go AppHost)",
                 (ctx, projectName) => OutputPathHelper.GetUniqueDefaultOutputPath(projectName, ctx.WorkingDirectory.FullName),
                 cmd =>
                 {

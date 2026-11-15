@@ -17,7 +17,7 @@ namespace Aspire.Hosting.Azure;
 /// <c>WithAzureUserAssignedIdentity</c>. The identity is available from the resource's <see cref="AppIdentityAnnotation"/>
 /// once the preparer has run. Environments that do not support managed identities do not create one.
 /// </remarks>
-[Experimental("ASPIREAZURE003", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+[Experimental("ASPIREAZURE006", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public sealed class ManagedIdentityRequiredAnnotation : IResourceAnnotation
 {
 }

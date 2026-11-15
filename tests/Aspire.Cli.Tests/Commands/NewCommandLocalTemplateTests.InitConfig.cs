@@ -182,7 +182,7 @@ public partial class NewCommandLocalTemplateTests
         var interaction = new TestInteractionService();
         interaction.ConfirmCallback = (prompt, _) =>
         {
-            Assert.Equal(ConfigSourceStrings.UseSourcePrompt, prompt);
+            Assert.Equal(ConfigSourceStrings.NewUseSourcePrompt, prompt);
             return false;
         };
         interaction.SetupStringPromptResponse("Hello");

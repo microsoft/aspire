@@ -17,7 +17,7 @@ internal interface IGitCommandRunner
     Task<string> RunAsync(DirectoryInfo workingDirectory, string[] arguments, GitCommandMode mode, CancellationToken cancellationToken);
 }
 
-internal sealed class GitCommandRunner(ICliHostEnvironment hostEnvironment, IInteractionService interaction, ILogger<GitCommandRunner> logger) : IGitCommandRunner
+internal sealed class GitCommandRunner(ICliHostEnvironment hostEnvironment, IInteractionService interaction, ConsoleEnvironment consoleEnvironment, ILogger<GitCommandRunner> logger) : IGitCommandRunner
 {
     private Action<string> StandardErrorHandler { get; init; } =
         output => interaction.DisplayRawText(output, ConsoleOutput.Error);
@@ -25,7 +25,7 @@ internal sealed class GitCommandRunner(ICliHostEnvironment hostEnvironment, IInt
     // Keep diagnostic routing operation-local: foreground and background Git work
     // can share the registered runner without changing each other's output.
     public IGitCommandRunner WithStandardErrorHandler(Action<string> standardErrorHandler) =>
-        new GitCommandRunner(hostEnvironment, interaction, logger) { StandardErrorHandler = standardErrorHandler };
+        new GitCommandRunner(hostEnvironment, interaction, consoleEnvironment, logger) { StandardErrorHandler = standardErrorHandler };
 
     private static readonly HashSet<string> s_repositoryEnvironmentVariables = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -81,7 +81,7 @@ internal sealed class GitCommandRunner(ICliHostEnvironment hostEnvironment, IInt
         if (!interactive && mode != GitCommandMode.Captured)
         {
             // GIT_TERMINAL_PROMPT does not govern GCM UI. Keep cached credentials usable.
-            // https://github.com/git-ecosystem/git-credential-manager/blob/release/docs/environment.md#gcm_interactive
+            // https://github.com/git-ecosystem/git-credential-manager/blob/main/docs/environment.md#gcm_interactive
             startInfo.Environment["GCM_INTERACTIVE"] = "never";
         }
         startInfo.Environment["LC_ALL"] = "C";
@@ -293,8 +293,8 @@ internal sealed class GitCommandRunner(ICliHostEnvironment hostEnvironment, IInt
             async (process, token) =>
             {
                 process.StandardInput.Close();
-                var stdout = ReadOutputAsync(process.StandardOutput, token);
-                var stderr = ReadOutputAsync(process.StandardError, token);
+                var stdout = ReadOutputAsync(process.StandardOutput, onOutput: null, token);
+                var stderr = ReadOutputAsync(process.StandardError, onOutput: null, token);
                 await Task.WhenAll(stdout, stderr);
                 return (await stdout + await stderr).Trim();
             },
@@ -352,8 +352,15 @@ internal sealed class GitCommandRunner(ICliHostEnvironment hostEnvironment, IInt
     {
         cancellationToken.ThrowIfCancellationRequested();
         var stopwatch = Stopwatch.StartNew();
-        // Arguments, directories, captured content and exception messages can expose credentials.
-        // Log lifecycle metadata only; the generic capture runner must keep its diagnostics off.
+        // Tee otherwise inherited output without redirecting stdin, so Git can still
+        // read credentials from the terminal while its diagnostics reach the log.
+        var forwardStandardOutput = !startInfo.RedirectStandardOutput;
+        var forwardStandardError = !startInfo.RedirectStandardError;
+        startInfo.RedirectStandardOutput = true;
+        startInfo.RedirectStandardError = true;
+        startInfo.StandardOutputEncoding ??= Encoding.UTF8;
+        startInfo.StandardErrorEncoding ??= Encoding.UTF8;
+        // Keep arguments and exception details out of the generic process diagnostics.
         logger.LogDebug("Starting Git process.");
         using var registration = cancellationToken.Register(() => logger.LogDebug("Git cancellation requested after {Elapsed}.", stopwatch.Elapsed));
         var result = await ProcessCaptureRunner.RunAsync<GitOutput?>(
@@ -367,14 +374,26 @@ internal sealed class GitCommandRunner(ICliHostEnvironment hostEnvironment, IInt
                     // or wait for input until the acquisition deadline expires.
                     process.StandardInput.Close();
                 }
-                if (!startInfo.RedirectStandardOutput)
+                // Log both streams independently of normal console routing for troubleshooting.
+                // With --debug or --log-level Debug, these records intentionally also appear on
+                // the console, including captured stdout and otherwise deferred background diagnostics.
+                // Loggers append their own newline; trim only the logged copy to avoid blank separators.
+                var stdout = ReadOutputAsync(process.StandardOutput, output =>
                 {
-                    return new GitOutput(string.Empty, string.Empty);
-                }
-                var stdout = ReadOutputAsync(process.StandardOutput, token);
-                var stderr = startInfo.RedirectStandardError
-                    ? ReadOutputAsync(process.StandardError, token)
-                    : Task.FromResult(string.Empty);
+                    logger.LogDebug("Git stdout: {Output}", output.TrimEndLine());
+                    if (forwardStandardOutput)
+                    {
+                        consoleEnvironment.Out.Profile.Out.Writer.Write(output);
+                    }
+                }, token);
+                var stderr = ReadOutputAsync(process.StandardError, output =>
+                {
+                    logger.LogDebug("Git stderr: {Output}", output.TrimEndLine());
+                    if (forwardStandardError)
+                    {
+                        consoleEnvironment.Error.Profile.Out.Writer.Write(output);
+                    }
+                }, token);
                 await Task.WhenAll(stdout, stderr);
                 logger.LogDebug("Git process {ProcessId} output drained after {Elapsed}.", process.Id, stopwatch.Elapsed);
                 return new GitOutput(await stdout, await stderr);
@@ -395,11 +414,11 @@ internal sealed class GitCommandRunner(ICliHostEnvironment hostEnvironment, IInt
         {
             throw new GitCommandException(GitFailure.RepositoryUnavailable, null);
         }
-        if (capture.StandardError.Length > 0)
+        if (!forwardStandardError && capture.StandardError.Length > 0)
         {
             // Quiet acquisition suppresses routine Git output, not diagnostics. Keep
             // captured stderr on the operation's diagnostic path without copying parsed
-            // stdout into it. Interactive remote stderr is inherited.
+            // stdout into it. Interactive remote stderr has already been forwarded.
             StandardErrorHandler(capture.StandardError);
         }
         if (result.ExitCode != 0)
@@ -407,7 +426,7 @@ internal sealed class GitCommandRunner(ICliHostEnvironment hostEnvironment, IInt
             throw CreateCommandException(capture.StandardError, result.ExitCode, mode);
         }
 
-        return capture.StandardOutput;
+        return forwardStandardOutput ? string.Empty : capture.StandardOutput;
     }
 
     internal static GitCommandException CreateCommandException(string stderr, int exitCode, GitCommandMode mode)
@@ -424,7 +443,7 @@ internal sealed class GitCommandRunner(ICliHostEnvironment hostEnvironment, IInt
             : unavailable ? GitFailure.RepositoryUnavailable : GitFailure.CommandFailed, exitCode);
     }
 
-    private static async Task<string> ReadOutputAsync(StreamReader reader, CancellationToken cancellationToken)
+    private static async Task<string> ReadOutputAsync(StreamReader reader, Action<string>? onOutput, CancellationToken cancellationToken)
     {
         var output = new StringBuilder();
         var buffer = new char[4096];
@@ -440,6 +459,7 @@ internal sealed class GitCommandRunner(ICliHostEnvironment hostEnvironment, IInt
                     break;
                 }
                 output.Append(buffer, 0, count);
+                onOutput?.Invoke(new string(buffer, 0, count));
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -455,6 +475,6 @@ internal sealed class GitCommandRunner(ICliHostEnvironment hostEnvironment, IInt
 
 internal sealed class GitProcessCanceledException(string output, CancellationToken cancellationToken) : OperationCanceledException(cancellationToken)
 {
-    // For explicit user display on timeout only, never exception messages, logs or telemetry.
+    // Retain diagnostics for explicit timeout display without putting them in exception messages.
     public string Output { get; } = output;
 }

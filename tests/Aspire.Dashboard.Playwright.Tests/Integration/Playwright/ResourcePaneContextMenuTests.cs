@@ -1,10 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Tests.Integration.Playwright.Infrastructure;
 using Aspire.TestUtilities;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Playwright;
 using Xunit;
 
@@ -167,36 +165,26 @@ public sealed class ResourcePaneContextMenuTests(ResourceTagPaneTests.TaggedReso
     [OuterloopTest("Resource-intensive Playwright browser test")]
     public async Task ContextMenu_RepeatedTagRowsRestoreExactTriggerAndRespectLightDismissal()
     {
-        var tags = DashboardServerFixture.DashboardApp.Services.GetRequiredService<ResourceTagStore>();
-        tags.AddTag("tag-b", "Backend");
-        tags.AddTag("tag-b", "Public");
-        try
+        await RunTestAsync(async page =>
         {
-            await RunTestAsync(async page =>
-            {
-                await page.SetViewportSizeAsync(1440, 900);
-                await page.GotoAsync("/resources/tag-a?pane=tags");
-                var rows = page.Locator("[data-resource-name='tag-b'] .resource-row-link");
-                await Assertions.Expect(rows).ToHaveCountAsync(2);
-                var target = rows.Last;
-                var menu = page.Locator("fluent-menu[aria-labelledby='resource-pane-context-menu-header'] fluent-menu-list");
-                await target.PressAsync("Shift+F10");
-                await Assertions.Expect(menu).ToBeVisibleAsync();
-                await page.Keyboard.PressAsync("Escape");
-                await Assertions.Expect(target).ToBeFocusedAsync();
+            await DashboardServerFixture.AddResourceTagsAsync(page, new() { ["tag-b"] = ["Backend", "Public"] });
+            await page.SetViewportSizeAsync(1440, 900);
+            await page.GotoAsync("/resources/tag-a?pane=tags");
+            var rows = page.Locator("[data-resource-name='tag-b'] .resource-row-link");
+            await Assertions.Expect(rows).ToHaveCountAsync(2);
+            var target = rows.Last;
+            var menu = page.Locator("fluent-menu[aria-labelledby='resource-pane-context-menu-header'] fluent-menu-list");
+            await target.PressAsync("Shift+F10");
+            await Assertions.Expect(menu).ToBeVisibleAsync();
+            await page.Keyboard.PressAsync("Escape");
+            await Assertions.Expect(target).ToBeFocusedAsync();
 
-                await target.PressAsync("Shift+F10");
-                await Assertions.Expect(menu).ToBeVisibleAsync();
-                var search = page.Locator(".resource-pane").GetByRole(AriaRole.Searchbox);
-                await search.ClickAsync();
-                await Assertions.Expect(menu).Not.ToBeVisibleAsync();
-                await Assertions.Expect(search).ToBeFocusedAsync();
-            });
-        }
-        finally
-        {
-            tags.RemoveTag("tag-b", "Backend");
-            tags.RemoveTag("tag-b", "Public");
-        }
+            await target.PressAsync("Shift+F10");
+            await Assertions.Expect(menu).ToBeVisibleAsync();
+            var search = page.Locator(".resource-pane").GetByRole(AriaRole.Searchbox);
+            await search.ClickAsync();
+            await Assertions.Expect(menu).Not.ToBeVisibleAsync();
+            await Assertions.Expect(search).ToBeFocusedAsync();
+        });
     }
 }
