@@ -33,6 +33,10 @@ for runtime requirements and run/publish behavior.
 | `ASPIREEXPORT018` | Warning | The source-generated Aspire export provider contract is experimental and may change or be removed in future releases. | [src/Aspire.Hosting/Ats/AspireExportProviderAttribute.cs](../src/Aspire.Hosting/Ats/AspireExportProviderAttribute.cs) |
 | `ASPIREPIPELINES005` | Warning | Pipeline output diffing APIs are experimental and may change or be removed in future releases. Suppress this diagnostic to opt in. | [src/Aspire.Hosting/PipelineOutputDiffingExtensions.cs](../src/Aspire.Hosting/PipelineOutputDiffingExtensions.cs) |
 
+Connection-string physical-name metadata (`ConnectionStringEnvironmentVariableNames` and
+`ConnectionStringReference.EnvironmentVariableNames`) is stable and no longer produces
+`ASPIRECONNECTIONSTRINGS001`. Existing suppressions of that diagnostic can be removed.
+
 ## Analyzer Warnings
 
 | Diagnostic ID | Severity | Description | Location |
