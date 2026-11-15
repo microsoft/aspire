@@ -28,7 +28,7 @@ env:
   #   --filter-method "*.TestMethodName"
   #   --filter-class "*.TestClassName"
   #   --filter-method "*.Test1" --filter-method "*.Test2"
-  TEST_FILTER: '--filter-method "*.SilentAndPartialFramesExpireWithoutBlockingOtherCliClients" --filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true"'
+  TEST_FILTER: '--filter-method "*.SilentAndPartialFramesExpireWithoutBlockingOtherCliClients" --filter-method "*.ClientThatObservedCloseCanReconnectAtCapacity" --filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true"'
 
   # Target operating systems (comma-separated)
   # Options: ubuntu-latest, windows-latest, macos-latest
