@@ -33,6 +33,9 @@ public class AzureSqlDatabaseResource(string name, string databaseName, AzureSql
     /// </summary>
     public AzureSqlServerResource Parent { get; } = parent ?? throw new ArgumentNullException(nameof(parent));
 
+    ValueTask<string?> IResourceWithConnectionString.GetConnectionStringAsync(ValueProviderContext context, CancellationToken cancellationToken) =>
+        ConnectionStringExpression.GetValueAsync(context, cancellationToken);
+
     /// <summary>
     /// Gets the connection string expression for the Azure SQL database.
     /// </summary>

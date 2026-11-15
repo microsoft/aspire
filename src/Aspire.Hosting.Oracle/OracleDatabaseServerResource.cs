@@ -48,6 +48,9 @@ public class OracleDatabaseServerResource : ContainerResource, IResourceWithConn
     /// </summary>
     public ParameterResource PasswordParameter { get; }
 
+    ValueTask<string?> IResourceWithConnectionString.GetConnectionStringAsync(ValueProviderContext context, CancellationToken cancellationToken) =>
+        ConnectionStringExpression.GetValueAsync(context, cancellationToken);
+
     /// <summary>
     /// Gets the connection string expression for the Oracle Database server.
     /// </summary>

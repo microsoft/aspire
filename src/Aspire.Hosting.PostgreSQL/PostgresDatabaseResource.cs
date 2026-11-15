@@ -28,6 +28,9 @@ public class PostgresDatabaseResource(string name, string databaseName, Postgres
     /// </summary>
     public PostgresServerResource Parent { get; } = postgresParentResource ?? throw new ArgumentNullException(nameof(postgresParentResource));
 
+    ValueTask<string?> IResourceWithConnectionString.GetConnectionStringAsync(ValueProviderContext context, CancellationToken cancellationToken) =>
+        ConnectionStringExpression.GetValueAsync(context, cancellationToken);
+
     /// <summary>
     /// Gets the connection string expression for the Postgres database.
     /// </summary>

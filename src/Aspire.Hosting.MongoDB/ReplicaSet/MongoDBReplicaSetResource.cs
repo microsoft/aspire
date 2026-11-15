@@ -29,6 +29,9 @@ public sealed class MongoDBReplicaSetResource(
     /// <inheritdoc/>
     public override string ResourceTypeDisplayName => "MongoDB Replica Set";
 
+    ValueTask<string?> IResourceWithConnectionString.GetConnectionStringAsync(ValueProviderContext context, CancellationToken cancellationToken) =>
+        ConnectionStringExpression.GetValueAsync(context, cancellationToken);
+
     /// <summary>
     /// Gets the combined connection string for the MongoDB replica set, which includes the endpoints of all members, interpretable by the MongoDB driver.
     /// </summary>

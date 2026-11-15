@@ -24,6 +24,9 @@ public class AzureRedisResource(RedisResource innerResource, Action<AzureResourc
     /// </summary>
     public BicepSecretOutputReference ConnectionString => new("connectionString", this);
 
+    ValueTask<string?> IResourceWithConnectionString.GetConnectionStringAsync(ValueProviderContext context, CancellationToken cancellationToken) =>
+        ConnectionStringExpression.GetValueAsync(context, cancellationToken);
+
     /// <summary>
     /// Gets the connection string template for the manifest for the Azure Redis resource.
     /// </summary>

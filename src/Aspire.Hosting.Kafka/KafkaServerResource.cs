@@ -45,6 +45,9 @@ public class KafkaServerResource(string name) : ContainerResource(name), IResour
     /// </summary>
     public EndpointReference InternalEndpoint => _internalEndpoint ??= new(this, InternalEndpointName, KnownNetworkIdentifiers.DefaultAspireContainerNetwork);
 
+    ValueTask<string?> IResourceWithConnectionString.GetConnectionStringAsync(ValueProviderContext context, CancellationToken cancellationToken) =>
+        ConnectionStringExpression.GetValueAsync(context, cancellationToken);
+
     /// <summary>
     /// Gets the connection string expression for the Kafka broker.
     /// </summary>

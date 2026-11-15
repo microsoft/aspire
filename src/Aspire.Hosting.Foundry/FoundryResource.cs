@@ -64,6 +64,9 @@ public class FoundryResource(string name, Action<AzureResourceInfrastructure> co
                 ReferenceExpression.Empty :
             ReferenceExpression.Create($"{AIFoundryApiEndpoint}");
 
+    ValueTask<string?> IResourceWithConnectionString.GetConnectionStringAsync(ValueProviderContext context, CancellationToken cancellationToken) =>
+        ConnectionStringExpression.GetValueAsync(context, cancellationToken);
+
     /// <summary>
     /// Gets the connection string template for the manifest for the resource.
     /// </summary>

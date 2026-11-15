@@ -121,6 +121,9 @@ public class AzureSqlServerResource : AzureProvisioningResource, IResourceWithCo
             InnerResource.UriExpression :
             ReferenceExpression.Create($"mssql://{FullyQualifiedDomainName}:1433");
 
+    ValueTask<string?> IResourceWithConnectionString.GetConnectionStringAsync(ValueProviderContext context, CancellationToken cancellationToken) =>
+        ConnectionStringExpression.GetValueAsync(context, cancellationToken);
+
     /// <summary>
     /// Gets the connection template for the manifest for the Azure SQL Server resource.
     /// </summary>

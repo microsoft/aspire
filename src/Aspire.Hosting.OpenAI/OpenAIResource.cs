@@ -42,6 +42,9 @@ public sealed class OpenAIResource : Resource, IResourceWithConnectionString
     /// </summary>
     private ReferenceExpression EndpointExpression => ReferenceExpression.Create($"{Endpoint}");
 
+    ValueTask<string?> IResourceWithConnectionString.GetConnectionStringAsync(ValueProviderContext context, CancellationToken cancellationToken) =>
+        ConnectionStringExpression.GetValueAsync(context, cancellationToken);
+
     /// <summary>
     /// Gets the base connection string for the OpenAI account.
     /// </summary>

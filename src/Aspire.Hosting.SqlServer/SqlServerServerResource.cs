@@ -129,6 +129,17 @@ public class SqlServerServerResource : ContainerResource, IResourceWithConnectio
         return ConnectionString.GetValueAsync(cancellationToken);
     }
 
+    /// <inheritdoc cref="IResourceWithConnectionString.GetConnectionStringAsync(ValueProviderContext, CancellationToken)"/>
+    public ValueTask<string?> GetConnectionStringAsync(ValueProviderContext context, CancellationToken cancellationToken)
+    {
+        if (this.TryGetLastAnnotation<ConnectionStringRedirectAnnotation>(out var connectionStringAnnotation))
+        {
+            return connectionStringAnnotation.Resource.GetConnectionStringAsync(context, cancellationToken);
+        }
+
+        return ConnectionString.GetValueAsync(context, cancellationToken);
+    }
+
     private readonly Dictionary<string, string> _databases = new(StringComparers.ResourceName);
     private readonly List<SqlServerDatabaseResource> _databaseResources = [];
 

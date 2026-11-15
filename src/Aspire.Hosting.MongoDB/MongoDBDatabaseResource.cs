@@ -22,6 +22,9 @@ public class MongoDBDatabaseResource(string name, string databaseName, MongoDBSe
     /// <inheritdoc/>
     public override string ResourceTypeDisplayName => "MongoDB Database";
 
+    ValueTask<string?> IResourceWithConnectionString.GetConnectionStringAsync(ValueProviderContext context, CancellationToken cancellationToken) =>
+        ConnectionStringExpression.GetValueAsync(context, cancellationToken);
+
     /// <summary>
     /// Gets the connection string expression for the MongoDB database.
     /// </summary>

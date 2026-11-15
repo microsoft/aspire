@@ -55,6 +55,9 @@ public class AzureOpenAIResource(string name, Action<AzureResourceInfrastructure
     public ReferenceExpression UriExpression =>
         ReferenceExpression.Create($"{Endpoint}");
 
+    ValueTask<string?> IResourceWithConnectionString.GetConnectionStringAsync(ValueProviderContext context, CancellationToken cancellationToken) =>
+        ConnectionStringExpression.GetValueAsync(context, cancellationToken);
+
     /// <summary>
     /// Gets the connection string template for the manifest for the resource.
     /// </summary>

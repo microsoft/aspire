@@ -132,6 +132,17 @@ public class RedisResource(string name) : ContainerResource(name), IResourceWith
         return BuildConnectionString().GetValueAsync(cancellationToken);
     }
 
+    /// <inheritdoc cref="IResourceWithConnectionString.GetConnectionStringAsync(ValueProviderContext, CancellationToken)"/>
+    public ValueTask<string?> GetConnectionStringAsync(ValueProviderContext context, CancellationToken cancellationToken)
+    {
+        if (this.TryGetLastAnnotation<ConnectionStringRedirectAnnotation>(out var connectionStringAnnotation))
+        {
+            return connectionStringAnnotation.Resource.GetConnectionStringAsync(context, cancellationToken);
+        }
+
+        return BuildConnectionString().GetValueAsync(context, cancellationToken);
+    }
+
     internal void SetPassword(ParameterResource? password)
     {
         PasswordParameter = password;

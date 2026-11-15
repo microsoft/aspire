@@ -58,6 +58,9 @@ public class AzureKustoClusterResource : AzureProvisioningResource, IResourceWit
             ? ReferenceExpression.Create($"{this.GetEndpoint("http")}")
             : ReferenceExpression.Create($"{ClusterUri}");
 
+    ValueTask<string?> IResourceWithConnectionString.GetConnectionStringAsync(ValueProviderContext context, CancellationToken cancellationToken) =>
+        ConnectionStringExpression.GetValueAsync(context, cancellationToken);
+
     /// <inheritdoc/>
     public ReferenceExpression ConnectionStringExpression
     {

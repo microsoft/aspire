@@ -32,6 +32,9 @@ public class AzureDataLakeStorageResource(string name, AzureStorageResource stor
     /// </remarks>
     public ReferenceExpression UriExpression => Parent.DataLakeUriExpression;
 
+    ValueTask<string?> IResourceWithConnectionString.GetConnectionStringAsync(ValueProviderContext context, CancellationToken cancellationToken) =>
+        ConnectionStringExpression.GetValueAsync(context, cancellationToken);
+
     /// <summary>
     /// Gets the connection string template for the manifest for the Azure DataLake Storage resource.
     /// </summary>

@@ -11,6 +11,67 @@ namespace Aspire.Hosting.Tests;
 [Trait("Partition", "5")]
 public class AddConnectionStringTests
 {
+    [Theory]
+    [InlineData("expression")]
+    [InlineData("parameter")]
+    [InlineData("database")]
+    [InlineData("postgres-redirect")]
+    [InlineData("redis-redirect")]
+    public async Task ContextualConnectionStringResolutionTracksTheRequestingResource(string source)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var parameter = source == "parameter"
+            ? Assert.IsAssignableFrom<ParameterResource>(builder.AddConnectionString("password").Resource)
+            : builder.AddParameter("password", secret: true).Resource;
+        parameter.EnsureValueTask();
+        IResourceWithConnectionString resource;
+        if (source == "database")
+        {
+            var server = builder.AddPostgres("postgres", password: builder.CreateResourceBuilder(parameter))
+                .WithEndpoint("tcp", e => e.AllocatedEndpoint = new(e, "localhost", 2000));
+            resource = server.AddDatabase("database").Resource;
+        }
+        else if (source == "parameter")
+        {
+            resource = (IResourceWithConnectionString)parameter;
+        }
+        else
+        {
+            var connection = builder.AddConnectionString("connection", ReferenceExpression.Create($"Password={parameter}"));
+            resource = source switch
+            {
+                "postgres-redirect" => builder.AddPostgres("postgres")
+                    .WithAnnotation(new ConnectionStringRedirectAnnotation(connection.Resource)).Resource,
+                "redis-redirect" => builder.AddRedis("redis")
+                    .WithAnnotation(new ConnectionStringRedirectAnnotation(connection.Resource)).Resource,
+                _ => connection.Resource
+            };
+        }
+        var caller = builder.AddExecutable("caller", "unused", ".").Resource;
+        using var app = builder.Build();
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
+        var read = resource.GetConnectionStringAsync(new ValueProviderContext
+        {
+            ExecutionContext = builder.ExecutionContext,
+            Caller = caller,
+            Network = KnownNetworkIdentifiers.LocalhostNetwork
+        }, cts.Token).AsTask();
+
+        Assert.False(read.IsCompleted);
+        Assert.True(app.ResourceNotifications.TryGetCurrentState(caller.Name, out var waiting));
+        Assert.Equal(KnownResourceStates.UnresolvedParameters, waiting.Snapshot.State?.Text);
+        var unresolved = Assert.Single(waiting.Snapshot.Properties);
+        Assert.Equal(KnownProperties.Resource.UnresolvedParameters, unresolved.Name);
+        Assert.Equal(new[] { parameter.Name }, Assert.IsType<string[]>(unresolved.Value));
+        Assert.False(app.ResourceNotifications.TryGetCurrentState(resource.Name, out _));
+
+        await parameter.SetValueAsync("password-value");
+        Assert.Equal(await resource.GetConnectionStringAsync(cts.Token), await read.DefaultTimeout());
+        Assert.True(app.ResourceNotifications.TryGetCurrentState(caller.Name, out var completed));
+        Assert.Null(completed.Snapshot.State);
+        Assert.Empty(completed.Snapshot.Properties);
+    }
+
     [Fact]
     public async Task AddConnectionStringExpressionIsAValueInTheManifest()
     {

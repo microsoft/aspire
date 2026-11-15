@@ -20,6 +20,9 @@ internal sealed class ConnectionStringParameterResource : ParameterResource, IRe
 
     public string? ConnectionStringEnvironmentVariable => _environmentVariableName;
 
+    ValueTask<string?> IResourceWithConnectionString.GetConnectionStringAsync(ValueProviderContext context, CancellationToken cancellationToken) =>
+        GetValueAsync(context, cancellationToken);
+
     public ReferenceExpression ConnectionStringExpression =>
         ReferenceExpression.Create($"{this}");
 }
