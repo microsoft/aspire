@@ -2987,11 +2987,6 @@ type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	//   - sourceBuilder: The resource builder whose lifetime should be used.
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithLifetimeOf(sourceBuilder Resource) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 
 	// WithMcpServer marks the resource as hosting a Model Context Protocol (MCP)
@@ -3072,11 +3067,6 @@ type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	//   - parentProcessId: The ID of the parent process to monitor.
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithParentProcessLifetime(parentProcessId float64) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 
 	// WithParentRelationship sets the parent relationship
@@ -3090,11 +3080,6 @@ type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	// WithPersistentLifetime configures a resource to use a persistent lifetime.
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithPersistentLifetime() Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 
 	// WithPipelineConfiguration registers a callback to be executed during the
@@ -3258,11 +3243,6 @@ type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	// WithSessionLifetime configures a resource to use a session lifetime.
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithSessionLifetime() Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 
 	// WithStatus sets the resource status
@@ -6384,11 +6364,6 @@ type CSharpAppResource interface {
 	//   - sourceBuilder: The resource builder whose lifetime should be used.
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithLifetimeOf(sourceBuilder Resource) CSharpAppResource
 
 	// WithMcpServer marks the resource as hosting a Model Context Protocol (MCP)
@@ -6469,11 +6444,6 @@ type CSharpAppResource interface {
 	//   - parentProcessId: The ID of the parent process to monitor.
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithParentProcessLifetime(parentProcessId float64) CSharpAppResource
 
 	// WithParentRelationship sets the parent relationship
@@ -6487,11 +6457,6 @@ type CSharpAppResource interface {
 	// WithPersistentLifetime configures a resource to use a persistent lifetime.
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithPersistentLifetime() CSharpAppResource
 
 	// WithPipelineConfiguration registers a callback to be executed during the
@@ -6664,11 +6629,6 @@ type CSharpAppResource interface {
 	// WithSessionLifetime configures a resource to use a session lifetime.
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithSessionLifetime() CSharpAppResource
 
 	// WithStatus sets the resource status
@@ -10425,11 +10385,6 @@ type ContainerRegistryResource interface {
 	//   - sourceBuilder: The resource builder whose lifetime should be used.
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithLifetimeOf(sourceBuilder Resource) ContainerRegistryResource
 
 	// WithMergeEndpoint configures a named endpoint
@@ -10487,11 +10442,6 @@ type ContainerRegistryResource interface {
 	//   - parentProcessId: The ID of the parent process to monitor.
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithParentProcessLifetime(parentProcessId float64) ContainerRegistryResource
 
 	// WithParentRelationship sets the parent relationship
@@ -10505,11 +10455,6 @@ type ContainerRegistryResource interface {
 	// WithPersistentLifetime configures a resource to use a persistent lifetime.
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithPersistentLifetime() ContainerRegistryResource
 
 	// WithPipelineConfiguration registers a callback to be executed during the
@@ -10623,11 +10568,6 @@ type ContainerRegistryResource interface {
 	// WithSessionLifetime configures a resource to use a session lifetime.
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithSessionLifetime() ContainerRegistryResource
 
 	// WithStatus sets the resource status
@@ -12659,11 +12599,6 @@ type ContainerResource interface {
 	//   - sourceBuilder: The resource builder whose lifetime should be used.
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithLifetimeOf(sourceBuilder Resource) ContainerResource
 
 	// WithMcpServer marks the resource as hosting a Model Context Protocol (MCP)
@@ -12744,11 +12679,6 @@ type ContainerResource interface {
 	//   - parentProcessId: The ID of the parent process to monitor.
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithParentProcessLifetime(parentProcessId float64) ContainerResource
 
 	// WithParentRelationship sets the parent relationship
@@ -12762,11 +12692,6 @@ type ContainerResource interface {
 	// WithPersistentLifetime configures a resource to use a persistent lifetime.
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithPersistentLifetime() ContainerResource
 
 	// WithPipelineConfiguration registers a callback to be executed during the
@@ -12930,11 +12855,6 @@ type ContainerResource interface {
 	// WithSessionLifetime configures a resource to use a session lifetime.
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithSessionLifetime() ContainerResource
 
 	// WithStatus sets the resource status
@@ -17988,11 +17908,6 @@ type DotnetToolResource interface {
 	//   - sourceBuilder: The resource builder whose lifetime should be used.
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithLifetimeOf(sourceBuilder Resource) DotnetToolResource
 
 	// WithMcpServer marks the resource as hosting a Model Context Protocol (MCP)
@@ -18073,11 +17988,6 @@ type DotnetToolResource interface {
 	//   - parentProcessId: The ID of the parent process to monitor.
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithParentProcessLifetime(parentProcessId float64) DotnetToolResource
 
 	// WithParentRelationship sets the parent relationship
@@ -18091,11 +18001,6 @@ type DotnetToolResource interface {
 	// WithPersistentLifetime configures a resource to use a persistent lifetime.
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithPersistentLifetime() DotnetToolResource
 
 	// WithPipelineConfiguration registers a callback to be executed during the
@@ -18259,11 +18164,6 @@ type DotnetToolResource interface {
 	// WithSessionLifetime configures a resource to use a session lifetime.
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithSessionLifetime() DotnetToolResource
 
 	// WithStatus sets the resource status
@@ -22279,11 +22179,6 @@ type ExecutableResource interface {
 	//   - sourceBuilder: The resource builder whose lifetime should be used.
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithLifetimeOf(sourceBuilder Resource) ExecutableResource
 
 	// WithMcpServer marks the resource as hosting a Model Context Protocol (MCP)
@@ -22364,11 +22259,6 @@ type ExecutableResource interface {
 	//   - parentProcessId: The ID of the parent process to monitor.
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithParentProcessLifetime(parentProcessId float64) ExecutableResource
 
 	// WithParentRelationship sets the parent relationship
@@ -22382,11 +22272,6 @@ type ExecutableResource interface {
 	// WithPersistentLifetime configures a resource to use a persistent lifetime.
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithPersistentLifetime() ExecutableResource
 
 	// WithPipelineConfiguration registers a callback to be executed during the
@@ -22550,11 +22435,6 @@ type ExecutableResource interface {
 	// WithSessionLifetime configures a resource to use a session lifetime.
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithSessionLifetime() ExecutableResource
 
 	// WithStatus sets the resource status
@@ -25148,11 +25028,6 @@ type ExternalServiceResource interface {
 	//   - sourceBuilder: The resource builder whose lifetime should be used.
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithLifetimeOf(sourceBuilder Resource) ExternalServiceResource
 
 	// WithMergeEndpoint configures a named endpoint
@@ -25210,11 +25085,6 @@ type ExternalServiceResource interface {
 	//   - parentProcessId: The ID of the parent process to monitor.
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithParentProcessLifetime(parentProcessId float64) ExternalServiceResource
 
 	// WithParentRelationship sets the parent relationship
@@ -25228,11 +25098,6 @@ type ExternalServiceResource interface {
 	// WithPersistentLifetime configures a resource to use a persistent lifetime.
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithPersistentLifetime() ExternalServiceResource
 
 	// WithPipelineConfiguration registers a callback to be executed during the
@@ -25346,11 +25211,6 @@ type ExternalServiceResource interface {
 	// WithSessionLifetime configures a resource to use a session lifetime.
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithSessionLifetime() ExternalServiceResource
 
 	// WithStatus sets the resource status
@@ -28953,11 +28813,6 @@ type ParameterResource interface {
 	//   - sourceBuilder: The resource builder whose lifetime should be used.
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithLifetimeOf(sourceBuilder Resource) ParameterResource
 
 	// WithMergeEndpoint configures a named endpoint
@@ -29026,11 +28881,6 @@ type ParameterResource interface {
 	//   - parentProcessId: The ID of the parent process to monitor.
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithParentProcessLifetime(parentProcessId float64) ParameterResource
 
 	// WithParentRelationship sets the parent relationship
@@ -29044,11 +28894,6 @@ type ParameterResource interface {
 	// WithPersistentLifetime configures a resource to use a persistent lifetime.
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithPersistentLifetime() ParameterResource
 
 	// WithPipelineConfiguration registers a callback to be executed during the
@@ -29170,11 +29015,6 @@ type ParameterResource interface {
 	// WithSessionLifetime configures a resource to use a session lifetime.
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithSessionLifetime() ParameterResource
 
 	// WithStatus sets the resource status
@@ -31962,11 +31802,6 @@ type ProjectResource interface {
 	//   - sourceBuilder: The resource builder whose lifetime should be used.
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithLifetimeOf(sourceBuilder Resource) ProjectResource
 
 	// WithMcpServer marks the resource as hosting a Model Context Protocol (MCP)
@@ -32047,11 +31882,6 @@ type ProjectResource interface {
 	//   - parentProcessId: The ID of the parent process to monitor.
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithParentProcessLifetime(parentProcessId float64) ProjectResource
 
 	// WithParentRelationship sets the parent relationship
@@ -32065,11 +31895,6 @@ type ProjectResource interface {
 	// WithPersistentLifetime configures a resource to use a persistent lifetime.
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithPersistentLifetime() ProjectResource
 
 	// WithPipelineConfiguration registers a callback to be executed during the
@@ -32242,11 +32067,6 @@ type ProjectResource interface {
 	// WithSessionLifetime configures a resource to use a session lifetime.
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithSessionLifetime() ProjectResource
 
 	// WithStatus sets the resource status
@@ -37142,11 +36962,6 @@ type TestDatabaseResource interface {
 	//   - sourceBuilder: The resource builder whose lifetime should be used.
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithLifetimeOf(sourceBuilder Resource) TestDatabaseResource
 
 	// WithMcpServer marks the resource as hosting a Model Context Protocol (MCP)
@@ -37227,11 +37042,6 @@ type TestDatabaseResource interface {
 	//   - parentProcessId: The ID of the parent process to monitor.
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithParentProcessLifetime(parentProcessId float64) TestDatabaseResource
 
 	// WithParentRelationship sets the parent relationship
@@ -37245,11 +37055,6 @@ type TestDatabaseResource interface {
 	// WithPersistentLifetime configures a resource to use a persistent lifetime.
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithPersistentLifetime() TestDatabaseResource
 
 	// WithPipelineConfiguration registers a callback to be executed during the
@@ -37413,11 +37218,6 @@ type TestDatabaseResource interface {
 	// WithSessionLifetime configures a resource to use a session lifetime.
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithSessionLifetime() TestDatabaseResource
 
 	// WithStatus sets the resource status
@@ -40879,11 +40679,6 @@ type TestRedisResource interface {
 	//   - sourceBuilder: The resource builder whose lifetime should be used.
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithLifetimeOf(sourceBuilder Resource) TestRedisResource
 
 	// WithMcpServer marks the resource as hosting a Model Context Protocol (MCP)
@@ -40979,11 +40774,6 @@ type TestRedisResource interface {
 	//   - parentProcessId: The ID of the parent process to monitor.
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithParentProcessLifetime(parentProcessId float64) TestRedisResource
 
 	// WithParentRelationship sets the parent relationship
@@ -41003,11 +40793,6 @@ type TestRedisResource interface {
 	// WithPersistentLifetime configures a resource to use a persistent lifetime.
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithPersistentLifetime() TestRedisResource
 
 	// WithPipelineConfiguration registers a callback to be executed during the
@@ -41191,11 +40976,6 @@ type TestRedisResource interface {
 	// WithSessionLifetime configures a resource to use a session lifetime.
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithSessionLifetime() TestRedisResource
 
 	// WithStatus sets the resource status
