@@ -2945,6 +2945,12 @@
 }
 
 @container resource-pane (min-width: 1600px) {
+    /* Grow the type and identity columns together on wide canvases, without taking room from resource names.
+       Keep the narrower breakpoints' width budget unchanged, especially when the activity column is visible. */
+    .pane-full-canvas .resource-pane-list.density-compact {
+        --resource-row-meta-type-width: clamp(120px, calc(100cqw - 1480px), 240px);
+    }
+
     .resource-row.resource-row-table {
         --resource-row-tracks: [identity] calc(320px + var(--resource-row-identity-extra, 0px)) [status] var(--resource-row-status-width) [source] minmax(220px, 1fr) [endpoint] minmax(240px, 1fr) [insights] var(--resource-insight-width) [actions] var(--resource-row-actions-width) [end];
         column-gap: var(--spacingHorizontalL);
