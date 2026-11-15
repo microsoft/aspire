@@ -3,7 +3,6 @@
 
 #pragma warning disable ASPIRECERTIFICATES001
 #pragma warning disable ASPIREEXTENSION001
-#pragma warning disable ASPIRECOMMAND001
 
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;

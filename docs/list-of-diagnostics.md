@@ -23,6 +23,9 @@ When automatic CLI bundle setup fails, `ASPIRE009` includes the setup command's 
 
 ## Experimental API Warnings
 
+`ASPIRECOMMAND001` is no longer produced. Required-command custom validation APIs are stable.
+Failed validation remains advisory: a warning is logged, but the resource is allowed to attempt to start.
+
 `ASPIREDENO001` is no longer emitted: the Deno hosting APIs are stable. Existing
 suppressions can be removed. See [Deno runtime and publishing](../src/Aspire.Hosting.JavaScript/README.md#deno-runtime-and-publishing)
 for runtime requirements and run/publish behavior.

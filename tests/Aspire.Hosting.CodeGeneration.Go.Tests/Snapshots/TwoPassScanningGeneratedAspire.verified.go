@@ -3565,11 +3565,6 @@ type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	//   - options: Optional parameters; see [WithRequiredCommandValidationOption].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...WithRequiredCommandValidationOption) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 
 	// WithResourceTypeDisplayName overrides the human-readable resource type label.
@@ -7708,11 +7703,6 @@ type CSharpAppResource interface {
 	//   - options: Optional parameters; see [WithRequiredCommandValidationOption].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...WithRequiredCommandValidationOption) CSharpAppResource
 
 	// WithResourceTypeDisplayName overrides the human-readable resource type label.
@@ -12494,11 +12484,6 @@ type ContainerRegistryResource interface {
 	//   - options: Optional parameters; see [WithRequiredCommandValidationOption].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...WithRequiredCommandValidationOption) ContainerRegistryResource
 
 	// WithResourceTypeDisplayName overrides the human-readable resource type label.
@@ -15139,11 +15124,6 @@ type ContainerResource interface {
 	//   - options: Optional parameters; see [WithRequiredCommandValidationOption].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...WithRequiredCommandValidationOption) ContainerResource
 
 	// WithResourceTypeDisplayName overrides the human-readable resource type label.
@@ -21386,11 +21366,6 @@ type DotnetToolResource interface {
 	//   - options: Optional parameters; see [WithRequiredCommandValidationOption].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...WithRequiredCommandValidationOption) DotnetToolResource
 
 	// WithResourceTypeDisplayName overrides the human-readable resource type label.
@@ -26579,11 +26554,6 @@ type ExecutableResource interface {
 	//   - options: Optional parameters; see [WithRequiredCommandValidationOption].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...WithRequiredCommandValidationOption) ExecutableResource
 
 	// WithResourceTypeDisplayName overrides the human-readable resource type label.
@@ -30049,11 +30019,6 @@ type ExternalServiceResource interface {
 	//   - options: Optional parameters; see [WithRequiredCommandValidationOption].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...WithRequiredCommandValidationOption) ExternalServiceResource
 
 	// WithResourceTypeDisplayName overrides the human-readable resource type label.
@@ -34669,11 +34634,6 @@ type ParameterResource interface {
 	//   - options: Optional parameters; see [WithRequiredCommandValidationOption].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...WithRequiredCommandValidationOption) ParameterResource
 
 	// WithResourceTypeDisplayName overrides the human-readable resource type label.
@@ -38199,11 +38159,6 @@ type ProjectResource interface {
 	//   - options: Optional parameters; see [WithRequiredCommandValidationOption].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...WithRequiredCommandValidationOption) ProjectResource
 
 	// WithResourceTypeDisplayName overrides the human-readable resource type label.
@@ -41553,11 +41508,6 @@ type RequiredCommandValidationContext interface {
 
 	// CancellationToken gets a cancellation token that can be used to cancel the
 	// validation.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	CancellationToken() (*CancellationToken, error)
 
 	// Failure creates a failed validation result with the specified message.
@@ -41567,37 +41517,17 @@ type RequiredCommandValidationContext interface {
 	//
 	// Returns: A [RequiredCommandValidationResult] indicating the command is
 	// invalid.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	Failure(validationMessage string) RequiredCommandValidationResult
 
 	// ResolvedPath gets the resolved full path to the command executable.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	ResolvedPath() (string, error)
 
 	// Services gets the service provider for accessing application services.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	Services() ServiceProvider
 
 	// Success creates a successful validation result.
 	//
 	// Returns: A [RequiredCommandValidationResult] indicating the command is valid.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	Success() RequiredCommandValidationResult
 
 	// Err returns the first error recorded on this wrapper, or nil if the wrapper
@@ -41718,24 +41648,17 @@ func (s *requiredCommandValidationContext) Success() RequiredCommandValidationRe
 
 // RequiredCommandValidationResult represents the result of validating a
 // required command.
+//
+// Failed validation logs a warning but does not prevent the resource from
+// attempting to start.
 type RequiredCommandValidationResult interface {
 	handleReference
 
 	// IsValid gets a value indicating whether the command validation succeeded.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	IsValid() (bool, error)
 
 	// ValidationMessage gets an optional validation message describing why
 	// validation failed.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	ValidationMessage() (*string, error)
 
 	// Err returns the first error recorded on this wrapper, or nil if the wrapper
@@ -44279,11 +44202,6 @@ type TestDatabaseResource interface {
 	//   - options: Optional parameters; see [WithRequiredCommandValidationOption].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...WithRequiredCommandValidationOption) TestDatabaseResource
 
 	// WithResourceTypeDisplayName overrides the human-readable resource type label.
@@ -48800,11 +48718,6 @@ type TestRedisResource interface {
 	//   - options: Optional parameters; see [WithRequiredCommandValidationOption].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...WithRequiredCommandValidationOption) TestRedisResource
 
 	// WithResourceTypeDisplayName overrides the human-readable resource type label.
