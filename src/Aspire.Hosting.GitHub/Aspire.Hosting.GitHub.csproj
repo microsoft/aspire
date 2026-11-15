@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
+    <IsPackable>true</IsPackable>
+    <PackageTags>aspire integration hosting github app authentication security</PackageTags>
+    <Description>GitHub App support for Aspire.</Description>
+    <SuppressFinalPackageVersion>true</SuppressFinalPackageVersion>
+    <!-- The integration has no polyglot (ATS) exports yet, so it is offered only to C# AppHosts. -->
+    <IsAspirePolyglotCompatible>false</IsAspirePolyglotCompatible>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Aspire.Hosting\Aspire.Hosting.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Aspire.Hosting.GitHub.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="$(SharedDir)EnvironmentVariableNameEncoder.cs" LinkBase="Shared" />
+  </ItemGroup>
+
+</Project>
