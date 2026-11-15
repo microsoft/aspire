@@ -294,8 +294,8 @@
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_TelemetryHooksInstalled">
-        <source>Installed Aspire agent telemetry hooks for: {0}. Only Aspire skill, MCP tool, and reference-file usage is recorded. Opt out anytime by setting ASPIRE_CLI_TELEMETRY_OPTOUT=true.</source>
-        <target state="translated">다음에 대한 Aspire 에이전트 원격 분석 후크를 설치했습니다. {0}. Aspire 기술, MCP 도구 및 참조 파일 사용만 기록됩니다. ASPIRE_CLI_TELEMETRY_OPTOUT=true로 설정하면 언제든지 옵트아웃할 수 있습니다.</target>
+        <source>Installed Aspire agent telemetry hooks in user-level configuration for: {0}. Only Aspire skill, MCP tool, and reference-file usage is recorded. Opt out anytime by setting ASPIRE_CLI_TELEMETRY_OPTOUT=true.</source>
+        <target state="needs-review-translation">다음에 대한 Aspire 에이전트 원격 분석 후크를 설치했습니다. {0}. Aspire 기술, MCP 도구 및 참조 파일 사용만 기록됩니다. ASPIRE_CLI_TELEMETRY_OPTOUT=true로 설정하면 언제든지 옵트아웃할 수 있습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_WorkspaceRootOptionDescription">

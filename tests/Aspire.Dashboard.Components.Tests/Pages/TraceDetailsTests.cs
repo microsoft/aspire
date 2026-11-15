@@ -2,9 +2,11 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text;
+using Aspire.Dashboard.Components.Controls;
 using Aspire.Dashboard.Components.Pages;
 using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Components.Tests.Shared;
+using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.Otlp;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
@@ -37,7 +39,7 @@ public partial class TraceDetailsTests : DashboardTestContext
     }
 
     [Fact]
-    public async Task Render_ManySpanLogs_RendersButtonsWithoutTooltipText()
+    public async Task Render_ManySpanLogs_ShareOneHiddenPreview()
     {
         SetupTraceDetailsServices();
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
@@ -61,7 +63,7 @@ public partial class TraceDetailsTests : DashboardTestContext
         var logs = new ScopeLogs { Scope = CreateScope(name: "test-scope") };
         logs.LogRecords.Add(Enumerable.Range(0, 501).Select(index =>
             CreateLogRecord(time: s_testTime.AddMilliseconds(index), traceId: "1", spanId: "1-1",
-                eventName: "Test event", message: "Test message")));
+                eventName: "Test event", message: "Test <message>\nwith details")));
         await repository.AddLogsAsync(new AddContext(),
         [
             new ResourceLogs { Resource = CreateResource(), ScopeLogs = { logs } }
@@ -71,20 +73,31 @@ public partial class TraceDetailsTests : DashboardTestContext
             .Add(p => p.TraceId, Convert.ToHexString(Encoding.UTF8.GetBytes("1")))
             .AddCascadingValue(viewport));
 
-        cut.WaitForAssertion(() =>
+        // A span can have thousands of logs, so the markers share one hidden preview rather than rendering one each.
+        cut.WaitForAssertion(() => Assert.Equal(501, cut.FindAll(".span-log-entry-button").Count));
+        Assert.Single(cut.FindAll(".log-tooltip"));
+        var preview = cut.Find($"#{SpanLogPreview.ElementId}");
+        Assert.True(preview.HasAttribute("hidden"));
+        Assert.Empty(preview.Children);
+        Assert.All(cut.FindAll(".span-log-entry-button"), button =>
         {
-            var buttons = cut.FindAll(".span-log-entry-button");
-            Assert.Equal(501, buttons.Count);
-            // Span logs can number in the thousands, so their buttons carry no tooltip text. The log's details open
-            // on click instead.
-            Assert.All(buttons, button =>
-            {
-                Assert.Null(button.GetAttribute("data-tooltip"));
-                Assert.Equal("Log entry details", button.GetAttribute("aria-label"));
-            });
-            // Only the bounded trace header keeps its rich Fluent tooltip.
-            Assert.Single(cut.FindComponents<FluentTooltip>());
+            Assert.Equal(SpanLogPreview.ElementId, button.GetAttribute("data-tooltip-content"));
+            Assert.Equal("Log entry details", button.GetAttribute("aria-label"));
         });
+
+        // Reaching a marker, with the pointer or the keyboard, fills the preview with its entry (see
+        // SpanLogPreviewTests): every marker handles both.
+        Assert.All(cut.FindAll(".span-log-entry-button"), button =>
+        {
+            Assert.True(button.HasAttribute("blazor:onmouseenter"));
+            Assert.True(button.HasAttribute("blazor:onfocus"));
+        });
+
+        Assert.Equal(
+            cut.Find(".resource-name").TextContent.Trim(),
+            cut.Find("[data-tooltip-cell]").GetAttribute("data-tooltip-cell"));
+        // Only the bounded trace header keeps its rich Fluent tooltip.
+        Assert.Single(cut.FindComponents<FluentTooltip>());
     }
 
     [Fact]
@@ -200,8 +213,7 @@ public partial class TraceDetailsTests : DashboardTestContext
             var spanContainers = cut.FindAll(".span-button-container");
             Assert.Equal(2, spanContainers.Count);
 
-            // Every log marker is rendered on each span. They carry no tooltip, so there's no per-span limit to apply:
-            // the log's details open on click.
+            // Shared tooltip metadata does not require limiting the number of log markers per span.
             Assert.All(spanContainers, container =>
             {
                 var buttons = container.QuerySelectorAll(".span-log-entry-button");
@@ -209,7 +221,7 @@ public partial class TraceDetailsTests : DashboardTestContext
                 Assert.All(buttons, button =>
                 {
                     Assert.Null(button.GetAttribute("title"));
-                    Assert.Null(button.GetAttribute("data-tooltip"));
+                    Assert.NotNull(button.GetAttribute("data-tooltip-content"));
                 });
             });
         });
@@ -625,7 +637,7 @@ public partial class TraceDetailsTests : DashboardTestContext
         });
 
         cut.WaitForAssertion(() => Assert.NotNull(cut.Instance.PageViewModel.SpanWaterfallViewModels));
-        var data = await cut.Instance.GetData(new GridItemsProviderRequest<SpanWaterfallViewModel>());
+        var data = await cut.InvokeAsync(() => cut.Instance.GetData(new GridItemsProviderRequest<SpanWaterfallViewModel>()).AsTask());
 
         // Assert
         Assert.Collection(data.Items,
@@ -721,7 +733,7 @@ public partial class TraceDetailsTests : DashboardTestContext
         });
 
         cut.WaitForAssertion(() => Assert.NotNull(cut.Instance.PageViewModel.SpanWaterfallViewModels));
-        var unfilteredData = await cut.Instance.GetData(new GridItemsProviderRequest<SpanWaterfallViewModel>());
+        var unfilteredData = await cut.InvokeAsync(() => cut.Instance.GetData(new GridItemsProviderRequest<SpanWaterfallViewModel>()).AsTask());
 
         // Duration >= 10ms only matches 1-3. Its parent chain (1-1, 1-2) stays visible
         // as ancestors so the matching span remains navigable in the waterfall, even
@@ -848,7 +860,7 @@ public partial class TraceDetailsTests : DashboardTestContext
         });
 
         cut.WaitForAssertion(() => Assert.NotNull(cut.Instance.PageViewModel.SpanWaterfallViewModels));
-        var unfilteredData = await cut.Instance.GetData(new GridItemsProviderRequest<SpanWaterfallViewModel>());
+        var unfilteredData = await cut.InvokeAsync(() => cut.Instance.GetData(new GridItemsProviderRequest<SpanWaterfallViewModel>()).AsTask());
 
         var durationMatches = await GetMatchingSpanIdsAsync(
             telemetryRepository,
@@ -915,6 +927,7 @@ public partial class TraceDetailsTests : DashboardTestContext
                 }
             });
 
+        Services.GetRequiredService<PauseManager>().SetTracesPaused(true);
         var traceId = Convert.ToHexString(Encoding.UTF8.GetBytes("1"));
         var cut = Render<TraceDetail>(builder =>
         {
@@ -922,7 +935,12 @@ public partial class TraceDetailsTests : DashboardTestContext
             builder.AddCascadingValue(viewport);
         });
 
-        cut.WaitForAssertion(() => Assert.Equal(2, cut.FindAll(".main-grid-expand-button").Count));
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal(2, cut.FindAll(".main-grid-expand-button").Count);
+            Assert.Equal("Showing 3 spans", cut.Find(".result-count").TextContent.Trim());
+            Assert.Single(cut.FindComponents<PauseWarning>());
+        });
         // Act and assert
 
         // Collapse the middle span
@@ -935,6 +953,7 @@ public partial class TraceDetailsTests : DashboardTestContext
             Assert.Collection(expandContainers,
                 container => Assert.True(container.ClassList.Contains("main-grid-expanded")),
                 container => Assert.True(container.ClassList.Contains("main-grid-collapsed")));
+            Assert.Equal("Showing 2 spans", cut.Find(".result-count").TextContent.Trim());
         });
 
         // Collapse the parent span
@@ -945,6 +964,7 @@ public partial class TraceDetailsTests : DashboardTestContext
             // There should now be one container since the 2nd level element should now be filtered out
             Assert.Collection(expandContainers,
                 container => Assert.True(container.ClassList.Contains("main-grid-collapsed")));
+            Assert.Equal("Showing 1 span", cut.Find(".result-count").TextContent.Trim());
         });
 
         // Expand the parent span, we should now see the same two containers as before
@@ -956,7 +976,16 @@ public partial class TraceDetailsTests : DashboardTestContext
             Assert.Collection(expandContainers,
                 container => Assert.True(container.ClassList.Contains("main-grid-expanded")),
                 container => Assert.True(container.ClassList.Contains("main-grid-collapsed")));
+            Assert.Equal("Showing 2 spans", cut.Find(".result-count").TextContent.Trim());
         });
+
+        await cut.InvokeAsync(async () =>
+        {
+            cut.Instance.PageViewModel.ContextFilterMatches = [];
+            var result = await cut.Instance.GetData(new GridItemsProviderRequest<SpanWaterfallViewModel>());
+            Assert.Equal(0, result.TotalItemCount);
+        });
+        cut.WaitForAssertion(() => Assert.Equal("Showing 0 spans", cut.Find(".result-count").TextContent.Trim()));
     }
 
     [Fact]
@@ -1145,7 +1174,7 @@ public partial class TraceDetailsTests : DashboardTestContext
         FluentUISetupHelpers.SetupFluentToolbar(this);
         FluentUISetupHelpers.SetupFluentMenu(this);
 
-        JSInterop.SetupVoid("focusElement", _ => true);
+        JSInterop.SetupVoid("focusElement", _ => true).SetVoidResult();
 
         loggerFactory ??= NullLoggerFactory.Instance;
 

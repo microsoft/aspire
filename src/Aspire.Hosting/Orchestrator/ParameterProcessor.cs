@@ -520,6 +520,36 @@ public sealed class ParameterProcessor(
         await DeleteParameterCoreAsync(parameterResource, result.Data, cancellationToken).ConfigureAwait(false);
     }
 
+    // Renames the inputs whose generated names aren't unique, keeping every other input's name because a load callback
+    // can read it. An input is named after its parameter, unless a name that's kept already uses that.
+    private static void RenameInputsWithConflictingNames(
+        List<(ParameterResource ParameterResource, InteractionInput Input, long Version)> resourceInputs,
+        List<(ParameterResource ParameterResource, InteractionInput Input, long Version)> inputsToRename,
+        bool showSaveToSecrets)
+    {
+        var nameCounts = resourceInputs
+            .Select(i => i.Input.Name)
+            .Concat(showSaveToSecrets ? [SaveToUserSecretsName] : [])
+            .CountBy(name => name, StringComparers.InteractionInputName)
+            .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparers.InteractionInputName);
+        var conflicting = inputsToRename.Where(i => nameCounts[i.Input.Name] > 1).ToList();
+        var usedNames = resourceInputs
+            .Where(i => !conflicting.Any(c => ReferenceEquals(c.Input, i.Input)))
+            .Select(i => i.Input.Name)
+            .Concat(showSaveToSecrets ? [SaveToUserSecretsName] : [])
+            .ToHashSet(StringComparers.InteractionInputName);
+
+        foreach (var (parameter, input, _) in conflicting)
+        {
+            var name = parameter.Name;
+            for (var suffix = 2; !usedNames.Add(name); suffix++)
+            {
+                name = $"{parameter.Name}{suffix}";
+            }
+            input.SetName(name);
+        }
+    }
+
     private InteractionInput CreateSaveParameterInput(bool hasExistingValue)
     {
         return new InteractionInput
@@ -698,7 +728,7 @@ public sealed class ParameterProcessor(
                     {
                         Intent = MessageIntent.Warning,
                         PrimaryButtonText = InteractionStrings.ParametersBarPrimaryButtonText,
-                        UnresolvedParameterNames = [.. GetUnresolvedParametersSnapshot(unresolvedParameters).Select(p => p.Parameter.Name)]
+                        RelatedResourceNames = [.. GetUnresolvedParametersSnapshot(unresolvedParameters).Select(p => p.Parameter.Name)]
                     },
                     allParametersResolvedToken).ConfigureAwait(false);
 
@@ -733,27 +763,33 @@ public sealed class ParameterProcessor(
                 {
                     // Create an input for each unresolved parameter.
                     var input = parameter.CreateInput();
+
+                    // The dashboard shows the prompt in its parameter form by matching each input to the parameter it
+                    // names here. Input names can't identify parameters: a kept generator name below can be the name of
+                    // a different, already resolved parameter, and the form would then edit that parameter's own input
+                    // while the prompt's input stays empty.
+                    input.RelatedResourceName = parameter.Name;
                     resourceInputs.Add((parameter, input, version));
                 }
 
                 // Name the inputs after their parameters, like the set-parameter command names its input, rather than
-                // whatever names WithCustomInput generators chose: the dashboard matches the prompt's inputs to
-                // parameters by name to show them in its parameter form, and two custom inputs could otherwise share
-                // a name in the same prompt. A custom input can load its options from another input it names in
-                // DependsOnInputs, and read that input by name in its load callback. The callback can't be rewritten,
-                // so when an input depends on a name the renaming would change, the generators' names are kept. The
-                // dashboard then shows the prompt in a dialog, as it does for any input that isn't named after a parameter.
+                // whatever names WithCustomInput generators chose, because two custom inputs could otherwise share a
+                // name in the same prompt. A custom input's load callback can read any input of the prompt by the name
+                // its generator chose, through context.AllInputs. DependsOnInputs only schedules reloads, so it doesn't
+                // say which names a callback reads, and the callback can't be rewritten. With any dynamically loaded
+                // input in the prompt the generators' names are kept, except names that can't be shown because they
+                // aren't unique, which no callback could read anyway.
                 // The save-values checkbox appended below owns its name, and input names must be unique in a prompt, so
                 // an input for a parameter that happens to share that name keeps the name its generator chose.
                 var inputsToRename = resourceInputs
                     .Where(i => !string.Equals(i.Input.Name, i.ParameterResource.Name, StringComparisons.InteractionInputName))
                     .Where(i => !showSaveToSecrets || !string.Equals(i.ParameterResource.Name, SaveToUserSecretsName, StringComparisons.InteractionInputName))
                     .ToList();
-                var renamedInputNames = inputsToRename
-                    .Select(i => i.Input.Name)
-                    .ToHashSet(StringComparers.InteractionInputName);
-                var dependsOnRenamedInput = resourceInputs.Any(i => i.Input.DynamicLoading?.DependsOnInputs?.Any(renamedInputNames.Contains) == true);
-                if (!dependsOnRenamedInput)
+                if (resourceInputs.Any(i => i.Input.DynamicLoading is not null))
+                {
+                    RenameInputsWithConflictingNames(resourceInputs, inputsToRename, showSaveToSecrets);
+                }
+                else
                 {
                     foreach (var (parameter, input, _) in inputsToRename)
                     {

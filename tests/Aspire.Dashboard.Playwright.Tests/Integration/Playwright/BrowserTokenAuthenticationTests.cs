@@ -62,7 +62,8 @@ public class BrowserTokenAuthenticationTests : PlaywrightTestsBase<BrowserTokenA
             var submitButton = SubmitButton(page);
             await submitButton.ClickAsync().DefaultTimeout();
 
-            await page.WaitForURLAsync(url => new Uri(url).AbsolutePath == "/resources").DefaultTimeout();
+            // The login returns to "/", the home page, which lists the resources.
+            await page.WaitForURLAsync(url => new Uri(url).AbsolutePath == "/").DefaultTimeout();
 
             // Assert
             await Assertions
@@ -91,7 +92,8 @@ public class BrowserTokenAuthenticationTests : PlaywrightTestsBase<BrowserTokenA
             var submitButton = SubmitButton(page);
             await submitButton.ClickAsync().DefaultTimeout();
 
-            await page.WaitForURLAsync(url => new Uri(url).AbsolutePath == "/resources").DefaultTimeout();
+            // The login returns to "/", the home page, which lists the resources.
+            await page.WaitForURLAsync(url => new Uri(url).AbsolutePath == "/").DefaultTimeout();
 
             // Assert
             await Assertions

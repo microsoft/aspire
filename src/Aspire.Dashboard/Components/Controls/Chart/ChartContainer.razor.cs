@@ -55,6 +55,12 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
     public required List<OtlpResource> Resources { get; set; }
 
     /// <summary>
+    /// Gets or sets the names of the resources that pinning the instrument applies to: those of the current selection.
+    /// </summary>
+    [Parameter, EditorRequired]
+    public required IReadOnlyList<string> PinResourceNames { get; set; }
+
+    /// <summary>
     /// Gets or sets whether a counter shows its running total instead of its change per interval.
     /// </summary>
     [Parameter, EditorRequired]
