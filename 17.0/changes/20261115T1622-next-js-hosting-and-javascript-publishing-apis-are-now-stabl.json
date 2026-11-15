@@ -1,0 +1,19 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "🔌",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "`AddNextJsApp`, `PublishAsStaticWebsite`, `PublishAsNodeServer`, `PublishAsPackageScript`, and related APIs no longer require suppressing `ASPIREJAVASCRIPT001`.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "⚛️",
+  "firstMergedAt": "2026-11-15T16:22:28Z",
+  "lastMergedAt": "2026-11-15T16:22:28Z",
+  "name": "Next.js hosting and JavaScript publishing APIs are now stable",
+  "owner": "maddymontaquila",
+  "prs": [
+    22164
+  ]
+}

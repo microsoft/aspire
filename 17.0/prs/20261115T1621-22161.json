@@ -1,0 +1,9 @@
+{
+  "author": "maddymontaquila",
+  "comment": "Connection-string physical-name metadata is now stable",
+  "mergedAt": "2026-11-15T16:21:34Z",
+  "number": 22161,
+  "runDate": "2026-11-15T18:10:00Z",
+  "status": "included",
+  "title": "Graduate connection-string physical-name metadata"
+}

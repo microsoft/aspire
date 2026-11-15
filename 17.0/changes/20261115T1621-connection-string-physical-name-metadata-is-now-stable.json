@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Consumers and publishers can use `ConnectionStringReference.EnvironmentVariableNames` and `ConnectionStringEnvironmentVariableNames` without suppressing the `ASPIRECONNECTIONSTRINGS001` diagnostic.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🔖",
+  "firstMergedAt": "2026-11-15T16:21:34Z",
+  "lastMergedAt": "2026-11-15T16:21:34Z",
+  "name": "Connection-string physical-name metadata is now stable",
+  "owner": "maddymontaquila",
+  "prs": [
+    22161
+  ]
+}

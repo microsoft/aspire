@@ -1,0 +1,19 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "🔌",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Compute environment implementers and consumers can use `IComputeEnvironmentResource.GetHostAddressExpression` and `GetEndpointPropertyExpression` without opting into `ASPIRECOMPUTE002`.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🧭",
+  "firstMergedAt": "2026-11-15T16:25:19Z",
+  "lastMergedAt": "2026-11-15T16:25:19Z",
+  "name": "Compute endpoint mapping contracts are now stable",
+  "owner": "maddymontaquila",
+  "prs": [
+    22167
+  ]
+}
