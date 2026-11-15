@@ -1027,8 +1027,19 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
         var builder = DistributedApplication.CreateBuilder();
         builder.WithTestAndResourceLogging(testOutputHelper);
 
+        var database = builder.AddContainer("database", "test-image")
+            .WithEndpoint(scheme: "tcp", targetPort: 5432, name: "tcp");
+        var endpoint = database.GetEndpoint("tcp");
+        var annotation = endpoint.EndpointAnnotation;
+        annotation.AllocatedEndpoint = new(annotation, "localhost", 15432);
+        annotation.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(
+            KnownNetworkIdentifiers.DefaultAspireContainerNetwork,
+            new(annotation, "database", 5432, EndpointBindingMode.SingleAddress, networkId: KnownNetworkIdentifiers.DefaultAspireContainerNetwork));
+
         var unresolvedProperty = ReferenceExpression.Create($"{new ThrowingValueProvider()}");
-        var resource = builder.AddResource(new TestResourceWithConnectionString("test-resource", "Server=localhost:5432;Database=testdb", "testdb", "localhost", unresolvedProperty));
+        var host = ReferenceExpression.Create($"{endpoint.Property(EndpointProperty.Host)}");
+        var resource = builder.AddResource(new TestResourceWithConnectionString("test-resource", "Server=localhost:5432;Database=testdb", "testdb", host, unresolvedProperty))
+            .WithAnnotation(new ContainerImageAnnotation { Image = "test-image" });
 
         using var app = builder.Build();
         var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
@@ -1828,7 +1839,7 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
         public IResource Parent { get; } = parent;
     }
 
-    private sealed class TestResourceWithConnectionString(string name, string connectionString, string? databaseName = null, string? host = null, ReferenceExpression? unresolvedProperty = null)
+    private sealed class TestResourceWithConnectionString(string name, string connectionString, string? databaseName = null, ReferenceExpression? host = null, ReferenceExpression? unresolvedProperty = null)
         : Resource(name), IResourceWithConnectionString
     {
         public ReferenceExpression ConnectionStringExpression { get; init; } = ReferenceExpression.Create($"{connectionString}");
@@ -1847,7 +1858,7 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
 
             if (host is not null)
             {
-                yield return new("Host", ReferenceExpression.Create($"{host}"));
+                yield return new("Host", host);
             }
 
             if (unresolvedProperty is not null)

@@ -86,7 +86,12 @@ internal sealed class ApplicationOrchestrator
             // The contextual IValueProvider overload resolves ConnectionStringExpression directly,
             // bypassing custom GetConnectionStringAsync implementations.
             var connectionString = await resourceWithConnectionString.GetConnectionStringAsync(token).ConfigureAwait(false);
-            var valueContext = new ValueProviderContext { ExecutionContext = _executionContext, Caller = resourceWithConnectionString };
+            var valueContext = new ValueProviderContext
+            {
+                ExecutionContext = _executionContext,
+                Caller = resourceWithConnectionString,
+                Network = KnownNetworkIdentifiers.LocalhostNetwork
+            };
             var connectionProperties = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
             foreach (var property in resourceWithConnectionString.GetConnectionProperties())
             {
