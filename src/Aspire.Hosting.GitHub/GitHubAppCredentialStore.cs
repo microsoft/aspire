@@ -50,12 +50,18 @@ internal sealed class GitHubAppCredentialStore(IConfiguration configuration, IUs
 
     public string FilePath => userSecrets.FilePath;
 
+    /// <exception cref="InvalidOperationException">Thrown when the AppHost's path hash isn't in configuration.</exception>
     internal static string GetPrefix(IConfiguration configuration, string resourceName)
     {
+        // Fail rather than fall back to a key without the hash, which every worktree would share.
         var pathSha = configuration[AppHostPathShaKey];
-        return string.IsNullOrEmpty(pathSha)
-            ? $"GitHub:Apps:{resourceName}"
-            : $"GitHub:Apps:{pathSha}:{resourceName}";
+        if (string.IsNullOrEmpty(pathSha))
+        {
+            throw new InvalidOperationException(
+                $"Can't save the credentials of GitHub App '{resourceName}' because the configuration value '{AppHostPathShaKey}' that identifies the AppHost is missing.");
+        }
+
+        return $"GitHub:Apps:{pathSha}:{resourceName}";
     }
 
     /// <summary>

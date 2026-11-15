@@ -125,13 +125,16 @@ public class GitHubAppManifestTests
     }
 
     [Fact]
-    public void GetPrefix_IncludesAppHostPathHash()
+    public void GetPrefix_IncludesAppHostPathHashAndRequiresIt()
     {
         var withHash = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["AppHost:PathSha256"] = "abc123" }).Build();
         var withoutHash = new ConfigurationBuilder().Build();
 
         Assert.Equal("GitHub:Apps:abc123:github-app", GitHubAppCredentialStore.GetPrefix(withHash, "github-app"));
-        Assert.Equal("GitHub:Apps:github-app", GitHubAppCredentialStore.GetPrefix(withoutHash, "github-app"));
+        var ex = Assert.Throws<InvalidOperationException>(() => GitHubAppCredentialStore.GetPrefix(withoutHash, "github-app"));
+        Assert.Equal(
+            "Can't save the credentials of GitHub App 'github-app' because the configuration value 'AppHost:PathSha256' that identifies the AppHost is missing.",
+            ex.Message);
     }
 
     [Fact]

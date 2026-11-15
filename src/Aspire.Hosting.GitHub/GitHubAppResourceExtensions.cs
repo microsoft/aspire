@@ -637,10 +637,20 @@ public static class GitHubAppResourceExtensions
     {
         var manifest = resource.Manifest!;
         var logger = evt.Logger;
-        var store = new GitHubAppCredentialStore(
-            evt.Services.GetRequiredService<IConfiguration>(),
-            evt.Services.GetRequiredService<IUserSecretsManager>(),
-            resource.Name);
+        GitHubAppCredentialStore store;
+        try
+        {
+            store = new GitHubAppCredentialStore(
+                evt.Services.GetRequiredService<IConfiguration>(),
+                evt.Services.GetRequiredService<IUserSecretsManager>(),
+                resource.Name);
+        }
+        catch (InvalidOperationException ex)
+        {
+            logger.LogError(ex, "GitHub App '{ResourceName}' can't be registered.", resource.Name);
+            await PublishFailedToStartAsync(resource, evt).ConfigureAwait(false);
+            return;
+        }
 
         var credentials = store.Load();
         if (credentials is null)
