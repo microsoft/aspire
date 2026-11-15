@@ -3,7 +3,6 @@
 
 #pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
-using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Pipelines;
@@ -397,7 +396,6 @@ public class AzureContainerAppEnvironmentResource :
 #pragma warning restore CS0618 // Type or member is obsolete
 
     /// <inheritdoc/>
-    [Experimental("ASPIRECOMPUTE002", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public ReferenceExpression GetHostAddressExpression(EndpointReference endpointReference)
     {
         if (IsExpress)
@@ -422,7 +420,6 @@ public class AzureContainerAppEnvironmentResource :
     }
 
     /// <inheritdoc/>
-    [Experimental("ASPIRECOMPUTE002", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public ReferenceExpression GetEndpointPropertyExpression(EndpointReferenceExpression endpointReferenceExpression)
     {
         ArgumentNullException.ThrowIfNull(endpointReferenceExpression);

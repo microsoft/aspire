@@ -503,9 +503,7 @@ public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
             throw CreateEndpointResolutionException(hostedAgent, resource, environmentVariableName, endpointReference, reason);
         }
 
-#pragma warning disable ASPIRECOMPUTE002
         var expression = computeEnvironment.GetEndpointPropertyExpression(endpointReferenceExpression);
-#pragma warning restore ASPIRECOMPUTE002
 
         return await expression.GetValueAsync(
             new ValueProviderContext
