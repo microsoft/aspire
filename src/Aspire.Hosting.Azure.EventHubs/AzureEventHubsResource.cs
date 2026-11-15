@@ -92,6 +92,9 @@ public class AzureEventHubsResource(string name, Action<AzureResourceInfrastruct
             ReferenceExpression.Create($"sb://{EmulatorEndpoint.Property(EndpointProperty.HostAndPort)}") :
             ReferenceExpression.Create($"{EventHubsEndpoint}");
 
+    ValueTask<string?> IResourceWithConnectionString.GetConnectionStringAsync(ValueProviderContext context, CancellationToken cancellationToken) =>
+        ConnectionStringExpression.GetValueAsync(context, cancellationToken);
+
     /// <summary>
     /// Gets the connection string template for the manifest for the Azure Event Hubs endpoint.
     /// </summary>

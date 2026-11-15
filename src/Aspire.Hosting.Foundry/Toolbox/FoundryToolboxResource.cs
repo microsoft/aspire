@@ -175,6 +175,9 @@ public sealed class FoundryToolboxResource : Resource, IResourceWithConnectionSt
         ? GetVersionUriExpression(version)
         : ReferenceExpression.Create($"{Parent.Endpoint}/toolboxes/{Name}/mcp?api-version={ApiVersion}");
 
+    ValueTask<string?> IResourceWithConnectionString.GetConnectionStringAsync(ValueProviderContext context, CancellationToken cancellationToken) =>
+        ConnectionStringExpression.GetValueAsync(context, cancellationToken);
+
     /// <summary>
     /// Gets the connection string expression for the Toolbox MCP endpoint.
     /// </summary>

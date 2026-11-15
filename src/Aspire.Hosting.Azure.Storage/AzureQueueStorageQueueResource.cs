@@ -28,6 +28,9 @@ public class AzureQueueStorageQueueResource(string name, string queueName, Azure
     /// </summary>
     public string QueueName { get; } = ThrowIfNullOrEmpty(queueName);
 
+    ValueTask<string?> IResourceWithConnectionString.GetConnectionStringAsync(ValueProviderContext context, CancellationToken cancellationToken) =>
+        ConnectionStringExpression.GetValueAsync(context, cancellationToken);
+
     /// <summary>
     /// Gets the connection string template for the manifest for the Azure Storage Queue resource.
     /// </summary>

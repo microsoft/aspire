@@ -54,6 +54,9 @@ public class MilvusServerResource : ContainerResource, IResourceWithConnectionSt
     /// </summary>
     public ReferenceExpression Token => ReferenceExpression.Create($"root:{ApiKeyParameter}");
 
+    ValueTask<string?> IResourceWithConnectionString.GetConnectionStringAsync(ValueProviderContext context, CancellationToken cancellationToken) =>
+        ConnectionStringExpression.GetValueAsync(context, cancellationToken);
+
     /// <summary>
     /// Gets the connection string expression for the Milvus gRPC endpoint.
     /// </summary>

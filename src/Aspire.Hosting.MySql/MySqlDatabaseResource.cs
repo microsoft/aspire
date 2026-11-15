@@ -28,6 +28,9 @@ public class MySqlDatabaseResource(string name, string databaseName, MySqlServer
     /// </summary>
     public MySqlServerResource Parent { get; } = parent ?? throw new ArgumentNullException(nameof(parent));
 
+    ValueTask<string?> IResourceWithConnectionString.GetConnectionStringAsync(ValueProviderContext context, CancellationToken cancellationToken) =>
+        ConnectionStringExpression.GetValueAsync(context, cancellationToken);
+
     /// <summary>
     /// Gets the connection string expression for the MySQL database.
     /// </summary>

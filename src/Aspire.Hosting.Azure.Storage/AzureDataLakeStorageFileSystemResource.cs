@@ -27,6 +27,9 @@ public class AzureDataLakeStorageFileSystemResource(string name, string dataLake
     /// </summary>
     public string DataLakeFileSystemName { get; } = ThrowIfNullOrEmpty(dataLakeFileSystemName);
 
+    ValueTask<string?> IResourceWithConnectionString.GetConnectionStringAsync(ValueProviderContext context, CancellationToken cancellationToken) =>
+        ConnectionStringExpression.GetValueAsync(context, cancellationToken);
+
     /// <summary>
     /// Gets the connection string template for the manifest for the Azure DataLake Storage file system resource.
     /// </summary>

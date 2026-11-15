@@ -14,6 +14,9 @@ namespace Aspire.Hosting.Azure.DurableTask;
 [Experimental("ASPIREDURABLETASK001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public sealed class DurableTaskSchedulerResource(string name) : Resource(name), IResourceWithEndpoints, IResourceWithConnectionString
 {
+    ValueTask<string?> IResourceWithConnectionString.GetConnectionStringAsync(ValueProviderContext context, CancellationToken cancellationToken) =>
+        ConnectionStringExpression.GetValueAsync(context, cancellationToken);
+
     /// <summary>
     /// Gets the expression that resolves to the connection string for the Durable Task scheduler.
     /// </summary>

@@ -66,7 +66,12 @@ public static partial class SqlServerBuilderExtensions
                       .WithHealthCheck(healthCheckKey)
                       .OnConnectionStringAvailable(async (sqlServer, @event, ct) =>
                       {
-                          connectionString = await sqlServer.GetConnectionStringAsync(ct).ConfigureAwait(false);
+                          connectionString = await sqlServer.GetConnectionStringAsync(new ValueProviderContext
+                          {
+                              ExecutionContext = builder.ExecutionContext,
+                              Caller = sqlServer,
+                              Network = KnownNetworkIdentifiers.LocalhostNetwork
+                          }, ct).ConfigureAwait(false);
 
                           if (connectionString == null)
                           {

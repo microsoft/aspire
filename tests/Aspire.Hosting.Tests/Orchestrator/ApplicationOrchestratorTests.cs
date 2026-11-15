@@ -1080,6 +1080,106 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
         Assert.Equal("runtime-connection-string", connectionString.Value);
     }
 
+    [Theory]
+    [InlineData("direct")]
+    [InlineData("value-provider")]
+    [InlineData("postgres-redirect")]
+    [InlineData("redis-redirect")]
+    public async Task ContextualConnectionStringResolutionPreservesLegacyCustomResolvers(string source)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var unused = builder.AddParameter("unused-by-resolver");
+        unused.Resource.EnsureValueTask();
+        var custom = builder.AddResource(new TestResourceWithConnectionString("custom", "runtime-connection-string")
+        {
+            ConnectionStringExpression = ReferenceExpression.Create($"{unused}")
+        });
+        IResourceWithConnectionString resource = source switch
+        {
+            "postgres-redirect" => builder.AddPostgres("postgres")
+                .WithAnnotation(new ConnectionStringRedirectAnnotation(custom.Resource)).Resource,
+            "redis-redirect" => builder.AddRedis("redis")
+                .WithAnnotation(new ConnectionStringRedirectAnnotation(custom.Resource)).Resource,
+            _ => custom.Resource
+        };
+        var caller = builder.AddExecutable("caller", "unused", ".").Resource;
+        using var app = builder.Build();
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
+        var context = new ValueProviderContext
+        {
+            ExecutionContext = builder.ExecutionContext,
+            Caller = caller,
+            Network = KnownNetworkIdentifiers.LocalhostNetwork
+        };
+
+        var read = source == "value-provider"
+            ? resource.GetValueAsync(context, cts.Token)
+            : resource.GetConnectionStringAsync(context, cts.Token);
+        Assert.True(read.IsCompletedSuccessfully);
+        Assert.Equal("runtime-connection-string", await read);
+        Assert.False(unused.Resource.WaitForValueTcs!.Task.IsCompleted);
+    }
+
+    [Theory]
+    [InlineData("postgres")]
+    [InlineData("redis")]
+    [InlineData("publisher")]
+    public async Task ConnectionStringAvailableEventReportsMissingPasswordBeforeStarting(string source)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var password = builder.AddParameter("password", secret: true);
+        password.Resource.EnsureValueTask();
+        IResourceWithConnectionString resource = source switch
+        {
+            "postgres" => builder.AddPostgres("database", password: password).Resource,
+            "redis" => builder.AddRedis("database", password: password).Resource,
+            _ => builder.AddResource(new PostgresServerResource("database", null, password.Resource))
+                .WithEndpoint(targetPort: 5432, scheme: "tcp", name: "tcp").Resource
+        };
+        var endpoint = Assert.Single(resource.Annotations.OfType<EndpointAnnotation>());
+        endpoint.AllocatedEndpoint = new(endpoint, "localhost", 2000);
+        using var app = builder.Build();
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
+        var notifications = app.ResourceNotifications;
+        var events = new DcpExecutorEvents();
+        var beforeStartReached = false;
+        builder.Eventing.Subscribe<BeforeResourceStartedEvent>(resource, (_, _) =>
+        {
+            beforeStartReached = true;
+            return Task.CompletedTask;
+        });
+        var orchestrator = CreateOrchestrator(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            notifications, dcpEvents: events, applicationEventing: builder.Eventing);
+        await orchestrator.RunApplicationAsync();
+        await notifications.PublishUpdateAsync(resource, s => s);
+
+        var startup = StartAsync();
+        Assert.False(startup.IsCompleted);
+        Assert.False(beforeStartReached);
+        Assert.True(notifications.TryGetCurrentState(resource.Name, out var waiting));
+        Assert.Equal(KnownResourceStates.UnresolvedParameters, waiting.Snapshot.State?.Text);
+        var unresolved = Assert.Single(waiting.Snapshot.Properties, p => p.Name == KnownProperties.Resource.UnresolvedParameters);
+        Assert.Equal(new[] { password.Resource.Name }, Assert.IsType<string[]>(unresolved.Value));
+        Assert.False(unresolved.IsSensitive);
+
+        await password.Resource.SetValueAsync("password-value");
+        await startup.DefaultTimeout();
+        Assert.True(beforeStartReached);
+        Assert.True(notifications.TryGetCurrentState(resource.Name, out var started));
+        Assert.Equal(KnownResourceStates.Starting, started.Snapshot.State?.Text);
+        Assert.Empty(started.Snapshot.Properties.Where(p => p.Name == KnownProperties.Resource.UnresolvedParameters));
+        var connectionString = Assert.Single(started.Snapshot.Properties, p => p.Name == KnownProperties.Resource.ConnectionString);
+        Assert.Equal(await resource.GetConnectionStringAsync(cts.Token), connectionString.Value);
+        Assert.True(connectionString.IsSensitive);
+
+        async Task StartAsync()
+        {
+            await events.PublishAsync(new OnConnectionStringAvailableContext(cts.Token, resource));
+            await events.PublishAsync(new OnResourceStartingContext(cts.Token, KnownResourceTypes.Container, resource, resource.Name));
+        }
+    }
+
     [Fact]
     public async Task ConnectionStringAvailableEventUpdatesConnectionStringAndResolvablePropertiesWithoutDuplicates()
     {

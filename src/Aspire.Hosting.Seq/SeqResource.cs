@@ -32,6 +32,9 @@ public class SeqResource(string name) : ContainerResource(name), IResourceWithCo
     /// </summary>
     public EndpointReferenceExpression Port => PrimaryEndpoint.Property(EndpointProperty.Port);
 
+    ValueTask<string?> IResourceWithConnectionString.GetConnectionStringAsync(ValueProviderContext context, CancellationToken cancellationToken) =>
+        ConnectionStringExpression.GetValueAsync(context, cancellationToken);
+
     /// <summary>
     /// Gets the connection string expression for the Seq server.
     /// </summary>

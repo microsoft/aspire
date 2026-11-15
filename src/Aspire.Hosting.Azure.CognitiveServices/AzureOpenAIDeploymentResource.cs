@@ -102,6 +102,9 @@ public class AzureOpenAIDeploymentResource : Resource, IResourceWithParent<Azure
     /// </summary>
     public AzureOpenAIResource Parent { get; }
 
+    ValueTask<string?> IResourceWithConnectionString.GetConnectionStringAsync(ValueProviderContext context, CancellationToken cancellationToken) =>
+        ConnectionStringExpression.GetValueAsync(context, cancellationToken);
+
     /// <summary>
     /// Gets the connection string expression for the Azure OpenAI Deployment resource.
     /// </summary>

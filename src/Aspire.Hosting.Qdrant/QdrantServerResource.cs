@@ -64,6 +64,9 @@ public class QdrantServerResource : ContainerResource, IResourceWithConnectionSt
     /// </summary>
     public EndpointReferenceExpression HttpPort => HttpEndpoint.Property(EndpointProperty.Port);
 
+    ValueTask<string?> IResourceWithConnectionString.GetConnectionStringAsync(ValueProviderContext context, CancellationToken cancellationToken) =>
+        ConnectionStringExpression.GetValueAsync(context, cancellationToken);
+
     /// <summary>
     /// Gets the connection string expression for the Qdrant gRPC endpoint.
     /// </summary>

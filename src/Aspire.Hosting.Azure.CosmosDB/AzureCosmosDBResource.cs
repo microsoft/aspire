@@ -123,6 +123,9 @@ public class AzureCosmosDBResource(string name, Action<AzureResourceInfrastructu
                 ReferenceExpression.Create($"{PrimaryAccessKeySecretOutput}") :
                 null;
 
+    ValueTask<string?> IResourceWithConnectionString.GetConnectionStringAsync(ValueProviderContext context, CancellationToken cancellationToken) =>
+        ConnectionStringExpression.GetValueAsync(context, cancellationToken);
+
     /// <summary>
     /// Gets the connection string template for the manifest for the Azure Cosmos DB resource.
     /// </summary>

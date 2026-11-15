@@ -64,7 +64,12 @@ public static class PostgresBuilderExtensions
 
         builder.Eventing.Subscribe<ConnectionStringAvailableEvent>(postgresServer, async (@event, ct) =>
         {
-            connectionString = await postgresServer.GetConnectionStringAsync(ct).ConfigureAwait(false);
+            connectionString = await postgresServer.GetConnectionStringAsync(new ValueProviderContext
+            {
+                ExecutionContext = builder.ExecutionContext,
+                Caller = postgresServer,
+                Network = KnownNetworkIdentifiers.LocalhostNetwork
+            }, ct).ConfigureAwait(false);
 
             if (connectionString == null)
             {

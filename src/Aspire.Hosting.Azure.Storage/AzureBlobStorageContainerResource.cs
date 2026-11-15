@@ -28,6 +28,9 @@ public class AzureBlobStorageContainerResource(string name, string blobContainer
     /// </summary>
     public string BlobContainerName { get; } = ThrowIfNullOrEmpty(blobContainerName);
 
+    ValueTask<string?> IResourceWithConnectionString.GetConnectionStringAsync(ValueProviderContext context, CancellationToken cancellationToken) =>
+        ConnectionStringExpression.GetValueAsync(context, cancellationToken);
+
     /// <summary>
     /// Gets the connection string template for the manifest for the Azure Blob Storage container resource.
     /// </summary>

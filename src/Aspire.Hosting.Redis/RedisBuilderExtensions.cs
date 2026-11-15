@@ -82,7 +82,12 @@ public static class RedisBuilderExtensions
 
         builder.Eventing.Subscribe<ConnectionStringAvailableEvent>(redis, async (@event, ct) =>
         {
-            connectionString = await redis.GetConnectionStringAsync(ct).ConfigureAwait(false);
+            connectionString = await redis.GetConnectionStringAsync(new ValueProviderContext
+            {
+                ExecutionContext = builder.ExecutionContext,
+                Caller = redis,
+                Network = KnownNetworkIdentifiers.LocalhostNetwork
+            }, ct).ConfigureAwait(false);
 
             if (connectionString == null)
             {

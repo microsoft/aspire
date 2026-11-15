@@ -51,6 +51,9 @@ public class MySqlServerResource : ContainerResource, IResourceWithConnectionStr
     /// </summary>
     public ParameterResource PasswordParameter { get; set; }
 
+    ValueTask<string?> IResourceWithConnectionString.GetConnectionStringAsync(ValueProviderContext context, CancellationToken cancellationToken) =>
+        ConnectionStringExpression.GetValueAsync(context, cancellationToken);
+
     /// <summary>
     /// Gets the connection string expression for the MySQL server.
     /// </summary>

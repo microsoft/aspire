@@ -47,6 +47,9 @@ public class ValkeyResource(string name) : ContainerResource(name), IResourceWit
     /// </summary>
     public EndpointReferenceExpression Port => PrimaryEndpoint.Property(EndpointProperty.Port);
 
+    ValueTask<string?> IResourceWithConnectionString.GetConnectionStringAsync(ValueProviderContext context, CancellationToken cancellationToken) =>
+        ConnectionStringExpression.GetValueAsync(context, cancellationToken);
+
     /// <summary>
     /// Gets the connection string expression for the Valkey server.
     /// </summary>
