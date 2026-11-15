@@ -130,7 +130,7 @@ public class GitHubAppResourceBuilderTests
     }
 
     [Fact]
-    public async Task WithReference_ConnectionName_RenamesVariablesAndOmitsProbotVariables()
+    public async Task WithReference_ConnectionName_RenamesVariablesAndKeepsProbotVariables()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var gitHubApp = AddGitHubApp(builder, withWebhookSecret: true);
@@ -145,7 +145,10 @@ public class GitHubAppResourceBuilderTests
             ["ORDERS_BOT_CLIENT_ID"] = ClientId,
             ["ORDERS_BOT_PRIVATE_KEY"] = PrivateKey,
             ["ORDERS_BOT_WEBHOOK_SECRET"] = WebhookSecret,
-            ["ORDERS_BOT_API_URL"] = "https://api.github.com"
+            ["ORDERS_BOT_API_URL"] = "https://api.github.com",
+            ["APP_ID"] = AppId,
+            ["PRIVATE_KEY"] = PrivateKey,
+            ["WEBHOOK_SECRET"] = WebhookSecret
         }, env);
     }
 
@@ -165,6 +168,8 @@ public class GitHubAppResourceBuilderTests
             ["BOTS_ORDERS_BOT_CLIENT_ID"] = ClientId,
             ["BOTS_ORDERS_BOT_PRIVATE_KEY"] = PrivateKey,
             ["BOTS_ORDERS_BOT_API_URL"] = "https://api.github.com",
+            ["APP_ID"] = AppId,
+            ["PRIVATE_KEY"] = PrivateKey,
             ["Bots__OrdersBot__AppId"] = AppId,
             ["Bots__OrdersBot__ClientId"] = ClientId,
             ["Bots__OrdersBot__PrivateKey"] = PrivateKey,
@@ -246,6 +251,42 @@ public class GitHubAppResourceBuilderTests
         Assert.Equal(AppId, env["RELEASE_BOT_APP_ID"]);
     }
 
+    [Fact]
+    public async Task WithReference_TwoApps_ProbotVariablesComeFromReferenceWithoutConnectionName()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var first = AddGitHubApp(builder, "first", appId: "111");
+        var second = AddGitHubApp(builder, "second", appId: "222");
+        var worker = builder.AddContainer("worker", "image")
+            .WithReference(first, "orders-bot")
+            .WithReference(second);
+
+        var env = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            worker.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance);
+
+        Assert.Equal("111", env["ORDERS_BOT_APP_ID"]);
+        Assert.Equal("222", env["GITHUB_APP_ID"]);
+        Assert.Equal("222", env["APP_ID"]);
+    }
+
+    [Fact]
+    public async Task WithReference_TwoAppsWithConnectionNames_ProbotVariablesComeFromFirstReference()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var first = AddGitHubApp(builder, "first", appId: "111");
+        var second = AddGitHubApp(builder, "second", appId: "222");
+        var worker = builder.AddContainer("worker", "image")
+            .WithReference(first, "orders-bot")
+            .WithReference(second, "release-bot");
+
+        var env = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            worker.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance);
+
+        Assert.Equal("111", env["ORDERS_BOT_APP_ID"]);
+        Assert.Equal("222", env["RELEASE_BOT_APP_ID"]);
+        Assert.Equal("111", env["APP_ID"]);
+    }
+
     [Theory]
     [InlineData("")]
     [InlineData(" ")]
@@ -262,13 +303,14 @@ public class GitHubAppResourceBuilderTests
         IDistributedApplicationBuilder builder,
         string name = "github-app",
         bool withClientSecret = false,
-        bool withWebhookSecret = false)
+        bool withWebhookSecret = false,
+        string appId = AppId)
     {
         // Parameter names must be unique, so apps after the first get their own.
         var suffix = name == "github-app" ? "" : $"-{name}";
         return builder.AddExistingGitHubApp(
             name,
-            builder.AddParameter($"app-id{suffix}", AppId),
+            builder.AddParameter($"app-id{suffix}", appId),
             builder.AddParameter($"client-id{suffix}", ClientId),
             builder.AddParameter($"private-key{suffix}", PrivateKey, secret: true),
             withClientSecret ? builder.AddParameter($"client-secret{suffix}", ClientSecret, secret: true) : null,

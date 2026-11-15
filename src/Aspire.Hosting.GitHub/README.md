@@ -69,11 +69,11 @@ When the AppHost starts, the resource checks that the values are well formed wit
 
 .NET projects also receive the values as the `GitHub:App` configuration section, through `GitHub__App__AppId`, `GitHub__App__ClientId`, `GitHub__App__PrivateKey`, `GitHub__App__ClientSecret`, `GitHub__App__WebhookSecret`, and `GitHub__App__ApiUrl`.
 
-When a resource references more than one app, give each reference a connection name. The name replaces the `GITHUB` prefix in upper snake case and names the .NET configuration section; the Probot names are only given without a connection name:
+When a resource references more than one app, give each reference a connection name. The name replaces the `GITHUB` prefix in upper snake case and names the .NET configuration section. The Probot names can hold only one app, so they hold the app referenced without a connection name, or otherwise the app referenced first:
 
 ```csharp
 builder.AddDotnetProject("worker", "../Worker/Worker.csproj")
-       .WithReference(ordersBot, connectionName: "orders-bot")    // ORDERS_BOT_APP_ID, orders-bot:AppId
+       .WithReference(ordersBot, connectionName: "orders-bot")    // ORDERS_BOT_APP_ID, orders-bot:AppId, APP_ID
        .WithReference(releaseBot, connectionName: "release-bot"); // RELEASE_BOT_APP_ID, release-bot:AppId
 ```
 

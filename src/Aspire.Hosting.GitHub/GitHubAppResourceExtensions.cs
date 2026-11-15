@@ -183,8 +183,12 @@ public static class GitHubAppResourceExtensions
     /// <para>
     /// A connection name replaces the <c>GITHUB</c> prefix with the name in upper snake case, so <c>"orders-bot"</c>
     /// produces <c>ORDERS_BOT_APP_ID</c>, and names the .NET configuration section, so <c>"OrdersBot"</c> produces
-    /// <c>OrdersBot__AppId</c>. A <c>:</c> in the name separates nested sections. The Probot names are only given with the
-    /// default names, because a Probot app reads only one app's credentials.
+    /// <c>OrdersBot__AppId</c>. A <c>:</c> in the name separates nested sections.
+    /// </para>
+    /// <para>
+    /// The Probot names are always given, but they can hold only one app's credentials. When a resource references more
+    /// than one app, the Probot names hold the app referenced without a connection name, or otherwise the app referenced
+    /// first.
     /// </para>
     /// <example>
     /// <code lang="csharp">
@@ -239,14 +243,26 @@ public static class GitHubAppResourceExtensions
             }
         }
 
+        var resource = builder.Resource;
+        var reference = new GitHubAppReferenceAnnotation(app, connectionName, names);
         builder.WithReferenceRelationship(app);
-        builder.Resource.Annotations.Add(new GitHubAppReferenceAnnotation(app, connectionName, names));
+        resource.Annotations.Add(reference);
 
         return builder.WithEnvironment(context =>
         {
             foreach (var (name, value) in environmentVariables)
             {
                 context.EnvironmentVariables[name] = value;
+            }
+
+            // The Probot names aren't prefixed, so only one reference on the resource can set them. Choosing the owner
+            // when the environment is built, rather than when the reference is added, makes the result independent of
+            // the order of the WithReference calls.
+            var references = resource.Annotations.OfType<GitHubAppReferenceAnnotation>().ToList();
+            var probotReference = references.FirstOrDefault(r => r.ConnectionName is null) ?? references[0];
+            if (probotReference == reference)
+            {
+                AddProbotSettings(context.EnvironmentVariables, app);
             }
         });
     }
@@ -263,18 +279,6 @@ public static class GitHubAppResourceExtensions
 
         AddSettings(environmentVariables, app, key => $"{prefix}_{JsonNamingPolicy.SnakeCaseUpper.ConvertName(key)}");
 
-        // Probot reads APP_ID, PRIVATE_KEY and WEBHOOK_SECRET, and also GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET.
-        // See https://probot.github.io/docs/configuration/.
-        if (connectionName is null)
-        {
-            environmentVariables["APP_ID"] = app.AppIdParameter;
-            environmentVariables["PRIVATE_KEY"] = app.PrivateKeyParameter;
-            if (app.WebhookSecretParameter is { } webhookSecret)
-            {
-                environmentVariables["WEBHOOK_SECRET"] = webhookSecret;
-            }
-        }
-
         if (isDotnetProgram)
         {
             // .NET configuration maps "__" in an environment variable name to the ":" section separator.
@@ -283,6 +287,18 @@ public static class GitHubAppResourceExtensions
         }
 
         return environmentVariables;
+    }
+
+    private static void AddProbotSettings(IDictionary<string, object> environmentVariables, GitHubAppResource app)
+    {
+        // Probot reads APP_ID, PRIVATE_KEY and WEBHOOK_SECRET, and also GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET.
+        // See https://probot.github.io/docs/configuration/.
+        environmentVariables["APP_ID"] = app.AppIdParameter;
+        environmentVariables["PRIVATE_KEY"] = app.PrivateKeyParameter;
+        if (app.WebhookSecretParameter is { } webhookSecret)
+        {
+            environmentVariables["WEBHOOK_SECRET"] = webhookSecret;
+        }
     }
 
     private static void AddSettings(Dictionary<string, object> environmentVariables, GitHubAppResource app, Func<string, string> getName)
