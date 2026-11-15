@@ -61,7 +61,7 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
             Assert.Equal("CS0618", diagnostic.GetProperty("ruleId").GetString());
             Assert.Equal(warningsAsErrors ? "error" : "warning", diagnostic.GetProperty("level").GetString());
             Assert.Contains(
-                "Use AddDotnetProject from the Aspire.Hosting.Dotnet package instead.",
+                "Use AddDotnetProject(name, path) from the Aspire.Hosting.Dotnet package instead.",
                 diagnostic.GetProperty("message").GetString());
         });
     }

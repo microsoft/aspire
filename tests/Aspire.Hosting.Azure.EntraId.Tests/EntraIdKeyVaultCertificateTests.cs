@@ -30,7 +30,7 @@ public class EntraIdKeyVaultCertificateTests
         using var builder = TestDistributedApplicationBuilder.Create(operation);
         var vault = builder.AddAzureKeyVault("vault");
         vault.Resource.Outputs["vaultUri"] = "https://contoso.vault.usgovcloudapi.net/";
-        var entra = builder.AddExistingEntraApplication("entra", TenantId, ClientId);
+        var entra = builder.AddExistingEntraIdApplication("entra", TenantId, ClientId);
         var web = builder.AddResource(new ProjectResource("web"));
         if (configureCredentialAfterReference)
         {
@@ -89,7 +89,7 @@ public class EntraIdKeyVaultCertificateTests
             endpoint.UriScheme = "https";
             endpoint.AllocatedEndpoint = new(endpoint, "localhost", 8443);
         });
-        var entra = builder.AddExistingEntraApplication("entra", TenantId, ClientId)
+        var entra = builder.AddExistingEntraIdApplication("entra", TenantId, ClientId)
             .WithCertificateFromKeyVault(vault, "web-certificate");
         var web = builder.AddResource(new ProjectResource("web")).WithReference(entra);
 
@@ -106,7 +106,7 @@ public class EntraIdKeyVaultCertificateTests
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var vault = builder.AddAzureKeyVault("vault");
-        var entra = builder.AddExistingEntraApplication("entra", TenantId, ClientId);
+        var entra = builder.AddExistingEntraIdApplication("entra", TenantId, ClientId);
         var web = builder.AddResource(new ProjectResource("web"));
         if (configureCredentialAfterReference)
         {
@@ -130,7 +130,7 @@ public class EntraIdKeyVaultCertificateTests
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var vault = builder.AddAzureKeyVault("vault");
-        var entra = builder.AddExistingEntraApplication("entra", TenantId, ClientId)
+        var entra = builder.AddExistingEntraIdApplication("entra", TenantId, ClientId)
             .WithCredential(new EntraIdKeyVaultCertificateCredential
             {
                 KeyVault = vault.Resource,
@@ -147,7 +147,7 @@ public class EntraIdKeyVaultCertificateTests
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var vault = builder.AddAzureKeyVault("vault");
-        var entra = builder.AddExistingEntraApplication("entra", TenantId, ClientId)
+        var entra = builder.AddExistingEntraIdApplication("entra", TenantId, ClientId)
             .WithCertificateFromKeyVault(vault, "certificate");
         var web = builder.AddResource(new ProjectResource("web"))
             .WithRoleAssignments(vault, [])
@@ -163,7 +163,7 @@ public class EntraIdKeyVaultCertificateTests
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var vault = builder.AddAzureKeyVault("vault");
-        var entra = builder.AddExistingEntraApplication("entra", TenantId, ClientId);
+        var entra = builder.AddExistingEntraIdApplication("entra", TenantId, ClientId);
         var first = builder.AddResource(new ProjectResource("first")).WithReference(entra);
         var second = builder.AddResource(new ProjectResource("second")).WithReference(entra);
         entra.WithCertificateFromKeyVault(vault, "first-certificate")
@@ -182,7 +182,7 @@ public class EntraIdKeyVaultCertificateTests
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var vault = builder.AddAzureKeyVault("vault");
-        var entra = builder.AddExistingEntraApplication("entra", TenantId, ClientId)
+        var entra = builder.AddExistingEntraIdApplication("entra", TenantId, ClientId)
             .WithCertificateFromKeyVault(vault, "first-certificate")
             .WithCertificateFromKeyVault(vault, "second-certificate");
         var web = builder.AddResource(new ProjectResource("web")).WithReference(entra);
@@ -199,7 +199,7 @@ public class EntraIdKeyVaultCertificateTests
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var vault = builder.AddAzureKeyVault("vault").ClearDefaultRoleAssignments();
-        builder.AddExistingEntraApplication("entra", TenantId, ClientId)
+        builder.AddExistingEntraIdApplication("entra", TenantId, ClientId)
             .WithCertificateFromKeyVault(vault, "certificate");
 
         Assert.Empty(vault.Resource.Annotations.OfType<DefaultRoleAssignmentsAnnotation>());
@@ -210,7 +210,7 @@ public class EntraIdKeyVaultCertificateTests
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var vault = builder.AddAzureKeyVault("vault");
-        var entra = builder.AddExistingEntraApplication("entra", TenantId, ClientId)
+        var entra = builder.AddExistingEntraIdApplication("entra", TenantId, ClientId)
             .WithCertificateFromKeyVault(vault, "web-certificate");
         builder.AddContainer("web", "image").WithReference(entra);
 
@@ -223,7 +223,7 @@ public class EntraIdKeyVaultCertificateTests
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var vault = builder.AddAzureKeyVault("vault");
-        var entra = builder.AddExistingEntraApplication("entra", TenantId, ClientId)
+        var entra = builder.AddExistingEntraIdApplication("entra", TenantId, ClientId)
             .WithCertificateFromKeyVault(vault, "web-certificate");
         builder.AddExecutable("web", "node", ".").WithReference(entra);
 
@@ -251,7 +251,7 @@ public class EntraIdKeyVaultCertificateTests
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var vault = builder.AddAzureKeyVault("vault");
-        var entra = builder.AddExistingEntraApplication("entra", TenantId, ClientId);
+        var entra = builder.AddExistingEntraIdApplication("entra", TenantId, ClientId);
 
         Assert.Throws<ArgumentNullException>(() =>
             EntraIdResourceExtensions.WithCertificateFromKeyVault(null!, vault, "certificate"));

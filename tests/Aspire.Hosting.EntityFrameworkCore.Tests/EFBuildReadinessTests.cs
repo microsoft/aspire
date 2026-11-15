@@ -6,6 +6,7 @@
 #pragma warning disable ASPIREPROJECTS001, ASPIREDOTNETTOOL
 
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Dotnet;
 using Aspire.Hosting.EntityFrameworkCore.Tests.TestServices;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
@@ -89,9 +90,11 @@ public class EFBuildReadinessTests
     public async Task CustomBuildWarningDoesNotBypassAutomaticMigrationFailure(bool succeed)
     {
         using var builder = TestDistributedApplicationBuilder.Create();
-        builder.Configuration["DEBUG_SESSION_PORT"] = "localhost:12345";
-        var project = builder.AddDotnetProject("api", new Projects.ServiceA().ProjectPath,
-            options => options.ExcludeLaunchProfile = true).WithBuildEnvironment("BUILD_FLAVOR", "custom");
+        var projectPath = new Projects.ServiceA().ProjectPath;
+        var project = builder.AddResource(new DotnetProjectResource("api", Path.GetDirectoryName(projectPath)!))
+            .WithAnnotation(new CustomBuildProjectMetadata { ProjectPath = projectPath })
+            .WithProjectDefaults(new ProjectResourceOptions { ExcludeLaunchProfile = true })
+            .WithBuildEnvironment("BUILD_FLAVOR", "custom");
         var migrations = project.AddEFMigrations("migrations").RunDatabaseUpdateOnStart();
         project.WaitFor(migrations);
         var tool = new TestEfTool

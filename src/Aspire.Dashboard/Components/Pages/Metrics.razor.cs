@@ -165,6 +165,9 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
         _metricsContentPaneSize = string.Create(CultureInfo.InvariantCulture, $"{100 - clampedPercent}%");
     }
 
+    // Pins are read before parameters are applied, so the default view can open the pinned group.
+    protected override Task OnInitializedAsync() => PinStore.EnsureLoadedAsync();
+
     protected override void OnInitialized()
     {
         TelemetryContextProvider.Initialize(TelemetryContext);
@@ -372,6 +375,14 @@ public partial class Metrics : IAsyncDisposable, IComponentWithTelemetry, IPageW
             ? _resources.Where(resource => keys.Contains(resource.ResourceKey)).ToList()
             : null;
     }
+
+    // Pinning applies to the resources of the current selection, every resource when all of them are selected,
+    // including those that haven't sent telemetry yet. Pins are kept by resource name (see MetricPinStore), so the
+    // replicas of a selected resource share them. Without the resource list, the selection is the resource picked on
+    // the page.
+    private IReadOnlyList<string> GetPinResourceNames() =>
+        ResourcesLayout?.GetSelectionPinResourceNames(SelectedResourceNames)
+            ?? (PageViewModel.SelectedResource.Id is { ReplicaSetName: { } replicaSetName } ? [replicaSetName] : []);
 
     private string GetInstrumentResourceLabel(OtlpInstrumentSummary instrument) =>
         OtlpHelpers.GetResourceName(instrument.ResourceView.Resource, _resources);

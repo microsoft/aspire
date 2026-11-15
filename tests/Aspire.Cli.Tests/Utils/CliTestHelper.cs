@@ -426,7 +426,7 @@ internal sealed class CliServiceCollectionTestOptions
         return new ConsoleEnvironment(outConsole, errorConsole, TextReader.Null);
     };
 
-    private static IAnsiConsole CreateAnsiConsole(TextWriter textWriter, bool ansi = true)
+    internal static IAnsiConsole CreateAnsiConsole(TextWriter textWriter, bool ansi = true)
     {
         var settings = new AnsiConsoleSettings()
         {

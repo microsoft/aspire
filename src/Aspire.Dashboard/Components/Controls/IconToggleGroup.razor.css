@@ -1,7 +1,7 @@
 .icon-toggle-group {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: var(--aspire-space-2);
 }
 
 .icon-toggle-buttons {
@@ -9,14 +9,14 @@
     gap: 2px;
     padding: 2px;
     border: 1px solid var(--colorNeutralStroke1);
-    border-radius: 8px;
+    border-radius: var(--aspire-radius-medium);
     background: var(--colorNeutralBackground2);
 }
 
 .icon-toggle-label {
     color: var(--colorNeutralForeground2);
-    font-size: var(--fontSizeBase300);
-    font-weight: 600;
+    font-size: var(--aspire-font-size-body);
+    font-weight: var(--aspire-font-weight-semibold);
 }
 
 .icon-toggle {
@@ -29,7 +29,7 @@
     height: 28px;
     padding: 0;
     border: 0;
-    border-radius: 6px;
+    border-radius: var(--aspire-radius-small);
     background: transparent;
     color: var(--colorNeutralForeground2);
     cursor: pointer;
@@ -49,11 +49,11 @@
     bottom: -3px;
     min-width: 13px;
     padding-inline: 1px;
-    border-radius: 3px;
+    border-radius: var(--aspire-radius-small);
     background: var(--colorNeutralBackground1);
     color: currentColor;
     font-size: 8px;
-    font-weight: var(--fontWeightSemibold);
+    font-weight: var(--aspire-font-weight-semibold);
     line-height: 10px;
 }
 
@@ -79,7 +79,7 @@
 
 .icon-toggle-current {
     color: var(--colorNeutralForeground2);
-    font-size: var(--fontSizeBase200);
+    font-size: var(--aspire-font-size-secondary);
 }
 
 .icon-toggle-group.labeled {
@@ -99,7 +99,7 @@
     width: auto;
     min-width: 0;
     height: 34px;
-    gap: 6px;
+    gap: var(--aspire-space-1);
     padding-inline: 7px;
 }
 
@@ -110,19 +110,19 @@
 
 @container (max-width: 320px) {
     .icon-toggle-group.labeled .icon-toggle {
-        gap: 3px;
+        gap: var(--aspire-space-1);
         padding-inline: 3px;
     }
 
     .icon-toggle-group.labeled .icon-toggle-option-text {
-        font-size: 11px;
+        font-size: var(--aspire-font-size-caption);
     }
 }
 
 .icon-toggle-option-text {
     min-width: 0;
     overflow: hidden;
-    font-size: var(--fontSizeBase200);
+    font-size: var(--aspire-font-size-secondary);
     text-overflow: ellipsis;
     white-space: nowrap;
 }
@@ -146,7 +146,7 @@
     flex: 1 1 auto;
     width: auto;
     min-width: 0;
-    gap: 7px;
+    gap: var(--aspire-space-2);
     padding: 0 10px;
 }
 
@@ -156,11 +156,11 @@
 }
 
 .icon-toggle-group.prominent {
-    gap: 8px;
+    gap: var(--aspire-space-2);
 }
 
 .icon-toggle-group.prominent .icon-toggle-buttons {
-    gap: 3px;
+    gap: var(--aspire-space-1);
     padding: 3px;
 }
 

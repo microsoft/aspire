@@ -1,7 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREAZURE003 // The managed identity annotation is experimental.
+#pragma warning disable ASPIREAZURE006 // The managed identity annotation is experimental.
 
 using System.Collections.Immutable;
 using Aspire.Hosting.ApplicationModel;
@@ -34,7 +34,7 @@ public static class EntraIdResourceExtensions
     /// <para>
     /// By default, Aspire provisions an application and service principal using the Microsoft Graph Bicep extension.
     /// This requires Azure provisioning configuration and permission to create registrations in the subscription's
-    /// tenant. Call <c>AddExistingEntraApplication</c> to reference an existing registration without Azure or Graph access.
+    /// tenant. Call <c>AddExistingEntraIdApplication</c> to reference an existing registration without Azure or Graph access.
     /// </para>
     /// <example>
     /// <code lang="csharp">
@@ -52,7 +52,7 @@ public static class EntraIdResourceExtensions
     /// Provisions an application and service principal through Microsoft Graph Bicep. Requires Azure provisioning
     /// configuration and permission to create registrations in the subscription's tenant.
     /// Reference the registration from a workload to inject authentication configuration as environment variables.
-    /// To reference an existing registration without Azure or Graph access, use addExistingEntraApplication.
+    /// To reference an existing registration without Azure or Graph access, use addExistingEntraIdApplication.
     /// Workloads must configure their own authentication library.
     /// </ats-remarks>
     [AspireExport]
@@ -136,7 +136,7 @@ public static class EntraIdResourceExtensions
             ((resource.TenantIdParameter is null && resource.TenantId is null) ||
              (resource.ClientIdParameter is null && resource.ClientId is null)))
         {
-            logger.LogError("The app registration is not fully configured. Call AddExistingEntraApplication with the registration's tenant ID and client ID.");
+            logger.LogError("The app registration is not fully configured. Call AddExistingEntraIdApplication with the registration's tenant ID and client ID.");
             await PublishFailedToStartAsync(resource, evt).ConfigureAwait(false);
             return;
         }
@@ -165,7 +165,7 @@ public static class EntraIdResourceExtensions
             }
             catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
             {
-                logger.LogError(ex, "Failed to provision the Entra ID application. If your tenant does not allow creating registrations, use AddExistingEntraApplication with an existing registration's tenant ID and client ID.");
+                logger.LogError(ex, "Failed to provision the Entra ID application. If your tenant does not allow creating registrations, use AddExistingEntraIdApplication with an existing registration's tenant ID and client ID.");
                 await PublishFailedToStartAsync(resource, evt).ConfigureAwait(false);
                 return;
             }
@@ -362,13 +362,13 @@ public static class EntraIdResourceExtensions
     /// <code lang="csharp">
     /// var tenantId = builder.AddParameter("EntraTenantId");
     /// var clientId = builder.AddParameter("EntraClientId");
-    /// var identity = builder.AddExistingEntraApplication("identity", tenantId, clientId);
+    /// var identity = builder.AddExistingEntraIdApplication("identity", tenantId, clientId);
     /// builder.AddDotnetProject("api", "../Api/Api.csproj").WithReference(identity);
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExportIgnore(Reason = "The addExistingEntraApplication export accepts literal or parameter IDs independently.")]
-    public static IResourceBuilder<EntraIdApplicationResource> AddExistingEntraApplication(
+    [AspireExportIgnore(Reason = "The addExistingEntraIdApplication export accepts literal or parameter IDs independently.")]
+    public static IResourceBuilder<EntraIdApplicationResource> AddExistingEntraIdApplication(
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name,
         IResourceBuilder<ParameterResource> tenantId,
@@ -421,7 +421,7 @@ public static class EntraIdResourceExtensions
     /// </para>
     /// <example>
     /// <code lang="csharp">
-    /// var identity = builder.AddExistingEntraApplication(
+    /// var identity = builder.AddExistingEntraIdApplication(
     ///     "identity",
     ///     tenantId: "aaaabbbb-0000-cccc-1111-dddd2222eeee",
     ///     clientId: "00001111-aaaa-2222-bbbb-3333cccc4444");
@@ -429,8 +429,8 @@ public static class EntraIdResourceExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExportIgnore(Reason = "The addExistingEntraApplication export accepts literal or parameter IDs independently.")]
-    public static IResourceBuilder<EntraIdApplicationResource> AddExistingEntraApplication(
+    [AspireExportIgnore(Reason = "The addExistingEntraIdApplication export accepts literal or parameter IDs independently.")]
+    public static IResourceBuilder<EntraIdApplicationResource> AddExistingEntraIdApplication(
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name,
         string tenantId,
@@ -457,8 +457,8 @@ public static class EntraIdResourceExtensions
     /// <param name="clientId">The registration's application client GUID, as a literal or parameter.</param>
     /// <returns>The application registration builder.</returns>
     /// <remarks>Literal IDs are validated immediately; parameter values are validated at startup. Other Azure resources retain their provisioning setup.</remarks>
-    [AspireExport("addExistingEntraApplication")]
-    internal static IResourceBuilder<EntraIdApplicationResource> AddExistingEntraApplicationForExport(
+    [AspireExport("addExistingEntraIdApplication")]
+    internal static IResourceBuilder<EntraIdApplicationResource> AddExistingEntraIdApplicationForExport(
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name,
         [AspireUnion(typeof(string), typeof(IResourceBuilder<ParameterResource>))] object tenantId,
@@ -519,7 +519,7 @@ public static class EntraIdResourceExtensions
     /// <see cref="AddEntraIdApplication"/> enables Azure provisioning before this method is called.
     /// This method does not disable that setup, so deployment can still require Azure authentication and provisioning
     /// configuration. To reference an existing registration without enabling Azure provisioning, use
-    /// <see cref="AddExistingEntraApplication(IDistributedApplicationBuilder, string, IResourceBuilder{ParameterResource}, IResourceBuilder{ParameterResource})"/>.
+    /// <see cref="AddExistingEntraIdApplication(IDistributedApplicationBuilder, string, IResourceBuilder{ParameterResource}, IResourceBuilder{ParameterResource})"/>.
     /// </para>
     /// <example>
     /// <code lang="csharp">
@@ -562,7 +562,7 @@ public static class EntraIdResourceExtensions
     /// <see cref="AddEntraIdApplication"/> enables Azure provisioning before this method is called.
     /// This method does not disable that setup, so deployment can still require Azure authentication and provisioning
     /// configuration. To reference an existing registration without enabling Azure provisioning, use
-    /// <see cref="AddExistingEntraApplication(IDistributedApplicationBuilder, string, string, string)"/>.
+    /// <see cref="AddExistingEntraIdApplication(IDistributedApplicationBuilder, string, string, string)"/>.
     /// </para>
     /// <example>
     /// <code lang="csharp">
@@ -597,7 +597,7 @@ public static class EntraIdResourceExtensions
     /// <returns>The registration builder.</returns>
     /// <remarks>
     /// The registration itself is not provisioned or queried. Deployment can still require Azure authentication and configuration.
-    /// Use addExistingEntraApplication instead for a configuration-only AppHost without Azure setup.
+    /// Use addExistingEntraIdApplication instead for a configuration-only AppHost without Azure setup.
     /// Throws before changing the resource if registration-only configuration was already applied.
     /// </remarks>
     [AspireExport("asExistingApplication")]
@@ -757,7 +757,7 @@ public static class EntraIdResourceExtensions
     /// as well as when publishing.
     /// </para>
     /// <para>
-    /// Use this method for an existing registration (<c>AddExistingEntraApplication</c>), which Aspire never modifies,
+    /// Use this method for an existing registration (<c>AddExistingEntraIdApplication</c>), which Aspire never modifies,
     /// or for a managed identity that Aspire does not manage. Before the app can get a token, the registration must
     /// already trust the identity: add a federated identity credential to it whose issuer is the tenant's v2.0 endpoint
     /// (<c>https://login.microsoftonline.com/{tenant}/v2.0</c> in the Azure public cloud), whose subject is the identity's
@@ -773,7 +773,7 @@ public static class EntraIdResourceExtensions
     /// </remarks>
     /// <example>
     /// <code lang="csharp">
-    /// var entraWeb = builder.AddExistingEntraApplication("entra-web", tenantId, clientId)
+    /// var entraWeb = builder.AddExistingEntraIdApplication("entra-web", tenantId, clientId)
     ///     .WithFederatedManagedIdentityCredential("00001111-aaaa-2222-bbbb-3333cccc4444");
     /// </code>
     /// </example>
@@ -841,7 +841,7 @@ public static class EntraIdResourceExtensions
     /// as <c>ManagedIdentityClientId</c>.
     /// </para>
     /// <para>
-    /// This is only for registrations that Aspire creates. For an existing registration (<c>AddExistingEntraApplication</c>),
+    /// This is only for registrations that Aspire creates. For an existing registration (<c>AddExistingEntraIdApplication</c>),
     /// which Aspire never modifies, this method throws; use
     /// <see cref="WithFederatedManagedIdentityCredential(IResourceBuilder{EntraIdApplicationResource}, string)"/> instead.
     /// </para>
@@ -1081,7 +1081,7 @@ public static class EntraIdResourceExtensions
     /// <example>
     /// <code lang="csharp">
     /// var vault = builder.AddAzureKeyVault("vault");
-    /// var entra = builder.AddExistingEntraApplication("entra", tenantId, clientId)
+    /// var entra = builder.AddExistingEntraIdApplication("entra", tenantId, clientId)
     ///     .WithCertificateFromKeyVault(vault, "web-certificate");
     /// builder.AddProject&lt;Projects.Web&gt;("web").WithReference(entra);
     /// </code>
@@ -1347,7 +1347,7 @@ public static class EntraIdResourceExtensions
     /// <example>
     /// Let work or school accounts from any organization sign in:
     /// <code lang="csharp">
-    /// var entraWeb = builder.AddExistingEntraApplication("entra-web", tenantId, clientId)
+    /// var entraWeb = builder.AddExistingEntraIdApplication("entra-web", tenantId, clientId)
     ///     .WithSignInAudience(EntraIdSignInAudience.AzureADMultipleOrgs);
     /// </code>
     /// </example>
@@ -1911,7 +1911,7 @@ public static class EntraIdResourceExtensions
     /// deployment if it is still enabled and is deleted if it is already disabled.
     /// </para>
     /// <para>
-    /// Existing registrations are never modified, so this method cannot be used with <c>AddExistingEntraApplication</c>.
+    /// Existing registrations are never modified, so this method cannot be used with <c>AddExistingEntraIdApplication</c>.
     /// </para>
     /// </remarks>
     /// <example>
@@ -1962,7 +1962,7 @@ public static class EntraIdResourceExtensions
     /// Application roles are separate from delegated scopes and from Azure RBAC roles. This only declares the role; it does not assign it or grant consent.
     /// Role IDs stay the same across deployments, and changing a role's value or ID creates a different role. Whenever at least one role is declared,
     /// the complete appRoles collection is sent, so include every role to keep. Microsoft Graph rejects deleting an enabled role.
-    /// Existing registrations are never modified, so this throws for registrations created with addExistingEntraApplication.
+    /// Existing registrations are never modified, so this throws for registrations created with addExistingEntraIdApplication.
     /// </remarks>
     [AspireExport("withAppRole")]
     internal static IResourceBuilder<EntraIdApplicationResource> WithAppRoleForExport(
@@ -3019,7 +3019,7 @@ public static class EntraIdResourceExtensions
     /// </para>
     /// <example>
     /// <code lang="csharp">
-    /// var entraApi = builder.AddExistingEntraApplication("entra-api",
+    /// var entraApi = builder.AddExistingEntraIdApplication("entra-api",
     ///         tenantId: tenantId,
     ///         clientId: clientId);
     ///

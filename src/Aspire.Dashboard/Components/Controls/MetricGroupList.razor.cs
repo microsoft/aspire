@@ -42,9 +42,10 @@ public partial class MetricGroupList : IDisposable
     [Inject]
     public required MetricPinStore PinStore { get; init; }
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
         PinStore.Changed += OnPinsChanged;
+        await PinStore.EnsureLoadedAsync();
     }
 
     private void OnPinsChanged()
@@ -68,9 +69,9 @@ public partial class MetricGroupList : IDisposable
         var filter = PageViewModel.TextFilter;
         var groups = new List<MetricGroup>();
 
-        // Pins are stored by meter and instrument name across resources, so count this resource's instruments
-        // that are pinned rather than the stored pins.
-        var pinnedCount = instruments.Count(i => MetricFilter.Matches(i, filter) && PinStore.IsPinned(i.GetKey()));
+        // Count the listed instruments that are pinned for their resource rather than the stored pins, which include
+        // other resources' pins.
+        var pinnedCount = instruments.Count(i => MetricFilter.Matches(i, filter) && PinStore.IsPinned(i));
 
         // Keep the pinned group while it's selected, even with no matches, so it doesn't disappear under the user.
         if (pinnedCount > 0 || PageViewModel.ShowPinned)

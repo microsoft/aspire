@@ -1,0 +1,4 @@
+﻿           Git source:  https://git.example/saved-configuration
+   Configuration file:  teams/platform.json
+              Git ref:  team/configuration
+        Source origin:  aspire.config.json

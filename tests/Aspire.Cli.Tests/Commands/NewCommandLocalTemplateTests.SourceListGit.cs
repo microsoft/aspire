@@ -54,7 +54,7 @@ public partial class NewCommandLocalTemplateTests
             {
                 prompts++;
                 Assert.False(json);
-                Assert.Equal(ConfigSourceStrings.UseSourcePrompt, prompt);
+                Assert.Equal(ConfigSourceStrings.TemplateSourceListUseSourcePrompt, prompt);
                 Assert.True(defaultValue);
                 return accept;
             }
@@ -224,7 +224,7 @@ public partial class NewCommandLocalTemplateTests
         var selections = 0;
         interaction.ConfirmCallback = (prompt, _) =>
         {
-            Assert.Equal(ConfigSourceStrings.UseSourcePrompt, prompt);
+            Assert.Equal(ConfigSourceStrings.NewUseSourcePrompt, prompt);
             Assert.Null(consent);
             Assert.Empty(git.Commands);
             Assert.Single(interaction.DisplayedMessages,
@@ -324,7 +324,8 @@ public partial class NewCommandLocalTemplateTests
         await File.WriteAllTextAsync(path, RealGitTemplateSourceConfiguration);
         await GitTestHelper.RunGitAsync(repository.FullName, outputHelper, "commit", "-am", "Add proof template sources");
         await GitTestHelper.RunGitAsync(repository.FullName, outputHelper, "checkout", "main");
-        var runner = new GitCommandRunner(TestHelpers.CreateNonInteractiveHostEnvironment(), new TestInteractionService(), NullLogger<GitCommandRunner>.Instance);
+        var runner = new GitCommandRunner(TestHelpers.CreateNonInteractiveHostEnvironment(), new TestInteractionService(),
+            TestHelpers.CreateConsoleEnvironment(TextWriter.Null, TextWriter.Null), NullLogger<GitCommandRunner>.Instance);
         var commit = await runner.RunAsync(repository, ["rev-parse", source.Ref!], GitCommandMode.Captured, TestContext.Current.CancellationToken);
         var version = await runner.RunAsync(repository, ["rev-parse", $"{source.Ref}:{source.Path}"], GitCommandMode.Captured, TestContext.Current.CancellationToken);
 

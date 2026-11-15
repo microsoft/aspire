@@ -38,4 +38,38 @@ public sealed class UrlsColumnDisplayTests
 
         Assert.Equal("grpc://localhost:17175", UrlsColumnDisplay.GetTooltipText(displayedUrl));
     }
+
+    [Fact]
+    public void GetTooltipText_DropsCredentialsAndFragmentAndMasksQueryValues()
+    {
+        const string address = "redis://:synthetic-secret@localhost:6379/?token=synthetic-secret#access_token=synthetic-secret";
+        var displayedUrl = new DisplayedUrl
+        {
+            Index = 0,
+            Name = "redis",
+            Text = address,
+            Url = null,
+            OriginalUrlString = address
+        };
+
+        Assert.Equal("redis://localhost:6379/?token=●●●●●●●●", UrlsColumnDisplay.GetTooltipText(displayedUrl));
+        Assert.Equal("redis://localhost:6379/?token=●●●●●●●●", UrlsColumnDisplay.GetDisplayText(displayedUrl));
+    }
+
+    [Fact]
+    public void GetDisplayText_KeepsDisplayName()
+    {
+        var displayedUrl = new DisplayedUrl
+        {
+            Index = 0,
+            Name = "https",
+            Text = "Login page",
+            DisplayName = "Login page",
+            Url = "https://localhost:17174/login?token=synthetic-secret",
+            OriginalUrlString = "https://localhost:17174/login?token=synthetic-secret"
+        };
+
+        Assert.Equal("Login page", UrlsColumnDisplay.GetDisplayText(displayedUrl));
+        Assert.Equal("https://localhost:17174/login?token=●●●●●●●●", UrlsColumnDisplay.GetTooltipText(displayedUrl));
+    }
 }

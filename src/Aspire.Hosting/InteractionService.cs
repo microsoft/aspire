@@ -282,7 +282,7 @@ internal class InteractionService : IInteractionService
         {
             options ??= NotificationInteractionOptions.CreateDefault();
 
-            var newState = new Interaction(title, message, options, new Interaction.NotificationInteractionInfo(intent: options.Intent ?? MessageIntent.None, linkText: options.LinkText, linkUrl: options.LinkUrl, unresolvedParameterNames: options.UnresolvedParameterNames ?? []), interactionCts.Token);
+            var newState = new Interaction(title, message, options, new Interaction.NotificationInteractionInfo(intent: options.Intent ?? MessageIntent.None, linkText: options.LinkText, linkUrl: options.LinkUrl, relatedResourceNames: options.RelatedResourceNames ?? []), interactionCts.Token);
             AddInteractionUpdate(newState);
 
             using var _ = cancellationToken.Register(OnInteractionCancellation, state: newState);
@@ -800,18 +800,18 @@ internal class Interaction
 
     internal sealed class NotificationInteractionInfo : InteractionInfoBase
     {
-        public NotificationInteractionInfo(MessageIntent intent, string? linkText, string? linkUrl, IReadOnlyList<string> unresolvedParameterNames)
+        public NotificationInteractionInfo(MessageIntent intent, string? linkText, string? linkUrl, IReadOnlyList<string> relatedResourceNames)
         {
             Intent = intent;
             LinkText = linkText;
             LinkUrl = linkUrl;
-            UnresolvedParameterNames = unresolvedParameterNames;
+            RelatedResourceNames = relatedResourceNames;
         }
 
         public MessageIntent Intent { get; }
         public string? LinkText { get; }
         public string? LinkUrl { get; }
-        public IReadOnlyList<string> UnresolvedParameterNames { get; }
+        public IReadOnlyList<string> RelatedResourceNames { get; }
     }
 
     internal sealed class InputsInteractionInfo : InteractionInfoBase

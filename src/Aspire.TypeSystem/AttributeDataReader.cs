@@ -153,6 +153,12 @@ public static class AttributeDataReader
         => FindSingleAttribute<ObsoleteData>(property.GetCustomAttributesData(), ObsoleteAttributeFullName, ParseObsoleteData);
 
     /// <summary>
+    /// Gets <see cref="ObsoleteData"/> from the specified <paramref name="field"/>, if present.
+    /// </summary>
+    public static ObsoleteData? GetObsoleteData(FieldInfo field)
+        => FindSingleAttribute<ObsoleteData>(field.GetCustomAttributesData(), ObsoleteAttributeFullName, ParseObsoleteData);
+
+    /// <summary>
     /// Gets <see cref="ObsoleteData"/> from the specified <paramref name="type"/>, if present.
     /// </summary>
     public static ObsoleteData? GetObsoleteData(Type type)

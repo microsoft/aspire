@@ -2,7 +2,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREAZURE003 // Tenant-scoped resource annotations are experimental.
+#pragma warning disable ASPIREAZURE007 // Tenant-scoped resource annotations are experimental.
 
 using System.Collections.Immutable;
 using System.Text.Json.Nodes;

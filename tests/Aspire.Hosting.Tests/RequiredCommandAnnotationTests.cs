@@ -274,7 +274,8 @@ public class RequiredCommandAnnotationTests
             .WaitAsync(TestConstants.DefaultTimeoutTimeSpan);
 
         Assert.True(callbackInvoked);
-        var warning = Assert.Single(testSink.Writes, w => w.LogLevel == LogLevel.Warning);
+        var warning = Assert.Single(testSink.Writes, w =>
+            w.LoggerName == typeof(RequiredCommandValidator).FullName && w.LogLevel == LogLevel.Warning);
         Assert.Equal("Resource 'test' may fail to start: Custom validation failed", warning.Message);
         Assert.True(interactionService.Interactions.Reader.TryRead(out var notification));
         Assert.Equal("Custom validation failed", notification.Message);

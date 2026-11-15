@@ -34,7 +34,7 @@ await container.withTags(["Backend", "API"]);
 await container.withTags(["Service"]);
 await container.withTrait("Owner", "Finance");
 await container.withTrait("Owner", "Platform");
-await container.withDashboardPosition(-10);
+await container.withDisplayOrder(10);
 await container.withOtlpExporter({ protocol: OtlpProtocol.HttpJson });
 const taggedContainer = await builder.addContainer("mytaggedcontainer", {
     image: "nginx",
@@ -152,14 +152,14 @@ await customInputParam.withCustomInput({
 });
 
 // optional parameter value management
-const optionalParam = await builder.addParameter("optional-value").withOptional();
+const optionalParam = await builder.addParameter("optional-value").asOptional();
 const _unsetOptionalValue: string | null = await optionalParam.tryGetCurrentValue();
 await optionalParam.setValueAsync({ value: "configured" });
 const _configuredOptionalValue: string | null = await optionalParam.tryGetCurrentValue();
 await optionalParam.setValueAsync();
 const _clearedOptionalValue: string | null = await optionalParam.tryGetCurrentValue();
-await optionalParam.withRequired({ required: true });
-await optionalParam.withRequired({ required: false });
+await optionalParam.asRequired();
+await optionalParam.asOptional();
 
 // ===================================================================
 // Container-specific methods on ContainerResource
