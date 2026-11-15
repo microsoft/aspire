@@ -617,7 +617,16 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerNetw
             await DockerfileHelper.ExecuteDockerfileFactoryAsync(dockerfileBuildAnnotation, modelContainerResource, executionContext.Services, cancellationToken).ConfigureAwait(false);
 
             var dcpBuildArgs = new List<EnvVar>();
-            var valueContext = new ValueProviderContext { ExecutionContext = executionContext, Caller = modelContainerResource };
+            // Preserve host-facing resolution for build inputs. Caller attributes parameter waits;
+            // it does not mean these values are consumed on the container's runtime network
+            // (for example, they may be embedded in browser assets). An endpoint reference's
+            // explicitly selected network still takes precedence over this default.
+            var valueContext = new ValueProviderContext
+            {
+                ExecutionContext = executionContext,
+                Caller = modelContainerResource,
+                Network = KnownNetworkIdentifiers.LocalhostNetwork
+            };
 
             foreach (var buildArgument in dockerfileBuildAnnotation.BuildArguments)
             {

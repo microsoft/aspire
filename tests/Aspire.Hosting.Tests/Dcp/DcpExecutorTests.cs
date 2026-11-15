@@ -507,6 +507,44 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         Assert.Null(container.Spec.Build!.Platform);
     }
 
+    [Theory]
+    [InlineData(false, "http://localhost:18080")]
+    [InlineData(true, "http://localhost:18080/v1")]
+    public async Task DockerfileContainerBuildArgumentsUseLocalhostAndPreserveCaller(bool useExpression, string expectedUrl)
+    {
+        using var tempDockerfileContext = await DockerfileUtils.CreateTemporaryDockerfileAsync(outputHelper);
+        var builder = DistributedApplication.CreateBuilder();
+        var api = builder.AddContainer("api", "image")
+            .WithHttpEndpoint(port: 18080, targetPort: 8080);
+        var endpoint = api.GetEndpoint("http");
+        IExpressionValue endpointValue = useExpression ? ReferenceExpression.Create($"{endpoint}/v1") : endpoint;
+        ValueProviderContext? observedContext = null;
+        var argumentValue = new TestManifestValue(endpointValue.ValueExpression, (context, cancellationToken) =>
+        {
+            observedContext = context;
+            return endpointValue.GetValueAsync(context, cancellationToken);
+        }, endpoint);
+        var frontend = builder.AddDockerfile("frontend", tempDockerfileContext.ContextPath, tempDockerfileContext.DockerfilePath)
+            .WithBuildArg("API_URL", argumentValue);
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        await using var appExecutor = CreateAppExecutor(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            kubernetesService: kubernetesService);
+
+        await appExecutor.RunApplicationAsync().DefaultTimeout();
+
+        var container = Assert.Single(kubernetesService.CreatedResources.OfType<Container>(),
+            c => c.AppModelResourceName == frontend.Resource.Name);
+        Assert.NotNull(container.Spec.Build);
+        Assert.NotNull(container.Spec.Build.Args);
+        var argument = Assert.Single(container.Spec.Build.Args);
+        Assert.Equal("API_URL", argument.Name);
+        Assert.Equal(expectedUrl, argument.Value);
+        Assert.NotNull(observedContext);
+        Assert.Same(frontend.Resource, observedContext.Caller);
+    }
+
     [Fact]
     public async Task ResourceStarted_ProjectHasReplicas_EventRaisedOnce()
     {
