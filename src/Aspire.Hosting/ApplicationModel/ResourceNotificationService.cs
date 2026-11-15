@@ -671,6 +671,7 @@ public class ResourceNotificationService : IDisposable
         state is null
         || (allowNotStarted && state == KnownResourceStates.NotStarted)
         || state == KnownResourceStates.Starting
+        || state == KnownResourceStates.UnresolvedParameters
         || state == KnownResourceStates.Waiting;
 
     private Task ClearWaitingForDependenciesAsync(IResource resource)

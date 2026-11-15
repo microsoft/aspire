@@ -17,6 +17,7 @@ public class AddConnectionStringTests
     [InlineData("database")]
     [InlineData("postgres-redirect")]
     [InlineData("redis-redirect")]
+    [InlineData("third-party-value-provider")]
     public async Task ContextualConnectionStringResolutionTracksTheRequestingResource(string source)
     {
         using var builder = TestDistributedApplicationBuilder.Create();
@@ -35,6 +36,13 @@ public class AddConnectionStringTests
         {
             resource = (IResourceWithConnectionString)parameter;
         }
+        else if (source == "third-party-value-provider")
+        {
+            resource = builder.AddResource(new ResourceWithoutLifetime("third-party")
+            {
+                ConnectionStringExpression = ReferenceExpression.Create($"Password={parameter}")
+            }).Resource;
+        }
         else
         {
             var connection = builder.AddConnectionString("connection", ReferenceExpression.Create($"Password={parameter}"));
@@ -50,12 +58,15 @@ public class AddConnectionStringTests
         var caller = builder.AddExecutable("caller", "unused", ".").Resource;
         using var app = builder.Build();
         using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
-        var read = resource.GetConnectionStringAsync(new ValueProviderContext
+        var context = new ValueProviderContext
         {
             ExecutionContext = builder.ExecutionContext,
             Caller = caller,
             Network = KnownNetworkIdentifiers.LocalhostNetwork
-        }, cts.Token).AsTask();
+        };
+        var read = source == "third-party-value-provider"
+            ? resource.GetValueAsync(context, cts.Token).AsTask()
+            : resource.GetConnectionStringAsync(context, cts.Token).AsTask();
 
         Assert.False(read.IsCompleted);
         Assert.True(app.ResourceNotifications.TryGetCurrentState(caller.Name, out var waiting));
@@ -70,6 +81,61 @@ public class AddConnectionStringTests
         Assert.True(app.ResourceNotifications.TryGetCurrentState(caller.Name, out var completed));
         Assert.Null(completed.Snapshot.State);
         Assert.Empty(completed.Snapshot.Properties);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ContextualValueProviderResolutionPreservesThirdPartyExpressionNetwork(bool throughReference)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var server = builder.AddContainer("server", "test-image")
+            .WithHttpEndpoint(targetPort: 8080);
+        var endpoint = server.GetEndpoint("http");
+        var annotation = endpoint.EndpointAnnotation;
+        annotation.AllocatedEndpoint = new(annotation, "localhost", 18080);
+        annotation.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(
+            KnownNetworkIdentifiers.DefaultAspireContainerNetwork,
+            new(annotation, "server", 8080, EndpointBindingMode.SingleAddress, networkId: KnownNetworkIdentifiers.DefaultAspireContainerNetwork));
+        IResourceWithConnectionString resource = builder.AddResource(new ResourceWithoutLifetime("third-party")
+        {
+            ConnectionStringExpression = ReferenceExpression.Create($"Endpoint={endpoint}")
+        }).Resource;
+        var caller = builder.AddContainer("caller", "test-image").Resource;
+        using var app = builder.Build();
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
+        IValueProvider provider = throughReference ? new ConnectionStringReference(resource, optional: false) : resource;
+
+        var value = await provider.GetValueAsync(new ValueProviderContext
+        {
+            ExecutionContext = builder.ExecutionContext,
+            Caller = caller,
+            Network = KnownNetworkIdentifiers.DefaultAspireContainerNetwork
+        }, cts.Token);
+
+        Assert.Equal("Endpoint=http://server:8080", value);
+        Assert.Equal("Endpoint=http://localhost:18080", await resource.GetValueAsync(cts.Token));
+    }
+
+    [Theory]
+    [InlineData("public")]
+    [InlineData("explicit")]
+    [InlineData("inherited")]
+    [InlineData("derived-interface")]
+    public async Task ContextualValueProviderUsesImplementedConnectionStringResolver(string implementation)
+    {
+        IResourceWithConnectionString resource = implementation switch
+        {
+            "public" => new ContextualResource("connection"),
+            "explicit" => new ExplicitContextualResource("connection"),
+            "inherited" => new InheritedContextualResource("connection"),
+            _ => new DerivedInterfaceContextualResource("connection")
+        };
+        var caller = new ContainerResource("caller");
+
+        var value = await resource.GetValueAsync(new ValueProviderContext { Caller = caller }, CancellationToken.None);
+
+        Assert.Equal(caller.Name, value);
     }
 
     [Fact]
@@ -157,9 +223,31 @@ public class AddConnectionStringTests
             });
     }
 
-    private sealed class ResourceWithoutLifetime(string name) : Resource(name), IResourceWithConnectionString, IResourceWithoutLifetime
+    private class ResourceWithoutLifetime(string name) : Resource(name), IResourceWithConnectionString, IResourceWithoutLifetime
     {
-        public ReferenceExpression ConnectionStringExpression =>
+        public ReferenceExpression ConnectionStringExpression { get; init; } =
             ReferenceExpression.Create($"ResourceWithoutLifetime");
     }
+
+    private class ContextualResource(string name) : ResourceWithoutLifetime(name), IResourceWithConnectionString
+    {
+        public ValueTask<string?> GetConnectionStringAsync(ValueProviderContext context, CancellationToken cancellationToken) =>
+            new(context.Caller?.Name);
+    }
+
+    private sealed class ExplicitContextualResource(string name) : ResourceWithoutLifetime(name), IResourceWithConnectionString
+    {
+        ValueTask<string?> IResourceWithConnectionString.GetConnectionStringAsync(ValueProviderContext context, CancellationToken cancellationToken) =>
+            new(context.Caller?.Name);
+    }
+
+    private sealed class InheritedContextualResource(string name) : ContextualResource(name);
+
+    private interface IContextualConnectionStringResource : IResourceWithConnectionString
+    {
+        ValueTask<string?> IResourceWithConnectionString.GetConnectionStringAsync(ValueProviderContext context, CancellationToken cancellationToken) =>
+            new(context.Caller?.Name);
+    }
+
+    private sealed class DerivedInterfaceContextualResource(string name) : ResourceWithoutLifetime(name), IContextualConnectionStringResource;
 }

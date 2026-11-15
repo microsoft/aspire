@@ -1082,7 +1082,7 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
 
     [Theory]
     [InlineData("direct")]
-    [InlineData("value-provider")]
+    [InlineData("context-free-value-provider")]
     [InlineData("postgres-redirect")]
     [InlineData("redis-redirect")]
     public async Task ContextualConnectionStringResolutionPreservesLegacyCustomResolvers(string source)
@@ -1112,8 +1112,8 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
             Network = KnownNetworkIdentifiers.LocalhostNetwork
         };
 
-        var read = source == "value-provider"
-            ? resource.GetValueAsync(context, cts.Token)
+        var read = source == "context-free-value-provider"
+            ? resource.GetValueAsync(cts.Token)
             : resource.GetConnectionStringAsync(context, cts.Token);
         Assert.True(read.IsCompletedSuccessfully);
         Assert.Equal("runtime-connection-string", await read);

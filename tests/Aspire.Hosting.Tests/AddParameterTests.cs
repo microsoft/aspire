@@ -104,6 +104,61 @@ public class AddParameterTests
         AssertParameterWaitState(app, caller, newerState);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task DependencyWaitTakesPrecedenceOverAnEarlierParameterRead(bool completeParameterFirst)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var parameter = builder.AddParameter("parameter").Resource;
+        parameter.EnsureValueTask();
+        var dependency = builder.AddExecutable("dependency", "unused", ".").Resource;
+        var caller = builder.AddExecutable("caller", "unused", ".")
+            .WithAnnotation(new WaitAnnotation(dependency, WaitType.WaitUntilStarted)).Resource;
+        caller.AddLifeCycleCommands();
+        using var app = builder.Build();
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
+        var read = parameter.GetValueAsync(
+            new ValueProviderContext { ExecutionContext = builder.ExecutionContext, Caller = caller },
+            cts.Token).AsTask();
+        AssertParameterWaitState(app, caller, KnownResourceStates.UnresolvedParameters, "parameter");
+
+        var dependencyWait = app.ResourceNotifications.WaitForDependenciesAsync(caller, cts.Token);
+        Assert.False(dependencyWait.IsCompleted);
+        AssertParameterWaitState(app, caller, KnownResourceStates.Waiting);
+        Assert.True(app.ResourceNotifications.TryGetCurrentState(caller.Name, out var waiting));
+        var waitingFor = Assert.Single(waiting.Snapshot.Properties);
+        Assert.Equal(KnownProperties.Resource.WaitingFor, waitingFor.Name);
+        Assert.Equal(new[] { dependency.Name }, Assert.IsType<string[]>(waitingFor.Value));
+        var start = Assert.Single(caller.Annotations.OfType<ResourceCommandAnnotation>(), c => c.Name == KnownResourceCommands.StartCommand);
+        Assert.Equal(ResourceCommandState.Enabled, start.UpdateState(new UpdateCommandStateContext
+        {
+            ResourceSnapshot = waiting.Snapshot,
+            Services = app.Services
+        }));
+
+        if (completeParameterFirst)
+        {
+            await parameter.SetValueAsync("value");
+            Assert.Equal("value", await read.DefaultTimeout());
+            AssertParameterWaitState(app, caller, KnownResourceStates.Waiting);
+            Assert.False(dependencyWait.IsCompleted);
+        }
+
+        await app.ResourceNotifications.PublishUpdateAsync(dependency, s => s with { State = KnownResourceStates.Running });
+        await dependencyWait.DefaultTimeout();
+        if (!completeParameterFirst)
+        {
+            AssertParameterWaitState(app, caller, KnownResourceStates.UnresolvedParameters, "parameter");
+            await parameter.SetValueAsync("value");
+            Assert.Equal("value", await read.DefaultTimeout());
+        }
+
+        AssertParameterWaitState(app, caller, KnownResourceStates.Waiting);
+        Assert.True(app.ResourceNotifications.TryGetCurrentState(caller.Name, out var completed));
+        Assert.Empty(completed.Snapshot.Properties);
+    }
+
     [Fact]
     public async Task ParameterWaitRestoresCustomResourceInitializationState()
     {

@@ -1,6 +1,9 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Concurrent;
+using System.Reflection;
+
 namespace Aspire.Hosting.ApplicationModel;
 
 /// <summary>
@@ -8,6 +11,11 @@ namespace Aspire.Hosting.ApplicationModel;
 /// </summary>
 public interface IResourceWithConnectionString : IResource, IExpressionValue, IValueWithReferences
 {
+    private static readonly ConcurrentDictionary<Type, bool> s_contextualImplementations = new();
+    private static readonly MethodInfo s_contextualConnectionStringMethod = typeof(IResourceWithConnectionString).GetMethod(
+        nameof(GetConnectionStringAsync), [typeof(ValueProviderContext), typeof(CancellationToken)])
+        ?? throw new MissingMethodException(typeof(IResourceWithConnectionString).FullName, nameof(GetConnectionStringAsync));
+
     /// <summary>
     /// Gets the connection string associated with the resource.
     /// </summary>
@@ -39,7 +47,9 @@ public interface IResourceWithConnectionString : IResource, IExpressionValue, IV
     ValueTask<string?> IValueProvider.GetValueAsync(CancellationToken cancellationToken) => GetConnectionStringAsync(cancellationToken);
 
     ValueTask<string?> IValueProvider.GetValueAsync(ValueProviderContext context, CancellationToken cancellationToken) =>
-        GetConnectionStringAsync(context, cancellationToken);
+        HasContextualConnectionStringImplementation(this.GetType())
+            ? GetConnectionStringAsync(context, cancellationToken)
+            : ConnectionStringExpression.GetValueAsync(context, cancellationToken);
 
     /// <summary>
     /// Describes the connection string format string used for this resource.
@@ -60,4 +70,19 @@ public interface IResourceWithConnectionString : IResource, IExpressionValue, IV
     /// is its corresponding <see cref="ReferenceExpression"/>. The collection is empty if there are no connection
     /// properties.</returns>
     IEnumerable<KeyValuePair<string, ReferenceExpression>> GetConnectionProperties() => [];
+
+    private static bool HasContextualConnectionStringImplementation(Type resourceType) =>
+        s_contextualImplementations.GetOrAdd(resourceType, static type =>
+        {
+            // The interface map distinguishes the default fallback from class or derived-interface
+            // implementations, including explicit and inherited methods.
+            var map = type.GetInterfaceMap(typeof(IResourceWithConnectionString));
+            var index = Array.IndexOf(map.InterfaceMethods, s_contextualConnectionStringMethod);
+            if (index < 0)
+            {
+                throw new MissingMethodException(type.FullName, nameof(GetConnectionStringAsync));
+            }
+
+            return map.TargetMethods[index].DeclaringType != typeof(IResourceWithConnectionString);
+        });
 }
