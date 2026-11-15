@@ -17,6 +17,7 @@ public class ResourceCommandAnnotationTests
 {
     [Theory]
     [InlineData("start", "Starting", ResourceCommandState.Disabled)]
+    [InlineData("start", "UnresolvedParameters", ResourceCommandState.Disabled)]
     [InlineData("start", "Stopping", ResourceCommandState.Hidden)]
     [InlineData("start", "Running", ResourceCommandState.Hidden)]
     [InlineData("start", "Exited", ResourceCommandState.Enabled)]
@@ -29,6 +30,7 @@ public class ResourceCommandAnnotationTests
     [InlineData("start", "", ResourceCommandState.Disabled)]
     [InlineData("start", null, ResourceCommandState.Disabled)]
     [InlineData("stop", "Starting", ResourceCommandState.Hidden)]
+    [InlineData("stop", "UnresolvedParameters", ResourceCommandState.Hidden)]
     [InlineData("stop", "Stopping", ResourceCommandState.Disabled)]
     [InlineData("stop", "Running", ResourceCommandState.Enabled)]
     [InlineData("stop", "Exited", ResourceCommandState.Hidden)]
@@ -41,6 +43,7 @@ public class ResourceCommandAnnotationTests
     [InlineData("stop", "", ResourceCommandState.Hidden)]
     [InlineData("stop", null, ResourceCommandState.Hidden)]
     [InlineData("restart", "Starting", ResourceCommandState.Disabled)]
+    [InlineData("restart", "UnresolvedParameters", ResourceCommandState.Disabled)]
     [InlineData("restart", "Stopping", ResourceCommandState.Disabled)]
     [InlineData("restart", "Running", ResourceCommandState.Enabled)]
     [InlineData("restart", "Exited", ResourceCommandState.Disabled)]
