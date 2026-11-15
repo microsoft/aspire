@@ -23,6 +23,65 @@ namespace Aspire.Hosting.Tests.Orchestrator;
 public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
 {
     [Theory]
+    [InlineData(null)]
+    [InlineData("Starting")]
+    [InlineData("Running")]
+    [InlineData("FailedToStart")]
+    public async Task PreStartUrlParameterWaitRestoresLatestState(string? newerState)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var parameter = builder.AddParameter("region").Resource;
+        parameter.EnsureValueTask();
+        var first = builder.AddExecutable("first", "unused", ".").WithHttpEndpoint(targetPort: 8080);
+        var second = builder.AddExecutable("second", "unused", ".").WithHttpEndpoint(targetPort: 8081);
+        first.WithUrl(ReferenceExpression.Create($"{first.GetEndpoint("http")}/manage?region={parameter}"));
+        var port = 18080;
+        foreach (var resource in new[] { first, second })
+        {
+            var endpoint = resource.GetEndpoint("http").EndpointAnnotation;
+            endpoint.AllocatedEndpoint = new(endpoint, "localhost", port++);
+        }
+
+        using var app = builder.Build();
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
+        var notifications = app.ResourceNotifications;
+        await notifications.PublishUpdateAsync(first.Resource, s => s);
+        await notifications.PublishUpdateAsync(second.Resource, s => s);
+        var orchestrator = CreateOrchestrator(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            notifications,
+            applicationEventing: builder.Eventing);
+
+        var allocation = orchestrator.PublishEndpointsAllocatedAsync(
+            [new(first.Resource, app.Services), new(second.Resource, app.Services)],
+            builder.Eventing, EventDispatchBehavior.BlockingSequential, cts.Token);
+        Assert.False(allocation.IsCompleted);
+        Assert.True(notifications.TryGetCurrentState(first.Resource.Name, out var waiting));
+        Assert.Equal(KnownResourceStates.UnresolvedParameters, waiting.Snapshot.State?.Text);
+        var unresolved = Assert.Single(waiting.Snapshot.Properties, p => p.Name == KnownProperties.Resource.UnresolvedParameters);
+        Assert.Equal(new[] { parameter.Name }, Assert.IsType<string[]>(unresolved.Value));
+        Assert.True(notifications.TryGetCurrentState(second.Resource.Name, out var sibling));
+        Assert.Empty(sibling.Snapshot.Urls);
+
+        ResourceStateSnapshot? latestState = newerState is not null ? new(newerState, null) : null;
+        if (latestState is not null)
+        {
+            await notifications.PublishUpdateAsync(first.Resource, s => s with { State = latestState });
+        }
+
+        await parameter.SetValueAsync("west");
+        await allocation.DefaultTimeout();
+        Assert.True(notifications.TryGetCurrentState(first.Resource.Name, out var completed));
+        Assert.Equal(latestState, completed.Snapshot.State);
+        Assert.Empty(completed.Snapshot.Properties);
+        Assert.Collection(completed.Snapshot.Urls,
+            url => Assert.Equal("http://localhost:18080", url.Url),
+            url => Assert.Equal("http://localhost:18080/manage?region=west", url.Url));
+        Assert.True(notifications.TryGetCurrentState(second.Resource.Name, out var siblingCompleted));
+        Assert.Equal("http://localhost:18081", Assert.Single(siblingCompleted.Snapshot.Urls).Url);
+    }
+
+    [Theory]
     [InlineData(true)]
     [InlineData(false)]
     public async Task UrlCallbackCannotWaitForUnfinishedBrowserOrigins(bool ownEndpoint)
@@ -1767,6 +1826,7 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
         var services = new ServiceCollection();
         var configuration = new ConfigurationManager();
         services.AddTestAndResourceLogging(testOutputHelper, configuration);
+        services.AddSingleton(notificationService);
         var serviceProvider = services.BuildServiceProvider();
         resourceLoggerService ??= new ResourceLoggerService();
 
