@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREPERSISTENCE001 // Resource lifetime APIs are experimental.
 #pragma warning disable ASPIRECERTIFICATES001 // Certificate APIs are experimental.
 #pragma warning disable ASPIREMONGODB001 // MongoDB replica set APIs are experimental.
 

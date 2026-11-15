@@ -30,8 +30,6 @@ public sealed class PersistentContainerEndToEndTests(ITestOutputHelper output)
         await auto.InstallAspireCliAsync(strategy, counter);
 
         var appHostCode = $$"""
-            #pragma warning disable ASPIREPERSISTENCE001
-
             var builder = DistributedApplication.CreateBuilder(args);
 
             var redis = builder.AddRedis("redis")

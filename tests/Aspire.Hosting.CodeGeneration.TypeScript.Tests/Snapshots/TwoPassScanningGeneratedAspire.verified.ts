@@ -13170,13 +13170,11 @@ export interface ContainerRegistryResource {
     /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
-     * @experimental
      */
     withSessionLifetime(): ContainerRegistryResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime.
      * @returns The resource builder.
-     * @experimental
      */
     withPersistentLifetime(): ContainerRegistryResourcePromise;
     /**
@@ -13186,14 +13184,12 @@ export interface ContainerRegistryResource {
      * changes to the source resource are reflected by this resource.
      * @param sourceBuilder The resource builder whose lifetime should be used.
      * @returns The resource builder.
-     * @experimental
      */
     withLifetimeOf(sourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ContainerRegistryResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime that ends when a parent process exits.
      * @param parentProcessId The ID of the parent process to monitor.
      * @returns The resource builder.
-     * @experimental
      */
     withParentProcessLifetime(parentProcessId: number): ContainerRegistryResourcePromise;
     /**
@@ -13545,13 +13541,11 @@ export interface ContainerRegistryResourcePromise extends PromiseLike<ContainerR
     /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
-     * @experimental
      */
     withSessionLifetime(): ContainerRegistryResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime.
      * @returns The resource builder.
-     * @experimental
      */
     withPersistentLifetime(): ContainerRegistryResourcePromise;
     /**
@@ -13561,14 +13555,12 @@ export interface ContainerRegistryResourcePromise extends PromiseLike<ContainerR
      * changes to the source resource are reflected by this resource.
      * @param sourceBuilder The resource builder whose lifetime should be used.
      * @returns The resource builder.
-     * @experimental
      */
     withLifetimeOf(sourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ContainerRegistryResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime that ends when a parent process exits.
      * @param parentProcessId The ID of the parent process to monitor.
      * @returns The resource builder.
-     * @experimental
      */
     withParentProcessLifetime(parentProcessId: number): ContainerRegistryResourcePromise;
     /**
@@ -14004,7 +13996,6 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
     /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
-     * @experimental
      */
     withSessionLifetime(): ContainerRegistryResourcePromise {
         return new ContainerRegistryResourcePromiseImpl(this._withSessionLifetimeInternal(), this._client);
@@ -14023,7 +14014,6 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
     /**
      * Configures a resource to use a persistent lifetime.
      * @returns The resource builder.
-     * @experimental
      */
     withPersistentLifetime(): ContainerRegistryResourcePromise {
         return new ContainerRegistryResourcePromiseImpl(this._withPersistentLifetimeInternal(), this._client);
@@ -14047,7 +14037,6 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
      * changes to the source resource are reflected by this resource.
      * @param sourceBuilder The resource builder whose lifetime should be used.
      * @returns The resource builder.
-     * @experimental
      */
     withLifetimeOf(sourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ContainerRegistryResourcePromise {
         return new ContainerRegistryResourcePromiseImpl(this._withLifetimeOfInternal(sourceBuilder), this._client);
@@ -14067,7 +14056,6 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
      * Configures a resource to use a persistent lifetime that ends when a parent process exits.
      * @param parentProcessId The ID of the parent process to monitor.
      * @returns The resource builder.
-     * @experimental
      */
     withParentProcessLifetime(parentProcessId: number): ContainerRegistryResourcePromise {
         return new ContainerRegistryResourcePromiseImpl(this._withParentProcessLifetimeInternal(parentProcessId), this._client);
@@ -15610,13 +15598,11 @@ export interface ContainerResource {
     /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
-     * @experimental
      */
     withSessionLifetime(): ContainerResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime.
      * @returns The resource builder.
-     * @experimental
      */
     withPersistentLifetime(): ContainerResourcePromise;
     /**
@@ -15626,14 +15612,12 @@ export interface ContainerResource {
      * changes to the source resource are reflected by this resource.
      * @param sourceBuilder The resource builder whose lifetime should be used.
      * @returns The resource builder.
-     * @experimental
      */
     withLifetimeOf(sourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ContainerResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime that ends when a parent process exits.
      * @param parentProcessId The ID of the parent process to monitor.
      * @returns The resource builder.
-     * @experimental
      */
     withParentProcessLifetime(parentProcessId: number): ContainerResourcePromise;
     /** Sets an environment variable */
@@ -16481,13 +16465,11 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
     /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
-     * @experimental
      */
     withSessionLifetime(): ContainerResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime.
      * @returns The resource builder.
-     * @experimental
      */
     withPersistentLifetime(): ContainerResourcePromise;
     /**
@@ -16497,14 +16479,12 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      * changes to the source resource are reflected by this resource.
      * @param sourceBuilder The resource builder whose lifetime should be used.
      * @returns The resource builder.
-     * @experimental
      */
     withLifetimeOf(sourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ContainerResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime that ends when a parent process exits.
      * @param parentProcessId The ID of the parent process to monitor.
      * @returns The resource builder.
-     * @experimental
      */
     withParentProcessLifetime(parentProcessId: number): ContainerResourcePromise;
     /** Sets an environment variable */
@@ -17780,7 +17760,6 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
-     * @experimental
      */
     withSessionLifetime(): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._withSessionLifetimeInternal(), this._client);
@@ -17799,7 +17778,6 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     /**
      * Configures a resource to use a persistent lifetime.
      * @returns The resource builder.
-     * @experimental
      */
     withPersistentLifetime(): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._withPersistentLifetimeInternal(), this._client);
@@ -17823,7 +17801,6 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
      * changes to the source resource are reflected by this resource.
      * @param sourceBuilder The resource builder whose lifetime should be used.
      * @returns The resource builder.
-     * @experimental
      */
     withLifetimeOf(sourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._withLifetimeOfInternal(sourceBuilder), this._client);
@@ -17843,7 +17820,6 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
      * Configures a resource to use a persistent lifetime that ends when a parent process exits.
      * @param parentProcessId The ID of the parent process to monitor.
      * @returns The resource builder.
-     * @experimental
      */
     withParentProcessLifetime(parentProcessId: number): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._withParentProcessLifetimeInternal(parentProcessId), this._client);
@@ -20226,13 +20202,11 @@ export interface CSharpAppResource {
     /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
-     * @experimental
      */
     withSessionLifetime(): CSharpAppResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime.
      * @returns The resource builder.
-     * @experimental
      */
     withPersistentLifetime(): CSharpAppResourcePromise;
     /**
@@ -20242,14 +20216,12 @@ export interface CSharpAppResource {
      * changes to the source resource are reflected by this resource.
      * @param sourceBuilder The resource builder whose lifetime should be used.
      * @returns The resource builder.
-     * @experimental
      */
     withLifetimeOf(sourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): CSharpAppResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime that ends when a parent process exits.
      * @param parentProcessId The ID of the parent process to monitor.
      * @returns The resource builder.
-     * @experimental
      */
     withParentProcessLifetime(parentProcessId: number): CSharpAppResourcePromise;
     /** Sets an environment variable */
@@ -20937,13 +20909,11 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
     /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
-     * @experimental
      */
     withSessionLifetime(): CSharpAppResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime.
      * @returns The resource builder.
-     * @experimental
      */
     withPersistentLifetime(): CSharpAppResourcePromise;
     /**
@@ -20953,14 +20923,12 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      * changes to the source resource are reflected by this resource.
      * @param sourceBuilder The resource builder whose lifetime should be used.
      * @returns The resource builder.
-     * @experimental
      */
     withLifetimeOf(sourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): CSharpAppResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime that ends when a parent process exits.
      * @param parentProcessId The ID of the parent process to monitor.
      * @returns The resource builder.
-     * @experimental
      */
     withParentProcessLifetime(parentProcessId: number): CSharpAppResourcePromise;
     /** Sets an environment variable */
@@ -21810,7 +21778,6 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
-     * @experimental
      */
     withSessionLifetime(): CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._withSessionLifetimeInternal(), this._client);
@@ -21829,7 +21796,6 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     /**
      * Configures a resource to use a persistent lifetime.
      * @returns The resource builder.
-     * @experimental
      */
     withPersistentLifetime(): CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._withPersistentLifetimeInternal(), this._client);
@@ -21853,7 +21819,6 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
      * changes to the source resource are reflected by this resource.
      * @param sourceBuilder The resource builder whose lifetime should be used.
      * @returns The resource builder.
-     * @experimental
      */
     withLifetimeOf(sourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._withLifetimeOfInternal(sourceBuilder), this._client);
@@ -21873,7 +21838,6 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
      * Configures a resource to use a persistent lifetime that ends when a parent process exits.
      * @param parentProcessId The ID of the parent process to monitor.
      * @returns The resource builder.
-     * @experimental
      */
     withParentProcessLifetime(parentProcessId: number): CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._withParentProcessLifetimeInternal(parentProcessId), this._client);
@@ -24312,13 +24276,11 @@ export interface DotnetToolResource {
     /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
-     * @experimental
      */
     withSessionLifetime(): DotnetToolResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime.
      * @returns The resource builder.
-     * @experimental
      */
     withPersistentLifetime(): DotnetToolResourcePromise;
     /**
@@ -24328,14 +24290,12 @@ export interface DotnetToolResource {
      * changes to the source resource are reflected by this resource.
      * @param sourceBuilder The resource builder whose lifetime should be used.
      * @returns The resource builder.
-     * @experimental
      */
     withLifetimeOf(sourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): DotnetToolResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime that ends when a parent process exits.
      * @param parentProcessId The ID of the parent process to monitor.
      * @returns The resource builder.
-     * @experimental
      */
     withParentProcessLifetime(parentProcessId: number): DotnetToolResourcePromise;
     /** Sets an environment variable */
@@ -25059,13 +25019,11 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
     /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
-     * @experimental
      */
     withSessionLifetime(): DotnetToolResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime.
      * @returns The resource builder.
-     * @experimental
      */
     withPersistentLifetime(): DotnetToolResourcePromise;
     /**
@@ -25075,14 +25033,12 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      * changes to the source resource are reflected by this resource.
      * @param sourceBuilder The resource builder whose lifetime should be used.
      * @returns The resource builder.
-     * @experimental
      */
     withLifetimeOf(sourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): DotnetToolResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime that ends when a parent process exits.
      * @param parentProcessId The ID of the parent process to monitor.
      * @returns The resource builder.
-     * @experimental
      */
     withParentProcessLifetime(parentProcessId: number): DotnetToolResourcePromise;
     /** Sets an environment variable */
@@ -26044,7 +26000,6 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
-     * @experimental
      */
     withSessionLifetime(): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._withSessionLifetimeInternal(), this._client);
@@ -26063,7 +26018,6 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     /**
      * Configures a resource to use a persistent lifetime.
      * @returns The resource builder.
-     * @experimental
      */
     withPersistentLifetime(): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._withPersistentLifetimeInternal(), this._client);
@@ -26087,7 +26041,6 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
      * changes to the source resource are reflected by this resource.
      * @param sourceBuilder The resource builder whose lifetime should be used.
      * @returns The resource builder.
-     * @experimental
      */
     withLifetimeOf(sourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._withLifetimeOfInternal(sourceBuilder), this._client);
@@ -26107,7 +26060,6 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
      * Configures a resource to use a persistent lifetime that ends when a parent process exits.
      * @param parentProcessId The ID of the parent process to monitor.
      * @returns The resource builder.
-     * @experimental
      */
     withParentProcessLifetime(parentProcessId: number): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._withParentProcessLifetimeInternal(parentProcessId), this._client);
@@ -28505,13 +28457,11 @@ export interface ExecutableResource {
     /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
-     * @experimental
      */
     withSessionLifetime(): ExecutableResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime.
      * @returns The resource builder.
-     * @experimental
      */
     withPersistentLifetime(): ExecutableResourcePromise;
     /**
@@ -28521,14 +28471,12 @@ export interface ExecutableResource {
      * changes to the source resource are reflected by this resource.
      * @param sourceBuilder The resource builder whose lifetime should be used.
      * @returns The resource builder.
-     * @experimental
      */
     withLifetimeOf(sourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ExecutableResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime that ends when a parent process exits.
      * @param parentProcessId The ID of the parent process to monitor.
      * @returns The resource builder.
-     * @experimental
      */
     withParentProcessLifetime(parentProcessId: number): ExecutableResourcePromise;
     /** Sets an environment variable */
@@ -29213,13 +29161,11 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
     /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
-     * @experimental
      */
     withSessionLifetime(): ExecutableResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime.
      * @returns The resource builder.
-     * @experimental
      */
     withPersistentLifetime(): ExecutableResourcePromise;
     /**
@@ -29229,14 +29175,12 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      * changes to the source resource are reflected by this resource.
      * @param sourceBuilder The resource builder whose lifetime should be used.
      * @returns The resource builder.
-     * @experimental
      */
     withLifetimeOf(sourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ExecutableResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime that ends when a parent process exits.
      * @param parentProcessId The ID of the parent process to monitor.
      * @returns The resource builder.
-     * @experimental
      */
     withParentProcessLifetime(parentProcessId: number): ExecutableResourcePromise;
     /** Sets an environment variable */
@@ -30088,7 +30032,6 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
-     * @experimental
      */
     withSessionLifetime(): ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._withSessionLifetimeInternal(), this._client);
@@ -30107,7 +30050,6 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     /**
      * Configures a resource to use a persistent lifetime.
      * @returns The resource builder.
-     * @experimental
      */
     withPersistentLifetime(): ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._withPersistentLifetimeInternal(), this._client);
@@ -30131,7 +30073,6 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
      * changes to the source resource are reflected by this resource.
      * @param sourceBuilder The resource builder whose lifetime should be used.
      * @returns The resource builder.
-     * @experimental
      */
     withLifetimeOf(sourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._withLifetimeOfInternal(sourceBuilder), this._client);
@@ -30151,7 +30092,6 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
      * Configures a resource to use a persistent lifetime that ends when a parent process exits.
      * @param parentProcessId The ID of the parent process to monitor.
      * @returns The resource builder.
-     * @experimental
      */
     withParentProcessLifetime(parentProcessId: number): ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._withParentProcessLifetimeInternal(parentProcessId), this._client);
@@ -32504,13 +32444,11 @@ export interface ExternalServiceResource {
     /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
-     * @experimental
      */
     withSessionLifetime(): ExternalServiceResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime.
      * @returns The resource builder.
-     * @experimental
      */
     withPersistentLifetime(): ExternalServiceResourcePromise;
     /**
@@ -32520,14 +32458,12 @@ export interface ExternalServiceResource {
      * changes to the source resource are reflected by this resource.
      * @param sourceBuilder The resource builder whose lifetime should be used.
      * @returns The resource builder.
-     * @experimental
      */
     withLifetimeOf(sourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ExternalServiceResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime that ends when a parent process exits.
      * @param parentProcessId The ID of the parent process to monitor.
      * @returns The resource builder.
-     * @experimental
      */
     withParentProcessLifetime(parentProcessId: number): ExternalServiceResourcePromise;
     /**
@@ -32884,13 +32820,11 @@ export interface ExternalServiceResourcePromise extends PromiseLike<ExternalServ
     /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
-     * @experimental
      */
     withSessionLifetime(): ExternalServiceResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime.
      * @returns The resource builder.
-     * @experimental
      */
     withPersistentLifetime(): ExternalServiceResourcePromise;
     /**
@@ -32900,14 +32834,12 @@ export interface ExternalServiceResourcePromise extends PromiseLike<ExternalServ
      * changes to the source resource are reflected by this resource.
      * @param sourceBuilder The resource builder whose lifetime should be used.
      * @returns The resource builder.
-     * @experimental
      */
     withLifetimeOf(sourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ExternalServiceResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime that ends when a parent process exits.
      * @param parentProcessId The ID of the parent process to monitor.
      * @returns The resource builder.
-     * @experimental
      */
     withParentProcessLifetime(parentProcessId: number): ExternalServiceResourcePromise;
     /**
@@ -33367,7 +33299,6 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
     /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
-     * @experimental
      */
     withSessionLifetime(): ExternalServiceResourcePromise {
         return new ExternalServiceResourcePromiseImpl(this._withSessionLifetimeInternal(), this._client);
@@ -33386,7 +33317,6 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
     /**
      * Configures a resource to use a persistent lifetime.
      * @returns The resource builder.
-     * @experimental
      */
     withPersistentLifetime(): ExternalServiceResourcePromise {
         return new ExternalServiceResourcePromiseImpl(this._withPersistentLifetimeInternal(), this._client);
@@ -33410,7 +33340,6 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
      * changes to the source resource are reflected by this resource.
      * @param sourceBuilder The resource builder whose lifetime should be used.
      * @returns The resource builder.
-     * @experimental
      */
     withLifetimeOf(sourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ExternalServiceResourcePromise {
         return new ExternalServiceResourcePromiseImpl(this._withLifetimeOfInternal(sourceBuilder), this._client);
@@ -33430,7 +33359,6 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
      * Configures a resource to use a persistent lifetime that ends when a parent process exits.
      * @param parentProcessId The ID of the parent process to monitor.
      * @returns The resource builder.
-     * @experimental
      */
     withParentProcessLifetime(parentProcessId: number): ExternalServiceResourcePromise {
         return new ExternalServiceResourcePromiseImpl(this._withParentProcessLifetimeInternal(parentProcessId), this._client);
@@ -34800,13 +34728,11 @@ export interface ParameterResource {
     /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
-     * @experimental
      */
     withSessionLifetime(): ParameterResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime.
      * @returns The resource builder.
-     * @experimental
      */
     withPersistentLifetime(): ParameterResourcePromise;
     /**
@@ -34816,14 +34742,12 @@ export interface ParameterResource {
      * changes to the source resource are reflected by this resource.
      * @param sourceBuilder The resource builder whose lifetime should be used.
      * @returns The resource builder.
-     * @experimental
      */
     withLifetimeOf(sourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ParameterResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime that ends when a parent process exits.
      * @param parentProcessId The ID of the parent process to monitor.
      * @returns The resource builder.
-     * @experimental
      */
     withParentProcessLifetime(parentProcessId: number): ParameterResourcePromise;
     /**
@@ -35223,13 +35147,11 @@ export interface ParameterResourcePromise extends PromiseLike<ParameterResource>
     /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
-     * @experimental
      */
     withSessionLifetime(): ParameterResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime.
      * @returns The resource builder.
-     * @experimental
      */
     withPersistentLifetime(): ParameterResourcePromise;
     /**
@@ -35239,14 +35161,12 @@ export interface ParameterResourcePromise extends PromiseLike<ParameterResource>
      * changes to the source resource are reflected by this resource.
      * @param sourceBuilder The resource builder whose lifetime should be used.
      * @returns The resource builder.
-     * @experimental
      */
     withLifetimeOf(sourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ParameterResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime that ends when a parent process exits.
      * @param parentProcessId The ID of the parent process to monitor.
      * @returns The resource builder.
-     * @experimental
      */
     withParentProcessLifetime(parentProcessId: number): ParameterResourcePromise;
     /**
@@ -35785,7 +35705,6 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
     /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
-     * @experimental
      */
     withSessionLifetime(): ParameterResourcePromise {
         return new ParameterResourcePromiseImpl(this._withSessionLifetimeInternal(), this._client);
@@ -35804,7 +35723,6 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
     /**
      * Configures a resource to use a persistent lifetime.
      * @returns The resource builder.
-     * @experimental
      */
     withPersistentLifetime(): ParameterResourcePromise {
         return new ParameterResourcePromiseImpl(this._withPersistentLifetimeInternal(), this._client);
@@ -35828,7 +35746,6 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
      * changes to the source resource are reflected by this resource.
      * @param sourceBuilder The resource builder whose lifetime should be used.
      * @returns The resource builder.
-     * @experimental
      */
     withLifetimeOf(sourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ParameterResourcePromise {
         return new ParameterResourcePromiseImpl(this._withLifetimeOfInternal(sourceBuilder), this._client);
@@ -35848,7 +35765,6 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
      * Configures a resource to use a persistent lifetime that ends when a parent process exits.
      * @param parentProcessId The ID of the parent process to monitor.
      * @returns The resource builder.
-     * @experimental
      */
     withParentProcessLifetime(parentProcessId: number): ParameterResourcePromise {
         return new ParameterResourcePromiseImpl(this._withParentProcessLifetimeInternal(parentProcessId), this._client);
@@ -37267,13 +37183,11 @@ export interface ProjectResource {
     /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
-     * @experimental
      */
     withSessionLifetime(): ProjectResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime.
      * @returns The resource builder.
-     * @experimental
      */
     withPersistentLifetime(): ProjectResourcePromise;
     /**
@@ -37283,14 +37197,12 @@ export interface ProjectResource {
      * changes to the source resource are reflected by this resource.
      * @param sourceBuilder The resource builder whose lifetime should be used.
      * @returns The resource builder.
-     * @experimental
      */
     withLifetimeOf(sourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ProjectResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime that ends when a parent process exits.
      * @param parentProcessId The ID of the parent process to monitor.
      * @returns The resource builder.
-     * @experimental
      */
     withParentProcessLifetime(parentProcessId: number): ProjectResourcePromise;
     /** Sets an environment variable */
@@ -37978,13 +37890,11 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
     /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
-     * @experimental
      */
     withSessionLifetime(): ProjectResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime.
      * @returns The resource builder.
-     * @experimental
      */
     withPersistentLifetime(): ProjectResourcePromise;
     /**
@@ -37994,14 +37904,12 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      * changes to the source resource are reflected by this resource.
      * @param sourceBuilder The resource builder whose lifetime should be used.
      * @returns The resource builder.
-     * @experimental
      */
     withLifetimeOf(sourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ProjectResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime that ends when a parent process exits.
      * @param parentProcessId The ID of the parent process to monitor.
      * @returns The resource builder.
-     * @experimental
      */
     withParentProcessLifetime(parentProcessId: number): ProjectResourcePromise;
     /** Sets an environment variable */
@@ -38852,7 +38760,6 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
-     * @experimental
      */
     withSessionLifetime(): ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._withSessionLifetimeInternal(), this._client);
@@ -38871,7 +38778,6 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     /**
      * Configures a resource to use a persistent lifetime.
      * @returns The resource builder.
-     * @experimental
      */
     withPersistentLifetime(): ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._withPersistentLifetimeInternal(), this._client);
@@ -38895,7 +38801,6 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
      * changes to the source resource are reflected by this resource.
      * @param sourceBuilder The resource builder whose lifetime should be used.
      * @returns The resource builder.
-     * @experimental
      */
     withLifetimeOf(sourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._withLifetimeOfInternal(sourceBuilder), this._client);
@@ -38915,7 +38820,6 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
      * Configures a resource to use a persistent lifetime that ends when a parent process exits.
      * @param parentProcessId The ID of the parent process to monitor.
      * @returns The resource builder.
-     * @experimental
      */
     withParentProcessLifetime(parentProcessId: number): ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._withParentProcessLifetimeInternal(parentProcessId), this._client);
@@ -41481,13 +41385,11 @@ export interface TestDatabaseResource {
     /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
-     * @experimental
      */
     withSessionLifetime(): TestDatabaseResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime.
      * @returns The resource builder.
-     * @experimental
      */
     withPersistentLifetime(): TestDatabaseResourcePromise;
     /**
@@ -41497,14 +41399,12 @@ export interface TestDatabaseResource {
      * changes to the source resource are reflected by this resource.
      * @param sourceBuilder The resource builder whose lifetime should be used.
      * @returns The resource builder.
-     * @experimental
      */
     withLifetimeOf(sourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): TestDatabaseResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime that ends when a parent process exits.
      * @param parentProcessId The ID of the parent process to monitor.
      * @returns The resource builder.
-     * @experimental
      */
     withParentProcessLifetime(parentProcessId: number): TestDatabaseResourcePromise;
     /** Sets an environment variable */
@@ -42352,13 +42252,11 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
     /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
-     * @experimental
      */
     withSessionLifetime(): TestDatabaseResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime.
      * @returns The resource builder.
-     * @experimental
      */
     withPersistentLifetime(): TestDatabaseResourcePromise;
     /**
@@ -42368,14 +42266,12 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      * changes to the source resource are reflected by this resource.
      * @param sourceBuilder The resource builder whose lifetime should be used.
      * @returns The resource builder.
-     * @experimental
      */
     withLifetimeOf(sourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): TestDatabaseResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime that ends when a parent process exits.
      * @param parentProcessId The ID of the parent process to monitor.
      * @returns The resource builder.
-     * @experimental
      */
     withParentProcessLifetime(parentProcessId: number): TestDatabaseResourcePromise;
     /** Sets an environment variable */
@@ -43650,7 +43546,6 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
-     * @experimental
      */
     withSessionLifetime(): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._withSessionLifetimeInternal(), this._client);
@@ -43669,7 +43564,6 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     /**
      * Configures a resource to use a persistent lifetime.
      * @returns The resource builder.
-     * @experimental
      */
     withPersistentLifetime(): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._withPersistentLifetimeInternal(), this._client);
@@ -43693,7 +43587,6 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
      * changes to the source resource are reflected by this resource.
      * @param sourceBuilder The resource builder whose lifetime should be used.
      * @returns The resource builder.
-     * @experimental
      */
     withLifetimeOf(sourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._withLifetimeOfInternal(sourceBuilder), this._client);
@@ -43713,7 +43606,6 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
      * Configures a resource to use a persistent lifetime that ends when a parent process exits.
      * @param parentProcessId The ID of the parent process to monitor.
      * @returns The resource builder.
-     * @experimental
      */
     withParentProcessLifetime(parentProcessId: number): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._withParentProcessLifetimeInternal(parentProcessId), this._client);
@@ -46263,13 +46155,11 @@ export interface TestRedisResource {
     /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
-     * @experimental
      */
     withSessionLifetime(): TestRedisResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime.
      * @returns The resource builder.
-     * @experimental
      */
     withPersistentLifetime(): TestRedisResourcePromise;
     /**
@@ -46279,14 +46169,12 @@ export interface TestRedisResource {
      * changes to the source resource are reflected by this resource.
      * @param sourceBuilder The resource builder whose lifetime should be used.
      * @returns The resource builder.
-     * @experimental
      */
     withLifetimeOf(sourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): TestRedisResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime that ends when a parent process exits.
      * @param parentProcessId The ID of the parent process to monitor.
      * @returns The resource builder.
-     * @experimental
      */
     withParentProcessLifetime(parentProcessId: number): TestRedisResourcePromise;
     /** Sets an environment variable */
@@ -47218,13 +47106,11 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
     /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
-     * @experimental
      */
     withSessionLifetime(): TestRedisResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime.
      * @returns The resource builder.
-     * @experimental
      */
     withPersistentLifetime(): TestRedisResourcePromise;
     /**
@@ -47234,14 +47120,12 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      * changes to the source resource are reflected by this resource.
      * @param sourceBuilder The resource builder whose lifetime should be used.
      * @returns The resource builder.
-     * @experimental
      */
     withLifetimeOf(sourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): TestRedisResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime that ends when a parent process exits.
      * @param parentProcessId The ID of the parent process to monitor.
      * @returns The resource builder.
-     * @experimental
      */
     withParentProcessLifetime(parentProcessId: number): TestRedisResourcePromise;
     /** Sets an environment variable */
@@ -48600,7 +48484,6 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
-     * @experimental
      */
     withSessionLifetime(): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._withSessionLifetimeInternal(), this._client);
@@ -48619,7 +48502,6 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     /**
      * Configures a resource to use a persistent lifetime.
      * @returns The resource builder.
-     * @experimental
      */
     withPersistentLifetime(): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._withPersistentLifetimeInternal(), this._client);
@@ -48643,7 +48525,6 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
      * changes to the source resource are reflected by this resource.
      * @param sourceBuilder The resource builder whose lifetime should be used.
      * @returns The resource builder.
-     * @experimental
      */
     withLifetimeOf(sourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._withLifetimeOfInternal(sourceBuilder), this._client);
@@ -48663,7 +48544,6 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
      * Configures a resource to use a persistent lifetime that ends when a parent process exits.
      * @param parentProcessId The ID of the parent process to monitor.
      * @returns The resource builder.
-     * @experimental
      */
     withParentProcessLifetime(parentProcessId: number): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._withParentProcessLifetimeInternal(parentProcessId), this._client);
@@ -51542,13 +51422,11 @@ export interface TestVaultResource {
     /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
-     * @experimental
      */
     withSessionLifetime(): TestVaultResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime.
      * @returns The resource builder.
-     * @experimental
      */
     withPersistentLifetime(): TestVaultResourcePromise;
     /**
@@ -51558,14 +51436,12 @@ export interface TestVaultResource {
      * changes to the source resource are reflected by this resource.
      * @param sourceBuilder The resource builder whose lifetime should be used.
      * @returns The resource builder.
-     * @experimental
      */
     withLifetimeOf(sourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): TestVaultResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime that ends when a parent process exits.
      * @param parentProcessId The ID of the parent process to monitor.
      * @returns The resource builder.
-     * @experimental
      */
     withParentProcessLifetime(parentProcessId: number): TestVaultResourcePromise;
     /** Sets an environment variable */
@@ -52415,13 +52291,11 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
     /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
-     * @experimental
      */
     withSessionLifetime(): TestVaultResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime.
      * @returns The resource builder.
-     * @experimental
      */
     withPersistentLifetime(): TestVaultResourcePromise;
     /**
@@ -52431,14 +52305,12 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      * changes to the source resource are reflected by this resource.
      * @param sourceBuilder The resource builder whose lifetime should be used.
      * @returns The resource builder.
-     * @experimental
      */
     withLifetimeOf(sourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): TestVaultResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime that ends when a parent process exits.
      * @param parentProcessId The ID of the parent process to monitor.
      * @returns The resource builder.
-     * @experimental
      */
     withParentProcessLifetime(parentProcessId: number): TestVaultResourcePromise;
     /** Sets an environment variable */
@@ -53715,7 +53587,6 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
-     * @experimental
      */
     withSessionLifetime(): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._withSessionLifetimeInternal(), this._client);
@@ -53734,7 +53605,6 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     /**
      * Configures a resource to use a persistent lifetime.
      * @returns The resource builder.
-     * @experimental
      */
     withPersistentLifetime(): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._withPersistentLifetimeInternal(), this._client);
@@ -53758,7 +53628,6 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
      * changes to the source resource are reflected by this resource.
      * @param sourceBuilder The resource builder whose lifetime should be used.
      * @returns The resource builder.
-     * @experimental
      */
     withLifetimeOf(sourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._withLifetimeOfInternal(sourceBuilder), this._client);
@@ -53778,7 +53647,6 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
      * Configures a resource to use a persistent lifetime that ends when a parent process exits.
      * @param parentProcessId The ID of the parent process to monitor.
      * @returns The resource builder.
-     * @experimental
      */
     withParentProcessLifetime(parentProcessId: number): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._withParentProcessLifetimeInternal(parentProcessId), this._client);
@@ -56425,13 +56293,11 @@ export interface Resource {
     /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
-     * @experimental
      */
     withSessionLifetime(): ResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime.
      * @returns The resource builder.
-     * @experimental
      */
     withPersistentLifetime(): ResourcePromise;
     /**
@@ -56441,14 +56307,12 @@ export interface Resource {
      * changes to the source resource are reflected by this resource.
      * @param sourceBuilder The resource builder whose lifetime should be used.
      * @returns The resource builder.
-     * @experimental
      */
     withLifetimeOf(sourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime that ends when a parent process exits.
      * @param parentProcessId The ID of the parent process to monitor.
      * @returns The resource builder.
-     * @experimental
      */
     withParentProcessLifetime(parentProcessId: number): ResourcePromise;
     /**
@@ -56800,13 +56664,11 @@ export interface ResourcePromise extends PromiseLike<Resource> {
     /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
-     * @experimental
      */
     withSessionLifetime(): ResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime.
      * @returns The resource builder.
-     * @experimental
      */
     withPersistentLifetime(): ResourcePromise;
     /**
@@ -56816,14 +56678,12 @@ export interface ResourcePromise extends PromiseLike<Resource> {
      * changes to the source resource are reflected by this resource.
      * @param sourceBuilder The resource builder whose lifetime should be used.
      * @returns The resource builder.
-     * @experimental
      */
     withLifetimeOf(sourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ResourcePromise;
     /**
      * Configures a resource to use a persistent lifetime that ends when a parent process exits.
      * @param parentProcessId The ID of the parent process to monitor.
      * @returns The resource builder.
-     * @experimental
      */
     withParentProcessLifetime(parentProcessId: number): ResourcePromise;
     /**
@@ -57260,7 +57120,6 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
     /**
      * Configures a resource to use a session lifetime.
      * @returns The resource builder.
-     * @experimental
      */
     withSessionLifetime(): ResourcePromise {
         return new ResourcePromiseImpl(this._withSessionLifetimeInternal(), this._client);
@@ -57279,7 +57138,6 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
     /**
      * Configures a resource to use a persistent lifetime.
      * @returns The resource builder.
-     * @experimental
      */
     withPersistentLifetime(): ResourcePromise {
         return new ResourcePromiseImpl(this._withPersistentLifetimeInternal(), this._client);
@@ -57303,7 +57161,6 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
      * changes to the source resource are reflected by this resource.
      * @param sourceBuilder The resource builder whose lifetime should be used.
      * @returns The resource builder.
-     * @experimental
      */
     withLifetimeOf(sourceBuilder: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ResourcePromise {
         return new ResourcePromiseImpl(this._withLifetimeOfInternal(sourceBuilder), this._client);
@@ -57323,7 +57180,6 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
      * Configures a resource to use a persistent lifetime that ends when a parent process exits.
      * @param parentProcessId The ID of the parent process to monitor.
      * @returns The resource builder.
-     * @experimental
      */
     withParentProcessLifetime(parentProcessId: number): ResourcePromise {
         return new ResourcePromiseImpl(this._withParentProcessLifetimeInternal(parentProcessId), this._client);

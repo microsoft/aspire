@@ -48,8 +48,6 @@ public sealed class StopForceTests(ITestOutputHelper output)
         File.WriteAllText(appHostFilePath, $$"""
             {{sdkLine}}
 
-            #pragma warning disable ASPIREPERSISTENCE001
-
             var builder = DistributedApplication.CreateBuilder(args);
 
             var cache = builder.AddContainer("{{resourceName}}", "redis")
