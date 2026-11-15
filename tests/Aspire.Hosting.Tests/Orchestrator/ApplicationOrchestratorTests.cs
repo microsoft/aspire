@@ -1235,6 +1235,65 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
         await startingTask.DefaultTimeout();
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ParameterWaitIsReportedAfterDependenciesComplete(bool readWhileWaitingForDependencies)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var parameter = builder.AddParameter("parameter").Resource;
+        parameter.EnsureValueTask();
+        var dependency = builder.AddExecutable("dependency", "unused", ".");
+        var caller = builder.AddExecutable("caller", "unused", ".").WaitFor(dependency);
+
+        using var app = builder.Build();
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
+        var notifications = app.ResourceNotifications;
+        var events = new DcpExecutorEvents();
+        var orchestrator = CreateOrchestrator(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            notifications,
+            dcpEvents: events,
+            applicationEventing: builder.Eventing);
+        await orchestrator.RunApplicationAsync();
+
+        var startingTask = events.PublishAsync(new OnResourceStartingContext(
+            cts.Token, KnownResourceTypes.Executable, caller.Resource, caller.Resource.Name));
+        await notifications.WaitForResourceAsync(caller.Resource.Name, KnownResourceStates.Waiting, cts.Token).DefaultTimeout();
+
+        var context = new ValueProviderContext { ExecutionContext = builder.ExecutionContext, Caller = caller.Resource };
+        var read = readWhileWaitingForDependencies ? parameter.GetValueAsync(context, cts.Token).AsTask() : null;
+        if (read is not null)
+        {
+            Assert.False(read.IsCompleted);
+            Assert.True(notifications.TryGetCurrentState(caller.Resource.Name, out var waiting));
+            Assert.Equal(KnownResourceStates.Waiting, waiting.Snapshot.State?.Text);
+            var waitingFor = Assert.Single(waiting.Snapshot.Properties, p => p.Name == KnownProperties.Resource.WaitingFor);
+            Assert.Equal(new[] { dependency.Resource.Name }, Assert.IsType<string[]>(waitingFor.Value));
+            Assert.False(startingTask.IsCompleted);
+        }
+
+        await notifications.PublishUpdateAsync(dependency.Resource, s => s with
+        {
+            State = KnownResourceStates.Running,
+            ResourceReadyEvent = new EventSnapshot(Task.CompletedTask)
+        });
+        await startingTask.DefaultTimeout();
+
+        read ??= parameter.GetValueAsync(context, cts.Token).AsTask();
+        Assert.False(read.IsCompleted);
+        Assert.True(caller.Resource.HasAnnotationOfType<WaitAnnotation>());
+        Assert.True(notifications.TryGetCurrentState(caller.Resource.Name, out var blocked));
+        Assert.Equal(KnownResourceStates.UnresolvedParameters, blocked.Snapshot.State?.Text);
+        var unresolved = Assert.Single(blocked.Snapshot.Properties, p => p.Name == KnownProperties.Resource.UnresolvedParameters);
+        Assert.Equal(new[] { parameter.Name }, Assert.IsType<string[]>(unresolved.Value));
+
+        await parameter.SetValueAsync("value");
+        Assert.Equal("value", await read.DefaultTimeout());
+        Assert.True(notifications.TryGetCurrentState(caller.Resource.Name, out var completed));
+        Assert.Equal(KnownResourceStates.Waiting, completed.Snapshot.State?.Text);
+    }
+
     [Fact]
     public async Task WaitIsNotReleasedByAnotherReplicaLeavingWaitingState()
     {
