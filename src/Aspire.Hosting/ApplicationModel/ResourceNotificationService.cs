@@ -1076,10 +1076,11 @@ public class ResourceNotificationService : IDisposable
             return snapshot;
         }
 
-        // Custom resources also use Waiting during initialization. Do not replace dependency waits:
-        // leaving Waiting releases WaitFor, even when the dependency is not ready yet.
+        // Custom resources also use Waiting during initialization. Dependency annotations remain after
+        // dependencies are ready, so use the pending list to identify active dependency waits.
+        // Leaving Waiting during an active dependency wait would release WaitFor prematurely.
         if (snapshot.State?.Text == KnownResourceStates.Starting ||
-            (snapshot.State?.Text == KnownResourceStates.Waiting && !notificationState.Resource.HasAnnotationOfType<WaitAnnotation>()))
+            (snapshot.State?.Text == KnownResourceStates.Waiting && !TryGetWaitingForDependencies(snapshot.Properties, out _)))
         {
             notificationState.StateBeforeParameterWait = snapshot.State;
         }

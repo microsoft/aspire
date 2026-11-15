@@ -73,15 +73,22 @@ public class AddParameterTests
         using var builder = TestDistributedApplicationBuilder.Create();
         var parameter = builder.AddParameter("parameter").Resource;
         parameter.EnsureValueTask();
+        var dependency = builder.AddExecutable("dependency", "unused", ".");
         var caller = builder.AddExecutable("caller", "unused", ".")
-            .WaitFor(builder.AddExecutable("dependency", "unused", ".")).Resource;
+            .WaitFor(dependency).Resource;
         using var app = builder.Build();
         using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
         await app.ResourceNotifications.PublishUpdateAsync(caller, s => s with { State = KnownResourceStates.Starting });
         var read = parameter.GetValueAsync(new ValueProviderContext { ExecutionContext = builder.ExecutionContext, Caller = caller }, cts.Token).AsTask();
         AssertParameterWaitState(app, caller, KnownResourceStates.UnresolvedParameters, "parameter");
 
-        await app.ResourceNotifications.PublishUpdateAsync(caller, s => s with { State = newerState });
+        await app.ResourceNotifications.PublishUpdateAsync(caller, s => s with
+        {
+            State = newerState,
+            Properties = newerState == KnownResourceStates.Waiting
+                ? [new ResourcePropertySnapshot(KnownProperties.Resource.WaitingFor, new[] { dependency.Resource.Name })]
+                : s.Properties
+        });
         AssertParameterWaitState(app, caller, newerState);
         await parameter.SetValueAsync("value");
         Assert.Equal("value", await read.DefaultTimeout());
