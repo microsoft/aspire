@@ -3,21 +3,21 @@
 
 var builder = DistributedApplication.CreateBuilder(args);
 
-var appId = builder.AddParameter("github-app-id")
-    .WithDescription("The numeric **App ID** shown on the GitHub App's settings page.", enableMarkdown: true);
-var clientId = builder.AddParameter("github-client-id")
-    .WithDescription("The **Client ID** shown on the GitHub App's settings page. It starts with `Iv`.", enableMarkdown: true);
-var privateKey = builder.AddParameter("github-private-key", secret: true)
-    .WithDescription("The contents of a **private key** `.pem` file generated on the GitHub App's settings page, with its line breaks.", enableMarkdown: true);
+// On the first run, the dashboard links to GitHub to register the app. Its credentials are then saved to the AppHost's
+// user secrets, and later runs reuse the app.
+var gitHubApp = builder.AddGitHubApp("github-app")
+    .WithPermission("metadata", GitHubAppPermissionLevel.Read);
 
-var gitHubApp = builder.AddExistingGitHubApp("github-app", appId, clientId, privateKey);
+// To use an app that is already registered instead, replace the resource above with:
+// var gitHubApp = builder.AddExistingGitHubApp(
+//     "github-app",
+//     builder.AddParameter("github-app-id"),
+//     builder.AddParameter("github-client-id"),
+//     builder.AddParameter("github-private-key", secret: true));
 
-// Set the slug, and the owning organization if any, to link the dashboard to the app's own settings page.
-// gitHubApp.WithAppSlug("my-app", organization: "my-org");
-
+// WithReference waits for the app to be registered before the API starts.
 builder.AddDotnetProject("api", "../GitHubApp.Api/GitHubApp.Api.csproj")
-    .WithReference(gitHubApp)
-    .WaitFor(gitHubApp);
+    .WithReference(gitHubApp);
 
 #if !SKIP_DASHBOARD_REFERENCE
 // This project is only added in playground projects to support development/debugging
