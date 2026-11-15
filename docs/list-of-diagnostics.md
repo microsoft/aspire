@@ -41,6 +41,12 @@ Connection-string physical-name metadata (`ConnectionStringEnvironmentVariableNa
 `ConnectionStringReference.EnvironmentVariableNames`) is stable and no longer produces
 `ASPIRECONNECTIONSTRINGS001`. Existing suppressions of that diagnostic can be removed.
 
+### Retired Experimental API Warnings
+
+| Diagnostic ID | Description | Location |
+| ------------- | ----------- | -------- |
+| `ASPIREMCP001` | MCP endpoint declaration via `WithMcpServer` is stable and no longer requires suppression. This declares an existing server for Aspire tooling discovery and proxying; it does not implement or configure an MCP transport. | [src/Aspire.Hosting/McpServerResourceBuilderExtensions.cs](../src/Aspire.Hosting/McpServerResourceBuilderExtensions.cs) |
+
 ## Analyzer Warnings
 
 | Diagnostic ID | Severity | Description | Location |
