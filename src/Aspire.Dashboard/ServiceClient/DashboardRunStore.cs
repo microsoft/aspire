@@ -74,6 +74,10 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
 
     private static readonly TimeSpan s_minimumLockAge = TimeSpan.FromDays(1);
 
+    // Collisions only happen when dashboards start within the same few milliseconds, so a handful of attempts is
+    // normally enough. The bound stops an unwritable runs directory, where every lock attempt fails, from looping forever.
+    internal const int MaxRunIdAttempts = 1000;
+
     internal const string DatabaseFileName = "dashboard.db";
     internal const int MaxApplicationDirectoryNameLength = 80;
     internal const int MaxRuns = 10;
@@ -112,12 +116,7 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
         var applicationName = options.Value.GetApplicationNameOrDefault();
         _applicationMarkerFileName = GetApplicationDirectoryName(applicationName);
         var startedAt = timeProvider.GetUtcNow();
-        // A millisecond timestamp collision is very unlikely. The exclusive run lock below also ensures that if two
-        // Dashboard instances resolve the same run ID concurrently, the second fails instead of sharing the database.
-        // Format invariantly. This value is a durable directory name and the ordinal sort key used by
-        // PruneRuns, so a non-Gregorian current culture (th-TH, ar-SA) would produce IDs that sort
-        // against previous runs incorrectly and let retention delete newer runs.
-        var runId = startedAt.ToString("yyyyMMddTHHmmssfffZ", CultureInfo.InvariantCulture);
+        var runId = FormatRunId(startedAt);
         PersistenceMode = options.Value.Data.PersistenceMode;
 
         // Persistent data can contain environment variables, telemetry, and console logs. Restrict the
@@ -137,13 +136,9 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
             case DashboardPersistenceMode.Run:
                 _runsDirectory = GetRunsDirectory(options.Value.Data.Directory);
                 DirectoryHelper.CreateWithOwnerOnlyPermissions(_runsDirectory);
+                var runLock = CreateNewRunDirectory(_runsDirectory, ref startedAt, out runId);
                 CurrentWorkingDirectory = Path.Combine(_runsDirectory, runId);
                 DatabasePath = Path.Combine(CurrentWorkingDirectory, DatabaseFileName);
-                // Assume that if the run directory can be created, then files in the run directory can be written as well.
-                Directory.CreateDirectory(CurrentWorkingDirectory);
-                var runLock = OpenRequiredRunLock(
-                    CurrentWorkingDirectory,
-                    $"Dashboard run '{runId}' is already in use by another dashboard process.");
                 try
                 {
                     File.WriteAllText(Path.Combine(CurrentWorkingDirectory, _applicationMarkerFileName), string.Empty);
@@ -555,6 +550,70 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
         }
     }
 
+    // Format invariantly. This value is a durable directory name and the ordinal sort key used by
+    // PruneRuns, so a non-Gregorian current culture (th-TH, ar-SA) would produce IDs that sort
+    // against previous runs incorrectly and let retention delete newer runs.
+    private static string FormatRunId(DateTimeOffset startedAt) =>
+        startedAt.ToString("yyyyMMddTHHmmssfffZ", CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// Claims a run ID that no other dashboard process has used and creates its directory.
+    /// </summary>
+    /// <remarks>
+    /// Dashboards started in the same millisecond, such as AppHosts started together, resolve the same run ID.
+    /// Taking the run lock before creating the directory makes the claim atomic across processes, and requiring the
+    /// directory to be new prevents adopting an earlier run's data. On a collision the start time advances by one
+    /// millisecond, which keeps the ID format and the chronological ordinal ordering used by pruning.
+    /// </remarks>
+    private static FileLock CreateNewRunDirectory(string runsDirectory, ref DateTimeOffset startedAt, out string runId)
+    {
+        Exception? lastLockException = null;
+        for (var attempt = 1; ; attempt++)
+        {
+            runId = FormatRunId(startedAt);
+            var runDirectory = Path.Combine(runsDirectory, runId);
+            FileLock? runLock = null;
+            try
+            {
+                runLock = OpenRunLock(runDirectory);
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                // Usually another dashboard holds the lock, but this can also be a disk or permission error.
+                lastLockException = exception;
+            }
+
+            if (runLock is not null)
+            {
+                if (!Directory.Exists(runDirectory))
+                {
+                    try
+                    {
+                        // Assume that if the run directory can be created, then files in the run directory can be written as well.
+                        Directory.CreateDirectory(runDirectory);
+                        return runLock;
+                    }
+                    catch
+                    {
+                        runLock.Dispose();
+                        throw;
+                    }
+                }
+
+                runLock.Dispose();
+            }
+
+            if (attempt >= MaxRunIdAttempts)
+            {
+                throw new InvalidOperationException(
+                    $"Could not allocate a dashboard run in '{runsDirectory}' after {MaxRunIdAttempts} attempts. Each candidate run ID was locked by another dashboard process, already existed, or its lock could not be acquired. Last candidate: '{runId}'.",
+                    lastLockException);
+            }
+
+            startedAt = startedAt.AddMilliseconds(1);
+        }
+    }
+
     private static FileLock OpenRunLock(string runDirectory)
     {
         // Keep the lock beside the run directory so pruning can hold it while recursively deleting the directory on Windows.
@@ -619,13 +678,6 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
     internal static string GetRunsDirectory(string? dataRoot) => Path.Combine(GetDataRoot(dataRoot), "runs");
 
     internal static string GetResumesDirectory(string? dataRoot) => Path.Combine(GetDataRoot(dataRoot), "resumes");
-
-    /// <summary>
-    /// Gets the directory for application settings that are shared by every run of the application, unlike run
-    /// databases which are created per run and pruned.
-    /// </summary>
-    internal static string GetApplicationSettingsDirectory(string? dataRoot, string applicationName) =>
-        Path.Combine(GetDataRoot(dataRoot), "apps", GetApplicationDirectoryName(applicationName));
 
     private static string GetDataRoot(string? dataRoot) => Path.GetFullPath(
         string.IsNullOrWhiteSpace(dataRoot)

@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Xml.Linq;
 using Aspire.Cli.Agents;
 using Aspire.Cli.Agents.AspireSkills;
+using Aspire.Cli.Agents.ClaudeCode;
 using Aspire.Cli.Utils;
 using Aspire.Cli.Commands;
 using RootCommand = Aspire.Cli.Commands.RootCommand;
@@ -1006,7 +1007,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Equal(KnownLanguageId.Go, scaffoldedLanguageId);
         Assert.NotNull(promptedTemplates);
-        Assert.Contains((KnownTemplateId.GoStarter, "Starter App (Go API + Redis, Go AppHost)"), promptedTemplates);
+        Assert.Contains((KnownTemplateId.GoStarter, "Starter App (Go API/React, Go AppHost)"), promptedTemplates);
         Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "output", "apphost.go")));
     }
 
@@ -1715,10 +1716,14 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData("13.6.1", false)]
-    [InlineData("17.0.0-preview.1", true)]
-    [InlineData("17.0.0", true)]
-    public async Task NewCommandCSharpTemplateUsesVersionCompatibleDirectives(string version, bool packageOnly)
+    [InlineData("13.6.1", false, true)]
+    [InlineData("17.0.0-preview.1.26479.11", true, true)]
+    [InlineData("17.0.0-preview.1.26552.6", true, true)]
+    [InlineData("17.0.0-pr.21564", true, true)]
+    [InlineData("17.0.0", true, false)]
+    [InlineData("17.1.0-preview.1", true, false)]
+    [InlineData("17.1.0-pr.21564", true, false)]
+    public async Task NewCommandCSharpTemplateUsesVersionCompatibleDirectives(string version, bool packageOnly, bool explicitBundle)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var cache = new FakeNuGetPackageCache
@@ -1736,19 +1741,25 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
         var content = await File.ReadAllTextAsync(Path.Combine(workspace.WorkspaceRoot.FullName, "output", "apphost.cs"));
-        Assert.Contains("#:property AspireUseCliBundle=true", content);
-        Assert.DoesNotContain("{{", content);
-        if (packageOnly)
+        var directives = packageOnly
+            ? $"""
+                #:package Aspire.Hosting.AppHost@{version}
+                #:package Aspire.Hosting.Dotnet@{version}
+                """
+            : $"#:sdk Aspire.AppHost.Sdk@{version}";
+        if (explicitBundle)
         {
-            Assert.Contains($"#:package Aspire.Hosting.AppHost@{version}", content);
-            Assert.Contains($"#:package Aspire.Hosting.Dotnet@{version}", content);
-            Assert.DoesNotContain("#:sdk", content);
+            directives += "\n#:property AspireUseCliBundle=true";
         }
-        else
-        {
-            Assert.Contains($"#:sdk Aspire.AppHost.Sdk@{version}", content);
-            Assert.DoesNotContain("#:package", content);
-        }
+
+        var expected = $$"""
+            {{directives}}
+
+            var builder = DistributedApplication.CreateBuilder(args);
+
+            builder.Build().Run();
+            """;
+        Assert.Equal(expected.ReplaceLineEndings("\n"), content.ReplaceLineEndings("\n").TrimEnd('\n'));
     }
 
     [Fact]
@@ -3513,10 +3524,12 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var homeDirectory = workspace.CreateDirectory("fake-home");
+        var hooks = new TestTelemetryHookConfigurator();
         var services = CreateServiceCollection(workspace, options =>
         {
             options.CliExecutionContextFactory = _ => TestExecutionContextHelper.CreateExecutionContext(
                 workspace.WorkspaceRoot, identityChannel: PackageChannelNames.Stable, homeDirectory: homeDirectory);
+            options.TelemetryHookConfiguratorFactory = _ => hooks;
         });
         using var provider = services.BuildServiceProvider();
 
@@ -3527,6 +3540,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.True(AspireSkillsRemoteConfiguration.HasPluginRegistration(
             [configurationPath], [SkillSource.BuiltIn]));
         Assert.Equal([configurationPath], Directory.EnumerateFiles(homeDirectory.FullName, "*", SearchOption.AllDirectories));
+        Assert.Equal([ClaudeCodeAgentClient.ClientId], hooks.SelectedClientIds);
         var outputDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, "output");
         Assert.False(Directory.Exists(Path.Combine(outputDirectory, ".claude", "skills")));
         Assert.False(Directory.Exists(Path.Combine(outputDirectory, ".agents", "skills")));

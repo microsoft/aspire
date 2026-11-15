@@ -3,6 +3,7 @@
 
 using System.Diagnostics;
 using System.Formats.Tar;
+using System.Globalization;
 using System.IO.Compression;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
@@ -59,6 +60,32 @@ internal static class CliE2ETestHelpers
         return !string.IsNullOrWhiteSpace(version)
             ? version
             : throw new InvalidOperationException("Could not find an explicit AppHost package or retained SDK version.");
+    }
+
+    /// <summary>
+    /// Mirrors the compatibility check in <c>CliTemplateFactory.GetCSharpAppHostDirectives</c>: current
+    /// AppHost sources rely on SDK defaults, except that every 17.0.0 prerelease (PR builds aren't
+    /// ordered by package version, so "is this before 17.0" can't be determined from the version alone)
+    /// keeps emitting the explicit <c>#:property AspireUseCliBundle=true</c> compatibility directive.
+    /// Returns that directive line (with a leading newline), or an empty string when it is not expected.
+    /// </summary>
+    internal static string GetExpectedCliBundleCompatibilityDirective(string version)
+    {
+        // Versions look like "17.0.0" or "17.0.0-pr.20867.gabcdef01" (build metadata may follow a '+').
+        var match = Regex.Match(version, @"^(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)(?<prerelease>-[^+]+)?");
+        if (!match.Success)
+        {
+            throw new InvalidOperationException($"Could not parse AppHost version '{version}'.");
+        }
+
+        var major = int.Parse(match.Groups["major"].Value, CultureInfo.InvariantCulture);
+        var minor = int.Parse(match.Groups["minor"].Value, CultureInfo.InvariantCulture);
+        var patch = int.Parse(match.Groups["patch"].Value, CultureInfo.InvariantCulture);
+        var isPrerelease = match.Groups["prerelease"].Success;
+
+        return major < 17 || (major == 17 && minor == 0 && patch == 0 && isPrerelease)
+            ? "\n#:property AspireUseCliBundle=true"
+            : string.Empty;
     }
 
     /// <summary>

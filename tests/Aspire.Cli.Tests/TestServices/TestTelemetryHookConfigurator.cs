@@ -9,10 +9,19 @@ namespace Aspire.Cli.Tests.TestServices;
 internal sealed class TestTelemetryHookConfigurator : ITelemetryHookConfigurator
 {
     public Exception? Exception { get; init; }
-    public AgentEnvironment ConfiguredEnvironments { get; private set; }
 
-    public Task<TelemetryHookConfigurationResult> ConfigureAsync(
-        AgentEnvironment detectedEnvironments,
+    /// <summary>
+    /// Builds the results returned for the selected clients. Returns no results when unset.
+    /// </summary>
+    public Func<IReadOnlyList<IAgentClient>, IReadOnlyList<TelemetryHookResult>>? ResultFactory { get; init; }
+
+    /// <summary>
+    /// The ids of the clients passed to the most recent <see cref="ConfigureAsync"/> call.
+    /// </summary>
+    public IReadOnlyList<string> SelectedClientIds { get; private set; } = [];
+
+    public Task<IReadOnlyList<TelemetryHookResult>> ConfigureAsync(
+        IReadOnlyList<IAgentClient> selectedClients,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -21,7 +30,7 @@ internal sealed class TestTelemetryHookConfigurator : ITelemetryHookConfigurator
             throw exception;
         }
 
-        ConfiguredEnvironments = detectedEnvironments;
-        return Task.FromResult(new TelemetryHookConfigurationResult(ConfiguredEnvironments, []));
+        SelectedClientIds = [.. selectedClients.Select(static client => client.Id)];
+        return Task.FromResult(ResultFactory?.Invoke(selectedClients) ?? []);
     }
 }

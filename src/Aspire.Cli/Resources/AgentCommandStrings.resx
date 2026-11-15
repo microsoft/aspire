@@ -167,7 +167,7 @@
     <value>Failed to install {0} skill at {1}: {2}</value>
   </data>
   <data name="InitCommand_TelemetryHooksInstalled" xml:space="preserve">
-    <value>Installed Aspire agent telemetry hooks for: {0}. Only Aspire skill, MCP tool, and reference-file usage is recorded. Opt out anytime by setting ASPIRE_CLI_TELEMETRY_OPTOUT=true.</value>
+    <value>Installed Aspire agent telemetry hooks in user-level configuration for: {0}. Only Aspire skill, MCP tool, and reference-file usage is recorded. Opt out anytime by setting ASPIRE_CLI_TELEMETRY_OPTOUT=true.</value>
   </data>
   <data name="InitCommand_TelemetryHookSkippedMalformedConfig" xml:space="preserve">
     <value>Skipped the telemetry hook for {0} because its configuration file contains malformed JSON.</value>

@@ -33,13 +33,12 @@ internal sealed class ConfigSourceService(
     ILogger<ConfigSourceService> logger) : IDisposable
 {
     internal const string MicrosoftRepository = "https://msft.ghe.com/coreai/aspire-1p-init";
-    internal const string MicrosoftReadmeUrl = $"{MicrosoftRepository}/blob/HEAD/README.md";
+    internal const string MicrosoftReadmeUrl = MicrosoftRepository;
     private static readonly string[] s_allowedSettings = [SkillSource.SectionName, IntegrationSourceConfiguration.SectionName];
-    private static readonly TimeSpan s_gitTimeout = TimeSpan.FromSeconds(30);
     private readonly Dictionary<ConfigSourceIdentity, ConfigSourceSnapshot> _snapshots = [];
     private string? _projectDirectory;
     private bool _projectChecked;
-    private readonly List<(string? Message, string? GitOutput)> _notifications = [];
+    private readonly List<(KnownEmoji Emoji, string? Message, string? GitOutput)> _notifications = [];
     private readonly Lock _checksLock = new();
     private readonly CancellationTokenSource _stopping = new();
     private Task? _check;
@@ -114,7 +113,7 @@ internal sealed class ConfigSourceService(
 
     public void NotifyIfUpdateAvailable()
     {
-        (string? Message, string? GitOutput)[] notifications;
+        (KnownEmoji Emoji, string? Message, string? GitOutput)[] notifications;
         lock (_checksLock)
         {
             notifications = _notifications.ToArray();
@@ -124,7 +123,7 @@ internal sealed class ConfigSourceService(
         {
             if (pending.Message is { } message)
             {
-                interaction.DisplayMessage(KnownEmojis.PoliceCarLight, message, consoleOverride: ConsoleOutput.Error);
+                interaction.DisplayMessage(pending.Emoji, message, consoleOverride: ConsoleOutput.Error);
             }
             DisplayGitOutput(interaction, pending.GitOutput);
         }
@@ -149,11 +148,14 @@ internal sealed class ConfigSourceService(
     /// Resolves an optional configuration source from the environment or employee detection,
     /// obtains consent, and acquires the accepted source.
     /// </summary>
-    public Task<ConfigSource?> ResolveAndAcquireConfigSourceAsync(ParseResult parseResult, CancellationToken cancellationToken) =>
-        ResolveAndAcquireConfigSourceAsync(parseResult, allowInteractiveInput: true, cancellationToken);
+    /// <param name="parseResult">The command parse result containing the optional consent option.</param>
+    /// <param name="consentPrompt">The confirmation prompt describing what accepting the source does for the current command.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    public Task<ConfigSource?> ResolveAndAcquireConfigSourceAsync(ParseResult parseResult, string consentPrompt, CancellationToken cancellationToken) =>
+        ResolveAndAcquireConfigSourceAsync(parseResult, consentPrompt, allowInteractiveInput: true, cancellationToken);
 
     internal async Task<ConfigSource?> ResolveAndAcquireConfigSourceAsync(
-        ParseResult parseResult, bool allowInteractiveInput, CancellationToken cancellationToken)
+        ParseResult parseResult, string consentPrompt, bool allowInteractiveInput, CancellationToken cancellationToken)
     {
         var repository = environment.GetEnvironmentVariable(CliConfigNames.InitSourceUrl);
         var explicitSource = repository is not null;
@@ -179,8 +181,7 @@ internal sealed class ConfigSourceService(
             Ref = explicitSource ? environment.GetEnvironmentVariable(CliConfigNames.InitSourceRef) : null
         };
         source.Validate();
-        var readmeUrl = environment.GetEnvironmentVariable(CliConfigNames.InitSourceReadmeUrl)
-            ?? (source.Repository == MicrosoftRepository ? MicrosoftReadmeUrl : null);
+        var readmeUrl = GetReadmeUrl(source);
         if (readmeUrl is not null && (!UrlHelper.IsHttpUrl(readmeUrl) || readmeUrl.Any(char.IsControl)))
         {
             throw new ConfigSourceException(string.Format(CultureInfo.CurrentCulture,
@@ -188,21 +189,7 @@ internal sealed class ConfigSourceService(
         }
 
         interaction.DisplayMessage(KnownEmojis.Information, ConfigSourceStrings.Explanation);
-        List<(string Label, string Value)> details =
-        [
-            (SharedCommandStrings.SourceGitRepository, source.Repository)
-        ];
-        if (source.Path != AspireConfigFile.FileName)
-        {
-            details.Add((ConfigSourceStrings.ConfigurationFile, source.Path));
-        }
-        if (source.Ref is not null)
-        {
-            details.Add((SharedCommandStrings.SourceRef, source.Ref));
-        }
-        details.Add((ConfigSourceStrings.SourceOrigin, explicitSource ? CliConfigNames.InitSourceUrl : ConfigSourceStrings.EmployeeOrigin));
-
-        interaction.DisplaySourceDetails([details]);
+        DisplayConfigSourceDetails(source, explicitSource ? CliConfigNames.InitSourceUrl : ConfigSourceStrings.EmployeeOrigin);
         if (readmeUrl is not null)
         {
             interaction.DisplayMessage(KnownEmojis.Information,
@@ -220,7 +207,7 @@ internal sealed class ConfigSourceService(
             {
                 throw new ConfigSourceException(ConfigSourceStrings.ConsentRequired);
             }
-            accepted = await interaction.PromptConfirmAsync(ConfigSourceStrings.UseSourcePrompt,
+            accepted = await interaction.PromptConfirmAsync(consentPrompt,
                 binding: PromptBinding.CreateDefault(true),
                 cancellationToken: cancellationToken);
         }
@@ -234,6 +221,29 @@ internal sealed class ConfigSourceService(
         return source;
     }
 
+    private void DisplayConfigSourceDetails(ConfigSource source, string origin)
+    {
+        List<(string Label, string Value)> details =
+        [
+            (SharedCommandStrings.SourceGitRepository, source.Repository)
+        ];
+        if (source.Path != AspireConfigFile.FileName)
+        {
+            details.Add((ConfigSourceStrings.ConfigurationFile, source.Path));
+        }
+        if (source.Ref is not null)
+        {
+            details.Add((SharedCommandStrings.SourceRef, source.Ref));
+        }
+        details.Add((ConfigSourceStrings.SourceOrigin, origin));
+
+        interaction.DisplaySourceDetails([details]);
+    }
+
+    private string? GetReadmeUrl(ConfigSource source) =>
+        environment.GetEnvironmentVariable(CliConfigNames.InitSourceReadmeUrl)
+            ?? (source.Repository == MicrosoftRepository ? MicrosoftReadmeUrl : null);
+
     public async Task<ConfigSource?> SelectForInitializationAsync(
         DirectoryInfo projectDirectory, ParseResult parseResult, CancellationToken cancellationToken)
     {
@@ -246,7 +256,7 @@ internal sealed class ConfigSourceService(
             return null;
         }
 
-        return await ResolveAndAcquireConfigSourceAsync(parseResult, cancellationToken);
+        return await ResolveAndAcquireConfigSourceAsync(parseResult, ConfigSourceStrings.InitUseSourcePrompt, cancellationToken);
     }
 
     public async Task MaterializeAsync(ConfigSource source, DirectoryInfo projectDirectory, CancellationToken cancellationToken)
@@ -273,7 +283,7 @@ internal sealed class ConfigSourceService(
             return;
         }
 
-        var source = await ResolveAndAcquireConfigSourceAsync(parseResult, cancellationToken);
+        var source = await ResolveAndAcquireConfigSourceAsync(parseResult, ConfigSourceStrings.UpdateUseSourcePrompt, cancellationToken);
         if (source is not null)
         {
             await ApplySourceAsync(source, path, cancellationToken);
@@ -363,7 +373,7 @@ internal sealed class ConfigSourceService(
             ? environment.GetEnvironmentVariable(CliConfigNames.InitSourcePath) ?? AspireConfigFile.FileName
             : AspireConfigFile.FileName;
 
-    private async Task ApplySnapshotAsync(ConfigSource source, ConfigSourceSnapshot snapshot, string path, CancellationToken cancellationToken)
+    private async Task<bool> ApplySnapshotAsync(ConfigSource source, ConfigSourceSnapshot snapshot, string path, CancellationToken cancellationToken)
     {
         using var configLock = await ConfigurationHelper.TryAcquireWorkspaceConfigLockAsync(
             executionContext, new FileInfo(path), logger, cancellationToken)
@@ -431,6 +441,8 @@ internal sealed class ConfigSourceService(
         {
             _projectChecked = true;
         }
+
+        return changed;
     }
 
     public async Task CheckProjectAsync(DirectoryInfo directory, bool force, CancellationToken cancellationToken)
@@ -465,8 +477,13 @@ internal sealed class ConfigSourceService(
             }
             if (force)
             {
+                DisplayConfigSourceDetails(source, Path.GetRelativePath(executionContext.WorkingDirectory.FullName, configPath));
                 var snapshot = await AcquireAsync(source, force: true, cancellationToken);
-                await ApplySnapshotAsync(source, snapshot, configPath, cancellationToken);
+                var changed = await ApplySnapshotAsync(source, snapshot, configPath, cancellationToken);
+                interaction.DisplayMessage(
+                    changed ? KnownEmojis.CheckMarkButton : KnownEmojis.Information,
+                    changed ? ConfigSourceStrings.Updated : ConfigSourceStrings.AlreadyUpToDate,
+                    consoleOverride: ConsoleOutput.Error);
             }
             else if (string.IsNullOrEmpty(source.AppliedVersion))
             {
@@ -477,7 +494,7 @@ internal sealed class ConfigSourceService(
                 var observed = await CheckVersionAsync(source, cancellationToken);
                 if (observed.Version != source.AppliedVersion)
                 {
-                    ReportOnce(ConfigSourceStrings.UpdateAvailable);
+                    ReportOnce(ConfigSourceStrings.UpdateAvailable, emoji: KnownEmojis.Information);
                 }
             }
         }
@@ -639,6 +656,19 @@ internal sealed class ConfigSourceService(
             }
             return snapshot;
         }
+        catch (ConfigSourceException ex)
+        {
+            var readmeUrl = GetReadmeUrl(source);
+            if (readmeUrl is not null && UrlHelper.IsHttpUrl(readmeUrl) && !readmeUrl.Any(char.IsControl))
+            {
+                ex.ReadmeUrl = readmeUrl;
+            }
+            else if (readmeUrl is not null)
+            {
+                logger.LogDebug("The configuration source README URL is invalid; access help is unavailable.");
+            }
+            throw;
+        }
         finally
         {
             File.Delete(temporaryPointer);
@@ -708,7 +738,7 @@ internal sealed class ConfigSourceService(
     private async Task<(string Commit, string Version, JsonObject Configuration)> AcquireRepositoryAsync(
         ConfigSource source, string directory, bool allowInteractiveInput, CancellationToken cancellationToken)
     {
-        using var deadline = new CancellationTokenSource(s_gitTimeout, timeProvider);
+        using var deadline = new CancellationTokenSource(GitClient.OperationTimeout, timeProvider);
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token);
         try
         {
@@ -757,7 +787,7 @@ internal sealed class ConfigSourceService(
 
     private async Task<(string Commit, string Version)> CheckRepositoryAsync(ConfigSource source, string directory, CancellationToken cancellationToken)
     {
-        using var deadline = new CancellationTokenSource(s_gitTimeout, timeProvider);
+        using var deadline = new CancellationTokenSource(GitClient.OperationTimeout, timeProvider);
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token);
         try
         {
@@ -831,13 +861,14 @@ internal sealed class ConfigSourceService(
         return ConfigurationHelper.WriteSettingsFileAtomicallyAsync(Path.Combine(directory, "check.json"), json, cancellationToken);
     }
 
-    private void ReportOnce(string? message, string? gitOutput = null)
+    private void ReportOnce(string? message, string? gitOutput = null, KnownEmoji? emoji = null)
     {
+        var notification = (emoji ?? KnownEmojis.PoliceCarLight, message, gitOutput);
         lock (_checksLock)
         {
-            if (!_notifications.Contains((message, gitOutput)))
+            if (!_notifications.Contains(notification))
             {
-                _notifications.Add((message, gitOutput));
+                _notifications.Add(notification);
             }
         }
     }

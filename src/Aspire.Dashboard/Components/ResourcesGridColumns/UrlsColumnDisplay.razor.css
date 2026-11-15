@@ -15,6 +15,38 @@
     white-space: nowrap;
 }
 
+/* One URL, cut short when it doesn't fit, then the "+N" button. */
+.first-url-only {
+    display: flex;
+    align-items: center;
+    gap: var(--aspire-space-2);
+    min-width: 0;
+}
+
+.first-url {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.first-url > a,
+.first-url > span {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* A quiet count rather than a brand-colored button: brand color is kept for links and the primary action. */
+::deep .url-button-neutral {
+    flex: 0 0 auto;
+    padding: 1px 8px;
+    border-radius: var(--aspire-radius-round);
+    /* The count reads as part of the URL text beside it, so it uses the same size. */
+    font-size: inherit;
+    line-height: inherit;
+}
+
 /* Fluent v5 hides vertical overflow, which makes visible horizontal overflow compute to auto. */
 ::deep .url-overflow {
     overflow-x: visible !important;
@@ -44,10 +76,10 @@
     min-width: 28px;
     min-height: 0;
     padding: 1px 14px;
-    border-radius: var(--borderRadiusLarge);
-    font-size: var(--fontSizeBase200);
+    border-radius: var(--aspire-radius-small);
+    font-size: var(--aspire-font-size-secondary);
     line-height: var(--lineHeightBase200);
-    font-weight: var(--fontWeightRegular);
+    font-weight: var(--aspire-font-weight-regular);
 }
 
 ::deep.url-list {

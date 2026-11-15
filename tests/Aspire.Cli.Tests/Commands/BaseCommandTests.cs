@@ -315,8 +315,9 @@ public class BaseCommandTests(ITestOutputHelper outputHelper)
             options.ExtensionBackchannelFactory = _ => new TestExtensionBackchannel();
             options.InteractionServiceFactory = serviceProvider => new TestExtensionInteractionService(serviceProvider)
             {
-                TryDisplayCommandFailureAsyncCallback = (errorMessage, capturedCliLogPath, capturedAppHostLogPath, _) =>
+                TryDisplayCommandFailureAsyncCallback = (errorMessage, capturedCliLogPath, capturedAppHostLogPath, allowMarkup, _) =>
                 {
+                    Assert.False(allowMarkup);
                     capturedFailure = (errorMessage, capturedCliLogPath, capturedAppHostLogPath);
                     return Task.FromResult(true);
                 }

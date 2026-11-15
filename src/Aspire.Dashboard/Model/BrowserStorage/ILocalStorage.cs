@@ -14,4 +14,15 @@ public interface ILocalStorage : IBrowserStorage
     /// Set unprotected data to local storage. This must only be used with non-sensitive data.
     /// </summary>
     Task SetUnprotectedAsync<TValue>(string key, TValue value);
+
+    /// <summary>
+    /// Get the text stored in local storage as is, without deserializing it, for example to keep a copy of a value
+    /// that isn't valid JSON. This must only be used with non-sensitive data.
+    /// </summary>
+    Task<StorageResult<string>> GetRawUnprotectedAsync(string key);
+
+    /// <summary>
+    /// Set text to local storage as is, without serializing it. This must only be used with non-sensitive data.
+    /// </summary>
+    Task SetRawUnprotectedAsync(string key, string value);
 }

@@ -1083,11 +1083,6 @@ Para saber mais sobre como usar os agentes de IA com o painel, incluindo como co
         <target state="new">Compact</target>
         <note />
       </trans-unit>
-      <trans-unit id="SettingsDialogResourceListDensitySpacious">
-        <source>Spacious</source>
-        <target state="new">Spacious</target>
-        <note />
-      </trans-unit>
       <trans-unit id="SettingsDialogSystemTheme">
         <source>System</source>
         <target state="translated">Sistema</target>

@@ -30,5 +30,5 @@
     align-items: center;
     justify-content: center;
     color: var(--colorNeutralForeground2);
-    font-size: 13px;
+    font-size: var(--aspire-font-size-body);
 }

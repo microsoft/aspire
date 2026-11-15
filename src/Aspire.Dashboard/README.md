@@ -8,6 +8,12 @@ The dashboard shows:
 - Live console logs of resources.
 - Live telemetry, such as structured logs, traces and metrics.
 
+When the resource list is collapsed, click the resource name or **All resources** in the toolbar to open
+the list below it. Selecting a resource closes the popup without expanding the sidebar.
+Shift-click and Ctrl-click (Cmd-click on macOS) keep the popup open for multi-selection, including on resource groups.
+Selecting **Select all** (or **All sources** in a standalone dashboard) always closes the popup.
+The popup includes search; filter and grouping buttons are available only in the sidebar or mobile drawer.
+
 ## Grouping resources
 
 Use **Group resources**, beside **Filters** in the resources pane, to group

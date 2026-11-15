@@ -2,6 +2,26 @@
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="pt-BR" original="../TraceDetail.resx">
     <body>
+      <trans-unit id="TotalItemsFooterPluralText">
+        <source>Showing &lt;strong&gt;{0} spans&lt;/strong&gt;</source>
+        <target state="new">Showing &lt;strong&gt;{0} spans&lt;/strong&gt;</target>
+        <note>{0} is a number. This is raw markup, so &lt;strong&gt; and &lt;/strong&gt; should not be modified</note>
+      </trans-unit>
+      <trans-unit id="TotalItemsFooterSingularText">
+        <source>Showing &lt;strong&gt;{0} span&lt;/strong&gt;</source>
+        <target state="new">Showing &lt;strong&gt;{0} span&lt;/strong&gt;</target>
+        <note>{0} is a number. This is raw markup, so &lt;strong&gt; and &lt;/strong&gt; should not be modified</note>
+      </trans-unit>
+      <trans-unit id="TraceDetailBackToTraces">
+        <source>Back to traces</source>
+        <target state="new">Back to traces</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TraceDetailBackToTracesButton">
+        <source>Traces</source>
+        <target state="new">Traces</target>
+        <note />
+      </trans-unit>
       <trans-unit id="TraceDetailDepthHeader">
         <source>Depth</source>
         <target state="translated">Profundidade</target>
