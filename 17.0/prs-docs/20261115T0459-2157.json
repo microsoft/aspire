@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Docs site CI artifact change; not tied to a changelog entry",
+  "mergedAt": "2026-11-15T04:59:45Z",
+  "number": 2157,
+  "runDate": "2026-11-15T06:05:00Z",
+  "status": "excluded",
+  "title": "[Astro] Upload the E2E site as one tar.zst"
+}

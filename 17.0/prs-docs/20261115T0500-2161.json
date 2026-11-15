@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Docs site E2E config; not tied to a changelog entry",
+  "mergedAt": "2026-11-15T05:00:03Z",
+  "number": 2161,
+  "runDate": "2026-11-15T06:05:00Z",
+  "status": "excluded",
+  "title": "E2E: record trace and video on first retry"
+}
