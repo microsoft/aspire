@@ -15,8 +15,10 @@ namespace Aspire.Hosting.Tests;
 [Trait("Partition", "5")]
 public class AddParameterTests
 {
-    [Fact]
-    public async Task ContextualParameterWaitsAreCountedPerCaller()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ContextualParameterWaitsAreCountedPerCaller(bool initiallyStarting)
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var first = builder.AddParameter("first", secret: true).Resource;
@@ -28,7 +30,9 @@ public class AddParameterTests
         using var app = builder.Build();
         using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
         using var canceledRead = CancellationTokenSource.CreateLinkedTokenSource(cts.Token);
-        var startingState = new ResourceStateSnapshot(KnownResourceStates.Starting, KnownResourceStateStyles.Info);
+        ResourceStateSnapshot? startingState = initiallyStarting
+            ? new(KnownResourceStates.Starting, KnownResourceStateStyles.Info)
+            : null;
         await app.ResourceNotifications.PublishUpdateAsync(caller, s => s with { State = startingState });
         await app.ResourceNotifications.PublishUpdateAsync(other, s => s with { State = startingState });
         var context = new ValueProviderContext { ExecutionContext = builder.ExecutionContext, Caller = caller };
@@ -51,24 +55,26 @@ public class AddParameterTests
         Assert.Equal("secret-value", await firstRead.DefaultTimeout());
         Assert.Equal("secret-value", await otherRead.DefaultTimeout());
         AssertParameterWaitState(app, caller, KnownResourceStates.UnresolvedParameters, "second");
-        AssertParameterWaitState(app, other, KnownResourceStates.Starting);
+        AssertParameterWaitState(app, other, startingState?.Text);
 
         await second.SetValueAsync("second-value");
         Assert.Equal("second-value", await secondRead.DefaultTimeout());
-        AssertParameterWaitState(app, caller, KnownResourceStates.Starting);
+        AssertParameterWaitState(app, caller, startingState?.Text);
         Assert.True(app.ResourceNotifications.TryGetCurrentState(caller.Name, out var state));
         Assert.Equal(startingState, state.Snapshot.State);
     }
 
     [Theory]
-    [InlineData("Running")]
-    [InlineData("FailedToStart")]
-    [InlineData("Exited")]
-    [InlineData("Stopping")]
-    [InlineData("Waiting")]
-    [InlineData("Building")]
-    [InlineData("NotStarted")]
-    public async Task CompletingParameterWaitDoesNotOverwriteNewerState(string newerState)
+    [InlineData("Running", true)]
+    [InlineData("FailedToStart", true)]
+    [InlineData("Exited", true)]
+    [InlineData("Stopping", true)]
+    [InlineData("Waiting", true)]
+    [InlineData("Building", true)]
+    [InlineData("NotStarted", true)]
+    [InlineData("Running", false)]
+    [InlineData("FailedToStart", false)]
+    public async Task CompletingParameterWaitDoesNotOverwriteNewerState(string newerState, bool initiallyStarting)
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var parameter = builder.AddParameter("parameter").Resource;
@@ -78,7 +84,10 @@ public class AddParameterTests
             .WaitFor(dependency).Resource;
         using var app = builder.Build();
         using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
-        await app.ResourceNotifications.PublishUpdateAsync(caller, s => s with { State = KnownResourceStates.Starting });
+        await app.ResourceNotifications.PublishUpdateAsync(caller, s => s with
+        {
+            State = initiallyStarting ? new(KnownResourceStates.Starting, null) : null
+        });
         var read = parameter.GetValueAsync(new ValueProviderContext { ExecutionContext = builder.ExecutionContext, Caller = caller }, cts.Token).AsTask();
         AssertParameterWaitState(app, caller, KnownResourceStates.UnresolvedParameters, "parameter");
 
@@ -113,8 +122,10 @@ public class AddParameterTests
         AssertParameterWaitState(app, caller, KnownResourceStates.Waiting);
     }
 
-    [Fact]
-    public async Task FaultedParameterWaitIsRemovedAndExceptionIsPreserved()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task FaultedParameterWaitIsRemovedAndExceptionIsPreserved(bool initiallyStarting)
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var parameter = builder.AddParameter("parameter").Resource;
@@ -122,7 +133,8 @@ public class AddParameterTests
         var caller = builder.AddExecutable("caller", "unused", ".").Resource;
         using var app = builder.Build();
         using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
-        await app.ResourceNotifications.PublishUpdateAsync(caller, s => s with { State = KnownResourceStates.Starting });
+        ResourceStateSnapshot? startingState = initiallyStarting ? new(KnownResourceStates.Starting, null) : null;
+        await app.ResourceNotifications.PublishUpdateAsync(caller, s => s with { State = startingState });
         var context = new ValueProviderContext { ExecutionContext = builder.ExecutionContext, Caller = caller };
         var read = parameter.GetValueAsync(context, cts.Token).AsTask();
         AssertParameterWaitState(app, caller, KnownResourceStates.UnresolvedParameters, "parameter");
@@ -130,9 +142,30 @@ public class AddParameterTests
         var error = new InvalidOperationException("Failed to load parameter.");
         await parameter.SetExceptionAsync(error);
         Assert.Same(error, await Assert.ThrowsAsync<InvalidOperationException>(() => read).DefaultTimeout());
-        AssertParameterWaitState(app, caller, KnownResourceStates.Starting);
+        AssertParameterWaitState(app, caller, startingState?.Text);
         Assert.Same(error, await Assert.ThrowsAsync<InvalidOperationException>(() => parameter.GetValueAsync(context, cts.Token).AsTask()));
-        AssertParameterWaitState(app, caller, KnownResourceStates.Starting);
+        AssertParameterWaitState(app, caller, startingState?.Text);
+    }
+
+    [Fact]
+    public async Task CanceledPreStartParameterWaitRestoresUnsetState()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var parameter = builder.AddParameter("parameter").Resource;
+        parameter.EnsureValueTask();
+        var caller = builder.AddExecutable("caller", "unused", ".").Resource;
+        using var app = builder.Build();
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
+        var read = parameter.GetValueAsync(
+            new ValueProviderContext { ExecutionContext = builder.ExecutionContext, Caller = caller },
+            cts.Token).AsTask();
+        AssertParameterWaitState(app, caller, KnownResourceStates.UnresolvedParameters, "parameter");
+
+        cts.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => read).DefaultTimeout();
+        AssertParameterWaitState(app, caller, null);
+        Assert.True(app.ResourceNotifications.TryGetCurrentState(caller.Name, out var state));
+        Assert.Null(state.Snapshot.State);
     }
 
     [Theory]
@@ -273,7 +306,7 @@ public class AddParameterTests
         AssertParameterWaitState(app, pgadmin, KnownResourceStates.Starting);
     }
 
-    private static void AssertParameterWaitState(DistributedApplication app, IResource resource, string expectedState, params string[] parameters)
+    private static void AssertParameterWaitState(DistributedApplication app, IResource resource, string? expectedState, params string[] parameters)
     {
         Assert.True(app.ResourceNotifications.TryGetCurrentState(resource.Name, out var state));
         Assert.Equal(expectedState, state.Snapshot.State?.Text);

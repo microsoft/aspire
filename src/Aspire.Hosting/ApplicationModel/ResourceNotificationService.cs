@@ -1079,14 +1079,17 @@ public class ResourceNotificationService : IDisposable
         // Custom resources also use Waiting during initialization. Dependency annotations remain after
         // dependencies are ready, so use the pending list to identify active dependency waits.
         // Leaving Waiting during an active dependency wait would release WaitFor prematurely.
-        if (snapshot.State?.Text == KnownResourceStates.Starting ||
+        // URL callbacks can resolve parameters before a resource has a state.
+        if (snapshot.State is null || snapshot.State.Text == KnownResourceStates.Starting ||
             (snapshot.State?.Text == KnownResourceStates.Waiting && !TryGetWaitingForDependencies(snapshot.Properties, out _)))
         {
             notificationState.StateBeforeParameterWait = snapshot.State;
+            notificationState.IsParameterWaitStateActive = true;
         }
         else if (snapshot.State?.Text != KnownResourceStates.UnresolvedParameters)
         {
             notificationState.StateBeforeParameterWait = null;
+            notificationState.IsParameterWaitStateActive = false;
             return snapshot with { Properties = snapshot.Properties.RemoveResourceProperty(KnownProperties.Resource.UnresolvedParameters) };
         }
 
@@ -1100,9 +1103,15 @@ public class ResourceNotificationService : IDisposable
             };
         }
 
+        var restoredState = notificationState.IsParameterWaitStateActive
+            ? notificationState.StateBeforeParameterWait
+            : snapshot.State;
+        notificationState.StateBeforeParameterWait = null;
+        notificationState.IsParameterWaitStateActive = false;
+
         return snapshot with
         {
-            State = notificationState.StateBeforeParameterWait ?? snapshot.State,
+            State = restoredState,
             Properties = snapshot.Properties.RemoveResourceProperty(KnownProperties.Resource.UnresolvedParameters)
         };
     }
@@ -1549,6 +1558,8 @@ public class ResourceNotificationService : IDisposable
         public IResource Resource { get; } = resource;
         public Dictionary<string, int>? ParameterWaits { get; set; }
         public ResourceStateSnapshot? StateBeforeParameterWait { get; set; }
+        // Null is a valid pre-start state, not an indication that no state was captured.
+        public bool IsParameterWaitStateActive { get; set; }
         // These profiling fields stay unset unless startup profiling is enabled. Keep the event list
         // lazy so normal resource notifications do not allocate milestone storage for every resource.
         public DateTimeOffset? FirstObservedAt { get; set; }
