@@ -9,4 +9,8 @@
     <ProjectReference Include="..\Aspire.Hosting.TestUtilities\Aspire.Hosting.TestUtilities.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Include="$(TestsSharedDir)TestInteractionService.cs" LinkBase="shared" />
+  </ItemGroup>
+
 </Project>

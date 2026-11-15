@@ -6,7 +6,9 @@ Use this integration to model, configure, and orchestrate a GitHub App resource 
 
 ### Prerequisites
 
-- A GitHub App registered on GitHub, with a generated private key. See [Registering a GitHub App](https://docs.github.com/apps/creating-github-apps/registering-a-github-app/registering-a-github-app).
+- A GitHub account, or an organization where you can register apps.
+- To register the app from the AppHost, AppHost user secrets, which Aspire templates enable with a `UserSecretsId`.
+- To use an app that is already registered, its private key. See [Registering a GitHub App](https://docs.github.com/apps/creating-github-apps/registering-a-github-app/registering-a-github-app).
 
 ### Add the integration
 
@@ -19,7 +21,45 @@ aspire add Aspire.Hosting.Dotnet
 
 ## Usage example
 
-Then, in the AppHost, add a GitHub App resource for an existing app and reference it from another resource:
+### Register a new app
+
+In the AppHost, add a GitHub App resource and reference it from another resource:
+
+**C#**
+
+```csharp
+var api = builder.AddDotnetProject("api", "../Api/Api.csproj");
+
+var gitHubApp = builder.AddGitHubApp("github-app")
+                       .WithCallback(api.GetEndpoint("https"), "/signin-github")
+                       .WithPermission("issues", GitHubAppPermissionLevel.Read)
+                       .WithPermission("pull_requests", GitHubAppPermissionLevel.Write);
+
+api.WithReference(gitHubApp);
+```
+
+On the first run, the resource shows as **Waiting for registration**, and the resources that reference it wait for it. Select **Register on GitHub** on the resource or in the dashboard's notification, in a browser on the machine running the AppHost. The AppHost sends GitHub a [manifest](https://docs.github.com/apps/sharing-github-apps/registering-a-github-app-from-a-manifest) describing the app, and GitHub shows it for you to review. Once you create the app, GitHub returns to the AppHost, which retrieves the app's credentials, saves them to the AppHost's user secrets, and continues to the page that installs the app. Later runs reuse the saved app without calling GitHub.
+
+Pass an organization to register the app in that organization rather than your personal account:
+
+```csharp
+var gitHubApp = builder.AddGitHubApp("github-app", organization: "contoso");
+```
+
+- `WithCallback` adds a URL that GitHub redirects users to after they authorize the app, its OAuth callback. Up to 10 are allowed. The URL that GitHub returns to after registering the app is separate and handled by the AppHost.
+- `WithPermission` requests a [permission](https://docs.github.com/rest/apps/apps#create-an-installation-access-token-for-an-app) by its GitHub name, at `Read`, `Write` or `Admin` level.
+- The app's name is the resource name with a random suffix, and can be changed on GitHub's registration page.
+
+The manifest applies only when the app is registered. To change the callbacks or permissions of a registered app, change them on its settings page, or delete the app and its saved credentials to register a new one. Callbacks built from endpoints should use fixed ports. The saved credentials are under `GitHub:Apps:{hash}:{resource name}` in the user secrets, where the hash identifies the AppHost's path, so that worktrees of the same repository, which share a `UserSecretsId`, register their own apps.
+
+When publishing, `AddGitHubApp` adds an existing app with the parameters `{name}-app-id`, `{name}-client-id`, `{name}-private-key` and `{name}-client-secret`, because a deployed application can't register an app.
+
+> [!NOTE]
+> The registration listens on `127.0.0.1` on a random port, so the browser must run on the same machine as the AppHost. It isn't reachable from remote environments such as GitHub Codespaces or dev containers. Register the app elsewhere and use `AddExistingGitHubApp` there.
+
+### Use an existing app
+
+Add a GitHub App resource for an app that is already registered, and reference it from another resource:
 
 **C#**
 

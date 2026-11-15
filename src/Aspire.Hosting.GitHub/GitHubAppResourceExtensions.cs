@@ -5,6 +5,8 @@ using System.Collections.Immutable;
 using System.Text.Json;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.GitHub;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting;
@@ -17,6 +19,8 @@ public static class GitHubAppResourceExtensions
     private const string ResourceType = "GitHubApp";
     private const string SettingsUrlName = "Settings";
     private const string PublicPageUrlName = "Public page";
+    private const string RegisterUrlName = "Register";
+    private const string WaitingForRegistrationState = "Waiting for registration";
 
     // The configuration section that .NET resources read by default, such as builder.Configuration.GetSection("GitHub:App").
     private const string DefaultDotnetSection = "GitHub__App";
@@ -104,6 +108,294 @@ public static class GitHubAppResourceExtensions
                 Properties = []
             })
             .OnInitializeResource(InitializeGitHubAppResourceAsync);
+    }
+
+    /// <summary>
+    /// Adds a GitHub App that is registered on GitHub the first time the AppHost runs.
+    /// </summary>
+    /// <param name="builder">The <see cref="IDistributedApplicationBuilder"/>.</param>
+    /// <param name="name">The name of the resource.</param>
+    /// <param name="organization">
+    /// The login of the organization to register the app under, or <see langword="null"/> to register it under the
+    /// personal account of the user who completes the registration.
+    /// </param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{GitHubAppResource}"/>.</returns>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="organization"/> is not in the format GitHub uses.</exception>
+    /// <remarks>
+    /// <para>
+    /// When the AppHost runs and the app hasn't been registered yet, the resource waits and the dashboard shows a
+    /// notification with a link that opens GitHub's "Register new GitHub App" page, filled in from a
+    /// <see href="https://docs.github.com/apps/sharing-github-apps/registering-a-github-app-from-a-manifest">manifest</see>
+    /// built from <see cref="WithCallback(IResourceBuilder{GitHubAppResource}, string)"/> and
+    /// <see cref="WithPermission(IResourceBuilder{GitHubAppResource}, string, GitHubAppPermissionLevel)"/>. The link is
+    /// also written to the resource's console logs. After the user creates the app, GitHub returns the browser to a
+    /// temporary listener on 127.0.0.1, which retrieves the app's credentials and continues to the page where the app is
+    /// installed on repositories.
+    /// </para>
+    /// <para>
+    /// The credentials are saved to the AppHost's user secrets, under keys that include a hash of the AppHost's path so
+    /// that each clone or worktree of a repository registers its own app. Later runs use the saved app. To register a new
+    /// app, delete the <c>GitHub:Apps</c> keys from the user secrets.
+    /// </para>
+    /// <para>
+    /// The manifest is used only when the app is created. Later changes to its callbacks or permissions must be made on
+    /// the app's settings page.
+    /// </para>
+    /// <para>
+    /// When publishing, the app is treated as an existing app whose values come from the parameters
+    /// <c>{name}-app-id</c>, <c>{name}-client-id</c>, <c>{name}-private-key</c> and <c>{name}-client-secret</c>.
+    /// </para>
+    /// <example>
+    /// <code lang="csharp">
+    /// var api = builder.AddDotnetProject("api", "../Api/Api.csproj");
+    ///
+    /// var gitHubApp = builder.AddGitHubApp("github-app")
+    ///     .WithCallback(api.GetEndpoint("https"), "/signin-github")
+    ///     .WithPermission("issues", GitHubAppPermissionLevel.Read);
+    ///
+    /// api.WithReference(gitHubApp);
+    /// </code>
+    /// </example>
+    /// </remarks>
+    [AspireExportIgnore(Reason = "GitHub App resources are not yet available to polyglot AppHosts.")]
+    public static IResourceBuilder<GitHubAppResource> AddGitHubApp(
+        this IDistributedApplicationBuilder builder,
+        [ResourceName] string name,
+        string? organization = null)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrEmpty(name);
+
+        if (organization is not null && GitHubAppValidation.ValidateOrganization(organization) is { } organizationError)
+        {
+            throw new ArgumentException($"The organization '{organization}' is not valid. {organizationError}", nameof(organization));
+        }
+
+        if (builder.ExecutionContext.IsPublishMode)
+        {
+            // A deployed application can't open a browser on the deployer's machine, so it uses an app registered
+            // beforehand, typically the one that was registered when the AppHost ran locally.
+            var appIdParameter = builder.AddParameter($"{name}-app-id");
+            var clientIdParameter = builder.AddParameter($"{name}-client-id");
+            var privateKeyParameter = builder.AddParameter($"{name}-private-key", secret: true);
+            var clientSecretParameter = builder.AddParameter($"{name}-client-secret", secret: true);
+            return builder.AddExistingGitHubApp(name, appIdParameter, clientIdParameter, privateKeyParameter, clientSecretParameter);
+        }
+
+        // The parameters aren't added to the application model, so the dashboard doesn't prompt for them: their values
+        // come from the registration, or from the user secrets that a previous registration saved.
+        var configuration = builder.Configuration;
+        var prefix = GitHubAppCredentialStore.GetPrefix(configuration, name);
+        ParameterResource CreateParameter(string suffix, string key, bool secret) =>
+            new($"{name}-{suffix}", _ => configuration[$"{prefix}:{key}"] is { Length: > 0 } value
+                ? value
+                : throw new MissingParameterValueException($"GitHub App '{name}' hasn't been registered."), secret)
+            {
+                Required = false
+            };
+
+        var resource = new GitHubAppResource(
+            name,
+            CreateParameter("app-id", "AppId", secret: false),
+            CreateParameter("client-id", "ClientId", secret: false),
+            CreateParameter("private-key", "PrivateKey", secret: true),
+            CreateParameter("client-secret", "ClientSecret", secret: true),
+            webhookSecret: null)
+        {
+            Organization = organization,
+            Manifest = new GitHubAppManifestSettings
+            {
+                AppName = CreateDefaultAppName(name),
+                Description = $"Registered by the Aspire AppHost '{builder.Environment.ApplicationName}' for the resource '{name}'.",
+                Organization = organization
+            }
+        };
+
+        return builder.AddResource(resource)
+            .WithIconName("Bot")
+            .WithInitialState(new CustomResourceSnapshot
+            {
+                ResourceType = ResourceType,
+                State = KnownResourceStates.Waiting,
+                Properties = []
+            })
+            .OnInitializeResource(InitializeManifestGitHubAppResourceAsync);
+    }
+
+    /// <summary>
+    /// Adds a URL that GitHub redirects users to after they authorize the app, to an app registered by
+    /// <see cref="AddGitHubApp(IDistributedApplicationBuilder, string, string?)"/>.
+    /// </summary>
+    /// <param name="builder">The GitHub App resource builder.</param>
+    /// <param name="url">The absolute <c>http</c> or <c>https</c> URL of the callback.</param>
+    /// <returns>The resource builder for chaining.</returns>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="url"/> isn't an absolute http or https URL.</exception>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown when the app wasn't added with <see cref="AddGitHubApp(IDistributedApplicationBuilder, string, string?)"/>, or
+    /// already has the 10 callbacks that GitHub allows.
+    /// </exception>
+    /// <remarks>
+    /// The callback is the app's OAuth redirect, used when the app signs users in. It is unrelated to the URL that GitHub
+    /// returns to when the app is registered. Callbacks are set only when the app is created. When publishing, the
+    /// callback is ignored.
+    /// </remarks>
+    [AspireExportIgnore(Reason = "GitHub App resources are not yet available to polyglot AppHosts.")]
+    public static IResourceBuilder<GitHubAppResource> WithCallback(this IResourceBuilder<GitHubAppResource> builder, string url)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(url);
+
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+        {
+            throw new ArgumentException($"The callback URL '{url}' must be an absolute http or https URL.", nameof(url));
+        }
+
+        return AddCallback(builder, ReferenceExpression.Create($"{url}"));
+    }
+
+    /// <summary>
+    /// Adds a URL that GitHub redirects users to after they authorize the app, to an app registered by
+    /// <see cref="AddGitHubApp(IDistributedApplicationBuilder, string, string?)"/>.
+    /// </summary>
+    /// <param name="builder">The GitHub App resource builder.</param>
+    /// <param name="url">An expression for the absolute URL of the callback, such as one built from an endpoint.</param>
+    /// <returns>The resource builder for chaining.</returns>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown when the app wasn't added with <see cref="AddGitHubApp(IDistributedApplicationBuilder, string, string?)"/>, or
+    /// already has the 10 callbacks that GitHub allows.
+    /// </exception>
+    /// <remarks>
+    /// The expression is evaluated when the app is registered. Endpoints that the callback refers to should use a fixed
+    /// port, because the callback isn't updated when the port changes on a later run.
+    /// </remarks>
+    [AspireExportIgnore(Reason = "GitHub App resources are not yet available to polyglot AppHosts.")]
+    public static IResourceBuilder<GitHubAppResource> WithCallback(this IResourceBuilder<GitHubAppResource> builder, ReferenceExpression url)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(url);
+
+        return AddCallback(builder, url);
+    }
+
+    /// <summary>
+    /// Adds a URL that GitHub redirects users to after they authorize the app, built from an endpoint and a path.
+    /// </summary>
+    /// <param name="builder">The GitHub App resource builder.</param>
+    /// <param name="endpoint">The endpoint that receives the callback.</param>
+    /// <param name="path">The path of the callback, such as <c>/signin-github</c>.</param>
+    /// <returns>The resource builder for chaining.</returns>
+    /// <inheritdoc cref="WithCallback(IResourceBuilder{GitHubAppResource}, ReferenceExpression)" path="/exception"/>
+    /// <inheritdoc cref="WithCallback(IResourceBuilder{GitHubAppResource}, ReferenceExpression)" path="/remarks"/>
+    [AspireExportIgnore(Reason = "GitHub App resources are not yet available to polyglot AppHosts.")]
+    public static IResourceBuilder<GitHubAppResource> WithCallback(this IResourceBuilder<GitHubAppResource> builder, EndpointReference endpoint, string path)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(endpoint);
+        ArgumentNullException.ThrowIfNull(path);
+
+        var normalizedPath = path.StartsWith('/') ? path : "/" + path;
+        return AddCallback(builder, ReferenceExpression.Create($"{endpoint.Property(EndpointProperty.Url)}{normalizedPath}"));
+    }
+
+    /// <summary>
+    /// Requests a permission for an app registered by <see cref="AddGitHubApp(IDistributedApplicationBuilder, string, string?)"/>.
+    /// </summary>
+    /// <param name="builder">The GitHub App resource builder.</param>
+    /// <param name="permission">
+    /// GitHub's name for the permission, such as <c>issues</c>, <c>contents</c> or <c>pull_requests</c>. The names are
+    /// listed in the
+    /// <see href="https://docs.github.com/rest/apps/apps#create-an-installation-access-token-for-an-app">permissions object</see>
+    /// of GitHub's REST API.
+    /// </param>
+    /// <param name="level">The level of access to request.</param>
+    /// <returns>The resource builder for chaining.</returns>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="permission"/> isn't in the format GitHub uses.</exception>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown when the app wasn't added with <see cref="AddGitHubApp(IDistributedApplicationBuilder, string, string?)"/>.
+    /// </exception>
+    /// <remarks>
+    /// Requesting a permission again replaces its level. Permissions are set only when the app is created. When
+    /// publishing, the permission is ignored.
+    /// </remarks>
+    [AspireExportIgnore(Reason = "GitHub App resources are not yet available to polyglot AppHosts.")]
+    public static IResourceBuilder<GitHubAppResource> WithPermission(
+        this IResourceBuilder<GitHubAppResource> builder,
+        string permission,
+        GitHubAppPermissionLevel level)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(permission);
+
+        if (GitHubAppValidation.ValidatePermissionName(permission) is { } error)
+        {
+            throw new ArgumentException($"The permission '{permission}' is not valid. {error}", nameof(permission));
+        }
+
+        if (!Enum.IsDefined(level))
+        {
+            throw new ArgumentOutOfRangeException(nameof(level), level, "Unknown permission level.");
+        }
+
+        if (GetManifest(builder, nameof(WithPermission)) is { } manifest)
+        {
+            manifest.Permissions[permission] = level;
+        }
+
+        return builder;
+    }
+
+    private static IResourceBuilder<GitHubAppResource> AddCallback(IResourceBuilder<GitHubAppResource> builder, ReferenceExpression url)
+    {
+        if (GetManifest(builder, nameof(WithCallback)) is { } manifest)
+        {
+            if (manifest.CallbackUrls.Count >= GitHubAppManifestSettings.MaxCallbackUrls)
+            {
+                throw new InvalidOperationException(
+                    $"GitHub App '{builder.Resource.Name}' can't have more than {GitHubAppManifestSettings.MaxCallbackUrls} callback URLs.");
+            }
+
+            manifest.CallbackUrls.Add(url);
+        }
+
+        return builder;
+    }
+
+    // Returns null when publishing, where AddGitHubApp produces an existing app and the manifest isn't used.
+    private static GitHubAppManifestSettings? GetManifest(IResourceBuilder<GitHubAppResource> builder, string methodName)
+    {
+        if (builder.Resource.Manifest is { } manifest)
+        {
+            return manifest;
+        }
+
+        if (builder.ApplicationBuilder.ExecutionContext.IsPublishMode)
+        {
+            return null;
+        }
+
+        throw new InvalidOperationException(
+            $"{methodName} can only be used with GitHub Apps added by {nameof(AddGitHubApp)}. Change the settings of an existing app on its settings page on GitHub.");
+    }
+
+    // GitHub App names are unique across GitHub and at most 34 characters long, so the suggested name ends with a random
+    // suffix. The user can change it on GitHub's registration page.
+    internal static string CreateDefaultAppName(string resourceName)
+    {
+        const int MaxLength = 34;
+        var suffix = "-" + Convert.ToHexStringLower(System.Security.Cryptography.RandomNumberGenerator.GetBytes(3));
+
+        var sanitized = new string([.. resourceName.Select(c => char.IsAsciiLetterOrDigit(c) ? char.ToLowerInvariant(c) : '-')]).Trim('-');
+        if (sanitized.Length == 0)
+        {
+            sanitized = "aspire-app";
+        }
+
+        if (sanitized.Length > MaxLength - suffix.Length)
+        {
+            sanitized = sanitized[..(MaxLength - suffix.Length)].TrimEnd('-');
+        }
+
+        return sanitized + suffix;
     }
 
     /// <summary>
@@ -248,6 +540,13 @@ public static class GitHubAppResourceExtensions
         builder.WithReferenceRelationship(app);
         resource.Annotations.Add(reference);
 
+        // An app registered from a manifest has no credentials until the user completes the registration, so a resource
+        // that references it starts only once it is running.
+        if (app.Manifest is not null && !resource.Annotations.OfType<WaitAnnotation>().Any(wait => wait.Resource == app))
+        {
+            resource.Annotations.Add(new WaitAnnotation(app, WaitType.WaitUntilHealthy));
+        }
+
         return builder.WithEnvironment(context =>
         {
             foreach (var (name, value) in environmentVariables)
@@ -331,6 +630,165 @@ public static class GitHubAppResourceExtensions
         }
     }
 
+    private static async Task InitializeManifestGitHubAppResourceAsync(
+        GitHubAppResource resource,
+        InitializeResourceEvent evt,
+        CancellationToken cancellationToken)
+    {
+        var manifest = resource.Manifest!;
+        var logger = evt.Logger;
+        GitHubAppCredentialStore store;
+        try
+        {
+            store = new GitHubAppCredentialStore(
+                evt.Services.GetRequiredService<IConfiguration>(),
+                evt.Services.GetRequiredService<IUserSecretsManager>(),
+                resource.Name);
+        }
+        catch (InvalidOperationException ex)
+        {
+            logger.LogError(ex, "GitHub App '{ResourceName}' can't be registered.", resource.Name);
+            await PublishFailedToStartAsync(resource, evt).ConfigureAwait(false);
+            return;
+        }
+
+        var credentials = store.Load();
+        if (credentials is null)
+        {
+            // Without somewhere to save the credentials, every run would register another app on GitHub.
+            if (!store.CanSave)
+            {
+                logger.LogError(
+                    "GitHub App '{ResourceName}' hasn't been registered, and can't be because the AppHost has no user secrets to save its credentials to. " +
+                    "Add a UserSecretsId to the AppHost project, for example by running 'dotnet user-secrets init' in its directory.",
+                    resource.Name);
+                await PublishFailedToStartAsync(resource, evt).ConfigureAwait(false);
+                return;
+            }
+
+            try
+            {
+                credentials = await RegisterAsync(resource, manifest, evt, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
+            {
+                logger.LogError(ex, "Failed to register GitHub App '{ResourceName}'. Restart the resource to try again.", resource.Name);
+                await PublishFailedToStartAsync(resource, evt).ConfigureAwait(false);
+                return;
+            }
+
+            if (store.Save(credentials))
+            {
+                logger.LogInformation("Saved the credentials of GitHub App '{Slug}' to the AppHost's user secrets in '{FilePath}'.", credentials.Slug, store.FilePath);
+            }
+            else
+            {
+                logger.LogWarning(
+                    "Failed to save the credentials of GitHub App '{Slug}' to the AppHost's user secrets in '{FilePath}'. The next run will register another app.",
+                    credentials.Slug, store.FilePath);
+            }
+
+            await resource.AppIdParameter.SetValueAsync(credentials.AppId, cancellationToken).ConfigureAwait(false);
+            await resource.ClientIdParameter.SetValueAsync(credentials.ClientId, cancellationToken).ConfigureAwait(false);
+            await resource.PrivateKeyParameter.SetValueAsync(credentials.PrivateKey, cancellationToken).ConfigureAwait(false);
+            if (resource.ClientSecretParameter is { } clientSecret)
+            {
+                await clientSecret.SetValueAsync(credentials.ClientSecret, cancellationToken).ConfigureAwait(false);
+            }
+        }
+
+        resource.Slug = credentials.Slug;
+        resource.Organization = credentials.Organization;
+
+        await InitializeGitHubAppResourceAsync(resource, evt, cancellationToken).ConfigureAwait(false);
+    }
+
+    private static async Task<GitHubAppCredentials> RegisterAsync(
+        GitHubAppResource resource,
+        GitHubAppManifestSettings manifest,
+        InitializeResourceEvent evt,
+        CancellationToken cancellationToken)
+    {
+        var logger = evt.Logger;
+
+        var flow = new GitHubAppManifestFlow(evt.Services.GetRequiredService<IHttpClientFactory>(), logger, resource.ApiUrl);
+        await using var flowScope = flow.ConfigureAwait(false);
+        await flow.StartAsync(
+            (redirectUrl, ct) => GitHubAppManifest.CreateJsonAsync(manifest, redirectUrl, ct),
+            manifest.Organization,
+            cancellationToken).ConfigureAwait(false);
+
+        var startUrl = flow.StartUrl!;
+        logger.LogInformation(
+            "GitHub App '{ResourceName}' hasn't been registered. Open {StartUrl} in a browser on this machine to review and create the app on GitHub.",
+            resource.Name, startUrl);
+
+        await evt.Notifications.PublishUpdateAsync(resource, snapshot => snapshot with
+        {
+            State = new ResourceStateSnapshot(WaitingForRegistrationState, KnownResourceStateStyles.Info),
+            Urls = [.. snapshot.Urls.Where(url => url.Name != RegisterUrlName), new UrlSnapshot(RegisterUrlName, startUrl, IsInternal: false)
+            {
+                DisplayProperties = new UrlDisplayPropertiesSnapshot("Register on GitHub")
+            }]
+        }).ConfigureAwait(false);
+
+        // The notification stays in the dashboard until it is dismissed, so it isn't awaited. Cancelling it once the
+        // registration has finished removes it. It handles its own exceptions.
+        using var notificationCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        _ = ShowRegistrationNotificationAsync(evt.Services, resource, startUrl, logger, notificationCts.Token);
+
+        try
+        {
+            return await flow.WaitForCredentialsAsync(cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            notificationCts.Cancel();
+
+            await evt.Notifications.PublishUpdateAsync(resource, snapshot => snapshot with
+            {
+                Urls = [.. snapshot.Urls.Where(url => url.Name != RegisterUrlName)]
+            }).ConfigureAwait(false);
+        }
+    }
+
+    private static async Task ShowRegistrationNotificationAsync(
+        IServiceProvider services,
+        GitHubAppResource resource,
+        string startUrl,
+        ILogger logger,
+        CancellationToken cancellationToken)
+    {
+#pragma warning disable ASPIREINTERACTION001
+        if (services.GetService<IInteractionService>() is not { IsAvailable: true } interactionService)
+        {
+            return;
+        }
+
+        try
+        {
+            await interactionService.PromptNotificationAsync(
+                "Register GitHub App",
+                $"GitHub App '{resource.Name}' needs to be registered on GitHub before the resources that use it can start.",
+                new NotificationInteractionOptions
+                {
+                    Intent = MessageIntent.Information,
+                    LinkText = "Register on GitHub",
+                    LinkUrl = startUrl
+                },
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            // The link is also in the console logs and on the resource, so the registration can continue without it.
+            logger.LogDebug(ex, "Failed to show the registration notification.");
+        }
+#pragma warning restore ASPIREINTERACTION001
+    }
+
     private static async Task InitializeGitHubAppResourceAsync(
         GitHubAppResource resource,
         InitializeResourceEvent evt,
@@ -405,7 +863,7 @@ public static class GitHubAppResourceExtensions
 
         await evt.Notifications.PublishUpdateAsync(resource, snapshot => snapshot with
         {
-            Urls = [.. snapshot.Urls.Where(url => url.Name is not SettingsUrlName and not PublicPageUrlName), .. urls],
+            Urls = [.. snapshot.Urls.Where(url => url.Name is not SettingsUrlName and not PublicPageUrlName and not RegisterUrlName), .. urls],
             Properties = [.. snapshot.Properties.Where(property => !properties.Any(updated => updated.Name == property.Name)), .. properties],
             State = KnownResourceStates.Running
         }).ConfigureAwait(false);

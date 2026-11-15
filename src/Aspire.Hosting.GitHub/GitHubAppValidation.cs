@@ -141,4 +141,23 @@ internal static class GitHubAppValidation
 
         return "Expected an organization login of at most 39 letters, digits and single hyphens that don't begin or end it, such as 'contoso'.";
     }
+
+    /// <summary>
+    /// Validates the name of a permission in a GitHub App manifest, such as <c>issues</c> or <c>pull_requests</c>.
+    /// </summary>
+    internal static string? ValidatePermissionName(string? permission)
+    {
+        if (string.IsNullOrEmpty(permission))
+        {
+            return NoValueError;
+        }
+
+        if (char.IsAsciiLetterLower(permission[0]) &&
+            permission.All(static c => char.IsAsciiLetterLower(c) || char.IsAsciiDigit(c) || c == '_'))
+        {
+            return null;
+        }
+
+        return "Expected GitHub's name for the permission, using lowercase letters, digits and underscores, such as 'issues' or 'pull_requests'.";
+    }
 }

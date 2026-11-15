@@ -82,4 +82,10 @@ public sealed class GitHubAppResource : Resource
     /// or the owner isn't known.
     /// </summary>
     public string? Organization { get; internal set; }
+
+    /// <summary>
+    /// Gets or sets the description of the app that is registered on GitHub when the AppHost first runs, or
+    /// <see langword="null"/> when the app already exists or the AppHost is publishing.
+    /// </summary>
+    internal GitHub.GitHubAppManifestSettings? Manifest { get; set; }
 }
