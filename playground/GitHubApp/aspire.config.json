@@ -1,0 +1,5 @@
+{
+  "appHost": {
+    "path": "GitHubApp.AppHost/GitHubApp.AppHost.csproj"
+  }
+}

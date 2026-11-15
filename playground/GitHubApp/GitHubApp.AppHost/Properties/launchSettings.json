@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json.schemastore.org/launchsettings.json",
+  "profiles": {
+    "https": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": true,
+      "applicationUrl": "https://GitHubApp.dev.localhost:17316;http://GitHubApp.dev.localhost:15316",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "DOTNET_ENVIRONMENT": "Development",
+        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "https://GitHubApp.dev.localhost:21316",
+        "ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL": "https://GitHubApp.dev.localhost:21317",
+        "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "https://GitHubApp.dev.localhost:22316"
+      }
+    },
+    "http": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": true,
+      "applicationUrl": "http://GitHubApp.dev.localhost:15316",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "DOTNET_ENVIRONMENT": "Development",
+        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "http://GitHubApp.dev.localhost:19316",
+        "ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL": "http://GitHubApp.dev.localhost:19317",
+        "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "http://GitHubApp.dev.localhost:20316",
+        "ASPIRE_ALLOW_UNSECURED_TRANSPORT": "true"
+      }
+    },
+    "generate-manifest": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "commandLineArgs": "--publisher manifest --output-path aspire-manifest.json",
+      "applicationUrl": "http://GitHubApp.dev.localhost:15316",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "DOTNET_ENVIRONMENT": "Development"
+      }
+    }
+  }
+}
