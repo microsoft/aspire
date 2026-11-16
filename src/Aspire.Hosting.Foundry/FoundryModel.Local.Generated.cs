@@ -13,6 +13,57 @@ public partial class FoundryModel
     public static partial class Local
     {
         /// <summary>
+        ///   <para>This is a mixed FP16 and INT4 ONNX version of CLM-v0.1-8B for local candidate ranking. It requires Foundry Local 2.4.0 or later.</para>
+        ///   <para>
+        ///     <b>Model Description</b>
+        ///   </para>
+        ///   <list type="bullet">
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Developed by:</b> Contrastive-LM</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Optimized by:</b> Microsoft</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Model type:</b> ONNX</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>License:</b> apache-2.0</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Model Description:</b> This model ranks candidate answers against a question and optional structured context.</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Disclaimer:</b> This model is an optimization of the base model. Validate its ranking behavior for your scenario.</para>
+        ///       </description>
+        ///     </item>
+        ///   </list>
+        ///   <para>
+        ///     <b>Base Model Information</b>
+        ///   </para>
+        ///   <para>See Hugging Face model <see href="https://huggingface.co/Contrastive-LM/CLM-v0.1-8B">CLM-v0.1-8B</see> for details.</para>
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel ClmV018b = new() { Name = "clm-v0.1-8b", Version = "2", Format = "Microsoft" };
+
+        /// <summary>
         ///   <para>This model is an optimized version of DeepSeek-R1-Distill-Qwen-1.5B to enable local inference on Intel GPUs.</para>
         ///   <para>
         ///     <b>Model Description</b>
@@ -253,6 +304,159 @@ public partial class FoundryModel
         /// </summary>
         [AspireValue("FoundryModels")]
         public static readonly FoundryModel GptOss20b = new() { Name = "gpt-oss-20b", Version = "1", Format = "Microsoft" };
+
+        /// <summary>
+        ///   <para>This is a mixed FP16 and INT4 ONNX version of KEV-0.8B for local typed decisions. It supports noul, choice, and score questions and requires Foundry Local 2.4.0 or later.</para>
+        ///   <para>
+        ///     <b>Model Description</b>
+        ///   </para>
+        ///   <list type="bullet">
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Developed by:</b> Jared Palmer</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Optimized by:</b> Microsoft</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Model type:</b> ONNX</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>License:</b> apache-2.0</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Model Description:</b> This model returns typed decisions for one or more questions over text and structured state.</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Disclaimer:</b> This model is an optimization of the base model. Validate its decision behavior for your scenario.</para>
+        ///       </description>
+        ///     </item>
+        ///   </list>
+        ///   <para>
+        ///     <b>Base Model Information</b>
+        ///   </para>
+        ///   <para>See Hugging Face model <see href="https://huggingface.co/jaredpalmer/kev-0.8b">KEV-0.8B</see> for details.</para>
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel Kev08b = new() { Name = "kev-0.8b", Version = "2", Format = "Microsoft" };
+
+        /// <summary>
+        ///   <para>This is a mixed FP16 and INT4 ONNX version of KEV-4B for local typed decisions. It supports noul, choice, and score questions and requires Foundry Local 2.4.0 or later.</para>
+        ///   <para>
+        ///     <b>Model Description</b>
+        ///   </para>
+        ///   <list type="bullet">
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Developed by:</b> Jared Palmer</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Optimized by:</b> Microsoft</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Model type:</b> ONNX</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>License:</b> apache-2.0</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Model Description:</b> This model returns typed decisions for one or more questions over text and structured state.</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Disclaimer:</b> This model is an optimization of the base model. Validate its decision behavior for your scenario.</para>
+        ///       </description>
+        ///     </item>
+        ///   </list>
+        ///   <para>
+        ///     <b>Base Model Information</b>
+        ///   </para>
+        ///   <para>See Hugging Face model <see href="https://huggingface.co/jaredpalmer/kev-4b">KEV-4B</see> for details.</para>
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel Kev4b = new() { Name = "kev-4b", Version = "2", Format = "Microsoft" };
+
+        /// <summary>
+        ///   <para>This model is an optimized ONNX version of Ling-3.0-tiny for local text inference. The export supports a 131,072-token context window, reasoning, and tool calling.</para>
+        ///   <para>
+        ///     <b>Model Description</b>
+        ///   </para>
+        ///   <list type="bullet">
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Developed by:</b> inclusionAI</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Optimized by:</b> Microsoft</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Model type:</b> ONNX</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>License:</b> MIT</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Model Description:</b> This is a conversion of Ling-3.0-tiny for local inference.</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Disclaimer:</b> This model is an optimization of the base model. Please verify and test it for your scenarios. Outputs may differ slightly from the base model. Optimizations are distinct from fine-tuning and do not alter the model's intended uses or capabilities.</para>
+        ///       </description>
+        ///     </item>
+        ///   </list>
+        ///   <para>
+        ///     <b>Base Model Information</b>
+        ///   </para>
+        ///   <para>See Hugging Face model <see href="https://huggingface.co/inclusionAI/Ling-3.0-tiny">Ling-3.0-tiny</see> for details.</para>
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel Ling30Tiny = new() { Name = "ling-3.0-tiny", Version = "1", Format = "Microsoft" };
 
         /// <summary>
         ///   <para>This model is an optimized version of Ministral-3-3B-Instruct-2512 for local inference. This optimized model is published here in ONNX format to run on CUDA-capable GPU devices, with the precision best suited to this target.</para>
@@ -2104,6 +2308,51 @@ public partial class FoundryModel
         /// </summary>
         [AspireValue("FoundryModels")]
         public static readonly FoundryModel Qwen359b = new() { Name = "qwen3.5-9b", Version = "4", Format = "Microsoft" };
+
+        /// <summary>
+        ///   <para>This model is an optimized version of Qwen3.8-27B to enable local text inference. This model uses RTN quantization with DFlash2 speculative decoding and requires Foundry Local 2.2.1 or later.</para>
+        ///   <para>
+        ///     <b>Model Description</b>
+        ///   </para>
+        ///   <list type="bullet">
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Developed by:</b> Microsoft</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Model type:</b> ONNX</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>License:</b> apache-2.0</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Model Description:</b> This is a conversion of the Qwen3.8-27B for local text inference.</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <b>Disclaimer:</b> Model is only an optimization of the base model, any risk associated with the model is the responsibility of the user of the model. Please verify and test for your scenarios. There may be a slight difference in output from the base model with the optimizations applied. Note that optimizations applied are distinct from fine tuning and thus do not alter the intended uses or capabilities of the model.</para>
+        ///       </description>
+        ///     </item>
+        ///   </list>
+        ///   <para>
+        ///     <b>Base Model Information</b>
+        ///   </para>
+        ///   <para>See Hugging Face model <see href="https://huggingface.co/Qwen/Qwen3.8-27B">Qwen3.8-27B</see> for details.</para>
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel Qwen3827b = new() { Name = "qwen3.8-27b", Version = "1", Format = "Microsoft" };
 
         /// <summary>
         ///   <para>This model is an optimized version of SmolLM3-3B to enable local inference. This model uses GPTQ quantization.</para>
