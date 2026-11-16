@@ -19,8 +19,12 @@ public interface IComputeEnvironmentResource : IResource
     /// <remarks>
     /// The returned value typically contains only the host name or address, without scheme, port, or path information.
     /// </remarks>
+    /// <exception cref="NotSupportedException">Thrown when the environment does not implement deployed host-address resolution.</exception>
     [Experimental("ASPIRECOMPUTE002", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    ReferenceExpression GetHostAddressExpression(EndpointReference endpointReference) => throw new NotImplementedException();
+    ReferenceExpression GetHostAddressExpression(EndpointReference endpointReference) =>
+        throw new NotSupportedException(
+            $"Compute environment '{Name}' cannot resolve the deployed host address for endpoint '{endpointReference.EndpointName}' on resource '{endpointReference.Resource.Name}' because it does not implement deployed host-address resolution. " +
+            "Use a compute environment that supports deployed endpoint resolution or supply an explicit backend URL.");
 
     /// <summary>
     /// Gets a <see cref="ReferenceExpression"/> representing a deployed endpoint property for the specified <see cref="EndpointReferenceExpression"/>.
@@ -36,7 +40,7 @@ public interface IComputeEnvironmentResource : IResource
     /// </remarks>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="endpointReferenceExpression"/> is <see langword="null"/>.</exception>
     /// <exception cref="InvalidOperationException">Thrown when the requested endpoint property is unsupported, or when a non-HTTP/HTTPS endpoint does not specify a port.</exception>
-    /// <exception cref="NotSupportedException">Thrown when the environment does not implement browser-origin resolution.</exception>
+    /// <exception cref="NotSupportedException">Thrown when the environment does not implement the host-address or browser-origin resolution required by the requested property.</exception>
     [Experimental("ASPIRECOMPUTE002", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     ReferenceExpression GetEndpointPropertyExpression(EndpointReferenceExpression endpointReferenceExpression)
     {
