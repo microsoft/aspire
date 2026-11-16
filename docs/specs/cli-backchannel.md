@@ -155,6 +155,7 @@ internal static class AuxiliaryBackchannelCapabilities
 | 13.1 | `aux.v1` | `GetAppHostInformationAsync()`, `GetDashboardMcpConnectionInfoAsync()`, `StopAppHostAsync()` |
 | 13.2 | `aux.v2` | All v1 methods + new request-object-based methods |
 | 13.4 | `aux.v3` | All v2 methods + `GetConsoleLogBatchesAsync(GetConsoleLogsRequest)` |
+
 ### Console Log Request Compatibility
 
 `GetConsoleLogsRequest.ResourceName` was required when the v2 console log methods shipped. In v3 it is optional: a `null` resource name requests logs for all resources. V2 callers that need all-resource logs should continue to use the legacy `GetResourceLogsAsync` method rather than sending a null `ResourceName` to v2 console log methods.

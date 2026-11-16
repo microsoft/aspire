@@ -13,6 +13,7 @@ using Aspire.Cli.Backchannel;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
+using Aspire.Dashboard.Utils;
 using Aspire.Hosting;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Logging;
@@ -153,6 +154,14 @@ internal sealed class ResourceCommand : BaseCommand
         }
 
         var commandArguments = commandArgumentsResult.Arguments;
+
+        if (loadArguments)
+        {
+            // Loading arguments only returns input metadata, so file contents are not uploaded.
+            RemoveFileArguments(command, commandArguments);
+            return await LoadCommandArgumentsAsync(parseResult, connection, resourceName, commandName, commandArguments, cancellationToken).ConfigureAwait(false);
+        }
+
         var fileArgumentsResult = await CreateFileArgumentsAsync(command, commandArguments, connection.SupportsResourceCommandFilesV1, cancellationToken).ConfigureAwait(false);
         if (fileArgumentsResult.ErrorMessage is { } fileErrorMessage)
         {
@@ -160,11 +169,6 @@ internal sealed class ResourceCommand : BaseCommand
         }
 
         var fileArguments = fileArgumentsResult.Files;
-
-        if (loadArguments)
-        {
-            return await LoadCommandArgumentsAsync(parseResult, connection, resourceName, commandName, commandArguments, fileArguments, cancellationToken).ConfigureAwait(false);
-        }
 
         // Use display metadata for well-known command names.
         if (s_wellKnownCommands.TryGetValue(commandName, out var knownCommand))
@@ -200,7 +204,6 @@ internal sealed class ResourceCommand : BaseCommand
         string resourceName,
         string commandName,
         JsonNode? commandArguments,
-        ResourceCommandFileArgument[]? fileArguments,
         CancellationToken cancellationToken)
     {
         var response = await connection.ExecuteResourceCommandAsync(
@@ -209,7 +212,6 @@ internal sealed class ResourceCommand : BaseCommand
             new ExecuteResourceCommandOptions
             {
                 Arguments = commandArguments,
-                Files = fileArguments,
                 ValidateOnly = true,
                 NonInteractive = true,
                 ReturnArgumentInputs = true
@@ -516,6 +518,17 @@ internal sealed class ResourceCommand : BaseCommand
         return string.Equals(argument.InputType, "File", StringComparison.OrdinalIgnoreCase);
     }
 
+    private static void RemoveFileArguments(ResourceSnapshotCommand? command, JsonNode? arguments)
+    {
+        if (command?.ArgumentInputs is { Length: > 0 } argumentInputs && arguments is JsonObject argumentValues)
+        {
+            foreach (var input in argumentInputs.Where(IsFileInput))
+            {
+                argumentValues.Remove(input.Name);
+            }
+        }
+    }
+
     private async Task<(ResourceCommandFileArgument[]? Files, string? ErrorMessage)> CreateFileArgumentsAsync(
         ResourceSnapshotCommand? command,
         JsonNode? arguments,
@@ -528,20 +541,16 @@ internal sealed class ResourceCommand : BaseCommand
             return (null, null);
         }
 
-        var fileInputs = argumentInputs.Where(IsFileInput).ToArray();
-        if (fileInputs.Length == 0)
-        {
-            return (null, null);
-        }
-
+        // The AppHost is authoritative for file filters and per-input size limits. The CLI only
+        // enforces the aggregate upload limit so it never buffers more than the AppHost accepts.
         var maxUploadFileSize = long.TryParse(_environment.GetEnvironmentVariable(KnownConfigNames.MaxFileUploadSize), out var configuredMaxUploadFileSize)
             ? configuredMaxUploadFileSize
             : FileUploadHelpers.DefaultMaxFileUploadSize;
         long totalFileSize = 0;
         var files = new List<ResourceCommandFileArgument>();
-        foreach (var input in fileInputs)
+        foreach (var input in argumentInputs.Where(IsFileInput))
         {
-            if (!argumentValues.TryGetPropertyValue(input.Name, out var value) || value is null)
+            if (!argumentValues.Remove(input.Name, out var value) || value is null)
             {
                 continue;
             }
@@ -551,71 +560,43 @@ internal sealed class ResourceCommand : BaseCommand
                 return (null, "The running AppHost does not support file arguments for resource commands. Restart it with a compatible Aspire version.");
             }
 
-            var paths = value switch
-            {
-                JsonArray values => values.Select(static item => item?.GetValue<string>() ?? string.Empty).ToArray(),
-                _ => [value.GetValue<string>()]
-            };
-
-            if (!input.AllowMultipleFiles && paths.Length > 1)
-            {
-                return (null, $"Option '--{ToKebabCase(input.Name)}' accepts only one file.");
-            }
+            string[] paths = value is JsonArray values
+                ? [.. values.Select(static item => item?.GetValue<string>() ?? string.Empty)]
+                : [value.GetValue<string>()];
 
             foreach (var path in paths)
             {
-                var fullPath = Path.GetFullPath(path);
-                if (!File.Exists(fullPath))
+                FileInfo fileInfo;
+                try
+                {
+                    fileInfo = new FileInfo(Path.GetFullPath(path));
+                }
+                catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+                {
+                    return (null, $"'{path}' is not a valid file path.");
+                }
+
+                if (!fileInfo.Exists)
                 {
                     return (null, $"File '{path}' does not exist.");
                 }
 
-                var fileName = Path.GetFileName(fullPath);
-                var fileInfo = new FileInfo(fullPath);
-                var maxFileSize = input.MaxFileSize is { } inputMaxFileSize
-                    ? Math.Min(inputMaxFileSize, maxUploadFileSize)
-                    : maxUploadFileSize;
-                if (fileInfo.Length > maxFileSize)
+                totalFileSize += fileInfo.Length;
+                if (totalFileSize > maxUploadFileSize)
                 {
-                    return (null, $"File '{fileName}' exceeds the maximum size of {FormatHelpers.FormatFileSize(maxFileSize)}.");
-                }
-                if (fileInfo.Length > maxUploadFileSize - totalFileSize)
-                {
-                    return (null, $"Combined file size exceeds the maximum size of {FormatHelpers.FormatFileSize(maxUploadFileSize)}.");
-                }
-
-                if (!MatchesFileFilter(fileName, input.FileFilter))
-                {
-                    return (null, $"File '{fileName}' does not match the accepted file types ({input.FileFilter}).");
+                    return (null, $"Combined file size exceeds the maximum size of {FormatHelpers.FormatFileSize(maxUploadFileSize)}. To increase the limit, set the {KnownConfigNames.MaxFileUploadSize} environment variable.");
                 }
 
                 files.Add(new ResourceCommandFileArgument
                 {
                     ArgumentName = input.Name,
-                    FileName = fileName,
-                    Data = await File.ReadAllBytesAsync(fullPath, cancellationToken).ConfigureAwait(false)
+                    FileName = fileInfo.Name,
+                    Data = await File.ReadAllBytesAsync(fileInfo.FullName, cancellationToken).ConfigureAwait(false)
                 });
-                totalFileSize += fileInfo.Length;
             }
-
-            argumentValues.Remove(input.Name);
         }
 
         return (files.Count > 0 ? files.ToArray() : null, null);
-    }
-
-    private static bool MatchesFileFilter(string fileName, string? fileFilter)
-    {
-        if (string.IsNullOrEmpty(fileFilter))
-        {
-            return true;
-        }
-
-        var extensionFilters = fileFilter
-            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Where(static filter => filter.StartsWith('.'));
-        return !extensionFilters.Any() ||
-            extensionFilters.Any(filter => fileName.EndsWith(filter, StringComparison.OrdinalIgnoreCase));
     }
 
     private static bool IsOptionLikeToken(string value)

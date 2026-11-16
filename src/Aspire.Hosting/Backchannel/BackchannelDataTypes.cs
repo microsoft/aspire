@@ -541,9 +541,9 @@ internal sealed class ResourceCommandFileArgument
     public required string FileName { get; init; }
 
     /// <summary>
-    /// Gets or sets the file content.
+    /// Gets the file content.
     /// </summary>
-    public required byte[] Data { get; set; }
+    public required byte[] Data { get; init; }
 }
 
 /// <summary>

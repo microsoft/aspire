@@ -394,15 +394,23 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
             return null;
         }
 
-        var filesByArgument = files.GroupBy(file => file.ArgumentName, StringComparers.InteractionInputName);
+        // Validate every file before writing any content so a rejected request leaves nothing on disk.
+        var filesByInput = new List<(InteractionInput Input, ResourceCommandFileArgument[] Files)>();
         var maxUploadSize = FileUploadHelpers.GetMaxFileUploadSize(configuration);
         long totalFileSize = 0;
 
-        foreach (var group in filesByArgument)
+        foreach (var group in files.GroupBy(static file => file.ArgumentName, StringComparers.InteractionInputName))
         {
             if (!arguments.TryGetByName(group.Key, out var input) || input.InputType != InputType.File)
             {
                 return $"Argument '{group.Key}' is not a file input.";
+            }
+
+            // Statically disabled scalar values are rejected when arguments are created. Files are not
+            // part of the scalar values, so apply the same rule here.
+            if (input.Disabled && input.DynamicLoading is null)
+            {
+                return $"Argument '{group.Key}' is disabled.";
             }
 
             var suppliedFiles = group.ToArray();
@@ -412,16 +420,18 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
                 return $"File argument '{group.Key}' accepts at most {maxFileCount} file(s).";
             }
 
+            var maxFileSize = input.MaxFileSize is { } configuredMax
+                ? Math.Min(configuredMax, maxUploadSize)
+                : maxUploadSize;
             foreach (var file in suppliedFiles)
             {
-                var maxFileSize = input.MaxFileSize is { } configuredMax
-                    ? Math.Min(configuredMax, maxUploadSize)
-                    : maxUploadSize;
                 if (file.Data.LongLength > maxFileSize)
                 {
                     return $"File '{file.FileName}' exceeds the maximum size of {maxFileSize} bytes.";
                 }
-                if (file.Data.LongLength > maxUploadSize - totalFileSize)
+
+                totalFileSize += file.Data.LongLength;
+                if (totalFileSize > maxUploadSize)
                 {
                     return $"Combined file size exceeds the maximum size of {maxUploadSize} bytes.";
                 }
@@ -430,9 +440,9 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
                 {
                     return $"File '{file.FileName}' does not match the accepted file types ({input.FileFilter}).";
                 }
-
-                totalFileSize += file.Data.LongLength;
             }
+
+            filesByInput.Add((input, suppliedFiles));
         }
 
         var fileSystemService = serviceProvider.GetRequiredService<IFileSystemService>();
@@ -440,26 +450,26 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
 
         try
         {
-            foreach (var group in filesByArgument)
+            foreach (var (input, suppliedFiles) in filesByInput)
             {
-                arguments.TryGetByName(group.Key, out var input);
                 var interactionFiles = new List<InteractionFile>();
                 var argumentTempFiles = new List<TempFile>();
 
-                foreach (var file in group)
+                foreach (var file in suppliedFiles)
                 {
                     var tempFile = fileSystemService.TempDirectory.CreateTempFile();
                     createdFiles.Add(tempFile);
                     argumentTempFiles.Add(tempFile);
                     await File.WriteAllBytesAsync(tempFile.Path, file.Data, cancellationToken).ConfigureAwait(false);
-                    file.Data = [];
 
+                    // The client-supplied name is display metadata only. Strip directory segments from
+                    // either platform's separator; it is never used to build the temporary path.
                     var lastSeparator = file.FileName.AsSpan().LastIndexOfAny('/', '\\');
                     var safeName = lastSeparator >= 0 ? file.FileName[(lastSeparator + 1)..] : file.FileName;
                     interactionFiles.Add(new InteractionFile(Guid.NewGuid().ToString("N"), safeName, tempFile.Path));
                 }
 
-                input!.SetFiles(new InteractionFileCollection(
+                input.SetFiles(new InteractionFileCollection(
                     interactionFiles,
                     () =>
                     {
@@ -472,10 +482,6 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         }
         catch
         {
-            foreach (var file in files)
-            {
-                file.Data = [];
-            }
             foreach (var tempFile in createdFiles)
             {
                 tempFile.Dispose();

@@ -2484,6 +2484,95 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         await app.StopAsync().DefaultTimeout();
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ExecuteResourceCommandAsync_RejectsFilesForDisabledFileArgument(bool dynamicLoading)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+
+        var executed = false;
+        var custom = builder.AddResource(new CustomResource("boardadmin"));
+        custom.WithCommand(
+            name: "import-squares",
+            displayName: "Import squares",
+            executeCommand: _ =>
+            {
+                executed = true;
+                return Task.FromResult(CommandResults.Success());
+            },
+            commandOptions: new CommandOptions
+            {
+                Arguments =
+                [
+                    new InteractionInput
+                    {
+                        Name = "source",
+                        InputType = InputType.Text
+                    },
+                    new InteractionInput
+                    {
+                        Name = "file",
+                        InputType = InputType.File,
+                        Disabled = true,
+                        // The dependency is never supplied, so the load callback cannot run and the
+                        // input stays disabled.
+                        DynamicLoading = dynamicLoading
+                            ? new InputLoadOptions
+                            {
+                                DependsOnInputs = ["source"],
+                                LoadCallback = context =>
+                                {
+                                    context.Input.Disabled = false;
+                                    return Task.CompletedTask;
+                                }
+                            }
+                            : null
+                    }
+                ]
+            });
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            app.Services.GetRequiredService<IConfiguration>(),
+            app.Services.GetRequiredService<ProfilingTelemetry>(),
+            app.Services);
+
+        var response = await target.ExecuteResourceCommandAsync(new ExecuteResourceCommandRequest
+        {
+            ResourceName = "boardadmin",
+            CommandName = "import-squares",
+            Arguments = new JsonObject(),
+            Files =
+            [
+                new ResourceCommandFileArgument
+                {
+                    ArgumentName = "file",
+                    FileName = "squares.json",
+                    Data = "{}"u8.ToArray()
+                }
+            ]
+        }).DefaultTimeout();
+
+        Assert.False(response.Success);
+        Assert.False(executed);
+        if (dynamicLoading)
+        {
+            var error = Assert.Single(response.ValidationErrors);
+            Assert.Equal("file", error.ArgumentName);
+            Assert.Equal("Argument is disabled.", error.ErrorMessage);
+        }
+        else
+        {
+            Assert.Equal("Argument 'file' is disabled.", response.Message);
+        }
+
+        await app.StopAsync().DefaultTimeout();
+    }
+
     [Fact]
     public async Task ExecuteResourceCommandAsync_UnknownJsonArgument_ReturnsFailure()
     {

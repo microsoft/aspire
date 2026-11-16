@@ -596,7 +596,11 @@ public class ResourceCommandService
                 // when the dynamic callback could not run because its dependencies were incomplete.
                 // A callback that ran may intentionally retain a harmless default while leaving the
                 // input disabled, such as Browser Logs keeping the default profile when Shared mode is off.
-                if (loadedDynamicArgumentNames is not null && !string.IsNullOrEmpty(value) && argument.DynamicLoading is not null && !loadedDynamicArgumentNames.Contains(argument.Name))
+                // File inputs carry their value as attached files rather than in Value.
+                var hasValue = argument.InputType == InputType.File
+                    ? argument.GetFiles().Count > 0
+                    : !string.IsNullOrEmpty(value);
+                if (loadedDynamicArgumentNames is not null && hasValue && argument.DynamicLoading is not null && !loadedDynamicArgumentNames.Contains(argument.Name))
                 {
                     context.AddValidationError(argument, "Argument is disabled.");
                 }
@@ -829,7 +833,7 @@ public class ResourceCommandService
 
     private static InteractionInput CloneInput(InteractionInput input, string? value)
     {
-        var clone = new InteractionInput
+        return new InteractionInput
         {
             Name = input.Name,
             Label = input.Label,
@@ -848,8 +852,6 @@ public class ResourceCommandService
             FileFilter = input.FileFilter,
             MaxFileSize = input.MaxFileSize
         };
-
-        return clone;
     }
 
     private static InteractionInputCollection CloneArguments(InteractionInputCollection arguments)

@@ -344,6 +344,86 @@ public class AuxiliaryBackchannelTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task ExecuteResourceCommandAsyncTransfersFileArgumentsOverRpc()
+    {
+        using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(outputHelper);
+
+        string? capturedName = null;
+        byte[]? capturedContents = null;
+        builder.AddResource(new FileCommandResource("boardadmin")).WithCommand(
+            name: "import-squares",
+            displayName: "Import squares",
+            executeCommand: async context =>
+            {
+                using var files = context.Arguments["file"].GetFiles();
+                var file = Assert.Single(files);
+                capturedName = file.Name;
+                capturedContents = await file.ReadAllBytesAsync(context.CancellationToken);
+                return CommandResults.Success();
+            },
+            commandOptions: new CommandOptions
+            {
+                Arguments =
+                [
+                    new InteractionInput
+                    {
+                        Name = "file",
+                        InputType = InputType.File,
+                        Required = true
+                    }
+                ]
+            });
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        var service = app.Services.GetRequiredService<AuxiliaryBackchannelService>();
+        await service.ListeningTask.DefaultTimeout();
+        Assert.NotNull(service.SocketPath);
+
+        var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+        await socket.ConnectAsync(new UnixDomainSocketEndPoint(service.SocketPath)).DefaultTimeout();
+
+        // Match the CLI's System.Text.Json wire format so byte[] content travels as base64 exactly as
+        // it does from `aspire resource`.
+        var formatter = new SystemTextJsonFormatter
+        {
+            JsonSerializerOptions = new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true,
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+            }
+        };
+        using var stream = new NetworkStream(socket, ownsSocket: true);
+        using var rpc = new JsonRpc(new HeaderDelimitedMessageHandler(stream, formatter));
+        rpc.StartListening();
+
+        byte[] contents = [0x00, 0xFF, .. "squares"u8];
+        var response = await rpc.InvokeAsync<ExecuteResourceCommandResponse>(
+            "ExecuteResourceCommandAsync",
+            new ExecuteResourceCommandRequest
+            {
+                ResourceName = "boardadmin",
+                CommandName = "import-squares",
+                Files =
+                [
+                    new ResourceCommandFileArgument
+                    {
+                        ArgumentName = "file",
+                        FileName = "squares.bin",
+                        Data = contents
+                    }
+                ]
+            }).DefaultTimeout();
+
+        Assert.True(response.Success, response.Message);
+        Assert.Equal("squares.bin", capturedName);
+        Assert.Equal(contents, capturedContents);
+
+        await app.StopAsync().DefaultTimeout();
+    }
+
+    [Fact]
     [RequiresFeature(TestFeature.ContainerRuntime)]
     public async Task CallResourceMcpToolAsyncThrowsWhenResourceNotFound()
     {
@@ -832,4 +912,6 @@ public class AuxiliaryBackchannelTests(ITestOutputHelper outputHelper)
 
         return homeDirectory;
     }
+
+    private sealed class FileCommandResource(string name) : Resource(name);
 }
