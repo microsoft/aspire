@@ -16,6 +16,58 @@ namespace Aspire.Cli.Tests.Agents;
 public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
 {
     [Fact]
+    public async Task ConfigureAsync_PreservesExistingCopilotConfig()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var home = workspace.CreateDirectory("home");
+        var configurator = CreateConfigurator(workspace, home);
+        await configurator.ConfigureAsync([CopilotAgentClient.ClientId], CancellationToken.None).DefaultTimeout();
+
+        var hookFile = Path.Combine(home.FullName, ".copilot", "hooks", "aspire-telemetry.json");
+        var config = JsonNode.Parse(await File.ReadAllTextAsync(hookFile))!.AsObject();
+        config["custom"] = new JsonObject { ["enabled"] = true };
+        var userHook = new JsonObject
+        {
+            ["type"] = "command",
+            ["matcher"] = CopilotAgentClient.TelemetryHookMatcher,
+            ["exec"] = "custom-tool",
+            ["args"] = new JsonArray("agent", "telemetry", "--hook")
+        };
+        config["hooks"]!["postToolUse"]!.AsArray().Add(userHook.DeepClone());
+        config["hooks"]!["sessionStart"] = new JsonArray(userHook.DeepClone());
+        await File.WriteAllTextAsync(hookFile, config.ToJsonString());
+
+        await configurator.ConfigureAsync([CopilotAgentClient.ClientId], CancellationToken.None).DefaultTimeout();
+        await configurator.ConfigureAsync([CopilotAgentClient.ClientId], CancellationToken.None).DefaultTimeout();
+
+        var updated = JsonNode.Parse(await File.ReadAllTextAsync(hookFile))!;
+        Assert.True(JsonNode.DeepEquals(config["custom"], updated["custom"]));
+        Assert.True(JsonNode.DeepEquals(config["hooks"]!["sessionStart"], updated["hooks"]!["sessionStart"]));
+        Assert.Collection(updated["hooks"]!["postToolUse"]!.AsArray(),
+            hook => Assert.True(JsonNode.DeepEquals(userHook, hook)),
+            hook => Assert.Equal(CopilotAgentClient.TelemetryHookMatcher, (string?)hook!["matcher"]));
+    }
+
+    [Theory]
+    [InlineData("not json", nameof(TelemetryHookStatus.MalformedConfig))]
+    [InlineData("{\"hooks\":[]}", nameof(TelemetryHookStatus.UnexpectedConfigShape))]
+    [InlineData("{\"hooks\":{\"postToolUse\":{}}}", nameof(TelemetryHookStatus.UnexpectedConfigShape))]
+    public async Task ConfigureAsync_PreservesInvalidCopilotConfig(string original, string expected)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var home = workspace.CreateDirectory("home");
+        var hooks = Directory.CreateDirectory(Path.Combine(home.FullName, ".copilot", "hooks"));
+        var hookFile = Path.Combine(hooks.FullName, "aspire-telemetry.json");
+        await File.WriteAllTextAsync(hookFile, original);
+
+        var result = await CreateConfigurator(workspace, home)
+            .ConfigureAsync([CopilotAgentClient.ClientId], CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal([(CopilotAgentClient.ClientId, Enum.Parse<TelemetryHookStatus>(expected))], GetOutcomes(result));
+        Assert.Equal(original, await File.ReadAllTextAsync(hookFile));
+    }
+
+    [Fact]
     public async Task ConfigureAsync_WritesCopilotUserHook_WithExpectedShape()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

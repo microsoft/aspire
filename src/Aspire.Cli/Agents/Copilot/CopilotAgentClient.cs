@@ -148,24 +148,55 @@ internal sealed class CopilotAgentClient(
             Directory.CreateDirectory(hooksDirectory);
             var filePath = Path.Combine(hooksDirectory, "aspire-telemetry.json");
             var (command, args) = AgentTelemetryHook.GetCommand(AgentTelemetryProtocol.HookOptionName);
-            var config = new JsonObject
-            {
-                ["version"] = 1,
-                ["hooks"] = new JsonObject
-                {
-                    ["postToolUse"] = new JsonArray(
-                        new JsonObject
-                        {
-                            ["type"] = "command",
-                            ["matcher"] = TelemetryHookMatcher,
-                            ["exec"] = command,
-                            ["args"] = new JsonArray(args.Select(arg => (JsonNode?)JsonValue.Create(arg)).ToArray()),
-                            ["timeoutSec"] = 30,
-                        }),
-                },
-            };
             var edit = new AgentConfiguration();
-            await edit.ReadBytesForEditAsync(filePath, cancellationToken);
+            JsonObject config;
+            try
+            {
+                config = await edit.ReadObjectForEditAsync(filePath, cancellationToken) ?? new JsonObject();
+            }
+            catch (InvalidOperationException ex)
+            {
+                logger.LogDebug(ex, "Copilot hooks at {Path} contained malformed JSON; skipping hook registration.", filePath);
+                return TelemetryHookStatus.MalformedConfig;
+            }
+
+            if (config.TryGetPropertyValue("hooks", out var hooksNode) && hooksNode is not JsonObject)
+            {
+                return TelemetryHookStatus.UnexpectedConfigShape;
+            }
+            var hooks = hooksNode as JsonObject ?? new JsonObject();
+            if (hooks.TryGetPropertyValue("postToolUse", out var postToolUseNode) && postToolUseNode is not JsonArray)
+            {
+                return TelemetryHookStatus.UnexpectedConfigShape;
+            }
+            var postToolUse = postToolUseNode as JsonArray ?? new JsonArray();
+
+            // This Aspire-owned file can still contain user entries. Replace only our
+            // invocation, preserving other events and hooks even when matchers overlap.
+            for (var i = postToolUse.Count - 1; i >= 0; i--)
+            {
+                if (IsAspireTelemetryHook(postToolUse[i], command))
+                {
+                    postToolUse.RemoveAt(i);
+                }
+            }
+            postToolUse.Add((JsonNode)new JsonObject
+            {
+                ["type"] = "command",
+                ["matcher"] = TelemetryHookMatcher,
+                ["exec"] = command,
+                ["args"] = new JsonArray(args.Select(arg => (JsonNode?)JsonValue.Create(arg)).ToArray()),
+                ["timeoutSec"] = 30,
+            });
+            if (hooksNode is null)
+            {
+                config["hooks"] = hooks;
+            }
+            if (postToolUseNode is null)
+            {
+                hooks["postToolUse"] = postToolUse;
+            }
+            config["version"] ??= 1;
             await edit.PublishAsync(filePath, config, cancellationToken);
 
             return TelemetryHookStatus.Configured;
@@ -175,6 +206,23 @@ internal sealed class CopilotAgentClient(
             logger.LogDebug(ex, "Failed to write Copilot telemetry hook configuration.");
             return TelemetryHookStatus.WriteFailed;
         }
+    }
+
+    private static bool IsAspireTelemetryHook(JsonNode? node, string currentCommand)
+    {
+        if (node is not JsonObject hook || hook["exec"] is not JsonValue executableValue
+            || !executableValue.TryGetValue<string>(out var executable) || hook["args"] is not JsonArray args)
+        {
+            return false;
+        }
+
+        var values = args.Select(arg => arg is JsonValue value && value.TryGetValue<string>(out var text) ? text : null).ToArray();
+        var executableName = Path.GetFileNameWithoutExtension(executable);
+        return values is [AgentTelemetryProtocol.AgentCommandName, AgentTelemetryProtocol.TelemetryCommandName, AgentTelemetryProtocol.HookOptionName]
+                && (executable == currentCommand || string.Equals(executableName, "aspire", StringComparison.OrdinalIgnoreCase))
+            || string.Equals(executableName, "dotnet", StringComparison.OrdinalIgnoreCase)
+                && values is [var assemblyPath, AgentTelemetryProtocol.AgentCommandName, AgentTelemetryProtocol.TelemetryCommandName, AgentTelemetryProtocol.HookOptionName]
+                && string.Equals(Path.GetFileName(assemblyPath), "aspire.dll", StringComparison.OrdinalIgnoreCase);
     }
 
     public override string ToString() => Id;
