@@ -139,6 +139,7 @@ export const VSBrowser = extester.VSBrowser as { readonly instance: VSBrowserIns
 export const ActivityBar = extester.ActivityBar as new () => ActivityBar;
 export const SideBarView = extester.SideBarView as new () => SideBarView;
 export const Workbench = extester.Workbench as new () => Workbench;
+export const ContextMenu = extester.ContextMenu as new (containingElement: Workbench) => Menu;
 export const By = extester.By as { css(selector: string): Locator };
 export const InputBox = extester.InputBox as { create(timeout?: number): Promise<InputBox> };
 export const BottomBarPanel = extester.BottomBarPanel as new () => {

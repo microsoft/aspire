@@ -1,6 +1,6 @@
 import type { AspireExtensionE2EControlCommand } from '../../types/extensionApi';
 import { applyE2eControl } from './assertions';
-import { BottomBarPanel, By, EditorView, InputBox, Menu, ModalDialog, Notification, SideBarView, TreeItem, TreeSection, VSBrowser, WebView, Workbench } from './extester';
+import { BottomBarPanel, By, ContextMenu, EditorView, InputBox, Menu, ModalDialog, Notification, SideBarView, TreeItem, TreeSection, VSBrowser, WebView, Workbench } from './extester';
 import { error as webDriverError } from 'selenium-webdriver';
 
 const escapeKey = '\uE00C';
@@ -299,11 +299,11 @@ export async function waitForTreeItemDescription(section: TreeSection, label: st
 
 // ExTester's openContextMenu() only waits for the menu on the first right-click of a session. Once
 // VS Code has created the shared `.context-view` container (it stays in the DOM after the menu closes),
-// later calls right-click and immediately look up `.monaco-menu`, so a slow render or a tree refresh
-// that dismisses the menu fails with:
+// later calls right-click and immediately look up `.monaco-menu`, so a slow render fails with:
 //   NoSuchElementError: no such element: Unable to locate element: {"method":"css selector","selector":".monaco-menu"}
 // See https://github.com/redhat-developer/vscode-extension-tester/blob/main/packages/page-objects/src/components/ElementWithContextMenu.ts
-// Retry with a freshly located row so a re-rendered tree item is not reused.
+// When that immediate lookup fails, wait for the menu to become visible within the remaining budget.
+// Only re-right-click a freshly located row when the menu never appears or the row went stale.
 export async function openTreeItemContextMenu(section: TreeSection, label: string, timeoutMs = 60000): Promise<Menu> {
     const deadline = Date.now() + timeoutMs;
     let lastError: unknown;
@@ -320,12 +320,45 @@ export async function openTreeItemContextMenu(section: TreeSection, label: strin
             }
 
             lastError = error;
-            // Close a partially opened menu so the next right-click starts from a dismissed state.
-            await VSBrowser.instance.driver.actions().sendKeys(escapeKey).perform();
         }
+
+        // Leave time for later attempts while still allowing a slow menu render to finish.
+        const remainingAttempts = 3 - attempt;
+        const renderWaitMs = Math.max(Math.floor((deadline - Date.now()) / remainingAttempts), 1000);
+        if (await waitForVisibleContextMenu(renderWaitMs)) {
+            return new ContextMenu(new Workbench());
+        }
+
+        // Close a partially opened menu so the next right-click starts from a dismissed state.
+        await VSBrowser.instance.driver.actions().sendKeys(escapeKey).perform();
     }
 
     throw new Error(`Failed to open the context menu for tree item '${label}' after 3 attempts: ${lastError instanceof Error ? lastError.message : String(lastError)}`);
+}
+
+async function waitForVisibleContextMenu(timeoutMs: number): Promise<boolean> {
+    try {
+        await VSBrowser.instance.driver.wait(async () => {
+            try {
+                const menus = await VSBrowser.instance.driver.findElements(By.css('.monaco-workbench .monaco-menu'));
+                for (const menu of menus) {
+                    if (await menu.isDisplayed()) {
+                        return true;
+                    }
+                }
+            }
+            catch (error) {
+                throwIfWebDriverSessionFailure(error);
+            }
+
+            return false;
+        }, timeoutMs);
+        return true;
+    }
+    catch (error) {
+        throwIfWebDriverSessionFailure(error);
+        return false;
+    }
 }
 
 export async function selectContextMenuItem(item: TreeItem, label: string): Promise<void> {
