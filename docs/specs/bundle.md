@@ -34,7 +34,7 @@ The Aspire Bundle distributes the CLI with its runtime components:
 | `dashboard/Aspire.Dashboard[.exe]` | Native AOT | Dashboard web application |
 | `dashboard/wwwroot/` and native dependencies | Publish assets | Dashboard scripts, styles, fonts, images, and SQLite native library |
 | `dcp/` | Platform-specific native binaries | Developer Control Plane |
-| `tray/` | NativeAOT, macOS, Windows, and glibc Linux | Experimental menu-bar or notification-area companion |
+| `tray/` | NativeAOT, macOS, Windows, and glibc Linux | Preview menu-bar or notification-area companion |
 
 The bundle removes the need to acquire DCP and Dashboard separately when using the bundled components. Its pre-built AppHost Server and in-process NuGet client do not require a globally installed .NET SDK.
 
@@ -413,7 +413,7 @@ Desktop layouts also require their native tray input: `--tray-app` on macOS,
 
 For the complete tool contract, see [CreateLayout](../../tools/CreateLayout/README.md). CI packaging additionally uses [dashboardpack](../../eng/dashboardpack/Common.projitems), [clipack](../../eng/clipack/Common.projitems), signing targets, and the native-archive workflows.
 
-### Experimental Native Tray Companion
+### Native Tray Companion (Preview)
 
 `aspire tray start` starts or restores the native companion from the invoking CLI's leased bundle; `aspire tray stop` shuts down the companion without stopping AppHosts. The companion uses the CLI's versioned discovery and exact-instance stop contracts. Linux musl, headless sessions, and standalone CLI binaries without a bundled payload are unsupported.
 
