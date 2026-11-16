@@ -6,14 +6,14 @@
 
 ### Features
 
-- Add an Open resource source action for source-backed AppHost resources ([#20463](https://github.com/microsoft/aspire/pull/20463)).
-- Persist stable AppHost ports and isolate AppHosts across worktrees ([#21013](https://github.com/microsoft/aspire/pull/21013)).
+- Add **Open resource source** to resource context menus in Workspace and Global AppHosts when source information is available ([#20463](https://github.com/microsoft/aspire/pull/20463)).
+- Add JSON completion and validation for options that enable automatic isolation in linked worktrees and stable port allocation in isolated mode ([#21013](https://github.com/microsoft/aspire/pull/21013)).
 
 ### Fixes
 
-- Fix resource name resolution when attaching a debugger to a resource ([#21416](https://github.com/microsoft/aspire/pull/21416)).
-- Stop the extension from polling when idle ([#21890](https://github.com/microsoft/aspire/pull/21890)).
-- Give the `aspire --version` probe a 30 second budget to avoid false timeouts ([#21912](https://github.com/microsoft/aspire/pull/21912)).
+- Allow the Aspire resource-debugging chat tool to attach by resource display name ([#21416](https://github.com/microsoft/aspire/pull/21416)).
+- Reduce background resource monitoring when the Aspire view and AppHost editors are hidden and no run or debug session needs updates ([#21890](https://github.com/microsoft/aspire/pull/21890)).
+- Prevent slow CLI startup from causing valid Aspire CLI installations to be reported as invalid ([#21912](https://github.com/microsoft/aspire/pull/21912)).
 
 ## v1.25.0
 
