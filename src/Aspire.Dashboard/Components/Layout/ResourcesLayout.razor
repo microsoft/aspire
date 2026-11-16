@@ -87,10 +87,6 @@
                         <FluentSpinner Size="SpinnerSize.Small" />
                     </div>
                 }
-                else if (paneItemCount == 0 && !(isGrouped && _grouping == ResourcePaneGrouping.Tags && TagStore.GetAllTags(_resourceByName.Values).Count == 0) && !DashboardClient.IsEnabled)
-                {
-                    <div class="resource-pane-message">@Loc[nameof(Dashboard.Resources.Layout.TelemetryPaneNoSources)]</div>
-                }
 
                 @if (_isLoaded)
                 {
@@ -125,10 +121,12 @@
                     </div>
                 }
 
-                @if (_isLoaded && DashboardClient.IsEnabled && paneItemCount == 0 && !(isGrouped && _grouping == ResourcePaneGrouping.Tags && TagStore.GetAllTags(_resourceByName.Values).Count == 0))
+                @if (_isLoaded && paneItemCount == 0 && !(isGrouped && _grouping == ResourcePaneGrouping.Tags && TagStore.GetAllTags(_resourceByName.Values).Count == 0))
                 {
                     <div class="resource-pane-message">
-                        @ResourcesLoc[nameof(Dashboard.Resources.Resources.ResourcesNoResources)]
+                        @(DashboardClient.IsEnabled
+                            ? ResourcesLoc[nameof(Dashboard.Resources.Resources.ResourcesNoResources)]
+                            : Loc[nameof(Dashboard.Resources.Layout.TelemetryPaneNoSources)])
                     </div>
                 }
 

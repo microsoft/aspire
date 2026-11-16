@@ -2808,6 +2808,70 @@ public class ResourcesLayoutTests : DashboardTestContext
         });
     }
 
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    public async Task EmptyPane_ShowsMessageAfterAllResources(bool appHostEnabled, bool hasResources)
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: appHostEnabled,
+            initialResources: hasResources ? [ModelTestHelpers.CreateResource("api")] : [],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        if (!appHostEnabled && hasResources)
+        {
+            await AddTelemetryAsync("api");
+        }
+        Services.GetRequiredService<NavigationManager>().NavigateTo(appHostEnabled
+            ? DashboardUrls.ResourceListUrl()
+            : DashboardUrls.StructuredLogsUrl());
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() =>
+        {
+            Assert.True(cut.Instance.IsLoaded);
+            Assert.Equal(hasResources ? 2 : 1, cut.FindAll(".resource-row").Count);
+        });
+
+        if (hasResources)
+        {
+            await cut.FindComponent<FluentTextInput>().InvokeAsync(() =>
+                cut.FindComponent<FluentTextInput>().Instance.ValueChanged.InvokeAsync("no-match"));
+        }
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Single(cut.FindAll(".resource-row"));
+            var allRow = cut.Find(".resource-row-all");
+            Assert.Equal(appHostEnabled ? "All resources" : "All sources", allRow.QuerySelector(".resource-row-name")!.TextContent.Trim());
+            var message = Assert.Single(cut.FindAll(".resource-pane-message"));
+            Assert.Equal(appHostEnabled ? "No resources found" : "No telemetry sources", message.TextContent.Trim());
+            Assert.Equal(allRow, message.PreviousElementSibling);
+        });
+    }
+
+    [Fact]
+    public void AppHost_TagsGroupingWithNoTags_ShowsTagsEmptyInsteadOfPaneMessage()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        var storage = Assert.IsType<TestLocalStorage>(Services.GetRequiredService<ILocalStorage>());
+        storage.OnGetUnprotectedAsync = key => key == BrowserStorageKeys.ResourcePaneGrouping ? (true, "Tags") : (false, null);
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.ResourceListUrl());
+        Render<FluentToastProvider>();
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.True(cut.Instance.IsLoaded);
+            Assert.Single(cut.FindAll(".resource-row-all"));
+            Assert.Single(cut.FindAll(".resource-tags-empty"));
+            Assert.Equal("No tags yet", cut.Find(".resource-tags-empty-title").TextContent.Trim());
+            Assert.Empty(cut.FindAll(".resource-pane-message"));
+        });
+    }
+
     [Fact]
     public async Task Standalone_SelectingResourcesPreservesSelectionInPageUrls()
     {
