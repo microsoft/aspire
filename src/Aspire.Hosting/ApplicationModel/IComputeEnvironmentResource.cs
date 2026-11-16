@@ -35,7 +35,7 @@ public interface IComputeEnvironmentResource : IResource
     /// when no explicit port is configured.
     /// </remarks>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="endpointReferenceExpression"/> is <see langword="null"/>.</exception>
-    /// <exception cref="InvalidOperationException">Thrown when the requested endpoint property is unsupported, or when a non-HTTP/HTTPS endpoint does not specify a port.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when the requested endpoint property is unsupported, or when a property requires a port and a non-HTTP/HTTPS endpoint does not specify one.</exception>
     /// <exception cref="NotSupportedException">Thrown when the environment does not implement browser-origin resolution.</exception>
     [Experimental("ASPIRECOMPUTE002", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     ReferenceExpression GetEndpointPropertyExpression(EndpointReferenceExpression endpointReferenceExpression)
@@ -52,21 +52,21 @@ public interface IComputeEnvironmentResource : IResource
                 "An endpoint host address alone does not establish a browser-facing origin. Use an environment that supports browser origins or supply an explicit origin parameter.");
         }
         var scheme = endpoint.UriScheme;
-        var port = endpoint.Port ?? GetDefaultPort(scheme, endpoint);
+        var port = new Lazy<int>(() => endpoint.Port ?? GetDefaultPort(scheme, endpoint));
         var host = new Lazy<ReferenceExpression>(() => GetHostAddressExpression(endpointReference));
 
         return property switch
         {
-            EndpointProperty.Url => IsDefaultPort(scheme, port)
+            EndpointProperty.Url => IsDefaultPort(scheme, port.Value)
                 ? ReferenceExpression.Create($"{scheme}://{host.Value}")
-                : ReferenceExpression.Create($"{scheme}://{host.Value}:{port.ToString(CultureInfo.InvariantCulture)}"),
+                : ReferenceExpression.Create($"{scheme}://{host.Value}:{port.Value.ToString(CultureInfo.InvariantCulture)}"),
             EndpointProperty.Host or EndpointProperty.IPV4Host => host.Value,
-            EndpointProperty.Port => ReferenceExpression.Create($"{port.ToString(CultureInfo.InvariantCulture)}"),
+            EndpointProperty.Port => ReferenceExpression.Create($"{port.Value.ToString(CultureInfo.InvariantCulture)}"),
             EndpointProperty.TargetPort => endpoint.TargetPort is int targetPort
                 ? ReferenceExpression.Create($"{targetPort.ToString(CultureInfo.InvariantCulture)}")
                 : ReferenceExpression.Create($"{new ContainerPortReference(endpointReference.Resource)}"),
             EndpointProperty.Scheme => ReferenceExpression.Create($"{scheme}"),
-            EndpointProperty.HostAndPort => ReferenceExpression.Create($"{host.Value}:{port.ToString(CultureInfo.InvariantCulture)}"),
+            EndpointProperty.HostAndPort => ReferenceExpression.Create($"{host.Value}:{port.Value.ToString(CultureInfo.InvariantCulture)}"),
             EndpointProperty.TlsEnabled => ReferenceExpression.Create($"{(endpoint.TlsEnabled ? bool.TrueString : bool.FalseString)}"),
             _ => throw new InvalidOperationException($"The property '{property}' is not supported for the endpoint '{endpoint.Name}'.")
         };

@@ -2119,6 +2119,29 @@ public class KubernetesPublisherTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task PublishAsync_ResolvesEndpointTlsConditionWithoutPublishedPort()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
+
+        builder.AddKubernetesEnvironment("env");
+
+        var cache = builder.AddContainer("cache", "redis")
+            .WithEndpoint(targetPort: 6379, name: "tcp", scheme: "redis");
+        var tlsSuffix = cache.GetEndpoint("tcp").GetTlsValue(
+            ReferenceExpression.Create($"secure"),
+            ReferenceExpression.Create($"plain"));
+        builder.AddContainer("myapp", "nginx")
+            .WithEnvironment("CACHE_TLS_SUFFIX", tlsSuffix);
+
+        var app = builder.Build();
+        app.Run();
+
+        var valuesContent = await File.ReadAllTextAsync(Path.Combine(workspace.Path, "values.yaml"));
+        await Verify(valuesContent, "yaml");
+    }
+
+    [Fact]
     public async Task PublishAsync_ConditionalWithParameterBranch_UsesIfElseSyntax()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

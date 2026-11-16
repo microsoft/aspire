@@ -102,6 +102,24 @@ public class ComputeEnvironmentValidationTests
         Assert.Equal(expected, await expression.GetValueAsync(default));
     }
 
+    [Theory]
+    [InlineData(EndpointProperty.Host, "api.example.com")]
+    [InlineData(EndpointProperty.IPV4Host, "api.example.com")]
+    [InlineData(EndpointProperty.TargetPort, "6379")]
+    [InlineData(EndpointProperty.Scheme, "redis")]
+    [InlineData(EndpointProperty.TlsEnabled, "False")]
+    public async Task GetEndpointPropertyExpression_DoesNotRequirePortForIndependentProperties(EndpointProperty property, string expected)
+    {
+        IComputeEnvironmentResource environment = new TestComputeEnvironmentResource("env");
+        var endpointReference = CreateEndpointReference("redis", port: null, targetPort: 6379);
+
+#pragma warning disable ASPIRECOMPUTE002
+        var expression = environment.GetEndpointPropertyExpression(endpointReference.Property(property));
+#pragma warning restore ASPIRECOMPUTE002
+
+        Assert.Equal(expected, await expression.GetValueAsync(default));
+    }
+
     [Fact]
     public void GetEndpointPropertyExpression_ThrowsWhenCustomSchemeDoesNotSpecifyPort()
     {
