@@ -1423,9 +1423,12 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         }
 
         return name.Equals("NoWarn", StringComparison.OrdinalIgnoreCase)
-            && value.Split([';', ','], StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
-                .Any(code => code.Equals("ASPIRE012", StringComparison.OrdinalIgnoreCase));
+            && Aspire012NoWarnRegex().IsMatch(value);
     }
+
+    // Must match the NoWarn check in Aspire.AppHost.Sdk's Sdk.in.targets (__WarnOnAspireAppHostSdkObsolete).
+    [GeneratedRegex(@"(^|[;,\s])ASPIRE012($|[;,\s])", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex Aspire012NoWarnRegex();
 
     [GeneratedRegex(@"^[\t ]*#:property[\t ]+(?<name>[A-Za-z0-9_.\-]+)[\t ]*=(?<value>.*?)\r?$", RegexOptions.Multiline | RegexOptions.CultureInvariant)]
     private static partial Regex PropertyDirectiveRegex();
