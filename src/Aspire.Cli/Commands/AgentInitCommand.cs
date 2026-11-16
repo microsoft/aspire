@@ -552,11 +552,10 @@ internal sealed class AgentInitCommand : BaseCommand
             var skillCopiesToRemove = aspireSkillsReplaceCopies
                 ? FindSkillCopiesAtSelectedScope(selectedClients, workspaceRoot, scope, cancellationToken)
                 : [];
-            // Report the plugin configuration first: it is the reason the copies can be deleted.
-            hasErrors |= DisplayRemoteConfigurationResults(registrationResults, workspaceRoot);
             var deleteSkillCopies = skillCopiesToRemove.Length > 0 &&
                 await ConfirmSkillCopyDeletionAsync(skillCopiesToRemove, workspaceRoot, removeSkillCopiesBinding, cancellationToken);
             var (removedSkillCopies, skillCopyFailures) = RemoveSkillCopies(deleteSkillCopies ? skillCopiesToRemove : [], workspaceRoot);
+            hasErrors |= DisplayRemoteConfigurationResults(registrationResults, workspaceRoot);
             if (removedSkillCopies.Count > 0)
             {
                 // The folders were listed just before deletion, so only summarize here.
