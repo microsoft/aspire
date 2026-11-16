@@ -13,6 +13,8 @@ namespace Aspire.Hosting.Dcp;
 
 internal sealed class ExecutableLaunchPolicy(IConfiguration configuration)
 {
+    private const string AzureFunctionsLaunchConfigurationType = "azure-functions";
+
     private readonly IConfiguration _configuration = configuration;
 
     public ExecutableLaunchDecision Decide(IResource resource)
@@ -87,12 +89,14 @@ internal sealed class ExecutableLaunchPolicy(IConfiguration configuration)
             return false;
         }
 
-        // Capability-less Visual Studio sessions can only launch projects loaded in the solution, so bare .cs files
-        // stay on the Process path. An IDE that explicitly advertises "project" can launch the same .cs project
-        // configuration through this compatibility path even when the resource has no SupportsDebuggingAnnotation.
+        var hasExplicitProjectLaunchCapability = HasExplicitProjectLaunchCapability();
+
+        // Capability-less IDE sessions can only launch projects loaded in the solution, so bare .cs files stay on
+        // the Process path. An IDE that explicitly advertises "project" can launch the same .cs project configuration
+        // through this compatibility path even when the resource has no SupportsDebuggingAnnotation.
         if (resource.TryGetProjectMetadata(out var projectMetadata) &&
             projectMetadata.IsFileBasedApp &&
-            !HasExplicitProjectLaunchCapability())
+            !hasExplicitProjectLaunchCapability)
         {
             return false;
         }
@@ -105,7 +109,19 @@ internal sealed class ExecutableLaunchPolicy(IConfiguration configuration)
 
         if (debugSupport is not null && !string.IsNullOrEmpty(_configuration[KnownConfigNames.DebugSessionInfo]))
         {
-            return false;
+            // Azure Functions projects should use the legacy "project" launch configuration only when the active IDE
+            // advertises native project support and the session is not owned by an Aspire extension. Extension-managed
+            // sessions treat the advertised custom launch types as an exact contract, so an unsupported
+            // "azure-functions" type must not use the "project" compatibility launch.
+            var useAzureFunctionsProjectFallback =
+                debugSupport.LaunchConfigurationType == AzureFunctionsLaunchConfigurationType &&
+                hasExplicitProjectLaunchCapability &&
+                string.IsNullOrEmpty(_configuration[KnownConfigNames.ExtensionEndpoint]);
+
+            if (!useAzureFunctionsProjectFallback)
+            {
+                return false;
+            }
         }
 
         // A directly added legacy ProjectResource may not declare a launch configuration type at all. Preserve its
