@@ -676,6 +676,10 @@ export async function executeE2eControlCommand(
       await vscode.commands.executeCommand('workbench.action.closeAllEditors');
       return getActiveEditorInfo();
     }
+    case 'clearAllNotifications': {
+      markStarted();
+      return await vscode.commands.executeCommand('notifications.clearAll');
+    }
     case 'getRegisteredAspireCommands': {
       markStarted();
       const commands = await vscode.commands.getCommands(true);
