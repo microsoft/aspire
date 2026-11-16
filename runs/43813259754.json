@@ -1,0 +1,68 @@
+{
+  "run_id": 43813259754,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/43813259754",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-16T06:31:34Z",
+  "verdict": "flaky-test",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 22298,
+    "title": "Use accepted configuration sources for template discovery",
+    "author": "JamesNK",
+    "state": "closed",
+    "head_branch": "fix/accepted-config-source-templates",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/22298",
+    "merged_at": "2026-11-16T05:54:32Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "81af9cf86b8b03848dae03a126ed02059b59156b",
+    "failed_sha": "334b86dd6bde8d14dc971bdfda8df3f9812af935",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "334b86dd6bde8d14dc971bdfda8df3f9812af935",
+        "message": "Use accepted configuration sources for template discovery (#22298)",
+        "html_url": "https://github.com/microsoft/aspire/commit/334b86dd6bde8d14dc971bdfda8df3f9812af935",
+        "pull_request": {
+          "number": 22298,
+          "title": "Use accepted configuration sources for template discovery",
+          "url": "https://github.com/microsoft/aspire/pull/22298",
+          "merged_at": "2026-11-16T05:54:32Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, cli-path-rejection)",
+      "id": 133125882311,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/43813259754/job/133125882311",
+      "classification": "flaky-test",
+      "reason": "Selenium element not interactable on notification action in cli-path-rejection E2E; UI timing, matches prior mechanism",
+      "failed_steps": [
+        "Run extension E2E tests"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Configured CLI path rejection E2E warns and opens the setting when the configured path is invalid",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, cli-path-rejection)",
+      "error": "element not interactable\n  (Session info: chrome=148.0.7778.280)",
+      "stack_trace": "ElementNotInteractableError: element not interactable\n  (Session info: chrome=148.0.7778.280)\n    at Object.throwDecodedError (node_modules/selenium-webdriver/lib/error.js:523:15)\n    at parseHttpResponse (node_modules/selenium-webdriver/lib/http.js:526:13)\n    at Executor.execute (node_modules/selenium-webdriver/lib/http.js:458:28)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async Driver.execute (node_modules/selenium-webdriver/lib/webdriver.js:745:17)\n    at async StandaloneNotification.takeAction (node_modules/@redhat-developer/page-objects/out/components/workbench/Notification.js:119:9)\n    at async Context.<anonymous> (out/test-e2e/test-e2e/cliPathRejectionNotification.e2e.test.js:93:9)",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Same notification-action ElementNotInteractableError at Notification.takeAction as recorded intermittent cause",
+      "job_id": 133125882311,
+      "result_file": "00001.json",
+      "result_format": "mocha"
+    }
+  ],
+  "causes": [
+    "vscode-extension-e2e-notification-element-not-interactable"
+  ]
+}
