@@ -1352,6 +1352,47 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task Remote_SkillCopyPreviewDoesNotListFilesBehindLinksInsideTheCopy()
+    {
+        using var context = new AgentConfigurationTestContext(outputHelper);
+        var shared = context.Workspace.CreateDirectory("shared-references");
+        var sharedFilePath = Path.Combine(shared.FullName, "notes.md");
+        const string notes = "Shared notes.";
+        await AgentConfigurationTestContext.WriteAsync(sharedFilePath, notes);
+        var skillDirectory = Path.Combine(context.Project.FullName, ".agents", "skills", "aspire");
+        await AgentConfigurationTestContext.WriteAsync(Path.Combine(skillDirectory, "SKILL.md"), "My customized Aspire instructions.");
+        try
+        {
+            Directory.CreateSymbolicLink(Path.Combine(skillDirectory, "references"), shared.FullName);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Assert.Skip($"Symbolic links are not available: {ex.Message}");
+        }
+        var interaction = new TestInteractionService();
+        using var provider = context.CreateServiceCollection(outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interaction;
+        }).BuildServiceProvider();
+
+        var result = provider.GetRequiredService<RootCommand>().Parse(
+            "agent init --agents copilot --scope project --skills aspire --mcp=false --remove-skill-copies");
+
+        Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
+        Assert.Equal(
+            string.Join(Environment.NewLine,
+            [
+                $"[yellow]{AgentCommandStrings.InitCommand_SkillCopiesFound}[/]",
+                "  .agents/skills/aspire",
+                "    SKILL.md"
+            ]),
+            Assert.Single(interaction.DisplayedMessages, message => message.Emoji.Equals(KnownEmojis.PoliceCarLight) &&
+                message.Message.StartsWith($"[yellow]{AgentCommandStrings.InitCommand_SkillCopiesFound}", StringComparison.Ordinal)).Message);
+        Assert.False(Directory.Exists(skillDirectory));
+        Assert.Equal(notes, await File.ReadAllTextAsync(sharedFilePath));
+    }
+
+    [Fact]
     public async Task Remote_ContinuesRemovingSkillCopiesAfterADeletionFails()
     {
         if (!OperatingSystem.IsWindows() && Environment.IsPrivilegedProcess)

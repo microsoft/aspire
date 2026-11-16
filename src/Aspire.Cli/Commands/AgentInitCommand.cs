@@ -1139,12 +1139,12 @@ internal sealed class AgentInitCommand : BaseCommand
     private static IEnumerable<string> GetSkillCopyFiles(string skillDirectory)
     {
         // Directory.Delete(recursive: true) removes everything below the folder, including hidden files,
-        // so list them too. Recursion does not descend into linked directories, which matches deletion
-        // removing the link rather than the target's contents.
+        // so list them too. Links are skipped because recursive enumeration would otherwise follow them
+        // into their targets (for example a shared checkout), while deletion removes only the link itself.
         var options = new EnumerationOptions
         {
             RecurseSubdirectories = true,
-            AttributesToSkip = 0,
+            AttributesToSkip = FileAttributes.ReparsePoint,
             IgnoreInaccessible = true
         };
 
