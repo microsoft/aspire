@@ -1,0 +1,9 @@
+{
+  "author": "maddymontaquila",
+  "comment": "MCP endpoint declaration API graduated to stable",
+  "mergedAt": "2026-11-15T20:07:45Z",
+  "number": 22158,
+  "runDate": "2026-11-16T00:06:00Z",
+  "status": "included",
+  "title": "Graduate MCP endpoint declaration to stable"
+}

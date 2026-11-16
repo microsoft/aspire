@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "`WithMcpServer` can declare an existing MCP server endpoint without suppressing `ASPIREMCP001`.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🔌",
+  "firstMergedAt": "2026-11-15T20:07:45Z",
+  "lastMergedAt": "2026-11-15T20:07:45Z",
+  "name": "MCP server endpoint declaration is now stable",
+  "owner": "maddymontaquila",
+  "prs": [
+    22158
+  ]
+}

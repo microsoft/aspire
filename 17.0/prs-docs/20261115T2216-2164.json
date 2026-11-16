@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Go quickstart fix; no matching changelog entry",
+  "mergedAt": "2026-11-15T22:16:11Z",
+  "number": 2164,
+  "runDate": "2026-11-16T00:06:00Z",
+  "status": "excluded",
+  "title": "Fix Go quickstart highlight alignment and API links"
+}
