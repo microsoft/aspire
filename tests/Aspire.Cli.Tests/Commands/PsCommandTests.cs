@@ -423,6 +423,7 @@ public class PsCommandTests(ITestOutputHelper outputHelper)
 
         var output = string.Join(Environment.NewLine, textWriter.Logs);
         var normalizedOutput = output.Replace(Environment.NewLine, string.Empty, StringComparison.Ordinal);
+        Assert.Matches(@"(?m)^\s*[│|]\s*AppHost\s*[│|]", output);
         Assert.Contains("SDK", normalizedOutput, StringComparison.Ordinal);
         Assert.Contains("13.2.4.0", normalizedOutput, StringComparison.Ordinal);
     }
