@@ -1,5 +1,5 @@
 ﻿{
-  "skillSources": {
+  "agentPluginSources": {
     "team": {
       "repository": "example/team",
       "plugins": [

@@ -11,21 +11,17 @@ using Microsoft.Extensions.Configuration;
 
 namespace Aspire.Cli.Agents.AspireSkills;
 
-internal sealed class SkillSource
+internal sealed class AgentPluginSource
 {
-    internal const string SectionName = "skillSources";
+    internal const string SectionName = "agentPluginSources";
     internal const string DefaultName = "default";
-    internal const string DefaultV1Catalog = "https://raw.githubusercontent.com/microsoft/aspire-skills/main/opencode/v1/";
-    internal const string DefaultV2Catalog = "https://raw.githubusercontent.com/microsoft/aspire-skills/main/opencode/v2/";
     private string _name = DefaultName;
 
-    internal static SkillSource BuiltIn { get; } = new()
+    internal static AgentPluginSource BuiltIn { get; } = new()
     {
         Repository = AspireSkillsRemoteConfiguration.Repository,
         Marketplace = AspireSkillsRemoteConfiguration.MarketplaceName,
-        Plugins = ["aspire"],
-        OpenCodeV1Catalog = DefaultV1Catalog,
-        OpenCodeV2Catalog = DefaultV2Catalog
+        Plugins = ["aspire"]
     };
 
     [JsonPropertyName("enabled")]
@@ -48,22 +44,16 @@ internal sealed class SkillSource
     [Description("Optional marketplace Git ref. Existing agent-side pins are preserved.")]
     public string? Ref { get; init; }
 
-    [JsonPropertyName("openCodeV1Catalog")]
-    [Description("HTTPS skills catalog URL for OpenCode V1. Omit for sources without an OpenCode catalog.")]
-    public string? OpenCodeV1Catalog { get; init; }
-
-    [JsonPropertyName("openCodeV2Catalog")]
-    [Description("HTTPS skills catalog URL for OpenCode V2. Omit for sources without an OpenCode catalog.")]
-    public string? OpenCodeV2Catalog { get; init; }
-
     internal string GetName() => _name;
+
+    internal bool IsDefault => _name.Equals(DefaultName, StringComparison.OrdinalIgnoreCase);
 
     internal IEnumerable<string> GetPluginNames() => (Plugins ?? ["aspire"]).Select(plugin => $"{plugin}@{Marketplace}");
 
     internal string GetRepositoryUrl() => IsGitHubRepository(Repository!)
         ? $"https://github.com/{Repository}" : Repository!;
 
-    internal static IReadOnlyList<SkillSource> Resolve(DirectoryInfo configurationDirectory, FileInfo globalSettingsFile)
+    internal static IReadOnlyList<AgentPluginSource> Resolve(DirectoryInfo configurationDirectory, FileInfo globalSettingsFile)
     {
         // Chained new/init runs before startup configuration can see newly generated or
         // materialized settings. Read the selected app's current file, not the invoking directory.
@@ -74,7 +64,7 @@ internal sealed class SkillSource
         return Resolve(effective);
     }
 
-    internal static IReadOnlyList<SkillSource> Resolve(IConfiguration configuration)
+    internal static IReadOnlyList<AgentPluginSource> Resolve(IConfiguration configuration)
     {
         // Validate the registration shape for actionable errors. This does not verify
         // the safety of content supplied by the accepted marketplace or catalog.
@@ -86,7 +76,7 @@ internal sealed class SkillSource
 
         var names = new[] { DefaultName }.Concat(section.GetChildren().Select(child => child.Key))
             .Distinct(StringComparer.OrdinalIgnoreCase);
-        var sources = new List<SkillSource>();
+        var sources = new List<AgentPluginSource>();
         var marketplaces = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var name in names)
         {
@@ -114,15 +104,13 @@ internal sealed class SkillSource
             {
                 throw AspireSkillsRemoteConfiguration.ExistingConfiguration($"{SectionName}.{name}.plugins");
             }
-            var source = new SkillSource
+            var source = new AgentPluginSource
             {
                 _name = name,
                 Repository = settings["repository"] ?? (isDefault ? BuiltIn.Repository : null),
                 Marketplace = settings["marketplace"] ?? (isDefault ? AspireSkillsRemoteConfiguration.MarketplaceName : name),
                 Plugins = plugins,
-                Ref = settings["ref"],
-                OpenCodeV1Catalog = settings["openCodeV1Catalog"] ?? (isDefault ? BuiltIn.OpenCodeV1Catalog : null),
-                OpenCodeV2Catalog = settings["openCodeV2Catalog"] ?? (isDefault ? BuiltIn.OpenCodeV2Catalog : null)
+                Ref = settings["ref"]
             };
             if (!IsIdentifier(source.Marketplace) || !marketplaces.Add(source.Marketplace))
             {
@@ -135,15 +123,6 @@ internal sealed class SkillSource
             if (!GitHelpers.IsValidRepository(source.GetRepositoryUrl()) || !GitHelpers.IsValidRef(source.Ref))
             {
                 throw AspireSkillsRemoteConfiguration.ExistingConfiguration($"{SectionName}.{name}.repository/ref");
-            }
-            foreach (var catalog in new[] { source.OpenCodeV1Catalog, source.OpenCodeV2Catalog })
-            {
-                if (catalog is not null &&
-                    (!Uri.TryCreate(catalog, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps ||
-                     uri.UserInfo.Length != 0 || uri.Fragment.Length != 0))
-                {
-                    throw AspireSkillsRemoteConfiguration.ExistingConfiguration($"{SectionName}.{name}.openCodeCatalog");
-                }
             }
             sources.Add(source);
         }

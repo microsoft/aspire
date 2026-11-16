@@ -42,12 +42,12 @@ public sealed class ConfigSourceTests(ITestOutputHelper output)
 
     [Fact]
     [CaptureWorkspaceOnFailure]
-    public Task AgentInit_RegistersMaterializedSkillSources()
+    public Task AgentInit_RegistersMaterializedAgentPluginSources()
         => ConfigSourceTestContext.RunAsync(output, "sha1", async context =>
         {
             await context.CreateProjectAsync();
             await context.AssertSourceAppliedAsync("original");
-            await context.RegisterAndAssertSkillSourcesAsync();
+            await context.RegisterAndAssertAgentPluginSourcesAsync();
         });
 
     [Fact]

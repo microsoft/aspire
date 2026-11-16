@@ -77,9 +77,9 @@ internal sealed class AspireJsonConfiguration
     [Description("Feature flags for enabling/disabling experimental or optional features. Key is feature name, value is enabled (true) or disabled (false).")]
     public Dictionary<string, bool>? Features { get; set; }
 
-    [JsonPropertyName(SkillSource.SectionName)]
-    [Description("Named agent skill sources, merged across configuration layers. The built-in default source remains enabled unless explicitly disabled. " + SourceNameValidator.Description)]
-    public Dictionary<string, SkillSource>? SkillSources { get; set; }
+    [JsonPropertyName(AgentPluginSource.SectionName)]
+    [Description("Named agent plugin sources, merged across configuration layers. The built-in default source remains enabled unless explicitly disabled. " + SourceNameValidator.Description)]
+    public Dictionary<string, AgentPluginSource>? AgentPluginSources { get; set; }
 
     [JsonPropertyName(IntegrationSourceConfiguration.SectionName)]
     [Description("Named NuGet integration sources and allowed package patterns, merged across configuration layers. " + SourceNameValidator.Description)]

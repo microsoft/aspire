@@ -400,45 +400,40 @@ internal sealed class AgentInitCommand : BaseCommand
         var showSkillWarnings = (_hostEnvironment.SupportsInteractiveInput && (!skillsProvided || requestedSkills is null)) ||
             ConsoleInteractionService.MatchChoices(requestedSkills ?? CommonAgentApplicators.AspireSkillName,
                 availableSkillChoices, static name => name)?.Contains(CommonAgentApplicators.AspireSkillName) is true;
-        IReadOnlyList<SkillSource> skillSources = [];
+        IReadOnlyList<AgentPluginSource> agentPluginSources = [];
         string? skillConfigurationError = null;
         if (showSkillWarnings)
         {
             configurationDirectory ??= await GetConfigurationDirectoryAsync(cancellationToken);
             try
             {
-                skillSources = SkillSource.Resolve(configurationDirectory, new FileInfo(_configurationService.GetSettingsFilePath(isGlobal: true)));
+                agentPluginSources = AgentPluginSource.Resolve(configurationDirectory, new FileInfo(_configurationService.GetSettingsFilePath(isGlobal: true)));
                 var usesPlugins = selectedClients.Any(client => client.Id != OpenCodeAgentClient.ClientId);
                 var usesOpenCode = selectedClients.Any(client => client.Id == OpenCodeAgentClient.ClientId);
                 List<IReadOnlyList<(string Label, string Value)>> sourceDetails = [];
-                foreach (var skillSource in skillSources)
+                foreach (var agentPluginSource in agentPluginSources)
                 {
-                    var sourceName = skillSource.GetName();
+                    var sourceName = agentPluginSource.GetName();
                     List<(string Label, string Value)> details = [(SharedCommandStrings.SourceName, sourceName)];
                     if (usesPlugins)
                     {
-                        details.Add((SharedCommandStrings.SourceGitRepository, skillSource.GetRepositoryUrl()));
-                        if (skillSource.Ref is not null)
+                        details.Add((SharedCommandStrings.SourceGitRepository, agentPluginSource.GetRepositoryUrl()));
+                        if (agentPluginSource.Ref is not null)
                         {
-                            details.Add((SharedCommandStrings.SourceRef, skillSource.Ref));
+                            details.Add((SharedCommandStrings.SourceRef, agentPluginSource.Ref));
                         }
-                        if (!string.Equals(skillSource.Marketplace, sourceName, StringComparison.OrdinalIgnoreCase))
+                        if (!string.Equals(agentPluginSource.Marketplace, sourceName, StringComparison.OrdinalIgnoreCase))
                         {
-                            details.Add((SharedCommandStrings.SourceMarketplace, skillSource.Marketplace!));
+                            details.Add((SharedCommandStrings.SourceMarketplace, agentPluginSource.Marketplace!));
                         }
-                        details.Add((SharedCommandStrings.SourcePlugins, string.Join(", ", skillSource.GetPluginNames())));
+                        details.Add((SharedCommandStrings.SourcePlugins, string.Join(", ", agentPluginSource.GetPluginNames())));
                     }
-                    if (usesOpenCode)
+                    if (usesOpenCode && sourceName.Equals(AgentPluginSource.DefaultName, StringComparison.OrdinalIgnoreCase))
                     {
-                        if (skillSource.OpenCodeV1Catalog is not null)
-                        {
-                            details.Add((SharedCommandStrings.SourceOpenCodeV1Catalog, skillSource.OpenCodeV1Catalog));
-                        }
-                        if (skillSource.OpenCodeV2Catalog is not null)
-                        {
-                            details.Add((SharedCommandStrings.SourceOpenCodeV2Catalog, skillSource.OpenCodeV2Catalog));
-                        }
+                        details.Add((SharedCommandStrings.SourceOpenCodeV1Catalog, AspireSkillsRemoteConfiguration.OpenCodeV1Catalog));
+                        details.Add((SharedCommandStrings.SourceOpenCodeV2Catalog, AspireSkillsRemoteConfiguration.OpenCodeV2Catalog));
                     }
+
                     if (details.Count > 1)
                     {
                         sourceDetails.Add(details);
@@ -447,7 +442,7 @@ internal sealed class AgentInitCommand : BaseCommand
 
                 if (sourceDetails.Count > 0)
                 {
-                    InteractionService.DisplayMessage(KnownEmojis.Information, AgentCommandStrings.InitCommand_SkillSourcesExplanation);
+                    InteractionService.DisplayMessage(KnownEmojis.Information, AgentCommandStrings.InitCommand_AgentPluginSourcesExplanation);
                     InteractionService.DisplaySourceDetails(sourceDetails);
                     if (InteractionService.DisplaySourceTrustWarning(ExecutionContext))
                     {
@@ -546,7 +541,7 @@ internal sealed class AgentInitCommand : BaseCommand
         if (configureAspire)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            registrationResults = await AgentConfiguration.ApplyRemoteAsync(selectedClients, workspaceRoot, scope, skillSources, cancellationToken);
+            registrationResults = await AgentConfiguration.ApplyRemoteAsync(selectedClients, workspaceRoot, scope, agentPluginSources, cancellationToken);
 
             var aspireSkillsReplaceCopies = AspireSkillsReplaceSkillCopies(registrationResults, selectedClients, workspaceRoot, scope);
             var skillCopiesToRemove = aspireSkillsReplaceCopies
@@ -728,11 +723,11 @@ internal sealed class AgentInitCommand : BaseCommand
         // The hooks only report aspire@aspire-skills skills and Aspire MCP tool usage, so a client gets a
         // hook only when this run registered that plugin or configured the Aspire MCP server for it at the
         // requested scope, or either is already set up there. The latter keeps re-runs that skip both
-        // choices refreshing the hook. Selecting the aspire skill choice is not enough: skill sources can
+        // choices refreshing the hook. Selecting the aspire skill choice is not enough: agent plugin sources can
         // disable the default source or replace its plugins.
         await ConfigureTelemetryHooksForAspireSetupAsync(
             selectedClients,
-            GetAspireSkillsRegisteredClients(registrationResults, skillSources).Concat(mcpConfiguredClients).ToHashSet(),
+            GetAspireSkillsRegisteredClients(registrationResults, agentPluginSources).Concat(mcpConfiguredClients).ToHashSet(),
             workspaceRoot,
             scope,
             cancellationToken);
@@ -752,7 +747,7 @@ internal sealed class AgentInitCommand : BaseCommand
             selectedSkills)
         {
             RegistrationResults = registrationResults,
-            SkillSources = skillSources
+            AgentPluginSources = agentPluginSources
         };
     }
 
@@ -782,9 +777,9 @@ internal sealed class AgentInitCommand : BaseCommand
 
     private static IEnumerable<IAgentClient> GetAspireSkillsRegisteredClients(
         IReadOnlyList<AgentTargetResult> registrationResults,
-        IReadOnlyList<SkillSource> skillSources)
+        IReadOnlyList<AgentPluginSource> agentPluginSources)
     {
-        var registersAspireSkillsPlugin = skillSources.Any(static source =>
+        var registersAspireSkillsPlugin = agentPluginSources.Any(static source =>
             source.GetPluginNames().Contains(AspireSkillsRemoteConfiguration.PluginName, StringComparer.Ordinal));
         if (!registersAspireSkillsPlugin)
         {
@@ -1235,7 +1230,7 @@ internal sealed class AgentInitCommand : BaseCommand
         {
             try
             {
-                return AspireSkillsRemoteConfiguration.HasOpenCodeCatalog(configuration, [SkillSource.BuiltIn]);
+                return AspireSkillsRemoteConfiguration.HasOpenCodeCatalog(configuration);
             }
             catch (Exception ex) when (ex is InvalidOperationException or ArgumentException)
             {
@@ -1254,7 +1249,7 @@ internal sealed class AgentInitCommand : BaseCommand
         try
         {
             // Configured sources can enable unrelated plugins that would not replace the copied Aspire skills.
-            return client.HasIntegrationRegistration(workspaceRoot, scope, [SkillSource.BuiltIn]);
+            return client.HasIntegrationRegistration(workspaceRoot, scope, [AgentPluginSource.BuiltIn]);
         }
         catch (Exception ex) when (ex is JsonException or InvalidOperationException or IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
         {
@@ -1298,5 +1293,5 @@ internal readonly record struct AgentInitExecutionResult(
     IReadOnlyList<SkillDefinition> SelectedSkills)
 {
     public IReadOnlyList<AgentTargetResult> RegistrationResults { get; init; } = [];
-    public IReadOnlyList<SkillSource> SkillSources { get; init; } = [];
+    public IReadOnlyList<AgentPluginSource> AgentPluginSources { get; init; } = [];
 }

@@ -49,7 +49,7 @@ internal sealed class CopilotAgentClient(
             AgentPath.UniversalSkillsDirectory);
 
     public bool HasIntegrationRegistration(
-        DirectoryInfo workspaceRoot, AgentConfigurationScope scope, IReadOnlyList<SkillSource> sources)
+        DirectoryInfo workspaceRoot, AgentConfigurationScope scope, IReadOnlyList<AgentPluginSource> sources)
         => AspireSkillsRemoteConfiguration.HasPluginRegistration(GetSettingsFiles(workspaceRoot, scope), sources);
 
     public string GetIntegrationConfigPath(AgentConfigurationScope scope, DirectoryInfo workspaceRoot)
@@ -62,7 +62,7 @@ internal sealed class CopilotAgentClient(
 
     public Task UpdateIntegrationConfigAsync(
         JsonObject config, DirectoryInfo workspaceRoot, AgentConfigurationScope scope,
-        AgentConfiguration edit, IReadOnlyList<SkillSource> sources, CancellationToken cancellationToken)
+        AgentConfiguration edit, IReadOnlyList<AgentPluginSource> sources, CancellationToken cancellationToken)
         => AspireSkillsRemoteConfiguration.ApplyPluginAsync(config, GetSettingsFiles(workspaceRoot, scope),
             GetIntegrationConfigPath(scope, workspaceRoot), edit, sources, cancellationToken);
 

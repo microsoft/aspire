@@ -327,20 +327,17 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
     [InlineData("copilot", true)]
     [InlineData("claude", false)]
     [InlineData("claude", true)]
-    [InlineData("opencode", false)]
-    [InlineData("opencode", true)]
-    public async Task AgentInit_UsesMaterializedSkillSourcesWithoutAcquisition(string agent, bool localOverride)
+    public async Task AgentInit_UsesMaterializedAgentPluginSourcesWithoutAcquisition(string agent, bool localOverride)
     {
         using var context = new AgentConfigurationTestContext(outputHelper);
         var acquired = new TestConfigSourceRepository
         {
             ReadConfiguration = (_, _) => Task.FromResult(("version-1", JsonNode.Parse("""
                 {
-                  "skillSources": {
+                  "agentPluginSources": {
                     "default": {},
                     "team": {
-                      "repository": "example/shared",
-                      "openCodeV2Catalog": "https://shared.example/skills/"
+                      "repository": "example/shared"
                     }
                   }
                 }
@@ -352,9 +349,7 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
         {
             var path = Path.Combine(context.Project.FullName, AspireConfigFile.FileName);
             await ConfigurationService.SetConfigurationInFileAsync(
-                path, "skillSources.team.repository", "example/local");
-            await ConfigurationService.SetConfigurationInFileAsync(
-                path, "skillSources.team.openCodeV2Catalog", "https://local.example/skills/");
+                path, "agentPluginSources.team.repository", "example/local");
         }
         using var provider = context.CreateServiceCollection(outputHelper).BuildServiceProvider();
         var git = Assert.IsType<TestConfigSourceRepository>(provider.GetRequiredService<IGitClient>());
@@ -364,12 +359,7 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
         var result = root.Parse($"agent init --agents {agent} --scope project --skills aspire --non-interactive");
         Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
 
-        var client = agent switch
-        {
-            "copilot" => context.Copilot,
-            "claude" => context.ClaudeCode,
-            _ => context.OpenCode
-        };
+        var client = agent == "copilot" ? (IAgentClient)context.Copilot : context.ClaudeCode;
         Assert.Equal(0, git.Calls);
         Assert.Equal(0, git.CheckCalls);
         await Verify(await File.ReadAllTextAsync(client.GetIntegrationConfigPath(AgentConfigurationScope.Project, context.Project)), "json")
@@ -379,8 +369,7 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
     [Theory]
     [InlineData("copilot")]
     [InlineData("claude")]
-    [InlineData("opencode")]
-    public async Task AgentInit_AfterSolutionInit_UsesAppHostSkillSources(string agent)
+    public async Task AgentInit_AfterSolutionInit_UsesAppHostAgentPluginSources(string agent)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         await File.WriteAllTextAsync(Path.Combine(workspace.Path, "Test.sln"), "Fake solution file");
@@ -416,12 +405,11 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
             var git = Assert.IsType<TestConfigSourceRepository>(provider.GetRequiredService<IGitClient>());
             git.ReadConfiguration = (_, _) => Task.FromResult(("version-1", JsonNode.Parse("""
                 {
-                  "skillSources": {
+                  "agentPluginSources": {
                     "default": { "enabled": false },
                     "team": {
                       "repository": "example/team",
-                      "plugins": ["deployment"],
-                      "openCodeV2Catalog": "https://team.example/skills/"
+                      "plugins": ["deployment"]
                     }
                   }
                 }
@@ -596,7 +584,7 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
             AppliedVersion = s_source.AppliedVersion
         }, workspace.WorkspaceRoot, CancellationToken.None);
         var path = Path.Combine(workspace.Path, AspireConfigFile.FileName);
-        await ConfigurationService.SetConfigurationInFileAsync(path, "skillSources.team.repository", "example/local");
+        await ConfigurationService.SetConfigurationInFileAsync(path, "agentPluginSources.team.repository", "example/local");
         await ConfigurationService.SetConfigurationInFileAsync(path, "appHost.path", "apphost.cs");
         if (invalidField is "repository" or "path" or "both")
         {
@@ -623,7 +611,7 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
             projectFile, createSettingsFile: true, CancellationToken.None);
         await provider.GetRequiredService<ConfigSourceService>().WaitForChecksAsync().DefaultTimeout();
         Assert.Equal(projectFile.FullName, project?.FullName);
-        var result = provider.GetRequiredService<RootCommand>().Parse("config get skillSources.team.repository");
+        var result = provider.GetRequiredService<RootCommand>().Parse("config get agentPluginSources.team.repository");
 
         Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
         Assert.Equal(previous, await File.ReadAllTextAsync(path));
@@ -913,7 +901,7 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
             {
                 ReadConfiguration = (_, _) => Task.FromResult(("version-1", new JsonObject
                 {
-                    ["skillSources"] = new JsonObject { ["team"] = new JsonObject { ["repository"] = "example/team" } },
+                    ["agentPluginSources"] = new JsonObject { ["team"] = new JsonObject { ["repository"] = "example/team" } },
                     ["docs"] = new JsonObject { ["llmsTxtUrl"] = "https://docs.example/llms.txt" }
                 }))
             };
@@ -935,7 +923,7 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
                 : new ConfigSource { OptOut = true };
             Assert.Equivalent(expectedSource, AspireConfigFile.Load(workspace.Path)!.ConfigSource, strict: true);
             Assert.Equal("keep", configuration["custom"]!.GetValue<string>());
-            Assert.Equal(accepted ? "example/team" : null, configuration["skillSources"]?["team"]?["repository"]?.GetValue<string>());
+            Assert.Equal(accepted ? "example/team" : null, configuration["agentPluginSources"]?["team"]?["repository"]?.GetValue<string>());
             Assert.Equal("https://local.example/llms.txt", configuration["docs"]!["llmsTxtUrl"]!.GetValue<string>());
             Assert.Equal(accepted && attempt == 0 ? 1 : 0, git.Calls);
             Assert.False(File.Exists(Path.Combine(appHostDirectory.FullName, AspireConfigFile.FileName)));
@@ -1086,7 +1074,7 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
         {
             ReadConfiguration = (_, _) => Task.FromResult(("version-1", new JsonObject
             {
-                ["skillSources"] = new JsonObject { ["team"] = new JsonObject { ["repository"] = inheritedRepository } }
+                ["agentPluginSources"] = new JsonObject { ["team"] = new JsonObject { ["repository"] = inheritedRepository } }
             }))
         });
         await initial.MaterializeAsync(s_source, workspace.WorkspaceRoot, CancellationToken.None);
@@ -1106,7 +1094,7 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(projectFile.FullName, project?.FullName);
         var inherited = await provider.GetRequiredService<IConfigurationService>().GetConfigurationFromDirectoryAsync(
-            "skillSources.team.repository", selected, continueSearchWhenKeyMissing: true, cancellationToken: CancellationToken.None);
+            "agentPluginSources.team.repository", selected, continueSearchWhenKeyMissing: true, cancellationToken: CancellationToken.None);
         Assert.Equal(inheritedRepository, inherited);
         await sources.CheckProjectAsync(selected, force: true, CancellationToken.None);
         Assert.Equal(1, git.Calls);
@@ -1299,7 +1287,7 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Equivalent(accepted ? s_source : new ConfigSource { OptOut = true }, AspireConfigFile.Load(output)?.ConfigSource, strict: true);
         var configuration = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(output, AspireConfigFile.FileName)))!;
-        Assert.Equal(accepted ? "example/team" : null, configuration["skillSources"]?["team"]?["repository"]?.GetValue<string>());
+        Assert.Equal(accepted ? "example/team" : null, configuration["agentPluginSources"]?["team"]?["repository"]?.GetValue<string>());
         Assert.Equal(accepted ? 1 : 0, Assert.IsType<TestConfigSourceRepository>(provider.GetRequiredService<IGitClient>()).Calls);
         Assert.False(File.Exists(Path.Combine(workspace.Path, AspireConfigFile.FileName)));
         var interaction = Assert.IsType<TestInteractionService>(provider.GetRequiredService<IInteractionService>());
@@ -1320,7 +1308,7 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
         Assert.Equivalent(accepted ? s_source : new ConfigSource { OptOut = true }, AspireConfigFile.Load(workspace.Path)!.ConfigSource, strict: true);
         var configuration = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(workspace.Path, AspireConfigFile.FileName)))!;
-        Assert.Equal(accepted ? "example/team" : null, configuration["skillSources"]?["team"]?["repository"]?.GetValue<string>());
+        Assert.Equal(accepted ? "example/team" : null, configuration["agentPluginSources"]?["team"]?["repository"]?.GetValue<string>());
         Assert.True(File.Exists(Path.Combine(workspace.Path, "apphost.cs")));
         Assert.Equal(accepted ? 1 : 0, Assert.IsType<TestConfigSourceRepository>(provider.GetRequiredService<IGitClient>()).Calls);
     }
@@ -1335,7 +1323,7 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
             Assert.Equal(CliExitCodes.Success, await original.GetRequiredService<RootCommand>().Parse(command).InvokeAsync().DefaultTimeout());
         }
         var path = Path.Combine(workspace.Path, AspireConfigFile.FileName);
-        await ConfigurationService.SetConfigurationInFileAsync(path, "skillSources.team.repository", "example/local");
+        await ConfigurationService.SetConfigurationInFileAsync(path, "agentPluginSources.team.repository", "example/local");
         var services = CreateCreationServices(workspace);
         services.AddSingleton<IEnvironment>(new TestEnvironment(new Dictionary<string, string?>
         {
@@ -1347,7 +1335,7 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
             "init --file-based --language csharp --suppress-agent-init --non-interactive").InvokeAsync().DefaultTimeout());
 
         var configuration = JsonNode.Parse(await File.ReadAllTextAsync(path))!;
-        Assert.Equal("example/local", configuration["skillSources"]!["team"]!["repository"]!.GetValue<string>());
+        Assert.Equal("example/local", configuration["agentPluginSources"]!["team"]!["repository"]!.GetValue<string>());
         Assert.Equivalent(s_source, configuration["configSource"]!.Deserialize(JsonSourceGenerationContext.Default.ConfigSource), strict: true);
         var git = Assert.IsType<TestConfigSourceRepository>(provider.GetRequiredService<IGitClient>());
         Assert.Equal(0, git.Calls);
@@ -1368,7 +1356,7 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
         var projectPath = Path.Combine(childPath, "Test.AppHost.csproj");
         var rootConfigPath = Path.Combine(workspace.Path, AspireConfigFile.FileName);
         await File.WriteAllTextAsync(rootConfigPath, """
-            {"appHost":{"path":"Test.AppHost/Test.AppHost.csproj"},"custom":"solution","skillSources":{"team":{"repository":"example/solution"}}}
+            {"appHost":{"path":"Test.AppHost/Test.AppHost.csproj"},"custom":"solution","agentPluginSources":{"team":{"repository":"example/solution"}}}
             """);
         if (appHostConfig)
         {
@@ -1396,7 +1384,7 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
         if (existingBinding)
         {
             await TestConfigSourceServices.SaveBindingAsync(s_source, configDirectory, CancellationToken.None);
-            await ConfigurationService.SetConfigurationInFileAsync(configPath, "skillSources.team.repository", "example/local");
+            await ConfigurationService.SetConfigurationInFileAsync(configPath, "agentPluginSources.team.repository", "example/local");
         }
         var originalRootConfiguration = await File.ReadAllTextAsync(rootConfigPath);
         var originalConfiguration = existingBinding ? await File.ReadAllTextAsync(configPath) : null;
@@ -1459,7 +1447,7 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
 
         var configuration = AspireConfigFile.Load(configDirectory.FullName)!;
         Assert.Equivalent(s_source, configuration.ConfigSource, strict: true);
-        Assert.Equal(existingBinding ? "example/local" : "example/team", configuration.SkillSources!["team"].Repository);
+        Assert.Equal(existingBinding ? "example/local" : "example/team", configuration.AgentPluginSources!["team"].Repository);
         Assert.True(Directory.Exists(childPath));
         Assert.Equal(appHostConfig, File.Exists(Path.Combine(childPath, AspireConfigFile.FileName)));
         Assert.Equal(appHostConfig ? "Test.AppHost.csproj" : "Test.AppHost/Test.AppHost.csproj", configuration.AppHost!.Path);
@@ -1488,7 +1476,7 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
             Assert.True(ConfigSource.HasSameIdentity(s_source, source));
             return Task.FromResult(("version-2", new JsonObject
             {
-                ["skillSources"] = new JsonObject { ["team"] = new JsonObject { ["repository"] = "example/updated" } }
+                ["agentPluginSources"] = new JsonObject { ["team"] = new JsonObject { ["repository"] = "example/updated" } }
             }));
         };
         var refresh = refreshProvider.GetRequiredService<RootCommand>().Parse(
@@ -1498,7 +1486,7 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
 
         var refreshed = AspireConfigFile.Load(configDirectory.FullName)!;
         Assert.Equal("version-2", refreshed.ConfigSource!.AppliedVersion);
-        Assert.Equal("example/updated", refreshed.SkillSources!["team"].Repository);
+        Assert.Equal("example/updated", refreshed.AgentPluginSources!["team"].Repository);
         Assert.Equal(configuration.AppHost.Path, refreshed.AppHost!.Path);
         Assert.Equal(appHostConfig, File.Exists(Path.Combine(childPath, AspireConfigFile.FileName)));
         if (appHostConfig)
@@ -1687,7 +1675,7 @@ public class ConfigSourceCommandTests(ITestOutputHelper outputHelper)
         {
             ReadConfiguration = (_, _) => Task.FromResult(("version-1", new JsonObject
             {
-                ["skillSources"] = new JsonObject { ["team"] = new JsonObject { ["repository"] = "example/team" } },
+                ["agentPluginSources"] = new JsonObject { ["team"] = new JsonObject { ["repository"] = "example/team" } },
                 ["sdk"] = new JsonObject { ["version"] = "99.0.0" }
             }))
         });

@@ -119,9 +119,9 @@ internal sealed class AspireConfigFile
     [Description("Documentation source overrides for aspire docs and aspire docs api. Leave these unset to use the built-in aspire.dev sources.")]
     public AspireConfigDocs? Docs { get; set; }
 
-    [JsonPropertyName(SkillSource.SectionName)]
-    [Description("Named agent skill sources, merged across configuration layers. The built-in default source remains enabled unless explicitly disabled. " + SourceNameValidator.Description)]
-    public Dictionary<string, SkillSource>? SkillSources { get; set; }
+    [JsonPropertyName(AgentPluginSource.SectionName)]
+    [Description("Named agent plugin sources, merged across configuration layers. The built-in default source remains enabled unless explicitly disabled. " + SourceNameValidator.Description)]
+    public Dictionary<string, AgentPluginSource>? AgentPluginSources { get; set; }
 
     [JsonPropertyName(IntegrationSourceConfiguration.SectionName)]
     [Description("Named NuGet integration sources and allowed package patterns, merged across configuration layers. " + SourceNameValidator.Description)]
@@ -483,7 +483,7 @@ internal sealed class AspireConfigFile
 
             config.Channel = settings.Channel;
             config.Features = settings.Features;
-            config.SkillSources = settings.SkillSources;
+            config.AgentPluginSources = settings.AgentPluginSources;
             config.IntegrationSources = settings.IntegrationSources;
 
             // Legacy settings.json stored packages as Dictionary<string,string> with an

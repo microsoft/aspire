@@ -1,6 +1,6 @@
 # Aspire CLI config sources
 
-**Status:** Configuration acquisition, allowlisted app-file materialization, named agent skill sources, runtime named template-source inheritance, and named integration sources are implemented in the CLI. Other content-acquisition customizations remain proposed.
+**Status:** Configuration acquisition, allowlisted app-file materialization, named agent plugin sources, runtime named template-source inheritance, and named integration sources are implemented in the CLI. Other content-acquisition customizations remain proposed.
 
 For example developer journeys, see [Microsoft first-party config-source scenarios](cli-config-sources-1p-scenarios.md).
 
@@ -19,7 +19,7 @@ Config sources let organizations provide shared Aspire CLI configuration through
 
 Debug logs trace source selection and consent, advisory-check skip reasons, version-check and snapshot cache reuse, settings application, and repository-template resolution, checkout, and discovery. Configuration-source and template-source decision logs can include local paths for project settings, template directories, and caches, but omit configuration values and raw repository addresses. Git failures are recorded by failure category and exit code rather than raw exception details.
 
-This specification covers the first phase, named agent skill sources, and runtime template-source inheritance. Other content acquisition is summarized at the end; its detailed schema and behavior are deferred.
+This specification covers the first phase, named agent plugin sources, and runtime template-source inheritance. Other content acquisition is summarized at the end; its detailed schema and behavior are deferred.
 
 The application's `aspire.config.json` is the runtime configuration, including values previously copied from a source. Normal CLI configuration precedence and explicit parent-setting inheritance continue to apply. The source is not an additional general-purpose runtime configuration provider. Named template sources have a separate, runtime-only inheritance path described below.
 
@@ -144,7 +144,7 @@ asks **Update app to use configuration from this source?**, and
 **Include template sources from this configuration source?**
 
 The source trust warning appears at most once per CLI command, shared across
-configuration, template, integration, and skill sources. Source explanations,
+configuration, template, integration, and agent plugin sources. Source explanations,
 inventories, and consent prompts still appear where applicable. A separate
 command can show the warning again.
 
@@ -273,12 +273,12 @@ Only explicitly allowlisted top-level settings may be copied. Each supplied sect
 
 | Setting | Purpose |
 |---|---|
-| `skillSources` | Named agent skill sources and all their settings |
+| `agentPluginSources` | Named agent plugin sources and all their settings |
 | `integrationSources` | Named NuGet integration feeds and allowed package patterns |
 
-Use the same root-only normalization for local settings and source files before matching the allowlist, and match top-level names case-insensitively like other CLI settings. Root-level flat colon-separated keys merge into existing nested sections regardless of casing. Normalize source files before configuration-provider validation; genuine duplicate nested leaves remain validation errors. Nested colon keys remain literal, including profile names, environment-variable names, and custom skill-source keys such as `{"skillSources":{"team":{"custom:key":"..."}}}`. These keys are copied unchanged when their top-level section is allowed. There is no source-specific normalization.
+Use the same root-only normalization for local settings and source files before matching the allowlist, and match top-level names case-insensitively like other CLI settings. Root-level flat colon-separated keys merge into existing nested sections regardless of casing. Normalize source files before configuration-provider validation; genuine duplicate nested leaves remain validation errors. Nested colon keys remain literal, including profile names, environment-variable names, and custom agent plugin source keys such as `{"agentPluginSources":{"team":{"custom:key":"..."}}}`. These keys are copied unchanged when their top-level section is allowed. There is no source-specific normalization.
 
-Replace every local case-equivalent section when an allowed top-level setting is supplied. Preserve all source sections, including disjoint `SKILLSOURCES` and `skillSources` objects that `IConfiguration` combines. Do not filter or merge individual nested properties. Validate the complete resulting configuration before writing it. Other top-level settings remain excluded unless explicitly added to the allowlist.
+Replace every local case-equivalent section when an allowed top-level setting is supplied. Preserve all source sections, including disjoint `AGENTPLUGINSOURCES` and `agentPluginSources` objects that `IConfiguration` combines. Do not filter or merge individual nested properties. Validate the complete resulting configuration before writing it. Other top-level settings remain excluded unless explicitly added to the allowlist.
 
 In particular, do not copy `docs`, `$schema`, `configSource`, AppHost identity or paths, SDK/channel selection, language, package references, launch profiles, or arbitrary feature/content settings. Documentation settings remain configurable locally but are not imported from a configuration source. The CLI creates and maintains its own source binding; the remote file cannot supply or replace it. The proposed content schema does not implicitly extend this allowlist.
 
@@ -290,7 +290,7 @@ Merge the allowed values into the selected application's file, not a configurati
 - An explicit null is a supplied value and replaces the existing value where valid for that setting. Future allowlisted arrays replace the whole value rather than appending.
 - Do not merge a runtime view of global settings into the app file. Global settings remain separate.
 
-For example, after applying a source that supplies named skill sources:
+For example, after applying a source that supplies named agent plugin sources:
 
 ```json
 {
@@ -300,7 +300,7 @@ For example, after applying a source that supplies named skill sources:
     "ref": "main",
     "appliedVersion": "<source-file-version>"
   },
-  "skillSources": {
+  "agentPluginSources": {
     "platform": {
       "repository": "https://git.acme.example/platform-skills",
       "ref": "main"
@@ -309,7 +309,7 @@ For example, after applying a source that supplies named skill sources:
 }
 ```
 
-This is an excerpt; other generated or existing app settings remain in the same file. Once saved, these skill sources are ordinary project settings. Editing them locally changes subsequent agent initialization without editing the configuration source or its tracking copy. A later explicit source update may overwrite them according to the rules above.
+This is an excerpt; other generated or existing app settings remain in the same file. Once saved, these agent plugin sources are ordinary project settings. Editing them locally changes subsequent agent initialization without editing the configuration source or its tracking copy. A later explicit source update may overwrite them according to the rules above.
 
 Stage and validate an update before replacing the project file. Write the settings and their applied version together so the file cannot claim a version whose values were not saved. If neither the supplied settings nor the saved binding change, report that the app configuration is already up to date and leave the project file untouched. Acquisition, validation, or project-write failure must be reported, without claiming a successful update or leaving a partially written app file.
 
@@ -351,22 +351,22 @@ Missing `configSource.repository` or `configSource.path` must not prevent genera
 Configuration keys use dots (or colons) for object properties and bracketed indices for arrays:
 
 ```shell
-aspire config set "skillSources.team.plugins[0]" deployment
-aspire config get "skillSources.team.plugins[0]"
-aspire config delete "skillSources.team.plugins[0]"
+aspire config set "agentPluginSources.team.plugins[0]" deployment
+aspire config get "agentPluginSources.team.plugins[0]"
+aspire config delete "agentPluginSources.team.plugins[0]"
 ```
 
 Quote bracketed keys to prevent shell glob expansion. Brackets are reserved for non-negative integer indices, including nested arrays such as `matrix[0][1]`.
 
 Setting an existing index replaces only that element. An index equal to the array length appends an element; larger indices and negative indices are rejected without changing the file. If the array property is missing or null, `[0]` creates it. Explicit bracket syntax never replaces an existing object or scalar with an array.
 
-Numeric dot or colon segments can also address an existing array, so `skillSources.team.plugins.0` edits element zero when `plugins` is already an array. Otherwise numeric segments remain object property names: creating `custom.0` creates an object with a `"0"` property. Use brackets when creating an array rather than relying on numeric property names.
+Numeric dot or colon segments can also address an existing array, so `agentPluginSources.team.plugins.0` edits element zero when `plugins` is already an array. Otherwise numeric segments remain object property names: creating `custom.0` creates an object with a `"0"` property. Use brackets when creating an array rather than relying on numeric property names.
 
 Deleting an array element shifts subsequent elements down by one index. Deleting the final element leaves an empty array, and deleting a property within an array element preserves the element even if it becomes an empty object. `aspire config list` displays individual array entries using bracketed indices, including `null` for null array elements, while empty arrays and objects remain visible.
 
 ### Check for updates without applying them
 
-Operations that resolve an Aspire project or select a running AppHost check the saved source in the nearest local settings file for newer versions. Global bindings are not read, validated, checked, or acquired. Initialization of an already-bound project uses the same discovery from the resolved project directory. Configuration inspection and documentation lookup do not perform an ambient source check. Agent setup may discover an AppHost to locate saved skill-source settings, but does not check the configuration source. It targets an agent workspace, which is not necessarily the AppHost directory. The check is advisory: the requested operation uses saved configuration whether a source is newer, unavailable, or has never been fetched on this machine.
+Operations that resolve an Aspire project or select a running AppHost check the saved source in the nearest local settings file for newer versions. Global bindings are not read, validated, checked, or acquired. Initialization of an already-bound project uses the same discovery from the resolved project directory. Configuration inspection and documentation lookup do not perform an ambient source check. Agent setup may discover an AppHost to locate saved agent plugin source settings, but does not check the configuration source. It targets an agent workspace, which is not necessarily the AppHost directory. The check is advisory: the requested operation uses saved configuration whether a source is newer, unavailable, or has never been fetched on this machine.
 
 Advisory checks run in the background without delaying project operations or prompting for Git credentials. At command exit, unfinished checks are cancelled and their child processes are cleaned up. Completed update notices and advisory warnings are displayed after the CLI version update notification, never concurrently with command output; machine-readable invocations suppress these notices. A fast command may exit before a check produces a result, in which case no notice is shown. Explicit `aspire update --config-source` remains a synchronous fetch-and-apply operation, including its normal credential prompts and failure reporting.
 
@@ -526,42 +526,40 @@ Never save inherited template sources into the user's global configuration or th
 
 Skills and integrations are acquired according to the application's saved configuration and normal CLI precedence. Templates use built-in choices and named sources from global configuration and the runtime overlay selected by creation consent or an explicit environment source. Content acquisition is separate from fetching or materializing a configuration source, and must not treat previously retained tracking copies as runtime configuration providers. Runtime template inheritance uses the invocation's acquired snapshot as described above.
 
-Keys in `integrationSources`, `templateSources`, and `skillSources` must be 1-64 ASCII letters, digits, dots, hyphens, or underscores, starting with a letter or digit (`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`). Names merge case-insensitively. Colons, whitespace, and other characters are not allowed. Dots remain path separators in `aspire config` edit commands, so edit dotted source keys directly in the JSON file or use the template source management commands. These restrictions apply to source keys, not NuGet package patterns, Git repository names, or explicit agent marketplace/plugin identifiers. This is an Aspire naming policy, not a NuGet package-source length limit.
+Keys in `integrationSources`, `templateSources`, and `agentPluginSources` must be 1-64 ASCII letters, digits, dots, hyphens, or underscores, starting with a letter or digit (`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`). Names merge case-insensitively. Colons, whitespace, and other characters are not allowed. Dots remain path separators in `aspire config` edit commands, so edit dotted source keys directly in the JSON file or use the template source management commands. These restrictions apply to source keys, not NuGet package patterns, Git repository names, or explicit agent marketplace/plugin identifiers. This is an Aspire naming policy, not a NuGet package-source length limit.
 
-### Named agent skill sources
+### Named agent plugin sources
 
 `aspire agent init`, including its chained use from `aspire new` and `aspire init`, registers all enabled sources when the `aspire` skill choice and remote mode are selected. Configure sources in `aspire.config.json` or global settings:
 
 ```json
 {
-  "skillSources": {
+  "agentPluginSources": {
     "aspire1p": {
       "repository": "https://git.example.com/platform/skills.git",
       "marketplace": "aspire1p",
       "plugins": ["aspire", "deployment"],
-      "ref": "main",
-      "openCodeV1Catalog": "https://skills.example.com/opencode/v1/",
-      "openCodeV2Catalog": "https://skills.example.com/opencode/v2/"
+      "ref": "main"
     }
   }
 }
 ```
 
-Sources and their fields merge by name across configuration layers, case-insensitively. Agent initialization reads fresh global settings and the selected app's nearest local settings file; it does not retain local settings from a different launch directory. Additional sources do not replace the built-in `default` source, which registers `aspire@aspire-skills` from `microsoft/aspire-skills` and the official OpenCode catalogs. Override its fields to change that source, or set `"default": { "enabled": false }` to omit it. Setting `enabled` to false does not remove previously installed registrations.
+Sources and their fields merge by name across configuration layers, case-insensitively. Agent initialization reads fresh global settings and the selected app's nearest local settings file; it does not retain local settings from a different launch directory. Additional sources do not replace the built-in `default` source, which registers `aspire@aspire-skills` from `microsoft/aspire-skills` and, for OpenCode, the official Aspire skills catalog. Override its fields to change that source, or set `"default": { "enabled": false }` to omit it. Setting `enabled` to false does not remove previously installed registrations.
 
-`aspire init` recommends `aspireify` only after successful or already-current registration of an enabled official Aspire plugin or OpenCode catalog. Disabled sources, arbitrary plugins, and sources without an applicable OpenCode catalog do not trigger this guidance.
+`aspire init` recommends `aspireify` only after successful or already-current registration of an enabled official Aspire plugin, or of the official OpenCode catalog when the `default` source is enabled. Disabled sources and arbitrary plugins do not trigger this guidance.
 
 Standalone agent initialization honors the configured AppHost or discovers one from the working directory using SDK-independent file inspection, prompting when multiple AppHosts are available. It does not require a usable .NET SDK or run MSBuild to find the AppHost's saved settings. It reads the selected AppHost's configuration independently of the agent workspace destination, without fetching or checking the configuration source. When there is no AppHost, it uses the working directory's nearest local settings file.
 
-Each additional source requires a GitHub `owner/repository` or Git repository address. The marketplace identifier defaults to the source name; marketplace identifiers must be unique. The `plugins` array selects one or more plugin names within that marketplace and defaults to `["aspire"]` when omitted. Empty lists and invalid plugin identifiers are rejected. Like other configuration arrays, plugin entries merge by index across configuration layers. An optional `ref` selects a branch or full commit for newly registered marketplaces. Copilot and Claude register each marketplace once and enable each selected plugin (for example, `aspire@aspire1p` and `deployment@aspire1p`). OpenCode uses the catalog for its existing settings format, falling back to the other catalog when only one is supplied; sources without catalog URLs are not registered with OpenCode. Plugin selections do not filter OpenCode catalogs. Catalog URLs must use HTTPS. The CLI registers sources without acquiring their content; agent clients perform acquisition and authentication.
+Each additional source requires a GitHub `owner/repository` or Git repository address. The marketplace identifier defaults to the source name; marketplace identifiers must be unique. The `plugins` array selects one or more plugin names within that marketplace and defaults to `["aspire"]` when omitted. Empty lists and invalid plugin identifiers are rejected. Like other configuration arrays, plugin entries merge by index across configuration layers. An optional `ref` selects a branch or full commit for newly registered marketplaces. Copilot and Claude register each marketplace once and enable each selected plugin (for example, `aspire@aspire1p` and `deployment@aspire1p`). OpenCode does not support plugin marketplaces, so additional sources are not registered with OpenCode. When the `default` source is enabled, OpenCode receives only the official Aspire skills catalog (V1 or V2, matching its existing settings format), even if `default` overrides its repository or plugins. The CLI registers sources without acquiring their content; agent clients perform acquisition and authentication.
 
 Existing matching registrations and agent-side pins are retained. GitHub shorthand and the equivalent HTTPS repository URL match an existing native GitHub registration, including URLs with a `.git` suffix. HTTPS and SSH URL schemes and hostnames match case-insensitively; non-GitHub repository paths and SSH usernames remain case-sensitive. Explicitly disabled plugins, mismatched marketplace repositories, and existing marketplace policies are conflicts rather than permission to overwrite user settings. Each target file is updated atomically, so a conflict in any source leaves that target unchanged.
 
-Before interactive skill selection, or before registration when `--skills aspire` is supplied, the CLI displays **One or more skill sources are configured. A skill source lets an organization share skills to customize your development experience.** when enabled sources apply to the selected clients. Aligned source-detail blocks identify every applicable source using **Name**, including the built-in `default` source and any overrides to it. Selected plugin clients see **Git source**, an explicit **Git ref**, and **Plugins**. **Marketplace** is displayed only when it differs from the source name, compared case-insensitively like source and marketplace identifiers. OpenCode clients see configured V1/V2 catalog URLs. Disabled sources and catalogs unused by the selected clients are omitted. The shared source-trust warning follows the details on stderr, at most once per command invocation, including when chained from configuration or template onboarding. Explicitly selecting only unrelated skills, `--skills none`, or no agents skips this source notice.
+Before interactive skill selection, or before registration when `--skills aspire` is supplied, the CLI displays **One or more agent plugin sources are configured. An agent plugin source lets an organization share agent plugins to customize your development experience.** when enabled sources apply to the selected clients. Aligned source-detail blocks identify every applicable source using **Name**, including the built-in `default` source. Selected plugin clients see **Git source**, an explicit **Git ref**, and **Plugins**. **Marketplace** is displayed only when it differs from the source name, compared case-insensitively like source and marketplace identifiers. OpenCode clients see the official V1/V2 catalog URLs for the `default` source only. Disabled sources and sources unused by the selected clients are omitted. The shared source-trust warning follows the details on stderr, at most once per command invocation, including when chained from configuration or template onboarding. Explicitly selecting only unrelated skills, `--skills none`, or no agents skips this source notice.
 
-Successful registration is summarized as **Configured sources in {files}**, listing configuration file paths with their agent names in parentheses, for example `.github/copilot/settings.json (GitHub Copilot)`. Multiple files are separated by commas. Repository and catalog URLs are not repeated in this summary.
+Successful registration is summarized as **Configured sources in {files}**, listing configuration file paths with their agent names in parentheses, for example `.github/copilot/settings.json (GitHub Copilot)`. Multiple files are separated by commas. Repository URLs are not repeated in this summary.
 
-The allowlist copies the entire supplied `skillSources` section, including arbitrary nested properties, replacing the existing local section. If `skillSources` is omitted, the local section remains untouched. Sources still merge by name across runtime configuration layers such as global and local settings. Refreshing `configSource` updates configuration only, not agent registrations. Run `aspire agent init` to register newly configured sources. `--skills none` and suppressed agent initialization do not register remote sources. Aspire does not acquire or install bundled Aspire skill files.
+The allowlist copies the entire supplied `agentPluginSources` section, including arbitrary nested properties, replacing the existing local section. If `agentPluginSources` is omitted, the local section remains untouched. Sources still merge by name across runtime configuration layers such as global and local settings. Refreshing `configSource` updates configuration only, not agent registrations. Run `aspire agent init` to register newly configured sources. `--skills none` and suppressed agent initialization do not register remote sources. Aspire does not acquire or install bundled Aspire skill files.
 
 | Content | Acquisition today | Possible configuration customizations |
 |---|---|---|
@@ -624,7 +622,7 @@ stays disabled. Ambient feed selections leave existing NuGet mappings unchanged.
 Polyglot adds retain their exact-package source override. Explicit
 `--source`, pinned-channel preferences, and non-interactive selection remain unchanged.
 
-Sources and their fields merge case-insensitively across global and selected-app settings. As with `skillSources`, `configSource` can supply the entire `integrationSources` section. Materialization replaces a supplied section in full and preserves an omitted section. Refreshing configuration does not add packages or remove previously persisted NuGet mappings.
+Sources and their fields merge case-insensitively across global and selected-app settings. As with `agentPluginSources`, `configSource` can supply the entire `integrationSources` section. Materialization replaces a supplied section in full and preserves an omitted section. Refreshing configuration does not add packages or remove previously persisted NuGet mappings.
 
 When adding an integration from a new feed, the NuGet package-source key is `aspire-integration-<name>` (for example, `aspire-integration-team`). This prefix identifies CLI-created integration aliases separately from SDK/channel aliases. If the feed already has a NuGet alias, that alias is retained, including unprefixed aliases and previously generated `aspire-integration-add` aliases, so credentials and other source settings remain attached. Existing user-owned mappings are left unchanged when NuGet's effective mapping precedence already routes the selected package exclusively to that feed, including through inherited mappings or multiple aliases for the same feed. Otherwise, an exact package mapping can be appended to a local alias while preserving its existing patterns and credentials. Explicitly selecting the same package from a different configured feed replaces its previous local exact integration mapping, while retaining the previous feed and all unrelated patterns. Extending or replacing an inherited mapping, including deleting a local entry that would expose inherited policy, requires a manual configuration change rather than silently shadowing or modifying that policy. Disabled sources and channel-source ownership checks remain enforced. When a new alias is required, a generated key reserved by another feed or its settings is an error, not permission to overwrite the feed or silently generate a suffixed key.
 

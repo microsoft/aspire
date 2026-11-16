@@ -87,9 +87,21 @@
         <target state="translated">OpenCode</target>
         <note />
       </trans-unit>
+      <trans-unit id="InitCommand_AgentPluginSources">
+        <source>Agent plugin sources:
+{0}</source>
+        <target state="new">Agent plugin sources:
+{0}</target>
+        <note>{0} lists the configured agent plugin source repository URLs for the selected agent clients, one per line.</note>
+      </trans-unit>
+      <trans-unit id="InitCommand_AgentPluginSourcesExplanation">
+        <source>One or more agent plugin sources are configured. An agent plugin source lets an organization share agent plugins to customize your development experience.</source>
+        <target state="new">One or more agent plugin sources are configured. An agent plugin source lets an organization share agent plugins to customize your development experience.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="InitCommand_AspireSkillChoice">
-        <source>Agent assets from configured skill sources</source>
-        <target state="translated">Ativos do agente provenientes das fontes de habilidades configuradas</target>
+        <source>Agent plugins from configured agent plugin sources</source>
+        <target state="needs-review-translation">Ativos do agente provenientes das fontes de habilidades configuradas</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_ConfigurationTarget">
@@ -298,18 +310,6 @@
         <source>It is reached through a linked folder that may be shared. Remove it manually if it is no longer needed.</source>
         <target state="translated">Ele é acessado por meio de uma pasta vinculada que pode ser compartilhada. Remova-o manualmente se não for mais necessário.</target>
         <note>Failure reason shown after InitCommand_RemoveSkillCopyFailed.</note>
-      </trans-unit>
-      <trans-unit id="InitCommand_SkillSources">
-        <source>Skill sources:
-{0}</source>
-        <target state="translated">Fontes de habilidades:
-{0}</target>
-        <note>{0} lists the configured skill source repository and/or catalog URLs for the selected agent clients, one per line.</note>
-      </trans-unit>
-      <trans-unit id="InitCommand_SkillSourcesExplanation">
-        <source>One or more skill sources are configured. A skill source lets an organization share skills to customize your development experience.</source>
-        <target state="translated">Uma ou mais fontes de habilidades estão configuradas. Uma fonte de habilidades permite que uma organização compartilhe habilidades para personalizar sua experiência de desenvolvimento.</target>
-        <note />
       </trans-unit>
       <trans-unit id="InitCommand_SkillsLocationHint">
         <source>Skills: {0}</source>

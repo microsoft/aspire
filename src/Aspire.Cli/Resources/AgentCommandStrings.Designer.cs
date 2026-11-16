@@ -223,7 +223,7 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Agent assets from configured skill sources.
+        ///   Looks up a localized string similar to Agent plugins from configured agent plugin sources.
         /// </summary>
         internal static string InitCommand_AspireSkillChoice {
             get {
@@ -628,20 +628,20 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Skill sources: {0}.
+        ///   Looks up a localized string similar to Agent plugin sources: {0}.
         /// </summary>
-        internal static string InitCommand_SkillSources {
+        internal static string InitCommand_AgentPluginSources {
             get {
-                return ResourceManager.GetString("InitCommand_SkillSources", resourceCulture);
+                return ResourceManager.GetString("InitCommand_AgentPluginSources", resourceCulture);
             }
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to One or more skill sources are configured. A skill source lets an organization share skills to customize your development experience..
+        ///   Looks up a localized string similar to One or more agent plugin sources are configured. An agent plugin source lets an organization share agent plugins to customize your development experience..
         /// </summary>
-        internal static string InitCommand_SkillSourcesExplanation {
+        internal static string InitCommand_AgentPluginSourcesExplanation {
             get {
-                return ResourceManager.GetString("InitCommand_SkillSourcesExplanation", resourceCulture);
+                return ResourceManager.GetString("InitCommand_AgentPluginSourcesExplanation", resourceCulture);
             }
         }
         

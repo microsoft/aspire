@@ -72,7 +72,7 @@ public sealed class DoctorCommandTests(ITestOutputHelper output)
         using var document = JsonDocument.Parse(await File.ReadAllTextAsync(
             Path.Combine(workspace.Path, "doctor-skills.json"), TestContext.Current.CancellationToken));
         var check = Assert.Single(document.RootElement.GetProperty("checks").EnumerateArray(),
-            check => check.GetProperty("name").GetString() == "aspire-skill-sources");
+            check => check.GetProperty("name").GetString() == "aspire-agent-plugin-sources");
         Assert.Equal("warning", check.GetProperty("status").GetString());
         Assert.Equal(
             expectedFiles.Select(file => $"{file} (copilot, opencode)"),
