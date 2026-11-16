@@ -311,11 +311,15 @@ func (l *List[T]) resolveListHandle(ctx context.Context) (*handle, error) {
 	if err != nil {
 		return nil, err
 	}
-	h, ok := result.(handleReference)
+	// Collection types without a registered wrapper arrive as raw handles.
+	listHandle, ok := result.(*handle)
 	if !ok {
-		return nil, fmt.Errorf("aspire: list getter %q returned unexpected type %T", l.getterCapabilityID, result)
+		h, ok := result.(handleReference)
+		if !ok {
+			return nil, fmt.Errorf("aspire: list getter %q returned unexpected type %T", l.getterCapabilityID, result)
+		}
+		listHandle = h.getHandle()
 	}
-	listHandle := h.getHandle()
 	l.handleMu.Lock()
 	l.resolvedHandle = listHandle
 	l.handleMu.Unlock()
@@ -479,11 +483,15 @@ func (d *Dict[K, V]) resolveDictHandle(ctx context.Context) (*handle, error) {
 	if err != nil {
 		return nil, err
 	}
-	h, ok := result.(handleReference)
+	// Collection types without a registered wrapper arrive as raw handles.
+	dictHandle, ok := result.(*handle)
 	if !ok {
-		return nil, fmt.Errorf("aspire: dict getter %q returned unexpected type %T", d.getterCapabilityID, result)
+		h, ok := result.(handleReference)
+		if !ok {
+			return nil, fmt.Errorf("aspire: dict getter %q returned unexpected type %T", d.getterCapabilityID, result)
+		}
+		dictHandle = h.getHandle()
 	}
-	dictHandle := h.getHandle()
 	d.handleMu.Lock()
 	d.resolvedHandle = dictHandle
 	d.handleMu.Unlock()
