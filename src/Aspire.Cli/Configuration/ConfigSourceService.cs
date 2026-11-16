@@ -42,7 +42,7 @@ internal sealed class ConfigSourceService(
     private readonly Lock _checksLock = new();
     private readonly CancellationTokenSource _stopping = new();
     private Task? _check;
-    private bool _sourceDeclined;
+    private ConfigSource? _creationSource;
 
     internal static readonly Option<bool?> s_useSourceOption = new("--use-config-source")
     {
@@ -211,14 +211,13 @@ internal sealed class ConfigSourceService(
                 binding: PromptBinding.CreateDefault(true),
                 cancellationToken: cancellationToken);
         }
-        _sourceDeclined = !accepted.Value;
-        if (_sourceDeclined)
+        if (!accepted.Value)
         {
-            return new ConfigSource { OptOut = true };
+            return _creationSource = new ConfigSource { OptOut = true };
         }
 
         await AcquireAsync(source, force: false, allowInteractiveInput, cancellationToken);
-        return source;
+        return _creationSource = source;
     }
 
     private void DisplayConfigSourceDetails(ConfigSource source, string origin)
@@ -313,14 +312,15 @@ internal sealed class ConfigSourceService(
 
     internal async Task<JsonObject> GetTemplateSourcesAsync(CancellationToken cancellationToken)
     {
-        // Discovery runs after creation consent and must not re-enable a declined source.
-        if (_sourceDeclined)
+        // Creation consent controls discovery for both explicit and employee-detected sources.
+        // Reuse the selected identity and snapshot, and do not re-enable a declined source.
+        if (_creationSource is not null)
         {
-            return new JsonObject();
+            return await GetTemplateSourcesAsync(_creationSource, cancellationToken);
         }
 
-        // An explicitly configured URL opts into optional runtime template-source inheritance,
-        // not project-file materialization. Employee detection alone does not opt in.
+        // Outside creation, an explicit URL opts into runtime discovery without materializing
+        // project settings. Employee detection without consent does not opt in.
         var repository = environment.GetEnvironmentVariable(CliConfigNames.InitSourceUrl);
         if (repository is null)
         {
