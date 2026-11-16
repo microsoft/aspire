@@ -36,6 +36,16 @@ namespace Aspire.Dashboard.Tests.Integration.Playwright;
 public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.MetadataResourcesFixture fixture)
     : PlaywrightTestsBase<ResourcePaneResponsiveTests.MetadataResourcesFixture>(fixture)
 {
+    // Playwright considers opacity: 0 visible; checkVisibility also accounts for transparent ancestors.
+    // See https://playwright.dev/dotnet/docs/actionability#visible
+    private const string IsShown = """
+        el => {
+            const rect = el.getBoundingClientRect();
+            return rect.width > 0 && rect.height > 0 &&
+                el.checkVisibility({ opacityProperty: true, visibilityProperty: true });
+        }
+        """;
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -190,8 +200,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
             await page.GotoAsync("/resources/cache?pane=tags");
             // These are expanded-list rows: a compact row is a single 32px line, and a comfortable one has two lines.
             foreach (var (density, fontSize, lineHeight, rowHeight) in new[]
-                // Secondary text sizes on the type scale: caption and secondary.
-                { ("Compact", 11d, 16d, 32d), ("Comfortable", 12d, 18d, 52d) })
+                { ("Compact", 12d, 16d, 32d), ("Comfortable", 12d, 18d, 52d) })
             {
                 await page.GetByRole(AriaRole.Button, new() { Name = "Settings", Exact = true }).ClickAsync();
                 await page.GetByRole(AriaRole.Button, new() { Name = density, Exact = true }).ClickAsync();
@@ -1188,15 +1197,15 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                             if (icon.width !== iconBox || icon.height !== iconBox) errors.push(`${row.dataset.resourceName}: icon box`);
                             const mainGlyph = row.querySelector('.resource-row-glyph svg').getBoundingClientRect();
                             if (mainGlyph.width !== glyphSize || mainGlyph.height !== glyphSize) errors.push(`${row.dataset.resourceName}: glyph`);
-                            // The type scale: secondary (12px), body (13px) and large (14px) for the three densities' names.
-                            const expectedFont = compact ? 12 : 13;
+                            // Both densities use the shared body size for names and secondary size for chips.
+                            const expectedFont = 13;
                             if (parseFloat(getComputedStyle(row.querySelector('.resource-row-name')).fontSize) !== expectedFont)
                                 errors.push(`${row.dataset.resourceName}: density font`);
                             for (const chip of row.querySelectorAll('.resource-row-insight')) {
                                 const chipBox = chip.getBoundingClientRect();
                                 if (!chipBox.width) continue;
                                 const style = getComputedStyle(chip), glyph = chip.querySelector('svg').getBoundingClientRect();
-                                const font = compact ? 11 : 12; // caption and secondary on the type scale
+                                const font = 12;
                                 const line = compact ? 16 : 18;
                                 const target = compact ? 24 : 28;
                                 const iconSize = compact ? 12 : 14;
@@ -1748,20 +1757,22 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                     await Assertions.Expect(pane).ToBeVisibleAsync();
                     // Compact sidebar rows reveal their actions on hover, so measure them with the pointer away first.
                     await page.Mouse.MoveAsync(1, 1);
-                    const string measureRows = """
+                    var measureRows = $$"""
                         rows => rows.map(row => {
                             const rect = row.getBoundingClientRect();
                             const next = row.nextElementSibling;
                             const rail = row.querySelector('.resource-row-actions');
-                            const shown = el => el.getBoundingClientRect().width > 0 && el.getBoundingClientRect().height > 0;
+                            const shown = {{IsShown}};
                             const overflow = rail.querySelector('.aspire-menu-button');
                             const essential = [...rail.querySelectorAll('.resource-row-highlighted, .resource-row-primary-endpoint')];
                             return [rect.height,
                                 next?.matches('.resource-row[data-resource-name]') ? next.getBoundingClientRect().top - rect.bottom : 1,
-                                rail.getBoundingClientRect().width, shown(overflow) ? 1 : 0,
+                                shown(rail) ? rail.getBoundingClientRect().width : 0, overflow && shown(overflow) ? 1 : 0,
                                 essential.every(shown) ? 1 : 0,
                                 [...rail.querySelectorAll('.resource-row-action')].some(shown) ? 1 : 0,
-                                row.matches(':hover, :focus-within') ? 1 : 0];
+                                row.matches(':hover') || row.querySelector(':focus-visible, .resource-row-actions [aria-haspopup][aria-expanded="true"]') ? 1 : 0,
+                                rail.querySelectorAll('.resource-row-highlighted').length,
+                                row.classList.contains('resource-row-kind-parameter') ? 1 : 0];
                         })
                         """;
                     var resourceRows = pane.Locator(".resource-row[data-resource-name]");
@@ -1774,17 +1785,19 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                         Assert.Equal(1, values[1]);
                         if (compactSidebar && values[6] == 0)
                         {
-                            // At rest, a compact row's rail narrows to the expand toggle and hides every action, so the
-                            // name gets the room. Hovering or focusing it brings the actions back (checked below).
-                            Assert.Equal(20, values[2]);
+                            // At rest, a compact row hides its action rail so metadata can use the trailing space.
+                            // Hovering or focusing it brings the actions back (checked below).
+                            Assert.Equal(0, values[2]);
                             Assert.Equal(0, values[5]);
                         }
                         else
                         {
-                            Assert.Equal(1, values[3]);
+                            // Parameter rows have no overflow menu in the expanded list.
+                            Assert.Equal(fullCanvas && values[8] == 1 ? 0 : 1, values[3]);
                             if (!fullCanvas)
                             {
-                                Assert.Equal(112, values[2]);
+                                var expectedRailWidth = compactSidebar ? (values[7] > 1 ? 94 : 88) : 112;
+                                Assert.Equal(expectedRailWidth, values[2]);
                                 Assert.Equal(1, values[4]);
                             }
                         }
@@ -1795,14 +1808,26 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                         Assert.True(rows.Count(values => values[6] == 0) >= rows.Length - 1);
                         // Hover reveals the full rail, and so does keyboard focus, so the actions stay reachable
                         // without a pointer.
-                        foreach (var reveal in new Func<ILocator, Task>[] { row => row.HoverAsync(), row => row.Locator(".resource-row-link").FocusAsync() })
+                        foreach (var reveal in new Func<ILocator, Task>[]
                         {
-                            var revealed = resourceRows.First;
-                            await reveal(revealed);
-                            var values = (await revealed.EvaluateAsync<double[][]>($"row => ({measureRows})([row])"))[0];
-                            Assert.Equal(new double[] { 112, 1, 1, 1 }, values[2..6]);
-                            await page.Mouse.MoveAsync(1, 1);
-                            await revealed.Locator(".resource-row-link").BlurAsync();
+                            row => row.HoverAsync(),
+                            async row =>
+                            {
+                                await page.Keyboard.PressAsync("Tab");
+                                await row.Locator(".resource-row-link").FocusAsync();
+                            }
+                        })
+                        {
+                            foreach (var resourceName in new[] { "cache", "api" })
+                            {
+                                var revealed = pane.Locator($".resource-row[data-resource-name='{resourceName}']").First;
+                                await reveal(revealed);
+                                var values = (await revealed.EvaluateAsync<double[][]>($"row => ({measureRows})([row])"))[0];
+                                var expectedRailWidth = values[7] > 1 ? 94 : 88;
+                                Assert.Equal(new double[] { expectedRailWidth, 1, 1, 1 }, values[2..6]);
+                                await page.Mouse.MoveAsync(1, 1);
+                                await revealed.Locator(".resource-row-link").BlurAsync();
+                            }
                         }
                     }
                     var list = pane.Locator(".resource-pane-list");
@@ -1939,15 +1964,28 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
             await Assertions.Expect(row.Locator(".resource-row-meta-state")).ToHaveAttributeAsync("data-tooltip", "Running (Unhealthy)");
             await Assertions.Expect(row.Locator(".resource-row-link")).ToHaveAttributeAsync("aria-description", new System.Text.RegularExpressions.Regex("Unhealthy"));
             await Assertions.Expect(row.Locator(".resource-row-link .state-dot")).ToHaveCountAsync(1);
-            await Assertions.Expect(endpoint).Not.ToBeVisibleAsync();
+            Assert.False(await endpoint.EvaluateAsync<bool>(IsShown));
             Assert.True(await row.Locator(".resource-row-text").EvaluateAsync<double>("el => el.clientWidth") >= 160);
+
+            await row.Locator(".resource-row-link").ClickAsync();
+            await Assertions.Expect(row.Locator(".resource-row-link")).ToHaveAttributeAsync("aria-current", "page");
+            await page.Mouse.MoveAsync(1, 1);
+            await Assertions.Expect(row.Locator(".resource-row-meta .resource-row-type")).ToBeVisibleAsync();
+            Assert.False(await endpoint.EvaluateAsync<bool>(IsShown));
+            await Assertions.Expect(row.Locator(".resource-row-link")).ToBeFocusedAsync();
+            await page.Keyboard.PressAsync("Tab");
+            await Assertions.Expect(endpoint).ToBeFocusedAsync();
+            Assert.True(await endpoint.EvaluateAsync<bool>(IsShown));
+            await Assertions.Expect(row.Locator(".resource-row-meta")).Not.ToBeVisibleAsync();
+            await endpoint.BlurAsync();
+
             // Hover and focus swap the type and state columns for the actions, which keeps the name's room.
             await row.HoverAsync();
             await row.Locator(".resource-row-link").FocusAsync();
             await Assertions.Expect(row.Locator(".resource-row-meta")).Not.ToBeVisibleAsync();
             Assert.True(await row.Locator(".resource-row-text").EvaluateAsync<double>("el => el.clientWidth") >= 160);
 
-            await Assertions.Expect(endpoint).ToBeVisibleAsync();
+            Assert.True(await endpoint.EvaluateAsync<bool>(IsShown));
             await Assertions.Expect(endpoint).ToHaveAttributeAsync("href", MetadataResourcesFixture.Endpoint);
             await Assertions.Expect(endpoint).ToHaveAttributeAsync("target", "_blank");
             await Assertions.Expect(endpoint).ToHaveAttributeAsync("rel", "noreferrer noopener");
@@ -1989,10 +2027,10 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                 // Per row: the badge's box; whether it is the topmost element at its center; the hidden spacer's box,
                 // which stops the name before the badge; the end of the name's text; whether the badge overlaps a
                 // shown column or action; and whether any action is shown.
-                const string measure = """
+                var measure = $$"""
                     row => {
                         const box = el => el.getBoundingClientRect();
-                        const shown = el => box(el).width > 0 && box(el).height > 0 && getComputedStyle(el).visibility !== 'hidden';
+                        const shown = {{IsShown}};
                         const badge = row.querySelector(':scope > .resource-row-error-link');
                         const b = box(badge);
                         const top = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2);
@@ -2038,6 +2076,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                     AssertBadge(rest, await row.EvaluateAsync<double[]>(measure), context, "badge hover", actionsShown: true);
 
                     await page.Mouse.MoveAsync(1, 1);
+                    await page.Keyboard.PressAsync("Tab");
                     await row.Locator(".resource-row-link").FocusAsync();
                     AssertBadge(rest, await row.EvaluateAsync<double[]>(measure), context, "focus", actionsShown: true);
 
@@ -2177,9 +2216,10 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
             // element at its center; whether the icon's glyph is hidden under it; whether the shown actions, in DOM
             // (tab) order, run left to right without overlapping; how many are shown; and whether the name ends before
             // the first of them.
-            const string measure = """
+            var measure = $$"""
                 row => {
                     const box = el => el.getBoundingClientRect();
+                    const isShown = {{IsShown}};
                     const toggle = row.querySelector(':scope > .resource-row-toggle-leading');
                     const t = box(toggle), icon = box(row.querySelector('.resource-row-icon'));
                     const shown = getComputedStyle(toggle).visibility === 'visible';
@@ -2188,7 +2228,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                     const top = document.elementFromPoint(t.left + t.width / 2, t.top + t.height / 2);
                     const glyphHidden = getComputedStyle(row.querySelector('.resource-row-glyph')).visibility === 'hidden';
                     const controls = [...row.querySelectorAll('.resource-row-actions .resource-row-action')]
-                        .filter(el => box(el).width > 0 && box(el).height > 0);
+                        .filter(isShown);
                     const ordered = controls.every((el, i) => i === 0 || box(controls[i - 1]).right <= box(el).left + 0.5);
                     const clear = controls.length === 0 || box(row.querySelector('.resource-row-text')).right <= box(controls[0]).left + 0.5;
                     return [shown ? 1 : 0, covers ? 1 : 0, top?.closest('.resource-row-toggle') === toggle ? 1 : 0,
@@ -2211,6 +2251,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                 AssertToggle(await row.EvaluateAsync<double[]>(measure), name, "row hover", shownControls, checkTopmost: true);
 
                 await page.Mouse.MoveAsync(1, 1);
+                await page.Keyboard.PressAsync("Tab");
                 await row.Locator(".resource-row-link").FocusAsync();
                 AssertToggle(await row.EvaluateAsync<double[]>(measure), name, "focus", shownControls, checkTopmost: true);
 

@@ -365,5 +365,14 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("StartupExplicitStart", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   Looks up a localized string similar to {0} (exit code: {1}).
+        /// </summary>
+        internal static string StateWithExitCode {
+            get {
+                return ResourceManager.GetString("StateWithExitCode", resourceCulture);
+            }
+        }
     }
 }

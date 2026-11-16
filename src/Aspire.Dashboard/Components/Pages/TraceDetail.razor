@@ -4,6 +4,7 @@
 @using Aspire.Dashboard.Components.Controls.Grid
 @using Aspire.Dashboard.Resources
 @using System.Diagnostics
+@using Microsoft.AspNetCore.Components.Sections
 @inject IStringLocalizer<StructuredFiltering> FilterLoc
 @inject IStringLocalizer<Dialogs> DialogsLoc
 
@@ -13,6 +14,13 @@
         ResourceName="@nameof(Dashboard.Resources.TraceDetail.TraceDetailPageTitle)"
         Loc="@Loc"/>
 </PageTitle>
+
+@if (ViewportInformation.IsDesktop && ResourcesLayout is not null && _trace is not null)
+{
+    <StableSectionContent SectionName="@Aspire.Dashboard.Components.Layout.ResourcesLayout.FooterStatusSectionName">
+        @GetTotalItemsFooter()
+    </StableSectionContent>
+}
 
 <div class="page-content-container">
     @if (_trace is { } trace)
@@ -220,7 +228,7 @@
                                                 </span>
                                             </div>
                                         </AspireTemplateColumn>
-                                        <AspireTemplateColumn ColumnId="@ResourceColumn" ColumnManager="@_manager" Title="@Loc[nameof(Dashboard.Resources.TraceDetail.TraceDetailResourceHeader)]" Class="expand-col">
+                                        <AspireTemplateColumn ColumnId="@ResourceColumn" ColumnManager="@_manager" Title="@Loc[nameof(Dashboard.Resources.TraceDetail.TraceDetailResourceHeader)]" TooltipText="@(c => GetResourceName(c.Span.Source))" Class="expand-col">
                                             <div class="resource-name">
                                                 <FluentHighlighter HighlightedText="@PageViewModel.Filter" Text="@GetResourceName(context.Span.Source)" />
                                             </div>
@@ -259,18 +267,39 @@
                                                             @foreach (var item in context.SpanLogs)
                                                             {
                                                                 var buttonId = $"{context.Span.SpanId}-{item.LogEntry.InternalId}";
+                                                                var tooltipId = $"{buttonId}-tooltip";
                                                                 var eventName = item.LogEntry.EventName ?? StructuredLogsLoc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsEntryDetails)];
                                                                 var isSelected = SelectedData?.LogEntryViewModel?.LogEntry.InternalId == item.LogEntry.InternalId;
                                                                 var buttonColor = item.LogEntry.IsError ? "var(--error)" : spanColor;
 
                                                                 <button id="@buttonId"
                                                                         aria-label="@StructuredLogsLoc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsEntryDetails)]"
+                                                                        data-tooltip-content="@tooltipId"
                                                                         class="@($"span-log-entry-button {(isSelected ? "span-log-entry-selected" : null)} {(item.LogEntry.IsError ? "span-log-entry-error" : null)}")"
                                                                         data-span-color="@spanColor"
                                                                         style="@($"left: {@item.LeftOffset.ToString("F2", CultureInfo.InvariantCulture)}%; --button-color: {buttonColor};")"
                                                                         @onclick="@(() => ToggleSpanLogsAsync(item.LogEntry))"
                                                                         @onclick:stopPropagation="true">
                                                                 </button>
+                                                                <div id="@tooltipId" class="log-tooltip" hidden>
+                                                                    <div class="log-tooltip-title-container">
+                                                                        <span class="log-tooltip-title">@eventName</span> <span class="log-tooltip-subtitle">@item.LogEntry.ScopeName</span><br />
+                                                                    </div>
+                                                                    <table class="log-tooltip-table">
+                                                                        <tr>
+                                                                            <td class="label-column">@StructuredLogsLoc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsLevelColumnHeader)]</td>
+                                                                            <td>@item.LogEntry.Severity</td>
+                                                                        </tr>
+                                                                        <tr>
+                                                                            <td class="label-column">@StructuredLogsLoc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsTimestampColumnHeader)]</td>
+                                                                            <td>@FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, item.LogEntry.TimeStamp, MillisecondsDisplay.Truncated)</td>
+                                                                        </tr>
+                                                                        <tr>
+                                                                            <td class="label-column">@StructuredLogsLoc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsMessageColumnHeader)]</td>
+                                                                            <td>@FormatHelpers.TruncateText(item.LogEntry.Message, maxLength: 150)</td>
+                                                                        </tr>
+                                                                    </table>
+                                                                </div>
                                                             }
                                                         </div>
                                                         <div class="span-bar" style="grid-column: 2; background: @spanColor;"></div>
@@ -322,6 +351,12 @@
                     </Details>
                 </SummaryDetailsView>
             </MainSection>
+            <FooterSection>
+                @if (!ViewportInformation.IsDesktop || ResourcesLayout is null)
+                {
+                    @GetTotalItemsFooter()
+                }
+            </FooterSection>
         </AspirePageContentLayout>
     }
     else
@@ -334,6 +369,13 @@
 </div>
 
 @code {
+    private RenderFragment GetTotalItemsFooter() =>
+        @<TotalItemsFooter @ref="_totalItemsFooter"
+                           TotalItemCount="@_totalItemsCount"
+                           SingularText="@Loc[nameof(Dashboard.Resources.TraceDetail.TotalItemsFooterSingularText)]"
+                           PluralText="@Loc[nameof(Dashboard.Resources.TraceDetail.TotalItemsFooterPluralText)]"
+                           PauseText="@PauseText" />;
+
     // The trace detail page is reached by drilling into a row of the traces list, so the back button makes the way
     // back explicit. It uses the same toolbar button styling as the rest of the row so it reads as a page control.
     private RenderFragment GetBackButton()

@@ -13,6 +13,13 @@
                      ResourceName="@nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsPageTitle)" Loc="@Loc"/>
 </PageTitle>
 
+@if (ViewportInformation.IsDesktop && ResourcesLayout is not null)
+{
+    <StableSectionContent SectionName="@Aspire.Dashboard.Components.Layout.ResourcesLayout.FooterStatusSectionName">
+        @GetFooter()
+    </StableSectionContent>
+}
+
 @{
     // Inside the resources layout on desktop, the console toolbar shares the tabs row instead of taking its own row.
     var toolbarInTabsRow = ViewportInformation.IsDesktop && ResourcesLayout is not null;
@@ -63,17 +70,24 @@
                        ShowResourcePrefix="@_isSubscribedToAll"/>
         </MainSection>
         <FooterSection>
-            @if (PauseText is not null)
+            @if (!ViewportInformation.IsDesktop || ResourcesLayout is null)
             {
-                <div class="items-footer">
-                    <PauseWarning PauseText="@PauseText" />
-                </div>
+                @GetFooter()
             }
         </FooterSection>
     </AspirePageContentLayout>
 </div>
 
 @code {
+    private RenderFragment GetFooter() => @<text>
+        @if (PauseText is not null)
+        {
+            <div class="items-footer">
+                <PauseWarning PauseText="@PauseText" />
+            </div>
+        }
+    </text>;
+
     private void RenderToolbar(RenderTreeBuilder __builder)
     {
     @if (ResourcesLayout is null)

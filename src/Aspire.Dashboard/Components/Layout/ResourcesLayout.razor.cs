@@ -1963,16 +1963,19 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
                 ? (Loc[nameof(Resources.Layout.ResourceHeaderStarted)], startTimeStamp)
                 : null;
 
-    // For example "Stopped 1m ago (11/6/2026 2:30:12 PM)". It contains the short age the row shows, so the accessible
-    // name includes the visible text (WCAG 2.5.3, label in name: https://www.w3.org/WAI/WCAG22/Understanding/label-in-name).
-    private string GetRowTimeDescription((string Label, DateTime Time) rowTime) =>
-        $"{GetRowTimeText(rowTime)} ({FormatHelpers.FormatDateTime(TimeProvider, rowTime.Time)})";
+    // The tooltip: only the exact time, for example "Nov 6, 2026, 2:30 PM", since the row already shows the age.
+    private string GetRowTimeTooltip((string Label, DateTime Time) rowTime) => FormatHelpers.FormatTooltipDateTime(TimeProvider, rowTime.Time);
+
+    // The accessible name, for example "Stopped 1m ago (Nov 6, 2026, 2:30 PM)". Unlike the tooltip, it contains the
+    // short age the row shows, so the accessible name includes the visible text (WCAG 2.5.3, label in name:
+    // https://www.w3.org/WAI/WCAG22/Understanding/label-in-name).
+    private string GetRowTimeDescription((string Label, DateTime Time) rowTime, string tooltip) => $"{GetRowTimeText(rowTime)} ({tooltip})";
 
     // What a row shows: the verb, so a stopped resource doesn't read as running, and a short age ("Started 7m ago").
     private string GetRowTimeText((string Label, DateTime Time) rowTime) => $"{rowTime.Label} {GetShortAge(rowTime.Time)}";
 
     // The short age ("7m ago"), which every row repeats; the tooltip and accessible label add the exact time (see
-    // GetRowTimeDescription).
+    // GetRowTimeTooltip and GetRowTimeDescription).
     private string GetShortAge(DateTime time)
     {
         // Clamp so a time slightly in the future (clock skew between processes) reads as "now".
@@ -2013,6 +2016,13 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private static IEnumerable<CommandViewModel> GetHighlightedCommands(ResourceViewModel resource) => resource.Commands
         .Where(c => c.IsHighlighted && c.State != CommandViewModelState.Hidden)
         .Take(DashboardUIHelpers.MaxHighlightedCommands);
+
+    private static IEnumerable<CommandViewModel> GetFullPageRowCommands(ResourceViewModel resource) =>
+        resource.IsParameter
+            ? resource.Commands.Where(c =>
+                string.Equals(c.Name, CommandViewModel.SetParameterCommand, StringComparisons.CommandName) &&
+                c.State != CommandViewModelState.Hidden).Take(1)
+            : GetHighlightedCommands(resource);
 
     private static IEnumerable<CommandViewModel> GetResourceRowCommands(ResourceViewModel resource)
     {
@@ -2194,7 +2204,10 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     }
 
     internal string GetResourceName(ResourceViewModel resource) =>
-        GetDuplicateDisplayNames().Contains(resource.DisplayName) ? resource.Name : resource.DisplayName;
+        IsReplica(resource) ? resource.Name : resource.DisplayName;
+
+    internal bool IsReplica(ResourceViewModel resource) =>
+        GetDuplicateDisplayNames().Contains(resource.DisplayName);
 
     private HashSet<string> GetDuplicateDisplayNames()
     {

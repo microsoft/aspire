@@ -63,8 +63,8 @@
         <note />
       </trans-unit>
       <trans-unit id="ChannelUpdateRequiresAmbientNuGetConfigurationFormat">
-        <source>Cannot apply channel '{0}' for '{1}' because MSBuild overrides NuGet configuration: {2}. Remove these overrides to enable explicit channel updates. Updates without an explicit channel remain supported.</source>
-        <target state="translated">无法对 '{1}' 应用通道 '{0}'，因为 MSBuild 替代 NuGet 配置： {2}。删除这些替代以启用显式频道更新。仍然支持没有显式频道的汇报。</target>
+        <source>Cannot apply channel '{0}' for '{1}' because MSBuild overrides NuGet configuration: {2}. Remove these overrides to enable channel updates. Updates without a command-line or configured channel remain supported.</source>
+        <target state="needs-review-translation">无法对 '{1}' 应用通道 '{0}'，因为 MSBuild 替代 NuGet 配置： {2}。删除这些替代以启用显式频道更新。仍然支持没有显式频道的汇报。</target>
         <note />
       </trans-unit>
       <trans-unit id="CheckingForUpdates">
@@ -81,6 +81,11 @@
         <source>Cannot safely update conditional Aspire.AppHost.Sdk declarations for '{0}'; update the conditional SDK version explicitly.</source>
         <target state="translated">无法安全更新 '{0}' 的条件 Aspire.AppHost.Sdk 声明; 请显式更新条件 SDK 版本。</target>
         <note>{0} = AppHost project path.</note>
+      </trans-unit>
+      <trans-unit id="ConfiguredChannelNotFoundFormat">
+        <source>Cannot use channel '{0}' from Aspire configuration. {1}</source>
+        <target state="new">Cannot use channel '{0}' from Aspire configuration. {1}</target>
+        <note>{0} = configured channel name. {1} = reason the channel could not be resolved.</note>
       </trans-unit>
       <trans-unit id="CouldNotFindPackageVersionInDirectoryPackagesProps">
         <source>Could not find PackageVersion element for '{0}' in {1}</source>
@@ -436,6 +441,11 @@
         <source>Update successful!</source>
         <target state="translated">更新成功!</target>
         <note />
+      </trans-unit>
+      <trans-unit id="UsingConfiguredChannelFormat">
+        <source>Using channel '{0}' from Aspire configuration. Pass --channel to override.</source>
+        <target state="new">Using channel '{0}' from Aspire configuration. Pass --channel to override.</target>
+        <note>{0} = configured channel name.</note>
       </trans-unit>
       <trans-unit id="WhichDirectoryNuGetConfigPrompt">
         <source>Which directory for NuGet.config file?</source>

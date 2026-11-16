@@ -95,7 +95,7 @@ internal sealed class TemplateManagementCommand : ParentCommand
                 // Machine-readable listing is local-only unless explicitly opted in. Do not
                 // even select a candidate by default: that can validate settings or run detection.
                 var source = !json || parseResult.GetValue(ConfigSourceService.s_useSourceOption) is true
-                    ? await ConfigSources.ResolveAndAcquireConfigSourceAsync(parseResult, allowInteractiveInput: !json, cancellationToken)
+                    ? await ConfigSources.ResolveAndAcquireConfigSourceAsync(parseResult, ConfigSourceStrings.TemplateSourceListUseSourcePrompt, allowInteractiveInput: !json, cancellationToken)
                     : null;
                 sources = await _store.ListAsync(source, cancellationToken);
             }

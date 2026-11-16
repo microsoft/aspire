@@ -26,7 +26,8 @@ public class DashboardRunsDialogTests : DashboardTestContext
             new DateTimeOffset(2025, 1, 2, 12, 30, 0, TimeSpan.Zero),
             endedAtUtc: new DateTimeOffset(2025, 1, 2, 13, 30, 0, TimeSpan.Zero));
         var cut = RenderDialog([s_currentRun, historicalRun]);
-        var expectedTooltip = FormatHelpers.FormatDateTime(Services.GetRequiredService<BrowserTimeProvider>(), historicalRun.StartedAtUtc.UtcDateTime);
+        // The row shows how long ago the recording started, so the tooltip gives only the exact time.
+        var expectedTooltip = FormatHelpers.FormatTooltipDateTime(Services.GetRequiredService<BrowserTimeProvider>(), historicalRun.StartedAtUtc);
 
         Assert.Equal(
             "Switch between the live view and read-only recordings of previous runs. Protect a recording from deletion to keep it when older recordings are automatically removed.",

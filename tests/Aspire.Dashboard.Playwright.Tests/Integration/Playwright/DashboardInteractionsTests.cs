@@ -20,6 +20,234 @@ public class DashboardInteractionsTests : PlaywrightTestsBase<DashboardInteracti
     {
     }
 
+    [Theory]
+    [InlineData("a")]
+    [InlineData("g")]
+    [InlineData("path")]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task Tooltips_SvgAnchorsPositionAndCleanUp(string tagName)
+    {
+        await RunTestAsync(async page =>
+        {
+            await page.SetViewportSizeAsync(1280, 900);
+            await GoToResourcesAndWaitAsync(page);
+            await page.EvaluateAsync("""
+                tagName => {
+                    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+                    svg.id = 'svg-tooltip-graph';
+                    svg.style.cssText = 'position:fixed;left:600px;top:250px;width:200px;height:80px;z-index:1000;';
+                    svg.setAttribute('viewBox', '0 0 200 80');
+                    const group = document.createElementNS(svg.namespaceURI, 'g');
+                    const anchor = document.createElementNS(svg.namespaceURI, tagName);
+                    anchor.id = 'svg-tooltip-probe';
+                    anchor.setAttribute('tabindex', '0');
+                    anchor.setAttribute('data-tooltip', 'Graph resource');
+                    if (tagName === 'path') {
+                        anchor.setAttribute('d', 'M0 0 H120 V40 H0 Z');
+                    } else {
+                        const rect = document.createElementNS(svg.namespaceURI, 'rect');
+                        rect.setAttribute('width', '120');
+                        rect.setAttribute('height', '40');
+                        anchor.appendChild(rect);
+                    }
+                    group.appendChild(anchor);
+                    svg.appendChild(group);
+                    document.body.appendChild(svg);
+                    const button = document.createElement('button');
+                    button.id = 'html-tooltip-probe';
+                    button.textContent = 'HTML control';
+                    button.setAttribute('data-tooltip', 'HTML control');
+                    button.style.cssText = 'position:fixed;left:900px;top:250px;z-index:1000;';
+                    document.body.appendChild(button);
+                }
+                """, tagName);
+
+            var anchor = page.Locator("#svg-tooltip-probe");
+            var tooltip = page.Locator(".dashboard-tooltip");
+            var positioningAnchor = page.Locator(".dashboard-tooltip-anchor");
+            await anchor.HoverAsync();
+            await Assertions.Expect(tooltip).ToHaveTextAsync("Graph resource");
+            await AssertPositionedAboveAsync(anchor);
+            await Assertions.Expect(tooltip).ToHaveAttributeAsync("anchor", "svg-tooltip-probe");
+            await Assertions.Expect(anchor).ToHaveAttributeAsync("aria-describedby", (await tooltip.GetAttributeAsync("id"))!);
+
+            await page.Keyboard.PressAsync("Escape");
+            await Assertions.Expect(tooltip).ToHaveCountAsync(0);
+            await Assertions.Expect(positioningAnchor).ToHaveCountAsync(0);
+
+            foreach (var mutation in new[]
+            {
+                "anchor => anchor.setAttribute('transform', 'translate(15,0)')",
+                "anchor => anchor.parentElement.setAttribute('transform', 'translate(30,0)')",
+                "anchor => anchor.ownerSVGElement.setAttribute('viewBox', '0 0 240 96')",
+                "anchor => anchor.ownerSVGElement.style.transform = 'translateX(10px)'",
+                """
+                anchor => {
+                    const style = document.createElement('style');
+                    style.textContent = '.svg-tooltip-shifted { margin-left: 15px; }';
+                    anchor.ownerSVGElement.appendChild(style);
+                    anchor.ownerSVGElement.classList.add('svg-tooltip-shifted');
+                }
+                """
+            })
+            {
+                await anchor.BlurAsync();
+                await anchor.FocusAsync();
+                await AssertPositionedAboveAsync(anchor);
+                var before = await anchor.BoundingBoxAsync();
+                Assert.NotNull(before);
+
+                await anchor.EvaluateAsync(mutation);
+
+                await Assertions.Expect(tooltip).ToHaveCountAsync(0);
+                await Assertions.Expect(positioningAnchor).ToHaveCountAsync(0);
+                await Assertions.Expect(anchor).ToBeFocusedAsync();
+                await Assertions.Expect(anchor).ToBeVisibleAsync();
+                var after = await anchor.BoundingBoxAsync();
+                Assert.NotNull(after);
+                Assert.True(before.X != after.X || before.Y != after.Y || before.Width != after.Width || before.Height != after.Height);
+            }
+
+            await anchor.BlurAsync();
+            await anchor.FocusAsync();
+            await Assertions.Expect(tooltip).ToHaveTextAsync("Graph resource");
+            await AssertPositionedAboveAsync(anchor);
+            await page.SetViewportSizeAsync(1100, 800);
+            await Assertions.Expect(tooltip).ToHaveCountAsync(0);
+            await Assertions.Expect(positioningAnchor).ToHaveCountAsync(0);
+
+            await page.Mouse.MoveAsync(0, 0);
+            await anchor.HoverAsync();
+            await AssertPositionedAboveAsync(anchor);
+            await anchor.EvaluateAsync("anchor => anchor.remove()");
+            await Assertions.Expect(tooltip).ToHaveCountAsync(0);
+            await Assertions.Expect(positioningAnchor).ToHaveCountAsync(0);
+
+            var button = page.Locator("#html-tooltip-probe");
+            await button.HoverAsync();
+            await Assertions.Expect(tooltip).ToHaveTextAsync("HTML control");
+            await AssertPositionedAboveAsync(button);
+            await Assertions.Expect(positioningAnchor).ToHaveCountAsync(0);
+            await page.Locator("#svg-tooltip-graph").EvaluateAsync("svg => svg.setAttribute('viewBox', '0 0 200 80')");
+            await Assertions.Expect(tooltip).ToHaveTextAsync("HTML control");
+            await AssertPositionedAboveAsync(button);
+
+            async Task AssertPositionedAboveAsync(ILocator target)
+            {
+                await Assertions.Expect(tooltip).ToBeVisibleAsync();
+                await page.WaitForFunctionAsync("""
+                    anchor => {
+                        const tooltip = document.querySelector('.dashboard-tooltip:popover-open');
+                        if (!tooltip) {
+                            return false;
+                        }
+                        const a = anchor.getBoundingClientRect();
+                        const t = tooltip.getBoundingClientRect();
+                        return Math.abs((a.left + a.width / 2) - (t.left + t.width / 2)) <= 2 &&
+                            Math.abs(a.top - t.bottom) <= 8;
+                    }
+                    """, await target.ElementHandleAsync()).DefaultTimeout();
+            }
+        });
+    }
+
+    [Fact]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task Tooltips_HiddenContentIsClonedAndUpdates()
+    {
+        await RunTestAsync(async page =>
+        {
+            await GoToResourcesAndWaitAsync(page);
+            await page.EvaluateAsync("""
+                () => {
+                    const button = document.createElement('button');
+                    button.id = 'table-tooltip-probe';
+                    button.textContent = 'Log entry';
+                    button.style.cssText = 'position:fixed;left:600px;top:250px;z-index:1000;';
+                    button.dataset.tooltipContent = 'hidden-tooltip-probe';
+                    const source = document.createElement('div');
+                    source.id = 'hidden-tooltip-probe';
+                    source.className = 'log-tooltip';
+                    source.hidden = true;
+                    source.innerHTML = `
+                        <div class="log-tooltip-title-container">
+                            <span class="log-tooltip-title"></span> <span class="log-tooltip-subtitle"></span><br>
+                        </div>
+                        <table class="log-tooltip-table"><tbody>
+                            <tr><td class="label-column">Level</td><td><strong>Information</strong></td></tr>
+                            <tr><td class="label-column">Timestamp</td><td>2026-01-01 10:00:00</td></tr>
+                            <tr><td class="label-column">Message</td><td></td></tr>
+                        </tbody></table>`;
+                    source.querySelector('.log-tooltip-title').textContent = 'Event <name>';
+                    source.querySelector('.log-tooltip-subtitle').textContent = 'Scope "name"';
+                    source.querySelector('tr:last-child td:last-child').textContent = 'Test <message>\nwith details';
+                    document.body.append(button, source);
+                }
+                """);
+
+            var anchor = page.Locator("#table-tooltip-probe");
+            var source = page.Locator("#hidden-tooltip-probe");
+            var tooltip = page.Locator(".dashboard-tooltip");
+            await anchor.HoverAsync();
+            await Assertions.Expect(tooltip).ToBeVisibleAsync();
+            await Assertions.Expect(page.Locator(".dashboard-tooltip.log-tooltip")).ToBeVisibleAsync();
+            await Assertions.Expect(tooltip.Locator(".log-tooltip-title")).ToHaveTextAsync("Event <name>");
+            await Assertions.Expect(tooltip.Locator(".log-tooltip-subtitle")).ToHaveTextAsync("Scope \"name\"");
+            await Assertions.Expect(tooltip.Locator("strong")).ToHaveTextAsync("Information");
+            await Assertions.Expect(source).ToBeHiddenAsync();
+            await Assertions.Expect(source.Locator(".log-tooltip-title")).ToHaveTextAsync("Event <name>");
+            await Assertions.Expect(tooltip.Locator("td")).ToHaveTextAsync(
+                ["Level", "Information", "Timestamp", "2026-01-01 10:00:00", "Message", "Test <message>\nwith details"]);
+
+            await source.EvaluateAsync("""
+                source => {
+                    source.querySelector('.log-tooltip-title').firstChild.data = 'Updated event';
+                    source.querySelector('tr:last-child td:last-child').textContent = 'Updated message';
+                }
+                """);
+            await Assertions.Expect(tooltip).ToHaveCountAsync(1);
+            await Assertions.Expect(tooltip.Locator(".log-tooltip-title")).ToHaveTextAsync("Updated event");
+            await Assertions.Expect(tooltip.Locator("td")).ToHaveTextAsync(
+                ["Level", "Information", "Timestamp", "2026-01-01 10:00:00", "Message", "Updated message"]);
+
+            await page.Keyboard.PressAsync("Escape");
+            await Assertions.Expect(tooltip).ToHaveCountAsync(0);
+            await anchor.FocusAsync();
+            await Assertions.Expect(tooltip.Locator(".log-tooltip-title")).ToHaveTextAsync("Updated event");
+            await Assertions.Expect(anchor).ToHaveAttributeAsync("aria-describedby", (await tooltip.GetAttributeAsync("id"))!);
+
+            await anchor.EvaluateAsync("""
+                anchor => {
+                    const source = document.createElement('div');
+                    source.id = 'replacement-tooltip-probe';
+                    source.hidden = true;
+                    const paragraph = document.createElement('p');
+                    paragraph.textContent = 'Another preview';
+                    source.appendChild(paragraph);
+                    document.body.appendChild(source);
+                    anchor.dataset.tooltipContent = source.id;
+                }
+                """);
+            await Assertions.Expect(tooltip.Locator("p")).ToHaveTextAsync("Another preview");
+            await Assertions.Expect(page.Locator(".dashboard-tooltip.log-tooltip")).ToHaveCountAsync(0);
+            await page.Locator("#replacement-tooltip-probe p").EvaluateAsync("paragraph => paragraph.firstChild.data = 'Updated preview'");
+            await Assertions.Expect(tooltip.Locator("p")).ToHaveTextAsync("Updated preview");
+
+            await anchor.EvaluateAsync("""
+                anchor => {
+                    delete anchor.dataset.tooltipContent;
+                    anchor.dataset.tooltip = 'Plain text';
+                }
+                """);
+            await Assertions.Expect(tooltip).ToHaveTextAsync("Plain text");
+            await Assertions.Expect(tooltip.Locator(":scope > span")).ToHaveTextAsync("Plain text");
+            await anchor.EvaluateAsync("anchor => anchor.remove()");
+            await Assertions.Expect(tooltip).ToHaveCountAsync(0);
+            await Assertions.Expect(source.Locator(".log-tooltip-title")).ToHaveTextAsync("Updated event");
+            await Assertions.Expect(source).ToBeHiddenAsync();
+        });
+    }
+
     [Fact]
     [OuterloopTest("Resource-intensive Playwright browser test")]
     public async Task ReconnectModal_RemainsAboveInteractionDialog()

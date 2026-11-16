@@ -1096,7 +1096,7 @@ public partial class MetricsTests : DashboardTestContext
                     loc[nameof(Resources.Metrics.PauseInProgressText)],
                     FormatHelpers.FormatTimeWithOptionalDate(timeProvider, pausedAt.Value)),
                 pauseWarning.Instance.PauseText);
-            Assert.Single(cut.Find("footer").QuerySelectorAll(".block-warning"));
+            Assert.Single(cut.Find("footer").QuerySelectorAll(".pause-warning"));
         });
 
         cut.FindComponent<PauseIncomingDataSwitch>().WaitForElement("fluent-button").Click();

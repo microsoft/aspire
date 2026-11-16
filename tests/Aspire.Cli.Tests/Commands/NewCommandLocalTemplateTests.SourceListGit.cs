@@ -54,7 +54,7 @@ public partial class NewCommandLocalTemplateTests
             {
                 prompts++;
                 Assert.False(json);
-                Assert.Equal(ConfigSourceStrings.UseSourcePrompt, prompt);
+                Assert.Equal(ConfigSourceStrings.TemplateSourceListUseSourcePrompt, prompt);
                 Assert.True(defaultValue);
                 return accept;
             }
@@ -224,7 +224,7 @@ public partial class NewCommandLocalTemplateTests
         var selections = 0;
         interaction.ConfirmCallback = (prompt, _) =>
         {
-            Assert.Equal(ConfigSourceStrings.UseSourcePrompt, prompt);
+            Assert.Equal(ConfigSourceStrings.NewUseSourcePrompt, prompt);
             Assert.Null(consent);
             Assert.Empty(git.Commands);
             Assert.Single(interaction.DisplayedMessages,
