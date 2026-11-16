@@ -240,8 +240,8 @@
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_RemoveSkillCopiesOptionDescription">
-        <source>Remove copied Aspire skills when the Aspire skills plugin replaces them at the selected scope. Defaults to false</source>
-        <target state="new">Remove copied Aspire skills when the Aspire skills plugin replaces them at the selected scope. Defaults to false</target>
+        <source>Delete copied Aspire skill folders without asking for confirmation, including all files inside them and any changes you made. Only applies when the Aspire skills plugin replaces them at the selected scope. Defaults to false</source>
+        <target state="new">Delete copied Aspire skill folders without asking for confirmation, including all files inside them and any changes you made. Only applies when the Aspire skills plugin replaces them at the selected scope. Defaults to false</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_RemoveSkillCopyFailed">
@@ -250,9 +250,14 @@
         <note>{0} is the skill directory path, and {1} is the failure reason.</note>
       </trans-unit>
       <trans-unit id="InitCommand_RemovedSkillCopies">
-        <source>Removed copied Aspire skills in {0}</source>
-        <target state="new">Removed copied Aspire skills in {0}</target>
-        <note>{0} lists the removed skill folder paths, separated by commas.</note>
+        <source>Deleted {0} copied skill folders</source>
+        <target state="new">Deleted {0} copied skill folders</target>
+        <note>{0} is the number of deleted skill folders, always greater than one.</note>
+      </trans-unit>
+      <trans-unit id="InitCommand_RemovedSkillCopy">
+        <source>Deleted 1 copied skill folder</source>
+        <target state="new">Deleted 1 copied skill folder</target>
+        <note />
       </trans-unit>
       <trans-unit id="InitCommand_ScopeOptionDescription">
         <source>Configuration and skill scope: project or global (default: project)</source>
@@ -280,8 +285,8 @@
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_SkillCopiesFound">
-        <source>Found copied Aspire skills that the Aspire skills plugin now provides:</source>
-        <target state="new">Found copied Aspire skills that the Aspire skills plugin now provides:</target>
+        <source>The Aspire skills plugin now provides these skills. Deleting the copied folders also deletes everything inside them, including any changes you made:</source>
+        <target state="new">The Aspire skills plugin now provides these skills. Deleting the copied folders also deletes everything inside them, including any changes you made:</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_SkillCopiesRequirePlugin">

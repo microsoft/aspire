@@ -552,14 +552,17 @@ internal sealed class AgentInitCommand : BaseCommand
             var skillCopiesToRemove = aspireSkillsReplaceCopies
                 ? FindSkillCopiesAtSelectedScope(selectedClients, workspaceRoot, scope, cancellationToken)
                 : [];
+            // Report the plugin configuration first: it is the reason the copies can be deleted.
+            hasErrors |= DisplayRemoteConfigurationResults(registrationResults, workspaceRoot);
             var deleteSkillCopies = skillCopiesToRemove.Length > 0 &&
                 await ConfirmSkillCopyDeletionAsync(skillCopiesToRemove, workspaceRoot, removeSkillCopiesBinding, cancellationToken);
             var (removedSkillCopies, skillCopyFailures) = RemoveSkillCopies(deleteSkillCopies ? skillCopiesToRemove : [], workspaceRoot);
-            hasErrors |= DisplayRemoteConfigurationResults(registrationResults, workspaceRoot);
             if (removedSkillCopies.Count > 0)
             {
-                InteractionService.DisplayMessage(KnownEmojis.FileFolder, string.Format(CultureInfo.CurrentCulture,
-                    AgentCommandStrings.InitCommand_RemovedSkillCopies, string.Join(", ", removedSkillCopies)));
+                // The folders were listed just before deletion, so only summarize here.
+                InteractionService.DisplayMessage(KnownEmojis.FileFolder, removedSkillCopies.Count == 1
+                    ? AgentCommandStrings.InitCommand_RemovedSkillCopy
+                    : string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_RemovedSkillCopies, removedSkillCopies.Count));
             }
             else if (skillCopiesToRemove.Length > 0 && !deleteSkillCopies)
             {
@@ -1128,8 +1131,46 @@ internal sealed class AgentInitCommand : BaseCommand
     }
 
     private IEnumerable<string> FormatSkillCopyFolders(IEnumerable<string> skillDirectories, DirectoryInfo workspaceRoot)
-        => skillDirectories.Select(directory =>
-            $"  {AgentPath.GetDisplayPath(directory, workspaceRoot, ExecutionContext).EscapeMarkup()}");
+        => skillDirectories.SelectMany(directory => (IEnumerable<string>)
+        [
+            $"  {AgentPath.GetDisplayPath(directory, workspaceRoot, ExecutionContext).EscapeMarkup()}",
+            .. GetSkillCopyFiles(directory).Select(file => $"    {file.EscapeMarkup()}")
+        ]);
+
+    private static IEnumerable<string> GetSkillCopyFiles(string skillDirectory)
+    {
+        // Directory.Delete(recursive: true) removes everything below the folder, including hidden files,
+        // so list them too. Recursion does not descend into linked directories, which matches deletion
+        // removing the link rather than the target's contents.
+        var options = new EnumerationOptions
+        {
+            RecurseSubdirectories = true,
+            AttributesToSkip = 0,
+            IgnoreInaccessible = true
+        };
+
+        try
+        {
+            return Directory.EnumerateFiles(skillDirectory, "*", options)
+                .Select(file => Path.GetRelativePath(skillDirectory, file)
+                    .Replace(Path.DirectorySeparatorChar, '/')
+                    .Replace(Path.AltDirectorySeparatorChar, '/'))
+                .Order(StringComparer.Ordinal)
+                .ToArray();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // The folder path is still shown; deletion reports its own failure if the folder is unusable.
+            return [];
+        }
+    }
+
+    private void DisplaySkillCopiesToDelete(IReadOnlyList<string> skillDirectories, DirectoryInfo workspaceRoot)
+        => InteractionService.DisplayMessage(KnownEmojis.PoliceCarLight, string.Join(Environment.NewLine,
+        [
+            $"[yellow]{AgentCommandStrings.InitCommand_SkillCopiesFound.EscapeMarkup()}[/]",
+            .. FormatSkillCopyFolders(skillDirectories, workspaceRoot)
+        ]), allowMarkup: true);
 
     private async Task<bool> ConfirmSkillCopyDeletionAsync(IReadOnlyList<string> skillDirectories, DirectoryInfo workspaceRoot,
         PromptBinding<bool> removeSkillCopiesBinding, CancellationToken cancellationToken)
@@ -1137,6 +1178,12 @@ internal sealed class AgentInitCommand : BaseCommand
         var (wasProvided, removeSkillCopies) = removeSkillCopiesBinding.Resolve();
         if (wasProvided)
         {
+            // Callers that pass the option never see the prompt, so show the same list before deleting.
+            if (removeSkillCopies)
+            {
+                DisplaySkillCopiesToDelete(skillDirectories, workspaceRoot);
+            }
+
             return removeSkillCopies;
         }
 
@@ -1147,11 +1194,7 @@ internal sealed class AgentInitCommand : BaseCommand
             return false;
         }
 
-        InteractionService.DisplayMessage(KnownEmojis.PoliceCarLight, string.Join(Environment.NewLine,
-        [
-            $"[yellow]{AgentCommandStrings.InitCommand_SkillCopiesFound.EscapeMarkup()}[/]",
-            .. FormatSkillCopyFolders(skillDirectories, workspaceRoot)
-        ]), allowMarkup: true);
+        DisplaySkillCopiesToDelete(skillDirectories, workspaceRoot);
         var prompt = skillDirectories.Count == 1
             ? AgentCommandStrings.InitCommand_DeleteSkillCopyPrompt
             : string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_DeleteSkillCopiesPrompt, skillDirectories.Count);

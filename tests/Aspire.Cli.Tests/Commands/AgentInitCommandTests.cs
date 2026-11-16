@@ -1092,7 +1092,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
         Assert.Empty(interaction.DisplayedErrors);
         Assert.Contains(interaction.DisplayedMessages, message => message.Emoji.Equals(KnownEmojis.FileFolder) &&
-            message.Message == string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_RemovedSkillCopies, ".opencode/skill/aspire"));
+            message.Message == AgentCommandStrings.InitCommand_RemovedSkillCopy);
         Assert.False(Directory.Exists(skillDirectory));
         Assert.True(Directory.Exists(Path.Combine(context.Project.FullName, ".opencode", "skill")));
         Assert.Equal(configuredSkill, await File.ReadAllTextAsync(configuredSkillPath));
@@ -1222,6 +1222,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         using var context = new AgentConfigurationTestContext(outputHelper);
         var skillDirectory = Path.Combine(context.Project.FullName, ".agents", "skills", "aspire");
         await AgentConfigurationTestContext.WriteAsync(Path.Combine(skillDirectory, "SKILL.md"), "My customized Aspire instructions.");
+        await AgentConfigurationTestContext.WriteAsync(Path.Combine(skillDirectory, "references", "notes.md"), "My notes.");
         var interaction = new TestInteractionService { ConfirmCallback = (_, _) => confirm };
         using var provider = context.CreateServiceCollection(outputHelper, options =>
         {
@@ -1239,7 +1240,17 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         var prompted = option.Length == 0 && interactive;
         Assert.Equal(prompted ? [new BooleanPromptCall(AgentCommandStrings.InitCommand_DeleteSkillCopyPrompt, false)] : [],
             interaction.BooleanPromptCalls);
-        Assert.Equal(prompted ? [string.Join(Environment.NewLine, [$"[yellow]{AgentCommandStrings.InitCommand_SkillCopiesFound}[/]", "  .agents/skills/aspire"])] : [],
+        // The option is the consent for non-interactive callers, so the affected files are listed before deletion.
+        var listed = prompted || option == " --remove-skill-copies";
+        Assert.Equal(listed
+                ? [string.Join(Environment.NewLine,
+                [
+                    $"[yellow]{AgentCommandStrings.InitCommand_SkillCopiesFound}[/]",
+                    "  .agents/skills/aspire",
+                    "    SKILL.md",
+                    "    references/notes.md"
+                ])]
+                : [],
             interaction.DisplayedMessages
                 .Where(message => message.Emoji.Equals(KnownEmojis.PoliceCarLight) &&
                     message.Message.StartsWith($"[yellow]{AgentCommandStrings.InitCommand_SkillCopiesFound}", StringComparison.Ordinal))
@@ -1393,7 +1404,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_RemoveSkillCopyFailed, ".agents/skills/aspire", string.Empty),
             Assert.Single(interaction.DisplayedErrors), StringComparison.Ordinal);
         Assert.Contains(interaction.DisplayedMessages, message => message.Emoji.Equals(KnownEmojis.FileFolder) &&
-            message.Message == string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_RemovedSkillCopies, ".agents/skills/aspire-deployment"));
+            message.Message == AgentCommandStrings.InitCommand_RemovedSkillCopy);
         Assert.False(Directory.Exists(removableDirectory));
         Assert.Equal(skill, await File.ReadAllTextAsync(failedSkillPath));
         Assert.Equal([failedDirectory], LocalAspireSkills.Find(context.Project, context.Project, context.Home, TestContext.Current.CancellationToken)

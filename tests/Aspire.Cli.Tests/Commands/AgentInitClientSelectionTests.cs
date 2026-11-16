@@ -1640,7 +1640,7 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
         {
             Assert.Empty(interaction.DisplayedErrors);
             Assert.Contains(interaction.DisplayedMessages, message => message.Emoji.Equals(KnownEmojis.FileFolder) &&
-                message.Message == string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_RemovedSkillCopies, "~/.agents/skills/aspire"));
+                message.Message == AgentCommandStrings.InitCommand_RemovedSkillCopy);
             Assert.False(Directory.Exists(Path.GetDirectoryName(path)));
             Assert.Equal(content, await File.ReadAllTextAsync(projectSkillPath));
             Assert.True(File.Exists(context.Copilot.GetIntegrationConfigPath(AgentConfigurationScope.Global, context.Project)));
