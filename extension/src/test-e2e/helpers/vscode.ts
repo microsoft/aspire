@@ -1,6 +1,6 @@
 import type { AspireExtensionE2EControlCommand } from '../../types/extensionApi';
 import { applyE2eControl } from './assertions';
-import { BottomBarPanel, By, EditorView, InputBox, ModalDialog, Notification, SideBarView, TreeItem, TreeSection, VSBrowser, WebView, Workbench } from './extester';
+import { BottomBarPanel, By, EditorView, InputBox, Menu, ModalDialog, Notification, SideBarView, TreeItem, TreeSection, VSBrowser, WebView, Workbench } from './extester';
 import { error as webDriverError } from 'selenium-webdriver';
 
 const escapeKey = '\uE00C';
@@ -10,6 +10,11 @@ const blockingWebDriverLifecycleErrorNames = new Set([
     'NoSuchSessionError',
     'NoSuchWindowError',
     'SessionNotCreatedError',
+]);
+const transientContextMenuErrorNames = new Set([
+    'NoSuchElementError',
+    'StaleElementReferenceError',
+    'TimeoutError',
 ]);
 const blockingWebDriverLifecycleMessageFragments = [
     'session deleted because of page crash',
@@ -290,6 +295,37 @@ export async function waitForTreeItemDescription(section: TreeSection, label: st
     catch (error) {
         throw withWaitDiagnostics(error, [`Last description for '${label}': ${JSON.stringify(lastDescription)}`]);
     }
+}
+
+// ExTester's openContextMenu() only waits for the menu on the first right-click of a session. Once
+// VS Code has created the shared `.context-view` container (it stays in the DOM after the menu closes),
+// later calls right-click and immediately look up `.monaco-menu`, so a slow render or a tree refresh
+// that dismisses the menu fails with:
+//   NoSuchElementError: no such element: Unable to locate element: {"method":"css selector","selector":".monaco-menu"}
+// See https://github.com/redhat-developer/vscode-extension-tester/blob/main/packages/page-objects/src/components/ElementWithContextMenu.ts
+// Retry with a freshly located row so a re-rendered tree item is not reused.
+export async function openTreeItemContextMenu(section: TreeSection, label: string, timeoutMs = 60000): Promise<Menu> {
+    const deadline = Date.now() + timeoutMs;
+    let lastError: unknown;
+
+    for (let attempt = 0; attempt < 3; attempt++) {
+        const item = await waitForTreeItem(section, label, Math.max(deadline - Date.now(), 1000));
+        try {
+            return await item.openContextMenu();
+        }
+        catch (error) {
+            throwIfWebDriverSessionFailure(error);
+            if (!(error instanceof Error) || !transientContextMenuErrorNames.has(error.name)) {
+                throw error;
+            }
+
+            lastError = error;
+            // Close a partially opened menu so the next right-click starts from a dismissed state.
+            await VSBrowser.instance.driver.actions().sendKeys(escapeKey).perform();
+        }
+    }
+
+    throw new Error(`Failed to open the context menu for tree item '${label}' after 3 attempts: ${lastError instanceof Error ? lastError.message : String(lastError)}`);
 }
 
 export async function selectContextMenuItem(item: TreeItem, label: string): Promise<void> {
