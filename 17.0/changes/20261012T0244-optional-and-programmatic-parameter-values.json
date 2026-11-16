@@ -1,14 +1,16 @@
 {
   "area": "AppHost",
-  "areaEmoji": "🏠",
+  "areaEmoji": "\ud83c\udfe0",
   "backport": false,
   "breaking": false,
   "changeType": "New features",
   "communityContributors": [],
   "description": "Parameter resources can now be marked optional with WithOptional()/WithRequired(), allowing unset values to resolve to null without prompting or blocking publish. AppHost code can also inspect and set parameter values programmatically with TryGetCurrentValue() and SetValueAsync(), with changes syncing to the dashboard and prompts across C# and TypeScript AppHosts.",
-  "docsPrs": [],
+  "docsPrs": [
+    1871
+  ],
   "docsRequired": true,
-  "emoji": "🎛️",
+  "emoji": "\ud83c\udf9b\ufe0f",
   "firstMergedAt": "2026-10-12T02:44:09Z",
   "lastMergedAt": "2026-10-12T02:44:09Z",
   "name": "Optional and programmatic parameter values",
