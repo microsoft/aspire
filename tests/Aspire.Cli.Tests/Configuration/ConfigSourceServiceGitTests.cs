@@ -24,7 +24,8 @@ public class ConfigSourceServiceGitTests(ITestOutputHelper outputHelper) : IDisp
     public void Dispose() => _loggerFactory.Dispose();
 
     private GitCommandRunner CreateRunner(ICliHostEnvironment hostEnvironment) =>
-        new(hostEnvironment, new TestInteractionService(), _loggerFactory.CreateLogger<GitCommandRunner>());
+        new(hostEnvironment, new TestInteractionService(), TestHelpers.CreateConsoleEnvironment(TextWriter.Null, TextWriter.Null),
+            _loggerFactory.CreateLogger<GitCommandRunner>());
 
     private IGitClient CreateClient(ICliHostEnvironment hostEnvironment) =>
         new GitClient(CreateRunner(hostEnvironment));
@@ -72,15 +73,17 @@ public class ConfigSourceServiceGitTests(ITestOutputHelper outputHelper) : IDisp
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task SharedGitTimeout_BudgetCoversAllCommands(bool check)
+    public async Task SharedGitTimeout_FiveMinuteBudgetCoversAllCommands(bool check)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var time = new FakeTimeProvider();
+        var startedAt = time.GetUtcNow();
+        var commandDurationsInSeconds = new Queue<int>([30, 269, 1]);
         var commands = new TestGitCommandRunner
         {
             RunCallback = (command, token) =>
             {
-                time.Advance(TimeSpan.FromSeconds(10));
+                time.Advance(TimeSpan.FromSeconds(commandDurationsInSeconds.Dequeue()));
                 token.ThrowIfCancellationRequested();
                 return Task.FromResult(command.Arguments[0] == "ls-remote"
                     ? $"{TestGitCommandRunner.DefaultCommitSha}\tHEAD\n"
@@ -103,6 +106,7 @@ public class ConfigSourceServiceGitTests(ITestOutputHelper outputHelper) : IDisp
             Assert.Null(error.GitOutput);
         }
         Assert.Equal(3, commands.Commands.Count);
+        Assert.Equal(TimeSpan.FromMinutes(5), time.GetUtcNow() - startedAt);
     }
 
     [Theory]
@@ -131,7 +135,7 @@ public class ConfigSourceServiceGitTests(ITestOutputHelper outputHelper) : IDisp
                     }
                     else
                     {
-                        time.Advance(TimeSpan.FromSeconds(30));
+                        time.Advance(TimeSpan.FromMinutes(5));
                     }
                     throw new GitProcessCanceledException("partial-private-remote-diagnostic", token);
                 }

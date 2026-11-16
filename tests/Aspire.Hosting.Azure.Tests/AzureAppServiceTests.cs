@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable CS0618 // Retain legacy ProjectResource Azure publishing/provisioning contracts with synthetic metadata.
-#pragma warning disable ASPIRECOMPUTE002
 #pragma warning disable ASPIREAZURE003
 
 using System.Text.Json.Nodes;
@@ -1215,9 +1214,7 @@ public class AzureAppServiceTests(ITestOutputHelper outputHelper)
             .AddProject<Project>("project1", launchProfileName: null)
             .WithEndpoint(port: 8080, targetPort: 5000, scheme: "http", name: "http", isExternal: true);
 
-#pragma warning disable ASPIRECOMPUTE002
         var expression = env.Resource.GetEndpointPropertyExpression(project.GetEndpoint("http").Property(property));
-#pragma warning restore ASPIRECOMPUTE002
 
         Assert.Equal(expected, await expression.GetValueAsync(default));
     }

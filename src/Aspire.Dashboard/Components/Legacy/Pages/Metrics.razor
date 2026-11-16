@@ -111,7 +111,8 @@
                                             ShowRunningTotal="true"
                                             OnShowRunningTotalChangedAsync="@(_ => Task.CompletedTask)"
                                             ShowChangePerIntervalOption="false"
-                                            Resources="@_resources" />
+                                            Resources="@_resources"
+                                            PinResourceNames="@([PageViewModel.SelectedResource.Id.GetResourceKey().Name])" />
                                     }
                                     else if (PageViewModel.SelectedMeter != null)
                                     {

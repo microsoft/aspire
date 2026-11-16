@@ -15,6 +15,11 @@
 
 ## Logical and Physical Connection String Names
 
+`ConnectionStringEnvironmentVariableNames` and `ConnectionStringReference.EnvironmentVariableNames`
+are stable APIs. The naming record retains its public `init` properties and supports `with`
+copies; changing one property does not recompute the others. Use `Create(resource, logicalName)`
+to derive consistent names from a resource.
+
 `WithReference` keeps the resource name, or its explicit `connectionName`, as the logical .NET configuration name. Physical environment-variable names are derived separately:
 
 | Logical name | Original physical name | Portable physical name |

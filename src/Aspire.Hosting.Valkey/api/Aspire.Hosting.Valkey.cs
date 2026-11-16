@@ -24,6 +24,9 @@ namespace Aspire.Hosting
 
         [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.ValkeyResource> WithPersistence(this ApplicationModel.IResourceBuilder<ApplicationModel.ValkeyResource> builder, System.TimeSpan? interval = null, long keysChangedThreshold = 1) { throw null; }
+
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<ApplicationModel.ValkeyResource> WithRepl(this ApplicationModel.IResourceBuilder<ApplicationModel.ValkeyResource> builder) { throw null; }
     }
 }
 

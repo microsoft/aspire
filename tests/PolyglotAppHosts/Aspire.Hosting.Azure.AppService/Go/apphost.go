@@ -84,12 +84,12 @@ func main() {
 			aspire.BicepValueKindExpression, aspire.BicepValueKindExpression,
 			aspire.BicepValueKindLiteral, aspire.BicepValueKindExpression,
 		} {
-			if kind, err := addresses.Get(float64(index)).Kind(); err != nil || kind != expected {
+			if kind, err := addresses.Get(index).Kind(); err != nil || kind != expected {
 				log.Fatalf("IP address %d kind = %v, error = %v; want %v", index, kind, err, expected)
 			}
 		}
 		networking := infrastructure.CreateAseV3NetworkingConfigurationData()
-		for _, output := range []interface{ Count() (float64, error) }{
+		for _, output := range []interface{ Count() (int, error) }{
 			networking.ExternalInboundIPAddresses(), networking.InternalInboundIPAddresses(),
 			networking.LinuxOutboundIPAddresses(), networking.WindowsOutboundIPAddresses(),
 		} {
@@ -138,7 +138,9 @@ func main() {
 		log.Fatal(aspire.FormatError(worker.Err()))
 	}
 
-	api := builder.AddProject("api", "../Fake.Api/Fake.Api.csproj", &aspire.AddProjectOptions{LaunchProfileOrOptions: "https"}).
+	api := builder.AddDotnetProject("api", "../Fake.Api/Fake.Api.csproj", &aspire.AddDotnetProjectOptions{
+		Options: &aspire.DotnetProjectOptions{LaunchProfileName: aspire.StringPtr("https")},
+	}).
 		PublishAsAzureAppServiceWebsite(&aspire.PublishAsAzureAppServiceWebsiteOptions{
 			ConfigureSlot: func(_ aspire.AzureResourceInfrastructure, appServiceSlot aspire.WebSiteSlot) {
 				if err := appServiceSlot.ConfigureSlotSiteConfig(&aspire.AzureAppServiceSiteConfig{IsAlwaysOn: aspire.BoolPtr(false)}); err != nil {

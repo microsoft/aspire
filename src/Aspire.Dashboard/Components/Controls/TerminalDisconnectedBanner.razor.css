@@ -2,7 +2,7 @@
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 8px;
+    gap: var(--aspire-space-2);
     padding: 12px;
     border: 1px solid var(--colorNeutralStroke1);
     border-radius: var(--aspire-control-radius);

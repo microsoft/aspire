@@ -19,6 +19,25 @@ internal static class LegacyNavUrls
         url.StartsWith('/') && (url.Length == 1 || url[1] == '?') ? BasePath + url[1..] : BasePath + url;
 
     /// <summary>
+    /// Gets whether the legacy layout should rewrite a navigation to a base-relative path, for example "traces?x=1" or
+    /// "api/set-language?language=fr&amp;redirectUrl=%2Flegacy", to the same route below /legacy.
+    /// </summary>
+    /// <remarks>
+    /// Only Blazor pages that both experiences have live below /legacy. Paths that are already legacy routes, pages
+    /// that only exist once (login, error, terminal-window), and server endpoints must keep their URL. Server
+    /// endpoints such as /api/set-language are reached with a forced page load, so rewriting them to
+    /// /legacy/api/... ends on the not found page. Keep the excluded paths in sync with
+    /// DashboardExperienceRedirectMiddleware, which skips the same server paths.
+    /// </remarks>
+    public static bool ShouldRewriteToLegacy(string relativePath) =>
+        !relativePath.StartsWith("legacy", StringComparison.OrdinalIgnoreCase) &&
+        !relativePath.StartsWith("login", StringComparison.OrdinalIgnoreCase) &&
+        !relativePath.StartsWith("error", StringComparison.OrdinalIgnoreCase) &&
+        !relativePath.StartsWith("terminal-window", StringComparison.OrdinalIgnoreCase) &&
+        !relativePath.StartsWith("api/", StringComparison.OrdinalIgnoreCase) &&
+        !relativePath.StartsWith('_');
+
+    /// <summary>
     /// Gets whether a base-relative path without query is the previous experience's resources page. The legacy layout
     /// navigates to "legacy/" when it rewrites "/", and "legacy/resources" is the page's second route.
     /// </summary>

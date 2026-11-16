@@ -242,6 +242,6 @@ internal static class EntraIdApiProvisioning
         BicepOutputReference output => output.AsProvisioningParameter(infrastructure, symbolNames.ClientId(application)),
         ParameterResource parameter => parameter.AsProvisioningParameter(infrastructure, symbolNames.ClientId(application)),
         string clientId => clientId,
-        _ => throw new InvalidOperationException($"The client ID of '{application.Name}' is not configured. Call AddExistingEntraApplication with the registration's tenant ID and client ID.")
+        _ => throw new InvalidOperationException($"The client ID of '{application.Name}' is not configured. Call AddExistingEntraIdApplication with the registration's tenant ID and client ID.")
     };
 }

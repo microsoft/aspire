@@ -35,6 +35,7 @@ internal static class KnownProperties
         public const string ExcludeFromMcp = "resource.excludeFromMcp";
         public const string WaitingFor = "resource.waitingFor";
         public const string TraitPrefix = "resource.trait.";
+        public const string DisplayOrder = "resource.displayOrder";
     }
 
     public static class Container
@@ -111,6 +112,7 @@ internal static class KnownResourcePropertySortOrder
 
 internal static class KnownResourceTraits
 {
-    public const string DashboardTag = "Aspire_Dashboard_Tag";
-    public const string DashboardPosition = "Aspire_Dashboard_Position";
+    // Tags are not dashboard-only: they also appear in `aspire describe` output and other tooling, so the
+    // name has no "Dashboard" scope. The "Aspire_" prefix keeps it apart from user traits added with WithTrait.
+    public const string Tag = "Aspire_Tag";
 }

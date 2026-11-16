@@ -278,7 +278,7 @@ public class ExecutionConfigurationGathererTests
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var optional = builder.AddParameter("optional")
-            .WithOptional();
+            .AsOptional();
         var consumer = builder.AddContainer("consumer", "image")
             .WithEnvironment("OPTIONAL_VALUE", optional)
             .Resource;

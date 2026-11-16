@@ -257,7 +257,7 @@ $templates = @(
         ProjectName = 'AspireCliGoStarterSmoke'
         # Hosted macOS/Windows runners have no Linux container runtime. Keep full Redis
         # readiness on Linux; the other runners exercise the supported cache-free starter.
-        ExpectedResources = $(if ($IsLinux) { @('api', 'cache') } else { @('api') })
+        ExpectedResources = $(if ($IsLinux) { @('app', 'cache') } else { @('app') })
     }
 )
 
@@ -287,9 +287,9 @@ foreach ($template in $templates)
             $newStartedAt = Get-Date
             Write-DiagnosticMessage "${templateId}: invoking aspire new."
             $templateArguments = @()
-            if ($templateId -eq 'aspire-go-starter' -and -not $IsLinux)
+            if ($templateId -eq 'aspire-go-starter')
             {
-                $templateArguments = @('--use-redis-cache', 'false')
+                $templateArguments = @('--use-redis-cache', $(if ($IsLinux) { 'true' } else { 'false' }))
             }
             aspire new $templateId --name $projectName --output $projectRoot --channel "pr-$PRNumber" --non-interactive --nologo --suppress-agent-init @templateArguments
             Write-DiagnosticMessage "${templateId}: aspire new returned after $([math]::Round(((Get-Date) - $newStartedAt).TotalSeconds, 1)) seconds."
@@ -430,6 +430,15 @@ foreach ($template in $templates)
             finally
             {
                 Pop-Location
+            }
+
+            # The diagnostics artifact preserves the generated project but does not need installed
+            # dependencies. Remove them after all Aspire processes stop so upload-artifact cannot race
+            # a package installer cleanup and fail while stat-ing a disappearing node_modules directory.
+            foreach ($relativeDependencyPath in @('node_modules', 'frontend/node_modules'))
+            {
+                $dependencyPath = Join-Path $projectRoot $relativeDependencyPath
+                Remove-Item -Recurse -Force $dependencyPath -ErrorAction SilentlyContinue
             }
         }
 

@@ -90,6 +90,7 @@ public sealed class ConfigSourceTests(ITestOutputHelper output)
         {
             await context.CreateProjectWithGitAuthenticationAsync();
             await context.AssertSourceAppliedAsync("original");
+            await context.AssertGitOutputLoggedAsync();
         });
 
     [Fact]
