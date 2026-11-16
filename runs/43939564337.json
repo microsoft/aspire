@@ -1,0 +1,68 @@
+{
+  "run_id": 43939564337,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/43939564337",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-16T20:14:30Z",
+  "verdict": "flaky-test",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 22320,
+    "title": "Fix aspire agent init --non-interactive with multiple AppHosts",
+    "author": "aspire-repo-bot[bot]",
+    "state": "closed",
+    "head_branch": "backport/pr-22269-to-main",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/22320",
+    "merged_at": "2026-11-16T19:27:39Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "886b86265de13dc0b81361c33cf2570c4554138d",
+    "failed_sha": "e870a4c7c01e73ec63219e0717d63215f809b684",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "e870a4c7c01e73ec63219e0717d63215f809b684",
+        "message": "Fix aspire agent init --non-interactive with multiple AppHosts (#22320) Backport of #22269 to main /cc @ellahathaway ## Customer Impact ## Testing ## Risk ## Regression? --------- Co-authored-by: Ella Hathaway <ellahathaway@microsoft.com> Co-authored-by: Copilot App <223556219+Copilot@users.noreply.github.com>",
+        "html_url": "https://github.com/microsoft/aspire/commit/e870a4c7c01e73ec63219e0717d63215f809b684",
+        "pull_request": {
+          "number": 22320,
+          "title": "Fix aspire agent init --non-interactive with multiple AppHosts",
+          "url": "https://github.com/microsoft/aspire/pull/22320",
+          "merged_at": "2026-11-16T19:27:39Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, tree-actions)",
+      "id": 133568987353,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/43939564337/job/133568987353",
+      "classification": "flaky-test",
+      "reason": "Extension E2E test failed on locating .monaco-menu UI element; intermittent UI timing.",
+      "failed_steps": [
+        "Run extension E2E tests"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire tree action command E2E routes view, copy, endpoint, log, and resource commands through tree handlers",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, tree-actions)",
+      "error": "no such element: Unable to locate element: {\"method\":\"css selector\",\"selector\":\".monaco-menu\"}\n  (Session info: chrome=148.0.7778.280)",
+      "stack_trace": "NoSuchElementError: no such element: Unable to locate element: {\"method\":\"css selector\",\"selector\":\".monaco-menu\"}\n  (Session info: chrome=148.0.7778.280)\n    at Object.throwDecodedError (node_modules\\selenium-webdriver\\lib\\error.js:523:15)\n    at parseHttpResponse (node_modules\\selenium-webdriver\\lib\\http.js:526:13)\n    at Executor.execute (node_modules\\selenium-webdriver\\lib\\http.js:458:28)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async Driver.execute (node_modules\\selenium-webdriver\\lib\\webdriver.js:745:17)\n    at async toWireValue (node_modules\\selenium-webdriver\\lib\\webdriver.js:149:15)\n    at async D:\\a\\aspire\\aspire\\extension\\node_modules\\selenium-webdriver\\lib\\webdriver.js:195:16\n    at async forEachKey (node_modules\\selenium-webdriver\\lib\\webdriver.js:189:9)\n    at async convertKeys (node_modules\\selenium-webdriver\\lib\\webdriver.js:194:3)\n    at async Driver.execute (node_modules\\selenium-webdriver\\lib\\webdriver.js:743:22)",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "NoSuchElement for .monaco-menu in a UI automation test, matching a previously recorded intermittent failure.",
+      "job_id": 133568987353,
+      "result_file": "00001.json",
+      "result_format": "mocha"
+    }
+  ],
+  "causes": [
+    "vscode-e2e-windows-tree-actions-monaco-menu-missing"
+  ]
+}
