@@ -65,7 +65,7 @@ public partial class ResourcesTests
         void AssertDescription(string? missingParameters)
         {
             var description = missingParameters is not null
-                ? $"{stateDescription} {string.Format(CultureInfo.InvariantCulture, Columns.StateColumnResourceMissingParameters, missingParameters)}"
+                ? string.Format(CultureInfo.InvariantCulture, Columns.StateColumnResourceMissingParameters, missingParameters)
                 : stateDescription;
             var expectedDescriptions = missingParameters is not null || state is KnownResourceState.Waiting ? new[] { description } : [];
             Assert.Equal(expectedDescriptions, cut.FindComponent<ResourceDetails>().Instance.FilteredResourceProperties

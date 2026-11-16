@@ -375,7 +375,7 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
         _displayedResourcePropertyViewModels.RemoveAll(property =>
             string.Equals(property.KnownProperty?.Key, StateDescriptionPropertyKey, StringComparisons.ResourcePropertyName));
         var stateViewModel = ResourceStateViewModel.GetStateViewModel(resource, ColumnsLoc);
-        var stateDescription = ResourceStateViewModel.GetResourceStateTooltip(resource, ColumnsLoc, ResourceByName.Values);
+        var stateDescription = ResourceStateViewModel.GetResourceStateDescription(resource, ColumnsLoc, ResourceByName.Values);
 
         if (string.IsNullOrWhiteSpace(stateDescription) || string.Equals(stateDescription, stateViewModel.Text, StringComparison.Ordinal))
         {

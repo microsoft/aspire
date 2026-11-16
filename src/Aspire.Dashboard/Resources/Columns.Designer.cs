@@ -134,7 +134,7 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Referenced parameters without values: {0}. Set their values in Parameters. Dependent resources may be unable to start until these values are supplied..
+        ///   Looks up a localized string similar to Missing parameter values: {0}. Set values in Parameters..
         /// </summary>
         public static string StateColumnResourceMissingParameters {
             get {

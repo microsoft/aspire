@@ -134,10 +134,10 @@ public class ResourceStateViewModelTests
     }
 
     [Theory]
-    [InlineData(KnownResourceState.Starting, "Starting")]
+    [InlineData(KnownResourceState.Starting, null)]
     [InlineData(KnownResourceState.FailedToStart, "Localized:StateColumnResourceFailedToStart:Container")]
     [InlineData(KnownResourceState.Waiting, "Localized:StateColumnResourceWaiting")]
-    public void BlockedResourceTooltipNamesMissingReferencedParameters(KnownResourceState state, string stateTooltip)
+    public void BlockedResourceTooltipNamesMissingReferencedParameters(KnownResourceState state, string? stateTooltip)
     {
         var parameter = ModelTestHelpers.CreateResource(
             resourceName: "optional-selector",
@@ -155,10 +155,12 @@ public class ResourceStateViewModelTests
             state: state,
             relationships: [new(parameter.Name, KnownRelationshipTypes.Reference)]);
 
-        var tooltip = ResourceStateViewModel.GetResourceStateTooltip(
-            resource, new TestStringLocalizer<Columns>(), [resource, parameter]);
+        var localizer = new TestStringLocalizer<Columns>();
+        var tooltip = ResourceStateViewModel.GetResourceStateTooltip(resource, localizer, [resource, parameter]);
+        var missingParameterDescription = $"Localized:{nameof(Columns.StateColumnResourceMissingParameters)}:optional-selector";
 
-        Assert.Equal($"{stateTooltip} Localized:{nameof(Columns.StateColumnResourceMissingParameters)}:optional-selector", tooltip);
+        Assert.Equal(stateTooltip is null ? missingParameterDescription : $"{stateTooltip}\n{missingParameterDescription}", tooltip);
+        Assert.Equal(missingParameterDescription, ResourceStateViewModel.GetResourceStateDescription(resource, localizer, [resource, parameter]));
     }
 
     [Fact]
@@ -178,7 +180,7 @@ public class ResourceStateViewModelTests
             frontend, new TestStringLocalizer<Columns>(), [frontend, api, parameter]);
 
         Assert.Equal(
-            $"Localized:{nameof(Columns.StateColumnResourceWaiting)} Localized:{nameof(Columns.StateColumnResourceMissingParameters)}:optional-selector",
+            $"Localized:{nameof(Columns.StateColumnResourceWaiting)}\nLocalized:{nameof(Columns.StateColumnResourceMissingParameters)}:optional-selector",
             tooltip);
     }
 
@@ -205,7 +207,7 @@ public class ResourceStateViewModelTests
             frontend, new TestStringLocalizer<Columns>(), [frontend, firstApi, secondApi, secondParameter, firstParameter]);
 
         Assert.Equal(
-            $"Localized:{nameof(Columns.StateColumnResourceWaiting)} Localized:{nameof(Columns.StateColumnResourceMissingParameters)}:first-selector, second-selector",
+            $"Localized:{nameof(Columns.StateColumnResourceWaiting)}\nLocalized:{nameof(Columns.StateColumnResourceMissingParameters)}:first-selector, second-selector",
             tooltip);
 
         var resources = new CopyToThrowingResourceCollection(frontend, firstApi, secondApi, secondParameter, firstParameter);
@@ -241,7 +243,7 @@ public class ResourceStateViewModelTests
             consumer, new TestStringLocalizer<Columns>(), [consumer, database, server, parameter]);
 
         Assert.Equal(
-            $"Localized:{nameof(Columns.StateColumnResourceWaitingFor)}:database, server Localized:{nameof(Columns.StateColumnResourceMissingParameters)}:password",
+            $"Localized:{nameof(Columns.StateColumnResourceWaitingFor)}:database, server\nLocalized:{nameof(Columns.StateColumnResourceMissingParameters)}:password",
             tooltip);
     }
 

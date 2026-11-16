@@ -104,17 +104,36 @@ internal class ResourceStateViewModel(string text, Icon icon, Color color)
     internal static string GetResourceStateTooltip(ResourceViewModel resource, IStringLocalizer<Columns> loc, IEnumerable<ResourceViewModel>? allResources = null)
     {
         var tooltip = GetResourceStateTooltipCore(resource, loc, allResources);
+        var missingParameterDescription = GetMissingParameterDescription(resource, loc, allResources);
+        if (missingParameterDescription is not null)
+        {
+            return string.Equals(tooltip, GetStateText(resource, loc), StringComparison.Ordinal)
+                ? missingParameterDescription
+                : $"{tooltip}\n{missingParameterDescription}";
+        }
+
+        return tooltip;
+    }
+
+    internal static string GetResourceStateDescription(ResourceViewModel resource, IStringLocalizer<Columns> loc, IEnumerable<ResourceViewModel> allResources)
+    {
+        return GetMissingParameterDescription(resource, loc, allResources)
+            ?? GetResourceStateTooltipCore(resource, loc, allResources);
+    }
+
+    private static string? GetMissingParameterDescription(ResourceViewModel resource, IStringLocalizer<Columns> loc, IEnumerable<ResourceViewModel>? allResources)
+    {
         if (allResources is not null
             && resource.KnownState is KnownResourceState.Starting or KnownResourceState.FailedToStart or KnownResourceState.Waiting)
         {
             var missingParameters = resource.GetMissingParameterDependencies(allResources);
             if (missingParameters.Length > 0)
             {
-                return $"{tooltip} {loc.GetString(nameof(Columns.StateColumnResourceMissingParameters), string.Join(", ", missingParameters))}";
+                return loc.GetString(nameof(Columns.StateColumnResourceMissingParameters), string.Join(", ", missingParameters));
             }
         }
 
-        return tooltip;
+        return null;
     }
 
     private static string GetResourceStateTooltipCore(ResourceViewModel resource, IStringLocalizer<Columns> loc, IEnumerable<ResourceViewModel>? allResources)
