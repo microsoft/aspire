@@ -3,9 +3,10 @@
     "path": "apphost.mts"
   },
   "packages": {
-    "Aspire.Hosting.Python": "13.3.0-preview.1.26167.8",
-    "Aspire.Hosting.PostgreSQL": "13.3.0-preview.1.26167.8",
-    "Aspire.Hosting.JavaScript": "13.3.0-preview.1.26167.8"
+    "Aspire.Hosting.Python": "",
+    "Aspire.Hosting.PostgreSQL": "",
+    "Aspire.Hosting.JavaScript": "",
+    "Aspire.Hosting.Dotnet": ""
   },
   "profiles": {
     "https": {
