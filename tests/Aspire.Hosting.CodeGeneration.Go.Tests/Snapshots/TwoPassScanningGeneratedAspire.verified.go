@@ -2865,11 +2865,6 @@ type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	//   - options: Optional parameters; see [WithHttpsDeveloperCertificateOptions].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithHttpsDeveloperCertificate(options ...*WithHttpsDeveloperCertificateOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 
 	// WithHttpsEndpoint adds an HTTPS endpoint
@@ -3382,11 +3377,6 @@ type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	//	.WithoutHttpsCertificate();
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithoutHttpsCertificate() Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 
 	// Err returns the first error recorded on this wrapper, or nil if the wrapper
@@ -6346,11 +6336,6 @@ type CSharpAppResource interface {
 	//   - options: Optional parameters; see [WithHttpsDeveloperCertificateOptions].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithHttpsDeveloperCertificate(options ...*WithHttpsDeveloperCertificateOptions) CSharpAppResource
 
 	// WithHttpsEndpoint adds an HTTPS endpoint
@@ -6805,11 +6790,6 @@ type CSharpAppResource interface {
 	//	.WithoutHttpsCertificate();
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithoutHttpsCertificate() CSharpAppResource
 
 	// Err returns the first error recorded on this wrapper, or nil if the wrapper
@@ -12615,11 +12595,6 @@ type ContainerResource interface {
 	//   - options: Optional parameters; see [WithHttpsDeveloperCertificateOptions].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithHttpsDeveloperCertificate(options ...*WithHttpsDeveloperCertificateOptions) ContainerResource
 
 	// WithHttpsEndpoint adds an HTTPS endpoint
@@ -13129,11 +13104,6 @@ type ContainerResource interface {
 	//	.WithoutHttpsCertificate();
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithoutHttpsCertificate() ContainerResource
 
 	// Err returns the first error recorded on this wrapper, or nil if the wrapper
@@ -18028,11 +17998,6 @@ type DotnetToolResource interface {
 	//   - options: Optional parameters; see [WithHttpsDeveloperCertificateOptions].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithHttpsDeveloperCertificate(options ...*WithHttpsDeveloperCertificateOptions) DotnetToolResource
 
 	// WithHttpsEndpoint adds an HTTPS endpoint
@@ -18559,11 +18524,6 @@ type DotnetToolResource interface {
 	//	.WithoutHttpsCertificate();
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithoutHttpsCertificate() DotnetToolResource
 
 	// Err returns the first error recorded on this wrapper, or nil if the wrapper
@@ -22405,11 +22365,6 @@ type ExecutableResource interface {
 	//   - options: Optional parameters; see [WithHttpsDeveloperCertificateOptions].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithHttpsDeveloperCertificate(options ...*WithHttpsDeveloperCertificateOptions) ExecutableResource
 
 	// WithHttpsEndpoint adds an HTTPS endpoint
@@ -22863,11 +22818,6 @@ type ExecutableResource interface {
 	//	.WithoutHttpsCertificate();
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithoutHttpsCertificate() ExecutableResource
 
 	// Err returns the first error recorded on this wrapper, or nil if the wrapper
@@ -32172,11 +32122,6 @@ type ProjectResource interface {
 	//   - options: Optional parameters; see [WithHttpsDeveloperCertificateOptions].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithHttpsDeveloperCertificate(options ...*WithHttpsDeveloperCertificateOptions) ProjectResource
 
 	// WithHttpsEndpoint adds an HTTPS endpoint
@@ -32631,11 +32576,6 @@ type ProjectResource interface {
 	//	.WithoutHttpsCertificate();
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithoutHttpsCertificate() ProjectResource
 
 	// Err returns the first error recorded on this wrapper, or nil if the wrapper
@@ -37329,11 +37269,6 @@ type TestDatabaseResource interface {
 	//   - options: Optional parameters; see [WithHttpsDeveloperCertificateOptions].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithHttpsDeveloperCertificate(options ...*WithHttpsDeveloperCertificateOptions) TestDatabaseResource
 
 	// WithHttpsEndpoint adds an HTTPS endpoint
@@ -37843,11 +37778,6 @@ type TestDatabaseResource interface {
 	//	.WithoutHttpsCertificate();
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithoutHttpsCertificate() TestDatabaseResource
 
 	// Err returns the first error recorded on this wrapper, or nil if the wrapper
@@ -41096,11 +41026,6 @@ type TestRedisResource interface {
 	//   - options: Optional parameters; see [WithHttpsDeveloperCertificateOptions].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithHttpsDeveloperCertificate(options ...*WithHttpsDeveloperCertificateOptions) TestRedisResource
 
 	// WithHttpsEndpoint adds an HTTPS endpoint
@@ -41651,11 +41576,6 @@ type TestRedisResource interface {
 	//	.WithoutHttpsCertificate();
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithoutHttpsCertificate() TestRedisResource
 
 	// GetMetadata gets the metadata for the resource

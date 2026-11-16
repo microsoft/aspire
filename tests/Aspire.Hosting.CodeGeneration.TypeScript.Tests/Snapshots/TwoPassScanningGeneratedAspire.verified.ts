@@ -15902,7 +15902,6 @@ export interface ContainerResource {
      * ```
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withHttpsDeveloperCertificate(options?: WithHttpsDeveloperCertificateOptions): ContainerResourcePromise;
     /**
@@ -15914,7 +15913,6 @@ export interface ContainerResource {
      * .WithoutHttpsCertificate();
      * ```
      * @returns The resource builder.
-     * @experimental
      */
     withoutHttpsCertificate(): ContainerResourcePromise;
     /**
@@ -16770,7 +16768,6 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      * ```
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withHttpsDeveloperCertificate(options?: WithHttpsDeveloperCertificateOptions): ContainerResourcePromise;
     /**
@@ -16782,7 +16779,6 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      * .WithoutHttpsCertificate();
      * ```
      * @returns The resource builder.
-     * @experimental
      */
     withoutHttpsCertificate(): ContainerResourcePromise;
     /**
@@ -18831,7 +18827,6 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
      * ```
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withHttpsDeveloperCertificate(options?: WithHttpsDeveloperCertificateOptions): ContainerResourcePromise {
         let password = options?.password;
@@ -18857,7 +18852,6 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
      * .WithoutHttpsCertificate();
      * ```
      * @returns The resource builder.
-     * @experimental
      */
     withoutHttpsCertificate(): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._withoutHttpsCertificateInternal(), this._client);
@@ -20515,7 +20509,6 @@ export interface CSharpAppResource {
      * ```
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withHttpsDeveloperCertificate(options?: WithHttpsDeveloperCertificateOptions): CSharpAppResourcePromise;
     /**
@@ -20527,7 +20520,6 @@ export interface CSharpAppResource {
      * .WithoutHttpsCertificate();
      * ```
      * @returns The resource builder.
-     * @experimental
      */
     withoutHttpsCertificate(): CSharpAppResourcePromise;
     /**
@@ -21223,7 +21215,6 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      * ```
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withHttpsDeveloperCertificate(options?: WithHttpsDeveloperCertificateOptions): CSharpAppResourcePromise;
     /**
@@ -21235,7 +21226,6 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      * .WithoutHttpsCertificate();
      * ```
      * @returns The resource builder.
-     * @experimental
      */
     withoutHttpsCertificate(): CSharpAppResourcePromise;
     /**
@@ -22872,7 +22862,6 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
      * ```
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withHttpsDeveloperCertificate(options?: WithHttpsDeveloperCertificateOptions): CSharpAppResourcePromise {
         let password = options?.password;
@@ -22898,7 +22887,6 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
      * .WithoutHttpsCertificate();
      * ```
      * @returns The resource builder.
-     * @experimental
      */
     withoutHttpsCertificate(): CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._withoutHttpsCertificateInternal(), this._client);
@@ -24586,7 +24574,6 @@ export interface DotnetToolResource {
      * ```
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withHttpsDeveloperCertificate(options?: WithHttpsDeveloperCertificateOptions): DotnetToolResourcePromise;
     /**
@@ -24598,7 +24585,6 @@ export interface DotnetToolResource {
      * .WithoutHttpsCertificate();
      * ```
      * @returns The resource builder.
-     * @experimental
      */
     withoutHttpsCertificate(): DotnetToolResourcePromise;
     /**
@@ -25330,7 +25316,6 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      * ```
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withHttpsDeveloperCertificate(options?: WithHttpsDeveloperCertificateOptions): DotnetToolResourcePromise;
     /**
@@ -25342,7 +25327,6 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      * .WithoutHttpsCertificate();
      * ```
      * @returns The resource builder.
-     * @experimental
      */
     withoutHttpsCertificate(): DotnetToolResourcePromise;
     /**
@@ -27077,7 +27061,6 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
      * ```
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withHttpsDeveloperCertificate(options?: WithHttpsDeveloperCertificateOptions): DotnetToolResourcePromise {
         let password = options?.password;
@@ -27103,7 +27086,6 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
      * .WithoutHttpsCertificate();
      * ```
      * @returns The resource builder.
-     * @experimental
      */
     withoutHttpsCertificate(): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._withoutHttpsCertificateInternal(), this._client);
@@ -28770,7 +28752,6 @@ export interface ExecutableResource {
      * ```
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withHttpsDeveloperCertificate(options?: WithHttpsDeveloperCertificateOptions): ExecutableResourcePromise;
     /**
@@ -28782,7 +28763,6 @@ export interface ExecutableResource {
      * .WithoutHttpsCertificate();
      * ```
      * @returns The resource builder.
-     * @experimental
      */
     withoutHttpsCertificate(): ExecutableResourcePromise;
     /**
@@ -29475,7 +29455,6 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      * ```
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withHttpsDeveloperCertificate(options?: WithHttpsDeveloperCertificateOptions): ExecutableResourcePromise;
     /**
@@ -29487,7 +29466,6 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      * .WithoutHttpsCertificate();
      * ```
      * @returns The resource builder.
-     * @experimental
      */
     withoutHttpsCertificate(): ExecutableResourcePromise;
     /**
@@ -31112,7 +31090,6 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
      * ```
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withHttpsDeveloperCertificate(options?: WithHttpsDeveloperCertificateOptions): ExecutableResourcePromise {
         let password = options?.password;
@@ -31138,7 +31115,6 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
      * .WithoutHttpsCertificate();
      * ```
      * @returns The resource builder.
-     * @experimental
      */
     withoutHttpsCertificate(): ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._withoutHttpsCertificateInternal(), this._client);
@@ -37510,7 +37486,6 @@ export interface ProjectResource {
      * ```
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withHttpsDeveloperCertificate(options?: WithHttpsDeveloperCertificateOptions): ProjectResourcePromise;
     /**
@@ -37522,7 +37497,6 @@ export interface ProjectResource {
      * .WithoutHttpsCertificate();
      * ```
      * @returns The resource builder.
-     * @experimental
      */
     withoutHttpsCertificate(): ProjectResourcePromise;
     /**
@@ -38218,7 +38192,6 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      * ```
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withHttpsDeveloperCertificate(options?: WithHttpsDeveloperCertificateOptions): ProjectResourcePromise;
     /**
@@ -38230,7 +38203,6 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      * .WithoutHttpsCertificate();
      * ```
      * @returns The resource builder.
-     * @experimental
      */
     withoutHttpsCertificate(): ProjectResourcePromise;
     /**
@@ -39868,7 +39840,6 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
      * ```
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withHttpsDeveloperCertificate(options?: WithHttpsDeveloperCertificateOptions): ProjectResourcePromise {
         let password = options?.password;
@@ -39894,7 +39865,6 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
      * .WithoutHttpsCertificate();
      * ```
      * @returns The resource builder.
-     * @experimental
      */
     withoutHttpsCertificate(): ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._withoutHttpsCertificateInternal(), this._client);
@@ -41709,7 +41679,6 @@ export interface TestDatabaseResource {
      * ```
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withHttpsDeveloperCertificate(options?: WithHttpsDeveloperCertificateOptions): TestDatabaseResourcePromise;
     /**
@@ -41721,7 +41690,6 @@ export interface TestDatabaseResource {
      * .WithoutHttpsCertificate();
      * ```
      * @returns The resource builder.
-     * @experimental
      */
     withoutHttpsCertificate(): TestDatabaseResourcePromise;
     /**
@@ -42577,7 +42545,6 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      * ```
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withHttpsDeveloperCertificate(options?: WithHttpsDeveloperCertificateOptions): TestDatabaseResourcePromise;
     /**
@@ -42589,7 +42556,6 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      * .WithoutHttpsCertificate();
      * ```
      * @returns The resource builder.
-     * @experimental
      */
     withoutHttpsCertificate(): TestDatabaseResourcePromise;
     /**
@@ -44637,7 +44603,6 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
      * ```
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withHttpsDeveloperCertificate(options?: WithHttpsDeveloperCertificateOptions): TestDatabaseResourcePromise {
         let password = options?.password;
@@ -44663,7 +44628,6 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
      * .WithoutHttpsCertificate();
      * ```
      * @returns The resource builder.
-     * @experimental
      */
     withoutHttpsCertificate(): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._withoutHttpsCertificateInternal(), this._client);
@@ -46498,7 +46462,6 @@ export interface TestRedisResource {
      * ```
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withHttpsDeveloperCertificate(options?: WithHttpsDeveloperCertificateOptions): TestRedisResourcePromise;
     /**
@@ -46510,7 +46473,6 @@ export interface TestRedisResource {
      * .WithoutHttpsCertificate();
      * ```
      * @returns The resource builder.
-     * @experimental
      */
     withoutHttpsCertificate(): TestRedisResourcePromise;
     /**
@@ -47450,7 +47412,6 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      * ```
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withHttpsDeveloperCertificate(options?: WithHttpsDeveloperCertificateOptions): TestRedisResourcePromise;
     /**
@@ -47462,7 +47423,6 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      * .WithoutHttpsCertificate();
      * ```
      * @returns The resource builder.
-     * @experimental
      */
     withoutHttpsCertificate(): TestRedisResourcePromise;
     /**
@@ -49614,7 +49574,6 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
      * ```
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withHttpsDeveloperCertificate(options?: WithHttpsDeveloperCertificateOptions): TestRedisResourcePromise {
         let password = options?.password;
@@ -49640,7 +49599,6 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
      * .WithoutHttpsCertificate();
      * ```
      * @returns The resource builder.
-     * @experimental
      */
     withoutHttpsCertificate(): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._withoutHttpsCertificateInternal(), this._client);
@@ -51752,7 +51710,6 @@ export interface TestVaultResource {
      * ```
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withHttpsDeveloperCertificate(options?: WithHttpsDeveloperCertificateOptions): TestVaultResourcePromise;
     /**
@@ -51764,7 +51721,6 @@ export interface TestVaultResource {
      * .WithoutHttpsCertificate();
      * ```
      * @returns The resource builder.
-     * @experimental
      */
     withoutHttpsCertificate(): TestVaultResourcePromise;
     /**
@@ -52622,7 +52578,6 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      * ```
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withHttpsDeveloperCertificate(options?: WithHttpsDeveloperCertificateOptions): TestVaultResourcePromise;
     /**
@@ -52634,7 +52589,6 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      * .WithoutHttpsCertificate();
      * ```
      * @returns The resource builder.
-     * @experimental
      */
     withoutHttpsCertificate(): TestVaultResourcePromise;
     /**
@@ -54684,7 +54638,6 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
      * ```
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withHttpsDeveloperCertificate(options?: WithHttpsDeveloperCertificateOptions): TestVaultResourcePromise {
         let password = options?.password;
@@ -54710,7 +54663,6 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
      * .WithoutHttpsCertificate();
      * ```
      * @returns The resource builder.
-     * @experimental
      */
     withoutHttpsCertificate(): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._withoutHttpsCertificateInternal(), this._client);
@@ -59675,7 +59627,6 @@ export interface ResourceWithEnvironment {
      * ```
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withHttpsDeveloperCertificate(options?: WithHttpsDeveloperCertificateOptions): ResourceWithEnvironmentPromise;
     /**
@@ -59687,7 +59638,6 @@ export interface ResourceWithEnvironment {
      * .WithoutHttpsCertificate();
      * ```
      * @returns The resource builder.
-     * @experimental
      */
     withoutHttpsCertificate(): ResourceWithEnvironmentPromise;
     /**
@@ -59793,7 +59743,6 @@ export interface ResourceWithEnvironmentPromise extends PromiseLike<ResourceWith
      * ```
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withHttpsDeveloperCertificate(options?: WithHttpsDeveloperCertificateOptions): ResourceWithEnvironmentPromise;
     /**
@@ -59805,7 +59754,6 @@ export interface ResourceWithEnvironmentPromise extends PromiseLike<ResourceWith
      * .WithoutHttpsCertificate();
      * ```
      * @returns The resource builder.
-     * @experimental
      */
     withoutHttpsCertificate(): ResourceWithEnvironmentPromise;
     /**
@@ -60038,7 +59986,6 @@ class ResourceWithEnvironmentImpl extends ResourceBuilderBase<IResourceWithEnvir
      * ```
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withHttpsDeveloperCertificate(options?: WithHttpsDeveloperCertificateOptions): ResourceWithEnvironmentPromise {
         let password = options?.password;
@@ -60064,7 +60011,6 @@ class ResourceWithEnvironmentImpl extends ResourceBuilderBase<IResourceWithEnvir
      * .WithoutHttpsCertificate();
      * ```
      * @returns The resource builder.
-     * @experimental
      */
     withoutHttpsCertificate(): ResourceWithEnvironmentPromise {
         return new ResourceWithEnvironmentPromiseImpl(this._withoutHttpsCertificateInternal(), this._client);

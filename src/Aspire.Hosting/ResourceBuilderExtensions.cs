@@ -5,6 +5,7 @@
 
 #pragma warning disable ASPIREPERSISTENCE001 // Persistence annotation APIs are experimental.
 #pragma warning disable ASPIREEXTENSION001 // Debug support annotations are experimental.
+#pragma warning disable ASPIRECERTIFICATES001 // HTTPS certificate annotations are experimental.
 
 using System.Diagnostics.CodeAnalysis;
 using System.Net.Http.Headers;
@@ -4578,9 +4579,6 @@ public static class ResourceBuilderExtensions
         });
     }
 
-    // Certificate selection is stable; its annotation remains an experimental integration-authoring contract.
-#pragma warning disable ASPIRECERTIFICATES001
-
     /// <summary>
     /// Indicates that a resource should use the developer certificate key pair for HTTPS endpoints at run time.
     /// Currently this indicates use of the ASP.NET Core developer certificate. The developer certificate will only be used
@@ -4685,8 +4683,6 @@ public static class ResourceBuilderExtensions
 
         return builder.WithAnnotation(annotation, ResourceAnnotationMutationBehavior.Replace);
     }
-
-#pragma warning restore ASPIRECERTIFICATES001
 
     /// <summary>
     /// Adds a callback that allows configuring the resource to use a specific HTTPS/TLS certificate key pair for server authentication.
