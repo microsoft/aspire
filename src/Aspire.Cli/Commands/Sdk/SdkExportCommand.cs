@@ -6,6 +6,7 @@ using System.Globalization;
 using System.Text.Json;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.Packaging;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
@@ -191,6 +192,10 @@ internal sealed class SdkExportCommand : BaseCommand
             var prepareResult = await appHostServerProject.PrepareAsync(
                 ExecutionContext.IdentityVersion,
                 integrations,
+                // This temporary project restores tools for the CLI itself, not an
+                // AppHost with its own channel policy. Local builds retain ambient sources.
+                requestedChannel: string.Equals(ExecutionContext.IdentityChannel, PackageChannelNames.Local, StringComparisons.ChannelName)
+                    ? null : ExecutionContext.IdentityChannel,
                 cancellationToken: cancellationToken);
 
             if (!prepareResult.Success)
