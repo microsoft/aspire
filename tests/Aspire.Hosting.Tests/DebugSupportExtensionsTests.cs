@@ -358,8 +358,8 @@ public class DebugSupportExtensionsTests(ITestOutputHelper outputHelper)
     [Fact]
     public void SupportsDebuggingTreatsProjectAsSupportedWhenTheIdeSendsNoCapabilityList()
     {
-        // Visual Studio does not send DEBUG_SESSION_INFO at all. It launches loaded project files natively,
-        // so "project" stays implicitly supported instead of using a plain process.
+        // Legacy IDE sessions can omit DEBUG_SESSION_INFO. Loaded project files keep implicit "project" support
+        // instead of using a plain process.
         using var builder = TestDistributedApplicationBuilder.Create();
 #pragma warning disable CS0618 // Retain legacy ProjectResource IDE launch-configuration compatibility.
         var project = builder.AddProject<Projects.ServiceA>("proj", launchProfileName: "http");
