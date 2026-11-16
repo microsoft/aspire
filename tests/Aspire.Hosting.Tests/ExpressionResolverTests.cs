@@ -164,6 +164,16 @@ public class ExpressionResolverTests
     [InlineData(true, false, "http://foo.dev.localhost:18889/path", "http://host.docker.internal:18889/path")]
     [InlineData(true, false, "http://foo.localhost:18889", "http://host.docker.internal:18889")]
     [InlineData(true, false, "http://notlocalhost:18889", "http://notlocalhost:18889")]
+    [InlineData(true, false, "http://0.0.0.0:18889/path", "http://host.docker.internal:18889/path")]
+    [InlineData(true, true, "http://0.0.0.0:18889/path", "http://host.docker.internal:18889/path")]
+    [InlineData(true, false, "http://[::]:18889/path", "http://host.docker.internal:18889/path")]
+    [InlineData(true, true, "http://[::]:18889/path", "http://host.docker.internal:18889/path")]
+    [InlineData(true, false, "http://*:18889/path?value=1", "http://host.docker.internal:18889/path?value=1")]
+    [InlineData(true, true, "http://+:18889/path?value=1", "http://host.docker.internal:18889/path?value=1")]
+    [InlineData(false, false, "http://0.0.0.0:18889/path", "http://0.0.0.0:18889/path")]
+    [InlineData(false, true, "http://*:18889/path", "http://*:18889/path")]
+    [InlineData(false, true, "http://+:18889/path", "http://+:18889/path")]
+    [InlineData(true, false, "http://example.com:18889/path/*", "http://example.com:18889/path/*")]
     public async Task HostUrlPropertyGetsResolved(bool targetIsContainer, bool withTunnel, string hostUrlVal, string expectedValue)
     {
         var builder = DistributedApplication.CreateBuilder();
@@ -187,6 +197,17 @@ public class ExpressionResolverTests
 
         var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(test.Resource, DistributedApplicationOperation.Run, testServiceProvider).DefaultTimeout();
         Assert.Equal(expectedValue, config["envname"]);
+    }
+
+    [Theory]
+    [InlineData("http://0.0.0.0:18889/path")]
+    [InlineData("http://[::]:18889/path")]
+    [InlineData("http://*:18889/path")]
+    [InlineData("http://+:18889/path")]
+    public void HostUrlRecognizesWildcardListenerPorts(string url)
+    {
+        Assert.True(HostUrl.TryGetLocalHostPort(url, out var port));
+        Assert.Equal(18889, port);
     }
 
     [Fact]
