@@ -34,6 +34,11 @@ jobs:
     if: ${{ github.repository == 'microsoft/aspire' }}
     runs-on: ${{ matrix.targets.runner }}
     strategy:
+      # Callers such as specialized-test-runner.yml build several RIDs in one matrix and
+      # intentionally tolerate a partial failure: jobs needing a failed RID's packages fail,
+      # while others still run. The default fail-fast would cancel the healthy RIDs too,
+      # turning one platform's build break into missing artifacts for unrelated platforms.
+      fail-fast: false
       matrix:
         targets: ${{ fromJson(inputs.targets) }}
     # Compute the Aspire CLI channel from the triggering GH Actions event,
