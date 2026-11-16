@@ -456,6 +456,13 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
         await AgentConfigurationTestContext.WriteAsync(skillPath, skill);
         var prompts = new List<string>();
         var warnings = new List<string>();
+        var expectedWarnings = new[]
+        {
+            AgentCommandStrings.InitCommand_SkillSourcesExplanation,
+            $"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]",
+            string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_LocalSkillsConflict,
+                "  .agents/skills/aspire/SKILL.md")
+        };
         var interaction = new TestInteractionService
         {
             DisplayMessageCallback = (emoji, message, _) =>

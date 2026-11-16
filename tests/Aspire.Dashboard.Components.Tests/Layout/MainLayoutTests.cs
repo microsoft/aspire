@@ -198,7 +198,6 @@ public partial class MainLayoutTests : DashboardTestContext
                 // The view preferences are read with the layout. None are stored here.
                 case BrowserStorageKeys.ResourceListDensity:
                 case BrowserStorageKeys.GroupOverview:
-                case BrowserStorageKeys.RecordingsStyle:
                     return (false, null);
                 default:
                     throw new InvalidOperationException("Unexpected key.");
@@ -254,7 +253,6 @@ public partial class MainLayoutTests : DashboardTestContext
                 // The view preferences are read with the layout. None are stored here.
                 case BrowserStorageKeys.ResourceListDensity:
                 case BrowserStorageKeys.GroupOverview:
-                case BrowserStorageKeys.RecordingsStyle:
                     return (false, null);
                 default:
                     throw new InvalidOperationException("Unexpected key.");
@@ -295,7 +293,6 @@ public partial class MainLayoutTests : DashboardTestContext
                 // The view preferences are read with the layout. None are stored here.
                 case BrowserStorageKeys.ResourceListDensity:
                 case BrowserStorageKeys.GroupOverview:
-                case BrowserStorageKeys.RecordingsStyle:
                     return (false, null);
                 default:
                     throw new InvalidOperationException("Unexpected key.");
@@ -340,7 +337,7 @@ public partial class MainLayoutTests : DashboardTestContext
                     return (true, true);
                 }
 
-                if (key is BrowserStorageKeys.ResourceListDensity or BrowserStorageKeys.GroupOverview or BrowserStorageKeys.RecordingsStyle)
+                if (key is BrowserStorageKeys.ResourceListDensity or BrowserStorageKeys.GroupOverview)
                 {
                     return (false, null);
                 }
@@ -482,11 +479,11 @@ public partial class MainLayoutTests : DashboardTestContext
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public void RecordingsMenuSetting_ShowsTheLiveRunMenuInsteadOfTheRecordingsButton(bool isDesktop)
+    public void ObsoleteRecordingsStylePreference_DoesNotChangeRunSelector(bool isDesktop)
     {
         var localStorage = new TestLocalStorage
         {
-            OnGetUnprotectedAsync = key => key == BrowserStorageKeys.RecordingsStyle ? (true, "Menu") : (false, null)
+            OnGetUnprotectedAsync = key => key == "Aspire_Header_RecordingsStyle" ? (true, "Menu") : (false, null)
         };
         SetupMainLayoutServices(localStorage: localStorage);
 
@@ -495,17 +492,15 @@ public partial class MainLayoutTests : DashboardTestContext
             builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: isDesktop, IsUltraLowHeight: false, IsUltraLowWidth: false));
         });
 
-        cut.WaitForAssertion(() => Assert.Single(cut.FindComponents<DashboardRunMenu>()));
-        Assert.Empty(cut.FindComponents<DashboardRunSelect>());
+        cut.WaitForAssertion(() => Assert.Single(cut.FindComponents<DashboardRunSelect>()));
+        Assert.Empty(cut.FindComponents<DashboardRunMenu>());
         Assert.Empty(cut.FindComponents<DashboardRunPill>());
-        var menuButton = Assert.Single(cut.FindComponent<DashboardRunMenu>().FindComponents<AspireMenuButton>());
-        Assert.Equal("Live run", menuButton.Instance.Text);
-        Assert.Equal(["Live run", "Learn about runs"], menuButton.Instance.ItemsProvider().Where(item => !item.IsDivider).Select(item => item.Text));
+        Assert.Equal("dialog", cut.Find($"#{MainLayout.RunSelectButtonId}").GetAttribute("aria-haspopup"));
         if (isDesktop)
         {
-            // Where it was before recordings had their own panel: with the header's buttons, ahead of the help button.
-            var menuIndex = cut.Markup.IndexOf("application-run-select", StringComparison.Ordinal);
-            Assert.True(menuIndex < cut.Markup.IndexOf($"id=\"{MainLayout.HelpButtonId}\"", StringComparison.Ordinal));
+            // Run selection is the first app-wide action after navigation.
+            var runSelectIndex = cut.Markup.IndexOf("application-run-select", StringComparison.Ordinal);
+            Assert.True(runSelectIndex < cut.Markup.IndexOf($"id=\"{MainLayout.HelpButtonId}\"", StringComparison.Ordinal));
         }
     }
 
@@ -577,11 +572,7 @@ public partial class MainLayoutTests : DashboardTestContext
             content = Assert.IsType<DashboardRunsDialogContent>(dialogContent);
             return Task.CompletedTask;
         });
-        var localStorage = new TestLocalStorage
-        {
-            OnGetUnprotectedAsync = key => key == BrowserStorageKeys.RecordingsStyle ? (true, "Panel") : (false, null)
-        };
-        SetupMainLayoutServices(localStorage: localStorage, dialogService: dialogService, dashboardRunStore: runStore, sessionStorage: sessionStorage);
+        SetupMainLayoutServices(dialogService: dialogService, dashboardRunStore: runStore, sessionStorage: sessionStorage);
         await Services.GetRequiredService<DashboardViewPreferences>().EnsureLoadedAsync();
         var expectedHistoricalRunText = FormatHelpers.FormatDateTime(
             Services.GetRequiredService<BrowserTimeProvider>(),
@@ -825,11 +816,7 @@ public partial class MainLayoutTests : DashboardTestContext
                 ? Task.FromResult<(bool Success, object? Value)>((false, false))
                 : runSelectionSource.Task
         };
-        var localStorage = new TestLocalStorage
-        {
-            OnGetUnprotectedAsync = key => key == BrowserStorageKeys.RecordingsStyle ? (true, "Panel") : (false, null)
-        };
-        SetupMainLayoutServices(localStorage: localStorage, dashboardRunStore: runStore, sessionStorage: sessionStorage);
+        SetupMainLayoutServices(dashboardRunStore: runStore, sessionStorage: sessionStorage);
         var runSelection = Assert.IsType<FluentUISetupHelpers.TestDashboardRunSelection>(Services.GetRequiredService<IDashboardRunSelection>());
         var getRunsCallCount = runStore.GetRunsCallCount;
 

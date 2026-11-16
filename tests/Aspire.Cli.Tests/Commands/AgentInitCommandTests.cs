@@ -95,6 +95,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         };
         using var provider = context.CreateServiceCollection(outputHelper, options =>
         {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
             options.InteractionServiceFactory = _ => interaction;
             options.ProjectLocatorFactory = _ => locator;
         }).BuildServiceProvider();
@@ -108,11 +109,42 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task AgentInit_NonInteractive_WithMultipleAppHosts_Succeeds()
+    {
+        using var context = new AgentConfigurationTestContext(outputHelper);
+        var discovered = false;
+
+        // Use the default non-interactive host and console interaction service so an AppHost
+        // selection prompt fails the command the same way it does for real users.
+        using var provider = context.CreateServiceCollection(outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = _ => new TestProjectLocator
+            {
+                GetAppHostFromSettingsAsyncCallback = _ => Task.FromResult<FileInfo?>(null),
+                FindAppHostProjectFilesAsyncCallback = (directory, _, _, _) =>
+                {
+                    discovered = true;
+                    return Task.FromResult<List<FileInfo>>([
+                        new FileInfo(Path.Combine(directory.FullName, "First", "First.csproj")),
+                        new FileInfo(Path.Combine(directory.FullName, "Second", "Second.csproj"))]);
+                }
+            };
+        }).BuildServiceProvider();
+        var result = provider.GetRequiredService<RootCommand>().Parse(
+            "agent init --agents copilot --scope project --non-interactive");
+
+        Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
+        Assert.True(discovered);
+    }
+
+    [Fact]
     public async Task AgentInit_WithoutAspireSkills_DoesNotDiscoverAppHost()
     {
         using var context = new AgentConfigurationTestContext(outputHelper);
+        var interaction = new TestInteractionService();
         using var provider = context.CreateServiceCollection(outputHelper, options =>
         {
+            options.InteractionServiceFactory = _ => interaction;
             options.ProjectLocatorFactory = _ => new TestProjectLocator
             {
                 GetAppHostFromSettingsAsyncCallback = _ => throw new InvalidOperationException("AppHost lookup is unnecessary without Aspire skills."),
@@ -123,6 +155,8 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             "agent init --agents copilot --skills none --mcp=false --non-interactive");
 
         Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
+        Assert.Empty(interaction.DisplayedRenderables);
+        Assert.Empty(interaction.DisplayedMessages);
     }
 
     [Theory]
@@ -208,14 +242,18 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData("copilot")]
-    [InlineData("claude")]
-    [InlineData("opencode")]
-    [InlineData("copilot,claude,opencode")]
-    public async Task AgentInit_WarnsAboutSelectedClientSourcesBeforeRegistration(string agents)
+    [InlineData("copilot", false)]
+    [InlineData("claude", false)]
+    [InlineData("opencode", false)]
+    [InlineData("copilot,claude,opencode", false)]
+    [InlineData("copilot", true)]
+    [InlineData("claude", true)]
+    [InlineData("opencode", true)]
+    [InlineData("copilot,claude,opencode", true)]
+    public async Task AgentInit_WarnsAboutSelectedClientSourcesBeforeRegistration(string agents, bool defaultOnly)
     {
         using var context = new AgentConfigurationTestContext(outputHelper);
-        await AgentConfigurationTestContext.WriteAsync(Path.Combine(context.Project.FullName, AspireConfigFile.FileName), """
+        await AgentConfigurationTestContext.WriteAsync(Path.Combine(context.Project.FullName, AspireConfigFile.FileName), defaultOnly ? "{}" : """
             {
               "skillSources": {
                 "default": { "openCodeV1Catalog": "https://third-party.example/skills/" },
@@ -287,7 +325,39 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             console.WriteLine();
         }
         await Verify(new { Sources = renderedSources.ToString(), Warnings = messagesBeforeRegistration })
-            .UseParameters(agents).ScrubLinesWithReplace(line => line.TrimEnd());
+            .UseParameters(defaultOnly ? $"{agents}-default" : agents).ScrubLinesWithReplace(line => line.TrimEnd());
+    }
+
+    [Theory]
+    [InlineData("{}", true)]
+    [InlineData("""{"skillSources":{"default":{"enabled":false}}}""", false)]
+    public async Task AgentInit_SourceNoticePrecedesSkillSelection(string configuration, bool hasSources)
+    {
+        using var context = new AgentConfigurationTestContext(outputHelper);
+        await AgentConfigurationTestContext.WriteAsync(Path.Combine(context.Project.FullName, AspireConfigFile.FileName), configuration);
+        var interaction = new TestInteractionService();
+        interaction.PromptForSelectionsCallback = (prompt, _, _, _) =>
+        {
+            Assert.Equal(AgentCommandStrings.InitCommand_SelectSkills, prompt);
+            Assert.Equal(hasSources ? new[]
+            {
+                AgentCommandStrings.InitCommand_SkillSourcesExplanation,
+                $"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]"
+            } : [], interaction.DisplayedMessages.Select(message => message.Message));
+            Assert.Equal(hasSources, interaction.DisplayedRenderables.Count > 0);
+            Assert.Empty(context.Project.GetDirectories());
+            return [];
+        };
+        using var provider = context.CreateServiceCollection(outputHelper, options =>
+        {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
+            options.InteractionServiceFactory = _ => interaction;
+        }).BuildServiceProvider();
+        var result = provider.GetRequiredService<RootCommand>().Parse(
+            "agent init --agents copilot --scope project --mcp=false");
+
+        Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
+        Assert.False(File.Exists(context.Copilot.GetIntegrationConfigPath(AgentConfigurationScope.Project, context.Project)));
     }
 
     [Fact]
@@ -810,8 +880,10 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         var config = JsonNode.Parse(await File.ReadAllTextAsync(expectedPath))!.AsObject();
         Assert.Equal(client == "opencode" ? ["skills"] : new[] { "enabledPlugins", "extraKnownMarketplaces" }, config.Select(property => property.Key).Order());
         Assert.Empty(messages);
-        Assert.Empty(interaction.DisplayedRenderables);
+        Assert.NotEmpty(interaction.DisplayedRenderables);
         Assert.Collection(interaction.DisplayedMessages,
+            message => Assert.Equal(AgentCommandStrings.InitCommand_SkillSourcesExplanation, message.Message),
+            message => Assert.Equal($"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]", message.Message),
             message =>
             {
                 Assert.Equal(KnownEmojis.Robot, message.Emoji);
@@ -854,6 +926,8 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
             var messages = interaction.DisplayedMessages.Skip(previousMessageCount).ToArray();
             Assert.Collection(messages,
+                message => Assert.Equal(AgentCommandStrings.InitCommand_SkillSourcesExplanation, message.Message),
+                message => Assert.Equal($"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]", message.Message),
                 message =>
                 {
                     Assert.Equal(KnownEmojis.Robot, message.Emoji);

@@ -477,13 +477,10 @@
         var handlers = GetRowHandlers(resource);
         var actionIndex = 0;
         var highlightedIndex = 0;
-        // A compact sidebar row puts the expand toggle after its actions. Where rows can be hovered, the toggle is the
-        // only control in the rail at rest, so the actions appear before it instead of pushing it toward the name, and
-        // the tab order stays the order on screen. Other rails keep the toggle first.
         var toggleLast = IsCompact && !_isPaneFullCanvas;
         <div class="@(showLabels ? "resource-actions" : "resource-row-actions")">
-            @* The toggle itself leads the row (see the row markup). The sidebar's rail keeps its slot, so the actions
-               don't move; the full-page list's rail has no slot for it. *@
+            @* The toggle itself leads the row (see the row markup). Sidebar CSS hides its placeholder so the rail
+               reserves only visible actions; the full-page list has no placeholder. *@
             @if (!showLabels && !toggleLast && !_isPaneFullCanvas)
             {
                 RenderRowToggleSlot(__builder);
@@ -549,8 +546,6 @@
         </div>
     };
 
-    // The empty slot the sidebar's action rail keeps where the expand toggle was, so the actions stay where they were
-    // in every row. The toggle itself leads the row, before its icon.
     private static void RenderRowToggleSlot(RenderTreeBuilder __builder)
     {
         <span class="resource-row-toggle-spacer" aria-hidden="true"></span>

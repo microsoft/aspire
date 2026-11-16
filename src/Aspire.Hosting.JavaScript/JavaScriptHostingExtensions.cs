@@ -3,7 +3,6 @@
 
 #pragma warning disable ASPIRECERTIFICATES001
 #pragma warning disable ASPIREEXTENSION001
-#pragma warning disable ASPIRECOMMAND001
 
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
@@ -1191,7 +1190,6 @@ public static partial class JavaScriptHostingExtensions
     /// To add an API reverse-proxy, use the overload that accepts an <c>apiPath</c> and <c>apiTarget</c>.
     /// </para>
     /// </remarks>
-    [Experimental("ASPIREJAVASCRIPT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExportIgnore(Reason = "Use the polyglot-compatible overload instead.")]
     public static IResourceBuilder<TResource> PublishAsStaticWebsite<TResource>(
         this IResourceBuilder<TResource> builder,
@@ -1230,7 +1228,6 @@ public static partial class JavaScriptHostingExtensions
     /// work correctly across all deployment targets (Docker Compose, Azure App Service, etc.).
     /// </para>
     /// </remarks>
-    [Experimental("ASPIREJAVASCRIPT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExportIgnore(Reason = "Use the polyglot-compatible overload instead.")]
     public static IResourceBuilder<TResource> PublishAsStaticWebsite<TResource>(
         this IResourceBuilder<TResource> builder,
@@ -1249,7 +1246,6 @@ public static partial class JavaScriptHostingExtensions
     /// <summary>
     /// Publishes the JavaScript application as a standalone static website using YARP.
     /// </summary>
-    [Experimental("ASPIREJAVASCRIPT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExport("publishAsStaticWebsite")]
     internal static IResourceBuilder<TResource> PublishAsStaticWebsitePolyglot<TResource>(
 #pragma warning restore ASPIREEXPORT009
@@ -1270,7 +1266,6 @@ public static partial class JavaScriptHostingExtensions
         return PublishAsStaticWebsiteCore(builder, apiPath, apiTarget, options);
     }
 
-    [Experimental("ASPIREJAVASCRIPT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     private static IResourceBuilder<TResource> PublishAsStaticWebsiteCore<TResource>(
         IResourceBuilder<TResource> builder,
         string? apiPath,
@@ -1387,7 +1382,6 @@ public static partial class JavaScriptHostingExtensions
     /// the built output directory is copied into the runtime container, not the full application source.
     /// </para>
     /// </remarks>
-    [Experimental("ASPIREJAVASCRIPT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExport]
     public static IResourceBuilder<TResource> PublishAsNodeServer<TResource>(this IResourceBuilder<TResource> builder, string entryPoint, string outputPath = ".")
         where TResource : JavaScriptAppResource
@@ -1469,7 +1463,6 @@ public static partial class JavaScriptHostingExtensions
     /// use <see cref="PublishAsNodeServer{TResource}"/> instead for a smaller runtime image.
     /// </para>
     /// </remarks>
-    [Experimental("ASPIREJAVASCRIPT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExport]
     public static IResourceBuilder<TResource> PublishAsPackageScript<TResource>(this IResourceBuilder<TResource> builder, string scriptName = "start", string? runScriptArguments = null)
         where TResource : JavaScriptAppResource
@@ -2201,7 +2194,6 @@ public static partial class JavaScriptHostingExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [Experimental("ASPIREJAVASCRIPT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExport]
     public static IResourceBuilder<NextJsAppResource> AddNextJsApp(this IDistributedApplicationBuilder builder, [ResourceName] string name, string appDirectory, string runScriptName = "dev")
     {
@@ -2288,7 +2280,6 @@ public static partial class JavaScriptHostingExtensions
     /// to suppress those checks when the configuration is set dynamically or via an external
     /// mechanism that cannot be detected by static file inspection.
     /// </remarks>
-    [Experimental("ASPIREJAVASCRIPT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExport]
     public static IResourceBuilder<NextJsAppResource> DisableBuildValidation(this IResourceBuilder<NextJsAppResource> builder)
     {

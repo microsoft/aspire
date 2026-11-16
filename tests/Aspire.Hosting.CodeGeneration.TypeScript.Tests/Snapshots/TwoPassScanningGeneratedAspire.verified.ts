@@ -317,7 +317,11 @@ type ReferenceExpressionBuilderHandle = Handle<'Aspire.Hosting/Aspire.Hosting.Ap
 /** Provides context for validating a required command. */
 type RequiredCommandValidationContextHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationModel.RequiredCommandValidationContext'>;
 
-/** Represents the result of validating a required command. */
+/**
+ * Represents the result of validating a required command.
+ *
+ * Failed validation logs a warning but does not prevent the resource from attempting to start.
+ */
 type RequiredCommandValidationResultHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationModel.RequiredCommandValidationResult'>;
 
 /** A service to execute resource commands. */
@@ -1919,9 +1923,9 @@ export interface WithImageOptions {
 }
 
 export interface WithMcpServerOptions {
-    /** An optional path to append to the endpoint URL when forming the MCP server address. Defaults to `"/mcp"`. */
+    /** An optional path to append to the endpoint URL when forming the MCP server address. Defaults to `"/mcp"`. A leading slash is added if missing. A null or empty value uses the endpoint URL without an additional path. */
     path?: string;
-    /** An optional name of the endpoint that hosts the MCP server. If not specified, defaults to the first HTTPS or HTTP endpoint. */
+    /** An optional name of the endpoint that hosts the MCP server. If not specified, selects the endpoint named `https`, falling back to the endpoint named `http`. Names are matched case-insensitively; endpoints with other names must be selected explicitly, regardless of their URI scheme. */
     endpointName?: string;
 }
 
@@ -7889,63 +7893,41 @@ const ReferenceExpressionBuilderPromiseImpl = $aspireCreateFluentPromiseClass<Re
 /** Provides context for validating a required command. */
 export interface RequiredCommandValidationContext {
     toJSON(): MarshalledHandle;
-    /**
-     * Gets the resolved full path to the command executable.
-     * @experimental
-     */
+    /** Gets the resolved full path to the command executable. */
     resolvedPath(): Promise<string>;
-    /**
-     * Gets the service provider for accessing application services.
-     * @experimental
-     */
+    /** Gets the service provider for accessing application services. */
     services(): ServiceProviderPromise;
-    /**
-     * Gets a cancellation token that can be used to cancel the validation.
-     * @experimental
-     */
+    /** Gets a cancellation token that can be used to cancel the validation. */
     cancellationToken(): Promise<CancellationToken>;
     /**
      * Creates a successful validation result.
      * @returns A `RequiredCommandValidationResult` indicating the command is valid.
-     * @experimental
      */
     success(): RequiredCommandValidationResultPromise;
     /**
      * Creates a failed validation result with the specified message.
      * @param validationMessage A message describing why validation failed.
      * @returns A `RequiredCommandValidationResult` indicating the command is invalid.
-     * @experimental
      */
     failure(validationMessage: string): RequiredCommandValidationResultPromise;
 }
 
 export interface RequiredCommandValidationContextPromise extends PromiseLike<RequiredCommandValidationContext> {
-    /**
-     * Gets the resolved full path to the command executable.
-     * @experimental
-     */
+    /** Gets the resolved full path to the command executable. */
     resolvedPath(): Promise<string>;
-    /**
-     * Gets the service provider for accessing application services.
-     * @experimental
-     */
+    /** Gets the service provider for accessing application services. */
     services(): ServiceProviderPromise;
-    /**
-     * Gets a cancellation token that can be used to cancel the validation.
-     * @experimental
-     */
+    /** Gets a cancellation token that can be used to cancel the validation. */
     cancellationToken(): Promise<CancellationToken>;
     /**
      * Creates a successful validation result.
      * @returns A `RequiredCommandValidationResult` indicating the command is valid.
-     * @experimental
      */
     success(): RequiredCommandValidationResultPromise;
     /**
      * Creates a failed validation result with the specified message.
      * @param validationMessage A message describing why validation failed.
      * @returns A `RequiredCommandValidationResult` indicating the command is invalid.
-     * @experimental
      */
     failure(validationMessage: string): RequiredCommandValidationResultPromise;
 }
@@ -8000,7 +7982,6 @@ class RequiredCommandValidationContextImpl implements RequiredCommandValidationC
     /**
      * Creates a successful validation result.
      * @returns A `RequiredCommandValidationResult` indicating the command is valid.
-     * @experimental
      */
     success(): RequiredCommandValidationResultPromise {
         return new RequiredCommandValidationResultPromiseImpl(this._successInternal(), this._client);
@@ -8020,7 +8001,6 @@ class RequiredCommandValidationContextImpl implements RequiredCommandValidationC
      * Creates a failed validation result with the specified message.
      * @param validationMessage A message describing why validation failed.
      * @returns A `RequiredCommandValidationResult` indicating the command is invalid.
-     * @experimental
      */
     failure(validationMessage: string): RequiredCommandValidationResultPromise {
         return new RequiredCommandValidationResultPromiseImpl(this._failureInternal(validationMessage), this._client);
@@ -8041,31 +8021,23 @@ const RequiredCommandValidationContextPromiseImpl = $aspireCreateFluentPromiseCl
 // RequiredCommandValidationResult
 // ============================================================================
 
-/** Represents the result of validating a required command. */
+/**
+ * Represents the result of validating a required command.
+ *
+ * Failed validation logs a warning but does not prevent the resource from attempting to start.
+ */
 export interface RequiredCommandValidationResult {
     toJSON(): MarshalledHandle;
-    /**
-     * Gets a value indicating whether the command validation succeeded.
-     * @experimental
-     */
+    /** Gets a value indicating whether the command validation succeeded. */
     isValid(): Promise<boolean>;
-    /**
-     * Gets an optional validation message describing why validation failed.
-     * @experimental
-     */
+    /** Gets an optional validation message describing why validation failed. */
     validationMessage(): Promise<string | null>;
 }
 
 export interface RequiredCommandValidationResultPromise extends PromiseLike<RequiredCommandValidationResult> {
-    /**
-     * Gets a value indicating whether the command validation succeeded.
-     * @experimental
-     */
+    /** Gets a value indicating whether the command validation succeeded. */
     isValid(): Promise<boolean>;
-    /**
-     * Gets an optional validation message describing why validation failed.
-     * @experimental
-     */
+    /** Gets an optional validation message describing why validation failed. */
     validationMessage(): Promise<string | null>;
 }
 
@@ -8073,7 +8045,11 @@ export interface RequiredCommandValidationResultPromise extends PromiseLike<Requ
 // RequiredCommandValidationResultImpl
 // ============================================================================
 
-/** Represents the result of validating a required command. */
+/**
+ * Represents the result of validating a required command.
+ *
+ * Failed validation logs a warning but does not prevent the resource from attempting to start.
+ */
 class RequiredCommandValidationResultImpl implements RequiredCommandValidationResult {
     constructor(private _handle: RequiredCommandValidationResultHandle, private _client: AspireClientRpc) {}
 
@@ -13164,7 +13140,6 @@ export interface ContainerRegistryResource {
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ContainerRegistryResourcePromise;
     /**
@@ -13539,7 +13514,6 @@ export interface ContainerRegistryResourcePromise extends PromiseLike<ContainerR
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ContainerRegistryResourcePromise;
     /**
@@ -13984,7 +13958,6 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ContainerRegistryResourcePromise {
         const helpLink = options?.helpLink;
@@ -15563,9 +15536,12 @@ export interface ContainerResource {
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
      * to discover and proxy the MCP server exposed by the resource.
+     * It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+     * The resource must already expose an MCP server at the selected endpoint and path.
+     * Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+     * A missing selected endpoint causes resolution to throw a `DistributedApplicationException`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): ContainerResourcePromise;
     /**
@@ -15604,7 +15580,6 @@ export interface ContainerResource {
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ContainerResourcePromise;
     /**
@@ -16434,9 +16409,12 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
      * to discover and proxy the MCP server exposed by the resource.
+     * It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+     * The resource must already expose an MCP server at the selected endpoint and path.
+     * Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+     * A missing selected endpoint causes resolution to throw a `DistributedApplicationException`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): ContainerResourcePromise;
     /**
@@ -16475,7 +16453,6 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ContainerResourcePromise;
     /**
@@ -17655,9 +17632,12 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
      * to discover and proxy the MCP server exposed by the resource.
+     * It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+     * The resource must already expose an MCP server at the selected endpoint and path.
+     * Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+     * A missing selected endpoint causes resolution to throw a `DistributedApplicationException`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): ContainerResourcePromise {
         const path = options?.path;
@@ -17760,7 +17740,6 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ContainerResourcePromise {
         const helpLink = options?.helpLink;
@@ -20166,9 +20145,12 @@ export interface CSharpAppResource {
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
      * to discover and proxy the MCP server exposed by the resource.
+     * It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+     * The resource must already expose an MCP server at the selected endpoint and path.
+     * Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+     * A missing selected endpoint causes resolution to throw a `DistributedApplicationException`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): CSharpAppResourcePromise;
     /**
@@ -20220,7 +20202,6 @@ export interface CSharpAppResource {
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): CSharpAppResourcePromise;
     /**
@@ -20877,9 +20858,12 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
      * to discover and proxy the MCP server exposed by the resource.
+     * It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+     * The resource must already expose an MCP server at the selected endpoint and path.
+     * Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+     * A missing selected endpoint causes resolution to throw a `DistributedApplicationException`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): CSharpAppResourcePromise;
     /**
@@ -20931,7 +20915,6 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): CSharpAppResourcePromise;
     /**
@@ -21639,9 +21622,12 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
      * to discover and proxy the MCP server exposed by the resource.
+     * It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+     * The resource must already expose an MCP server at the selected endpoint and path.
+     * Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+     * A missing selected endpoint causes resolution to throw a `DistributedApplicationException`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): CSharpAppResourcePromise {
         const path = options?.path;
@@ -21790,7 +21776,6 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): CSharpAppResourcePromise {
         const helpLink = options?.helpLink;
@@ -24273,9 +24258,12 @@ export interface DotnetToolResource {
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
      * to discover and proxy the MCP server exposed by the resource.
+     * It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+     * The resource must already expose an MCP server at the selected endpoint and path.
+     * Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+     * A missing selected endpoint causes resolution to throw a `DistributedApplicationException`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): DotnetToolResourcePromise;
     /**
@@ -24306,7 +24294,6 @@ export interface DotnetToolResource {
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): DotnetToolResourcePromise;
     /**
@@ -25020,9 +25007,12 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
      * to discover and proxy the MCP server exposed by the resource.
+     * It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+     * The resource must already expose an MCP server at the selected endpoint and path.
+     * Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+     * A missing selected endpoint causes resolution to throw a `DistributedApplicationException`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): DotnetToolResourcePromise;
     /**
@@ -25053,7 +25043,6 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): DotnetToolResourcePromise;
     /**
@@ -25940,9 +25929,12 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
      * to discover and proxy the MCP server exposed by the resource.
+     * It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+     * The resource must already expose an MCP server at the selected endpoint and path.
+     * Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+     * A missing selected endpoint causes resolution to throw a `DistributedApplicationException`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): DotnetToolResourcePromise {
         const path = options?.path;
@@ -26024,7 +26016,6 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): DotnetToolResourcePromise {
         const helpLink = options?.helpLink;
@@ -28466,9 +28457,12 @@ export interface ExecutableResource {
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
      * to discover and proxy the MCP server exposed by the resource.
+     * It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+     * The resource must already expose an MCP server at the selected endpoint and path.
+     * Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+     * A missing selected endpoint causes resolution to throw a `DistributedApplicationException`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): ExecutableResourcePromise;
     /**
@@ -28499,7 +28493,6 @@ export interface ExecutableResource {
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ExecutableResourcePromise;
     /**
@@ -29174,9 +29167,12 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
      * to discover and proxy the MCP server exposed by the resource.
+     * It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+     * The resource must already expose an MCP server at the selected endpoint and path.
+     * Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+     * A missing selected endpoint causes resolution to throw a `DistributedApplicationException`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): ExecutableResourcePromise;
     /**
@@ -29207,7 +29203,6 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ExecutableResourcePromise;
     /**
@@ -29984,9 +29979,12 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
      * to discover and proxy the MCP server exposed by the resource.
+     * It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+     * The resource must already expose an MCP server at the selected endpoint and path.
+     * Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+     * A missing selected endpoint causes resolution to throw a `DistributedApplicationException`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): ExecutableResourcePromise {
         const path = options?.path;
@@ -30068,7 +30066,6 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ExecutableResourcePromise {
         const helpLink = options?.helpLink;
@@ -32498,7 +32495,6 @@ export interface ExternalServiceResource {
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ExternalServiceResourcePromise;
     /**
@@ -32878,7 +32874,6 @@ export interface ExternalServiceResourcePromise extends PromiseLike<ExternalServ
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ExternalServiceResourcePromise;
     /**
@@ -33347,7 +33342,6 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ExternalServiceResourcePromise {
         const helpLink = options?.helpLink;
@@ -34794,7 +34788,6 @@ export interface ParameterResource {
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ParameterResourcePromise;
     /**
@@ -35217,7 +35210,6 @@ export interface ParameterResourcePromise extends PromiseLike<ParameterResource>
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ParameterResourcePromise;
     /**
@@ -35765,7 +35757,6 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ParameterResourcePromise {
         const helpLink = options?.helpLink;
@@ -37207,9 +37198,12 @@ export interface ProjectResource {
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
      * to discover and proxy the MCP server exposed by the resource.
+     * It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+     * The resource must already expose an MCP server at the selected endpoint and path.
+     * Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+     * A missing selected endpoint causes resolution to throw a `DistributedApplicationException`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): ProjectResourcePromise;
     /**
@@ -37261,7 +37255,6 @@ export interface ProjectResource {
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ProjectResourcePromise;
     /**
@@ -37918,9 +37911,12 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
      * to discover and proxy the MCP server exposed by the resource.
+     * It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+     * The resource must already expose an MCP server at the selected endpoint and path.
+     * Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+     * A missing selected endpoint causes resolution to throw a `DistributedApplicationException`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): ProjectResourcePromise;
     /**
@@ -37972,7 +37968,6 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ProjectResourcePromise;
     /**
@@ -38681,9 +38676,12 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
      * to discover and proxy the MCP server exposed by the resource.
+     * It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+     * The resource must already expose an MCP server at the selected endpoint and path.
+     * Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+     * A missing selected endpoint causes resolution to throw a `DistributedApplicationException`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): ProjectResourcePromise {
         const path = options?.path;
@@ -38832,7 +38830,6 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ProjectResourcePromise {
         const helpLink = options?.helpLink;
@@ -41434,9 +41431,12 @@ export interface TestDatabaseResource {
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
      * to discover and proxy the MCP server exposed by the resource.
+     * It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+     * The resource must already expose an MCP server at the selected endpoint and path.
+     * Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+     * A missing selected endpoint causes resolution to throw a `DistributedApplicationException`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): TestDatabaseResourcePromise;
     /**
@@ -41475,7 +41475,6 @@ export interface TestDatabaseResource {
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): TestDatabaseResourcePromise;
     /**
@@ -42305,9 +42304,12 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
      * to discover and proxy the MCP server exposed by the resource.
+     * It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+     * The resource must already expose an MCP server at the selected endpoint and path.
+     * Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+     * A missing selected endpoint causes resolution to throw a `DistributedApplicationException`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): TestDatabaseResourcePromise;
     /**
@@ -42346,7 +42348,6 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): TestDatabaseResourcePromise;
     /**
@@ -43525,9 +43526,12 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
      * to discover and proxy the MCP server exposed by the resource.
+     * It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+     * The resource must already expose an MCP server at the selected endpoint and path.
+     * Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+     * A missing selected endpoint causes resolution to throw a `DistributedApplicationException`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): TestDatabaseResourcePromise {
         const path = options?.path;
@@ -43630,7 +43634,6 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): TestDatabaseResourcePromise {
         const helpLink = options?.helpLink;
@@ -46216,9 +46219,12 @@ export interface TestRedisResource {
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
      * to discover and proxy the MCP server exposed by the resource.
+     * It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+     * The resource must already expose an MCP server at the selected endpoint and path.
+     * Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+     * A missing selected endpoint causes resolution to throw a `DistributedApplicationException`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): TestRedisResourcePromise;
     /**
@@ -46257,7 +46263,6 @@ export interface TestRedisResource {
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): TestRedisResourcePromise;
     /**
@@ -47171,9 +47176,12 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
      * to discover and proxy the MCP server exposed by the resource.
+     * It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+     * The resource must already expose an MCP server at the selected endpoint and path.
+     * Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+     * A missing selected endpoint causes resolution to throw a `DistributedApplicationException`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): TestRedisResourcePromise;
     /**
@@ -47212,7 +47220,6 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): TestRedisResourcePromise;
     /**
@@ -48475,9 +48482,12 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
      * to discover and proxy the MCP server exposed by the resource.
+     * It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+     * The resource must already expose an MCP server at the selected endpoint and path.
+     * Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+     * A missing selected endpoint causes resolution to throw a `DistributedApplicationException`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): TestRedisResourcePromise {
         const path = options?.path;
@@ -48580,7 +48590,6 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): TestRedisResourcePromise {
         const helpLink = options?.helpLink;
@@ -51495,9 +51504,12 @@ export interface TestVaultResource {
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
      * to discover and proxy the MCP server exposed by the resource.
+     * It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+     * The resource must already expose an MCP server at the selected endpoint and path.
+     * Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+     * A missing selected endpoint causes resolution to throw a `DistributedApplicationException`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): TestVaultResourcePromise;
     /**
@@ -51536,7 +51548,6 @@ export interface TestVaultResource {
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): TestVaultResourcePromise;
     /**
@@ -52368,9 +52379,12 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
      * to discover and proxy the MCP server exposed by the resource.
+     * It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+     * The resource must already expose an MCP server at the selected endpoint and path.
+     * Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+     * A missing selected endpoint causes resolution to throw a `DistributedApplicationException`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): TestVaultResourcePromise;
     /**
@@ -52409,7 +52423,6 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): TestVaultResourcePromise;
     /**
@@ -53590,9 +53603,12 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
      * to discover and proxy the MCP server exposed by the resource.
+     * It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+     * The resource must already expose an MCP server at the selected endpoint and path.
+     * Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+     * A missing selected endpoint causes resolution to throw a `DistributedApplicationException`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): TestVaultResourcePromise {
         const path = options?.path;
@@ -53695,7 +53711,6 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): TestVaultResourcePromise {
         const helpLink = options?.helpLink;
@@ -56419,7 +56434,6 @@ export interface Resource {
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ResourcePromise;
     /**
@@ -56794,7 +56808,6 @@ export interface ResourcePromise extends PromiseLike<Resource> {
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ResourcePromise;
     /**
@@ -57240,7 +57253,6 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
      * @param validationCallback A callback that validates the resolved command path. Receives a `RequiredCommandValidationContext` and returns a `RequiredCommandValidationResult`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withRequiredCommandValidation(command: string, validationCallback: (arg: RequiredCommandValidationContext) => Promise<RequiredCommandValidationResult>, options?: WithRequiredCommandValidationOptions): ResourcePromise {
         const helpLink = options?.helpLink;
@@ -59048,9 +59060,12 @@ export interface ResourceWithEndpoints {
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
      * to discover and proxy the MCP server exposed by the resource.
+     * It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+     * The resource must already expose an MCP server at the selected endpoint and path.
+     * Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+     * A missing selected endpoint causes resolution to throw a `DistributedApplicationException`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): ResourceWithEndpointsPromise;
     /**
@@ -59149,9 +59164,12 @@ export interface ResourceWithEndpointsPromise extends PromiseLike<ResourceWithEn
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
      * to discover and proxy the MCP server exposed by the resource.
+     * It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+     * The resource must already expose an MCP server at the selected endpoint and path.
+     * Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+     * A missing selected endpoint causes resolution to throw a `DistributedApplicationException`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): ResourceWithEndpointsPromise;
     /**
@@ -59271,9 +59289,12 @@ class ResourceWithEndpointsImpl extends ResourceBuilderBase<IResourceWithEndpoin
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
      * to discover and proxy the MCP server exposed by the resource.
+     * It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+     * The resource must already expose an MCP server at the selected endpoint and path.
+     * Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+     * A missing selected endpoint causes resolution to throw a `DistributedApplicationException`.
      * @param options Additional options.
      * @returns The resource builder.
-     * @experimental
      */
     withMcpServer(options?: WithMcpServerOptions): ResourceWithEndpointsPromise {
         const path = options?.path;
