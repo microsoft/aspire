@@ -17,7 +17,7 @@ Config sources let organizations provide shared Aspire CLI configuration through
 1. **Acquire configuration:** select a remote source, obtain consent, acquire the file using Git, and merge allowlisted values into the application's `aspire.config.json`. Retain the fetched source and metadata in Aspire home for tracking.
 2. **Acquire content:** use the application's saved configuration to acquire skills, templates, and integrations.
 
-Debug logs trace source selection and consent, advisory-check skip reasons, version-check and snapshot cache reuse, settings application, and repository-template resolution, checkout, and discovery. These decision logs omit configuration values and raw repository addresses; Git failures are recorded by failure category and exit code rather than raw exception details.
+Debug logs trace source selection and consent, advisory-check skip reasons, version-check and snapshot cache reuse, settings application, and repository-template resolution, checkout, and discovery. These decision logs omit configuration values, filesystem paths, and raw repository addresses; Git failures are recorded by failure category and exit code rather than raw exception details.
 
 This specification covers the first phase, named agent skill sources, and runtime template-source inheritance. Other content acquisition is summarized at the end; its detailed schema and behavior are deferred.
 

@@ -404,7 +404,9 @@ internal sealed class NewCommand : BaseCommand
             choice => showGroups ? choice.Group : null, choice => FormatTemplateDisplayLabel(choice.Template).EscapeMarkup(),
             cancellationToken: cancellationToken);
         if (selection.IsConfigured &&
-            configuredTemplates.FirstOrDefault(t => ReferenceEquals(t.Template, selection.Template)) is { } selectedConfigured)
+            configuredTemplates.FirstOrDefault(t =>
+                ReferenceEquals(t.Template, selection.Template) &&
+                CreateTemplateSourceGroup(t).Id == selection.Group.Id) is { } selectedConfigured)
         {
             _logger.LogDebug("Selected template {TemplateName} from configured template source {SourceName}.",
                 selectedConfigured.Template.Name, selectedConfigured.SourceName);

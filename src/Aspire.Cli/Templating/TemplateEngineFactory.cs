@@ -60,7 +60,7 @@ internal sealed partial class TemplateEngineFactory(
             : await GetRepositoryTemplateAsync(source.Repository, source.Path, source.RepositoryRef, cancellationToken);
         if (_discoveredTemplates.TryGetValue(fullPath, out var cached))
         {
-            logger.LogDebug("Reusing {TemplateCount} discovered templates from {TemplatePath}.", cached.Length, fullPath);
+            logger.LogDebug("Reusing {TemplateCount} discovered templates from the configured source.", cached.Length);
             return cached;
         }
 
@@ -87,10 +87,10 @@ internal sealed partial class TemplateEngineFactory(
 
     private async Task<ITemplate[]> DiscoverTemplatesAsync(string fullPath, CancellationToken cancellationToken)
     {
-        logger.LogDebug("Discovering templates in {TemplatePath}.", fullPath);
+        logger.LogDebug("Discovering templates from a configured source.");
         if (!Directory.Exists(fullPath))
         {
-            logger.LogDebug("Template discovery directory does not exist: {TemplatePath}.", fullPath);
+            logger.LogDebug("Template discovery directory does not exist.");
             throw new TemplateDiscoveryException(CliExitCodes.InvalidCommand,
                 string.Format(CultureInfo.CurrentCulture, NewCommandStrings.TemplateDirectoryNotFound, fullPath));
         }
@@ -111,7 +111,7 @@ internal sealed partial class TemplateEngineFactory(
         var failures = installed.Where(result => !result.Success).ToArray();
         if (failures.Length > 0)
         {
-            logger.LogDebug("Template source installation failed for {TemplatePath}; {FailureCount} failed install results.", fullPath, failures.Length);
+            logger.LogDebug("Template source installation failed; {FailureCount} install results failed.", failures.Length);
             throw new TemplateDiscoveryException(CliExitCodes.FailedToInstallTemplates,
                 string.Format(CultureInfo.CurrentCulture, NewCommandStrings.LocalTemplateLoadFailed,
                     string.Join(", ", failures.Select(result => result.Error))));
@@ -133,14 +133,14 @@ internal sealed partial class TemplateEngineFactory(
         cancellationToken.ThrowIfCancellationRequested();
         if (templates.Length == 0)
         {
-            logger.LogDebug("No templates were discovered in {TemplatePath}.", fullPath);
+            logger.LogDebug("No templates were discovered in the configured source.");
             throw new TemplateDiscoveryException(CliExitCodes.InvalidCommand,
                 string.Format(CultureInfo.CurrentCulture, NewCommandStrings.NoLocalTemplatesFound, fullPath));
         }
 
         // Returned callbacks still use the engine's mounts. Keep them alive through generation;
         // immutable repository checkouts are retained in the SHA-keyed cache across invocations.
-        logger.LogDebug("Discovered {TemplateCount} templates in {TemplatePath}.", templates.Length, fullPath);
+        logger.LogDebug("Discovered {TemplateCount} templates in the configured source.", templates.Length);
         return templates;
     }
 
@@ -173,7 +173,7 @@ internal sealed partial class TemplateEngineFactory(
             DirectoryHelper.CreateWithOwnerOnlyPermissions(cacheRoot);
             if (Directory.Exists(cacheDirectory))
             {
-                logger.LogDebug("Reusing repository template checkout at {CacheDirectory}.", cacheDirectory);
+                logger.LogDebug("Reusing cached repository template checkout.");
                 return GetRepositoryTemplatePath(cacheDirectory, relativePath);
             }
 
@@ -196,11 +196,11 @@ internal sealed partial class TemplateEngineFactory(
                 // Publish only complete checkouts. Concurrent invocations can safely use the winner;
                 // the losing temporary checkout is removed by its lease owner on disposal.
                 checkout.MoveTo(cacheDirectory);
-                logger.LogDebug("Published repository template checkout at {CacheDirectory}.", cacheDirectory);
+                logger.LogDebug("Published repository template checkout.");
             }
             catch (IOException) when (Directory.Exists(cacheDirectory))
             {
-                logger.LogDebug("Template checkout was already cached at {Path}.", cacheDirectory);
+                logger.LogDebug("Repository template checkout was already cached.");
             }
 
             return GetRepositoryTemplatePath(cacheDirectory, relativePath);
@@ -303,7 +303,7 @@ internal sealed partial class TemplateEngineFactory(
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            logger.LogWarning(ex, "Could not delete template checkout {Path}.", path);
+            logger.LogWarning("Could not delete template checkout because cleanup failed with {ExceptionType}.", ex.GetType().Name);
         }
     }
 
@@ -337,7 +337,7 @@ internal sealed partial class TemplateEngineFactory(
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            logger.LogWarning(ex, "Could not delete template checkout lease {Path}.", path);
+            logger.LogWarning("Could not delete template checkout lease because cleanup failed with {ExceptionType}.", ex.GetType().Name);
         }
     }
 
