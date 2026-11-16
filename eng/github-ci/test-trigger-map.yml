@@ -558,6 +558,7 @@ path_rules:
       - .github/actionlint.yaml
       - .github/actionlint-version.json
       - eng/pipelines/**
+      - eng/scripts/create-specialized-test-results-bundle.ps1
       - eng/Signing.props
       - eng/Publishing.props
       # Script behavior and packaging fixtures.
