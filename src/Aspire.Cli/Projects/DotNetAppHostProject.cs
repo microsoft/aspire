@@ -1358,6 +1358,65 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         return false;
     }
 
+    /// <summary>
+    /// Determines whether the AppHost declares the obsolete Aspire.AppHost.Sdk (ASPIRE012) directly in
+    /// its project file or file-based <c>apphost.cs</c>, and has not suppressed the ASPIRE012 warning there.
+    /// </summary>
+    internal static bool UsesObsoleteAppHostSdk(FileInfo appHostFile)
+    {
+        if (appHostFile.Extension.Equals(".cs", StringComparison.OrdinalIgnoreCase))
+        {
+            string content;
+            try
+            {
+                content = File.ReadAllText(appHostFile.FullName);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                return false;
+            }
+
+            if (!FallbackProjectParser.HasAppHostSdkDirective(content))
+            {
+                return false;
+            }
+
+            var preamble = FallbackProjectParser.GetDirectivePreamble(content);
+            return !AppHostSdkObsoleteWarningSuppressedDirectiveRegex().IsMatch(preamble);
+        }
+
+        if (!TryLoadProjectRoot(appHostFile.FullName, out var root) || root is null
+            || !root.Name.LocalName.Equals("Project", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var usesSdk = (root.Attribute("Sdk")?.Value is { } sdkAttribute && ContainsAspireAppHostSdk(sdkAttribute))
+            || root.Descendants().Any(e =>
+                (e.Name.LocalName.Equals("Sdk", StringComparison.Ordinal)
+                    && string.Equals(e.Attribute("Name")?.Value, AspireAppHostSdkName, StringComparison.OrdinalIgnoreCase))
+                || (e.Name.LocalName.Equals("Import", StringComparison.Ordinal)
+                    && string.Equals(e.Attribute("Sdk")?.Value, AspireAppHostSdkName, StringComparison.OrdinalIgnoreCase)));
+        if (!usesSdk)
+        {
+            return false;
+        }
+
+        var suppressed = root.Descendants().Any(e =>
+            (e.Name.LocalName.Equals("SuppressAspireAppHostSdkObsoleteWarning", StringComparison.OrdinalIgnoreCase)
+                && string.Equals(e.Value.Trim(), "true", StringComparison.OrdinalIgnoreCase))
+            || (e.Name.LocalName.Equals("NoWarn", StringComparison.OrdinalIgnoreCase)
+                && Aspire012NoWarnRegex().IsMatch(e.Value)));
+        return !suppressed;
+    }
+
+    // Mirrors the NoWarn check used by the ASPIRE012 warning target in Aspire.AppHost.Sdk's Sdk.in.targets.
+    [GeneratedRegex(@"(^|[;,\s])ASPIRE012($|[;,\s])", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex Aspire012NoWarnRegex();
+
+    [GeneratedRegex(@"^[\t ]*#:property[\t ]+(?:SuppressAspireAppHostSdkObsoleteWarning[\t ]*=[\t ]*true|NoWarn[\t ]*=.*(?<![A-Za-z0-9])ASPIRE012(?![A-Za-z0-9]))[\t ]*\r?$", RegexOptions.IgnoreCase | RegexOptions.Multiline | RegexOptions.CultureInvariant)]
+    private static partial Regex AppHostSdkObsoleteWarningSuppressedDirectiveRegex();
+
     // ═══════════════════════════════════════════════════════════════
     // CREATION
     // ═══════════════════════════════════════════════════════════════
