@@ -60,6 +60,9 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
     [InlineData("apphost.cs", "#:sdk Aspire.AppHost.Sdk\n", true)]
     [InlineData("apphost.cs", "#:sdk Aspire.AppHost.Sdk@13.2.0\n#:property SuppressAspireAppHostSdkObsoleteWarning=true\n", false)]
     [InlineData("apphost.cs", "#:sdk Aspire.AppHost.Sdk@13.2.0\n#:property NoWarn=$(NoWarn);ASPIRE012\n", false)]
+    [InlineData("apphost.cs", "#:sdk Aspire.AppHost.Sdk@13.2.0\n#:property NoWarn=ASPIRE012;NU1605\n", false)]
+    [InlineData("apphost.cs", "#:sdk Aspire.AppHost.Sdk@13.2.0\n#:property NoWarn=NU1605, aspire012 ,CS1591\n", false)]
+    [InlineData("apphost.cs", "#:sdk Aspire.AppHost.Sdk@13.2.0\n#:property NoWarn=ASPIRE0120\n", true)]
     [InlineData("apphost.cs", "#:sdk Microsoft.NET.Sdk\n#:package Aspire.Hosting.AppHost@17.0.0\n", false)]
     [InlineData("apphost.cs", "// #:sdk Aspire.AppHost.Sdk is mentioned only in a comment\nvar x = 1;\n#:sdk Aspire.AppHost.Sdk\n", false)]
     [InlineData("AppHost.csproj", """<Project Sdk="Aspire.AppHost.Sdk/13.2.0"></Project>""", true)]
@@ -67,6 +70,9 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
     [InlineData("AppHost.csproj", """<Project><Import Project="Sdk.props" Sdk="Aspire.AppHost.Sdk" /></Project>""", true)]
     [InlineData("AppHost.csproj", """<Project Sdk="Aspire.AppHost.Sdk/13.2.0"><PropertyGroup><SuppressAspireAppHostSdkObsoleteWarning>true</SuppressAspireAppHostSdkObsoleteWarning></PropertyGroup></Project>""", false)]
     [InlineData("AppHost.csproj", """<Project Sdk="Aspire.AppHost.Sdk/13.2.0"><PropertyGroup><NoWarn>$(NoWarn);aspire012</NoWarn></PropertyGroup></Project>""", false)]
+    [InlineData("AppHost.csproj", """<Project Sdk="Aspire.AppHost.Sdk/13.2.0"><PropertyGroup><NoWarn>ASPIRE012;NU1605</NoWarn></PropertyGroup></Project>""", false)]
+    [InlineData("AppHost.csproj", """<Project Sdk="Aspire.AppHost.Sdk/13.2.0"><PropertyGroup Condition="false"><SuppressAspireAppHostSdkObsoleteWarning>true</SuppressAspireAppHostSdkObsoleteWarning></PropertyGroup></Project>""", true)]
+    [InlineData("AppHost.csproj", """<Project Sdk="Aspire.AppHost.Sdk/13.2.0"><PropertyGroup><NoWarn Condition="'$(Configuration)' == 'Release'">$(NoWarn);ASPIRE012</NoWarn></PropertyGroup></Project>""", true)]
     [InlineData("AppHost.csproj", """<Project Sdk="Microsoft.NET.Sdk"><ItemGroup><PackageReference Include="Aspire.Hosting.AppHost" Version="17.0.0" /></ItemGroup></Project>""", false)]
     public void UsesObsoleteAppHostSdk_DetectsUnsuppressedAppHostSdk(string fileName, string content, bool expected)
     {

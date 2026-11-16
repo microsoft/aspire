@@ -1382,7 +1382,9 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
             }
 
             var preamble = FallbackProjectParser.GetDirectivePreamble(content);
-            return !AppHostSdkObsoleteWarningSuppressedDirectiveRegex().IsMatch(preamble);
+            var directiveSuppressed = PropertyDirectiveRegex().Matches(preamble)
+                .Any(m => IsAspire012SuppressionProperty(m.Groups["name"].Value, m.Groups["value"].Value));
+            return !directiveSuppressed;
         }
 
         if (!TryLoadProjectRoot(appHostFile.FullName, out var root) || root is null
@@ -1402,20 +1404,31 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
             return false;
         }
 
+        // Conditions are not evaluated, so conditional suppressions are conservatively treated as inactive.
         var suppressed = root.Descendants().Any(e =>
-            (e.Name.LocalName.Equals("SuppressAspireAppHostSdkObsoleteWarning", StringComparison.OrdinalIgnoreCase)
-                && string.Equals(e.Value.Trim(), "true", StringComparison.OrdinalIgnoreCase))
-            || (e.Name.LocalName.Equals("NoWarn", StringComparison.OrdinalIgnoreCase)
-                && Aspire012NoWarnRegex().IsMatch(e.Value)));
+            IsAspire012SuppressionProperty(e.Name.LocalName, e.Value)
+            && !e.AncestorsAndSelf().Any(IsConditionalElement));
         return !suppressed;
     }
 
-    // Mirrors the NoWarn check used by the ASPIRE012 warning target in Aspire.AppHost.Sdk's Sdk.in.targets.
-    [GeneratedRegex(@"(^|[;,\s])ASPIRE012($|[;,\s])", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
-    private static partial Regex Aspire012NoWarnRegex();
+    private static bool IsConditionalElement(XElement element) =>
+        element.Attribute("Condition") is not null
+        || element.Name.LocalName.Equals("Choose", StringComparison.Ordinal);
 
-    [GeneratedRegex(@"^[\t ]*#:property[\t ]+(?:SuppressAspireAppHostSdkObsoleteWarning[\t ]*=[\t ]*true|NoWarn[\t ]*=.*(?<![A-Za-z0-9])ASPIRE012(?![A-Za-z0-9]))[\t ]*\r?$", RegexOptions.IgnoreCase | RegexOptions.Multiline | RegexOptions.CultureInvariant)]
-    private static partial Regex AppHostSdkObsoleteWarningSuppressedDirectiveRegex();
+    private static bool IsAspire012SuppressionProperty(string name, string value)
+    {
+        if (name.Equals("SuppressAspireAppHostSdkObsoleteWarning", StringComparison.OrdinalIgnoreCase))
+        {
+            return string.Equals(value.Trim(), "true", StringComparison.OrdinalIgnoreCase);
+        }
+
+        return name.Equals("NoWarn", StringComparison.OrdinalIgnoreCase)
+            && value.Split([';', ','], StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+                .Any(code => code.Equals("ASPIRE012", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [GeneratedRegex(@"^[\t ]*#:property[\t ]+(?<name>[A-Za-z0-9_.\-]+)[\t ]*=(?<value>.*?)\r?$", RegexOptions.Multiline | RegexOptions.CultureInvariant)]
+    private static partial Regex PropertyDirectiveRegex();
 
     // ═══════════════════════════════════════════════════════════════
     // CREATION
