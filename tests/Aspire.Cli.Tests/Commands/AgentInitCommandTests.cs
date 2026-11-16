@@ -95,6 +95,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         };
         using var provider = context.CreateServiceCollection(outputHelper, options =>
         {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
             options.InteractionServiceFactory = _ => interaction;
             options.ProjectLocatorFactory = _ => locator;
         }).BuildServiceProvider();
@@ -105,6 +106,35 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         await Verify(await File.ReadAllTextAsync(
             context.Copilot.GetIntegrationConfigPath(AgentConfigurationScope.Project, context.Project)), "json")
             .UseParameters(configured);
+    }
+
+    [Fact]
+    public async Task AgentInit_NonInteractive_WithMultipleAppHosts_Succeeds()
+    {
+        using var context = new AgentConfigurationTestContext(outputHelper);
+        var discovered = false;
+
+        // Use the default non-interactive host and console interaction service so an AppHost
+        // selection prompt fails the command the same way it does for real users.
+        using var provider = context.CreateServiceCollection(outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = _ => new TestProjectLocator
+            {
+                GetAppHostFromSettingsAsyncCallback = _ => Task.FromResult<FileInfo?>(null),
+                FindAppHostProjectFilesAsyncCallback = (directory, _, _, _) =>
+                {
+                    discovered = true;
+                    return Task.FromResult<List<FileInfo>>([
+                        new FileInfo(Path.Combine(directory.FullName, "First", "First.csproj")),
+                        new FileInfo(Path.Combine(directory.FullName, "Second", "Second.csproj"))]);
+                }
+            };
+        }).BuildServiceProvider();
+        var result = provider.GetRequiredService<RootCommand>().Parse(
+            "agent init --agents copilot --scope project --non-interactive");
+
+        Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
+        Assert.True(discovered);
     }
 
     [Fact]
