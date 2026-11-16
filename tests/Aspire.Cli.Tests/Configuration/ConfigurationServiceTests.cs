@@ -17,6 +17,68 @@ namespace Aspire.Cli.Tests.Configuration;
 
 public class ConfigurationServiceTests(ITestOutputHelper outputHelper)
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task DottedTemplateSourceNamesCanBeCreatedEditedReadAndDeleted(bool isGlobal)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var (service, _) = CreateService(workspace);
+        await service.SetConfigurationAsync("custom", "preserve", isGlobal);
+        await service.SetConfigurationAsync("templateSources.company.repository", "https://example.test/company", isGlobal);
+        await service.SetConfigurationAsync(@"templateSources.company\.templates.repository", "https://example.test/dotted", isGlobal);
+        await service.SetConfigurationAsync(@"templateSources.company\.templates.ref", "old", isGlobal);
+        await service.SetConfigurationAsync(@"TEMPLATESOURCES.COMPANY\.TEMPLATES.REF", "main", isGlobal);
+
+        var path = service.GetSettingsFilePath(isGlobal);
+        var configuration = new ConfigurationBuilder().AddJsonFile(path).Build();
+        var reader = new ConfigurationService(configuration, workspace.CreateExecutionContext(),
+            new FileInfo(service.GetSettingsFilePath(isGlobal: true)), NullLogger<ConfigurationService>.Instance);
+        Assert.Equal("main", await reader.GetConfigurationAsync(@"templateSources:company\.templates:ref"));
+        var listing = isGlobal ? await service.GetGlobalConfigurationAsync() : await service.GetLocalConfigurationAsync();
+        Assert.Equal("main", listing[@"templateSources.company\.templates.ref"]);
+
+        Assert.True(await service.DeleteConfigurationAsync(@"templateSources.COMPANY\.TEMPLATES", isGlobal));
+        var settings = JsonNode.Parse(await File.ReadAllTextAsync(path))!;
+        Assert.Equal("preserve", (string?)settings["custom"]);
+        Assert.Equal("https://example.test/company", (string?)settings["templateSources"]!["company"]!["repository"]);
+        Assert.Equal(["company"], settings["templateSources"]!.AsObject().Select(source => source.Key));
+    }
+
+    [Theory]
+    [InlineData(@"custom\.settings[0].name", "custom.settings")]
+    [InlineData(@"custom\\settings.value", "custom\\settings")]
+    public async Task LiteralKeyEscapesWorkWithArrayAndObjectValues(string key, string propertyName)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var (service, _) = CreateService(workspace);
+        await service.SetConfigurationAsync(key, "value");
+        var path = service.GetSettingsFilePath(isGlobal: false);
+
+        var settings = JsonNode.Parse(await File.ReadAllTextAsync(path))!.AsObject();
+        Assert.Equal([propertyName], settings.Select(property => property.Key));
+        var configuration = new ConfigurationBuilder().AddJsonFile(path).Build();
+        var reader = new ConfigurationService(configuration, workspace.CreateExecutionContext(),
+            new FileInfo(service.GetSettingsFilePath(isGlobal: true)), NullLogger<ConfigurationService>.Instance);
+        Assert.Equal("value", await reader.GetConfigurationAsync(key));
+        Assert.Equal("value", (await service.GetLocalConfigurationAsync())[key]);
+        Assert.True(await service.DeleteConfigurationAsync(key));
+    }
+
+    [Theory]
+    [InlineData(@"templateSources.company\")]
+    [InlineData(@"templateSources.company\q.ref")]
+    public async Task InvalidKeyEscapesPreserveConfiguration(string key)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        const string original = """{"custom":"preserve"}""";
+        var (service, path) = CreateService(workspace, original);
+
+        await Assert.ThrowsAsync<ArgumentException>(() => service.SetConfigurationAsync(key, "main"));
+
+        Assert.Equal(original, await File.ReadAllTextAsync(path));
+    }
+
     private static (ConfigurationService Service, string SettingsFilePath) CreateService(
         TemporaryWorkspace workspace,
         string? existingContent = null)

@@ -504,7 +504,24 @@ Never save inherited template sources into the user's global configuration or th
 
 Skills and integrations are acquired according to the application's saved configuration and normal CLI precedence. Templates use built-in choices and named sources from global configuration and the runtime overlay selected by creation consent or an explicit environment source. Content acquisition is separate from fetching or materializing a configuration source, and must not treat previously retained tracking copies as runtime configuration providers. Runtime template inheritance uses the invocation's acquired snapshot as described above.
 
-Keys in `integrationSources`, `templateSources`, and `skillSources` must be 1-64 ASCII letters, digits, dots, hyphens, or underscores, starting with a letter or digit (`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`). Names merge case-insensitively. Colons, whitespace, and other characters are not allowed. Dots remain path separators in `aspire config` edit commands, so edit dotted source keys directly in the JSON file or use the template source management commands. These restrictions apply to source keys, not NuGet package patterns, Git repository names, or explicit agent marketplace/plugin identifiers. This is an Aspire naming policy, not a NuGet package-source length limit.
+Keys in `integrationSources`, `templateSources`, and `skillSources` must be 1-64 ASCII letters, digits, dots, hyphens, or underscores, starting with a letter or digit (`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`). Names merge case-insensitively. Colons, whitespace, and other characters are not allowed. These restrictions apply to source keys, not NuGet package patterns, Git repository names, or explicit agent marketplace/plugin identifiers. This is an Aspire naming policy, not a NuGet package-source length limit.
+
+In `aspire config` keys, unescaped dots and colons separate path segments. Escape a
+literal dot as `\.` and a literal backslash as `\\`. For example, use the following
+commands to address the source named `company.templates` independently of a
+source named `company`:
+
+```shell
+aspire config set 'templateSources.company\.templates.ref' main --global
+aspire config get 'templateSources.company\.templates.ref'
+aspire config delete 'templateSources.company\.templates' --global
+```
+
+The same syntax works for local configuration. Configuration listings escape
+literal dots so their keys can be reused in these commands. Ordinary dotted and
+colon-separated paths and array indices such as `plugins[0]` retain their existing
+meaning. A trailing backslash or an escape other than `\.` or `\\` is invalid;
+invalid edits leave the configuration file unchanged.
 
 ### Named agent skill sources
 
