@@ -459,9 +459,7 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
         var expectedWarnings = new[]
         {
             AgentCommandStrings.InitCommand_SkillSourcesExplanation,
-            $"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]",
-            string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_LocalSkillsConflict,
-                "  .agents/skills/aspire/SKILL.md")
+            $"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]"
         };
         var interaction = new TestInteractionService
         {
@@ -480,7 +478,7 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
                     return choices.Cast<IAgentClient>().Where(client => string.Equals(client.Id, "copilot", StringComparisons.AgentClientId)).Cast<object>().ToArray();
                 }
                 Assert.Equal(AgentCommandStrings.InitCommand_SelectSkills, prompt);
-                Assert.Empty(warnings);
+                Assert.Equal(expectedWarnings, warnings);
                 Assert.Equal(["aspire", "playwright-cli"], choices.Cast<string>());
                 Assert.Equal($"aspire — {AgentCommandStrings.InitCommand_AspireSkillChoice}", formatter("aspire"));
                 return ["aspire"];
@@ -501,7 +499,7 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
                         "Global (In your home directory, available across all projects)"
                     ],
                     choices.Cast<object>().Select(formatter));
-                Assert.Empty(warnings);
+                Assert.Equal(expectedWarnings, warnings);
                 Assert.Empty(homeDirectory.GetFileSystemInfos());
                 return AgentConfigurationScope.Global;
             }
@@ -521,7 +519,7 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
             [AgentCommandStrings.InitCommand_SelectAgentsPrompt, AgentCommandStrings.InitCommand_SelectSkills,
                 AgentCommandStrings.InitCommand_ConfigureMcpServerPrompt, AgentCommandStrings.InitCommand_SelectScopePrompt],
             prompts);
-        Assert.Empty(warnings);
+        Assert.Equal(expectedWarnings, warnings);
         Assert.Equal(skill, await File.ReadAllTextAsync(skillPath));
         var copilot = provider.GetServices<IAgentClient>().Single(client =>
             string.Equals(client.Id, "copilot", StringComparisons.AgentClientId));
