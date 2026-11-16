@@ -280,7 +280,7 @@
     <value>Invalid skill/tool selection '{0}'. Use {1}, '{2}', or '{3}'.</value>
   </data>
   <data name="InitCommand_AspireSkillChoice" xml:space="preserve">
-    <value>Agent assets from configured skill sources</value>
+    <value>Agent plugins from configured agent plugin sources</value>
   </data>
   <data name="InitCommand_RemoveSkillCopiesOptionDescription" xml:space="preserve">
     <value>Remove copied Aspire skills when the Aspire skills plugin replaces them at the selected scope. Defaults to false</value>
@@ -319,13 +319,13 @@
     <value>It is reached through a linked folder that may be shared. Remove it manually if it is no longer needed.</value>
     <comment>Failure reason shown after InitCommand_RemoveSkillCopyFailed.</comment>
   </data>
-  <data name="InitCommand_SkillSourcesExplanation" xml:space="preserve">
-    <value>One or more skill sources are configured. A skill source lets an organization share skills to customize your development experience.</value>
+  <data name="InitCommand_AgentPluginSourcesExplanation" xml:space="preserve">
+    <value>One or more agent plugin sources are configured. An agent plugin source lets an organization share agent plugins to customize your development experience.</value>
   </data>
-  <data name="InitCommand_SkillSources" xml:space="preserve">
-    <value>Skill sources:
+  <data name="InitCommand_AgentPluginSources" xml:space="preserve">
+    <value>Agent plugin sources:
 {0}</value>
-    <comment>{0} lists the configured skill source repository and/or catalog URLs for the selected agent clients, one per line.</comment>
+    <comment>{0} lists the configured agent plugin source repository URLs for the selected agent clients, one per line.</comment>
   </data>
   <data name="InitCommand_ConfiguredTargets" xml:space="preserve">
     <value>Configured sources in {0}</value>

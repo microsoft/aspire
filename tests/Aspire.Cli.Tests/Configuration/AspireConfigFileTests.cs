@@ -11,17 +11,17 @@ namespace Aspire.Cli.Tests.Configuration;
 public class AspireConfigFileTests(ITestOutputHelper outputHelper)
 {
     [Fact]
-    public void FromLegacy_PreservesNamedSkillSources()
+    public void FromLegacy_PreservesNamedAgentPluginSources()
     {
-        var sources = new Dictionary<string, SkillSource>
+        var sources = new Dictionary<string, AgentPluginSource>
         {
             ["default"] = new() { Enabled = false },
             ["team"] = new() { Repository = "example/team" }
         };
 
-        var config = AspireConfigFile.FromLegacy(new AspireJsonConfiguration { SkillSources = sources }, profiles: null);
+        var config = AspireConfigFile.FromLegacy(new AspireJsonConfiguration { AgentPluginSources = sources }, profiles: null);
 
-        Assert.Same(sources, config.SkillSources);
+        Assert.Same(sources, config.AgentPluginSources);
     }
 
     [Fact]
@@ -90,14 +90,14 @@ public class AspireConfigFileTests(ITestOutputHelper outputHelper)
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task LoadAndSave_PreservesSkillSourcePlugins(bool explicitPlugins)
+    public async Task LoadAndSave_PreservesAgentPluginSourcePlugins(bool explicitPlugins)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var path = Path.Combine(workspace.Path, AspireConfigFile.FileName);
         var globalSettingsFile = new FileInfo(Path.Combine(workspace.Path, "globalsettings.json"));
         await File.WriteAllTextAsync(globalSettingsFile.FullName, """
             {
-              "skillSources": {
+              "agentPluginSources": {
                 "team": {
                   "repository": "example/global",
                   "plugins": ["deployment", "operations"]
@@ -108,7 +108,7 @@ public class AspireConfigFileTests(ITestOutputHelper outputHelper)
         var plugins = explicitPlugins ? """, "plugins": ["local", "release"]""" : string.Empty;
         await File.WriteAllTextAsync(path, $$"""
             {
-              "skillSources": {
+              "agentPluginSources": {
                 "default": { "enabled": false },
                 "team": { "repository": "example/local"{{plugins}} }
               }
@@ -117,14 +117,14 @@ public class AspireConfigFileTests(ITestOutputHelper outputHelper)
         string[] expectedPlugins = explicitPlugins
             ? ["local@team", "release@team"]
             : ["deployment@team", "operations@team"];
-        Assert.Equal(expectedPlugins, Assert.Single(SkillSource.Resolve(workspace.WorkspaceRoot, globalSettingsFile)).GetPluginNames());
+        Assert.Equal(expectedPlugins, Assert.Single(AgentPluginSource.Resolve(workspace.WorkspaceRoot, globalSettingsFile)).GetPluginNames());
 
         var config = AspireConfigFile.Load(workspace.Path);
         Assert.NotNull(config);
         config.Channel = "daily";
         config.Save(workspace.Path);
 
-        var source = Assert.Single(SkillSource.Resolve(workspace.WorkspaceRoot, globalSettingsFile));
+        var source = Assert.Single(AgentPluginSource.Resolve(workspace.WorkspaceRoot, globalSettingsFile));
         Assert.Equal("example/local", source.Repository);
         Assert.Equal(expectedPlugins, source.GetPluginNames());
         await Verify(await File.ReadAllTextAsync(path), "json").UseParameters(explicitPlugins);

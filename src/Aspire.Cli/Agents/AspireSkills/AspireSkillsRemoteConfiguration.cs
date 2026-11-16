@@ -16,8 +16,10 @@ internal static class AspireSkillsRemoteConfiguration
     internal const string PluginName = "aspire@aspire-skills";
     internal const string Repository = "microsoft/aspire-skills";
     internal const string RepositoryUrl = "https://github.com/" + Repository;
+    internal const string OpenCodeV1Catalog = "https://raw.githubusercontent.com/microsoft/aspire-skills/main/opencode/v1/";
+    internal const string OpenCodeV2Catalog = "https://raw.githubusercontent.com/microsoft/aspire-skills/main/opencode/v2/";
 
-    public static bool HasPluginRegistration(IEnumerable<string> settings, IReadOnlyList<SkillSource> sources)
+    public static bool HasPluginRegistration(IEnumerable<string> settings, IReadOnlyList<AgentPluginSource> sources)
     {
         // Disabling new registrations does not disable a plugin already active in an agent.
         var pluginNames = sources.SelectMany(source => source.GetPluginNames()).Prepend(PluginName).Distinct(StringComparer.Ordinal).ToArray();
@@ -49,51 +51,40 @@ internal static class AspireSkillsRemoteConfiguration
         return enabled.Count > 0;
     }
 
-    public static void ApplyOpenCodeCatalog(JsonObject root, IEnumerable<JsonObject> configs, IReadOnlyList<SkillSource> skillSources)
+    // OpenCode consumes skill catalogs rather than plugin marketplaces, so agent plugin sources
+    // cannot be registered with it. It only receives the built-in Aspire catalog.
+    public static void ApplyOpenCodeCatalog(JsonObject root, IEnumerable<JsonObject> configs)
     {
-        var target = ReadOpenCodeSkills(root);
-        var settings = configs.ToArray();
-        foreach (var source in skillSources)
+        var catalog = root["skills"] is JsonArray ? OpenCodeV2Catalog : OpenCodeV1Catalog;
+        string? preferred = null;
+        foreach (var config in configs)
         {
-            var catalog = root["skills"] is JsonArray
-                ? source.OpenCodeV2Catalog ?? source.OpenCodeV1Catalog
-                : source.OpenCodeV1Catalog ?? source.OpenCodeV2Catalog;
-            if (catalog is null)
+            if (ReadOpenCodeSkills(config)?.Select(String).FirstOrDefault(IsOpenCodeCatalog) is { } existing &&
+                (preferred is null || preferred.Contains("/main/opencode/", StringComparison.Ordinal)))
             {
-                continue;
+                preferred = existing;
             }
-            string? preferred = null;
-            foreach (var config in settings)
-            {
-                var sources = ReadOpenCodeSkills(config);
-                if (sources?.Select(String).FirstOrDefault(value => IsOpenCodeCatalog(value, source)) is { } existing &&
-                    (preferred is null || preferred.Contains("/main/opencode/", StringComparison.Ordinal)))
-                {
-                    preferred = existing;
-                }
-            }
+        }
 
-            // V2 accepts V1 skills objects and native arrays independently of MCP.
-            // Catalog URLs identify content and pins, not the surrounding JSON syntax.
-            // https://github.com/anomalyco/opencode/blob/52a10f573f1da5103c85990da9341e3645a39365/services/www/src/docs/content/migrate-v1.mdx#skills
-            preferred ??= catalog;
-            if (target is null)
-            {
-                // With no skills setting, use the object form supported by both clients.
-                target = new JsonArray();
-                Object(root, "skills")["urls"] = target;
-            }
-            if (!target.Any(value => IsOpenCodeCatalog(String(value), source)))
-            {
-                target.Add((JsonNode?)preferred);
-            }
+        // V2 accepts V1 skills objects and native arrays independently of MCP.
+        // Catalog URLs identify content and pins, not the surrounding JSON syntax.
+        // https://github.com/anomalyco/opencode/blob/52a10f573f1da5103c85990da9341e3645a39365/services/www/src/docs/content/migrate-v1.mdx#skills
+        preferred ??= catalog;
+        var target = ReadOpenCodeSkills(root);
+        if (target is null)
+        {
+            // With no skills setting, use the object form supported by both clients.
+            target = new JsonArray();
+            Object(root, "skills")["urls"] = target;
+        }
+        if (!target.Any(value => IsOpenCodeCatalog(String(value))))
+        {
+            target.Add((JsonNode?)preferred);
         }
     }
 
-    public static bool HasOpenCodeCatalog(JsonObject root, IReadOnlyList<SkillSource> sources)
-        => ReadOpenCodeSkills(root)?.Any(value =>
-            IsOpenCodeCatalog(String(value), SkillSource.BuiltIn) ||
-            sources.Any(source => IsOpenCodeCatalog(String(value), source))) is true;
+    public static bool HasOpenCodeCatalog(JsonObject root)
+        => ReadOpenCodeSkills(root)?.Any(value => IsOpenCodeCatalog(String(value))) is true;
 
     internal static JsonArray? ReadOpenCodeSkills(JsonObject root)
     {
@@ -111,23 +102,18 @@ internal static class AspireSkillsRemoteConfiguration
         return Strings(skills.AsArray());
     }
 
-    internal static bool IsOpenCodeCatalog(string? source, SkillSource configuration)
+    internal static bool IsOpenCodeCatalog(string? source)
     {
         if (source is null)
         {
             return false;
         }
-        if (source == configuration.OpenCodeV1Catalog || source == configuration.OpenCodeV2Catalog)
+        if (source is OpenCodeV1Catalog or OpenCodeV2Catalog)
         {
             return true;
         }
-        // Recognize existing official release/commit pins only when using the built-in
-        // catalog. Custom catalog URLs are identities and must match exactly.
-        if (configuration.OpenCodeV1Catalog != SkillSource.DefaultV1Catalog &&
-            configuration.OpenCodeV2Catalog != SkillSource.DefaultV2Catalog)
-        {
-            return false;
-        }
+        // Also recognize existing official release/commit pins, for example
+        // https://raw.githubusercontent.com/microsoft/aspire-skills/v1.2.0/opencode/v2/
         if (!Uri.TryCreate(source, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps ||
             !uri.Host.Equals("raw.githubusercontent.com", StringComparison.OrdinalIgnoreCase) ||
             !uri.AbsolutePath.StartsWith("/microsoft/aspire-skills/", StringComparison.OrdinalIgnoreCase))
@@ -136,13 +122,12 @@ internal static class AspireSkillsRemoteConfiguration
         }
 
         var path = uri.AbsolutePath.TrimEnd('/');
-        return configuration.OpenCodeV1Catalog == SkillSource.DefaultV1Catalog && path.EndsWith("/opencode/v1", StringComparison.Ordinal) ||
-            configuration.OpenCodeV2Catalog == SkillSource.DefaultV2Catalog && path.EndsWith("/opencode/v2", StringComparison.Ordinal);
+        return path.EndsWith("/opencode/v1", StringComparison.Ordinal) || path.EndsWith("/opencode/v2", StringComparison.Ordinal);
     }
 
     public static async Task ApplyPluginAsync(
         JsonObject root, IEnumerable<string> settingsPaths, string targetPath,
-        AgentConfiguration edit, IReadOnlyList<SkillSource> sources, CancellationToken cancellationToken)
+        AgentConfiguration edit, IReadOnlyList<AgentPluginSource> sources, CancellationToken cancellationToken)
     {
         if (sources.Count == 0)
         {
@@ -160,16 +145,16 @@ internal static class AspireSkillsRemoteConfiguration
                 }
             }
         }
-        foreach (var skillSource in sources)
+        foreach (var agentPluginSource in sources)
         {
-            ApplyPlugin(root, settings, skillSource);
+            ApplyPlugin(root, settings, agentPluginSource);
         }
     }
 
-    private static void ApplyPlugin(JsonObject root, IReadOnlyList<JsonObject> settings, SkillSource skillSource)
+    private static void ApplyPlugin(JsonObject root, IReadOnlyList<JsonObject> settings, AgentPluginSource agentPluginSource)
     {
-        var marketplaceName = skillSource.Marketplace!;
-        var pluginNames = skillSource.GetPluginNames().ToArray();
+        var marketplaceName = agentPluginSource.Marketplace!;
+        var pluginNames = agentPluginSource.GetPluginNames().ToArray();
         JsonObject? selectedSource = null;
         foreach (var config in settings.Append(root))
         {
@@ -189,7 +174,7 @@ internal static class AspireSkillsRemoteConfiguration
                 var source = OptionalObject(marketplaceNode.AsObject(), "source");
                 ArgumentNullException.ThrowIfNull(source);
 
-                if (!IsMatchingSource(source, skillSource))
+                if (!IsMatchingSource(source, agentPluginSource))
                 {
                     throw ExistingConfiguration($"extraKnownMarketplaces.{marketplaceName}.source");
                 }
@@ -204,12 +189,12 @@ internal static class AspireSkillsRemoteConfiguration
 
         if (selectedSource is null)
         {
-            selectedSource = SkillSource.IsGitHubRepository(skillSource.Repository!)
-                ? new JsonObject { ["source"] = "github", ["repo"] = skillSource.Repository }
-                : new JsonObject { ["source"] = "git", ["url"] = skillSource.Repository };
-            if (skillSource.Ref is not null)
+            selectedSource = AgentPluginSource.IsGitHubRepository(agentPluginSource.Repository!)
+                ? new JsonObject { ["source"] = "github", ["repo"] = agentPluginSource.Repository }
+                : new JsonObject { ["source"] = "git", ["url"] = agentPluginSource.Repository };
+            if (agentPluginSource.Ref is not null)
             {
-                selectedSource["ref"] = skillSource.Ref;
+                selectedSource["ref"] = agentPluginSource.Ref;
             }
         }
 
@@ -312,7 +297,7 @@ internal static class AspireSkillsRemoteConfiguration
     internal static InvalidOperationException ExistingConfiguration(string key)
         => new(string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_ExistingConfigurationConflict, key));
 
-    private static bool IsMatchingSource(JsonObject source, SkillSource configuration)
+    private static bool IsMatchingSource(JsonObject source, AgentPluginSource configuration)
     {
         return String(source["source"]) switch
         {

@@ -141,7 +141,7 @@ public partial class NewCommandLocalTemplateTests
             ReadConfiguration = (_, _) => Task.FromResult(("version-1", JsonNode.Parse($$"""
                 {
                   "templateSources": { "enterprise": { "path": {{JsonSerializer.Serialize(Path.Combine(workspace.Path, "enterprise"))}}, "displayName": "Team [templates]" } },
-                  "skillSources": { "team": { "repository": "example/team", "plugins": ["deployment"] } },
+                  "agentPluginSources": { "team": { "repository": "example/team", "plugins": ["deployment"] } },
                   "docs": { "llmsTxtUrl": "https://docs.example/llms.txt" }
                 }
                 """)!.AsObject()))

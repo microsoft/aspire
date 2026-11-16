@@ -321,7 +321,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         git.ReadConfiguration = (source, _) =>
         {
             operations.Enqueue(source);
-            return Task.FromResult(("version-2", new JsonObject { ["skillSources"] = new JsonObject { ["team"] = new JsonObject { ["repository"] = "example/updated" } } }));
+            return Task.FromResult(("version-2", new JsonObject { ["agentPluginSources"] = new JsonObject { ["team"] = new JsonObject { ["repository"] = "example/updated" } } }));
         };
         git.InspectConfiguration = (source, _) =>
         {
@@ -344,7 +344,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
                 var configuration = JsonNode.Parse(await File.ReadAllTextAsync(path))!;
                 Assert.Equal("version-2", configuration["configSource"]!["appliedVersion"]!.GetValue<string>());
                 Assert.Equal(directory.Name, configuration["custom"]!.GetValue<string>());
-                Assert.Equal("example/updated", configuration["skillSources"]!["team"]!["repository"]!.GetValue<string>());
+                Assert.Equal("example/updated", configuration["agentPluginSources"]!["team"]!["repository"]!.GetValue<string>());
             }
             else
             {
@@ -656,7 +656,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
                     "appliedVersion": "version-1",
                 },
                 /* Keep local settings when applying a source update. */
-                "skillSources": {
+                "agentPluginSources": {
                     "team": { "repository": "example/local", },
                 },
                 "custom": "preserved",
@@ -667,7 +667,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         {
             ReadConfiguration = (_, _) => Task.FromResult(("version-2", new JsonObject
             {
-                ["skillSources"] = new JsonObject { ["team"] = new JsonObject { ["repository"] = "example/shared" } }
+                ["agentPluginSources"] = new JsonObject { ["team"] = new JsonObject { ["repository"] = "example/shared" } }
             }))
         };
         var interaction = new TestInteractionService();
@@ -680,7 +680,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         var configuration = JsonNode.Parse(await File.ReadAllTextAsync(path), documentOptions: ConfigurationHelper.ParseOptions)!;
         Assert.Equal("preserved", configuration["custom"]!.GetValue<string>());
         Assert.Equal(update ? "example/shared" : "example/local",
-            configuration["skillSources"]!["team"]!["repository"]!.GetValue<string>());
+            configuration["agentPluginSources"]!["team"]!["repository"]!.GetValue<string>());
         Assert.Equal(update ? "version-2" : "version-1",
             configuration["configSource"]!["appliedVersion"]!.GetValue<string>());
         Assert.Equal(update ? 1 : 0, git.Calls);
@@ -1297,7 +1297,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         var git = new TestConfigSourceRepository
         {
             ReadConfiguration = (_, _) => Task.FromResult(("version-1", JsonNode.Parse("""
-                {"skillSources":{"team":{"repository":"example/team","custom":"copied"}},"DOCS":{"LLMSTXTURL":"https://docs.example/llms.txt","API":{"SITEMAPURL":null,"excluded":"remote"}},"sdk":{"version":"99.0.0"},"features":{"remote":true},"custom":"remote"}
+                {"agentPluginSources":{"team":{"repository":"example/team","custom":"copied"}},"DOCS":{"LLMSTXTURL":"https://docs.example/llms.txt","API":{"SITEMAPURL":null,"excluded":"remote"}},"sdk":{"version":"99.0.0"},"features":{"remote":true},"custom":"remote"}
                 """)!.AsObject()))
         };
         var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git);
@@ -1311,17 +1311,17 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task Materialize_CopiesEntireSkillSourcesSection()
+    public async Task Materialize_CopiesEntireAgentPluginSourcesSection()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var path = Path.Combine(workspace.Path, AspireConfigFile.FileName);
         await File.WriteAllTextAsync(path, """
-            {"skillSources":{"default":{"enabled":false},"team":{"repository":"example/old","plugins":["existing"]},"local":{"repository":"example/local"}}}
+            {"agentPluginSources":{"default":{"enabled":false},"team":{"repository":"example/old","plugins":["existing"]},"local":{"repository":"example/local"}}}
             """);
         var git = new TestConfigSourceRepository
         {
             ReadConfiguration = (_, _) => Task.FromResult(("version-1", JsonNode.Parse("""
-                {"SKILLSOURCES":{"TEAM":{"REPOSITORY":"example/new","excluded":"remote"},"extra":{"repository":"example/extra","openCodeV1Catalog":"https://example.com/v1/"}}}
+                {"AGENTPLUGINSOURCES":{"TEAM":{"REPOSITORY":"example/new","excluded":"remote"},"extra":{"repository":"example/extra","ref":"main"}}}
                 """)!.AsObject()))
         };
         using var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git);
@@ -1353,18 +1353,18 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task Update_ReplacesSkillSourcesAndPreservesExcludedDocs()
+    public async Task Update_ReplacesAgentPluginSourcesAndPreservesExcludedDocs()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         await TestConfigSourceServices.SaveBindingAsync(s_appliedSource, workspace.WorkspaceRoot, CancellationToken.None);
         var path = Path.Combine(workspace.Path, AspireConfigFile.FileName);
-        await ConfigurationService.SetConfigurationInFileAsync(path, "skillSources.local.repository", "example/local");
-        await ConfigurationService.SetConfigurationInFileAsync(path, "skillSources.local.plugins.0", "existing");
+        await ConfigurationService.SetConfigurationInFileAsync(path, "agentPluginSources.local.repository", "example/local");
+        await ConfigurationService.SetConfigurationInFileAsync(path, "agentPluginSources.local.plugins.0", "existing");
         await ConfigurationService.SetConfigurationInFileAsync(path, "docs.llmsTxtUrl", "https://local.example/docs");
         var git = new TestConfigSourceRepository
         {
             ReadConfiguration = (_, _) => Task.FromResult(("version-2", JsonNode.Parse("""
-                {"skillSources:team:repository":"example/remote","skillSources:team:arbitrary":"copied","docs":{"llmsTxtUrl":"https://remote.example/docs"}}
+                {"agentPluginSources:team:repository":"example/remote","agentPluginSources:team:arbitrary":"copied","docs":{"llmsTxtUrl":"https://remote.example/docs"}}
                 """)!.AsObject()))
         };
         var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git);
@@ -1373,21 +1373,21 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
 
         var config = AspireConfigFile.Load(workspace.Path)!;
         Assert.Equal("https://local.example/docs", config.Docs!.LlmsTxtUrl);
-        Assert.Equal("example/remote", Assert.Single(config.SkillSources!).Value.Repository);
+        Assert.Equal("example/remote", Assert.Single(config.AgentPluginSources!).Value.Repository);
         Assert.Equal("version-2", config.ConfigSource!.AppliedVersion);
         var settings = JsonNode.Parse(await File.ReadAllTextAsync(path))!.AsObject();
-        Assert.Equal(["configSource", "skillSources", "docs"], settings.Select(p => p.Key));
-        Assert.Equal(["team"], settings["skillSources"]!.AsObject().Select(p => p.Key));
-        Assert.Equal(["repository", "arbitrary"], settings["skillSources"]!["team"]!.AsObject().Select(p => p.Key));
+        Assert.Equal(["configSource", "agentPluginSources", "docs"], settings.Select(p => p.Key));
+        Assert.Equal(["team"], settings["agentPluginSources"]!.AsObject().Select(p => p.Key));
+        Assert.Equal(["repository", "arbitrary"], settings["agentPluginSources"]!["team"]!.AsObject().Select(p => p.Key));
     }
 
     [Fact]
-    public async Task Update_PreservesSkillSourcesWhenOmitted()
+    public async Task Update_PreservesAgentPluginSourcesWhenOmitted()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         await TestConfigSourceServices.SaveBindingAsync(s_appliedSource, workspace.WorkspaceRoot, CancellationToken.None);
         var path = Path.Combine(workspace.Path, AspireConfigFile.FileName);
-        await ConfigurationService.SetConfigurationInFileAsync(path, "skillSources.team.repository", "example/local");
+        await ConfigurationService.SetConfigurationInFileAsync(path, "agentPluginSources.team.repository", "example/local");
         await ConfigurationService.SetConfigurationInFileAsync(path, "docs.llmsTxtUrl", "https://local.example/docs");
         var git = new TestConfigSourceRepository
         {
@@ -1411,7 +1411,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         await TestConfigSourceServices.SaveBindingAsync(s_appliedSource, workspace.WorkspaceRoot, CancellationToken.None);
         var path = Path.Combine(workspace.Path, AspireConfigFile.FileName);
         var configuration = JsonNode.Parse(await File.ReadAllTextAsync(path))!.AsObject();
-        configuration["skillSources"] = JsonNode.Parse("""
+        configuration["agentPluginSources"] = JsonNode.Parse("""
             {"team":{"repository":"example/local","custom":{"setting":"local"},"custom:key":"literal"}}
             """);
         configuration["profiles"] = JsonNode.Parse("""
@@ -1422,8 +1422,8 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         var git = new TestConfigSourceRepository
         {
             ReadConfiguration = (_, _) => Task.FromResult(("version-2", JsonNode.Parse(flattenedSource
-                ? """{"skillSources":{"team":{"repository":"example/remote","custom:setting":"remote"}}}"""
-                : """{"skillSources":{"team":{"repository":"example/remote","custom":{"setting":"remote"}}}}""")!.AsObject()))
+                ? """{"agentPluginSources":{"team":{"repository":"example/remote","custom:setting":"remote"}}}"""
+                : """{"agentPluginSources":{"team":{"repository":"example/remote","custom":{"setting":"remote"}}}}""")!.AsObject()))
         };
         using var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git);
 
@@ -1433,7 +1433,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         using var stream = new MemoryStream(Encoding.UTF8.GetBytes(content));
         using var parsed = new ConfigurationManager();
         parsed.AddJsonStream(stream);
-        Assert.Equal("remote", parsed["skillSources:team:custom:setting"]);
+        Assert.Equal("remote", parsed["agentPluginSources:team:custom:setting"]);
         Assert.Equal("version-2", parsed["configSource:appliedVersion"]);
         var config = AspireConfigFile.Load(workspace.Path)!;
         Assert.Equal(new Dictionary<string, string> { ["Logging:LogLevel:Default"] = "Debug" },
@@ -1448,12 +1448,12 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         await TestConfigSourceServices.SaveBindingAsync(s_appliedSource, workspace.WorkspaceRoot, CancellationToken.None);
         var path = Path.Combine(workspace.Path, AspireConfigFile.FileName);
         var configuration = JsonNode.Parse(await File.ReadAllTextAsync(path))!.AsObject();
-        configuration["skillSources"] = JsonNode.Parse("""{"team":{"repository":"example/local","custom:setting":"local"}}""");
+        configuration["agentPluginSources"] = JsonNode.Parse("""{"team":{"repository":"example/local","custom:setting":"local"}}""");
         await File.WriteAllTextAsync(path, configuration.ToJsonString());
         var git = new TestConfigSourceRepository
         {
             ReadConfiguration = (_, _) => Task.FromResult(("version-2", JsonNode.Parse("""
-                {"skillSources":{"team":{"repository":"example/remote","custom":{"setting":"remote"}}}}
+                {"agentPluginSources":{"team":{"repository":"example/remote","custom":{"setting":"remote"}}}}
                 """)!.AsObject()))
         };
         using var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git);
@@ -1470,17 +1470,17 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         await TestConfigSourceServices.SaveBindingAsync(s_appliedSource, workspace.WorkspaceRoot, CancellationToken.None);
         var path = Path.Combine(workspace.Path, AspireConfigFile.FileName);
         var configuration = JsonNode.Parse(await File.ReadAllTextAsync(path))!.AsObject();
-        configuration["SKILLSOURCES"] = JsonNode.Parse("""
+        configuration["AGENTPLUGINSOURCES"] = JsonNode.Parse("""
             {"first":{"repository":"example/first","custom":"local"}}
             """);
-        configuration["skillSources"] = JsonNode.Parse("""
+        configuration["agentPluginSources"] = JsonNode.Parse("""
             {"second":{"repository":"example/second"}}
             """);
         await File.WriteAllTextAsync(path, configuration.ToJsonString());
         var git = new TestConfigSourceRepository
         {
             ReadConfiguration = (_, _) => Task.FromResult(("version-2", JsonNode.Parse("""
-                {"SKILLSOURCES":{"first":{"repository":"example/updated"}},"skillSources":{"second":{"repository":"example/second","openCodeV1Catalog":null,"custom":"remote"}}}
+                {"AGENTPLUGINSOURCES":{"first":{"repository":"example/updated"}},"agentPluginSources":{"second":{"repository":"example/second","ref":null,"custom":"remote"}}}
                 """)!.AsObject()))
         };
         using var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git);
@@ -1491,10 +1491,10 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         using var stream = new MemoryStream(Encoding.UTF8.GetBytes(content));
         using var parsed = new ConfigurationManager();
         parsed.AddJsonStream(stream);
-        Assert.Equal("example/updated", parsed["skillSources:first:repository"]);
-        Assert.Equal("example/second", parsed["skillSources:second:repository"]);
-        Assert.Null(parsed["skillSources:second:openCodeV1Catalog"]);
-        Assert.Equal("remote", parsed["skillSources:second:custom"]);
+        Assert.Equal("example/updated", parsed["agentPluginSources:first:repository"]);
+        Assert.Equal("example/second", parsed["agentPluginSources:second:repository"]);
+        Assert.Null(parsed["agentPluginSources:second:ref"]);
+        Assert.Equal("remote", parsed["agentPluginSources:second:custom"]);
         await Verify(content, "json");
     }
 
@@ -1870,7 +1870,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
                 fetched.SetResult();
                 return Task.FromResult(("version-1", new JsonObject
                 {
-                    ["skillSources"] = new JsonObject { ["team"] = new JsonObject { ["repository"] = "example/team" } }
+                    ["agentPluginSources"] = new JsonObject { ["team"] = new JsonObject { ["repository"] = "example/team" } }
                 }));
             }
         };
@@ -1889,7 +1889,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
 
         var configuration = JsonNode.Parse(await File.ReadAllTextAsync(path))!;
         Assert.Equal("intervening edit", configuration["custom"]!.GetValue<string>());
-        Assert.Equal("example/team", configuration["skillSources"]!["team"]!["repository"]!.GetValue<string>());
+        Assert.Equal("example/team", configuration["agentPluginSources"]!["team"]!["repository"]!.GetValue<string>());
         Assert.Equivalent(s_appliedSource, AspireConfigFile.Load(workspace.Path)!.ConfigSource, strict: true);
     }
 
@@ -1985,7 +1985,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         await TestConfigSourceServices.SaveBindingAsync(s_appliedSource, workspace.WorkspaceRoot, CancellationToken.None);
         var path = Path.Combine(workspace.Path, AspireConfigFile.FileName);
-        await ConfigurationService.SetConfigurationInFileAsync(path, "skillSources.team.repository", "example/local");
+        await ConfigurationService.SetConfigurationInFileAsync(path, "agentPluginSources.team.repository", "example/local");
         var original = await File.ReadAllTextAsync(path);
         var git = new TestConfigSourceRepository();
         var detector = new TestConfigSourceDetector { IsInternal = true };
@@ -2074,7 +2074,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         var git = new TestConfigSourceRepository
         {
             ReadConfiguration = (_, _) => Task.FromResult(("version-1", JsonNode.Parse("""
-                {"skillSources":{"team":{"repository":"example/team"}}}
+                {"agentPluginSources":{"team":{"repository":"example/team"}}}
                 """)!.AsObject()))
         };
         using var first = TestConfigSourceServices.Create(context, git: git, clock: clock);
@@ -2092,7 +2092,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         }
         if (localEdits)
         {
-            await ConfigurationService.SetConfigurationInFileAsync(path, "skillSources.team.repository", "example/local");
+            await ConfigurationService.SetConfigurationInFileAsync(path, "agentPluginSources.team.repository", "example/local");
         }
         clock.UtcNow += TimeSpan.FromSeconds(1);
         var interaction = new TestInteractionService();

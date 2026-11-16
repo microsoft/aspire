@@ -22,7 +22,7 @@ public class SettingsSchemaBuilderTests
         })
         {
             foreach (var source in schema.Properties.Where(property =>
-                property.Name is "integrationSources" or "skillSources" or "templateSources"))
+                property.Name is "integrationSources" or "agentPluginSources" or "templateSources"))
             {
                 Assert.EndsWith(SourceNameValidator.Description, source.Description, StringComparison.Ordinal);
             }
@@ -49,8 +49,8 @@ public class SettingsSchemaBuilderTests
         var schema = SettingsSchemaBuilder.BuildConfigFileSchema(excludeLocalOnly: false);
 
         Assert.Equal(
-            ["appHost", "certificates", "channel", "configSource", "containerTunnel", "docs", "features",
-                "integrationSources", "packages", "portAllocation", "profiles", "sdk", "skillSources", "templateSources"],
+            ["agentPluginSources", "appHost", "certificates", "channel", "configSource", "containerTunnel", "docs", "features",
+                "integrationSources", "packages", "portAllocation", "profiles", "sdk", "templateSources"],
             schema.Properties.Select(property => property.Name));
         var configSource = Assert.Single(schema.Properties, property => property.Name == "configSource");
         Assert.NotNull(configSource.SubProperties);
@@ -82,7 +82,7 @@ public class SettingsSchemaBuilderTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public void BuildSchema_IncludesNamedSkillSources(bool global)
+    public void BuildSchema_IncludesNamedAgentPluginSources(bool global)
     {
         foreach (var schema in new[]
         {
@@ -90,12 +90,12 @@ public class SettingsSchemaBuilderTests
             SettingsSchemaBuilder.BuildConfigFileSchema(excludeLocalOnly: global)
         })
         {
-            var skillSources = Assert.Single(schema.Properties, property => property.Name == "skillSources");
-            Assert.Equal("object", skillSources.AdditionalPropertiesType);
+            var agentPluginSources = Assert.Single(schema.Properties, property => property.Name == "agentPluginSources");
+            Assert.Equal("object", agentPluginSources.AdditionalPropertiesType);
             Assert.Equal(
-                ["enabled", "repository", "marketplace", "plugins", "ref", "openCodeV1Catalog", "openCodeV2Catalog"],
-                skillSources.SubProperties!.Select(property => property.Name));
-            Assert.Equal("array", Assert.Single(skillSources.SubProperties!, property => property.Name == "plugins").Type);
+                ["enabled", "repository", "marketplace", "plugins", "ref"],
+                agentPluginSources.SubProperties!.Select(property => property.Name));
+            Assert.Equal("array", Assert.Single(agentPluginSources.SubProperties!, property => property.Name == "plugins").Type);
         }
     }
 

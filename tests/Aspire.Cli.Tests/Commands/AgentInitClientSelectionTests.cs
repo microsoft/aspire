@@ -39,10 +39,10 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
         var copilot = provider.GetServices<IAgentClient>().Single(client => string.Equals(client.Id, "copilot", StringComparisons.AgentClientId));
         Assert.True(copilot.HasIntegrationRegistration(
-            workspace.WorkspaceRoot, AgentConfigurationScope.Project, [SkillSource.BuiltIn]));
+            workspace.WorkspaceRoot, AgentConfigurationScope.Project, [AgentPluginSource.BuiltIn]));
         Assert.False(provider.GetServices<IAgentClient>()
             .Single(client => string.Equals(client.Id, "claude", StringComparisons.AgentClientId))
-            .HasIntegrationRegistration(workspace.WorkspaceRoot, AgentConfigurationScope.Project, [SkillSource.BuiltIn]));
+            .HasIntegrationRegistration(workspace.WorkspaceRoot, AgentConfigurationScope.Project, [AgentPluginSource.BuiltIn]));
         Assert.False(Directory.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills")));
         Assert.Equal(AgentEnvironment.CopilotApp | AgentEnvironment.CopilotCli | AgentEnvironment.VsCode, copilot.Environments);
     }
@@ -112,7 +112,7 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
             clients.Where(client =>
                     File.Exists(client.GetIntegrationConfigPath(selectedScope, workspace.WorkspaceRoot)) &&
                     client.HasIntegrationRegistration(
-                        workspace.WorkspaceRoot, selectedScope, [SkillSource.BuiltIn]))
+                        workspace.WorkspaceRoot, selectedScope, [AgentPluginSource.BuiltIn]))
                 .Select(client => client.GetIntegrationConfigPath(selectedScope, workspace.WorkspaceRoot))
                 .Distinct().Order(StringComparer.Ordinal));
         var unselectedRoot = scope == "project" ? homeDirectory : workspace.WorkspaceRoot;
@@ -519,7 +519,7 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
         var copilot = provider.GetServices<IAgentClient>().Single(client =>
             string.Equals(client.Id, "copilot", StringComparisons.AgentClientId));
         Assert.True(copilot.HasIntegrationRegistration(
-            workspace.WorkspaceRoot, AgentConfigurationScope.Global, [SkillSource.BuiltIn]));
+            workspace.WorkspaceRoot, AgentConfigurationScope.Global, [AgentPluginSource.BuiltIn]));
         Assert.True(File.Exists(Path.Combine(homeDirectory.FullName, ".copilot", "mcp-config.json")));
     }
 
@@ -531,7 +531,7 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var homeDirectory = workspace.CreateDirectory("fake-home");
         await File.WriteAllTextAsync(Path.Combine(workspace.WorkspaceRoot.FullName, "aspire.config.json"),
-            """{"skillSources":{"default":{"repository":""}}}""");
+            """{"agentPluginSources":{"default":{"repository":""}}}""");
         var skillsPrompted = false;
         var interaction = new TestInteractionService
         {
@@ -614,7 +614,7 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
             .Where(client => client.Id is "copilot" or "opencode"))
         {
             Assert.True(client.HasIntegrationRegistration(
-                workspace.WorkspaceRoot, AgentConfigurationScope.Project, [SkillSource.BuiltIn]));
+                workspace.WorkspaceRoot, AgentConfigurationScope.Project, [AgentPluginSource.BuiltIn]));
         }
     }
 
@@ -1372,11 +1372,11 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
     [Theory]
     [InlineData("aspire", false, null, true)]
     [InlineData("aspire", false, "{}", true)]
-    [InlineData("aspire", false, """{"skillSources":{}}""", true)]
-    [InlineData("aspire", false, """{"skillSources":{"contoso":{"repository":"contoso/skills"}}}""", true)]
-    [InlineData("aspire", false, """{"skillSources":{"default":{"enabled":false},"contoso":{"repository":"contoso/skills"}}}""", false)]
-    [InlineData("aspire", false, """{"skillSources":{"default":{"plugins":["other"]}}}""", false)]
-    [InlineData("aspire", true, """{"skillSources":{"default":{"enabled":false},"contoso":{"repository":"contoso/skills"}}}""", true)]
+    [InlineData("aspire", false, """{"agentPluginSources":{}}""", true)]
+    [InlineData("aspire", false, """{"agentPluginSources":{"contoso":{"repository":"contoso/skills"}}}""", true)]
+    [InlineData("aspire", false, """{"agentPluginSources":{"default":{"enabled":false},"contoso":{"repository":"contoso/skills"}}}""", false)]
+    [InlineData("aspire", false, """{"agentPluginSources":{"default":{"plugins":["other"]}}}""", false)]
+    [InlineData("aspire", true, """{"agentPluginSources":{"default":{"enabled":false},"contoso":{"repository":"contoso/skills"}}}""", true)]
     [InlineData("none", true, null, true)]
     [InlineData("playwright-cli", false, null, false)]
     public async Task AgentInit_Hooks_RequireAspireSkillsPluginOrMcp(string skills, bool mcp, string? config, bool expectHooks)
@@ -1586,7 +1586,7 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
         var claude = provider.GetServices<IAgentClient>().Single(client =>
             string.Equals(client.Id, "claude", StringComparisons.AgentClientId));
         Assert.True(claude.HasIntegrationRegistration(
-            workspace.WorkspaceRoot, AgentConfigurationScope.Project, [SkillSource.BuiltIn]));
+            workspace.WorkspaceRoot, AgentConfigurationScope.Project, [AgentPluginSource.BuiltIn]));
         Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".mcp.json")));
     }
 

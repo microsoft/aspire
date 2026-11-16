@@ -16,7 +16,7 @@
 
 ,
   Warnings: [
-    One or more skill sources are configured. A skill source lets an organization share skills to customize your development experience.,
+    One or more agent plugin sources are configured. An agent plugin source lets an organization share agent plugins to customize your development experience.,
     [yellow]Only use sources you trust. Content from these sources can run code on your machine.[/]
   ]
 }

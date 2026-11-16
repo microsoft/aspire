@@ -1,6 +1,6 @@
 # Config-source scenarios for Microsoft first-party developers
 
-This companion to the [CLI config-source specification](cli-config-sources.md) follows hypothetical Microsoft first-party (1P) developers. It describes the CLI's configuration materialization flow. Sources can also supply [named agent skill sources](cli-config-sources.md#named-agent-skill-sources); template and integration customization schemas remain separate future work.
+This companion to the [CLI config-source specification](cli-config-sources.md) follows hypothetical Microsoft first-party (1P) developers. It describes the CLI's configuration materialization flow. Sources can also supply [named agent plugin sources](cli-config-sources.md#named-agent-plugin-sources); template and integration customization schemas remain separate future work.
 
 The Microsoft default configuration repository is `https://msft.ghe.com/coreai/aspire-1p-init`. The developers, application names, team-specific configuration paths, and documentation URLs below are illustrative. The `.example` documentation hosts do not identify actual Microsoft services.
 
@@ -69,7 +69,7 @@ For this scenario, suppose the repository initially supplies:
 
 ```json
 {
-  "skillSources": {
+  "agentPluginSources": {
     "platform": {
       "repository": "https://git.example/platform-skills"
     }
@@ -100,7 +100,7 @@ The relevant excerpt from the project's file is:
     "path": "aspire.config.json",
     "appliedVersion": "<initial-source-file-version>"
   },
-  "skillSources": {
+  "agentPluginSources": {
     "platform": {
       "repository": "https://git.example/platform-skills"
     }
@@ -110,7 +110,7 @@ The relevant excerpt from the project's file is:
 
 This is an excerpt, not a replacement for the generated file. Maya keeps its AppHost, SDK, package, and other project-owned settings.
 
-Only [allowlisted top-level settings](cli-config-sources.md#materialize-an-allowlist-into-the-app-configuration) are copied, not the entire source JSON. `skillSources` and `integrationSources` are allowed, and each is copied in full when supplied. Other source values, including `docs`, AppHost paths, SDK/channel selection, packages, and arbitrary feature settings, are not imported.
+Only [allowlisted top-level settings](cli-config-sources.md#materialize-an-allowlist-into-the-app-configuration) are copied, not the entire source JSON. `agentPluginSources` and `integrationSources` are allowed, and each is copied in full when supplied. Other source values, including `docs`, AppHost paths, SDK/channel selection, packages, and arbitrary feature settings, are not imported.
 
 Maya commits the resulting app file with the application. It contains neither Git credentials nor an absolute tracking path, so another machine can use the saved values immediately.
 
@@ -137,11 +137,11 @@ Maya does not commit the tracking directory or edit it to customize the app. Git
 
 ## Scenario 3: Leo expands the shared configuration, and Maya overrides one setting
 
-Leo maintains the organization's configuration repository. He expands its configuration to include another named skill source:
+Leo maintains the organization's configuration repository. He expands its configuration to include another named agent plugin source:
 
 ```json
 {
-  "skillSources": {
+  "agentPluginSources": {
     "platform": {
       "repository": "https://git.example/platform-skills"
     },
@@ -159,10 +159,10 @@ Maya explicitly applies the update as described in scenario 5. Both named source
 
 ```powershell
 Set-Location .\Inventory
-aspire config set skillSources.inventory.ref preview
+aspire config set agentPluginSources.inventory.ref preview
 ```
 
-Her project file now contains all the skill sources, with her edit to the inventory source's ref, in addition to its other project settings:
+Her project file now contains all the agent plugin sources, with her edit to the inventory source's ref, in addition to its other project settings:
 
 ```json
 {
@@ -171,7 +171,7 @@ Her project file now contains all the skill sources, with her edit to the invent
     "path": "aspire.config.json",
     "appliedVersion": "<expanded-source-file-version>"
   },
-  "skillSources": {
+  "agentPluginSources": {
     "platform": {
       "repository": "https://git.example/platform-skills"
     },
@@ -185,13 +185,13 @@ Her project file now contains all the skill sources, with her edit to the invent
 
 There is no extra source-defaults merge at command execution. The normal CLI configuration system reads these saved app values alongside its usual sources, such as global settings and explicit command options. The named sources are copied settings in this file, not values inherited from the user-directory configuration-source copy.
 
-Maya's edit takes effect for subsequent agent initialization. It is not a protected override against a future explicit configuration-source update: if that update supplies `skillSources`, it replaces the entire local section. Entire top-level sections omitted by the source and settings outside the allowlist are preserved.
+Maya's edit takes effect for subsequent agent initialization. It is not a protected override against a future explicit configuration-source update: if that update supplies `agentPluginSources`, it replaces the entire local section. Entire top-level sections omitted by the source and settings outside the allowlist are preserved.
 
 Maya can inspect these effective values and use them:
 
 ```powershell
-aspire config get skillSources.platform.repository
-aspire config get skillSources.inventory.ref
+aspire config get agentPluginSources.platform.repository
+aspire config get agentPluginSources.inventory.ref
 aspire agent init --skills aspire
 ```
 
@@ -201,7 +201,7 @@ The source allowlist does not permit changing the project's AppHost, SDK/channel
 
 ## Scenario 4: Noah clones Inventory and uses its saved source
 
-Noah joins Maya's team and clones the application repository, including its materialized `aspire.config.json`. He already has the saved skill sources, even though his own Aspire home has no configuration-source tracking copy.
+Noah joins Maya's team and clones the application repository, including its materialized `aspire.config.json`. He already has the saved agent plugin sources, even though his own Aspire home has no configuration-source tracking copy.
 
 From Inventory's project directory, he runs:
 
@@ -209,7 +209,7 @@ From Inventory's project directory, he runs:
 aspire agent init --skills aspire
 ```
 
-The command reads Inventory's saved skill sources and registers them with the selected agents. It does not fetch configuration to fill in runtime values or copy Maya's tracking directory.
+The command reads Inventory's saved agent plugin sources and registers them with the selected agents. It does not fetch configuration to fill in runtime values or copy Maya's tracking directory.
 
 When Noah later runs a command that resolves the project or selects a running AppHost, such as `aspire start` or `aspire logs`, the saved binding identifies the source for a background advisory version check. Noah does not need `ASPIRE_INIT_SOURCE_URL`, and Aspire does not repeat employee detection or the creation-time consent prompt. With no prior check metadata on his machine, the CLI checks the source's version and compares it with Inventory's saved `appliedVersion`, without writing a fetched JSON snapshot or changing the app file.
 
@@ -228,7 +228,7 @@ The binding's applied version records what was copied into this app, not which b
 
 ## Scenario 5: Maya needs Leo's latest change immediately
 
-Maya's app still contains the skill sources she last saved. Leo publishes a new source-file version. On the next due version check, an ordinary command reports:
+Maya's app still contains the agent plugin sources she last saved. Leo publishes a new source-file version. On the next due version check, an ordinary command reports:
 
 ```text
 A new version of the configuration source is available.
@@ -245,7 +245,7 @@ aspire update --config-source
 
 This fetches and validates the source regardless of the last check time. It merges supplied allowlisted values into Inventory's `aspire.config.json`, records the newly applied version in that same file, and updates the fetched tracking copy and fetch time in Aspire home.
 
-If Leo's source supplies `skillSources`, this explicit operation replaces the entire local section, including Maya's team-specific edit. Other app settings, including local documentation settings, are not imported or overwritten. If `skillSources` is omitted, its existing value is left unchanged.
+If Leo's source supplies `agentPluginSources`, this explicit operation replaces the entire local section, including Maya's team-specific edit. Other app settings, including local documentation settings, are not imported or overwritten. If `agentPluginSources` is omitted, its existing value is left unchanged.
 
 The command does not update the CLI, SDK, or packages, change the source repository/path/ref, regenerate AppHost or application code, or reinstall skills. Updating the app's configuration file is intentional.
 
@@ -325,7 +325,7 @@ The variables affect initial source selection, not later commands on a bound pro
 
 ## What these scenarios do not imply
 
-Configuration materialization and named native skill sources are implemented. Other content-acquisition customizations remain proposed. Accepting a source does not currently promise organization-specific template catalogs, downloadable skill bundles, integration catalogs, or package feeds. Those settings need a defined schema and explicit allowlist entries before they can be copied into apps.
+Configuration materialization and named agent plugin sources are implemented. Other content-acquisition customizations remain proposed. Accepting a source does not currently promise organization-specific template catalogs, downloadable skill bundles, integration catalogs, or package feeds. Those settings need a defined schema and explicit allowlist entries before they can be copied into apps.
 
 Ordinary commands, including plain `aspire update`, do not apply source updates. Runtime configuration comes from the saved app file and normal CLI configuration sources, never the retained source JSON in Aspire home.
 

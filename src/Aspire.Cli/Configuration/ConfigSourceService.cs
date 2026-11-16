@@ -34,7 +34,7 @@ internal sealed class ConfigSourceService(
 {
     internal const string MicrosoftRepository = "https://msft.ghe.com/coreai/aspire-1p-init";
     internal const string MicrosoftReadmeUrl = MicrosoftRepository;
-    private static readonly string[] s_allowedSettings = [SkillSource.SectionName, IntegrationSourceConfiguration.SectionName];
+    private static readonly string[] s_allowedSettings = [AgentPluginSource.SectionName, IntegrationSourceConfiguration.SectionName];
     private readonly Dictionary<ConfigSourceIdentity, ConfigSourceSnapshot> _snapshots = [];
     private string? _projectDirectory;
     private bool _projectChecked;
@@ -399,7 +399,7 @@ internal sealed class ConfigSourceService(
             }
 
             // Replace all case-equivalent local sections, preserving every source section
-            // that IConfiguration combines (for example {"SKILLSOURCES":{...},"skillSources":{...}}).
+            // that IConfiguration combines (for example {"AGENTPLUGINSOURCES":{...},"agentPluginSources":{...}}).
             // Keep the original position so an unchanged section does not reorder the file
             // and make an otherwise identical refresh rewrite the file.
             var insertionIndex = configuration.Count;

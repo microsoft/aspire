@@ -1,9 +1,9 @@
 ﻿{
       "category": "environment",
-      "name": "aspire-skill-sources",
+      "name": "aspire-agent-plugin-sources",
       "status": "warning",
       "message": "Found static copies of Aspire skills.",
-      "fix": "Run 'aspire agent init' to configure skill sources and remove these copies.",
+      "fix": "Run 'aspire agent init' to configure agent plugin sources and remove these copies.",
       "details": ".agents/skills/aspire (copilot, opencode)\n~/.agents/skills/aspire (copilot, opencode)",
       "metadata": {
         "workspaceRoot": "<workspace>"

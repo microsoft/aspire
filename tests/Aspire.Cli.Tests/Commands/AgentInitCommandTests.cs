@@ -69,7 +69,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         var firstProject = new FileInfo(Path.Combine(first.FullName, "First.csproj"));
         var selectedProject = new FileInfo(Path.Combine(selected.FullName, "Selected.csproj"));
         await AgentConfigurationTestContext.WriteAsync(Path.Combine(selected.FullName, AspireConfigFile.FileName), """
-            {"skillSources":{"default":{"enabled":false},"team":{"repository":"example/selected","plugins":["deployment"]}}}
+            {"agentPluginSources":{"default":{"enabled":false},"team":{"repository":"example/selected","plugins":["deployment"]}}}
             """);
         var interaction = new TestInteractionService
         {
@@ -143,7 +143,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             <Project Sdk="Microsoft.NET.Sdk.Web" />
             """);
         await AgentConfigurationTestContext.WriteAsync(Path.Combine(appHostDirectory.FullName, AspireConfigFile.FileName), """
-            {"skillSources":{"default":{"enabled":false},"team":{"repository":"example/selected","plugins":["deployment"]}}}
+            {"agentPluginSources":{"default":{"enabled":false},"team":{"repository":"example/selected","plugins":["deployment"]}}}
             """);
         await AgentConfigurationTestContext.WriteAsync(Path.Combine(context.Project.FullName, AspireConfigFile.FileName), """
             {"appHost":{"path":"app/AppHost.csproj"}}
@@ -210,32 +210,27 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
     [Theory]
     [InlineData("copilot")]
     [InlineData("claude")]
-    [InlineData("opencode")]
     [InlineData("copilot,claude,opencode")]
     public async Task AgentInit_WarnsAboutSelectedClientSourcesBeforeRegistration(string agents)
     {
         using var context = new AgentConfigurationTestContext(outputHelper);
         await AgentConfigurationTestContext.WriteAsync(Path.Combine(context.Project.FullName, AspireConfigFile.FileName), """
             {
-              "skillSources": {
-                "default": { "openCodeV1Catalog": "https://third-party.example/skills/" },
+              "agentPluginSources": {
+                "default": { "ref": "main" },
                 "team": {
                   "repository": "example/team",
-                  "marketplace": "TEAM",
-                  "openCodeV1Catalog": "https://team.example/skills/",
-                  "openCodeV2Catalog": "https://team.example/skills/"
+                  "marketplace": "TEAM"
                 },
                 "pluginsOnly": { "repository": "example/plugins" },
                 "teamAlias": {
                   "repository": "example/team",
                   "marketplace": "team-marketplace",
-                  "ref": "source-demo",
-                  "openCodeV1Catalog": "https://team.example/skills/"
+                  "ref": "source-demo"
                 },
                 "disabled": {
                   "enabled": false,
-                  "repository": "example/disabled",
-                  "openCodeV1Catalog": "https://disabled.example/skills/"
+                  "repository": "example/disabled"
                 }
               }
             }
@@ -263,7 +258,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             $"agent init --agents {agents} --scope project --skills aspire");
 
         Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
-        Assert.Equal([AgentCommandStrings.InitCommand_SkillSourcesExplanation, $"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]"],
+        Assert.Equal([AgentCommandStrings.InitCommand_AgentPluginSourcesExplanation, $"[yellow]{SharedCommandStrings.SourceTrustWarning}[/]"],
             messagesBeforeRegistration);
         Assert.NotEmpty(interaction.DisplayedRenderables);
         var warning = Assert.Single(interaction.DisplayedMessages, message => message.Emoji.Equals(KnownEmojis.PoliceCarLight));
@@ -288,6 +283,35 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         }
         await Verify(new { Sources = renderedSources.ToString(), Warnings = messagesBeforeRegistration })
             .UseParameters(agents).ScrubLinesWithReplace(line => line.TrimEnd());
+    }
+
+    [Fact]
+    public async Task AgentInit_OpenCodeDoesNotDisplayAdditionalPluginSources()
+    {
+        using var context = new AgentConfigurationTestContext(outputHelper);
+        await AgentConfigurationTestContext.WriteAsync(Path.Combine(context.Project.FullName, AspireConfigFile.FileName), """
+            {"agentPluginSources":{"team":{"repository":"example/team"}}}
+            """);
+        var interaction = new TestInteractionService
+        {
+            PromptForSelectionCallback = (_, _, _, _) => throw new InvalidOperationException("No source or scope prompt is expected.")
+        };
+        using var provider = context.CreateServiceCollection(outputHelper, options =>
+        {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
+            options.InteractionServiceFactory = _ => interaction;
+        }).BuildServiceProvider();
+        var result = provider.GetRequiredService<RootCommand>().Parse(
+            "agent init --agents opencode --scope project --skills aspire");
+
+        Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
+        Assert.Empty(interaction.DisplayedRenderables);
+        Assert.DoesNotContain(interaction.DisplayedMessages,
+            message => message.Message == AgentCommandStrings.InitCommand_AgentPluginSourcesExplanation);
+        var configuration = AgentConfiguration.ReadObject(
+            context.OpenCode.GetIntegrationConfigPath(AgentConfigurationScope.Project, context.Project))!;
+        Assert.Equal("""{"urls":["https://raw.githubusercontent.com/microsoft/aspire-skills/main/opencode/v1/"]}""",
+            configuration["skills"]!.ToJsonString());
     }
 
     [Fact]
@@ -464,7 +488,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         var client = provider.GetServices<IAgentClient>().Single(client =>
             string.Equals(client.Id, "copilot", StringComparisons.AgentClientId));
         Assert.True(client.HasIntegrationRegistration(
-            workspace.WorkspaceRoot, AgentConfigurationScope.Project, SkillSource.Resolve(provider.GetRequiredService<IConfiguration>())));
+            workspace.WorkspaceRoot, AgentConfigurationScope.Project, AgentPluginSource.Resolve(provider.GetRequiredService<IConfiguration>())));
     }
 
     [Fact]
@@ -473,7 +497,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         using var context = new AgentConfigurationTestContext(outputHelper);
         var app = context.Project.CreateSubdirectory("app");
         await AgentConfigurationTestContext.WriteAsync(Path.Combine(app.FullName, "aspire.config.json"), """
-            {"skillSources":{"default":{"enabled":false},"team":{"repository":"example/team","plugins":["team"]}}}
+            {"agentPluginSources":{"default":{"enabled":false},"team":{"repository":"example/team","plugins":["team"]}}}
             """);
         var interaction = new TestInteractionService();
         var services = context.CreateServiceCollection(outputHelper, options =>
@@ -505,10 +529,10 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
     {
         using var context = new AgentConfigurationTestContext(outputHelper);
         await AgentConfigurationTestContext.WriteAsync(Path.Combine(context.Project.FullName, "aspire.config.json"), """
-            {"skillSources":{"default":{"enabled":false},"old":{"repository":"example/old"}}}
+            {"agentPluginSources":{"default":{"enabled":false},"old":{"repository":"example/old"}}}
             """);
         await AgentConfigurationTestContext.WriteAsync(Path.Combine(context.Project.FullName, ".aspire", "settings.global.json"), """
-            {"skillSources":{"shared":{"repository":"example/shared"},"team":{"repository":"example/global","plugins":["team"],"ref":"main"}}}
+            {"agentPluginSources":{"shared":{"repository":"example/shared"},"team":{"repository":"example/global","plugins":["team"],"ref":"main"}}}
             """);
         var interaction = new TestInteractionService();
         using var provider = context.CreateServiceCollection(outputHelper, options =>
@@ -517,10 +541,10 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             options.InteractionServiceFactory = _ => interaction;
             options.CliHostEnvironmentFactory = _ => TestHelpers.CreateNonInteractiveHostEnvironment();
         }).BuildServiceProvider();
-        Assert.Equal("example/old", provider.GetRequiredService<IConfiguration>()["skillSources:old:repository"]);
+        Assert.Equal("example/old", provider.GetRequiredService<IConfiguration>()["agentPluginSources:old:repository"]);
         var app = sameDirectory ? context.Project : context.Project.CreateSubdirectory("app");
         await AgentConfigurationTestContext.WriteAsync(Path.Combine(app.FullName, "aspire.config.json"), """
-            {"skillSources":{"default":{},"team":{"repository":"example/team"}}}
+            {"agentPluginSources":{"default":{},"team":{"repository":"example/team"}}}
             """);
 
         var result = await provider.GetRequiredService<AgentInitCommand>().PromptAndChainAsync(
@@ -869,7 +893,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
     {
         using var context = new AgentConfigurationTestContext(outputHelper);
         await AgentConfigurationTestContext.WriteAsync(Path.Combine(context.Project.FullName, "aspire.config.json"), """
-            {"skillSources":{"team":{"repository":"example/team","plugins":["deployment"]}}}
+            {"agentPluginSources":{"team":{"repository":"example/team","plugins":["deployment"]}}}
             """);
         var interaction = new TestInteractionService();
         using var provider = context.CreateServiceCollection(outputHelper, options =>
@@ -1055,15 +1079,15 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
                     """{"enabledPlugins":{"aspire@aspire-skills":false}}""");
                 break;
             case "sources-disabled":
-                await AgentConfigurationTestContext.WriteAsync(configPath, """{"skillSources":{"default":{"enabled":false}}}""");
+                await AgentConfigurationTestContext.WriteAsync(configPath, """{"agentPluginSources":{"default":{"enabled":false}}}""");
                 break;
             case "opencode-without-catalog":
                 await AgentConfigurationTestContext.WriteAsync(configPath,
-                    """{"skillSources":{"default":{"enabled":false},"team":{"repository":"example/team"}}}""");
+                    """{"agentPluginSources":{"default":{"enabled":false},"team":{"repository":"example/team"}}}""");
                 break;
             case "unrelated-plugin":
                 await AgentConfigurationTestContext.WriteAsync(configPath,
-                    """{"skillSources":{"default":{"enabled":false},"team":{"repository":"example/team","plugins":["deployment"]}}}""");
+                    """{"agentPluginSources":{"default":{"enabled":false},"team":{"repository":"example/team","plugins":["deployment"]}}}""");
                 break;
         }
         var interaction = new TestInteractionService();
@@ -1105,7 +1129,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         var skillDirectory = Path.Combine(context.Project.FullName, ".agents", "skills", "aspire");
         await AgentConfigurationTestContext.WriteAsync(Path.Combine(skillDirectory, "SKILL.md"), "My customized Aspire instructions.");
         await AgentConfigurationTestContext.WriteAsync(Path.Combine(context.Project.FullName, "aspire.config.json"),
-            """{"skillSources":{"default":{"enabled":false}}}""");
+            """{"agentPluginSources":{"default":{"enabled":false}}}""");
         const string plugin = """{"enabledPlugins":{"aspire@aspire-skills":true}}""";
         const string catalog = """{"skills":{"urls":["https://raw.githubusercontent.com/microsoft/aspire-skills/main/opencode/v1/"]}}""";
         IAgentClient client = agent == "copilot" ? context.Copilot : context.OpenCode;
@@ -1192,7 +1216,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         const string skill = "My customized Aspire instructions.";
         await AgentConfigurationTestContext.WriteAsync(skillPath, skill);
         await AgentConfigurationTestContext.WriteAsync(Path.Combine(context.Project.FullName, "aspire.config.json"),
-            """{"skillSources":{"default":{"enabled":false}}}""");
+            """{"agentPluginSources":{"default":{"enabled":false}}}""");
         await AgentConfigurationTestContext.WriteAsync(client.GetIntegrationConfigPath(scope, context.Project),
             """{"enabledPlugins":{"aspire@aspire-skills":true}}""");
         await AgentConfigurationTestContext.WriteAsync(
@@ -1263,7 +1287,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             Assert.Single(interaction.DisplayedErrors));
         Assert.Equal(skill, await File.ReadAllTextAsync(sharedSkillPath));
         Assert.True(context.Copilot.HasIntegrationRegistration(
-            context.Project, AgentConfigurationScope.Project, [SkillSource.BuiltIn]));
+            context.Project, AgentConfigurationScope.Project, [AgentPluginSource.BuiltIn]));
     }
 
     [Fact]

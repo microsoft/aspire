@@ -227,16 +227,6 @@
         <target state="new">Name</target>
         <note />
       </trans-unit>
-      <trans-unit id="SourceOpenCodeV1Catalog">
-        <source>OpenCode V1 catalog</source>
-        <target state="new">OpenCode V1 catalog</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="SourceOpenCodeV2Catalog">
-        <source>OpenCode V2 catalog</source>
-        <target state="new">OpenCode V2 catalog</target>
-        <note />
-      </trans-unit>
       <trans-unit id="SourcePath">
         <source>Path</source>
         <target state="new">Path</target>
