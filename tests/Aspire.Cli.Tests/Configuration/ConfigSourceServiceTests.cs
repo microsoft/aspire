@@ -110,19 +110,25 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData(null)]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task TemplateSources_RespectsCreationConsent(bool? consent)
+    [InlineData(null, false, false)]
+    [InlineData(null, true, false)]
+    [InlineData(false, false, false)]
+    [InlineData(true, false, false)]
+    [InlineData(null, false, true)]
+    [InlineData(null, true, true)]
+    [InlineData(false, false, true)]
+    [InlineData(true, false, true)]
+    public async Task TemplateSources_RespectsCreationConsent(bool? consent, bool accept, bool microsoftDefault)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var environment = new TestEnvironment(new Dictionary<string, string?>
         {
-            [CliConfigNames.InitSourceUrl] = "https://git.example/configuration"
+            [CliConfigNames.InitSourceUrl] = microsoftDefault ? null : "https://git.example/configuration"
         });
+        var detector = new TestConfigSourceDetector { IsInternal = true };
         var interaction = new TestInteractionService
         {
-            ConfirmCallback = (_, _) => false
+            ConfirmCallback = (_, _) => accept
         };
         var git = new TestConfigSourceRepository
         {
@@ -131,15 +137,17 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
                 """)!.AsObject()))
         };
         using var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(),
-            git: git, environment: environment, interaction: interaction, interactive: true);
+            git: git, environment: environment, detector: detector, interaction: interaction, interactive: true);
 
         var source = await service.ResolveAndAcquireConfigSourceAsync(ParseConsent(consent), ConfigSourceStrings.NewUseSourcePrompt, CancellationToken.None);
         var sources = await service.GetTemplateSourcesAsync(CancellationToken.None);
         var repeatedSources = await service.GetTemplateSourcesAsync(CancellationToken.None);
 
-        if (consent is true)
+        var repository = microsoftDefault ? ConfigSourceService.MicrosoftRepository : "https://git.example/configuration";
+        if (consent ?? accept)
         {
             Assert.NotNull(source);
+            Assert.Equal(repository, source.Repository);
             Assert.Equal("enterprise", Assert.Single(sources).Key);
             Assert.Equal("enterprise", Assert.Single(repeatedSources).Key);
             Assert.Equal(1, git.Calls);
@@ -153,10 +161,11 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
             Assert.Equal(0, git.Calls);
             Assert.False(Directory.Exists(service.GetCacheDirectory(new ConfigSource
             {
-                Repository = "https://git.example/configuration",
+                Repository = repository,
                 Path = AspireConfigFile.FileName
             })));
         }
+        Assert.Equal(microsoftDefault ? 1 : 0, detector.Calls);
         Assert.False(File.Exists(Path.Combine(workspace.Path, AspireConfigFile.FileName)));
     }
 
