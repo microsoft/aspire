@@ -3127,11 +3127,6 @@ type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 
 	// WithProcessCommand adds a command to the resource that starts a local process
 	// when invoked.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithProcessCommand(commandName string, displayName string, options *ProcessCommandExportOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 
 	// WithProcessCommandFactory adds a command to the resource that starts a local
@@ -6550,11 +6545,6 @@ type CSharpAppResource interface {
 
 	// WithProcessCommand adds a command to the resource that starts a local process
 	// when invoked.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithProcessCommand(commandName string, displayName string, options *ProcessCommandExportOptions) CSharpAppResource
 
 	// WithProcessCommandFactory adds a command to the resource that starts a local
@@ -10594,11 +10584,6 @@ type ContainerRegistryResource interface {
 
 	// WithProcessCommand adds a command to the resource that starts a local process
 	// when invoked.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithProcessCommand(commandName string, displayName string, options *ProcessCommandExportOptions) ContainerRegistryResource
 
 	// WithProcessCommandFactory adds a command to the resource that starts a local
@@ -12877,11 +12862,6 @@ type ContainerResource interface {
 
 	// WithProcessCommand adds a command to the resource that starts a local process
 	// when invoked.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithProcessCommand(commandName string, displayName string, options *ProcessCommandExportOptions) ContainerResource
 
 	// WithProcessCommandFactory adds a command to the resource that starts a local
@@ -18232,11 +18212,6 @@ type DotnetToolResource interface {
 
 	// WithProcessCommand adds a command to the resource that starts a local process
 	// when invoked.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithProcessCommand(commandName string, displayName string, options *ProcessCommandExportOptions) DotnetToolResource
 
 	// WithProcessCommandFactory adds a command to the resource that starts a local
@@ -22609,11 +22584,6 @@ type ExecutableResource interface {
 
 	// WithProcessCommand adds a command to the resource that starts a local process
 	// when invoked.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithProcessCommand(commandName string, displayName string, options *ProcessCommandExportOptions) ExecutableResource
 
 	// WithProcessCommandFactory adds a command to the resource that starts a local
@@ -25481,11 +25451,6 @@ type ExternalServiceResource interface {
 
 	// WithProcessCommand adds a command to the resource that starts a local process
 	// when invoked.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithProcessCommand(commandName string, displayName string, options *ProcessCommandExportOptions) ExternalServiceResource
 
 	// WithProcessCommandFactory adds a command to the resource that starts a local
@@ -29323,11 +29288,6 @@ type ParameterResource interface {
 
 	// WithProcessCommand adds a command to the resource that starts a local process
 	// when invoked.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithProcessCommand(commandName string, displayName string, options *ProcessCommandExportOptions) ParameterResource
 
 	// WithProcessCommandFactory adds a command to the resource that starts a local
@@ -32376,11 +32336,6 @@ type ProjectResource interface {
 
 	// WithProcessCommand adds a command to the resource that starts a local process
 	// when invoked.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithProcessCommand(commandName string, displayName string, options *ProcessCommandExportOptions) ProjectResource
 
 	// WithProcessCommandFactory adds a command to the resource that starts a local
@@ -37591,11 +37546,6 @@ type TestDatabaseResource interface {
 
 	// WithProcessCommand adds a command to the resource that starts a local process
 	// when invoked.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithProcessCommand(commandName string, displayName string, options *ProcessCommandExportOptions) TestDatabaseResource
 
 	// WithProcessCommandFactory adds a command to the resource that starts a local
@@ -41379,11 +41329,6 @@ type TestRedisResource interface {
 
 	// WithProcessCommand adds a command to the resource that starts a local process
 	// when invoked.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithProcessCommand(commandName string, displayName string, options *ProcessCommandExportOptions) TestRedisResource
 
 	// WithProcessCommandFactory adds a command to the resource that starts a local

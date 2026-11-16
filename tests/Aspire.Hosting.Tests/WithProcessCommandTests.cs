@@ -1485,6 +1485,69 @@ public class WithProcessCommandTests(ITestOutputHelper testOutputHelper)
         Assert.Equal(1, disposable.DisposeCallCount);
     }
 
+    [Theory]
+    [InlineData("17", false, false)]
+    [InlineData("17", true, false)]
+    [InlineData("17", false, true)]
+    [InlineData("0", true, true)]
+    [InlineData("wait", true, true)]
+    public async Task WithProcessCommand_RejectedStandardInput_PreservesResultPolicy(string exitCode, bool acceptExitCode, bool customizeResult)
+    {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var (executable, arguments) = await DotnetFileAppProcess.CreateInputRejectingProcessAsync(workspace.Path, exitCode, TestContext.Current.CancellationToken);
+        using var builder = CreateTestDistributedApplicationBuilder(new DefaultProcessRunner());
+        ProcessCommandResultContext? capturedContext = null;
+        var options = new ProcessCommandOptions
+        {
+            SuccessExitCodes = acceptExitCode ? [0, 17] : [0]
+        };
+        if (customizeResult)
+        {
+            options.GetCommandResult = context =>
+            {
+                capturedContext = context;
+                return Task.FromResult(CommandResults.Success());
+            };
+        }
+
+        var resource = builder.AddResource(new CustomResource("resource"))
+            .WithProcessCommand("reject", "Reject", _ => new ProcessCommandSpec(executable)
+            {
+                Arguments = arguments,
+                StandardInputContent = new string('x', 2_000_000)
+            }, options);
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(resource.Resource, "reject", TestContext.Current.CancellationToken)
+            .DefaultTimeout(TestConstants.LongTimeoutDuration);
+
+        Assert.Equal(exitCode == "17" && (acceptExitCode || customizeResult), result.Success);
+        if (exitCode != "17")
+        {
+            Assert.Null(capturedContext);
+            Assert.Null(result.Data);
+            Assert.NotEmpty(result.Message!);
+        }
+        else if (customizeResult)
+        {
+            Assert.NotNull(capturedContext);
+            Assert.Equal(17, capturedContext.ExitCode);
+            Assert.Equal(2, capturedContext.TotalOutputLineCount);
+            Assert.Equal(["stderr-after-input-closed", "stdout-after-input-closed"], capturedContext.Output.Order().ToArray());
+        }
+        else
+        {
+            Assert.NotNull(result.Data);
+            Assert.Contains("stdout-after-input-closed", result.Data.Value);
+            Assert.Contains("stderr-after-input-closed", result.Data.Value);
+            if (!acceptExitCode)
+            {
+                Assert.Contains("exited with code 17", result.Message);
+            }
+        }
+    }
+
     [Fact]
     public async Task WithProcessCommand_Cancellation_StopsRealProcessWithBlockedStandardInput()
     {

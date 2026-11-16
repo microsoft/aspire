@@ -17,6 +17,56 @@ internal static class DotnetFileAppProcess
 
         return appPath;
     }
+
+    public static async Task<(string ExecutablePath, string[] Arguments)> CreateInputRejectingProcessAsync(
+        string directoryPath, string exitCode, CancellationToken cancellationToken)
+    {
+        var appPath = WriteApp(directoryPath, "reject-input.cs", """
+            #:sdk Microsoft.NET.Sdk
+            using System.Runtime.InteropServices;
+            using Microsoft.Win32.SafeHandles;
+
+            // Console.OpenStandardInput does not own the native handle. Close the handle itself
+            // so the parent's write fails while this process is still alive.
+            if (OperatingSystem.IsWindows())
+            {
+                using var input = new SafeFileHandle(GetStdHandle(-10), ownsHandle: true);
+            }
+
+            if (args[0] == "wait")
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan);
+            }
+
+            // Emit diagnostics after rejecting input, not just before closing the pipe.
+            await Task.Delay(200);
+            Console.WriteLine("stdout-after-input-closed");
+            Console.Error.WriteLine("stderr-after-input-closed");
+            return int.Parse(args[0]);
+
+            [DllImport("kernel32.dll")]
+            static extern IntPtr GetStdHandle(int nStdHandle);
+            """);
+        var outputDirectory = Path.Combine(directoryPath, "bin");
+        var (pending, disposable) = ProcessUtil.Run(new ProcessSpec(ResolvedExecutablePath)
+        {
+            ArgumentList = ["build", appPath, "--output", outputDirectory, "-p:PublishAot=false", "-p:UseAppHost=false"]
+        });
+        await using (disposable)
+        {
+            await pending.WaitAsync(TimeSpan.FromMinutes(2), cancellationToken);
+        }
+
+        var assemblyPath = Path.Combine(outputDirectory, "reject-input.dll");
+        // Launch the DLL directly: dotnet run can retain its own copy of stdin. On Unix,
+        // replace stdin before starting .NET, whose runtime also duplicates standard handles.
+        // /dev/null closes the original pipe but leaves a valid handle for runtime startup.
+        // exec preserves the PID so the runner owns the process that stays alive.
+        return OperatingSystem.IsWindows()
+            ? (ResolvedExecutablePath, [assemblyPath, exitCode])
+            : ("/bin/sh", ["-c", """exec 0</dev/null; exec "$@" """, "reject-input", ResolvedExecutablePath, assemblyPath, exitCode]);
+    }
+
     public static ProcessCommandSpec CreateProcessCommandSpec(
         string appPath,
         IReadOnlyList<string>? arguments = null,

@@ -53,7 +53,15 @@ public sealed class ProcessCommandSpec(string executablePath)
     /// Gets or sets standard input content to write to the process after it starts.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// A platform newline is appended to the content and standard input is closed after writing.
+    /// </para>
+    /// <para>
+    /// If writing fails, the process has a bounded grace period to exit. A natural nonzero exit
+    /// preserves its exit code and output for normal command result handling. A zero exit or a
+    /// process still running after the grace period instead reports the input error; a process
+    /// still running is stopped.
+    /// </para>
     /// </remarks>
     public string? StandardInputContent { get; init; }
 

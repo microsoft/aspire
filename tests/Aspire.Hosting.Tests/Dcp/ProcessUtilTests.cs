@@ -240,6 +240,75 @@ public class ProcessUtilTests(ITestOutputHelper outputHelper)
         }
     }
 
+    [Theory]
+    [InlineData(0, false)]
+    [InlineData(0, true)]
+    [InlineData(17, false)]
+    [InlineData(17, true)]
+    public async Task Run_InputFailure_PreservesNaturalExitAndLateOutput(int exitCode, bool throwOnNonZeroReturnCode)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var (executable, arguments) = await DotnetFileAppProcess.CreateInputRejectingProcessAsync(workspace.Path, exitCode.ToString(), TestContext.Current.CancellationToken);
+        int? stoppedExitCode = null;
+        var (pending, disposable) = ProcessUtil.Run(new ProcessSpec(executable)
+        {
+            ArgumentList = arguments,
+            StandardInputContent = new string('x', 2_000_000),
+            ThrowOnNonZeroReturnCode = throwOnNonZeroReturnCode,
+            RetainedOutputLineCount = 10,
+            OnStop = code => stoppedExitCode = code
+        });
+        await using (disposable)
+        {
+            if (exitCode == 0)
+            {
+                await Assert.ThrowsAsync<IOException>(() => pending).DefaultTimeout(TestConstants.LongTimeoutDuration);
+            }
+            else if (throwOnNonZeroReturnCode)
+            {
+                var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => pending).DefaultTimeout(TestConstants.LongTimeoutDuration);
+                Assert.Contains("returned non-zero exit code 17", exception.Message);
+                Assert.Contains("stdout-after-input-closed", exception.Message);
+                Assert.Contains("stderr-after-input-closed", exception.Message);
+            }
+            else
+            {
+                var result = await pending.DefaultTimeout(TestConstants.LongTimeoutDuration);
+                Assert.Equal(exitCode, result.ExitCode);
+                Assert.Equal(2, result.TotalProcessOutputLineCount);
+                Assert.Equal(["stderr-after-input-closed", "stdout-after-input-closed"], result.ProcessOutput.Order().ToArray());
+            }
+
+            Assert.Equal(exitCode, stoppedExitCode);
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Run_InputFailure_StopsLiveProcessAndReportsOriginalError(bool throwOnNonZeroReturnCode)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var (executable, arguments) = await DotnetFileAppProcess.CreateInputRejectingProcessAsync(workspace.Path, "wait", TestContext.Current.CancellationToken);
+        var startedPid = 0;
+        int? stoppedExitCode = null;
+        var (pending, disposable) = ProcessUtil.Run(new ProcessSpec(executable)
+        {
+            ArgumentList = arguments,
+            StandardInputContent = new string('x', 2_000_000),
+            ThrowOnNonZeroReturnCode = throwOnNonZeroReturnCode,
+            OnStart = pid => startedPid = pid,
+            OnStop = code => stoppedExitCode = code
+        });
+        await using (disposable)
+        {
+            using var child = System.Diagnostics.Process.GetProcessById(startedPid);
+            await Assert.ThrowsAsync<IOException>(() => pending).DefaultTimeout(TestConstants.LongTimeoutDuration);
+            Assert.True(child.HasExited);
+            Assert.True(stoppedExitCode is not null and not 0);
+        }
+    }
+
     private static ProcessSpec CreateSingleLineOutputProcessSpec(TemporaryWorkspace workspace, Action<string> onOutputData, Action<int> onStart)
     {
         var appPath = DotnetFileAppProcess.WriteApp(workspace.WorkspaceRoot.FullName, "single-line.cs", """
