@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Docs-site CI/E2E infrastructure change; no matching changelog entry",
+  "mergedAt": "2026-11-16T12:47:27Z",
+  "number": 2163,
+  "runDate": "2026-11-16T18:10:00Z",
+  "status": "excluded",
+  "title": "Serve the E2E tests with StaticHost and install Playwright in the background"
+}
