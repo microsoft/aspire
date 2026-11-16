@@ -7,30 +7,25 @@
 @inject IStringLocalizer<TerminalStrings> TerminalLoc
 @inherits LayoutComponentBase
 
-<div class="layout @(!RunSelection.SelectedRun.IsCurrent ? "historical-run" : null)" style="@GetLayoutStyle()">
+<div class="layout @(!RunSelection.SelectedRun.IsCurrent ? "historical-run" : null)" style="@(_isNavMenuOpen ? "overflow: hidden;" : string.Empty)">
     @if (ViewportInformation.IsDesktop)
     {
-        @* Top header with the brand lockup (logo + app name), the tabs of the current page and app-wide actions.
-           The brand is the top of the resource list's column and is exactly as wide as the docked list, so the tabs
-           start where the page they switch starts (see MainLayout.razor.css). *@
+        @* Top header with the content-sized brand lockup, the tabs of the current page and app-wide actions. *@
         <header>
             <div class="header-brand">
-                @* The brand is the home button: it opens the table of every resource. The house says so, and is filled
-                   in while home is showing. The button is the whole head of the list's column, with the house at
-                   its far end (see MainLayout.razor.css). *@
-                <div class="brand-home @(IsHome ? "current" : null)">
-                    <div class="brand-logo-container">
-                        <a href="/" class="logo" @onclick="GoToAllResourcesAsync" @onclick:preventDefault="true"
-                                      data-tooltip="@Loc[nameof(Layout.MainLayoutAspire)]"
-                                      aria-label="@Loc[nameof(Layout.MainLayoutAspire)]">
+                @* The brand is the home button: it opens the table of every resource. The house follows the app name
+                   and is filled in while home is showing. *@
+                <a href="/" class="brand-home @(IsHome ? "current" : null)"
+                   data-tooltip="@DashboardClient.ApplicationName" data-tooltip-positioning="below"
+                   aria-current="@(IsHome ? "page" : null)" @onclick="GoToAllResourcesAsync" @onclick:preventDefault="true">
+                    @* The tooltip gives the full name when it's truncated. It's below the link so it doesn't
+                       cover the adjacent tabs. *@
+                    <span class="brand-logo-container">
+                        <span class="logo">
                             <AspireLogo />
-                        </a>
-                    </div>
-                    <a href="/" class="application-name" data-tooltip="@DashboardClient.ApplicationName" data-tooltip-positioning="below"
-                       aria-current="@(IsHome ? "page" : null)" @onclick="GoToAllResourcesAsync" @onclick:preventDefault="true">
-                        @* The link's tooltip gives the full name when it's truncated, for the pointer and for keyboard
-                           focus. It's below the link: the link can span the whole column, and a tooltip after it would
-                           cover the first tab. *@
+                        </span>
+                    </span>
+                    <span class="application-name">
                         <span class="application-name-text"><ApplicationName/></span>
                         @if (IsHome)
                         {
@@ -40,8 +35,8 @@
                         {
                             <FluentIcon Class="application-home-icon" Value="@(new Icons.Regular.Size16.Home())" Width="16px" Color="Color.Custom" CustomColor="currentColor" aria-hidden="true" />
                         }
-                    </a>
-                </div>
+                    </span>
+                </a>
             </div>
             <div class="header-context">
                 <SectionOutlet SectionName="@HeaderContextSectionName" />
