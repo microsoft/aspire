@@ -3709,6 +3709,23 @@ suite('Editor assistance AppHost services', () => {
             }
         }
 
+        test('preserves unresolved parameter state in model-facing resource results', async () => {
+            addEditorAppHostRunSession(appHostProjectPath);
+            resourceRepository.resourcesByAppHost.set(path.resolve(appHostProjectPath), [{
+                ...createResource('api', path.join(workspaceRoot, 'Api', 'Api.csproj')),
+                state: 'UnresolvedParameters',
+            }]);
+
+            const result = await service.getDebugSessionStatus(
+                { appHostPath: 'AppHost/AppHost.csproj', resourceName: 'api' },
+                new vscode.CancellationTokenSource().token);
+
+            assert.ok('resource' in result);
+            assert.deepStrictEqual(result.resource, createExpectedResource('Api.csproj', {
+                state: 'UnresolvedParameters',
+            }));
+        });
+
         test('maps unrecognized resource states to unknown', async () => {
             addEditorAppHostRunSession(appHostProjectPath);
             const privateState = 'Running with private-state-secret';
