@@ -142,9 +142,9 @@ internal sealed class DotNetAppHostRestorePreview : IDisposable
         // locked mode, applies unchanged; any lockfile NuGet writes stays under the isolated output
         // path. Copy the original from the location NuGet would otherwise use:
         //   1. NuGetLockFilePath, relative to the project directory,
-        //   2. an existing packages.<restore project name>.lock.json, with spaces as underscores,
+        //   2. an existing packages.<project filename>.lock.json, with spaces as underscores,
         //   3. packages.lock.json.
-        // The restore project name is PackageId, then AssemblyName, then MSBuildProjectName.
+        // NuGet derives the implicit lockfile name from ProjectPath, not PackageId or AssemblyName.
         // https://github.com/NuGet/NuGet.Client/blob/dev/src/NuGet.Core/NuGet.ProjectModel/ProjectLockFile/PackagesLockFileUtilities.cs
         const string outputRoot = "$(_AspireIsolatedRestoreOutput)";
         return new XElement("Target",
@@ -155,12 +155,6 @@ internal sealed class DotNetAppHostRestorePreview : IDisposable
                     MSBuildEscaping.Escape(Path.TrimEndingDirectorySeparator(outputDirectory.FullName)) + Path.DirectorySeparatorChar
                     + "$([MSBuild]::StableStringHash('$(MSBuildProjectFullPath)'))" + Path.DirectorySeparatorChar),
                 new XElement("_AspireRestoreProjectName", "$(MSBuildProjectName)"),
-                new XElement("_AspireRestoreProjectName",
-                    new XAttribute("Condition", "'$(PackageReferenceCompatibleProjectStyle)' == 'true' And '$(AssemblyName)' != ''"),
-                    "$(AssemblyName)"),
-                new XElement("_AspireRestoreProjectName",
-                    new XAttribute("Condition", "'$(PackageReferenceCompatibleProjectStyle)' == 'true' And '$(PackageId)' != ''"),
-                    "$(PackageId)"),
                 new XElement("_AspireProjectLockFile",
                     new XAttribute("Condition", "'$(NuGetLockFilePath)' != ''"),
                     "$([System.IO.Path]::Combine('$(MSBuildProjectDirectory)', '$(NuGetLockFilePath)'))"),

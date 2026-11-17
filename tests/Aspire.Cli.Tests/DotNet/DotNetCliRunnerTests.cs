@@ -477,9 +477,9 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
 
     [Theory]
     [InlineData(null, "packages.lock.json", false)]
-    [InlineData(null, "packages.Contoso_App.lock.json", false)]
+    [InlineData(null, "packages.App.lock.json", false)]
     [InlineData("locks/custom.lock.json", "locks/custom.lock.json", false)]
-    [InlineData(null, "packages.lock.json", true)]
+    [InlineData(null, "packages.App.lock.json", true)]
     public async Task IsolatedRestoreOutputs_HonorExistingLockFileWithoutChangingProject(string? lockFileProperty, string lockFile, bool lockedMode)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -499,6 +499,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
                 <TargetFramework>net{{Environment.Version.Major}}.0</TargetFramework>
                 <DisableImplicitFrameworkReferences>true</DisableImplicitFrameworkReferences>
                 <PackageId>Contoso App</PackageId>
+                <AssemblyName>DifferentAssembly</AssemblyName>
                 <RestoreLockedMode>{{lockedMode.ToString().ToLowerInvariant()}}</RestoreLockedMode>
                 <NuGetLockFilePath>{{lockFileProperty}}</NuGetLockFilePath>
               </PropertyGroup>
@@ -510,8 +511,12 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         await WriteProjectAsync("1.0.0");
         var lockFilePath = Path.Combine(project.FullName, lockFile);
         var (seedExitCode, seedOutput, seedError) = await RunNativeDotNetAsync(project, cache.FullName,
-            ["restore", projectFile.FullName, "-property:RestoreLockedMode=false", "-property:RestorePackagesWithLockFile=true", $"-property:NuGetLockFilePath={lockFile}"]);
+            ["restore", projectFile.FullName, "-property:RestoreLockedMode=false", "-property:RestorePackagesWithLockFile=true"]);
         Assert.True(seedExitCode == 0, seedOutput + seedError);
+        if (lockFileProperty is null && lockFile != "packages.lock.json")
+        {
+            File.Move(Path.Combine(project.FullName, "packages.lock.json"), lockFilePath);
+        }
         Assert.Contains($"\"{package}\"", await File.ReadAllTextAsync(lockFilePath));
         Directory.Delete(Path.Combine(project.FullName, "obj"), recursive: true);
         await WriteProjectAsync("2.0.0");
@@ -535,6 +540,9 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
             //   error NU1004: The package reference Aspire.LockedRestore.<id> version has changed from [1.0.0, ) to [2.0.0, ).
             Assert.NotEqual(0, exitCode);
             Assert.Contains("NU1004", stdout + stderr);
+            var existingLockFile = await File.ReadAllTextAsync(
+                Path.Combine(FindRestoreOutput(outputDirectory, "App.csproj"), "packages.lock.json"));
+            Assert.Contains("\"resolved\": \"1.0.0\"", existingLockFile);
             return;
         }
 
