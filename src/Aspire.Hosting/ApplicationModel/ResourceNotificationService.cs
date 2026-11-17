@@ -928,11 +928,15 @@ public class ResourceNotificationService : IDisposable
                 };
             }
 
-            // Command-state callbacks can throw. Keep restoration metadata consistent with the
-            // committed snapshot so a failed publication can restore the state on a later update.
+            // Command-state callbacks can throw. Commit restoration metadata and discard empty wait
+            // bookkeeping only after snapshot construction succeeds, so failed publications can retry.
             var unchanged = notificationState.LastSnapshot is { } lastSnapshot && lastSnapshot.ContentEquals(newState);
             notificationState.StateBeforeParameterWait = stateBeforeParameterWait;
             notificationState.IsParameterWaitStateActive = isParameterWaitStateActive;
+            if (notificationState.ParameterWaits is { Count: 0 })
+            {
+                notificationState.ParameterWaits = null;
+            }
 
             // Producers can recompute a snapshot that is identical to the one already published. DCP is
             // the common case: its watches are periodically torn down and re-established, and each fresh
