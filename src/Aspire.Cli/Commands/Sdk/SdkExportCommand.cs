@@ -257,10 +257,7 @@ internal sealed class SdkExportCommand : BaseCommand
         {
             try
             {
-                if (Directory.Exists(tempDirectoryPath))
-                {
-                    Directory.Delete(tempDirectoryPath, recursive: true);
-                }
+                await FileDeleteHelper.DeleteDirectoryWithRetryAsync(tempDirectoryPath, TimeProvider.System, CancellationToken.None).ConfigureAwait(false);
             }
             catch (Exception ex)
             {

@@ -254,10 +254,7 @@ internal sealed class SdkDumpCommand : BaseCommand
             // Clean up temp directory
             try
             {
-                if (Directory.Exists(tempDir))
-                {
-                    Directory.Delete(tempDir, recursive: true);
-                }
+                await FileDeleteHelper.DeleteDirectoryWithRetryAsync(tempDir, TimeProvider.System, CancellationToken.None).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -333,10 +330,7 @@ internal sealed class SdkDumpCommand : BaseCommand
         {
             try
             {
-                if (Directory.Exists(tempDir))
-                {
-                    Directory.Delete(tempDir, recursive: true);
-                }
+                await FileDeleteHelper.DeleteDirectoryWithRetryAsync(tempDir, TimeProvider.System, CancellationToken.None).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
