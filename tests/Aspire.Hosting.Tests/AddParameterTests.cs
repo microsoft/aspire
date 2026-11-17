@@ -9,6 +9,8 @@ using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Testing;
 
 namespace Aspire.Hosting.Tests;
 
@@ -221,6 +223,159 @@ public class AddParameterTests
         AssertParameterWaitState(app, caller, null);
         Assert.True(app.ResourceNotifications.TryGetCurrentState(caller.Name, out var state));
         Assert.Null(state.Snapshot.State);
+    }
+
+    [Theory]
+    [InlineData(true, "value", null)]
+    [InlineData(true, "error", "Starting")]
+    [InlineData(true, "cancellation", "Waiting")]
+    [InlineData(false, "value", null)]
+    [InlineData(false, "error", "Starting")]
+    [InlineData(false, "cancellation", "Waiting")]
+    public async Task ParameterWaitReportingFailuresPreserveParameterOutcome(bool failRegistration, string outcome, string? initialState)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var logger = new FakeLogger<ResourceNotificationService>();
+        builder.Services.AddSingleton<ILogger<ResourceNotificationService>>(logger);
+        var parameter = builder.AddParameter("parameter", secret: true).Resource;
+        parameter.EnsureValueTask();
+        var reportingError = new InvalidOperationException("Command state failed.");
+        var failReporting = false;
+        var caller = builder.AddExecutable("caller", "unused", ".")
+            .WithCommand("custom", "Custom", _ => Task.FromResult(CommandResults.Success()),
+                new CommandOptions
+                {
+                    UpdateState = _ => failReporting ? throw reportingError : ResourceCommandState.Enabled
+                }).Resource;
+        using var app = builder.Build();
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
+        ResourceStateSnapshot? startingState = initialState is null ? null : new(initialState, KnownResourceStateStyles.Info);
+        await app.ResourceNotifications.PublishUpdateAsync(caller, s => s with { State = startingState });
+        failReporting = failRegistration;
+        var read = parameter.GetValueAsync(
+            new ValueProviderContext { ExecutionContext = builder.ExecutionContext, Caller = caller },
+            cts.Token).AsTask();
+        failReporting = true;
+
+        switch (outcome)
+        {
+            case "value":
+                await parameter.SetValueAsync("secret-value");
+                Assert.Equal("secret-value", await read.DefaultTimeout());
+                break;
+            case "error":
+                var parameterError = new FormatException("Failed to load parameter.");
+                await parameter.SetExceptionAsync(parameterError);
+                Assert.Same(parameterError, await Assert.ThrowsAsync<FormatException>(() => read).DefaultTimeout());
+                break;
+            case "cancellation":
+                cts.Cancel();
+                var canceled = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => read).DefaultTimeout();
+                Assert.Equal(cts.Token, canceled.CancellationToken);
+                break;
+        }
+
+        failReporting = false;
+        await app.ResourceNotifications.PublishUpdateAsync(caller, s => s);
+        AssertParameterWaitState(app, caller, initialState);
+        Assert.True(app.ResourceNotifications.TryGetCurrentState(caller.Name, out var restored));
+        Assert.Equal(startingState, restored.Snapshot.State);
+        var warnings = logger.Collector.GetSnapshot().Where(r => r.Level == LogLevel.Warning).ToArray();
+        Assert.Equal(failRegistration ? 2 : 1, warnings.Length);
+        Assert.All(warnings, r => Assert.Same(reportingError, r.Exception));
+    }
+
+    [Fact]
+    public async Task ParameterWaitSkipsMismatchedReplicaWithoutFailingRead()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var logger = new FakeLogger<ResourceNotificationService>();
+        builder.Services.AddSingleton<ILogger<ResourceNotificationService>>(logger);
+        var parameter = builder.AddParameter("parameter").Resource;
+        parameter.EnsureValueTask();
+        var caller = builder.AddExecutable("caller", "unused", ".")
+            .WithAnnotation(new DcpInstancesAnnotation([
+                new("caller-first", "first", 0), new("caller-second", "second", 1), new("caller-third", "third", 2)
+            ])).Resource;
+        var registered = new ExecutableResource(caller.Name, "unused", ".");
+        using var app = builder.Build();
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
+        await app.ResourceNotifications.PublishUpdateAsync(caller, "caller-first", s => s with { State = KnownResourceStates.Starting });
+        await app.ResourceNotifications.PublishUpdateAsync(registered, "caller-second", s => s with { State = KnownResourceStates.Starting });
+        await app.ResourceNotifications.PublishUpdateAsync(caller, "caller-third", s => s with { State = KnownResourceStates.Starting });
+        var read = parameter.GetValueAsync(
+            new ValueProviderContext { ExecutionContext = builder.ExecutionContext, Caller = caller },
+            cts.Token).AsTask();
+
+        foreach (var id in new[] { "caller-first", "caller-third" })
+        {
+            Assert.True(app.ResourceNotifications.TryGetCurrentState(id, out var waiting));
+            Assert.Equal(KnownResourceStates.UnresolvedParameters, waiting.Snapshot.State?.Text);
+        }
+
+        await parameter.SetValueAsync("value");
+        Assert.Equal("value", await read.DefaultTimeout());
+        foreach (var id in new[] { "caller-first", "caller-second", "caller-third" })
+        {
+            Assert.True(app.ResourceNotifications.TryGetCurrentState(id, out var restored));
+            Assert.Equal(KnownResourceStates.Starting, restored.Snapshot.State?.Text);
+            Assert.Empty(restored.Snapshot.Properties);
+            Assert.Same(id == "caller-second" ? registered : caller, restored.Resource);
+        }
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            app.ResourceNotifications.PublishUpdateAsync(caller, "caller-second", s => s));
+        var warning = Assert.Single(logger.Collector.GetSnapshot(), r => r.Level == LogLevel.Warning);
+        Assert.IsType<InvalidOperationException>(warning.Exception);
+    }
+
+    [Fact]
+    public async Task ParameterWaitCleanupFailureDoesNotSkipOtherReplicas()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var logger = new FakeLogger<ResourceNotificationService>();
+        builder.Services.AddSingleton<ILogger<ResourceNotificationService>>(logger);
+        var parameter = builder.AddParameter("parameter").Resource;
+        parameter.EnsureValueTask();
+        var reportingError = new InvalidOperationException("Command state failed.");
+        var failReporting = false;
+        var caller = builder.AddExecutable("caller", "unused", ".")
+            .WithAnnotation(new DcpInstancesAnnotation([new("caller-first", "first", 0), new("caller-second", "second", 1)]))
+            .WithCommand("custom", "Custom", _ => Task.FromResult(CommandResults.Success()),
+                new CommandOptions
+                {
+                    UpdateState = c => failReporting && c.ResourceSnapshot.Properties.Any(p => p.Name == "replica" && p.Value is "caller-first")
+                        ? throw reportingError
+                        : ResourceCommandState.Enabled
+                }).Resource;
+        using var app = builder.Build();
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
+        foreach (var id in new[] { "caller-first", "caller-second" })
+        {
+            await app.ResourceNotifications.PublishUpdateAsync(caller, id, s => s with
+            {
+                State = KnownResourceStates.Starting,
+                Properties = [new("replica", id)]
+            });
+        }
+
+        var read = parameter.GetValueAsync(
+            new ValueProviderContext { ExecutionContext = builder.ExecutionContext, Caller = caller },
+            cts.Token).AsTask();
+        failReporting = true;
+        await parameter.SetValueAsync("value");
+        Assert.Equal("value", await read.DefaultTimeout());
+        Assert.True(app.ResourceNotifications.TryGetCurrentState("caller-second", out var second));
+        Assert.Equal(KnownResourceStates.Starting, second.Snapshot.State?.Text);
+        Assert.Equal("replica", Assert.Single(second.Snapshot.Properties).Name);
+
+        failReporting = false;
+        await app.ResourceNotifications.PublishUpdateAsync(caller, "caller-first", s => s);
+        Assert.True(app.ResourceNotifications.TryGetCurrentState("caller-first", out var first));
+        Assert.Equal(KnownResourceStates.Starting, first.Snapshot.State?.Text);
+        Assert.Equal("replica", Assert.Single(first.Snapshot.Properties).Name);
+        var warning = Assert.Single(logger.Collector.GetSnapshot(), r => r.Level == LogLevel.Warning);
+        Assert.Same(reportingError, warning.Exception);
     }
 
     [Theory]
