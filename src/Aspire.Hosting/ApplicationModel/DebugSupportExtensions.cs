@@ -15,12 +15,18 @@ namespace Aspire.Hosting.ApplicationModel;
 [Experimental("ASPIREEXTENSION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public static class DebugSupportExtensions
 {
+    internal const string AspireExtensionBaselineCapability = "baseline.v1";
+    private const string AzureFunctionsLaunchConfigurationType = "azure-functions";
+
     /// <summary>
     /// Determines whether the resource will be launched by the IDE for debugging in the current session.
     /// </summary>
     /// <param name="resource">The resource to inspect.</param>
     /// <param name="configuration">The app host configuration, used to detect the active debug session and its capabilities.</param>
-    /// <param name="supportsDebuggingAnnotation">When this method returns <see langword="true"/>, the annotation describing how the resource is launched.</param>
+    /// <param name="supportsDebuggingAnnotation">
+    /// When this method returns <see langword="true"/>, the annotation describing the effective IDE launch.
+    /// Compatibility launches can return a synthesized annotation that is not attached to the resource.
+    /// </param>
     /// <returns><see langword="true"/> when the IDE owns launching this resource; otherwise <see langword="false"/>.</returns>
     /// <remarks>
     /// <para>
@@ -29,16 +35,17 @@ public static class DebugSupportExtensions
     /// supplied by the IDE instead and must not be produced by the integration.
     /// </para>
     /// <para>
-    /// A resource is only considered debuggable when it carries a <see cref="SupportsDebuggingAnnotation"/>,
+    /// A resource is normally considered debuggable when it carries a <see cref="SupportsDebuggingAnnotation"/>,
     /// a debug session is active, the resource is not forced to process execution, it does not have a
     /// persistent lifetime, and the IDE advertised support for the annotation's launch configuration type.
     /// A producer that requires explicit Debug mode uses plain process execution for non-debug launches.
     /// </para>
     /// <para>
-    /// Exception: when the active debug session did not provide a usable launch configuration capability list
-    /// (for example Visual Studio, which does not send one), a non-file-based resource whose launch configuration
-    /// type is <see cref="KnownLaunchConfigurationTypes.Project"/> is treated as implicitly supported. File-based
-    /// C# apps require explicit IDE support because Visual Studio can only launch projects loaded in the solution.
+    /// Project resources also retain legacy IDE compatibility. A capability-less session can launch a loaded
+    /// project, and a native IDE that explicitly advertises <see cref="KnownLaunchConfigurationTypes.Project"/>
+    /// can use the Azure Functions project compatibility launch. In those cases this method returns an effective
+    /// project annotation. File-based C# apps require explicit project support because a legacy IDE can only launch
+    /// projects loaded in the solution.
     /// </para>
     /// </remarks>
     [AspireExportIgnore(Reason = "Debug support inspection is a local .NET helper and is not part of the ATS surface.")]
@@ -47,33 +54,63 @@ public static class DebugSupportExtensions
         ArgumentNullException.ThrowIfNull(resource);
         ArgumentNullException.ThrowIfNull(configuration);
 
-        var supportedLaunchConfigurations = GetSupportedLaunchConfigurations(configuration);
+        var decision = resource.GetEffectiveDebugSupportDecision(configuration);
+        supportsDebuggingAnnotation = decision.EffectiveAnnotation ?? decision.DeclaredAnnotation;
 
-        if (!resource.TryGetLastAnnotation(out supportsDebuggingAnnotation)
-            || string.IsNullOrEmpty(configuration[DcpExecutor.DebugSessionPortVar])
+        return decision.EffectiveAnnotation is not null;
+    }
+
+    internal static EffectiveDebugSupportDecision GetEffectiveDebugSupportDecision(
+        this IResource resource,
+        IConfiguration configuration)
+    {
+        ArgumentNullException.ThrowIfNull(resource);
+        ArgumentNullException.ThrowIfNull(configuration);
+
+        resource.TryGetLastAnnotation<SupportsDebuggingAnnotation>(out var declaredAnnotation);
+
+        if (string.IsNullOrEmpty(configuration[DcpExecutor.DebugSessionPortVar])
             || resource.HasAnnotationOfType<ForceProcessExecutionAnnotation>()
             || resource.HasPersistentLifetime()
-            || (supportsDebuggingAnnotation.RequiresDebugMode &&
+            || (declaredAnnotation?.RequiresDebugMode is true &&
                 configuration[KnownConfigNames.DebugSessionRunMode] != ExecutableLaunchMode.Debug))
         {
-            return false;
+            return new(declaredAnnotation, EffectiveAnnotation: null, UsesAzureFunctionsProjectCompatibility: false);
         }
 
-        // Visual Studio does not send DEBUG_SESSION_INFO, so preserve implicit support for loaded project files.
-        // A bare .cs file is not a loaded project and must stay on the process path unless the IDE explicitly
-        // advertises project support, as the VS Code extension does for its file-based app launcher.
-        if (supportedLaunchConfigurations is null)
+        var debugSessionInfo = configuration[KnownConfigNames.DebugSessionInfo];
+        var hasDebugSessionInfo = !string.IsNullOrEmpty(debugSessionInfo);
+        var supportedLaunchConfigurations =
+            DebugSessionInfoParser.TryGetSupportedLaunchConfigurations(debugSessionInfo, out var parsedLaunchConfigurations)
+                ? parsedLaunchConfigurations
+                : null;
+
+        if (declaredAnnotation is not null &&
+            IsDeclaredLaunchConfigurationSupported(resource, declaredAnnotation, supportedLaunchConfigurations))
         {
-            return supportsDebuggingAnnotation.LaunchConfigurationType == KnownLaunchConfigurationTypes.Project &&
-                (!resource.TryGetProjectMetadata(out var projectMetadata) || !projectMetadata.IsFileBasedApp);
+            return new(declaredAnnotation, declaredAnnotation, UsesAzureFunctionsProjectCompatibility: false);
         }
 
-        // The IDE advertised an explicit capability list — honor it for every type, including
-        // "project". An IDE that can launch project resources must include "project" in its list
-        // (the VS Code extension does this when the C# extension is installed). Treating "project"
-        // as implicitly supported here would route resources to an IDE that cannot launch them
-        // and leave them stuck.
-        return supportedLaunchConfigurations.Contains(supportsDebuggingAnnotation.LaunchConfigurationType);
+        if (resource is not ProjectResource ||
+            !ShouldUseCompatibilityProjectLaunch(
+                resource,
+                declaredAnnotation,
+                hasDebugSessionInfo,
+                supportedLaunchConfigurations))
+        {
+            return new(declaredAnnotation, EffectiveAnnotation: null, UsesAzureFunctionsProjectCompatibility: false);
+        }
+
+        var effectiveAnnotation = SupportsDebuggingAnnotation.Create(
+            resource.Name,
+            KnownLaunchConfigurationTypes.Project,
+            context => Task.FromResult(ProjectLaunchConfigurationFactory.Create(context.Resource, context.Mode)));
+
+        return new(
+            declaredAnnotation,
+            effectiveAnnotation,
+            UsesAzureFunctionsProjectCompatibility:
+                declaredAnnotation?.LaunchConfigurationType == AzureFunctionsLaunchConfigurationType);
     }
 
     /// <summary>
@@ -191,12 +228,78 @@ public static class DebugSupportExtensions
         return supportsDebuggingAnnotation.LaunchConfigurationProducer(context);
     }
 
-    private static string[]? GetSupportedLaunchConfigurations(IConfiguration configuration)
+    private static bool IsDeclaredLaunchConfigurationSupported(
+        IResource resource,
+        SupportsDebuggingAnnotation declaredAnnotation,
+        string[]? supportedLaunchConfigurations)
     {
-        return DebugSessionInfoParser.TryGetSupportedLaunchConfigurations(
-            configuration[KnownConfigNames.DebugSessionInfo],
-            out var supportedLaunchConfigurations)
-                ? supportedLaunchConfigurations
-                : null;
+        // A capability-less IDE session can only launch projects loaded in the solution. A bare .cs file must stay
+        // on the Process path unless the IDE explicitly advertises project support.
+        if (supportedLaunchConfigurations is null)
+        {
+            return declaredAnnotation.LaunchConfigurationType == KnownLaunchConfigurationTypes.Project &&
+                (!resource.TryGetProjectMetadata(out var projectMetadata) || !projectMetadata.IsFileBasedApp);
+        }
+
+        return supportedLaunchConfigurations.Contains(declaredAnnotation.LaunchConfigurationType);
+    }
+
+    private static bool ShouldUseCompatibilityProjectLaunch(
+        IResource resource,
+        SupportsDebuggingAnnotation? declaredAnnotation,
+        bool hasDebugSessionInfo,
+        string[]? supportedLaunchConfigurations)
+    {
+        var hasExplicitProjectLaunchCapability =
+            supportedLaunchConfigurations?.Contains(KnownLaunchConfigurationTypes.Project) is true;
+
+        // Capability-less IDE sessions can only launch projects loaded in the solution, so bare .cs files stay on
+        // the Process path. An IDE that explicitly advertises "project" can launch the same .cs project configuration
+        // through this compatibility path even when the resource has no SupportsDebuggingAnnotation.
+        if (resource.TryGetProjectMetadata(out var projectMetadata) &&
+            projectMetadata.IsFileBasedApp &&
+            !hasExplicitProjectLaunchCapability)
+        {
+            return false;
+        }
+
+        if (resource.TryGetLastAnnotation<ExecutableAnnotation>(out _) &&
+            declaredAnnotation?.LaunchConfigurationType is not null and not KnownLaunchConfigurationTypes.Project)
+        {
+            return false;
+        }
+
+        if (declaredAnnotation is not null && hasDebugSessionInfo)
+        {
+            if (declaredAnnotation.LaunchConfigurationType != AzureFunctionsLaunchConfigurationType ||
+                !hasExplicitProjectLaunchCapability)
+            {
+                return false;
+            }
+
+            // Visual Studio's native project system can launch an Azure Functions project even though its DCP
+            // endpoint advertises only "project". Aspire VS Code sessions include "baseline.v1" in the same
+            // capability list, including leased test sessions and detached CLI children whose extension endpoint
+            // was intentionally stripped. For those sessions the advertised launch types are authoritative:
+            // without "azure-functions", the generic VS Code project launcher must not replace func host startup.
+            if (supportedLaunchConfigurations?.Contains(AspireExtensionBaselineCapability) is true)
+            {
+                return false;
+            }
+        }
+
+        // A directly added legacy ProjectResource may not declare a launch configuration type at all. Preserve its
+        // historical Visual Studio-compatible behavior and treat it as a project launch whenever a debug session is
+        // active. Project v2 resources declare their capability explicitly and do not use this compatibility path.
+        return true;
     }
 }
+
+/// <summary>
+/// Describes the declared and effective debug support selected for the current IDE session.
+/// </summary>
+[Experimental("ASPIREEXTENSION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+internal readonly record struct EffectiveDebugSupportDecision(
+    SupportsDebuggingAnnotation? DeclaredAnnotation,
+    SupportsDebuggingAnnotation? EffectiveAnnotation,
+    bool UsesAzureFunctionsProjectCompatibility);

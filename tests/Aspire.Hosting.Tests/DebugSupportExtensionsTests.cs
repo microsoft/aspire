@@ -417,6 +417,51 @@ public class DebugSupportExtensionsTests(ITestOutputHelper outputHelper)
         Assert.False(executable.Resource.SupportsDebugging(CreateConfiguration(), out _));
     }
 
+    [Fact]
+    public void SupportsDebuggingReturnsEffectiveProjectAnnotationForAzureFunctionsCompatibility()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+#pragma warning disable CS0618 // Retain legacy ProjectResource IDE launch-configuration compatibility.
+        var project = builder.AddProject<Projects.ServiceA>("proj", launchProfileName: "http");
+#pragma warning restore CS0618
+        var declaredAnnotation = project.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().Single();
+        project.Resource.Annotations.Remove(declaredAnnotation);
+        project.WithDebugSupport(
+            mode => new ExecutableLaunchConfiguration("azure-functions") { Mode = mode },
+            "azure-functions");
+
+        var configuration = CreateConfiguration(
+            debugSessionInfo: CreateDebugSessionInfo([KnownLaunchConfigurationTypes.Project]));
+
+        Assert.True(project.Resource.SupportsDebugging(configuration, out var effectiveAnnotation));
+        Assert.Equal(KnownLaunchConfigurationTypes.Project, effectiveAnnotation.LaunchConfigurationType);
+        Assert.DoesNotContain(effectiveAnnotation, project.Resource.Annotations);
+    }
+
+    [Fact]
+    public void SupportsDebuggingTreatsAspireExtensionCapabilitiesAsAuthoritative()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+#pragma warning disable CS0618 // Retain legacy ProjectResource IDE launch-configuration compatibility.
+        var project = builder.AddProject<Projects.ServiceA>("proj", launchProfileName: "http");
+#pragma warning restore CS0618
+        var defaultAnnotation = project.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().Single();
+        project.Resource.Annotations.Remove(defaultAnnotation);
+        project.WithDebugSupport(
+            mode => new ExecutableLaunchConfiguration("azure-functions") { Mode = mode },
+            "azure-functions");
+        var declaredAnnotation = project.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().Single();
+
+        var configuration = CreateConfiguration(
+            debugSessionInfo: CreateDebugSessionInfo([
+                KnownLaunchConfigurationTypes.Project,
+                DebugSupportExtensions.AspireExtensionBaselineCapability
+            ]));
+
+        Assert.False(project.Resource.SupportsDebugging(configuration, out var effectiveAnnotation));
+        Assert.Same(declaredAnnotation, effectiveAnnotation);
+    }
+
     [Theory]
     [InlineData(new[] { "go" }, true)]
     [InlineData(new[] { "project", "go" }, true)]
