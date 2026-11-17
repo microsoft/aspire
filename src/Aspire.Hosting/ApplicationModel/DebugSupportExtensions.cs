@@ -19,45 +19,89 @@ public static class DebugSupportExtensions
     private const string AzureFunctionsLaunchConfigurationType = "azure-functions";
 
     /// <summary>
-    /// Determines whether the resource will be launched by the IDE for debugging in the current session.
+    /// Attempts to get the annotation describing the IDE launch selected for the resource in the current session.
     /// </summary>
     /// <param name="resource">The resource to inspect.</param>
-    /// <param name="configuration">The app host configuration, used to detect the active debug session and its capabilities.</param>
-    /// <param name="supportsDebuggingAnnotation">
-    /// When this method returns <see langword="true"/>, the annotation describing the effective IDE launch.
-    /// Compatibility launches can return a synthesized annotation that is not attached to the resource.
+    /// <param name="configuration">
+    /// The app host configuration used to detect the active debug session and its supported launch configuration types.
     /// </param>
-    /// <returns><see langword="true"/> when the IDE owns launching this resource; otherwise <see langword="false"/>.</returns>
+    /// <param name="ideLaunchAnnotation">
+    /// When this method returns <see langword="true"/>, the annotation describing the effective IDE launch. A
+    /// compatibility launch can return a synthesized annotation that is not attached to the resource. When this
+    /// method returns <see langword="false"/>, this is the resource's last declared annotation, if one exists; that
+    /// annotation can describe optional metadata but does not mean the IDE owns process creation.
+    /// </param>
+    /// <returns>
+    /// <see langword="true"/> when the IDE owns process creation for this resource; otherwise <see langword="false"/>.
+    /// </returns>
     /// <remarks>
     /// <para>
-    /// Integrations use this to decide whether to build a runnable command line for the resource. When the
-    /// IDE launches the resource, arguments such as <c>dotnet run --project …</c> or <c>go run …</c> are
-    /// supplied by the IDE instead and must not be produced by the integration.
+    /// Integrations use the return value to decide whether to build a runnable process command. When the IDE owns
+    /// process creation, commands such as <c>dotnet run --project …</c> or <c>go run …</c> are supplied by the IDE
+    /// and must not also be produced by the integration.
     /// </para>
     /// <para>
-    /// A resource is normally considered debuggable when it carries a <see cref="SupportsDebuggingAnnotation"/>,
-    /// a debug session is active, the resource is not forced to process execution, it does not have a
-    /// persistent lifetime, and the IDE advertised support for the annotation's launch configuration type.
-    /// A producer that requires explicit Debug mode uses plain process execution for non-debug launches.
+    /// The declared annotation is selected for IDE launch when a debug session is active, the resource is not forced
+    /// to process execution, the resource does not have a persistent lifetime, and the IDE advertised support for the
+    /// annotation's launch configuration type. An annotation that requires explicit Debug mode is not selected during
+    /// a no-debug session.
     /// </para>
     /// <para>
-    /// Project resources also retain legacy IDE compatibility. A capability-less session can launch a loaded
-    /// project, and a native IDE that explicitly advertises <see cref="KnownLaunchConfigurationTypes.Project"/>
-    /// can use the Azure Functions project compatibility launch. In those cases this method returns an effective
-    /// project annotation. File-based C# apps require explicit project support because a legacy IDE can only launch
-    /// projects loaded in the solution.
+    /// Project resources have two compatibility rules. First, when an IDE session does not provide a parseable
+    /// <c>DEBUG_SESSION_INFO</c> list of supported launch configuration types, Aspire assumes the IDE can launch a
+    /// non-file-based project through <see cref="KnownLaunchConfigurationTypes.Project"/>. Such a resource represents
+    /// a project file included in the solution currently open in the IDE. A file-based C# app represents a standalone
+    /// <c>.cs</c> file rather than a solution project, so its session must explicitly advertise project-launch support.
+    /// </para>
+    /// <para>
+    /// Second, an Azure Functions project normally declares the <c>azure-functions</c> launch configuration type.
+    /// When a session advertises <see cref="KnownLaunchConfigurationTypes.Project"/> but not
+    /// <c>azure-functions</c>, and the session is not identified as an Aspire extension session by the
+    /// <c>baseline.v1</c> capability, Aspire must fall back from <c>azure-functions</c> to
+    /// <see cref="KnownLaunchConfigurationTypes.Project"/> so the IDE launches and debugs the project. For either
+    /// compatibility rule, this method returns a synthesized project annotation that is not attached to the resource.
+    /// </para>
+    /// <para>
+    /// A <see cref="ProjectLaunchArgsOverrideAnnotation"/> tells Aspire to execute the complete project command as a
+    /// DCP-managed process instead of asking the IDE to create the process. Because this method reports whether the
+    /// IDE owns process creation, it returns <see langword="false"/> for that resource. A supported custom launch
+    /// annotation can still add metadata to the process-launched resource, but that metadata does not transfer process
+    /// ownership to the IDE.
     /// </para>
     /// </remarks>
     [AspireExportIgnore(Reason = "Debug support inspection is a local .NET helper and is not part of the ATS surface.")]
-    public static bool SupportsDebugging(this IResource resource, IConfiguration configuration, [NotNullWhen(true)] out SupportsDebuggingAnnotation? supportsDebuggingAnnotation)
+    public static bool TryGetIdeLaunchAnnotation(this IResource resource, IConfiguration configuration, [NotNullWhen(true)] out SupportsDebuggingAnnotation? ideLaunchAnnotation)
     {
         ArgumentNullException.ThrowIfNull(resource);
         ArgumentNullException.ThrowIfNull(configuration);
 
         var decision = resource.GetEffectiveDebugSupportDecision(configuration);
-        supportsDebuggingAnnotation = decision.EffectiveAnnotation ?? decision.DeclaredAnnotation;
+        ideLaunchAnnotation = decision.EffectiveAnnotation ?? decision.DeclaredAnnotation;
 
         return decision.EffectiveAnnotation is not null;
+    }
+
+    /// <summary>
+    /// Determines whether the IDE owns process creation for the resource in the current session.
+    /// </summary>
+    /// <param name="resource">The resource to inspect.</param>
+    /// <param name="configuration">The app host configuration used to inspect the active IDE launch session.</param>
+    /// <param name="supportsDebuggingAnnotation">
+    /// The effective IDE launch annotation when this method returns <see langword="true"/>; otherwise the last
+    /// declared annotation, if one exists.
+    /// </param>
+    /// <returns>
+    /// <see langword="true"/> when the IDE owns process creation for this resource; otherwise <see langword="false"/>.
+    /// </returns>
+    /// <remarks>
+    /// This compatibility entry point is retained for existing callers. Use
+    /// <see cref="TryGetIdeLaunchAnnotation(IResource, IConfiguration, out SupportsDebuggingAnnotation?)"/> for new code.
+    /// </remarks>
+    [Obsolete("Use TryGetIdeLaunchAnnotation instead.")]
+    [AspireExportIgnore(Reason = "Debug support inspection is a local .NET helper and is not part of the ATS surface.")]
+    public static bool SupportsDebugging(this IResource resource, IConfiguration configuration, [NotNullWhen(true)] out SupportsDebuggingAnnotation? supportsDebuggingAnnotation)
+    {
+        return resource.TryGetIdeLaunchAnnotation(configuration, out supportsDebuggingAnnotation);
     }
 
     internal static EffectiveDebugSupportDecision GetEffectiveDebugSupportDecision(
@@ -69,13 +113,20 @@ public static class DebugSupportExtensions
 
         resource.TryGetLastAnnotation<SupportsDebuggingAnnotation>(out var declaredAnnotation);
 
+        // IDE launch is unavailable without an active debug session. Force-process and persistent resources always
+        // stay on the DCP process path, and debug-only producers are inactive during a no-debug session.
         if (string.IsNullOrEmpty(configuration[DcpExecutor.DebugSessionPortVar])
             || resource.HasAnnotationOfType<ForceProcessExecutionAnnotation>()
             || resource.HasPersistentLifetime()
             || (declaredAnnotation?.RequiresDebugMode is true &&
                 configuration[KnownConfigNames.DebugSessionRunMode] != ExecutableLaunchMode.Debug))
         {
-            return new(declaredAnnotation, EffectiveAnnotation: null, UsesAzureFunctionsProjectCompatibility: false);
+            return new(
+                declaredAnnotation,
+                SupportedDeclaredAnnotation: null,
+                EffectiveAnnotation: null,
+                UsesCompatibilityProjectLaunch: false,
+                UsesAzureFunctionsProjectCompatibility: false);
         }
 
         var debugSessionInfo = configuration[KnownConfigNames.DebugSessionInfo];
@@ -85,12 +136,39 @@ public static class DebugSupportExtensions
                 ? parsedLaunchConfigurations
                 : null;
 
-        if (declaredAnnotation is not null &&
-            IsDeclaredLaunchConfigurationSupported(resource, declaredAnnotation, supportedLaunchConfigurations))
+        var supportedDeclaredAnnotation =
+            declaredAnnotation is not null &&
+            IsDeclaredLaunchConfigurationSupported(resource, declaredAnnotation, supportedLaunchConfigurations)
+                ? declaredAnnotation
+                : null;
+
+        // A project launch override is a complete process command. Retain a supported declared producer only so it
+        // can contribute optional metadata; it must not make the resource appear to be IDE-launched.
+        if (resource is ProjectResource &&
+            resource.HasAnnotationOfType<ProjectLaunchArgsOverrideAnnotation>())
         {
-            return new(declaredAnnotation, declaredAnnotation, UsesAzureFunctionsProjectCompatibility: false);
+            return new(
+                declaredAnnotation,
+                supportedDeclaredAnnotation,
+                EffectiveAnnotation: null,
+                UsesCompatibilityProjectLaunch: false,
+                UsesAzureFunctionsProjectCompatibility: false);
         }
 
+        // When the IDE supports the declared launch type, that annotation is both the active producer and the
+        // effective configuration sent to the IDE.
+        if (supportedDeclaredAnnotation is not null)
+        {
+            return new(
+                declaredAnnotation,
+                supportedDeclaredAnnotation,
+                EffectiveAnnotation: supportedDeclaredAnnotation,
+                UsesCompatibilityProjectLaunch: false,
+                UsesAzureFunctionsProjectCompatibility: false);
+        }
+
+        // Only project resources that satisfy the legacy compatibility rules can replace an unsupported or absent
+        // declared producer with a synthesized native "project" launch configuration.
         if (resource is not ProjectResource ||
             !ShouldUseCompatibilityProjectLaunch(
                 resource,
@@ -98,9 +176,16 @@ public static class DebugSupportExtensions
                 hasDebugSessionInfo,
                 supportedLaunchConfigurations))
         {
-            return new(declaredAnnotation, EffectiveAnnotation: null, UsesAzureFunctionsProjectCompatibility: false);
+            return new(
+                declaredAnnotation,
+                SupportedDeclaredAnnotation: null,
+                EffectiveAnnotation: null,
+                UsesCompatibilityProjectLaunch: false,
+                UsesAzureFunctionsProjectCompatibility: false);
         }
 
+        // Keep synthesized compatibility metadata separate from the declared producer so it cannot claim ownership
+        // of integration-specific launch-tool arguments.
         var effectiveAnnotation = SupportsDebuggingAnnotation.Create(
             resource.Name,
             KnownLaunchConfigurationTypes.Project,
@@ -108,7 +193,9 @@ public static class DebugSupportExtensions
 
         return new(
             declaredAnnotation,
-            effectiveAnnotation,
+            SupportedDeclaredAnnotation: null,
+            EffectiveAnnotation: effectiveAnnotation,
+            UsesCompatibilityProjectLaunch: true,
             UsesAzureFunctionsProjectCompatibility:
                 declaredAnnotation?.LaunchConfigurationType == AzureFunctionsLaunchConfigurationType);
     }
@@ -159,7 +246,7 @@ public static class DebugSupportExtensions
     /// <para>
     /// This describes the launch configuration itself, not whether one is going to be used. Depending on how
     /// the application is started, or how a resource is configured, Aspire may or may not run the resource under
-    /// a debugger. Use <see cref="SupportsDebugging"/> to test for that.
+    /// a debugger. Use <see cref="TryGetIdeLaunchAnnotation"/> to test for that.
     /// </para>
     /// </remarks>
     [AspireExportIgnore(Reason = "Debug support inspection is a local .NET helper and is not part of the ATS surface.")]
@@ -296,10 +383,25 @@ public static class DebugSupportExtensions
 }
 
 /// <summary>
-/// Describes the declared and effective debug support selected for the current IDE session.
+/// Describes the declared producer and effective debug support selected for the current IDE session.
 /// </summary>
+/// <param name="DeclaredAnnotation">The resource's last declared debug-support annotation, whether supported or not.</param>
+/// <param name="SupportedDeclaredAnnotation">
+/// The supported declared producer. Only this annotation can own launch-tool arguments or contribute custom metadata.
+/// </param>
+/// <param name="EffectiveAnnotation">
+/// The annotation describing the actual IDE launch, including a synthesized compatibility annotation when applicable.
+/// </param>
+/// <param name="UsesCompatibilityProjectLaunch">
+/// Whether <paramref name="EffectiveAnnotation"/> is synthesized project compatibility metadata rather than a declared producer.
+/// </param>
+/// <param name="UsesAzureFunctionsProjectCompatibility">
+/// Whether launch-profile arguments must be materialized for the Azure Functions compatibility route.
+/// </param>
 [Experimental("ASPIREEXTENSION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 internal readonly record struct EffectiveDebugSupportDecision(
     SupportsDebuggingAnnotation? DeclaredAnnotation,
+    SupportsDebuggingAnnotation? SupportedDeclaredAnnotation,
     SupportsDebuggingAnnotation? EffectiveAnnotation,
+    bool UsesCompatibilityProjectLaunch,
     bool UsesAzureFunctionsProjectCompatibility);

@@ -84,6 +84,9 @@ internal enum ExecutableLaunchArgumentRole
 /// <param name="mechanism">The mechanism selected for the current start attempt.</param>
 /// <param name="launchMode">The mode supplied to the active launch-configuration producer.</param>
 /// <param name="debugSupport">The debug-support annotation used for required IDE configuration or optional Process metadata, or <see langword="null"/>.</param>
+/// <param name="useCompatibilityProjectLaunchConfiguration">
+/// Whether to synthesize project launch metadata without treating it as an active declared producer.
+/// </param>
 /// <param name="materializeLaunchProfileArguments">
 /// Whether launch-profile arguments must be included in the run-session arguments because compatibility arguments
 /// would otherwise replace them.
@@ -93,6 +96,7 @@ internal sealed class ExecutableLaunchDecision(
     ExecutableLaunchMechanism mechanism,
     string launchMode,
     SupportsDebuggingAnnotation? debugSupport = null,
+    bool useCompatibilityProjectLaunchConfiguration = false,
     bool materializeLaunchProfileArguments = false,
     string? projectLaunchMode = null)
 {
@@ -112,9 +116,15 @@ internal sealed class ExecutableLaunchDecision(
     public string ProjectLaunchMode { get; } = projectLaunchMode ?? launchMode;
 
     /// <summary>
-    /// Gets the debug-support annotation used for required IDE configuration or optional Process metadata.
+    /// Gets the active declared producer used for IDE configuration or optional Process metadata.
+    /// Synthesized compatibility metadata is represented by <see cref="UseCompatibilityProjectLaunchConfiguration"/>.
     /// </summary>
     public SupportsDebuggingAnnotation? DebugSupport { get; } = debugSupport;
+
+    /// <summary>
+    /// Gets a value indicating whether project launch metadata should be synthesized for compatibility.
+    /// </summary>
+    public bool UseCompatibilityProjectLaunchConfiguration { get; } = useCompatibilityProjectLaunchConfiguration;
 
     /// <summary>
     /// Gets a value indicating whether launch-profile arguments must be materialized into the run-session arguments.
@@ -581,6 +591,13 @@ internal sealed class ProjectExecutableLaunchRecipe : IExecutableLaunchRecipe
             return launchConfigurations;
         }
 
+        if (context.Decision.UseCompatibilityProjectLaunchConfiguration)
+        {
+            launchConfigurations.Add(JsonSerializer.SerializeToElement(
+                ProjectLaunchConfigurationFactory.Create(resource, projectMetadata, context.Decision.ProjectLaunchMode)));
+            return launchConfigurations;
+        }
+
         if (context.Decision.Mechanism == ExecutableLaunchMechanism.Process && executableAnnotation is null)
         {
             // Keep project metadata on process-launched legacy projects for existing DCP/dashboard consumers.
@@ -709,13 +726,15 @@ internal sealed class ProjectExecutableLaunchRecipe : IExecutableLaunchRecipe
         if (!useProjectLaunchArgsOverride)
         {
             var ordinaryAppHostArgumentCount = Math.Max(0, appHostArgumentList.Count - launchToolArgumentCount);
+            var executableAppHostArgumentCount = Math.Max(0, appHostArgumentList.Count - omittedLaunchToolArgumentCount);
             var materializeCompatibilityProfileArguments =
-                materializeLaunchProfileArguments && ordinaryAppHostArgumentCount > 0;
+                materializeLaunchProfileArguments && executableAppHostArgumentCount > 0;
 
             // A project IDE launch delegates profile arguments to the IDE unless there are no ordinary AppHost
             // arguments, in which case the profile arguments are still shown in the dashboard. DCP run-session
             // arguments replace profile arguments, so the Azure Functions project compatibility route must
-            // materialize both when it adds a generated port. Process and custom IDE launches also materialize them.
+            // materialize them whenever any executable arguments remain. Process and custom IDE launches also
+            // materialize them.
             if (mechanism == ExecutableLaunchMechanism.Process ||
                 !projectLaunchConfigurationHandlesLaunchProfile ||
                 materializeCompatibilityProfileArguments ||

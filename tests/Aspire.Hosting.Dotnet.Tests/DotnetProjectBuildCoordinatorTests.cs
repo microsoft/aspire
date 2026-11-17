@@ -279,7 +279,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         Assert.Equal(
             KnownLaunchConfigurationTypes.Project,
             Assert.Single(project.Resource.Annotations.OfType<SupportsDebuggingAnnotation>()).LaunchConfigurationType);
-        Assert.True(project.Resource.SupportsDebugging(builder.Configuration, out _));
+        Assert.True(project.Resource.TryGetIdeLaunchAnnotation(builder.Configuration, out _));
     }
 
     [Fact]
@@ -397,7 +397,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         Assert.Equal(
             KnownLaunchConfigurationTypes.Project,
             Assert.Single(project.Resource.Annotations.OfType<SupportsDebuggingAnnotation>()).LaunchConfigurationType);
-        Assert.True(project.Resource.SupportsDebugging(builder.Configuration, out _));
+        Assert.True(project.Resource.TryGetIdeLaunchAnnotation(builder.Configuration, out _));
     }
 
     [Theory]
@@ -517,7 +517,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
             {
                 Assert.True(Assert.Single(project.Resource.Annotations.OfType<DotnetProjectMetadata>()).SuppressBuild);
                 Assert.Single(project.Resource.Annotations.OfType<DotnetProgramBuildCompletionAnnotation>());
-                Assert.False(project.Resource.SupportsDebugging(builder.Configuration, out _));
+                Assert.False(project.Resource.TryGetIdeLaunchAnnotation(builder.Configuration, out _));
             });
     }
 
@@ -570,7 +570,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         Assert.Equal(
             KnownLaunchConfigurationTypes.Project,
             Assert.Single(project.Resource.Annotations.OfType<SupportsDebuggingAnnotation>()).LaunchConfigurationType);
-        Assert.True(project.Resource.SupportsDebugging(builder.Configuration, out _));
+        Assert.True(project.Resource.TryGetIdeLaunchAnnotation(builder.Configuration, out _));
     }
 
     [Fact]
@@ -4064,7 +4064,7 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         Assert.DoesNotContain(
             missing.Resource.Annotations.OfType<SupportsDebuggingAnnotation>(),
             annotation => annotation.LaunchConfigurationType == KnownLaunchConfigurationTypes.ProjectWithExternalBuild);
-        Assert.False(missing.Resource.SupportsDebugging(builder.Configuration, out _));
+        Assert.False(missing.Resource.TryGetIdeLaunchAnnotation(builder.Configuration, out _));
         var args = await ArgumentEvaluator.GetArgumentListAsync(missing.Resource, app.Services);
         Assert.Equal(["run", pathOption, missingPath], args.Take(3));
         Assert.DoesNotContain("--no-build", args);

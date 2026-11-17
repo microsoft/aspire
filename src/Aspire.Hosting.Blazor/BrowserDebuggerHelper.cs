@@ -144,7 +144,7 @@ internal static class BrowserDebuggerHelper
                         return CommandResults.Failure(BrowserDebuggerClientUnavailableMessage);
                     }
 
-                    if (!debuggerResource.SupportsDebugging(builder.Configuration, out _))
+                    if (!debuggerResource.TryGetIdeLaunchAnnotation(builder.Configuration, out _))
                     {
                         return CommandResults.Failure(BrowserDebuggingUnavailableMessage);
                     }
@@ -217,7 +217,7 @@ internal static class BrowserDebuggerHelper
                         return ResourceCommandState.Hidden;
                     }
 
-                    return debuggerResource.SupportsDebugging(builder.Configuration, out _)
+                    return debuggerResource.TryGetIdeLaunchAnnotation(builder.Configuration, out _)
                         && ctx.ResourceSnapshot.State?.Text == KnownResourceStates.Running
                         ? ResourceCommandState.Enabled
                         : ResourceCommandState.Disabled;

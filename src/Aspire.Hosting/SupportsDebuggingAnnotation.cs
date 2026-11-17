@@ -13,7 +13,7 @@ namespace Aspire.Hosting.ApplicationModel;
 /// <remarks>
 /// Added by a <c>WithDebugSupport</c> overload on <see cref="ResourceBuilderExtensions"/>.
 /// The annotation is only honored while a debug session is active; use
-/// <see cref="DebugSupportExtensions.SupportsDebugging"/> to test for that.
+/// <see cref="DebugSupportExtensions.TryGetIdeLaunchAnnotation"/> to test for that.
 /// </remarks>
 [DebuggerDisplay("Type = {GetType().Name,nq}, RequiredExtensionId = {LaunchConfigurationType,nq}")]
 [Experimental("ASPIREEXTENSION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]

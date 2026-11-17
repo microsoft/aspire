@@ -407,8 +407,8 @@ public static class DotnetProjectHostingExtensions
         resource.WithLaunchToolArgs(
             async ctx =>
             {
-                if (ctx.Resource.SupportsDebugging(builder.Configuration, out var debugAnnotation)
-                    && debugAnnotation.LaunchConfigurationType == projectLaunchConfigurationType)
+                if (ctx.Resource.TryGetIdeLaunchAnnotation(builder.Configuration, out var ideLaunchAnnotation)
+                    && ideLaunchAnnotation.LaunchConfigurationType == projectLaunchConfigurationType)
                 {
                     return;
                 }
@@ -499,8 +499,8 @@ public static class DotnetProjectHostingExtensions
             // Project launch configurations carry the selected launch profile, so the IDE applies its command-line arguments.
             if (!builder.ExecutionContext.IsRunMode
                 || options.ExcludeLaunchProfile
-                || (resource.SupportsDebugging(builder.Configuration, out var debugAnnotation)
-                    && debugAnnotation.LaunchConfigurationType == projectLaunchConfigurationType))
+                || (resource.TryGetIdeLaunchAnnotation(builder.Configuration, out var ideLaunchAnnotation)
+                    && ideLaunchAnnotation.LaunchConfigurationType == projectLaunchConfigurationType))
             {
                 return [];
             }
