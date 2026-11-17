@@ -251,7 +251,7 @@ public class AzureSqlExtensionsTests(ITestOutputHelper testOutputHelper)
         var azureSql = (AzureSqlServerResource)connectionStringAnnotation.Resource;
         azureSql.Outputs["sqlServerFqdn"] = "myserver";
 
-        Assert.Equal("Server=tcp:myserver,1433;Encrypt=True;Authentication=\"Active Directory Default\"", await sql.Resource.GetConnectionStringAsync(default));
+        Assert.Equal("Server=tcp:myserver,1433;Encrypt=True;Authentication=\"Active Directory Default\"", await sql.Resource.GetConnectionStringAsync());
         Assert.Equal("Server=tcp:{sql.outputs.sqlServerFqdn},1433;Encrypt=True;Authentication=\"Active Directory Default\"", sql.Resource.ConnectionStringExpression.ValueExpression);
 
         var expectedManifest = """
@@ -282,7 +282,7 @@ public class AzureSqlExtensionsTests(ITestOutputHelper testOutputHelper)
         var azureSql = (AzureSqlServerResource)connectionStringAnnotation.Resource;
         azureSql.Outputs["sqlServerFqdn"] = "myserver";
 
-        Assert.Equal("Server=tcp:myserver,1433;Encrypt=True;Authentication=\"Active Directory Default\"", await sql.Resource.GetConnectionStringAsync(default));
+        Assert.Equal("Server=tcp:myserver,1433;Encrypt=True;Authentication=\"Active Directory Default\"", await sql.Resource.GetConnectionStringAsync());
         Assert.Equal("Server=tcp:{sql.outputs.sqlServerFqdn},1433;Encrypt=True;Authentication=\"Active Directory Default\"", sql.Resource.ConnectionStringExpression.ValueExpression);
 
         var expectedManifest = """

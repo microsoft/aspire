@@ -114,7 +114,7 @@ public class AddConnectionStringTests
         };
         IValueProvider provider = source == "reference" ? new ConnectionStringReference(resource, optional: false) : resource;
         var value = source == "connection-string"
-            ? await resource.GetConnectionStringAsync(context, cts.Token)
+            ? await resource.GetConnectionStringAsync(context)
             : await provider.GetValueAsync(context, cts.Token);
 
         Assert.Equal("Endpoint=http://server:8080", value);

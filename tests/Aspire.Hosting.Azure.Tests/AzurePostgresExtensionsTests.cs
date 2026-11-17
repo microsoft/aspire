@@ -448,7 +448,7 @@ public class AzurePostgresExtensionsTests(ITestOutputHelper testOutputHelper)
         // Setup to verify that connection strings is acquired via resource connectionstring redirct.
         Assert.NotNull(azurePostgres);
         azurePostgres.SecretOutputs["connectionString"] = "myconnectionstring";
-        Assert.Equal("myconnectionstring", await postgres.Resource.GetConnectionStringAsync(default));
+        Assert.Equal("myconnectionstring", await postgres.Resource.GetConnectionStringAsync());
 
         var expectedManifest = """
             {
@@ -491,7 +491,7 @@ public class AzurePostgresExtensionsTests(ITestOutputHelper testOutputHelper)
         // Setup to verify that connection strings is acquired via resource connectionstring redirct.
         Assert.NotNull(azurePostgres);
         azurePostgres.SecretOutputs["connectionString"] = "myconnectionstring";
-        Assert.Equal("myconnectionstring", await postgres.Resource.GetConnectionStringAsync(default));
+        Assert.Equal("myconnectionstring", await postgres.Resource.GetConnectionStringAsync());
 
         var expectedManifest = """
             {

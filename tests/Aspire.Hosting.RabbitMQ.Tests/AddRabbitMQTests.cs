@@ -103,7 +103,7 @@ public class AddRabbitMQTests(ITestOutputHelper testOutputHelper)
 
         var rabbitMqResource = Assert.Single(appModel.Resources.OfType<RabbitMQServerResource>());
         var connectionStringResource = rabbitMqResource as IResourceWithConnectionString;
-        var connectionString = await connectionStringResource.GetConnectionStringAsync(default);
+        var connectionString = await connectionStringResource.GetConnectionStringAsync();
 
         Assert.Equal("amqp://guest:p%40ssw0rd1@localhost:27011", connectionString);
         Assert.Equal("amqp://guest:{pass.value}@{rabbit.bindings.tcp.host}:{rabbit.bindings.tcp.port}", connectionStringResource.ConnectionStringExpression.ValueExpression);

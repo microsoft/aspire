@@ -31,7 +31,7 @@ public interface IResourceWithConnectionString : IResource, IExpressionValue, IV
     /// Gets the connection string associated with the resource in the specified context.
     /// </summary>
     /// <param name="context">The context identifying the requesting resource, execution mode, and network.</param>
-    /// <param name="cancellationToken">A cancellation token to observe while resolving the connection string.</param>
+    /// <param name="cancellationToken">A cancellation token to observe while resolving the connection string. Defaults to <see cref="CancellationToken.None"/>.</param>
     /// <returns>The connection string associated with the resource, when one is available.</returns>
     /// <remarks>
     /// The default implementation evaluates <see cref="ConnectionStringExpression"/> in the specified context,
@@ -39,7 +39,7 @@ public interface IResourceWithConnectionString : IResource, IExpressionValue, IV
     /// the existing custom resolver is preserved. Implement this overload to forward <paramref name="context"/>
     /// through custom resolution for caller attribution and network-specific values.
     /// </remarks>
-    public ValueTask<string?> GetConnectionStringAsync(ValueProviderContext context, CancellationToken cancellationToken) =>
+    public ValueTask<string?> GetConnectionStringAsync(ValueProviderContext context, CancellationToken cancellationToken = default) =>
         GetConnectionStringImplementations(this.GetType()).Legacy
             ? GetConnectionStringAsync(cancellationToken)
             : ConnectionStringExpression.GetValueAsync(context, cancellationToken);

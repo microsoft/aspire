@@ -133,7 +133,7 @@ public class RedisResource(string name) : ContainerResource(name), IResourceWith
     }
 
     /// <inheritdoc cref="IResourceWithConnectionString.GetConnectionStringAsync(ValueProviderContext, CancellationToken)"/>
-    public ValueTask<string?> GetConnectionStringAsync(ValueProviderContext context, CancellationToken cancellationToken)
+    public ValueTask<string?> GetConnectionStringAsync(ValueProviderContext context, CancellationToken cancellationToken = default)
     {
         if (this.TryGetLastAnnotation<ConnectionStringRedirectAnnotation>(out var connectionStringAnnotation))
         {

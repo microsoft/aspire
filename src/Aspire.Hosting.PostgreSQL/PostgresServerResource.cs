@@ -92,7 +92,7 @@ public class PostgresServerResource : ContainerResource, IResourceWithConnection
     }
 
     /// <inheritdoc cref="IResourceWithConnectionString.GetConnectionStringAsync(ValueProviderContext, CancellationToken)"/>
-    public ValueTask<string?> GetConnectionStringAsync(ValueProviderContext context, CancellationToken cancellationToken)
+    public ValueTask<string?> GetConnectionStringAsync(ValueProviderContext context, CancellationToken cancellationToken = default)
     {
         if (this.TryGetLastAnnotation<ConnectionStringRedirectAnnotation>(out var connectionStringAnnotation))
         {
