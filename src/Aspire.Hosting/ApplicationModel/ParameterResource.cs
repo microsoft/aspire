@@ -555,6 +555,7 @@ public class ParameterResource : Resource, IExpressionValue
     /// <remarks>
     /// In run mode, an unresolved value is reported on <see cref="ValueProviderContext.Caller"/> while
     /// it is starting. Pass the caller and execution context when resolving parameters in resource callbacks.
+    /// Failures to report the wait are logged without affecting value resolution.
     /// </remarks>
     public ValueTask<string?> GetValueAsync(ValueProviderContext context, CancellationToken cancellationToken)
     {

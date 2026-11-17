@@ -887,18 +887,13 @@ public class ResourceNotificationService : IDisposable
     public Task PublishUpdateAsync(IResource resource, string resourceId, Func<CustomResourceSnapshot, CustomResourceSnapshot> stateFactory)
     {
         var notificationState = GetResourceNotificationState(resourceId, resource);
-        if (notificationState.Resource != resource)
-        {
-            throw new InvalidOperationException($"Resource instance doesn't match resource previously registered with specified resource id '{resourceId}'.");
-        }
 
         lock (notificationState)
         {
             var previousState = GetCurrentSnapshot(resource, notificationState);
 
-            var newState = stateFactory(previousState);
-
-            newState = UpdateParameterWaitState(notificationState, newState);
+            var (newState, stateBeforeParameterWait, isParameterWaitStateActive) =
+                UpdateParameterWaitState(notificationState, stateFactory(previousState));
 
             if (!string.Equals(newState.State?.Text, KnownResourceStates.Waiting, StringComparisons.ResourceState))
             {
@@ -933,6 +928,12 @@ public class ResourceNotificationService : IDisposable
                 };
             }
 
+            // Command-state callbacks can throw. Keep restoration metadata consistent with the
+            // committed snapshot so a failed publication can restore the state on a later update.
+            var unchanged = notificationState.LastSnapshot is { } lastSnapshot && lastSnapshot.ContentEquals(newState);
+            notificationState.StateBeforeParameterWait = stateBeforeParameterWait;
+            notificationState.IsParameterWaitStateActive = isParameterWaitStateActive;
+
             // Producers can recompute a snapshot that is identical to the one already published. DCP is
             // the common case: its watches are periodically torn down and re-established, and each fresh
             // watch replays every object that exists, so a resource that never changes again keeps
@@ -940,7 +941,7 @@ public class ResourceNotificationService : IDisposable
             // anything having changed. Subscribers that start watching later are still seeded from
             // LastSnapshot, so suppressing here cannot cost anyone an update.
             // See https://github.com/microsoft/aspire/issues/18869.
-            if (notificationState.LastSnapshot is { } lastSnapshot && lastSnapshot.ContentEquals(newState))
+            if (unchanged)
             {
                 if (_logger.IsEnabled(LogLevel.Trace))
                 {
@@ -1031,53 +1032,73 @@ public class ResourceNotificationService : IDisposable
         // Capture instance IDs once so cancellation removes waits from the instances that registered
         // them, even if the resource's replica set changes in the meantime.
         var resourceIds = resource.GetResolvedResourceNames();
-        var registeredCount = 0;
+        var registeredResourceIds = new List<string>(resourceIds.Length);
         try
         {
             foreach (var resourceId in resourceIds)
             {
-                await PublishUpdateAsync(resource, resourceId, snapshot =>
+                try
                 {
                     var state = GetResourceNotificationState(resourceId, resource);
-                    var waits = state.ParameterWaits ??= new(StringComparers.ResourceName);
-                    waits.TryGetValue(parameter.Name, out var count);
-                    waits[parameter.Name] = count + 1;
-                    registeredCount++;
-                    return snapshot;
-                }).ConfigureAwait(false);
+                    lock (state)
+                    {
+                        var waits = state.ParameterWaits ??= new(StringComparers.ResourceName);
+                        waits.TryGetValue(parameter.Name, out var count);
+                        waits[parameter.Name] = count + 1;
+                        registeredResourceIds.Add(resourceId);
+                    }
+
+                    // Track registrations independently of publication: user callbacks can throw,
+                    // but reporting failures must not change the parameter read's outcome.
+                    await PublishUpdateAsync(resource, resourceId, snapshot => snapshot).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to report resource {ResourceName}/{ResourceId} waiting for parameter {ParameterName}.", resource.Name, resourceId, parameter.Name);
+                }
             }
 
             return await valueTask.ConfigureAwait(false);
         }
         finally
         {
-            for (var i = 0; i < registeredCount; i++)
+            foreach (var resourceId in registeredResourceIds)
             {
-                var resourceId = resourceIds[i];
-                await PublishUpdateAsync(resource, resourceId, snapshot =>
+                try
                 {
-                    var waits = GetResourceNotificationState(resourceId, resource).ParameterWaits!;
-                    var count = waits[parameter.Name];
-                    if (count == 1)
+                    var state = GetResourceNotificationState(resourceId, resource);
+                    lock (state)
                     {
-                        waits.Remove(parameter.Name);
-                    }
-                    else
-                    {
-                        waits[parameter.Name] = count - 1;
+                        var waits = state.ParameterWaits!;
+                        var count = waits[parameter.Name];
+                        if (count == 1)
+                        {
+                            waits.Remove(parameter.Name);
+                        }
+                        else
+                        {
+                            waits[parameter.Name] = count - 1;
+                        }
                     }
 
-                    return snapshot;
-                }).ConfigureAwait(false);
+                    await PublishUpdateAsync(resource, resourceId, snapshot => snapshot).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to clear parameter {ParameterName} wait for resource {ResourceName}/{ResourceId}.", parameter.Name, resource.Name, resourceId);
+                }
             }
         }
     }
 
-    private static CustomResourceSnapshot UpdateParameterWaitState(ResourceNotificationState notificationState, CustomResourceSnapshot snapshot)
+    private static (CustomResourceSnapshot Snapshot, ResourceStateSnapshot? StateBeforeParameterWait, bool IsParameterWaitStateActive) UpdateParameterWaitState(
+        ResourceNotificationState notificationState, CustomResourceSnapshot snapshot)
     {
+        var stateBeforeParameterWait = notificationState.StateBeforeParameterWait;
+        var isParameterWaitStateActive = notificationState.IsParameterWaitStateActive;
         if (notificationState.ParameterWaits is null)
         {
-            return snapshot;
+            return (snapshot, stateBeforeParameterWait, isParameterWaitStateActive);
         }
 
         // Custom resources also use Waiting during initialization. Dependency annotations remain after
@@ -1087,37 +1108,33 @@ public class ResourceNotificationService : IDisposable
         if (snapshot.State is null || snapshot.State.Text == KnownResourceStates.Starting ||
             (snapshot.State?.Text == KnownResourceStates.Waiting && !TryGetWaitingForDependencies(snapshot.Properties, out _)))
         {
-            notificationState.StateBeforeParameterWait = snapshot.State;
-            notificationState.IsParameterWaitStateActive = true;
+            stateBeforeParameterWait = snapshot.State;
+            isParameterWaitStateActive = true;
         }
         else if (snapshot.State?.Text != KnownResourceStates.UnresolvedParameters)
         {
-            notificationState.StateBeforeParameterWait = null;
-            notificationState.IsParameterWaitStateActive = false;
-            return snapshot with { Properties = snapshot.Properties.RemoveResourceProperty(KnownProperties.Resource.UnresolvedParameters) };
+            return (snapshot with { Properties = snapshot.Properties.RemoveResourceProperty(KnownProperties.Resource.UnresolvedParameters) }, null, false);
         }
 
         if (notificationState.ParameterWaits is { Count: > 0 } waits)
         {
-            return snapshot with
+            return (snapshot with
             {
                 State = new(KnownResourceStates.UnresolvedParameters, KnownResourceStateStyles.Warn),
                 Properties = snapshot.Properties.SetResourceProperty(
                     KnownProperties.Resource.UnresolvedParameters, waits.Keys.Order(StringComparers.ResourceName).ToArray())
-            };
+            }, stateBeforeParameterWait, isParameterWaitStateActive);
         }
 
-        var restoredState = notificationState.IsParameterWaitStateActive
-            ? notificationState.StateBeforeParameterWait
+        var restoredState = isParameterWaitStateActive
+            ? stateBeforeParameterWait
             : snapshot.State;
-        notificationState.StateBeforeParameterWait = null;
-        notificationState.IsParameterWaitStateActive = false;
 
-        return snapshot with
+        return (snapshot with
         {
             State = restoredState,
             Properties = snapshot.Properties.RemoveResourceProperty(KnownProperties.Resource.UnresolvedParameters)
-        };
+        }, null, false);
     }
 
     private void RecordResourceLifecycleMilestones(
@@ -1432,8 +1449,16 @@ public class ResourceNotificationService : IDisposable
         return previousState;
     }
 
-    private ResourceNotificationState GetResourceNotificationState(string resourceId, IResource resource) =>
-        _resourceNotificationStates.GetOrAdd(resourceId, _ => new ResourceNotificationState(resource));
+    private ResourceNotificationState GetResourceNotificationState(string resourceId, IResource resource)
+    {
+        var state = _resourceNotificationStates.GetOrAdd(resourceId, _ => new ResourceNotificationState(resource));
+        if (state.Resource != resource)
+        {
+            throw new InvalidOperationException($"Resource instance doesn't match resource previously registered with specified resource id '{resourceId}'.");
+        }
+
+        return state;
+    }
 
     private string BuildCancellationErrorMessage(string cancellationMessage, string resourceName)
     {
