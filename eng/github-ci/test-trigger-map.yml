@@ -564,6 +564,7 @@ path_rules:
       # Script behavior and packaging fixtures.
       - eng/scripts/download-native-archives.ps1
       - eng/scripts/stage-native-cli-tool-packages.ps1
+      - eng/scripts/stage-cli-starter-validation-diagnostics.ps1
       - eng/scripts/stabilization-smoke-init-restore.sh
       - eng/scripts/validate-npm-package-signatures.ps1
       - eng/scripts/validate-npm-release-aliases.ps1
