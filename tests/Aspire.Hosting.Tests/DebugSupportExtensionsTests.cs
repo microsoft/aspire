@@ -336,49 +336,27 @@ public class DebugSupportExtensionsTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void TryGetIdeLaunchAnnotationReturnsFalseWhenTheResourceHasNoDebugSupport()
+    public void SupportsDebuggingReturnsFalseWhenTheResourceHasNoDebugSupport()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var executable = builder.AddExecutable("app", "go", ".");
 
-        Assert.False(executable.Resource.TryGetIdeLaunchAnnotation(CreateConfiguration(), out var annotation));
+        Assert.False(executable.Resource.SupportsDebugging(CreateConfiguration(), out var annotation));
         Assert.Null(annotation);
     }
 
     [Fact]
-    public void SupportsDebuggingCompatibilityShimDelegatesToTryGetIdeLaunchAnnotation()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create();
-        var executable = builder.AddExecutable("app", "go", ".")
-                                .WithDebugSupport(mode => new TestGoLaunchConfiguration { Mode = mode }, "go");
-        var configuration = CreateConfiguration(debugSessionInfo: CreateDebugSessionInfo(["go"]));
-
-        var result = executable.Resource.TryGetIdeLaunchAnnotation(
-            configuration: configuration,
-            ideLaunchAnnotation: out var ideLaunchAnnotation);
-#pragma warning disable CS0618 // Verify the compatibility entry point and its shipped parameter name.
-        var compatibilityResult = executable.Resource.SupportsDebugging(
-            configuration: configuration,
-            supportsDebuggingAnnotation: out var compatibilityAnnotation);
-#pragma warning restore CS0618
-
-        Assert.True(result);
-        Assert.Equal(result, compatibilityResult);
-        Assert.Same(ideLaunchAnnotation, compatibilityAnnotation);
-    }
-
-    [Fact]
-    public void TryGetIdeLaunchAnnotationReturnsFalseWhenNoDebugSessionIsActive()
+    public void SupportsDebuggingReturnsFalseWhenNoDebugSessionIsActive()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var executable = builder.AddExecutable("app", "go", ".")
                                 .WithDebugSupport(mode => new TestGoLaunchConfiguration { Mode = mode }, "go");
 
-        Assert.False(executable.Resource.TryGetIdeLaunchAnnotation(CreateConfiguration(debugSessionPort: null), out _));
+        Assert.False(executable.Resource.SupportsDebugging(CreateConfiguration(debugSessionPort: null), out _));
     }
 
     [Fact]
-    public void TryGetIdeLaunchAnnotationTreatsProjectAsSupportedWhenTheIdeSendsNoCapabilityList()
+    public void SupportsDebuggingTreatsProjectAsSupportedWhenTheIdeSendsNoCapabilityList()
     {
         // An IDE session that omits DEBUG_SESSION_INFO is assumed to support project files included in the open
         // solution, so this project uses the IDE's "project" launcher instead of a DCP-managed process.
@@ -387,14 +365,14 @@ public class DebugSupportExtensionsTests(ITestOutputHelper outputHelper)
         var project = builder.AddProject<Projects.ServiceA>("proj", launchProfileName: "http");
 #pragma warning restore CS0618
 
-        Assert.True(project.Resource.TryGetIdeLaunchAnnotation(CreateConfiguration(), out var annotation));
+        Assert.True(project.Resource.SupportsDebugging(CreateConfiguration(), out var annotation));
         Assert.Equal(KnownLaunchConfigurationTypes.Project, annotation.LaunchConfigurationType);
     }
 
     [Theory]
     [InlineData(null)]
     [InlineData("{ not json")]
-    public void TryGetIdeLaunchAnnotationDoesNotTreatFileBasedAppsAsImplicitlySupported(string? debugSessionInfo)
+    public void SupportsDebuggingDoesNotTreatFileBasedAppsAsImplicitlySupported(string? debugSessionInfo)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var appPath = Path.Combine(workspace.WorkspaceRoot.FullName, "app.cs");
@@ -406,11 +384,11 @@ public class DebugSupportExtensionsTests(ITestOutputHelper outputHelper)
 
         var configuration = CreateConfiguration(debugSessionInfo: debugSessionInfo);
 
-        Assert.False(fileApp.Resource.TryGetIdeLaunchAnnotation(configuration, out _));
+        Assert.False(fileApp.Resource.SupportsDebugging(configuration, out _));
     }
 
     [Fact]
-    public void TryGetIdeLaunchAnnotationTreatsFileBasedAppsAsSupportedWhenTheIdeAdvertisesProject()
+    public void SupportsDebuggingTreatsFileBasedAppsAsSupportedWhenTheIdeAdvertisesProject()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var appPath = Path.Combine(workspace.WorkspaceRoot.FullName, "app.cs");
@@ -423,12 +401,12 @@ public class DebugSupportExtensionsTests(ITestOutputHelper outputHelper)
         var configuration = CreateConfiguration(
             debugSessionInfo: CreateDebugSessionInfo([KnownLaunchConfigurationTypes.Project]));
 
-        Assert.True(fileApp.Resource.TryGetIdeLaunchAnnotation(configuration, out var annotation));
+        Assert.True(fileApp.Resource.SupportsDebugging(configuration, out var annotation));
         Assert.Equal(KnownLaunchConfigurationTypes.Project, annotation.LaunchConfigurationType);
     }
 
     [Fact]
-    public void TryGetIdeLaunchAnnotationReturnsFalseForANonProjectTypeWhenTheIdeSendsNoCapabilityList()
+    public void SupportsDebuggingReturnsFalseForANonProjectTypeWhenTheIdeSendsNoCapabilityList()
     {
         // The implicit rule is deliberately limited to "project": an IDE that never advertised its
         // capabilities cannot be assumed to know how to launch a "go" resource.
@@ -436,32 +414,34 @@ public class DebugSupportExtensionsTests(ITestOutputHelper outputHelper)
         var executable = builder.AddExecutable("app", "go", ".")
                                 .WithDebugSupport(mode => new TestGoLaunchConfiguration { Mode = mode }, "go");
 
-        Assert.False(executable.Resource.TryGetIdeLaunchAnnotation(CreateConfiguration(), out _));
+        Assert.False(executable.Resource.SupportsDebugging(CreateConfiguration(), out _));
     }
 
     [Fact]
-    public void TryGetIdeLaunchAnnotationReturnsEffectiveProjectAnnotationForAzureFunctionsCompatibility()
+    public void SupportsDebuggingReturnsEffectiveProjectAnnotationForAzureFunctionsCompatibility()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
 #pragma warning disable CS0618 // Retain legacy ProjectResource IDE launch-configuration compatibility.
         var project = builder.AddProject<Projects.ServiceA>("proj", launchProfileName: "http");
 #pragma warning restore CS0618
-        var declaredAnnotation = project.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().Single();
-        project.Resource.Annotations.Remove(declaredAnnotation);
+        var defaultAnnotation = project.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().Single();
+        project.Resource.Annotations.Remove(defaultAnnotation);
         project.WithDebugSupport(
             mode => new ExecutableLaunchConfiguration("azure-functions") { Mode = mode },
             "azure-functions");
+        var declaredAnnotation = project.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().Single();
 
         var configuration = CreateConfiguration(
             debugSessionInfo: CreateDebugSessionInfo([KnownLaunchConfigurationTypes.Project]));
 
-        Assert.True(project.Resource.TryGetIdeLaunchAnnotation(configuration, out var effectiveAnnotation));
+        Assert.True(project.Resource.SupportsDebugging(configuration, out var effectiveAnnotation));
         Assert.Equal(KnownLaunchConfigurationTypes.Project, effectiveAnnotation.LaunchConfigurationType);
-        Assert.DoesNotContain(effectiveAnnotation, project.Resource.Annotations);
+        // The synthesized compatibility annotation describes the launch without being attached to the resource.
+        Assert.Same(declaredAnnotation, Assert.Single(project.Resource.Annotations.OfType<SupportsDebuggingAnnotation>()));
     }
 
     [Fact]
-    public void TryGetIdeLaunchAnnotationTreatsAspireExtensionCapabilitiesAsAuthoritative()
+    public void SupportsDebuggingTreatsAspireExtensionCapabilitiesAsAuthoritative()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
 #pragma warning disable CS0618 // Retain legacy ProjectResource IDE launch-configuration compatibility.
@@ -480,12 +460,12 @@ public class DebugSupportExtensionsTests(ITestOutputHelper outputHelper)
                 DebugSupportExtensions.AspireExtensionBaselineCapability
             ]));
 
-        Assert.False(project.Resource.TryGetIdeLaunchAnnotation(configuration, out var effectiveAnnotation));
-        Assert.Same(declaredAnnotation, effectiveAnnotation);
+        Assert.False(project.Resource.SupportsDebugging(configuration, out var returnedAnnotation));
+        Assert.Same(declaredAnnotation, returnedAnnotation);
     }
 
     [Fact]
-    public void TryGetIdeLaunchAnnotationReturnsFalseForCompatibilityProjectLaunchWithProjectLaunchArgsOverride()
+    public void SupportsDebuggingReturnsFalseForCompatibilityProjectLaunchWithProjectLaunchArgsOverride()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
 #pragma warning disable CS0618 // Retain legacy ProjectResource IDE launch-configuration compatibility.
@@ -504,7 +484,7 @@ public class DebugSupportExtensionsTests(ITestOutputHelper outputHelper)
         var configuration = CreateConfiguration(
             debugSessionInfo: CreateDebugSessionInfo([KnownLaunchConfigurationTypes.Project]));
 
-        Assert.False(project.Resource.TryGetIdeLaunchAnnotation(configuration, out var returnedAnnotation));
+        Assert.False(project.Resource.SupportsDebugging(configuration, out var returnedAnnotation));
         Assert.Same(declaredAnnotation, returnedAnnotation);
     }
 
@@ -513,7 +493,7 @@ public class DebugSupportExtensionsTests(ITestOutputHelper outputHelper)
     [InlineData(new[] { "project", "go" }, true)]
     [InlineData(new[] { "project" }, false)]
     [InlineData(new string[0], false)]
-    public void TryGetIdeLaunchAnnotationHonorsTheAdvertisedCapabilityList(string[] supportedLaunchConfigurations, bool expected)
+    public void SupportsDebuggingHonorsTheAdvertisedCapabilityList(string[] supportedLaunchConfigurations, bool expected)
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var executable = builder.AddExecutable("app", "go", ".")
@@ -521,11 +501,11 @@ public class DebugSupportExtensionsTests(ITestOutputHelper outputHelper)
 
         var configuration = CreateConfiguration(debugSessionInfo: CreateDebugSessionInfo(supportedLaunchConfigurations));
 
-        Assert.Equal(expected, executable.Resource.TryGetIdeLaunchAnnotation(configuration, out _));
+        Assert.Equal(expected, executable.Resource.SupportsDebugging(configuration, out _));
     }
 
     [Fact]
-    public void TryGetIdeLaunchAnnotationReturnsFalseForProjectWhenTheAdvertisedCapabilityListOmitsIt()
+    public void SupportsDebuggingReturnsFalseForProjectWhenTheAdvertisedCapabilityListOmitsIt()
     {
         // "project" gets no special treatment once the IDE advertises a list. The VS Code extension only
         // includes it when the C# extension is installed; treating it as implicit would route the
@@ -537,11 +517,11 @@ public class DebugSupportExtensionsTests(ITestOutputHelper outputHelper)
 
         var configuration = CreateConfiguration(debugSessionInfo: CreateDebugSessionInfo(["go", "python"]));
 
-        Assert.False(project.Resource.TryGetIdeLaunchAnnotation(configuration, out _));
+        Assert.False(project.Resource.SupportsDebugging(configuration, out _));
     }
 
     [Fact]
-    public void TryGetIdeLaunchAnnotationReturnsFalseWhenTheResourceForcesProcessExecution()
+    public void SupportsDebuggingReturnsFalseWhenTheResourceForcesProcessExecution()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
 #pragma warning disable CS0618 // Retain legacy ProjectResource IDE launch-configuration compatibility.
@@ -549,11 +529,11 @@ public class DebugSupportExtensionsTests(ITestOutputHelper outputHelper)
 #pragma warning restore CS0618
                              .WithAnnotation(new ForceProcessExecutionAnnotation());
 
-        Assert.False(project.Resource.TryGetIdeLaunchAnnotation(CreateConfiguration(), out _));
+        Assert.False(project.Resource.SupportsDebugging(CreateConfiguration(), out _));
     }
 
     [Fact]
-    public void TryGetIdeLaunchAnnotationReturnsFalseForAPersistentResource()
+    public void SupportsDebuggingReturnsFalseForAPersistentResource()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
 #pragma warning disable CS0618 // Retain legacy ProjectResource IDE launch-configuration compatibility.
@@ -561,11 +541,11 @@ public class DebugSupportExtensionsTests(ITestOutputHelper outputHelper)
 #pragma warning restore CS0618
                              .WithPersistentLifetime();
 
-        Assert.False(project.Resource.TryGetIdeLaunchAnnotation(CreateConfiguration(), out _));
+        Assert.False(project.Resource.SupportsDebugging(CreateConfiguration(), out _));
     }
 
     [Fact]
-    public void TryGetIdeLaunchAnnotationFallsBackToTheImplicitProjectRuleWhenDebugSessionInfoIsMalformed()
+    public void SupportsDebuggingFallsBackToTheImplicitProjectRuleWhenDebugSessionInfoIsMalformed()
     {
         // Malformed DEBUG_SESSION_INFO is swallowed and treated as "no capability list", so the resource
         // keeps the Visual Studio behavior instead of failing the run outright.
@@ -578,8 +558,8 @@ public class DebugSupportExtensionsTests(ITestOutputHelper outputHelper)
 
         var configuration = CreateConfiguration(debugSessionInfo: "{ not json");
 
-        Assert.True(project.Resource.TryGetIdeLaunchAnnotation(configuration, out _));
-        Assert.False(executable.Resource.TryGetIdeLaunchAnnotation(configuration, out _));
+        Assert.True(project.Resource.SupportsDebugging(configuration, out _));
+        Assert.False(executable.Resource.SupportsDebugging(configuration, out _));
     }
 
     private static IConfiguration CreateConfiguration(string? debugSessionPort = "12345", string? debugSessionInfo = null)
