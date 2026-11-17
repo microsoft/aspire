@@ -112,6 +112,53 @@
         <target state="translated">Para atualizar a CLI do Aspire quando instalada como uma ferramenta do .NET, execute:</target>
         <note />
       </trans-unit>
+      <trans-unit id="DryRunBackupRecoveryFormat">
+        <source>Could not restore '{0}'. Its recovery backup was preserved at '{1}'. Restore the backup manually before retrying.</source>
+        <target state="new">Could not restore '{0}'. Its recovery backup was preserved at '{1}'. Restore the backup manually before retrying.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DryRunBackupsNotReplaced">
+        <source>Dry run cancelled without replacing existing backups. Recover the originals from the listed backup files or move them aside before retrying.</source>
+        <target state="new">Dry run cancelled without replacing existing backups. Recover the originals from the listed backup files or move them aside before retrying.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DryRunExistingBackupsFormat">
+        <source>Backups from an earlier dry run already exist. Preserve them for recovery if needed before replacing them:
+{0}</source>
+        <target state="new">Backups from an earlier dry run already exist. Preserve them for recovery if needed before replacing them:
+{0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DryRunOptionDescription">
+        <source>Validate an explicit .NET AppHost channel update using temporary NuGet caches, without proposing or applying changes.</source>
+        <target state="new">Validate an explicit .NET AppHost channel update using temporary NuGet caches, without proposing or applying changes.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DryRunReplaceBackupsPrompt">
+        <source>Replace the existing backups with the current file contents? This discards the previous recovery copies.</source>
+        <target state="new">Replace the existing backups with the current file contents? This discards the previous recovery copies.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DryRunRequiresChannel">
+        <source>--dry-run requires an explicit --channel or --quality other than default, and cannot be combined with --self or --migrate.</source>
+        <target state="new">--dry-run requires an explicit --channel or --quality other than default, and cannot be combined with --self or --migrate.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DryRunRequiresDotNet">
+        <source>--dry-run is supported only for .NET AppHosts.</source>
+        <target state="new">--dry-run is supported only for .NET AppHosts.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DryRunSuccessful">
+        <source>Channel update validation succeeded. Original files have been restored; no update was applied.</source>
+        <target state="new">Channel update validation succeeded. Original files have been restored; no update was applied.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DryRunValidating">
+        <source>Validating the channel update...</source>
+        <target state="new">Validating the channel update...</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ExecutingUpdateStepFormat">
         <source>Executing: {0}</source>
         <target state="translated">Executando: {0}</target>

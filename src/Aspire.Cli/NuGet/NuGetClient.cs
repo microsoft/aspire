@@ -58,6 +58,7 @@ internal interface INuGetClient
         string workingDirectory,
         string globalPackagesFolder,
         IReadOnlyList<string> sensitiveSources,
+        bool bypassCaches,
         CancellationToken cancellationToken);
 
     Task WriteManifestAsync(
@@ -178,7 +179,7 @@ internal sealed class NuGetClient(
         IReadOnlyList<string> sensitiveSources,
         CancellationToken cancellationToken)
         => RestoreAsync(packages, framework, runtimeIdentifier, outputPath, sources, nugetConfigPaths,
-            workingDirectory, globalPackagesFolderOverride, sensitiveSources, acquireOnly: false, cancellationToken);
+            workingDirectory, globalPackagesFolderOverride, sensitiveSources, acquireOnly: false, bypassCaches: false, cancellationToken);
 
     public Task AcquirePackageAsync(
         (string Id, string Version) package,
@@ -186,6 +187,7 @@ internal sealed class NuGetClient(
         string workingDirectory,
         string globalPackagesFolder,
         IReadOnlyList<string> sensitiveSources,
+        bool bypassCaches,
         CancellationToken cancellationToken)
         // Like MSBuild's SDK resolver, exclude assets and use an exact version. The framework
         // only satisfies NuGet's package-spec requirement; SDK acquisition must not depend on
@@ -193,7 +195,7 @@ internal sealed class NuGetClient(
         // https://github.com/NuGet/NuGet.Client/blob/dev/src/NuGet.Core/Microsoft.Build.NuGetSdkResolver/RestoreRunnerEx.cs
         => RestoreAsync([package], FrameworkConstants.CommonFrameworks.NetStandard.GetShortFolderName(),
             runtimeIdentifier: null, outputPath, sources: [], nugetConfigPaths: [],
-            workingDirectory, globalPackagesFolder, sensitiveSources, acquireOnly: true, cancellationToken);
+            workingDirectory, globalPackagesFolder, sensitiveSources, acquireOnly: true, bypassCaches, cancellationToken);
 
     private async Task RestoreAsync(
         IReadOnlyList<(string Id, string Version)> packages,
@@ -206,6 +208,7 @@ internal sealed class NuGetClient(
         string? globalPackagesFolderOverride,
         IReadOnlyList<string> sensitiveSources,
         bool acquireOnly,
+        bool bypassCaches,
         CancellationToken cancellationToken)
     {
         using var operation = BeginOperation(sensitiveSources);
@@ -236,7 +239,7 @@ internal sealed class NuGetClient(
                 packageSources,
                 settings,
                 globalPackagesFolderOverride,
-                acquireOnly);
+                acquireOnly, bypassCaches);
 
             var dgSpec = new DependencyGraphSpec();
             dgSpec.AddProject(packageSpec);
@@ -245,7 +248,11 @@ internal sealed class NuGetClient(
             var providerCache = new RestoreCommandProvidersCache();
             var dgProvider = new DependencyGraphSpecRequestProvider(providerCache, dgSpec, settings);
 
-            using var cacheContext = new SourceCacheContext();
+            using var cacheContext = new SourceCacheContext
+            {
+                NoCache = bypassCaches,
+                DirectDownload = bypassCaches
+            };
             var restoreArgs = new RestoreArgs
             {
                 CacheContext = cacheContext,
@@ -299,7 +306,8 @@ internal sealed class NuGetClient(
         List<PackageSource> sources,
         ISettings settings,
         string? globalPackagesFolderOverride,
-        bool acquireOnly)
+        bool acquireOnly,
+        bool bypassCaches)
     {
         var projectName = "AspireRestore";
         var projectPath = Path.Combine(outputPath, "project.json");
@@ -350,7 +358,7 @@ internal sealed class NuGetClient(
         {
             restoreMetadata.Sources.Add(source);
         }
-        if (acquireOnly)
+        if (acquireOnly && !bypassCaches)
         {
             restoreMetadata.FallbackFolders = pathContext.FallbackPackageFolders.ToList();
         }
