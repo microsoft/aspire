@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents Mermaid resource graph export (#20746)",
+  "mergedAt": "2026-11-17T05:33:12Z",
+  "number": 1829,
+  "runDate": "2026-11-17T12:06:00Z",
+  "status": "included",
+  "title": "[docs] Document Mermaid resource graph export in dashboard and CLI"
+}
