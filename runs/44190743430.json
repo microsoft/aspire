@@ -1,0 +1,90 @@
+{
+  "run_id": 44190743430,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/44190743430",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-17T23:20:35Z",
+  "verdict": "flaky-test",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 22207,
+    "title": "Separate channel update validation with aspire update --dry-run",
+    "author": "danegsta",
+    "state": "closed",
+    "head_branch": "danegsta-force-channel-updates",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/22207",
+    "merged_at": "2026-11-17T22:30:31Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "164d249ffe54273be55256f2cfc06530a6a9659e",
+    "failed_sha": "30326eb876d6897b1feadc8bc800f78e466b1b52",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "f27d7fd9a21595d8f37376280d6b401e6bc52a1f",
+        "message": "Consolidate AppHost template package references (#22322) ## Description Generated AppHost projects are easier to inspect when their package references share one ItemGroup. Consolidate the references in the ASP.NET Core/Blazor and ASP.NET Core/React starter templates without changing which packages are included. Redis remains conditional on `--use-redis-cache`. Fixes # (issue) ### User-facing usage ```shell dotnet new aspire-starter --use-redis-cache dotnet new aspire-ts-cs-starter --use-redis-ca",
+        "html_url": "https://github.com/microsoft/aspire/commit/f27d7fd9a21595d8f37376280d6b401e6bc52a1f",
+        "pull_request": {
+          "number": 22322,
+          "title": "Consolidate AppHost template package references",
+          "url": "https://github.com/microsoft/aspire/pull/22322",
+          "merged_at": "2026-11-17T02:43:51Z"
+        }
+      },
+      {
+        "sha": "e3008dc09c8aa26b666c6557165178c4a0bb9b5e",
+        "message": "Fix Durable Task emulator task hub dashboard URL (#20180) ## Description Opening a Durable Task Scheduler emulator task hub from the Aspire dashboard currently redirects to an Add Endpoint dialog instead of the hub. Use the emulator's `local/emulator` identity and `/orchestrations` route so the generated link opens the task hub directly, while preserving the resolved endpoint and task hub name. Fixes #20173 ### Example For a hub named `ZeusOrchestrationHub`, the generated path changes from: ```t",
+        "html_url": "https://github.com/microsoft/aspire/commit/e3008dc09c8aa26b666c6557165178c4a0bb9b5e",
+        "pull_request": {
+          "number": 20180,
+          "title": "Fix Durable Task emulator task hub dashboard URL",
+          "url": "https://github.com/microsoft/aspire/pull/20180",
+          "merged_at": "2026-11-17T16:55:18Z"
+        }
+      },
+      {
+        "sha": "30326eb876d6897b1feadc8bc800f78e466b1b52",
+        "message": "Separate channel update validation with aspire update --dry-run (#22207) ## Description Users should be able to apply a channel update without first requiring its dependency graph to restore. This separates applying a .NET channel update from validating it: normal updates selected through an option or Aspire configuration propose and apply confirmed changes without a validation restore, while `--dry-run` only validates and restores the original source files afterward. Updates without a command-l",
+        "html_url": "https://github.com/microsoft/aspire/commit/30326eb876d6897b1feadc8bc800f78e466b1b52",
+        "pull_request": {
+          "number": 22207,
+          "title": "Separate channel update validation with aspire update --dry-run",
+          "url": "https://github.com/microsoft/aspire/pull/22207",
+          "merged_at": "2026-11-17T22:30:31Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, tree-actions)",
+      "id": 134429066095,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/44190743430/job/134429066095",
+      "classification": "flaky-test",
+      "reason": "Windows tree-actions E2E failed with intermittent .monaco-menu lookup failure matching a recorded flaky mechanism",
+      "failed_steps": [
+        "Run extension E2E tests"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire tree action command E2E routes view, copy, endpoint, log, and resource commands through tree handlers",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, tree-actions)",
+      "error": "no such element: Unable to locate element: {\"method\":\"css selector\",\"selector\":\".monaco-menu\"}\n  (Session info: chrome=148.0.7778.280)",
+      "stack_trace": "NoSuchElementError: no such element: Unable to locate element: {\"method\":\"css selector\",\"selector\":\".monaco-menu\"}\n  (Session info: chrome=148.0.7778.280)\n    at Object.throwDecodedError (node_modules\\selenium-webdriver\\lib\\error.js:523:15)\n    at parseHttpResponse (node_modules\\selenium-webdriver\\lib\\http.js:526:13)\n    at Executor.execute (node_modules\\selenium-webdriver\\lib\\http.js:458:28)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async Driver.execute (node_modules\\selenium-webdriver\\lib\\webdriver.js:745:17)\n    at async toWireValue (node_modules\\selenium-webdriver\\lib\\webdriver.js:149:15)\n    at async D:\\a\\aspire\\aspire\\extension\\node_modules\\selenium-webdriver\\lib\\webdriver.js:195:16\n    at async forEachKey (node_modules\\selenium-webdriver\\lib\\webdriver.js:189:9)\n    at async convertKeys (node_modules\\selenium-webdriver\\lib\\webdriver.js:194:3)\n    at async Driver.execute (node_modules\\selenium-webdriver\\lib\\webdriver.js:743:22)",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Same .monaco-menu NoSuchElement diagnostic recurs across runs in prior flaky history",
+      "job_id": 134429066095,
+      "result_file": "00001.json",
+      "result_format": "mocha"
+    }
+  ],
+  "causes": [
+    "vscode-e2e-windows-tree-actions-monaco-menu-missing"
+  ]
+}
