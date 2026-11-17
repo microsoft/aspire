@@ -50,7 +50,7 @@ Assume employee detection succeeds and none of the initialization-source environ
    Configuration source:  https://msft.ghe.com/coreai/aspire-1p-init
           Source origin:  Microsoft employee default
 
-Use configuration from this source? [Y/n]:
+Create app using configuration from this source? [Y/n]:
 ```
 
 Detection only chooses a candidate. Maya's **Yes** is the project's consent to use it.

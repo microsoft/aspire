@@ -1,6 +1,7 @@
 ﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Concurrent;
 using System.Threading.Channels;
 using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Components.Resize;
@@ -412,20 +413,22 @@ public class ResourcesLayoutTests : DashboardTestContext
         await cut.InvokeAsync(() => Services.GetRequiredService<DashboardViewPreferences>().SetDensityAsync(ResourceListDensity.Comfortable));
 
         // A two-line row shows the age after the state. A stopped resource's is how long ago it stopped, which says
-        // more than how long ago it started; the tooltip says which.
+        // more than how long ago it started. The tooltip only adds the exact time; the accessible name has both.
         var workerTime = cut.Find("[data-resource-name='worker'] .resource-row-sidebar-start time");
         Assert.Equal("Stopped 1m ago", workerTime.TextContent);
         Assert.Equal(stopped.ToString("O", System.Globalization.CultureInfo.InvariantCulture), workerTime.GetAttribute("datetime"));
-        Assert.Equal($"Stopped 1m ago ({FormatHelpers.FormatDateTime(clock, stopped)})", workerTime.GetAttribute("data-tooltip"));
-        Assert.Equal(workerTime.GetAttribute("data-tooltip"), workerTime.GetAttribute("aria-label"));
+        Assert.Equal(FormatHelpers.FormatTooltipDateTime(clock, stopped), workerTime.GetAttribute("data-tooltip"));
+        Assert.Equal($"Stopped 1m ago ({FormatHelpers.FormatTooltipDateTime(clock, stopped)})", workerTime.GetAttribute("aria-label"));
         var apiTime = cut.Find("[data-resource-name='api'] .resource-row-sidebar-start time");
-        Assert.Equal($"Started 3h ago ({FormatHelpers.FormatDateTime(clock, started)})", apiTime.GetAttribute("data-tooltip"));
+        Assert.Equal(FormatHelpers.FormatTooltipDateTime(clock, started), apiTime.GetAttribute("data-tooltip"));
+        Assert.Equal($"Started 3h ago ({FormatHelpers.FormatTooltipDateTime(clock, started)})", apiTime.GetAttribute("aria-label"));
 
-        // The expanded list shows the same short age; the state beside it and the tooltip say which it is.
+        // The expanded list shows the same short age; the state beside it says which it is.
         ResourceSetupHelpers.ToggleResourceList(cut);
         var wideWorkerTime = cut.Find("[data-resource-name='worker'] .resource-row-wide-metadata time");
         Assert.Equal("Stopped 1m ago", wideWorkerTime.TextContent.Trim());
-        Assert.Equal($"Stopped 1m ago ({FormatHelpers.FormatDateTime(clock, stopped)})", wideWorkerTime.GetAttribute("data-tooltip"));
+        Assert.Equal(FormatHelpers.FormatTooltipDateTime(clock, stopped), wideWorkerTime.GetAttribute("data-tooltip"));
+        Assert.Equal($"Stopped 1m ago ({FormatHelpers.FormatTooltipDateTime(clock, stopped)})", wideWorkerTime.GetAttribute("aria-label"));
         Assert.Equal("Started 3h ago", cut.Find("[data-resource-name='api'] .resource-row-wide-metadata time").TextContent.Trim());
     }
 
@@ -531,7 +534,8 @@ public class ResourcesLayoutTests : DashboardTestContext
         Assert.Equal(api.StartTimeStamp!.Value.ToString("O", System.Globalization.CultureInfo.InvariantCulture), time.GetAttribute("datetime"));
         // Every row repeats its age, so the row shows the verb and a short age; the tooltip adds the exact time.
         Assert.Equal("Started 10m ago", time.TextContent.Trim());
-        Assert.Equal($"Started 10m ago ({FormatHelpers.FormatDateTime(clock, api.StartTimeStamp.Value)})", time.GetAttribute("data-tooltip"));
+        Assert.Equal(FormatHelpers.FormatTooltipDateTime(clock, api.StartTimeStamp.Value), time.GetAttribute("data-tooltip"));
+        Assert.Equal($"Started 10m ago ({FormatHelpers.FormatTooltipDateTime(clock, api.StartTimeStamp.Value)})", time.GetAttribute("aria-label"));
         Assert.Equal("above", time.GetAttribute("data-tooltip-positioning"));
         Assert.Equal("0", time.GetAttribute("tabindex"));
         var absent = cut.Find("[data-resource-name='missing'] .resource-row-wide-metadata");
@@ -1448,6 +1452,49 @@ public class ResourcesLayoutTests : DashboardTestContext
         cut.Render();
         await SelectTabAsync("tab-Overview");
         Assert.Equal("http://localhost/resources/api", navigation.Uri);
+    }
+
+    [Theory]
+    [InlineData("Stop")]
+    [InlineData("")]
+    [InlineData("UnknownCommandIcon")]
+    public void RowActions_DoNotRecolorSharedCommandIcons(string iconName)
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var command = new CommandViewModel("resource-stop", CommandViewModelState.Enabled, "Stop", "Stop resource", confirmationMessage: "", argumentInputs: [], isHighlighted: true, iconName: iconName, iconVariant: IconVariant.Filled);
+        var resource = ModelTestHelpers.CreateResource("api", state: KnownResourceState.Running, commands: [command]);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: [resource],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        var icon = Services.GetRequiredService<IconResolver>().ResolveHighlightedCommandIcon(command.IconName, command.IconVariant);
+        var preview = Render<FluentIcon<Icon>>(builder => builder.Add(component => component.Value, icon));
+        var originalStyle = preview.Find("svg").GetAttribute("style");
+
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.ConsoleLogsUrl("api"));
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.Single(cut.FindAll(".resource-row-highlighted")));
+        preview.Render();
+        Assert.Equal(originalStyle, preview.Find("svg").GetAttribute("style"));
+
+        using var gridActions = Render<ResourceActions>(builder => builder
+            .AddCascadingValue(viewport)
+            .Add(component => component.Resource, resource)
+            .Add(component => component.ResourceByName, new ConcurrentDictionary<string, ResourceViewModel>(StringComparers.ResourceName) { [resource.Name] = resource })
+            .Add(component => component.MaxHighlightedCount, 1)
+            .Add(component => component.CommandSelected, EventCallback<CommandViewModel>.Empty)
+            .Add(component => component.OnViewDetails, EventCallback<string?>.Empty)
+            .Add(component => component.IsCommandExecuting, (_, _) => false));
+        preview.Render();
+        Assert.Equal(originalStyle, preview.Find("svg").GetAttribute("style"));
+
+        using var overview = Render<FluentStack>(builder => builder.AddChildContent(
+            cut.Instance.RenderResourceActions(resource, showLabels: true, row: null)));
+        preview.Render();
+        Assert.Equal(originalStyle, preview.Find("svg").GetAttribute("style"));
+
+        cut.Render();
+        preview.Render();
+        Assert.Equal(originalStyle, preview.Find("svg").GetAttribute("style"));
     }
 
     [Fact]

@@ -10,7 +10,9 @@ public sealed class IconDto
     public required string? Tooltip { get; init; }
 }
 
-internal sealed record GraphIconsDto(GraphMenuIconDto Menu, GraphHiddenIconDto Hidden, GraphGameStringsDto Game);
+// Game is null where the graph doesn't offer the Aspire Outage game (the previous dashboard experience). The graph script
+// only wires up the Play button and the O key when it receives the game's strings.
+internal sealed record GraphIconsDto(GraphMenuIconDto Menu, GraphHiddenIconDto Hidden, GraphGameStringsDto? Game);
 
 internal sealed record GraphMenuIconDto(string Path, string LabelFormat);
 
