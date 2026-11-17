@@ -1354,7 +1354,7 @@ public static partial class JavaHostingExtensions
     private static bool IdeLaunchesAPackagedArtifact<T>(IResourceBuilder<T> builder)
         where T : JavaAppResource
         => builder.Resource.HasAnnotationOfType<JavaQuarkusAnnotation>()
-            && builder.Resource.TryGetIdeLaunchAnnotation(builder.ApplicationBuilder.Configuration, out _);
+            && builder.Resource.SupportsDebugging(builder.ApplicationBuilder.Configuration, out _);
 
     /// <summary>
     /// Whether the resource's OpenTelemetry agent is one its own build writes, rather than one the machine

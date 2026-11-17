@@ -13,7 +13,7 @@ namespace Aspire.Hosting.ApplicationModel;
 /// <remarks>
 /// Added by a <c>WithDebugSupport</c> overload on <see cref="ResourceBuilderExtensions"/>.
 /// The annotation is only honored while a debug session is active; use
-/// <see cref="DebugSupportExtensions.TryGetIdeLaunchAnnotation"/> to test for that.
+/// <see cref="DebugSupportExtensions.SupportsDebugging"/> to test for that.
 /// </remarks>
 [DebuggerDisplay("Type = {GetType().Name,nq}, RequiredExtensionId = {LaunchConfigurationType,nq}")]
 [Experimental("ASPIREEXTENSION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
@@ -32,12 +32,15 @@ public sealed class SupportsDebuggingAnnotation : IResourceAnnotation
     /// </summary>
     /// <remarks>
     /// The IDE advertises the launch configuration types it can handle; a resource whose type is not
-    /// advertised is started as a plain process instead.
+    /// advertised is normally started as a plain process instead.
     /// <para>
-    /// Exception: when the active debug session does not provide a usable launch configuration capability list
-    /// (for example Visual Studio, which does not send one), <see cref="KnownLaunchConfigurationTypes.Project"/>
-    /// is treated as implicitly supported for non-file-based project resources. File-based C# apps require the
-    /// IDE to advertise explicit project support.
+    /// Project resources have compatibility exceptions. When the active debug session does not provide a usable
+    /// launch configuration capability list, <see cref="KnownLaunchConfigurationTypes.Project"/> is treated as
+    /// implicitly supported for non-file-based project resources; file-based C# apps require the IDE to advertise
+    /// explicit project support. An IDE can also launch a project resource whose declared type it does not support
+    /// through a synthesized <see cref="KnownLaunchConfigurationTypes.Project"/> launch configuration, for example an
+    /// Azure Functions project in an IDE that advertises <see cref="KnownLaunchConfigurationTypes.Project"/> but not
+    /// <c>azure-functions</c>. See <see cref="DebugSupportExtensions.SupportsDebugging"/> for the complete rules.
     /// </para>
     /// </remarks>
     public string LaunchConfigurationType { get; }
@@ -46,6 +49,16 @@ public sealed class SupportsDebuggingAnnotation : IResourceAnnotation
     /// Gets or sets whether IDE execution requires an explicit Debug session run mode.
     /// </summary>
     internal bool RequiresDebugMode { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether Aspire synthesized this annotation to describe a compatibility project launch instead of
+    /// it being declared with a <c>WithDebugSupport</c> overload.
+    /// </summary>
+    /// <remarks>
+    /// A synthesized annotation is never attached to a resource. It does not own launch tool arguments, because a
+    /// compatibility launch passes them to the launched program.
+    /// </remarks>
+    internal bool IsCompatibilityProjectLaunch { get; set; }
 
     // The producer callback supplied to WithDebugSupport, with the launch configuration boxed as object.
     // Internal because only Aspire constructs LaunchConfigurationCallbackContext values and because the

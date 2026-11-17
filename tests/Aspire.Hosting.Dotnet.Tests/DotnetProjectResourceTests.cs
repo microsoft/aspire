@@ -916,7 +916,7 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AddDotnetProject_InDebugSession_KeepsDotnetRunArgs_WhenActiveCustomDebugSupportDoesNotOwnInvocation()
     {
-        // TryGetIdeLaunchAnnotation() consults only the LAST SupportsDebuggingAnnotation. When a caller stacks a
+        // SupportsDebugging() consults only the LAST SupportsDebuggingAnnotation. When a caller stacks a
         // custom, non-"project" WithDebugSupport that does not own the .NET SDK invocation, the selected launch
         // still needs the complete `dotnet run …` scaffolding.
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
