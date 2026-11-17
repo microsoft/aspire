@@ -18,6 +18,7 @@ using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
 using Aspire.Shared;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.Projects;
@@ -297,7 +298,7 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
         var originalProject = await File.ReadAllBytesAsync(projectFile.FullName);
         var configFile = await WriteCurrentPolicyAsync(workspace, "https://old.example/v3/index.json", configureCache: false);
         var originalConfig = await File.ReadAllBytesAsync(configFile.FullName);
-        const string newSource = "https://new.example/v3/index.json";
+        const string newSource = "https://candidate:candidate-password@new.example/v3/index.json?sig=candidate-token";
         var evaluationCount = 0;
         var restoreCount = 0;
         var runner = CreateRunner(projectFile, hasExplicitChannel: false);
@@ -347,7 +348,7 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
             Assert.Equal(originalProps, File.ReadAllText(propsPath + ".aspire-backup"));
             Assert.Equal(originalConfig, File.ReadAllBytes(configFile.FullName));
             options.StandardOutputCallback?.Invoke("Determining projects to restore...");
-            options.StandardErrorCallback?.Invoke("Native restore diagnostic.");
+            options.StandardErrorCallback?.Invoke($"Native restore diagnostic: {newSource}");
             restoreCount++;
             return restoreSucceeds ? 0 : 1;
         };
@@ -372,7 +373,7 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
 
         var interaction = Assert.IsType<TestInteractionService>(provider.GetRequiredService<IInteractionService>());
         Assert.Equal(
-            restoreSucceeds ? [] : new[] { (OutputLineStream.StdOut, "Determining projects to restore..."), (OutputLineStream.StdErr, "Native restore diagnostic.") },
+            restoreSucceeds ? [] : new[] { (OutputLineStream.StdOut, "Determining projects to restore..."), (OutputLineStream.StdErr, "Native restore diagnostic: https://***@new.example/v3/index.json") },
             interaction.DisplayedLines);
         Assert.True(evaluationCount > 0);
         Assert.Equal(1, restoreCount);
@@ -1669,16 +1670,36 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
     [InlineData("apphost.cs", false)]
     [InlineData("AppHost.csproj", true)]
     [InlineData("apphost.cs", true)]
-    public async Task UpdateAsync_RestoreDiagnosticsAreNotLoggedAndOnlyDisplayedOnFailure(string fileName, bool restoreFails)
+    public async Task UpdateAsync_RestoreDiagnosticsAreRedactedBeforeLoggingAndFailureDisplay(string fileName, bool restoreFails)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = await CreateAppHostAsync(workspace, fileName);
         var originalProject = await File.ReadAllBytesAsync(projectFile.FullName);
         const string restoreMessage = "Determining projects to restore...";
-        const string restoreError = "error : Access to the path 'Aspire.Hosting.Tasks.dll' is denied.";
-        const string stderrMessage = "NuGet restore diagnostic on stderr.";
+        const string rootSource = "https://root:root-password@root.example/v3/index.json?sig=root-token";
+        const string childSource = "https://child:child-password@child.example/v3/index.json?sig=child-token";
+        const string restoreError = $"Restore failed for {rootSource}";
+        const string stderrMessage = $"Restore failed for {childSource}";
+        const string redactedError = "Restore failed for https://***@root.example/v3/index.json";
+        const string redactedStderr = "Restore failed for https://***@child.example/v3/index.json";
+        await File.WriteAllTextAsync(Path.Combine(workspace.Path, "NuGet.Config"),
+            $"""<configuration><packageSources><clear /><add key="root" value="{rootSource}" /></packageSources></configuration>""");
+        var childDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "Child"));
+        var childProject = await CreateAppHostAsync(workspace, "Child/Child.csproj");
+        await File.WriteAllTextAsync(Path.Combine(childDirectory.FullName, "NuGet.Config"),
+            $"""<configuration><packageSources><add key="child" value="{childSource}" /></packageSources></configuration>""");
         var runner = CreateRunner(projectFile, hasExplicitChannel: false);
-        runner.GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) => CreatePackageEvaluation();
+        runner.GetProjectItemsAndPropertiesAsyncCallback = (file, _, _, _, _) =>
+        {
+            if (file.FullName == childProject.FullName)
+            {
+                return (0, JsonDocument.Parse("""{"Items":{},"Properties":{}}"""));
+            }
+            var evaluation = new JsonObject().WithSdkVersion("9.4.1")
+                .WithPackageReference("Aspire.Hosting.Redis", "9.4.1")
+                .WithProjectReference(childProject.FullName);
+            return (0, JsonDocument.Parse(evaluation.ToJsonString()));
+        };
         runner.RestoreAsyncCallback = (_, options, _) =>
         {
             options.StandardOutputCallback?.Invoke(restoreMessage);
@@ -1687,7 +1708,9 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
             return restoreFails ? 1 : 0;
         };
         string logFilePath;
-        using (var provider = CreateServices(workspace, runner).BuildServiceProvider())
+        var services = CreateServices(workspace, runner);
+        services.AddSingleton<ILoggerProvider>(provider => provider.GetRequiredService<FileLoggerProvider>());
+        using (var provider = services.BuildServiceProvider())
         {
             logFilePath = provider.GetRequiredService<FileLoggerProvider>().LogFilePath;
             var context = await CreateContextAsync(provider, projectFile, "default", hasExplicitChannel: false);
@@ -1701,7 +1724,7 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
                 Assert.Equal(string.Format(CultureInfo.InvariantCulture,
                     UpdateCommandStrings.FailedToRestoreAfterUpdateFormat, context.Channel.Name, projectFile.FullName), exception.Message);
                 Assert.Equal(
-                    [(OutputLineStream.StdOut, restoreMessage), (OutputLineStream.StdOut, restoreError), (OutputLineStream.StdErr, stderrMessage)],
+                    [(OutputLineStream.StdOut, restoreMessage), (OutputLineStream.StdOut, redactedError), (OutputLineStream.StdErr, redactedStderr)],
                     interaction.DisplayedLines);
                 Assert.Equal(originalProject, await File.ReadAllBytesAsync(projectFile.FullName));
             }
@@ -1714,7 +1737,22 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
             }
         }
 
-        Assert.Equal(string.Empty, await File.ReadAllTextAsync(logFilePath));
+        var logText = await File.ReadAllTextAsync(logFilePath);
+        Assert.Equal(PackageSourceRedactor.RedactOccurrences(logText, [rootSource, childSource]), logText);
+        var category = FileLoggerProvider.GetShortCategoryName(typeof(ProjectUpdater).FullName!);
+        var logEntries = (await File.ReadAllLinesAsync(logFilePath)).Select(line =>
+        {
+            Assert.True(CliLogFormat.TryParseFileLogLine(line, out var entry));
+            return entry;
+        }).Where(entry => entry.Category == category
+            && (entry.Message == restoreMessage || entry.Message.StartsWith("Restore failed for ", StringComparison.Ordinal)));
+        Assert.Equal(
+            [
+                new CliLogFormat.FileLogEntry(CliLogFormat.FileLevelTokens.Debug, category, restoreMessage),
+                new CliLogFormat.FileLogEntry(CliLogFormat.FileLevelTokens.Debug, category, redactedError),
+                new CliLogFormat.FileLogEntry(CliLogFormat.FileLevelTokens.Debug, category, redactedStderr)
+            ],
+            logEntries);
     }
 
     private static async Task<FileInfo> WriteCurrentPolicyAsync(TemporaryWorkspace workspace, string source, bool configureCache)

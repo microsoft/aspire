@@ -130,9 +130,9 @@ conflicts still fail in either mode. Dry runs restore source files from adjacent
 backups; leftover backups require separate consent to replace. See the
 [update validation details](../../docs/specs/polyglot-integration-restore.md#shared-policy-previews-and-net-persistence).
 
-If the validation restore fails, `aspire update` displays the native restore
-diagnostics without persisting them in its CLI log, because they can contain
-credential-bearing feed URLs. The validation failure summary is still logged.
+Validation restore diagnostics are logged and displayed on failure. Credential
+material from known package sources is redacted before diagnostics are buffered
+or logged, using the candidate and discovered referenced-project configurations.
 
 ## Configured template sources
 

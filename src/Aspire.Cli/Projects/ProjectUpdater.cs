@@ -340,8 +340,15 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
             {
                 // Validate the complete updated graph, not old versions against a new feed or a
                 // half-updated graph. Native restore retains each referenced project's own settings.
-                // Native diagnostics can contain credential-bearing feed URLs. Display them on
-                // failure like dotnet restore, without persisting them in the CLI log.
+                // Redact before buffering or logging, using both the candidate hierarchy and
+                // referenced projects' settings, just as in-process NuGet operations do.
+                var sensitiveSources = updatePlan.AmbientPolicies.Keys
+                    .SelectMany(directory => nuGetService.GetNuGetSettings(directory, cancellationToken).SensitiveSourceValues)
+                    .Concat(nuGetService.GetNuGetSettings(candidatePackageConfiguration.EffectiveWorkingDirectory.FullName, cancellationToken).SensitiveSourceValues)
+                    .Concat(restorePreview?.GetSensitiveSourceValues(nuGetService, cancellationToken) ?? [])
+                    .Concat(repairedRestorePreview?.GetSensitiveSourceValues(nuGetService, cancellationToken) ?? [])
+                    .Distinct(StringComparer.Ordinal)
+                    .ToArray();
                 var restoreOutput = new OutputCollector();
                 var restoreExitCode = await interactionService.ShowStatusAsync(
                     UpdateCommandStrings.RestoringPackagesAfterUpdate,
@@ -350,8 +357,18 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
                         await transaction.VerifyAsync(cancellationToken);
                         return await runner.RestoreAsync(projectFile, new()
                         {
-                            StandardOutputCallback = restoreOutput.AppendOutput,
-                            StandardErrorCallback = restoreOutput.AppendError,
+                            StandardOutputCallback = line =>
+                            {
+                                var redacted = PackageSourceRedactor.RedactOccurrences(line, sensitiveSources);
+                                restoreOutput.AppendOutput(redacted);
+                                logger.LogDebug("{Message}", redacted);
+                            },
+                            StandardErrorCallback = line =>
+                            {
+                                var redacted = PackageSourceRedactor.RedactOccurrences(line, sensitiveSources);
+                                restoreOutput.AppendError(redacted);
+                                logger.LogDebug("{Message}", redacted);
+                            },
                             NuGetRestoreTargetsFile = restorePreview?.TargetsFile ?? repairedRestorePreview?.TargetsFile,
                             IsolatedRestorePackagesDirectory = dryRunRestore is null ? null : new DirectoryInfo(dryRunRestore.PackagesDirectory),
                             EnvironmentVariables = dryRunRestore?.EnvironmentVariables

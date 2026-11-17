@@ -27,6 +27,10 @@ internal sealed class DotNetAppHostRestorePreview : IDisposable
 
     internal NuGetPackageOperationConfiguration RootConfiguration => _configurations[0];
 
+    internal IEnumerable<string> GetSensitiveSourceValues(BundleNuGetService nuGetService, CancellationToken cancellationToken)
+        => _configurations.SelectMany(configuration =>
+            nuGetService.GetNuGetSettings(configuration.EffectiveWorkingDirectory.FullName, cancellationToken).SensitiveSourceValues);
+
     internal static async Task<DotNetAppHostRestorePreview> CreateAsync(
         BundleNuGetService nuGetService,
         DotNetAppHostNuGetConfigMergerCandidate candidate,
