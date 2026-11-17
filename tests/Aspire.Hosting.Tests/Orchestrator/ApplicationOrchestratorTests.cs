@@ -1122,7 +1122,13 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
 
     [Theory]
     [InlineData("postgres")]
+    [InlineData("postgres-database")]
     [InlineData("redis")]
+    [InlineData("mysql")]
+    [InlineData("mysql-database")]
+    [InlineData("valkey")]
+    [InlineData("mongodb")]
+    [InlineData("mongodb-database")]
     [InlineData("publisher")]
     public async Task ConnectionStringAvailableEventReportsMissingPasswordBeforeStarting(string source)
     {
@@ -1132,11 +1138,18 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
         IResourceWithConnectionString resource = source switch
         {
             "postgres" => builder.AddPostgres("database", password: password).Resource,
+            "postgres-database" => builder.AddPostgres("server", password: password).AddDatabase("database").Resource,
             "redis" => builder.AddRedis("database", password: password).Resource,
+            "mysql" => builder.AddMySql("database", password: password).Resource,
+            "mysql-database" => builder.AddMySql("server", password: password).AddDatabase("database").Resource,
+            "valkey" => builder.AddValkey("database", password: password).Resource,
+            "mongodb" => builder.AddMongoDB("database", password: password).Resource,
+            "mongodb-database" => builder.AddMongoDB("server", password: password).AddDatabase("database").Resource,
             _ => builder.AddResource(new PostgresServerResource("database", null, password.Resource))
                 .WithEndpoint(targetPort: 5432, scheme: "tcp", name: "tcp").Resource
         };
-        var endpoint = Assert.Single(resource.Annotations.OfType<EndpointAnnotation>());
+        var endpointResource = resource is IResourceWithParent child ? child.Parent : resource;
+        var endpoint = Assert.Single(endpointResource.Annotations.OfType<EndpointAnnotation>());
         endpoint.AllocatedEndpoint = new(endpoint, "localhost", 2000);
         using var app = builder.Build();
         using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
@@ -1179,6 +1192,58 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
             await events.PublishAsync(new OnResourceStartingContext(cts.Token, KnownResourceTypes.Container, resource, resource.Name));
         }
     }
+
+#pragma warning disable ASPIREMONGODB001
+    [Fact]
+    public async Task ReplicaSetInitializationReportsMissingPasswordBeforeConnectionStringAvailable()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var password = builder.AddParameter("password", secret: true);
+        password.Resource.EnsureValueTask();
+        var member = builder.AddMongoDB("member");
+        var replicaSet = builder.AddMongoDBReplicaSet("replica-set", password: password).WithMember(member);
+        var endpoint = Assert.Single(member.Resource.Annotations.OfType<EndpointAnnotation>());
+        endpoint.AllocatedEndpoint = new(endpoint, "localhost", 2000);
+        using var app = builder.Build();
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
+        var notifications = app.ResourceNotifications;
+        var connectionStringAvailable = false;
+        builder.Eventing.Subscribe<ConnectionStringAvailableEvent>(replicaSet.Resource, (_, _) =>
+        {
+            connectionStringAvailable = true;
+            return Task.CompletedTask;
+        });
+        await notifications.PublishUpdateAsync(replicaSet.Resource, s => s);
+
+        var initialization = builder.Eventing.PublishAsync(new InitializeResourceEvent(
+            replicaSet.Resource,
+            builder.Eventing,
+            app.Services.GetRequiredService<ResourceLoggerService>(),
+            notifications,
+            app.Services), cts.Token);
+
+        try
+        {
+            Assert.False(initialization.IsCompleted);
+            Assert.False(connectionStringAvailable);
+            Assert.True(notifications.TryGetCurrentState(replicaSet.Resource.Name, out var waiting));
+            Assert.Equal(KnownResourceStates.UnresolvedParameters, waiting.Snapshot.State?.Text);
+            var unresolved = Assert.Single(waiting.Snapshot.Properties, p => p.Name == KnownProperties.Resource.UnresolvedParameters);
+            Assert.Equal(new[] { password.Resource.Name }, Assert.IsType<string[]>(unresolved.Value));
+            Assert.False(unresolved.IsSensitive);
+        }
+        finally
+        {
+            cts.Cancel();
+            await initialization.DefaultTimeout();
+        }
+
+        Assert.False(connectionStringAvailable);
+        Assert.True(notifications.TryGetCurrentState(replicaSet.Resource.Name, out var canceled));
+        Assert.Equal(KnownResourceStates.FailedToStart, canceled.Snapshot.State?.Text);
+        Assert.Empty(canceled.Snapshot.Properties.Where(p => p.Name == KnownProperties.Resource.UnresolvedParameters));
+    }
+#pragma warning restore ASPIREMONGODB001
 
     [Fact]
     public async Task ConnectionStringAvailableEventUpdatesConnectionStringAndResolvablePropertiesWithoutDuplicates()

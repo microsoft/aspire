@@ -43,7 +43,12 @@ public static class KafkaBuilderExtensions
 
         builder.Eventing.Subscribe<ConnectionStringAvailableEvent>(kafka, async (@event, ct) =>
         {
-            connectionString = await kafka.ConnectionStringExpression.GetValueAsync(ct).ConfigureAwait(false);
+            connectionString = await kafka.ConnectionStringExpression.GetValueAsync(new ValueProviderContext
+            {
+                ExecutionContext = builder.ExecutionContext,
+                Caller = kafka,
+                Network = KnownNetworkIdentifiers.LocalhostNetwork
+            }, ct).ConfigureAwait(false);
 
             if (connectionString == null)
             {

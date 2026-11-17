@@ -46,7 +46,12 @@ public static class RabbitMQBuilderExtensions
 
         builder.Eventing.Subscribe<ConnectionStringAvailableEvent>(rabbitMq, async (@event, ct) =>
         {
-            connectionString = await rabbitMq.ConnectionStringExpression.GetValueAsync(ct).ConfigureAwait(false);
+            connectionString = await rabbitMq.ConnectionStringExpression.GetValueAsync(new ValueProviderContext
+            {
+                ExecutionContext = builder.ExecutionContext,
+                Caller = rabbitMq,
+                Network = KnownNetworkIdentifiers.LocalhostNetwork
+            }, ct).ConfigureAwait(false);
 
             if (connectionString == null)
             {
