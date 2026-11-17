@@ -48,12 +48,8 @@ public static class MySqlBuilderExtensions
 
         builder.Eventing.Subscribe<ConnectionStringAvailableEvent>(resource, async (@event, ct) =>
         {
-            connectionString = await resource.ConnectionStringExpression.GetValueAsync(new ValueProviderContext
-            {
-                ExecutionContext = builder.ExecutionContext,
-                Caller = resource,
-                Network = KnownNetworkIdentifiers.LocalhostNetwork
-            }, ct).ConfigureAwait(false);
+            connectionString = await resource.ConnectionStringExpression.GetValueAsync(
+                ValueProviderContext.ForHost(builder.ExecutionContext, resource), ct).ConfigureAwait(false);
 
             if (connectionString == null)
             {
@@ -183,12 +179,8 @@ public static class MySqlBuilderExtensions
 
         builder.ApplicationBuilder.Eventing.Subscribe<ConnectionStringAvailableEvent>(mySqlDatabase, async (@event, ct) =>
         {
-            connectionString = await mySqlDatabase.ConnectionStringExpression.GetValueAsync(new ValueProviderContext
-            {
-                ExecutionContext = builder.ApplicationBuilder.ExecutionContext,
-                Caller = mySqlDatabase,
-                Network = KnownNetworkIdentifiers.LocalhostNetwork
-            }, ct).ConfigureAwait(false);
+            connectionString = await mySqlDatabase.ConnectionStringExpression.GetValueAsync(
+                ValueProviderContext.ForHost(builder.ApplicationBuilder.ExecutionContext, mySqlDatabase), ct).ConfigureAwait(false);
 
             if (connectionString is null)
             {

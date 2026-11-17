@@ -64,12 +64,8 @@ public static class PostgresBuilderExtensions
 
         builder.Eventing.Subscribe<ConnectionStringAvailableEvent>(postgresServer, async (@event, ct) =>
         {
-            connectionString = await postgresServer.GetConnectionStringAsync(new ValueProviderContext
-            {
-                ExecutionContext = builder.ExecutionContext,
-                Caller = postgresServer,
-                Network = KnownNetworkIdentifiers.LocalhostNetwork
-            }, ct).ConfigureAwait(false);
+            connectionString = await postgresServer.GetConnectionStringAsync(
+                ValueProviderContext.ForHost(builder.ExecutionContext, postgresServer), ct).ConfigureAwait(false);
 
             if (connectionString == null)
             {
@@ -211,12 +207,8 @@ public static class PostgresBuilderExtensions
 
         builder.ApplicationBuilder.Eventing.Subscribe<ConnectionStringAvailableEvent>(postgresDatabase, async (@event, ct) =>
         {
-            connectionString = await postgresDatabase.ConnectionStringExpression.GetValueAsync(new ValueProviderContext
-            {
-                ExecutionContext = builder.ApplicationBuilder.ExecutionContext,
-                Caller = postgresDatabase,
-                Network = KnownNetworkIdentifiers.LocalhostNetwork
-            }, ct).ConfigureAwait(false);
+            connectionString = await postgresDatabase.ConnectionStringExpression.GetValueAsync(
+                ValueProviderContext.ForHost(builder.ApplicationBuilder.ExecutionContext, postgresDatabase), ct).ConfigureAwait(false);
 
             if (connectionString == null)
             {

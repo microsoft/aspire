@@ -83,12 +83,7 @@ internal sealed class ApplicationOrchestrator
     {
         if (@event.Resource is IResourceWithConnectionString resourceWithConnectionString)
         {
-            var valueContext = new ValueProviderContext
-            {
-                ExecutionContext = _executionContext,
-                Caller = resourceWithConnectionString,
-                Network = KnownNetworkIdentifiers.LocalhostNetwork
-            };
+            var valueContext = ValueProviderContext.ForHost(_executionContext, resourceWithConnectionString);
             var connectionString = await resourceWithConnectionString.GetConnectionStringAsync(valueContext, token).ConfigureAwait(false);
             var connectionProperties = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
             foreach (var property in resourceWithConnectionString.GetConnectionProperties())

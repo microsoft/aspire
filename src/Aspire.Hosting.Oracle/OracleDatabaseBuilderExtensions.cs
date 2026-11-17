@@ -44,12 +44,8 @@ public static class OracleDatabaseBuilderExtensions
 
         builder.Eventing.Subscribe<ConnectionStringAvailableEvent>(oracleDatabaseServer, async (@event, ct) =>
         {
-            connectionString = await oracleDatabaseServer.ConnectionStringExpression.GetValueAsync(new ValueProviderContext
-            {
-                ExecutionContext = builder.ExecutionContext,
-                Caller = oracleDatabaseServer,
-                Network = KnownNetworkIdentifiers.LocalhostNetwork
-            }, ct).ConfigureAwait(false);
+            connectionString = await oracleDatabaseServer.ConnectionStringExpression.GetValueAsync(
+                ValueProviderContext.ForHost(builder.ExecutionContext, oracleDatabaseServer), ct).ConfigureAwait(false);
 
             if (connectionString == null)
             {

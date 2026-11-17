@@ -37,8 +37,8 @@ public class AddParameterTests
             : null;
         await app.ResourceNotifications.PublishUpdateAsync(caller, s => s with { State = startingState });
         await app.ResourceNotifications.PublishUpdateAsync(other, s => s with { State = startingState });
-        var context = new ValueProviderContext { ExecutionContext = builder.ExecutionContext, Caller = caller };
-        var otherContext = new ValueProviderContext { ExecutionContext = builder.ExecutionContext, Caller = other };
+        var context = ValueProviderContext.ForHost(builder.ExecutionContext, caller);
+        var otherContext = ValueProviderContext.ForHost(builder.ExecutionContext, other);
 
         var canceled = first.GetValueAsync(context, canceledRead.Token).AsTask();
         var firstRead = ((IValueProvider)first).GetValueAsync(context, cts.Token).AsTask();

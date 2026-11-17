@@ -12,12 +12,7 @@ internal sealed class ResourceUrlsEditor(DistributedApplicationExecutionContext 
     private readonly DistributedApplicationExecutionContext _executionContext = executionContext ?? throw new ArgumentNullException(nameof(executionContext));
     private readonly List<ResourceUrlAnnotation> _urls = urls ?? throw new ArgumentNullException(nameof(urls));
     private readonly CancellationToken _cancellationToken = cancellationToken;
-    private readonly ValueProviderContext _valueContext = new()
-    {
-        ExecutionContext = executionContext,
-        Caller = resource,
-        Network = KnownNetworkIdentifiers.LocalhostNetwork
-    };
+    private readonly ValueProviderContext _valueContext = ValueProviderContext.ForHost(executionContext, resource);
 
     /// <summary>
     /// Adds a displayed URL.
