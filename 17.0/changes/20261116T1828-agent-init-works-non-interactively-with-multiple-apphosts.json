@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "`aspire agent init --non-interactive` no longer fails when the working directory contains multiple AppHosts and none is saved in settings.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🤖",
+  "firstMergedAt": "2026-11-16T18:28:19Z",
+  "lastMergedAt": "2026-11-16T18:28:19Z",
+  "name": "Agent init works non-interactively with multiple AppHosts",
+  "owner": "ellahathaway",
+  "prs": [
+    22269
+  ]
+}

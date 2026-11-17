@@ -6,7 +6,9 @@
   "changeType": "Bug fixes",
   "communityContributors": [],
   "description": "Fixes the SQL Server dashboard REPL failing to launch from Windows checkouts due to CRLF line endings in an embedded shell script. The REPL now launches `sqlcmd` directly and adds a `SqlServerReplOptions` callback with `SqlServerReplCommand.Version17`/`Version18` so older or custom images can select an installed client path.",
-  "docsPrs": [],
+  "docsPrs": [
+    1822
+  ],
   "docsRequired": true,
   "emoji": "🐛",
   "firstMergedAt": "2026-10-03T08:13:21Z",

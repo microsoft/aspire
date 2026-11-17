@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Container image tag bump (source #21218 excluded)",
+  "mergedAt": "2026-11-16T19:48:31Z",
+  "number": 1931,
+  "runDate": "2026-11-17T00:10:00Z",
+  "status": "excluded",
+  "title": "[docs] Update MongoDB container image tag to 9.0"
+}

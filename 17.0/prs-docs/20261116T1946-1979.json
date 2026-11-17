@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Matched to Publish reports ignored entrypoint for Go and Python",
+  "mergedAt": "2026-11-16T19:46:23Z",
+  "number": 1979,
+  "runDate": "2026-11-17T00:10:00Z",
+  "status": "included",
+  "title": "[docs] Document existing Dockerfile entrypoint handling for Go and Python"
+}

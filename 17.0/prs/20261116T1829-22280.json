@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Backport of #22274; grouped with tray entry",
+  "mergedAt": "2026-11-16T18:29:43Z",
+  "number": 22280,
+  "runDate": "2026-11-17T00:10:00Z",
+  "status": "included",
+  "title": "[release/17.0] Label the Aspire tray as Preview instead of Experimental"
+}

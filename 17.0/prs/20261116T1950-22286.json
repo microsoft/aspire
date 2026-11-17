@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "Backport of E2E test fixture infrastructure change",
+  "mergedAt": "2026-11-16T19:50:40Z",
+  "number": 22286,
+  "runDate": "2026-11-17T00:10:00Z",
+  "status": "excluded",
+  "title": "[release/17.0] Use locally available package versions for browser debugger fixtures"
+}

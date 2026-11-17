@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Templates from an automatically detected configuration source that the user accepted during `aspire new` now appear in the template picker without setting `ASPIRE_INIT_SOURCE_URL`.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🧭",
+  "firstMergedAt": "2026-11-16T18:32:05Z",
+  "lastMergedAt": "2026-11-16T18:32:05Z",
+  "name": "Accepted configuration sources used for template discovery",
+  "owner": "JamesNK",
+  "prs": [
+    22301
+  ]
+}

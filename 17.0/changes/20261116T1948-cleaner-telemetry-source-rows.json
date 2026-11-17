@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Telemetry-only resource rows in the dashboard sidebar no longer repeat the \"Telemetry sources\" label; compact rows show just the source name and comfortable rows list the retained signals.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "📡",
+  "firstMergedAt": "2026-11-16T19:48:28Z",
+  "lastMergedAt": "2026-11-16T19:48:28Z",
+  "name": "Cleaner telemetry source rows",
+  "owner": "JamesNK",
+  "prs": [
+    22257
+  ]
+}

@@ -1,14 +1,16 @@
 {
   "area": "AppHost",
-  "areaEmoji": "\ud83c\udfe0",
+  "areaEmoji": "🏠",
   "backport": false,
   "breaking": false,
   "changeType": "Improvements",
   "communityContributors": [],
   "description": "Publishing a Python app fails, and a Go app warns, when an existing app-directory Dockerfile cannot honor the entrypoint set on the resource, instead of silently ignoring it.",
-  "docsPrs": [],
+  "docsPrs": [
+    1979
+  ],
   "docsRequired": false,
-  "emoji": "\ud83d\udea8",
+  "emoji": "🚨",
   "firstMergedAt": "2026-10-29T16:44:45Z",
   "lastMergedAt": "2026-10-29T16:44:45Z",
   "name": "Publish reports ignored entrypoint for Go and Python",

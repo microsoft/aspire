@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Backport of #22298; template discovery fix",
+  "mergedAt": "2026-11-16T18:32:05Z",
+  "number": 22301,
+  "runDate": "2026-11-17T00:10:00Z",
+  "status": "included",
+  "title": "[release/17.0] Use accepted configuration sources for template discovery"
+}

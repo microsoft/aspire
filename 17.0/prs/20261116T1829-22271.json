@@ -1,0 +1,9 @@
+{
+  "author": "ellahathaway",
+  "comment": "Grouped with agent init warnings entry",
+  "mergedAt": "2026-11-16T18:29:05Z",
+  "number": 22271,
+  "runDate": "2026-11-17T00:10:00Z",
+  "status": "included",
+  "title": "[release/17.0] Warn about all agent skill sources"
+}

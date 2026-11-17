@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Backport of #22054; describe exit codes",
+  "mergedAt": "2026-11-16T18:36:39Z",
+  "number": 22288,
+  "runDate": "2026-11-17T00:10:00Z",
+  "status": "included",
+  "title": "[release/17.0] Show exit codes in describe snapshot table"
+}

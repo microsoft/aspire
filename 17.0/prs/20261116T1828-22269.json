@@ -1,0 +1,9 @@
+{
+  "author": "ellahathaway",
+  "comment": "New bug fix entry",
+  "mergedAt": "2026-11-16T18:28:19Z",
+  "number": 22269,
+  "runDate": "2026-11-17T00:10:00Z",
+  "status": "included",
+  "title": "[release/17.0] Fix aspire agent init --non-interactive with multiple AppHosts"
+}
