@@ -78,7 +78,7 @@ public class AddSeqTests
         var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
 
         var connectionStringResource = Assert.Single(appModel.Resources.OfType<IResourceWithConnectionString>());
-        var connectionString = await connectionStringResource.GetConnectionStringAsync(default);
+        var connectionString = await connectionStringResource.GetConnectionStringAsync();
         Assert.Equal("{mySeq.bindings.http.url}", connectionStringResource.ConnectionStringExpression.ValueExpression);
         Assert.StartsWith("http://localhost:2000", connectionString);
     }
@@ -238,7 +238,7 @@ public class AddSeqTests
         var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
 
         var connectionStringResource = Assert.Single(appModel.Resources.OfType<IResourceWithConnectionString>());
-        var connectionString = await connectionStringResource.GetConnectionStringAsync(default);
+        var connectionString = await connectionStringResource.GetConnectionStringAsync();
         Assert.Equal("{mySeq.bindings.http.url}", connectionStringResource.ConnectionStringExpression.ValueExpression);
         Assert.StartsWith("http://localhost:2000", connectionString);
     }

@@ -79,7 +79,7 @@ public class AddValkeyTests(ITestOutputHelper testOutputHelper)
         var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
 
         var connectionStringResource = Assert.Single(appModel.Resources.OfType<IResourceWithConnectionString>());
-        var connectionString = await connectionStringResource.GetConnectionStringAsync(default);
+        var connectionString = await connectionStringResource.GetConnectionStringAsync();
         Assert.Equal("{myValkey.bindings.tcp.host}:{myValkey.bindings.tcp.port},password={myValkey-password.value}", connectionStringResource.ConnectionStringExpression.ValueExpression);
         Assert.StartsWith("localhost:2000", connectionString);
     }
@@ -335,7 +335,7 @@ public class AddValkeyTests(ITestOutputHelper testOutputHelper)
         var containerResource = Assert.Single(appModel.Resources.OfType<ValkeyResource>());
 
         var connectionStringResource = Assert.Single(appModel.Resources.OfType<IResourceWithConnectionString>());
-        var connectionString = await connectionStringResource.GetConnectionStringAsync(default);
+        var connectionString = await connectionStringResource.GetConnectionStringAsync();
         Assert.Equal("{myValkey.bindings.tcp.host}:{myValkey.bindings.tcp.port},password={pass.value}", connectionStringResource.ConnectionStringExpression.ValueExpression);
         Assert.StartsWith($"localhost:5001,password={password}", connectionString);
     }

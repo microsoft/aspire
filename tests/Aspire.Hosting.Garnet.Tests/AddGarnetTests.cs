@@ -79,7 +79,7 @@ public class AddGarnetTests(ITestOutputHelper testOutputHelper)
         var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
 
         var connectionStringResource = Assert.Single(appModel.Resources.OfType<IResourceWithConnectionString>());
-        var connectionString = await connectionStringResource.GetConnectionStringAsync(default);
+        var connectionString = await connectionStringResource.GetConnectionStringAsync();
         Assert.Equal("{myGarnet.bindings.tcp.host}:{myGarnet.bindings.tcp.port},password={myGarnet-password.value}", connectionStringResource.ConnectionStringExpression.ValueExpression);
         Assert.StartsWith("localhost:2000", connectionString);
     }
@@ -345,7 +345,7 @@ public class AddGarnetTests(ITestOutputHelper testOutputHelper)
         var containerResource = Assert.Single(appModel.Resources.OfType<GarnetResource>());
 
         var connectionStringResource = Assert.Single(appModel.Resources.OfType<IResourceWithConnectionString>());
-        var connectionString = await connectionStringResource.GetConnectionStringAsync(default);
+        var connectionString = await connectionStringResource.GetConnectionStringAsync();
         Assert.Equal("{myGarnet.bindings.tcp.host}:{myGarnet.bindings.tcp.port},password={pass.value}", connectionStringResource.ConnectionStringExpression.ValueExpression);
         Assert.StartsWith($"localhost:5001,password={password}", connectionString);
     }
