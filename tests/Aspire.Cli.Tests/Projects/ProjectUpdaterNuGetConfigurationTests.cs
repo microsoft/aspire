@@ -1735,6 +1735,7 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
         };
         string logFilePath;
         var services = CreateServices(workspace, runner);
+        services.AddLogging(logging => logging.AddFilter("Aspire.Cli", LogLevel.Information));
         services.AddSingleton<ILoggerProvider>(provider => provider.GetRequiredService<FileLoggerProvider>());
         using (var provider = services.BuildServiceProvider())
         {
@@ -1765,7 +1766,7 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
 
         var logText = await File.ReadAllTextAsync(logFilePath);
         Assert.Equal(PackageSourceRedactor.RedactOccurrences(logText, [rootSource, childSource]), logText);
-        var category = FileLoggerProvider.GetShortCategoryName(typeof(ProjectUpdater).FullName!);
+        var category = CliLogFormat.Categories.Package;
         var logEntries = (await File.ReadAllLinesAsync(logFilePath)).Select(line =>
         {
             Assert.True(CliLogFormat.TryParseFileLogLine(line, out var entry));
@@ -1774,9 +1775,9 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
             && (entry.Message == restoreMessage || entry.Message.StartsWith("Restore failed for ", StringComparison.Ordinal)));
         Assert.Equal(
             [
-                new CliLogFormat.FileLogEntry(CliLogFormat.FileLevelTokens.Debug, category, restoreMessage),
-                new CliLogFormat.FileLogEntry(CliLogFormat.FileLevelTokens.Debug, category, redactedError),
-                new CliLogFormat.FileLogEntry(CliLogFormat.FileLevelTokens.Debug, category, redactedStderr)
+                new CliLogFormat.FileLogEntry(CliLogFormat.FileLevelTokens.Information, category, restoreMessage),
+                new CliLogFormat.FileLogEntry(CliLogFormat.FileLevelTokens.Information, category, redactedError),
+                new CliLogFormat.FileLogEntry(CliLogFormat.FileLevelTokens.Error, category, redactedStderr)
             ],
             logEntries);
     }

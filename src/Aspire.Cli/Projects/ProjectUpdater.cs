@@ -8,6 +8,7 @@ using System.Text.RegularExpressions;
 using System.Xml;
 using System.Xml.Linq;
 using Aspire.Cli.Configuration;
+using Aspire.Cli.Diagnostics;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.NuGet;
@@ -28,7 +29,7 @@ internal interface IProjectUpdater
     Task<ProjectUpdateResult> UpdateProjectAsync(UpdatePackagesContext context, CancellationToken cancellationToken = default);
 }
 
-internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDotNetCliRunner runner, IInteractionService interactionService, IMemoryCache cache, CliExecutionContext executionContext, FallbackProjectParser fallbackParser, BundleNuGetService nuGetService) : IProjectUpdater
+internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDotNetCliRunner runner, IInteractionService interactionService, IMemoryCache cache, CliExecutionContext executionContext, FallbackProjectParser fallbackParser, BundleNuGetService nuGetService, FileLoggerProvider fileLoggerProvider) : IProjectUpdater
 {
     public async Task<ProjectUpdateResult> UpdateProjectAsync(UpdatePackagesContext context, CancellationToken cancellationToken = default)
     {
@@ -350,7 +351,7 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
                     .Concat(repairedRestorePreview?.GetSensitiveSourceValues(nuGetService, cancellationToken) ?? [])
                     .Distinct(StringComparer.Ordinal)
                     .ToArray();
-                var restoreOutput = new OutputCollector();
+                var restoreOutput = new OutputCollector(fileLoggerProvider, CliLogFormat.Categories.Package);
                 var restoreExitCode = await interactionService.ShowStatusAsync(
                     UpdateCommandStrings.RestoringPackagesAfterUpdate,
                     async () =>
@@ -365,13 +366,11 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
                             {
                                 var redacted = PackageSourceRedactor.RedactOccurrences(line, sensitiveSources);
                                 restoreOutput.AppendOutput(redacted);
-                                logger.LogDebug("{Message}", redacted);
                             },
                             StandardErrorCallback = line =>
                             {
                                 var redacted = PackageSourceRedactor.RedactOccurrences(line, sensitiveSources);
                                 restoreOutput.AppendError(redacted);
-                                logger.LogDebug("{Message}", redacted);
                             },
                             NuGetRestoreTargetsFile = restorePreview?.TargetsFile ?? repairedRestorePreview?.TargetsFile,
                             IsolatedRestorePackagesDirectory = dryRunRestore is null ? null : new DirectoryInfo(dryRunRestore.PackagesDirectory),
