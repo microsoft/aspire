@@ -44,7 +44,7 @@
     <PackageVersion Include="Azure.Provisioning" Version="1.6.0" />
     <PackageVersion Include="Azure.Provisioning.ApiManagement" Version="1.0.0-beta.1" />
     <PackageVersion Include="Azure.Provisioning.AppConfiguration" Version="1.1.0" />
-    <PackageVersion Include="Azure.Provisioning.AppContainers" Version="1.3.0-beta.2" />
+    <PackageVersion Include="Azure.Provisioning.AppContainers" Version="1.3.0" />
     <PackageVersion Include="Azure.Provisioning.AppService" Version="1.3.1" />
     <PackageVersion Include="Azure.Provisioning.ApplicationInsights" Version="1.1.0" />
     <PackageVersion Include="Azure.Provisioning.Cdn" Version="1.0.0-beta.4" />
@@ -216,7 +216,7 @@
     <PackageVersion Include="Microsoft.Identity.Web" Version="4.16.0" />
     <!-- playground apps dependencies for javascript -->
     <!-- Pinned versions for Component Governance - Remove when root dependencies are updated -->
-    <PackageVersion Include="Azure.Core" Version="1.63.0" />
+    <PackageVersion Include="Azure.Core" Version="1.65.0" />
     <PackageVersion Include="Azure.Identity" Version="1.21.0" />
     <!-- https://github.com/Azure/azure-cosmos-dotnet-v3/pull/3313 -->
     <PackageVersion Include="Newtonsoft.Json" Version="13.0.4" />
