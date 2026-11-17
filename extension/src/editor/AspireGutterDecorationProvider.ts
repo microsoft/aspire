@@ -88,6 +88,7 @@ export function classifyState(state: string, stateStyle: string, healthStatus: s
         case ResourceState.FailedToStart:
             return exitCode != null && exitCode !== 0 ? 'error' : 'warning';
         case ResourceState.RuntimeUnhealthy:
+        case ResourceState.UnresolvedParameters:
             return 'warning';
         case ResourceState.Starting:
         case ResourceState.Stopping:

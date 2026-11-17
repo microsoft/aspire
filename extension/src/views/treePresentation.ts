@@ -195,6 +195,7 @@ export function getResourceIcon(resource: ResourceJson): vscode.ThemeIcon {
     const health = resource.healthStatus;
     switch (state) {
         case ResourceState.ValueMissing:
+        case ResourceState.UnresolvedParameters:
             return new vscode.ThemeIcon('warning', new vscode.ThemeColor('list.warningForeground'));
         case ResourceState.Running:
         case ResourceState.Active:

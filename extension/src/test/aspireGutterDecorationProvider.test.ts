@@ -80,6 +80,10 @@ suite('AspireGutterDecorationProvider', () => {
         assert.strictEqual(classifyState(ResourceState.RuntimeUnhealthy, '', ''), 'warning');
     });
 
+    test('UnresolvedParameters uses the warning decoration category', () => {
+        assert.strictEqual(classifyState(ResourceState.UnresolvedParameters, '', ''), 'warning');
+    });
+
     test('FailedToStart uses the warning decoration category', () => {
         assert.strictEqual(classifyState(ResourceState.FailedToStart, '', ''), 'warning');
     });
