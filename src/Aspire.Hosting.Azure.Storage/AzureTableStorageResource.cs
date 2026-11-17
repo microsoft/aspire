@@ -36,9 +36,6 @@ public class AzureTableStorageResource(string name, AzureStorageResource storage
     /// </remarks>
     public ReferenceExpression UriExpression => Parent.TableUriExpression;
 
-    ValueTask<string?> IResourceWithConnectionString.GetConnectionStringAsync(ValueProviderContext context, CancellationToken cancellationToken) =>
-        ConnectionStringExpression.GetValueAsync(context, cancellationToken);
-
     /// <summary>
     /// Gets the connection string template for the manifest for the Azure Table Storage resource.
     /// </summary>

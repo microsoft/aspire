@@ -55,9 +55,6 @@ public class AzureSignalRResource(string name, Action<AzureResourceInfrastructur
             ReferenceExpression.Create($"{EmulatorEndpoint.Property(EndpointProperty.Url)}") : 
             ReferenceExpression.Create($"https://{HostName}");
 
-    ValueTask<string?> IResourceWithConnectionString.GetConnectionStringAsync(ValueProviderContext context, CancellationToken cancellationToken) =>
-        ConnectionStringExpression.GetValueAsync(context, cancellationToken);
-
     /// <summary>
     /// Gets the connection string template for the manifest for Azure SignalR.
     /// </summary>

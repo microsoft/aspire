@@ -41,9 +41,6 @@ public class AzureKustoReadWriteDatabaseResource : Resource, IResourceWithParent
     /// </summary>
     public AzureKustoClusterResource Parent { get; }
 
-    ValueTask<string?> IResourceWithConnectionString.GetConnectionStringAsync(ValueProviderContext context, CancellationToken cancellationToken) =>
-        ConnectionStringExpression.GetValueAsync(context, cancellationToken);
-
     /// <summary>
     /// Gets the connection string expression for the Kusto database.
     /// </summary>

@@ -67,9 +67,6 @@ public class NatsServerResource(string name) : ContainerResource(name), IResourc
     /// </summary>
     public ParameterResource? PasswordParameter { get; set; }
 
-    ValueTask<string?> IResourceWithConnectionString.GetConnectionStringAsync(ValueProviderContext context, CancellationToken cancellationToken) =>
-        ConnectionStringExpression.GetValueAsync(context, cancellationToken);
-
     /// <summary>
     /// Gets the connection string expression for the NATS server.
     /// </summary>

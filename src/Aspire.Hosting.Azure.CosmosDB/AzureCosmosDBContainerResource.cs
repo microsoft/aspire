@@ -110,9 +110,6 @@ public class AzureCosmosDBContainerResource : Resource, IResourceWithParent<Azur
     /// </summary>
     public AzureCosmosDBDatabaseResource Parent { get; }
 
-    ValueTask<string?> IResourceWithConnectionString.GetConnectionStringAsync(ValueProviderContext context, CancellationToken cancellationToken) =>
-        ConnectionStringExpression.GetValueAsync(context, cancellationToken);
-
     /// <summary>
     /// Gets the connection string expression for the Azure Cosmos DB Database Container.
     /// </summary>

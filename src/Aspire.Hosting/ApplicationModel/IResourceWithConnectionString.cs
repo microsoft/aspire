@@ -11,7 +11,10 @@ namespace Aspire.Hosting.ApplicationModel;
 /// </summary>
 public interface IResourceWithConnectionString : IResource, IExpressionValue, IValueWithReferences
 {
-    private static readonly ConcurrentDictionary<Type, bool> s_contextualImplementations = new();
+    private static readonly ConcurrentDictionary<Type, (bool Legacy, bool Contextual)> s_connectionStringImplementations = new();
+    private static readonly MethodInfo s_legacyConnectionStringMethod = typeof(IResourceWithConnectionString).GetMethod(
+        nameof(GetConnectionStringAsync), [typeof(CancellationToken)])
+        ?? throw new MissingMethodException(typeof(IResourceWithConnectionString).FullName, nameof(GetConnectionStringAsync));
     private static readonly MethodInfo s_contextualConnectionStringMethod = typeof(IResourceWithConnectionString).GetMethod(
         nameof(GetConnectionStringAsync), [typeof(ValueProviderContext), typeof(CancellationToken)])
         ?? throw new MissingMethodException(typeof(IResourceWithConnectionString).FullName, nameof(GetConnectionStringAsync));
@@ -31,23 +34,22 @@ public interface IResourceWithConnectionString : IResource, IExpressionValue, IV
     /// <param name="cancellationToken">A cancellation token to observe while resolving the connection string.</param>
     /// <returns>The connection string associated with the resource, when one is available.</returns>
     /// <remarks>
-    /// The default implementation calls <see cref="GetConnectionStringAsync(CancellationToken)"/> to preserve
-    /// existing custom resolvers. Implement this overload and forward <paramref name="context"/> to nested
-    /// value providers to support caller attribution and network-specific resolution.
-    /// <code>
-    /// public ValueTask&lt;string?&gt; GetConnectionStringAsync(ValueProviderContext context, CancellationToken cancellationToken)
-    ///     =&gt; ConnectionStringExpression.GetValueAsync(context, cancellationToken);
-    /// </code>
+    /// The default implementation evaluates <see cref="ConnectionStringExpression"/> in the specified context,
+    /// unless the resource implements <see cref="GetConnectionStringAsync(CancellationToken)"/>. In that case,
+    /// the existing custom resolver is preserved. Implement this overload to forward <paramref name="context"/>
+    /// through custom resolution for caller attribution and network-specific values.
     /// </remarks>
     public ValueTask<string?> GetConnectionStringAsync(ValueProviderContext context, CancellationToken cancellationToken) =>
-        GetConnectionStringAsync(cancellationToken);
+        GetConnectionStringImplementations(this.GetType()).Legacy
+            ? GetConnectionStringAsync(cancellationToken)
+            : ConnectionStringExpression.GetValueAsync(context, cancellationToken);
 
     string IManifestExpressionProvider.ValueExpression => $"{{{Name}.connectionString}}";
 
     ValueTask<string?> IValueProvider.GetValueAsync(CancellationToken cancellationToken) => GetConnectionStringAsync(cancellationToken);
 
     ValueTask<string?> IValueProvider.GetValueAsync(ValueProviderContext context, CancellationToken cancellationToken) =>
-        HasContextualConnectionStringImplementation(this.GetType())
+        GetConnectionStringImplementations(this.GetType()).Contextual
             ? GetConnectionStringAsync(context, cancellationToken)
             : ConnectionStringExpression.GetValueAsync(context, cancellationToken);
 
@@ -71,18 +73,23 @@ public interface IResourceWithConnectionString : IResource, IExpressionValue, IV
     /// properties.</returns>
     IEnumerable<KeyValuePair<string, ReferenceExpression>> GetConnectionProperties() => [];
 
-    private static bool HasContextualConnectionStringImplementation(Type resourceType) =>
-        s_contextualImplementations.GetOrAdd(resourceType, static type =>
+    private static (bool Legacy, bool Contextual) GetConnectionStringImplementations(Type resourceType) =>
+        s_connectionStringImplementations.GetOrAdd(resourceType, static type =>
         {
             // The interface map distinguishes the default fallback from class or derived-interface
             // implementations, including explicit and inherited methods.
             var map = type.GetInterfaceMap(typeof(IResourceWithConnectionString));
-            var index = Array.IndexOf(map.InterfaceMethods, s_contextualConnectionStringMethod);
-            if (index < 0)
-            {
-                throw new MissingMethodException(type.FullName, nameof(GetConnectionStringAsync));
-            }
+            return (HasCustomImplementation(s_legacyConnectionStringMethod), HasCustomImplementation(s_contextualConnectionStringMethod));
 
-            return map.TargetMethods[index].DeclaringType != typeof(IResourceWithConnectionString);
+            bool HasCustomImplementation(MethodInfo method)
+            {
+                var index = Array.IndexOf(map.InterfaceMethods, method);
+                if (index < 0)
+                {
+                    throw new MissingMethodException(type.FullName, nameof(GetConnectionStringAsync));
+                }
+
+                return map.TargetMethods[index].DeclaringType != typeof(IResourceWithConnectionString);
+            }
         });
 }

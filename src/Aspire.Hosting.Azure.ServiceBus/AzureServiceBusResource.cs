@@ -82,9 +82,6 @@ public class AzureServiceBusResource(string name, Action<AzureResourceInfrastruc
             ReferenceExpression.Create($"sb://{EmulatorEndpoint.Property(EndpointProperty.HostAndPort)}") :
             ReferenceExpression.Create($"{ServiceBusEndpoint}");
 
-    ValueTask<string?> IResourceWithConnectionString.GetConnectionStringAsync(ValueProviderContext context, CancellationToken cancellationToken) =>
-        ConnectionStringExpression.GetValueAsync(context, cancellationToken);
-
     /// <summary>
     /// Gets the connection string template for the manifest for the Azure Service Bus endpoint.
     /// </summary>

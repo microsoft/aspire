@@ -12,9 +12,6 @@ namespace Aspire.Hosting;
 /// <param name="connectionStringExpression">The connection string expression.</param>
 public sealed class ConnectionStringResource(string name, ReferenceExpression connectionStringExpression) : Resource(name), IResourceWithConnectionString, IResourceWithWaitSupport
 {
-    ValueTask<string?> IResourceWithConnectionString.GetConnectionStringAsync(ValueProviderContext context, CancellationToken cancellationToken) =>
-        ConnectionStringExpression.GetValueAsync(context, cancellationToken);
-
     /// <summary>
     /// Describes the connection string format string used for this resource.
     /// </summary>

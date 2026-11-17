@@ -39,9 +39,6 @@ public class OpenAIModelResource : Resource, IResourceWithParent<OpenAIResource>
     /// </summary>
     public string Model { get; set; }
 
-    ValueTask<string?> IResourceWithConnectionString.GetConnectionStringAsync(ValueProviderContext context, CancellationToken cancellationToken) =>
-        ConnectionStringExpression.GetValueAsync(context, cancellationToken);
-
     /// <summary>
     /// Gets the connection string expression for the OpenAI Model resource.
     /// </summary>

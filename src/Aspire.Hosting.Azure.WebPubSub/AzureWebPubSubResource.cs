@@ -46,9 +46,6 @@ public class AzureWebPubSubResource(string name, Action<AzureResourceInfrastruct
     /// </summary>
     public BicepOutputReference Id => new("id", this);
 
-    ValueTask<string?> IResourceWithConnectionString.GetConnectionStringAsync(ValueProviderContext context, CancellationToken cancellationToken) =>
-        ConnectionStringExpression.GetValueAsync(context, cancellationToken);
-
     /// <summary>
     /// Gets the connection string template for the manifest for Azure Web PubSub.
     /// </summary>

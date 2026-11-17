@@ -27,9 +27,6 @@ public class SqlServerDatabaseResource(string name, string databaseName, SqlServ
     /// </summary>
     public SqlServerServerResource Parent { get; } = parent ?? throw new ArgumentNullException(nameof(parent));
 
-    ValueTask<string?> IResourceWithConnectionString.GetConnectionStringAsync(ValueProviderContext context, CancellationToken cancellationToken) =>
-        ConnectionStringExpression.GetValueAsync(context, cancellationToken);
-
     /// <summary>
     /// Gets the connection string expression for the SQL Server database.
     /// </summary>

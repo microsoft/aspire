@@ -18,6 +18,7 @@ public class AddConnectionStringTests
     [InlineData("postgres-redirect")]
     [InlineData("redis-redirect")]
     [InlineData("third-party-value-provider")]
+    [InlineData("third-party-connection-string")]
     public async Task ContextualConnectionStringResolutionTracksTheRequestingResource(string source)
     {
         using var builder = TestDistributedApplicationBuilder.Create();
@@ -36,7 +37,7 @@ public class AddConnectionStringTests
         {
             resource = (IResourceWithConnectionString)parameter;
         }
-        else if (source == "third-party-value-provider")
+        else if (source is "third-party-value-provider" or "third-party-connection-string")
         {
             resource = builder.AddResource(new ResourceWithoutLifetime("third-party")
             {
@@ -84,9 +85,10 @@ public class AddConnectionStringTests
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task ContextualValueProviderResolutionPreservesThirdPartyExpressionNetwork(bool throughReference)
+    [InlineData("connection-string")]
+    [InlineData("value-provider")]
+    [InlineData("reference")]
+    public async Task ContextualResolutionPreservesThirdPartyExpressionNetwork(string source)
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var server = builder.AddContainer("server", "test-image")
@@ -104,14 +106,16 @@ public class AddConnectionStringTests
         var caller = builder.AddContainer("caller", "test-image").Resource;
         using var app = builder.Build();
         using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
-        IValueProvider provider = throughReference ? new ConnectionStringReference(resource, optional: false) : resource;
-
-        var value = await provider.GetValueAsync(new ValueProviderContext
+        var context = new ValueProviderContext
         {
             ExecutionContext = builder.ExecutionContext,
             Caller = caller,
             Network = KnownNetworkIdentifiers.DefaultAspireContainerNetwork
-        }, cts.Token);
+        };
+        IValueProvider provider = source == "reference" ? new ConnectionStringReference(resource, optional: false) : resource;
+        var value = source == "connection-string"
+            ? await resource.GetConnectionStringAsync(context, cts.Token)
+            : await provider.GetValueAsync(context, cts.Token);
 
         Assert.Equal("Endpoint=http://server:8080", value);
         Assert.Equal("Endpoint=http://localhost:18080", await resource.GetValueAsync(cts.Token));
@@ -136,6 +140,26 @@ public class AddConnectionStringTests
         var value = await resource.GetValueAsync(new ValueProviderContext { Caller = caller }, CancellationToken.None);
 
         Assert.Equal(caller.Name, value);
+    }
+
+    [Theory]
+    [InlineData("public")]
+    [InlineData("explicit")]
+    [InlineData("inherited")]
+    [InlineData("derived-interface")]
+    public async Task ContextualConnectionStringDefaultPreservesLegacyResolver(string implementation)
+    {
+        IResourceWithConnectionString resource = implementation switch
+        {
+            "public" => new LegacyResource("connection"),
+            "explicit" => new ExplicitLegacyResource("connection"),
+            "inherited" => new InheritedLegacyResource("connection"),
+            _ => new DerivedInterfaceLegacyResource("connection")
+        };
+        var context = new ValueProviderContext { Caller = new ContainerResource("caller") };
+
+        Assert.Equal("legacy", await resource.GetConnectionStringAsync(context, TestContext.Current.CancellationToken));
+        Assert.Equal("ResourceWithoutLifetime", await resource.GetValueAsync(context, TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -250,4 +274,23 @@ public class AddConnectionStringTests
     }
 
     private sealed class DerivedInterfaceContextualResource(string name) : ResourceWithoutLifetime(name), IContextualConnectionStringResource;
+
+    private class LegacyResource(string name) : ResourceWithoutLifetime(name), IResourceWithConnectionString
+    {
+        public ValueTask<string?> GetConnectionStringAsync(CancellationToken cancellationToken) => new("legacy");
+    }
+
+    private sealed class ExplicitLegacyResource(string name) : ResourceWithoutLifetime(name), IResourceWithConnectionString
+    {
+        ValueTask<string?> IResourceWithConnectionString.GetConnectionStringAsync(CancellationToken cancellationToken) => new("legacy");
+    }
+
+    private sealed class InheritedLegacyResource(string name) : LegacyResource(name);
+
+    private interface ILegacyConnectionStringResource : IResourceWithConnectionString
+    {
+        ValueTask<string?> IResourceWithConnectionString.GetConnectionStringAsync(CancellationToken cancellationToken) => new("legacy");
+    }
+
+    private sealed class DerivedInterfaceLegacyResource(string name) : ResourceWithoutLifetime(name), ILegacyConnectionStringResource;
 }
