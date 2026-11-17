@@ -3,7 +3,9 @@
   <PropertyGroup>
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
     <IsPackable>true</IsPackable>
-    <PackageTags>$(ComponentEfCorePackageTags) pomelo mysql sql</PackageTags>
+    <!-- This package has no shipped baseline yet: it replaces Aspire.Pomelo.EntityFrameworkCore.MySql under a new ID. -->
+    <EnablePackageValidation>false</EnablePackageValidation>
+    <PackageTags>$(ComponentEfCorePackageTags) microting mysql sql</PackageTags>
     <Description>A MySQL provider for Entity Framework Core that integrates with Aspire, including connection pooling, health checks, logging, and telemetry.</Description>
     <PackageIconFullPath>$(SharedDir)SQL_256x.png</PackageIconFullPath>
   </PropertyGroup>
@@ -18,13 +20,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Pomelo 9 requires EF Core 9, including its health-check dependency. -->
-    <PackageVersion Update="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" Version="9.0.23" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Binder" />
     <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks.EntityFrameworkCore" />
     <PackageReference Include="MySqlConnector.Logging.Microsoft.Extensions.Logging" />
     <PackageReference Include="Polly.Extensions" />
-    <PackageReference Include="Pomelo.EntityFrameworkCore.MySql" />
+    <PackageReference Include="Microting.EntityFrameworkCore.MySql" />
     <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
   </ItemGroup>
 

@@ -11,14 +11,14 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using MySqlConnector;
-using Pomelo.EntityFrameworkCore.MySql.Infrastructure.Internal;
+using Microting.EntityFrameworkCore.MySql.Infrastructure.Internal;
 using Xunit;
 
-namespace Aspire.Pomelo.EntityFrameworkCore.MySql.Tests;
+namespace Aspire.Microting.EntityFrameworkCore.MySql.Tests;
 
 public class AspireEFMySqlExtensionsTests : IClassFixture<MySqlContainerFixture>
 {
-    private const string ConnectionStringSuffixAddedByPomelo = ";Allow User Variables=True;Use Affected Rows=False";
+    private const string ConnectionStringSuffixAddedByMicroting = ";Allow User Variables=True;Use Affected Rows=False";
     private static readonly MySqlServerVersion s_serverVersion = new(new Version(MySqlContainerImageTags.Tag));
     private static readonly string s_serverVersionString = s_serverVersion.ToString();
     private readonly MySqlContainerFixture _containerFixture;
@@ -34,7 +34,7 @@ public class AspireEFMySqlExtensionsTests : IClassFixture<MySqlContainerFixture>
     {
         var builder = Host.CreateEmptyApplicationBuilder(null);
         builder.Configuration.AddInMemoryCollection([
-            new KeyValuePair<string, string?>("Aspire:Pomelo:EntityFrameworkCore:MySql:ServerVersion", s_serverVersionString),
+            new KeyValuePair<string, string?>("Aspire:Microting:EntityFrameworkCore:MySql:ServerVersion", s_serverVersionString),
             new KeyValuePair<string, string?>("ConnectionStrings:mysql", ConnectionString)
         ]);
 
@@ -44,7 +44,7 @@ public class AspireEFMySqlExtensionsTests : IClassFixture<MySqlContainerFixture>
         var context = host.Services.GetRequiredService<TestDbContext>();
 
         var actualConnectionString = context.Database.GetDbConnection().ConnectionString;
-        string expectedConnectionString = new MySqlConnectionStringBuilder(ConnectionString + ConnectionStringSuffixAddedByPomelo).ConnectionString;
+        string expectedConnectionString = new MySqlConnectionStringBuilder(ConnectionString + ConnectionStringSuffixAddedByMicroting).ConnectionString;
         Assert.Equal(expectedConnectionString, actualConnectionString);
     }
 
@@ -53,7 +53,7 @@ public class AspireEFMySqlExtensionsTests : IClassFixture<MySqlContainerFixture>
     {
         var builder = Host.CreateEmptyApplicationBuilder(null);
         builder.Configuration.AddInMemoryCollection([
-            new KeyValuePair<string, string?>("Aspire:Pomelo:EntityFrameworkCore:MySql:ServerVersion", s_serverVersionString),
+            new KeyValuePair<string, string?>("Aspire:Microting:EntityFrameworkCore:MySql:ServerVersion", s_serverVersionString),
             new KeyValuePair<string, string?>("ConnectionStrings:mysql", "unused")
         ]);
 
@@ -63,7 +63,7 @@ public class AspireEFMySqlExtensionsTests : IClassFixture<MySqlContainerFixture>
         var context = host.Services.GetRequiredService<TestDbContext>();
 
         var actualConnectionString = context.Database.GetDbConnection().ConnectionString;
-        string expectedConnectionString = new MySqlConnectionStringBuilder(ConnectionString + ConnectionStringSuffixAddedByPomelo).ConnectionString;
+        string expectedConnectionString = new MySqlConnectionStringBuilder(ConnectionString + ConnectionStringSuffixAddedByMicroting).ConnectionString;
         Assert.Equal(expectedConnectionString, actualConnectionString);
         // the connection string from config should not be used since code set it explicitly
         Assert.DoesNotContain("unused", actualConnectionString);
@@ -74,8 +74,8 @@ public class AspireEFMySqlExtensionsTests : IClassFixture<MySqlContainerFixture>
     {
         var builder = Host.CreateEmptyApplicationBuilder(null);
         builder.Configuration.AddInMemoryCollection([
-            new KeyValuePair<string, string?>("Aspire:Pomelo:EntityFrameworkCore:MySql:ServerVersion", s_serverVersionString),
-            new KeyValuePair<string, string?>("Aspire:Pomelo:EntityFrameworkCore:MySql:ConnectionString", "unused"),
+            new KeyValuePair<string, string?>("Aspire:Microting:EntityFrameworkCore:MySql:ServerVersion", s_serverVersionString),
+            new KeyValuePair<string, string?>("Aspire:Microting:EntityFrameworkCore:MySql:ConnectionString", "unused"),
             new KeyValuePair<string, string?>("ConnectionStrings:mysql", ConnectionString)
         ]);
 
@@ -85,7 +85,7 @@ public class AspireEFMySqlExtensionsTests : IClassFixture<MySqlContainerFixture>
         var context = host.Services.GetRequiredService<TestDbContext>();
 
         var actualConnectionString = context.Database.GetDbConnection().ConnectionString;
-        string expectedConnectionString = new MySqlConnectionStringBuilder(ConnectionString + ConnectionStringSuffixAddedByPomelo).ConnectionString;
+        string expectedConnectionString = new MySqlConnectionStringBuilder(ConnectionString + ConnectionStringSuffixAddedByMicroting).ConnectionString;
         Assert.Equal(expectedConnectionString, actualConnectionString);
         // the connection string from config should not be used since it was found in ConnectionStrings
         Assert.DoesNotContain("unused", actualConnectionString);
@@ -96,9 +96,9 @@ public class AspireEFMySqlExtensionsTests : IClassFixture<MySqlContainerFixture>
     {
         var builder = Host.CreateEmptyApplicationBuilder(null);
         builder.Configuration.AddInMemoryCollection([
-            new KeyValuePair<string, string?>("Aspire:Pomelo:EntityFrameworkCore:MySql:ServerVersion", s_serverVersionString),
+            new KeyValuePair<string, string?>("Aspire:Microting:EntityFrameworkCore:MySql:ServerVersion", s_serverVersionString),
             new KeyValuePair<string, string?>("ConnectionStrings:mysql", ConnectionString),
-            new KeyValuePair<string, string?>("Aspire:Pomelo:EntityFrameworkCore:MySql:DisableRetry", "false")
+            new KeyValuePair<string, string?>("Aspire:Microting:EntityFrameworkCore:MySql:DisableRetry", "false")
         ]);
 
         builder.AddMySqlDbContext<TestDbContext>("mysql", configureDbContextOptions: optionsBuilder =>
@@ -139,9 +139,9 @@ public class AspireEFMySqlExtensionsTests : IClassFixture<MySqlContainerFixture>
     {
         var builder = Host.CreateEmptyApplicationBuilder(null);
         builder.Configuration.AddInMemoryCollection([
-            new KeyValuePair<string, string?>("Aspire:Pomelo:EntityFrameworkCore:MySql:ServerVersion", s_serverVersionString),
+            new KeyValuePair<string, string?>("Aspire:Microting:EntityFrameworkCore:MySql:ServerVersion", s_serverVersionString),
             new KeyValuePair<string, string?>("ConnectionStrings:mysql", ConnectionString),
-            new KeyValuePair<string, string?>("Aspire:Pomelo:EntityFrameworkCore:MySql:DisableRetry", "true")
+            new KeyValuePair<string, string?>("Aspire:Microting:EntityFrameworkCore:MySql:DisableRetry", "true")
         ]);
 
         builder.AddMySqlDbContext<TestDbContext>("mysql", configureDbContextOptions: optionsBuilder =>
@@ -182,13 +182,13 @@ public class AspireEFMySqlExtensionsTests : IClassFixture<MySqlContainerFixture>
     {
         var builder = Host.CreateEmptyApplicationBuilder(null);
         builder.Configuration.AddInMemoryCollection([
-            new KeyValuePair<string, string?>("Aspire:Pomelo:EntityFrameworkCore:MySql:ServerVersion", "8.2.0-mysql"),
+            new KeyValuePair<string, string?>("Aspire:Microting:EntityFrameworkCore:MySql:ServerVersion", "8.2.0-mysql"),
             new KeyValuePair<string, string?>("ConnectionStrings:mysql", ConnectionString),
         ]);
         if (!useSettings)
         {
             builder.Configuration.AddInMemoryCollection([
-                new KeyValuePair<string, string?>("Aspire:Pomelo:EntityFrameworkCore:MySql:CommandTimeout", "123"),
+                new KeyValuePair<string, string?>("Aspire:Microting:EntityFrameworkCore:MySql:CommandTimeout", "123"),
             ]);
         }
 
@@ -218,13 +218,13 @@ public class AspireEFMySqlExtensionsTests : IClassFixture<MySqlContainerFixture>
     {
         var builder = Host.CreateEmptyApplicationBuilder(null);
         builder.Configuration.AddInMemoryCollection([
-            new KeyValuePair<string, string?>("Aspire:Pomelo:EntityFrameworkCore:MySql:ServerVersion", "8.2.0-mysql"),
+            new KeyValuePair<string, string?>("Aspire:Microting:EntityFrameworkCore:MySql:ServerVersion", "8.2.0-mysql"),
             new KeyValuePair<string, string?>("ConnectionStrings:mysql", ConnectionString),
         ]);
         if (!useSettings)
         {
             builder.Configuration.AddInMemoryCollection([
-                new KeyValuePair<string, string?>("Aspire:Pomelo:EntityFrameworkCore:MySql:CommandTimeout", "400"),
+                new KeyValuePair<string, string?>("Aspire:Microting:EntityFrameworkCore:MySql:CommandTimeout", "400"),
             ]);
         }
 
@@ -308,12 +308,12 @@ public class AspireEFMySqlExtensionsTests : IClassFixture<MySqlContainerFixture>
         builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
         {
             [$"ConnectionStrings:{connectionName}"] = ConnectionString,
-            [$"Aspire:Pomelo:EntityFrameworkCore:MySql:{connectionName}:CommandTimeout"] = "60",
-            [$"Aspire:Pomelo:EntityFrameworkCore:MySql:{connectionName}:DisableRetry"] = "true",
-            [$"Aspire:Pomelo:EntityFrameworkCore:MySql:{connectionName}:DisableHealthChecks"] = "true"
+            [$"Aspire:Microting:EntityFrameworkCore:MySql:{connectionName}:CommandTimeout"] = "60",
+            [$"Aspire:Microting:EntityFrameworkCore:MySql:{connectionName}:DisableRetry"] = "true",
+            [$"Aspire:Microting:EntityFrameworkCore:MySql:{connectionName}:DisableHealthChecks"] = "true"
         });
 
-        PomeloEntityFrameworkCoreMySqlSettings? capturedSettings = null;
+        MicrotingEntityFrameworkCoreMySqlSettings? capturedSettings = null;
         builder.AddMySqlDbContext<TestDbContext>(connectionName, settings =>
         {
             capturedSettings = settings;
@@ -337,12 +337,12 @@ public class AspireEFMySqlExtensionsTests : IClassFixture<MySqlContainerFixture>
         {
             [$"ConnectionStrings:{connectionName}"] = ConnectionString,
             // Connection-specific settings
-            [$"Aspire:Pomelo:EntityFrameworkCore:MySql:{connectionName}:CommandTimeout"] = "60",
+            [$"Aspire:Microting:EntityFrameworkCore:MySql:{connectionName}:CommandTimeout"] = "60",
             // Context-specific settings wins
-            [$"Aspire:Pomelo:EntityFrameworkCore:MySql:TestDbContext:CommandTimeout"] = "120"
+            [$"Aspire:Microting:EntityFrameworkCore:MySql:TestDbContext:CommandTimeout"] = "120"
         });
 
-        PomeloEntityFrameworkCoreMySqlSettings? capturedSettings = null;
+        MicrotingEntityFrameworkCoreMySqlSettings? capturedSettings = null;
         builder.AddMySqlDbContext<TestDbContext>(connectionName, settings =>
         {
             capturedSettings = settings;

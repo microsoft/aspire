@@ -136,11 +136,12 @@
     <PackageVersion Include="Microsoft.Data.Sqlite.Core" Version="11.0.0" />
     <PackageVersion Include="Microsoft.FluentUI.AspNetCore.Components" Version="$(MicrosoftFluentUIAspNetCoreComponentsVersion)" />
     <PackageVersion Include="Microsoft.FluentUI.AspNetCore.Components.Icons" Version="5.1.0" />
+    <PackageVersion Include="Microting.EntityFrameworkCore.MySql" Version="10.0.14" />
     <PackageVersion Include="Milvus.Client" Version="2.3.0-preview.1" /> <!-- No stable release available -->
     <PackageVersion Include="ModelContextProtocol" Version="1.4.1" />
     <PackageVersion Include="MongoDB.Driver" Version="3.12.0" />
     <PackageVersion Include="MongoDB.Driver.Core.Extensions.DiagnosticSources" Version="3.0.0" />
-    <!-- Pin HealthChecks/Pomelo's transitive dependency: https://github.com/advisories/GHSA-473q-m89c-ghf8 -->
+    <!-- Pin HealthChecks/Microting.EntityFrameworkCore.MySql's transitive dependency: https://github.com/advisories/GHSA-473q-m89c-ghf8 -->
     <PackageVersion Include="MySqlConnector" Version="2.6.2" />
     <PackageVersion Include="MySqlConnector.DependencyInjection" Version="2.6.2" />
     <PackageVersion Include="MySqlConnector.Logging.Microsoft.Extensions.Logging" Version="2.1.0" />
@@ -151,7 +152,6 @@
     <PackageVersion Include="Oracle.ManagedDataAccess.OpenTelemetry" Version="23.26.300" />
     <PackageVersion Include="Polly.Core" Version="8.7.0" />
     <PackageVersion Include="Polly.Extensions" Version="8.7.0" />
-    <PackageVersion Include="Pomelo.EntityFrameworkCore.MySql" Version="9.0.0" />
     <PackageVersion Include="Qdrant.Client" Version="1.19.0" />
     <PackageVersion Include="RabbitMQ.Client" Version="7.2.2" />
     <PackageVersion Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.5" />

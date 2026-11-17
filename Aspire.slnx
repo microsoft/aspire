@@ -25,6 +25,7 @@
     <Project Path="src/Components/Aspire.Microsoft.EntityFrameworkCore.Cosmos/Aspire.Microsoft.EntityFrameworkCore.Cosmos.csproj" />
     <Project Path="src/Components/Aspire.Microsoft.EntityFrameworkCore.SqlServer/Aspire.Microsoft.EntityFrameworkCore.SqlServer.csproj" />
     <Project Path="src/Components/Aspire.Microsoft.Extensions.Configuration.AzureAppConfiguration/Aspire.Microsoft.Extensions.Configuration.AzureAppConfiguration.csproj" />
+    <Project Path="src/Components/Aspire.Microting.EntityFrameworkCore.MySql/Aspire.Microting.EntityFrameworkCore.MySql.csproj" />
     <Project Path="src/Components/Aspire.Milvus.Client/Aspire.Milvus.Client.csproj" />
     <Project Path="src/Components/Aspire.MongoDB.Driver/Aspire.MongoDB.Driver.csproj" />
     <Project Path="src/Components/Aspire.MongoDB.EntityFrameworkCore/Aspire.MongoDB.EntityFrameworkCore.csproj" Id="61b0efc4-439c-4d09-a336-b4c5763c6bd7" />
@@ -34,7 +35,6 @@
     <Project Path="src/Components/Aspire.Npgsql/Aspire.Npgsql.csproj" />
     <Project Path="src/Components/Aspire.OpenAI/Aspire.OpenAI.csproj" />
     <Project Path="src/Components/Aspire.Oracle.EntityFrameworkCore/Aspire.Oracle.EntityFrameworkCore.csproj" />
-    <Project Path="src/Components/Aspire.Pomelo.EntityFrameworkCore.MySql/Aspire.Pomelo.EntityFrameworkCore.MySql.csproj" />
     <Project Path="src/Components/Aspire.Qdrant.Client/Aspire.Qdrant.Client.csproj" />
     <Project Path="src/Components/Aspire.RabbitMQ.Client/Aspire.RabbitMQ.Client.csproj" />
     <Project Path="src/Components/Aspire.Seq/Aspire.Seq.csproj" />
@@ -560,6 +560,7 @@
     <Project Path="tests/Aspire.Microsoft.EntityFrameworkCore.Cosmos.Tests/Aspire.Microsoft.EntityFrameworkCore.Cosmos.Tests.csproj" />
     <Project Path="tests/Aspire.Microsoft.EntityFrameworkCore.SqlServer.Tests/Aspire.Microsoft.EntityFrameworkCore.SqlServer.Tests.csproj" />
     <Project Path="tests/Aspire.Microsoft.Extensions.Configuration.AzureAppConfiguration.Tests/Aspire.Microsoft.Extensions.Configuration.AzureAppConfiguration.Tests.csproj" />
+    <Project Path="tests/Aspire.Microting.EntityFrameworkCore.MySql.Tests/Aspire.Microting.EntityFrameworkCore.MySql.Tests.csproj" />
     <Project Path="tests/Aspire.Milvus.Client.Tests/Aspire.Milvus.Client.Tests.csproj" />
     <Project Path="tests/Aspire.MongoDB.Driver.Tests/Aspire.MongoDB.Driver.Tests.csproj" />
     <Project Path="tests/Aspire.MongoDB.EntityFrameworkCore.Tests/Aspire.MongoDB.EntityFrameworkCore.Tests.csproj" Id="79ef6bd3-8f2b-4b42-8993-6707fd8be598" />
@@ -569,7 +570,6 @@
     <Project Path="tests/Aspire.Npgsql.Tests/Aspire.Npgsql.Tests.csproj" />
     <Project Path="tests/Aspire.OpenAI.Tests/Aspire.OpenAI.Tests.csproj" />
     <Project Path="tests/Aspire.Oracle.EntityFrameworkCore.Tests/Aspire.Oracle.EntityFrameworkCore.Tests.csproj" />
-    <Project Path="tests/Aspire.Pomelo.EntityFrameworkCore.MySql.Tests/Aspire.Pomelo.EntityFrameworkCore.MySql.Tests.csproj" />
     <Project Path="tests/Aspire.Qdrant.Client.Tests/Aspire.Qdrant.Client.Tests.csproj" />
     <Project Path="tests/Aspire.RabbitMQ.Client.Tests/Aspire.RabbitMQ.Client.Tests.csproj" />
     <Project Path="tests/Aspire.Seq.Tests/Aspire.Seq.Tests.csproj" />

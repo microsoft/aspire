@@ -1,4 +1,4 @@
-# Aspire.Pomelo.EntityFrameworkCore.MySql library
+# Aspire.Microting.EntityFrameworkCore.MySql library
 
 Registers [EntityFrameworkCore](https://learn.microsoft.com/ef/core/) [DbContext](https://learn.microsoft.com/dotnet/api/microsoft.entityframeworkcore.dbcontext) in the DI container for connecting MySql database. Enables connection pooling, retries, health check, logging and telemetry.
 
@@ -10,10 +10,10 @@ Registers [EntityFrameworkCore](https://learn.microsoft.com/ef/core/) [DbContext
 
 ### Install the package
 
-Install the Aspire Pomelo EntityFrameworkCore MySQL library with [NuGet](https://www.nuget.org):
+Install the Aspire Microting EntityFrameworkCore MySQL library with [NuGet](https://www.nuget.org):
 
 ```dotnetcli
-dotnet add package Aspire.Pomelo.EntityFrameworkCore.MySql
+dotnet add package Aspire.Microting.EntityFrameworkCore.MySql
 ```
 
 ## Usage example
@@ -45,7 +45,7 @@ builder.EnrichMySqlDbContext<MyDbContext>();
 
 ## Configuration
 
-The Aspire Pomelo EntityFrameworkCore MySQL component provides multiple options to configure the database connection based on the requirements and conventions of your project.
+The Aspire Microting EntityFrameworkCore MySQL component provides multiple options to configure the database connection based on the requirements and conventions of your project.
 
 ### Use a connection string
 
@@ -71,14 +71,14 @@ See the [ConnectionString documentation](https://mysqlconnector.net/connection-o
 
 ### Use configuration providers
 
-The Aspire Pomelo EntityFrameworkCore MySQL component supports [Microsoft.Extensions.Configuration](https://learn.microsoft.com/dotnet/api/microsoft.extensions.configuration).
-It loads the `PomeloEntityFrameworkCoreMySqlSettings` from configuration by using the `Aspire:Pomelo:EntityFrameworkCore:MySql` key.
+The Aspire Microting EntityFrameworkCore MySQL component supports [Microsoft.Extensions.Configuration](https://learn.microsoft.com/dotnet/api/microsoft.extensions.configuration).
+It loads the `MicrotingEntityFrameworkCoreMySqlSettings` from configuration by using the `Aspire:Microting:EntityFrameworkCore:MySql` key.
 Example `appsettings.json` that configures some of the options:
 
 ```json
 {
   "Aspire": {
-    "Pomelo": {
+    "Microting": {
       "EntityFrameworkCore": {
         "MySql": {
           "DisableHealthChecks": true,
@@ -92,7 +92,7 @@ Example `appsettings.json` that configures some of the options:
 
 ### Use inline delegates
 
-Also you can pass the `Action<PomeloEntityFrameworkCoreMySqlSettings> configureSettings` delegate to set up some or all the options inline, for example to disable health checks from code:
+Also you can pass the `Action<MicrotingEntityFrameworkCoreMySqlSettings> configureSettings` delegate to set up some or all the options inline, for example to disable health checks from code:
 
 ```csharp
     builder.AddMySqlDbContext<MyDbContext>("mysqldb", settings => settings.DisableHealthChecks = true);

@@ -13,10 +13,10 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using MySqlConnector.Logging;
 using OpenTelemetry.Trace;
-using Pomelo.EntityFrameworkCore.MySql.Infrastructure.Internal;
+using Microting.EntityFrameworkCore.MySql.Infrastructure.Internal;
 using Xunit;
 
-namespace Aspire.Pomelo.EntityFrameworkCore.MySql.Tests;
+namespace Aspire.Microting.EntityFrameworkCore.MySql.Tests;
 
 public class EnrichMySqlTests : ConformanceTests
 {
@@ -26,11 +26,11 @@ public class EnrichMySqlTests : ConformanceTests
     {
     }
 
-    protected override void RegisterComponent(HostApplicationBuilder builder, Action<PomeloEntityFrameworkCoreMySqlSettings>? configure = null, string? key = null)
+    protected override void RegisterComponent(HostApplicationBuilder builder, Action<MicrotingEntityFrameworkCoreMySqlSettings>? configure = null, string? key = null)
     {
         builder.Services.AddDbContextPool<TestDbContext>((serviceProvider, options) =>
         {
-            // use the legacy method of setting the ILoggerFactory because Pomelo EF Core doesn't use MySqlDataSource
+            // use the legacy method of setting the ILoggerFactory because the Microting EF Core provider doesn't use MySqlDataSource
             if (serviceProvider.GetService<ILoggerFactory>() is { } loggerFactory)
             {
 #pragma warning disable CS0618 // Type or member is obsolete
@@ -72,7 +72,7 @@ public class EnrichMySqlTests : ConformanceTests
     {
         var builder = Host.CreateEmptyApplicationBuilder(null);
         builder.Configuration.AddInMemoryCollection([
-            new KeyValuePair<string, string?>("Aspire:Pomelo:EntityFrameworkCore:MySql:DisableRetry", "false")
+            new KeyValuePair<string, string?>("Aspire:Microting:EntityFrameworkCore:MySql:DisableRetry", "false")
         ]);
 
         builder.Services.AddDbContextPool<TestDbContext>(optionsBuilder =>
@@ -122,7 +122,7 @@ public class EnrichMySqlTests : ConformanceTests
         using var host = builder.Build();
 
         var exception = Assert.Throws<InvalidOperationException>(host.Services.GetRequiredService<TestDbContext>);
-        Assert.Equal("Conflicting values for 'CommandTimeout' were found in PomeloEntityFrameworkCoreMySqlSettings and set in DbContextOptions<TestDbContext>.", exception.Message);
+        Assert.Equal("Conflicting values for 'CommandTimeout' were found in MicrotingEntityFrameworkCoreMySqlSettings and set in DbContextOptions<TestDbContext>.", exception.Message);
     }
 
     [Fact]
@@ -162,7 +162,7 @@ public class EnrichMySqlTests : ConformanceTests
     {
         var builder = Host.CreateEmptyApplicationBuilder(null);
         builder.Configuration.AddInMemoryCollection([
-            new KeyValuePair<string, string?>("Aspire:Pomelo:EntityFrameworkCore:MySql:DisableRetry", "true")
+            new KeyValuePair<string, string?>("Aspire:Microting:EntityFrameworkCore:MySql:DisableRetry", "true")
         ]);
 
         builder.Services.AddDbContextPool<TestDbContext>(optionsBuilder =>
@@ -205,7 +205,7 @@ public class EnrichMySqlTests : ConformanceTests
     {
         var builder = Host.CreateEmptyApplicationBuilder(null);
         builder.Configuration.AddInMemoryCollection([
-            new KeyValuePair<string, string?>("Aspire:Pomelo:EntityFrameworkCore:MySql:DisableRetry", "false")
+            new KeyValuePair<string, string?>("Aspire:Microting:EntityFrameworkCore:MySql:DisableRetry", "false")
         ]);
 
         builder.Services.AddDbContextPool<TestDbContext>(optionsBuilder =>
@@ -317,7 +317,7 @@ public class EnrichMySqlTests : ConformanceTests
         using var host = builder.Build();
 
         var exception = Assert.Throws<InvalidOperationException>(host.Services.GetRequiredService<TestDbContext>);
-        Assert.Equal("PomeloEntityFrameworkCoreMySqlSettings.DisableRetry needs to be set when a custom Execution Strategy is configured.", exception.Message);
+        Assert.Equal("MicrotingEntityFrameworkCoreMySqlSettings.DisableRetry needs to be set when a custom Execution Strategy is configured.", exception.Message);
     }
 
     [Fact]
@@ -353,8 +353,8 @@ public class EnrichMySqlTests : ConformanceTests
     {
         var builder = Host.CreateEmptyApplicationBuilder(null);
         builder.Configuration.AddInMemoryCollection([
-            new KeyValuePair<string, string?>("Aspire:Pomelo:EntityFrameworkCore:MySql:DisableTracing", "false"),
-            new KeyValuePair<string, string?>("Aspire:Pomelo:EntityFrameworkCore:MySql:TestDbContext:DisableTracing", "true")
+            new KeyValuePair<string, string?>("Aspire:Microting:EntityFrameworkCore:MySql:DisableTracing", "false"),
+            new KeyValuePair<string, string?>("Aspire:Microting:EntityFrameworkCore:MySql:TestDbContext:DisableTracing", "true")
         ]);
 
         builder.Services.AddDbContextPool<TestDbContext>(optionsBuilder =>

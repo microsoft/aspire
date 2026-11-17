@@ -46,7 +46,7 @@
     "Aspire": {
       "type": "object",
       "properties": {
-        "Pomelo": {
+        "Microting": {
           "type": "object",
           "properties": {
             "EntityFrameworkCore": {

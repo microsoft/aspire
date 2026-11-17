@@ -3,7 +3,7 @@
 
 using System.Diagnostics.CodeAnalysis;
 using Aspire;
-using Aspire.Pomelo.EntityFrameworkCore.MySql;
+using Aspire.Microting.EntityFrameworkCore.MySql;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Configuration;
@@ -14,8 +14,8 @@ using MySqlConnector.Logging;
 using Polly;
 using Polly.Registry;
 using Polly.Retry;
-using Pomelo.EntityFrameworkCore.MySql.Infrastructure.Internal;
-using Pomelo.EntityFrameworkCore.MySql.Storage.Internal;
+using Microting.EntityFrameworkCore.MySql.Infrastructure.Internal;
+using Microting.EntityFrameworkCore.MySql.Storage.Internal;
 
 namespace Microsoft.Extensions.Hosting;
 
@@ -24,7 +24,7 @@ namespace Microsoft.Extensions.Hosting;
 /// </summary>
 public static partial class AspireEFMySqlExtensions
 {
-    private const string DefaultConfigSectionName = "Aspire:Pomelo:EntityFrameworkCore:MySql";
+    private const string DefaultConfigSectionName = "Aspire:Microting:EntityFrameworkCore:MySql";
     private const DynamicallyAccessedMemberTypes RequiredByEF = DynamicallyAccessedMemberTypes.PublicConstructors | DynamicallyAccessedMemberTypes.NonPublicConstructors | DynamicallyAccessedMemberTypes.PublicProperties;
 
     /// <summary>
@@ -38,18 +38,18 @@ public static partial class AspireEFMySqlExtensions
     /// <param name="configureDbContextOptions">An optional delegate to configure the <see cref="DbContextOptions"/> for the context.</param>
     /// <remarks>
     /// <para>
-    /// Reads the configuration from "Aspire:Pomelo:EntityFrameworkCore:MySql:{typeof(TContext).Name}" config section, or "Aspire:Pomelo:EntityFrameworkCore:MySql" if former does not exist.
+    /// Reads the configuration from "Aspire:Microting:EntityFrameworkCore:MySql:{typeof(TContext).Name}" config section, or "Aspire:Microting:EntityFrameworkCore:MySql" if former does not exist.
     /// </para>
     /// <para>
     /// The <see cref="DbContext.OnConfiguring" /> method can then be overridden to configure <see cref="DbContext" /> options.
     /// </para>
     /// </remarks>
     /// <exception cref="ArgumentNullException">Thrown if mandatory <paramref name="builder"/> is null.</exception>
-    /// <exception cref="InvalidOperationException">Thrown when mandatory <see cref="PomeloEntityFrameworkCoreMySqlSettings.ConnectionString"/> is not provided.</exception>
+    /// <exception cref="InvalidOperationException">Thrown when mandatory <see cref="MicrotingEntityFrameworkCoreMySqlSettings.ConnectionString"/> is not provided.</exception>
     public static void AddMySqlDbContext<[DynamicallyAccessedMembers(RequiredByEF)] TContext>(
         this IHostApplicationBuilder builder,
         string connectionName,
-        Action<PomeloEntityFrameworkCoreMySqlSettings>? configureSettings = null,
+        Action<MicrotingEntityFrameworkCoreMySqlSettings>? configureSettings = null,
         Action<DbContextOptionsBuilder>? configureDbContextOptions = null)
         where TContext : DbContext
     {
@@ -58,7 +58,7 @@ public static partial class AspireEFMySqlExtensions
 
         builder.EnsureDbContextNotRegistered<TContext>();
 
-        var settings = builder.GetDbContextSettings<TContext, PomeloEntityFrameworkCoreMySqlSettings>(
+        var settings = builder.GetDbContextSettings<TContext, MicrotingEntityFrameworkCoreMySqlSettings>(
             DefaultConfigSectionName,
             connectionName,
             (settings, section) => section.Bind(settings)
@@ -94,8 +94,8 @@ public static partial class AspireEFMySqlExtensions
         void ConfigureDbContext(IServiceProvider serviceProvider, DbContextOptionsBuilder dbContextOptionsBuilder)
         {
             // MySqlConnectorLogManager.Provider is the only way to wire MySqlConnector's internal logging
-            // categories (e.g. MySqlConnector.ConnectionPool) into ILoggerFactory when using Pomelo,
-            // because Pomelo doesn't use MySqlDataSource. The API is marked obsolete but there is no
+            // categories (e.g. MySqlConnector.ConnectionPool) into ILoggerFactory when using Microting,
+            // because the provider doesn't use MySqlDataSource. The API is marked obsolete but there is no
             // non-obsolete alternative for this scenario.
             if (serviceProvider.GetService<ILoggerFactory>() is { } loggerFactory)
             {
@@ -148,12 +148,12 @@ public static partial class AspireEFMySqlExtensions
     /// <exception cref="InvalidOperationException">Thrown when mandatory <see cref="DbContext"/> is not registered in DI.</exception>
     public static void EnrichMySqlDbContext<[DynamicallyAccessedMembers(RequiredByEF)] TContext>(
             this IHostApplicationBuilder builder,
-            Action<PomeloEntityFrameworkCoreMySqlSettings>? configureSettings = null)
+            Action<MicrotingEntityFrameworkCoreMySqlSettings>? configureSettings = null)
         where TContext : DbContext
     {
         ArgumentNullException.ThrowIfNull(builder);
 
-        var settings = builder.GetDbContextSettings<TContext, PomeloEntityFrameworkCoreMySqlSettings>(
+        var settings = builder.GetDbContextSettings<TContext, MicrotingEntityFrameworkCoreMySqlSettings>(
             DefaultConfigSectionName,
             null,
             (settings, section) => section.Bind(settings)
@@ -202,7 +202,7 @@ public static partial class AspireEFMySqlExtensions
                                 {
                                     // Check MySqlExecutionStrategy specifically (no 'is'), any sub-class is treated as a custom strategy.
 
-                                    throw new InvalidOperationException($"{nameof(PomeloEntityFrameworkCoreMySqlSettings)}.{nameof(PomeloEntityFrameworkCoreMySqlSettings.DisableRetry)} needs to be set when a custom Execution Strategy is configured.");
+                                    throw new InvalidOperationException($"{nameof(MicrotingEntityFrameworkCoreMySqlSettings)}.{nameof(MicrotingEntityFrameworkCoreMySqlSettings.DisableRetry)} needs to be set when a custom Execution Strategy is configured.");
                                 }
                                 else
                                 {
@@ -221,7 +221,7 @@ public static partial class AspireEFMySqlExtensions
                                 extension.CommandTimeout.HasValue &&
                                 extension.CommandTimeout != settings.CommandTimeout)
                             {
-                                throw new InvalidOperationException($"Conflicting values for 'CommandTimeout' were found in {nameof(PomeloEntityFrameworkCoreMySqlSettings)} and set in DbContextOptions<{typeof(TContext).Name}>.");
+                                throw new InvalidOperationException($"Conflicting values for 'CommandTimeout' were found in {nameof(MicrotingEntityFrameworkCoreMySqlSettings)} and set in DbContextOptions<{typeof(TContext).Name}>.");
                             }
 
                             options.CommandTimeout(settings.CommandTimeout);
@@ -234,7 +234,7 @@ public static partial class AspireEFMySqlExtensions
         }
     }
 
-    private static void ConfigureInstrumentation<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors | DynamicallyAccessedMemberTypes.NonPublicConstructors | DynamicallyAccessedMemberTypes.PublicProperties)] TContext>(IHostApplicationBuilder builder, PomeloEntityFrameworkCoreMySqlSettings settings) where TContext : DbContext
+    private static void ConfigureInstrumentation<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors | DynamicallyAccessedMemberTypes.NonPublicConstructors | DynamicallyAccessedMemberTypes.PublicProperties)] TContext>(IHostApplicationBuilder builder, MicrotingEntityFrameworkCoreMySqlSettings settings) where TContext : DbContext
     {
         if (!settings.DisableHealthChecks)
         {
