@@ -164,6 +164,7 @@ public sealed class UpdateChannelNuGetConfigOrderingTests(ITestOutputHelper outp
         await AssertOriginalsAsync();
         Assert.Equal(previousBackup, await File.ReadAllTextAsync(backupPath));
 
+        await auto.ClearScreenAsync(counter);
         await auto.TypeAsync(dryRunCommand);
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("Replace the existing backups with the current file contents?", timeout: TimeSpan.FromMinutes(3));
