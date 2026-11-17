@@ -1518,6 +1518,75 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
         Assert.Equal(KnownResourceStates.Waiting, completed.Snapshot.State?.Text);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ForceStartingResourceBypassesDependenciesButNotParameterWaits(bool readBeforeWaitingForDependencies)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var parameter = builder.AddParameter("parameter").Resource;
+        parameter.EnsureValueTask();
+        var dependency = builder.AddExecutable("dependency", "unused", ".");
+        var caller = builder.AddExecutable("caller", "unused", ".").WaitFor(dependency);
+        caller.Resource.AddLifeCycleCommands();
+
+        using var app = builder.Build();
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
+        var notifications = app.ResourceNotifications;
+        var events = new DcpExecutorEvents();
+        var dcpExecutor = new TestDcpExecutor();
+        dcpExecutor.AddResource(caller.Resource, caller.Resource.Name);
+        var orchestrator = CreateOrchestrator(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            notifications,
+            dcpEvents: events,
+            applicationEventing: builder.Eventing,
+            dcpExecutor: dcpExecutor);
+        await orchestrator.RunApplicationAsync();
+        await notifications.PublishUpdateAsync(dependency.Resource, s => s with { State = KnownResourceStates.NotStarted });
+
+        var context = new ValueProviderContext { ExecutionContext = builder.ExecutionContext, Caller = caller.Resource };
+        var read = readBeforeWaitingForDependencies ? parameter.GetValueAsync(context, cts.Token).AsTask() : null;
+        var startingTask = events.PublishAsync(new OnResourceStartingContext(
+            cts.Token, KnownResourceTypes.Executable, caller.Resource, caller.Resource.Name));
+        await notifications.WaitForResourceAsync(caller.Resource.Name, KnownResourceStates.Waiting, cts.Token).DefaultTimeout();
+        read ??= parameter.GetValueAsync(context, cts.Token).AsTask();
+
+        Assert.False(read.IsCompleted);
+        Assert.False(startingTask.IsCompleted);
+        Assert.True(notifications.TryGetCurrentState(caller.Resource.Name, out var waiting));
+        Assert.Equal(KnownResourceStates.Waiting, waiting.Snapshot.State?.Text);
+        var waitingFor = Assert.Single(waiting.Snapshot.Properties, p => p.Name == KnownProperties.Resource.WaitingFor);
+        Assert.Equal(new[] { dependency.Resource.Name }, Assert.IsType<string[]>(waitingFor.Value));
+        var start = Assert.Single(caller.Resource.Annotations.OfType<ResourceCommandAnnotation>(), c => c.Name == KnownResourceCommands.StartCommand);
+        Assert.Equal(ResourceCommandState.Enabled, start.UpdateState(new UpdateCommandStateContext
+        {
+            ResourceSnapshot = waiting.Snapshot,
+            Services = app.Services
+        }));
+
+        await orchestrator.StartResourceAsync(caller.Resource.Name, cts.Token).DefaultTimeout();
+        await startingTask.DefaultTimeout();
+
+        Assert.Empty(dcpExecutor.StartedResources);
+        Assert.True(notifications.TryGetCurrentState(dependency.Resource.Name, out var dependencyState));
+        Assert.Equal(KnownResourceStates.NotStarted, dependencyState.Snapshot.State?.Text);
+        Assert.False(read.IsCompleted);
+        Assert.True(notifications.TryGetCurrentState(caller.Resource.Name, out var blocked));
+        Assert.Equal(KnownResourceStates.UnresolvedParameters, blocked.Snapshot.State?.Text);
+        Assert.Collection(blocked.Snapshot.Properties, property =>
+        {
+            Assert.Equal(KnownProperties.Resource.UnresolvedParameters, property.Name);
+            Assert.Equal(new[] { parameter.Name }, Assert.IsType<string[]>(property.Value));
+        });
+
+        await parameter.SetValueAsync("value");
+        Assert.Equal("value", await read.DefaultTimeout());
+        Assert.True(notifications.TryGetCurrentState(caller.Resource.Name, out var completed));
+        Assert.Equal(KnownResourceStates.Starting, completed.Snapshot.State?.Text);
+        Assert.Empty(completed.Snapshot.Properties);
+    }
+
     [Fact]
     public async Task WaitIsNotReleasedByAnotherReplicaLeavingWaitingState()
     {
