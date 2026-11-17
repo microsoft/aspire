@@ -2,9 +2,11 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Dashboard.Model;
+using Aspire.Hosting.Backchannel;
 using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Hosting.Tests;
 
@@ -162,6 +164,162 @@ public class AddConnectionStringTests
         Assert.Equal("ResourceWithoutLifetime", await resource.GetValueAsync(context, TestContext.Current.CancellationToken));
     }
 
+    [Theory]
+    [InlineData("public", "caller", true)]
+    [InlineData("explicit", "caller", true)]
+    [InlineData("inherited", "caller", true)]
+    [InlineData("derived-interface", "caller", true)]
+    [InlineData("legacy", "ResourceWithoutLifetime", false)]
+    [InlineData("expression", "ResourceWithoutLifetime", false)]
+    public async Task ExecutionConfigurationUsesContextualConnectionStringResolvers(string implementation, string expectedValue, bool expectedSensitive)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        ResourceWithoutLifetime resource = implementation switch
+        {
+            "public" => new ContextualResource("connection"),
+            "explicit" => new ExplicitContextualResource("connection"),
+            "inherited" => new InheritedContextualResource("connection"),
+            "derived-interface" => new DerivedInterfaceContextualResource("connection"),
+            "legacy" => new LegacyResource("connection"),
+            _ => new ResourceWithoutLifetime("connection")
+        };
+        var source = builder.AddResource(resource);
+        var caller = builder.AddContainer("caller", "test-image")
+            .WithReference(source)
+            .WithEnvironment("CUSTOM_CONNECTION", source)
+            .WithEnvironment(context => context.EnvironmentVariables["RAW_RESOURCE"] = resource)
+            .WithArgs(resource, ReferenceExpression.Create($"wrapped:{resource}"));
+        using var app = builder.Build();
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
+
+        var configuration = await ExecutionConfigurationBuilder.Create(caller.Resource)
+            .WithArgumentsConfig()
+            .WithEnvironmentVariablesConfig()
+            .BuildAsync(builder.ExecutionContext, NullLogger.Instance, cts.Token);
+
+        Assert.Null(configuration.Exception);
+        Assert.Collection(configuration.EnvironmentVariables.OrderBy(entry => entry.Key, StringComparer.Ordinal),
+            entry => Assert.Equal(new("CUSTOM_CONNECTION", expectedValue), entry),
+            entry => Assert.Equal(new("ConnectionStrings__connection", expectedValue), entry),
+            entry => Assert.Equal(new("RAW_RESOURCE", expectedValue), entry));
+        Assert.Equal([(expectedValue, expectedSensitive), ($"wrapped:{expectedValue}", expectedSensitive)], configuration.Arguments);
+        var redactedValues = app.Services.GetRequiredService<SecretRedactionHistory>().AddValuesAndSnapshot([]);
+        Assert.Equal(expectedSensitive, redactedValues.Contains(expectedValue));
+    }
+
+    [Fact]
+    public async Task ExecutionConfigurationDoesNotEvaluateUnusedConnectionStringExpression()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var unused = new ParameterResource("unused", _ => throw new MissingParameterValueException("The unused parameter has no value."), secret: true);
+        var actual = builder.AddParameter("actual", secret: true).Resource;
+        actual.EnsureValueTask();
+        var caller = builder.AddContainer("caller", "test-image");
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
+        var source = builder.AddResource(new ContextualResource("connection")
+        {
+            ConnectionStringExpression = ReferenceExpression.Create($"Password={unused}"),
+            Resolver = (context, cancellationToken) =>
+            {
+                Assert.Same(caller.Resource, context.Caller);
+                Assert.Same(builder.ExecutionContext, context.ExecutionContext);
+                Assert.Equal(KnownNetworkIdentifiers.DefaultAspireContainerNetwork, context.GetNetworkIdentifier());
+                Assert.Equal(cts.Token, cancellationToken);
+                return actual.GetValueAsync(context, cancellationToken);
+            }
+        });
+        caller.WithEnvironment("CONNECTION", source);
+        using var app = builder.Build();
+
+        var configurationTask = ExecutionConfigurationBuilder.Create(caller.Resource)
+            .WithEnvironmentVariablesConfig()
+            .BuildAsync(builder.ExecutionContext, NullLogger.Instance, cts.Token);
+
+        Assert.False(configurationTask.IsCompleted);
+        Assert.True(app.ResourceNotifications.TryGetCurrentState(caller.Resource.Name, out var waiting));
+        Assert.Equal(KnownResourceStates.UnresolvedParameters, waiting.Snapshot.State?.Text);
+        var unresolved = Assert.Single(waiting.Snapshot.Properties, property => property.Name == KnownProperties.Resource.UnresolvedParameters);
+        Assert.Equal(["actual"], Assert.IsType<string[]>(unresolved.Value));
+
+        await actual.SetValueAsync("runtime-value");
+        var configuration = await configurationTask.DefaultTimeout();
+
+        Assert.Null(configuration.Exception);
+        Assert.Equal(new("CONNECTION", "runtime-value"), Assert.Single(configuration.EnvironmentVariables));
+    }
+
+    [Theory]
+    [InlineData(null, false)]
+    [InlineData("", false)]
+    [InlineData(null, true)]
+    [InlineData("", true)]
+    public async Task ExecutionConfigurationChecksContextualConnectionStringOptionality(string? value, bool optional)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var source = builder.AddResource(new ContextualResource("connection")
+        {
+            Resolver = (_, _) => new(value)
+        });
+        var caller = builder.AddContainer("caller", "test-image").WithReference(source, optional: optional);
+        using var app = builder.Build();
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
+
+        var configuration = await ExecutionConfigurationBuilder.Create(caller.Resource)
+            .WithEnvironmentVariablesConfig()
+            .BuildAsync(builder.ExecutionContext, NullLogger.Instance, cts.Token);
+
+        if (optional)
+        {
+            Assert.Null(configuration.Exception);
+            if (value is null)
+            {
+                Assert.Empty(configuration.EnvironmentVariables);
+            }
+            else
+            {
+                Assert.Equal(new("ConnectionStrings__connection", value), Assert.Single(configuration.EnvironmentVariables));
+            }
+        }
+        else
+        {
+            var aggregate = Assert.IsType<AggregateException>(configuration.Exception);
+            Assert.IsType<DistributedApplicationException>(Assert.Single(aggregate.InnerExceptions));
+            Assert.Empty(configuration.EnvironmentVariables);
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ExecutionConfigurationPreservesSelectedConnectionStringExpression(bool secret)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var resource = new ContextualResource("connection")
+        {
+            Resolver = (_, _) => throw new InvalidOperationException("The default connection string was not selected.")
+        };
+        var parameter = new ParameterResource("selected", _ => "selected-value", secret);
+#pragma warning disable ASPIRECONNECTIONSTRINGS001
+        var reference = new ConnectionStringReference(resource, optional: false,
+            ConnectionStringEnvironmentVariableNames.Create(resource, "selected"),
+            "SelectedConnectionString", ReferenceExpression.Create($"{parameter}"));
+#pragma warning restore ASPIRECONNECTIONSTRINGS001
+        var caller = builder.AddContainer("caller", "test-image")
+            .WithEnvironment("SELECTED", reference)
+            .WithArgs(reference);
+        using var app = builder.Build();
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
+
+        var configuration = await ExecutionConfigurationBuilder.Create(caller.Resource)
+            .WithArgumentsConfig()
+            .WithEnvironmentVariablesConfig()
+            .BuildAsync(builder.ExecutionContext, NullLogger.Instance, cts.Token);
+
+        Assert.Null(configuration.Exception);
+        Assert.Equal(new("SELECTED", "selected-value"), Assert.Single(configuration.EnvironmentVariables));
+        Assert.Equal(("selected-value", secret), Assert.Single(configuration.Arguments));
+    }
+
     [Fact]
     public async Task AddConnectionStringExpressionIsAValueInTheManifest()
     {
@@ -255,8 +413,10 @@ public class AddConnectionStringTests
 
     private class ContextualResource(string name) : ResourceWithoutLifetime(name), IResourceWithConnectionString
     {
+        public Func<ValueProviderContext, CancellationToken, ValueTask<string?>>? Resolver { get; init; }
+
         public ValueTask<string?> GetConnectionStringAsync(ValueProviderContext context, CancellationToken cancellationToken) =>
-            new(context.Caller?.Name);
+            Resolver is { } resolver ? resolver(context, cancellationToken) : new(context.Caller?.Name);
     }
 
     private sealed class ExplicitContextualResource(string name) : ResourceWithoutLifetime(name), IResourceWithConnectionString
