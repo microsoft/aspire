@@ -218,10 +218,16 @@ public static class AzureStorageExtensions
                 // We can't use ConnectionStringAvailableEvent here because the resource doesn't have a connection string, so
                 // we use BeforeResourceStartedEvent
 
-                var blobConnectionString = await builder.Resource.GetBlobConnectionString().GetValueAsync(ct).ConfigureAwait(false) ?? throw new DistributedApplicationException($"{nameof(ConnectionStringAvailableEvent)} was published for the '{builder.Resource.Name}' resource but the connection string was null.");
+                var valueContext = new ValueProviderContext
+                {
+                    ExecutionContext = builder.ApplicationBuilder.ExecutionContext,
+                    Caller = storage,
+                    Network = KnownNetworkIdentifiers.LocalhostNetwork
+                };
+                var blobConnectionString = await builder.Resource.GetBlobConnectionString().GetValueAsync(valueContext, ct).ConfigureAwait(false) ?? throw new DistributedApplicationException($"{nameof(ConnectionStringAvailableEvent)} was published for the '{builder.Resource.Name}' resource but the connection string was null.");
                 blobServiceClient = CreateBlobServiceClient(blobConnectionString);
 
-                var queueConnectionString = await builder.Resource.GetQueueConnectionString().GetValueAsync(ct).ConfigureAwait(false) ?? throw new DistributedApplicationException($"{nameof(ConnectionStringAvailableEvent)} was published for the '{builder.Resource.Name}' resource but the connection string was null.");
+                var queueConnectionString = await builder.Resource.GetQueueConnectionString().GetValueAsync(valueContext, ct).ConfigureAwait(false) ?? throw new DistributedApplicationException($"{nameof(ConnectionStringAvailableEvent)} was published for the '{builder.Resource.Name}' resource but the connection string was null.");
                 queueServiceClient = CreateQueueServiceClient(queueConnectionString);
             })
             .OnResourceReady(async (storage, @event, ct) =>
@@ -512,7 +518,12 @@ public static class AzureStorageExtensions
             .WithHealthCheck(healthCheckKey)
             .OnConnectionStringAvailable(async (containerResource, @event, ct) =>
             {
-                connectionString = await resource.Parent.ConnectionStringExpression.GetValueAsync(ct).ConfigureAwait(false);
+                connectionString = await resource.Parent.ConnectionStringExpression.GetValueAsync(new ValueProviderContext
+                {
+                    ExecutionContext = builder.ApplicationBuilder.ExecutionContext,
+                    Caller = containerResource,
+                    Network = KnownNetworkIdentifiers.LocalhostNetwork
+                }, ct).ConfigureAwait(false);
             });
     }
 
@@ -565,7 +576,12 @@ public static class AzureStorageExtensions
         string? connectionString = null;
         builder.OnConnectionStringAvailable(async (blobStorage, @event, ct) =>
         {
-            connectionString = await blobStorage.ConnectionStringExpression.GetValueAsync(ct).ConfigureAwait(false);
+            connectionString = await blobStorage.ConnectionStringExpression.GetValueAsync(new ValueProviderContext
+            {
+                ExecutionContext = builder.ApplicationBuilder.ExecutionContext,
+                Caller = blobStorage,
+                Network = KnownNetworkIdentifiers.LocalhostNetwork
+            }, ct).ConfigureAwait(false);
         });
 
         var healthCheckKey = $"{resource.Name}_check";
@@ -676,7 +692,12 @@ public static class AzureStorageExtensions
             .WithHealthCheck(healthCheckKey)
             .OnConnectionStringAvailable(async (containerResource, @event, ct) =>
             {
-                connectionString = await resource.Parent.ConnectionStringExpression.GetValueAsync(ct).ConfigureAwait(false);
+                connectionString = await resource.Parent.ConnectionStringExpression.GetValueAsync(new ValueProviderContext
+                {
+                    ExecutionContext = builder.ApplicationBuilder.ExecutionContext,
+                    Caller = containerResource,
+                    Network = KnownNetworkIdentifiers.LocalhostNetwork
+                }, ct).ConfigureAwait(false);
             });
     }
 
@@ -829,7 +850,12 @@ public static class AzureStorageExtensions
             .WithHealthCheck(healthCheckKey)
             .OnConnectionStringAvailable(async (blobs, @event, ct) =>
             {
-                connectionString = await resource.ConnectionStringExpression.GetValueAsync(ct).ConfigureAwait(false);
+                connectionString = await resource.ConnectionStringExpression.GetValueAsync(new ValueProviderContext
+                {
+                    ExecutionContext = builder.ApplicationBuilder.ExecutionContext,
+                    Caller = blobs,
+                    Network = KnownNetworkIdentifiers.LocalhostNetwork
+                }, ct).ConfigureAwait(false);
             });
     }
 
@@ -871,7 +897,12 @@ public static class AzureStorageExtensions
             .WithHealthCheck(healthCheckKey)
             .OnConnectionStringAvailable(async (queues, @event, ct) =>
             {
-                connectionString = await resource.ConnectionStringExpression.GetValueAsync(ct).ConfigureAwait(false);
+                connectionString = await resource.ConnectionStringExpression.GetValueAsync(new ValueProviderContext
+                {
+                    ExecutionContext = builder.ApplicationBuilder.ExecutionContext,
+                    Caller = queues,
+                    Network = KnownNetworkIdentifiers.LocalhostNetwork
+                }, ct).ConfigureAwait(false);
             });
     }
 

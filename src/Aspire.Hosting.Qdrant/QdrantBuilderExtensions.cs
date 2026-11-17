@@ -55,7 +55,12 @@ public static class QdrantBuilderExtensions
 
         builder.Eventing.Subscribe<ConnectionStringAvailableEvent>(qdrant, async (@event, ct) =>
         {
-            var connectionString = await qdrant.ConnectionStringExpression.GetValueAsync(ct).ConfigureAwait(false)
+            var connectionString = await qdrant.ConnectionStringExpression.GetValueAsync(new ValueProviderContext
+            {
+                ExecutionContext = builder.ExecutionContext,
+                Caller = qdrant,
+                Network = KnownNetworkIdentifiers.LocalhostNetwork
+            }, ct).ConfigureAwait(false)
             ?? throw new DistributedApplicationException($"ConnectionStringAvailableEvent was published for the '{qdrant.Name}' resource but the connection string was null.");
 
             qdrantClient = CreateQdrantClient(connectionString);

@@ -131,7 +131,12 @@ public static class ValkeyBuilderExtensions
 
         builder.Eventing.Subscribe<ConnectionStringAvailableEvent>(valkey, async (@event, ct) =>
         {
-            connectionString = await valkey.ConnectionStringExpression.GetValueAsync(ct).ConfigureAwait(false);
+            connectionString = await valkey.ConnectionStringExpression.GetValueAsync(new ValueProviderContext
+            {
+                ExecutionContext = builder.ExecutionContext,
+                Caller = valkey,
+                Network = KnownNetworkIdentifiers.LocalhostNetwork
+            }, ct).ConfigureAwait(false);
 
             if (connectionString is null)
             {
