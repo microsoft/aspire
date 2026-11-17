@@ -73,9 +73,6 @@ public class RabbitMQServerResource : ContainerResource, IResourceWithConnection
     /// </summary>
     public ParameterResource PasswordParameter { get; }
 
-    ValueTask<string?> IResourceWithConnectionString.GetConnectionStringAsync(ValueProviderContext context, CancellationToken cancellationToken) =>
-        ConnectionStringExpression.GetValueAsync(context, cancellationToken);
-
     /// <summary>
     /// Gets the connection string expression for the RabbitMQ server.
     /// </summary>

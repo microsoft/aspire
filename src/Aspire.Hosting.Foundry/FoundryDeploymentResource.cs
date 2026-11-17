@@ -102,9 +102,6 @@ public class FoundryDeploymentResource : Resource, IResourceWithParent<FoundryRe
     /// </summary>
     public FoundryResource Parent { get; set; }
 
-    ValueTask<string?> IResourceWithConnectionString.GetConnectionStringAsync(ValueProviderContext context, CancellationToken cancellationToken) =>
-        ConnectionStringExpression.GetValueAsync(context, cancellationToken);
-
     /// <summary>
     /// Gets the connection string expression for the Microsoft Foundry resource with model/deployment information.
     /// </summary>

@@ -80,9 +80,6 @@ public class AzureManagedRedisResource(string name, Action<AzureResourceInfrastr
     [AspireExportIgnore]
     public override ResourceAnnotationCollection Annotations => InnerResource?.Annotations ?? base.Annotations;
 
-    ValueTask<string?> IResourceWithConnectionString.GetConnectionStringAsync(ValueProviderContext context, CancellationToken cancellationToken) =>
-        ConnectionStringExpression.GetValueAsync(context, cancellationToken);
-
     /// <summary>
     /// Gets the connection string template for the manifest for the Azure Managed Redis resource.
     /// </summary>

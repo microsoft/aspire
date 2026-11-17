@@ -18,9 +18,6 @@ namespace Aspire.Hosting.Azure.DurableTask;
 public sealed class DurableTaskHubResource(string name, DurableTaskSchedulerResource scheduler)
     : Resource(name), IResourceWithConnectionString, IResourceWithParent<DurableTaskSchedulerResource>, IResourceWithAzureFunctionsConfig
 {
-    ValueTask<string?> IResourceWithConnectionString.GetConnectionStringAsync(ValueProviderContext context, CancellationToken cancellationToken) =>
-        ConnectionStringExpression.GetValueAsync(context, cancellationToken);
-
     /// <summary>
     /// Gets the connection string expression composed of the scheduler connection string and the TaskHub name.
     /// </summary>

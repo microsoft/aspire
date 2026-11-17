@@ -26,9 +26,6 @@ public class AzurePostgresFlexibleServerDatabaseResource(string name, string dat
     /// </summary>
     public AzurePostgresFlexibleServerResource Parent { get; } = postgresParentResource ?? throw new ArgumentNullException(nameof(postgresParentResource));
 
-    ValueTask<string?> IResourceWithConnectionString.GetConnectionStringAsync(ValueProviderContext context, CancellationToken cancellationToken) =>
-        ConnectionStringExpression.GetValueAsync(context, cancellationToken);
-
     /// <summary>
     /// Gets the connection string expression for the Postgres database.
     /// </summary>

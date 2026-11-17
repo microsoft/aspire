@@ -29,9 +29,6 @@ public class AzureApplicationInsightsResource(string name, Action<AzureResourceI
     /// </summary>
     public BicepOutputReference ConnectionString => new("appInsightsConnectionString", this);
 
-    ValueTask<string?> IResourceWithConnectionString.GetConnectionStringAsync(ValueProviderContext context, CancellationToken cancellationToken) =>
-        ConnectionStringExpression.GetValueAsync(context, cancellationToken);
-
     /// <summary>
     /// Gets the connection string template for the manifest for the Azure Application Insights resource.
     /// </summary>

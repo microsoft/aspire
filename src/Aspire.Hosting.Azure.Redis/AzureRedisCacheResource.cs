@@ -61,9 +61,6 @@ public class AzureRedisCacheResource(string name, Action<AzureResourceInfrastruc
     /// <inheritdoc />
     public override ResourceAnnotationCollection Annotations => InnerResource?.Annotations ?? base.Annotations;
 
-    ValueTask<string?> IResourceWithConnectionString.GetConnectionStringAsync(ValueProviderContext context, CancellationToken cancellationToken) =>
-        ConnectionStringExpression.GetValueAsync(context, cancellationToken);
-
     /// <summary>
     /// Gets the connection string template for the manifest for the Azure Cache for Redis resource.
     /// </summary>

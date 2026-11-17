@@ -24,9 +24,6 @@ public class AzurePostgresResource(PostgresServerResource innerResource, Action<
     /// </summary>
     public BicepSecretOutputReference ConnectionString => new("connectionString", this);
 
-    ValueTask<string?> IResourceWithConnectionString.GetConnectionStringAsync(ValueProviderContext context, CancellationToken cancellationToken) =>
-        ConnectionStringExpression.GetValueAsync(context, cancellationToken);
-
     /// <summary>
     /// Gets the connection template for the manifest for the Azure Postgres Flexible Server.
     /// </summary>

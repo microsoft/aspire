@@ -159,9 +159,6 @@ public class AzurePromptAgentResource : Resource, IResourceWithEnvironment, IRes
         _tools.Add(tool);
     }
 
-    ValueTask<string?> IResourceWithConnectionString.GetConnectionStringAsync(ValueProviderContext context, CancellationToken cancellationToken) =>
-        ConnectionStringExpression.GetValueAsync(context, cancellationToken);
-
     /// <inheritdoc/>
     public ReferenceExpression ConnectionStringExpression =>
         ReferenceExpression.Create($"{Project.Endpoint}/agents/{Name}");

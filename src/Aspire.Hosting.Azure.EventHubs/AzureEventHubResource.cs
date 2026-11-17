@@ -43,9 +43,6 @@ public class AzureEventHubResource(string name, string hubName, AzureEventHubsRe
     /// </summary>
     public AzureEventHubsResource Parent { get; } = parent ?? throw new ArgumentNullException(nameof(parent));
 
-    ValueTask<string?> IResourceWithConnectionString.GetConnectionStringAsync(ValueProviderContext context, CancellationToken cancellationToken) =>
-        ConnectionStringExpression.GetValueAsync(context, cancellationToken);
-
     /// <summary>
     /// Gets the connection string expression for the Azure Event Hub.
     /// </summary>

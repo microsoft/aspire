@@ -36,9 +36,6 @@ public class AzureCosmosDBDatabaseResource(string name, string databaseName, Azu
     /// </summary>
     public AzureCosmosDBResource Parent { get; } = parent ?? throw new ArgumentNullException(nameof(parent));
 
-    ValueTask<string?> IResourceWithConnectionString.GetConnectionStringAsync(ValueProviderContext context, CancellationToken cancellationToken) =>
-        ConnectionStringExpression.GetValueAsync(context, cancellationToken);
-
     /// <summary>
     /// Gets the connection string expression for the Azure Cosmos DB database.
     /// </summary>

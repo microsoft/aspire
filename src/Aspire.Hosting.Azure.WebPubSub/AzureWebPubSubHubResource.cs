@@ -40,9 +40,6 @@ public class AzureWebPubSubHubResource(string name, AzureWebPubSubResource webpu
     /// </summary>
     public string HubName { get; set; } = name;
 
-    ValueTask<string?> IResourceWithConnectionString.GetConnectionStringAsync(ValueProviderContext context, CancellationToken cancellationToken) =>
-        ConnectionStringExpression.GetValueAsync(context, cancellationToken);
-
     /// <summary>
     /// Gets the connection string template for the manifest for Azure Web PubSub.
     /// </summary>
