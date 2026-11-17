@@ -435,7 +435,7 @@ foreach ($template in $templates)
             # The diagnostics artifact preserves the generated project but does not need installed
             # dependencies, so free their disk space here. This removal is best effort: a package
             # installer can still change node_modules after `aspire stop` returns. The workflow
-            # uploads a staged copy without node_modules, so it does not depend on this removal.
+            # uploads an archive without node_modules, so it does not depend on this removal.
             foreach ($relativeDependencyPath in @('node_modules', 'frontend/node_modules'))
             {
                 $dependencyPath = Join-Path $projectRoot $relativeDependencyPath

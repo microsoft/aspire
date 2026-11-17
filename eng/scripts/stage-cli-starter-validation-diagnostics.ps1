@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Copies Aspire CLI starter validation diagnostics into a private directory for artifact upload.
+    Archives Aspire CLI starter validation diagnostics for artifact upload.
 
 .DESCRIPTION
     actions/upload-artifact first enumerates every path under the upload root and then calls
@@ -10,15 +10,16 @@
 
     The generated starter projects contain node_modules trees. A JavaScript package installer, such
     as an interrupted `frontend-installer` npm install, can still rewrite or delete them after
-    `aspire stop` returns. Upload a copy that no other process writes to instead. The copy skips
-    node_modules directories without enumerating them, skips directory symbolic links, and ignores
-    entries that are removed while they are being copied.
+    `aspire stop` returns. Upload a completed tar archive instead. tar excludes node_modules without
+    traversing them and stores symbolic links without following them. Hidden files and directories
+    remain excluded, matching upload-artifact's default. The archive contains the validation root
+    directory and its retained contents.
 
 .PARAMETER SourceRoot
     The starter validation root that contains generated projects, diagnostics, and CLI logs.
 
 .PARAMETER DestinationRoot
-    The directory to create for upload. Any existing directory at this path is replaced.
+    The directory in which to create starter-validation.tar for upload.
 #>
 [CmdletBinding()]
 param(
@@ -30,92 +31,16 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+$PSNativeCommandUseErrorActionPreference = $false
 
-# Test-Path cannot tell whether an entry vanished: it reports a dangling symbolic link as present.
-# Classify the failure itself so only "not found" errors are tolerated.
-function Test-IsNotFoundError
+$archivePath = Join-Path $DestinationRoot 'starter-validation.tar'
+$temporaryArchivePath = "$archivePath.partial"
+foreach ($path in @($archivePath, $temporaryArchivePath))
 {
-    param(
-        [Parameter(Mandatory = $true)]
-        [System.Management.Automation.ErrorRecord]$ErrorRecord
-    )
-
-    for ($exception = $ErrorRecord.Exception; $null -ne $exception; $exception = $exception.InnerException)
+    if (Test-Path -LiteralPath $path)
     {
-        if ($exception -is [System.IO.FileNotFoundException] -or
-            $exception -is [System.IO.DirectoryNotFoundException] -or
-            $exception -is [System.Management.Automation.ItemNotFoundException])
-        {
-            return $true
-        }
+        Remove-Item -LiteralPath $path -Force
     }
-
-    return $false
-}
-
-function Copy-DiagnosticsDirectory
-{
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$Source,
-
-        [Parameter(Mandatory = $true)]
-        [string]$Destination
-    )
-
-    try
-    {
-        $children = @(Get-ChildItem -LiteralPath $Source -Force -ErrorAction Stop)
-    }
-    catch
-    {
-        if (-not (Test-IsNotFoundError -ErrorRecord $_))
-        {
-            throw
-        }
-
-        Write-Host "Skipping '$Source' because it was removed while staging diagnostics."
-        return
-    }
-
-    New-Item -ItemType Directory -Path $Destination -Force | Out-Null
-
-    foreach ($child in $children)
-    {
-        $target = Join-Path $Destination $child.Name
-
-        if ($child.PSIsContainer)
-        {
-            # Installed dependencies are not diagnostics and are the entries other processes mutate.
-            # Symbolic links to directories can form cycles or point outside the validation root.
-            if ($child.Name -eq 'node_modules' -or $child.LinkType)
-            {
-                continue
-            }
-
-            Copy-DiagnosticsDirectory -Source $child.FullName -Destination $target
-            continue
-        }
-
-        try
-        {
-            Copy-Item -LiteralPath $child.FullName -Destination $target -Force -ErrorAction Stop
-        }
-        catch
-        {
-            if (-not (Test-IsNotFoundError -ErrorRecord $_))
-            {
-                throw
-            }
-
-            Write-Host "Skipping '$($child.FullName)' because it was removed while staging diagnostics."
-        }
-    }
-}
-
-if (Test-Path -LiteralPath $DestinationRoot)
-{
-    Remove-Item -LiteralPath $DestinationRoot -Recurse -Force
 }
 
 if (-not (Test-Path -LiteralPath $SourceRoot -PathType Container))
@@ -124,5 +49,29 @@ if (-not (Test-Path -LiteralPath $SourceRoot -PathType Container))
     return
 }
 
-Copy-DiagnosticsDirectory -Source $SourceRoot -Destination $DestinationRoot
-Write-Host "Staged starter validation diagnostics from '$SourceRoot' to '$DestinationRoot'."
+New-Item -ItemType Directory -Path $DestinationRoot -Force | Out-Null
+try
+{
+    # Both GNU tar and BSD/Windows tar exclude this directory name at any depth without entering it.
+    # Do not dereference links or ignore tar failures: errors in retained diagnostics must stay visible.
+    # Archive the named root from its parent: using "." lets BSD tar's hidden-file pattern exclude
+    # the entire "./" tree. ".?*" excludes hidden names at any depth, including "..name".
+    # https://github.com/actions/upload-artifact#uploading-hidden-files
+    $sourceDirectory = Get-Item -LiteralPath $SourceRoot
+    & tar --exclude=node_modules '--exclude=.?*' -cf $temporaryArchivePath -C $sourceDirectory.Parent.FullName $sourceDirectory.Name
+    if ($LASTEXITCODE -ne 0)
+    {
+        throw "Archiving starter validation diagnostics failed with tar exit code $LASTEXITCODE."
+    }
+
+    Move-Item -LiteralPath $temporaryArchivePath -Destination $archivePath -Force
+}
+finally
+{
+    if (Test-Path -LiteralPath $temporaryArchivePath)
+    {
+        Remove-Item -LiteralPath $temporaryArchivePath -Force
+    }
+}
+
+Write-Host "Archived starter validation diagnostics from '$SourceRoot' to '$archivePath'."
