@@ -14,6 +14,13 @@ builder.AddSqlServerDbContext<MyDbContext>("db");
 var app = builder.Build();
 
 app.MapDefaultEndpoints();
+app.MapGet("/parameters", (IConfiguration configuration) => new
+{
+    optionalUnset = configuration["OPTIONAL_UNSET"] ?? "(not set)",
+    optionalConfigured = configuration["OPTIONAL_CONFIGURED"] ?? "(not set)",
+    programmaticValue = configuration["PROGRAMMATIC_VALUE"] ?? "(not set)",
+    requiredAfterOptional = configuration["REQUIRED_AFTER_OPTIONAL"] ?? "(not set)",
+});
 app.MapGet("/", async (MyDbContext context) =>
 {
     // You wouldn't normally do this on every call,

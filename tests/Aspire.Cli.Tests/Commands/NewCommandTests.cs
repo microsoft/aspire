@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Xml.Linq;
 using Aspire.Cli.Agents;
 using Aspire.Cli.Agents.AspireSkills;
+using Aspire.Cli.Agents.ClaudeCode;
 using Aspire.Cli.Utils;
 using Aspire.Cli.Commands;
 using RootCommand = Aspire.Cli.Commands.RootCommand;
@@ -2490,6 +2491,38 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.False(Directory.Exists(Path.Combine(outputDir, ".agents", "skills")));
     }
 
+    [Theory]
+    [InlineData("", false)]
+    [InlineData(" --remove-skill-copies", true)]
+    [InlineData(" --remove-skill-copies=false", false)]
+    public async Task NewCommandNonInteractive_RemovesSkillCopiesOnlyWhenRequested(string option, bool removed)
+    {
+        // `aspire new` requires an empty output directory, so only user-level copies can exist here.
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var homeDirectory = workspace.CreateDirectory("fake-home");
+        var skillDirectory = Path.Combine(homeDirectory.FullName, ".agents", "skills", CommonAgentApplicators.AspireSkillName);
+        Directory.CreateDirectory(skillDirectory);
+        await File.WriteAllTextAsync(Path.Combine(skillDirectory, "SKILL.md"), "My customized Aspire instructions.");
+        var services = CreateServiceCollection(workspace, options =>
+        {
+            options.CliExecutionContextFactory = _ => TestExecutionContextHelper.CreateExecutionContext(
+                workspace.WorkspaceRoot, identityChannel: PackageChannelNames.Stable, homeDirectory: homeDirectory);
+            options.CliHostEnvironmentFactory = (sp) =>
+            {
+                var configuration = sp.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>();
+                return new CliHostEnvironment(configuration, nonInteractive: true);
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<NewCommand>();
+        var result = command.Parse($"new aspire-empty --name TestApp --output ./output --agents copilot --scope global --skills aspire{option}");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal(!removed, Directory.Exists(skillDirectory));
+    }
+
     [Fact]
     public async Task NewCommandNonInteractiveWithoutTemplate_DisplaysErrorWithAvailableTemplates()
     {
@@ -3523,10 +3556,12 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var homeDirectory = workspace.CreateDirectory("fake-home");
+        var hooks = new TestTelemetryHookConfigurator();
         var services = CreateServiceCollection(workspace, options =>
         {
             options.CliExecutionContextFactory = _ => TestExecutionContextHelper.CreateExecutionContext(
                 workspace.WorkspaceRoot, identityChannel: PackageChannelNames.Stable, homeDirectory: homeDirectory);
+            options.TelemetryHookConfiguratorFactory = _ => hooks;
         });
         using var provider = services.BuildServiceProvider();
 
@@ -3537,6 +3572,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.True(AspireSkillsRemoteConfiguration.HasPluginRegistration(
             [configurationPath], [SkillSource.BuiltIn]));
         Assert.Equal([configurationPath], Directory.EnumerateFiles(homeDirectory.FullName, "*", SearchOption.AllDirectories));
+        Assert.Equal([ClaudeCodeAgentClient.ClientId], hooks.SelectedClientIds);
         var outputDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, "output");
         Assert.False(Directory.Exists(Path.Combine(outputDirectory, ".claude", "skills")));
         Assert.False(Directory.Exists(Path.Combine(outputDirectory, ".agents", "skills")));

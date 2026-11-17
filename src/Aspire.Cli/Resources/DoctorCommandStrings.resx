@@ -67,9 +67,6 @@
   <data name="EnvironmentCheckHeader" xml:space="preserve">
     <value>Aspire Environment Check</value>
   </data>
-  <data name="FilesHeader" xml:space="preserve">
-    <value>Files:</value>
-  </data>
   <data name="AspireCategoryHeader" xml:space="preserve">
     <value>Aspire</value>
   </data>
@@ -387,11 +384,12 @@ The legacy file continues to work — this is a non-blocking warning.</value>
   <data name="PendingMigrationFix" xml:space="preserve">
     <value>Run 'aspire update --migrate' to apply the recommended migration.</value>
   </data>
-  <data name="AspireSkillsFix" xml:space="preserve">
-    <value>Delete these files, then run 'aspire agent init --skills aspire'.</value>
+  <data name="AspireSkillsMessage" xml:space="preserve">
+    <value>Found static copies of Aspire skills.</value>
   </data>
-  <data name="AspireSkillsInspectionFailedMessage" xml:space="preserve">
-    <value>Could not inspect local Aspire skills</value>
+  <data name="AspireSkillsFix" xml:space="preserve">
+    <value>Run 'aspire agent init' to configure skill sources and remove these copies.</value>
+    <comment>'aspire agent init' is a command and is not localizable.</comment>
   </data>
   <data name="ContainerRuntimeExplicitSelectionSuffix" xml:space="preserve">
     <value> ← explicitly selected</value>

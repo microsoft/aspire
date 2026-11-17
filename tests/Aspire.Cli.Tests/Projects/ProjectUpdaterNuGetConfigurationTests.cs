@@ -6,6 +6,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Xml;
 using Aspire.Cli.Configuration;
+using Aspire.Cli.Diagnostics;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.NuGet;
@@ -345,6 +346,8 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
             Assert.Equal("9.4.2", declaration.Root!.Element("Sdk")!.Attribute("Version")!.Value);
             Assert.Equal(originalProps, File.ReadAllText(propsPath + ".aspire-backup"));
             Assert.Equal(originalConfig, File.ReadAllBytes(configFile.FullName));
+            options.StandardOutputCallback?.Invoke("Determining projects to restore...");
+            options.StandardErrorCallback?.Invoke("Native restore diagnostic.");
             restoreCount++;
             return restoreSucceeds ? 0 : 1;
         };
@@ -367,6 +370,10 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
                 updater.UpdateProjectAsync(context, TestContext.Current.CancellationToken));
         }
 
+        var interaction = Assert.IsType<TestInteractionService>(provider.GetRequiredService<IInteractionService>());
+        Assert.Equal(
+            restoreSucceeds ? [] : new[] { (OutputLineStream.StdOut, "Determining projects to restore..."), (OutputLineStream.StdErr, "Native restore diagnostic.") },
+            interaction.DisplayedLines);
         Assert.True(evaluationCount > 0);
         Assert.Equal(1, restoreCount);
         Assert.True(client.LastAcquisitionBypassedCaches);
@@ -1655,6 +1662,70 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
 
         Assert.Equal(originalProject, await File.ReadAllBytesAsync(projectFile.FullName));
         Assert.Equal(originalProps, await File.ReadAllBytesAsync(propsFile.FullName));
+    }
+
+    [Theory]
+    [InlineData("AppHost.csproj", false)]
+    [InlineData("apphost.cs", false)]
+    [InlineData("AppHost.csproj", true)]
+    [InlineData("apphost.cs", true)]
+    public async Task UpdateAsync_RestoreDiagnosticsAreLoggedAndOnlyDisplayedOnFailure(string fileName, bool restoreFails)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var projectFile = await CreateAppHostAsync(workspace, fileName);
+        var originalProject = await File.ReadAllBytesAsync(projectFile.FullName);
+        const string restoreMessage = "Determining projects to restore...";
+        const string restoreError = "error : Access to the path 'Aspire.Hosting.Tasks.dll' is denied.";
+        const string stderrMessage = "NuGet restore diagnostic on stderr.";
+        var runner = CreateRunner(projectFile, hasExplicitChannel: false);
+        runner.GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) => CreatePackageEvaluation();
+        runner.RestoreAsyncCallback = (_, options, _) =>
+        {
+            options.StandardOutputCallback?.Invoke(restoreMessage);
+            options.StandardOutputCallback?.Invoke(restoreError);
+            options.StandardErrorCallback?.Invoke(stderrMessage);
+            return restoreFails ? 1 : 0;
+        };
+        string logFilePath;
+        using (var provider = CreateServices(workspace, runner).BuildServiceProvider())
+        {
+            logFilePath = provider.GetRequiredService<FileLoggerProvider>().LogFilePath;
+            var context = await CreateContextAsync(provider, projectFile, "default", hasExplicitChannel: false);
+            var updater = provider.GetRequiredService<IProjectUpdater>();
+            var interaction = Assert.IsType<TestInteractionService>(provider.GetRequiredService<IInteractionService>());
+            if (restoreFails)
+            {
+                var exception = await Assert.ThrowsAsync<ProjectUpdaterException>(() =>
+                    updater.UpdateProjectAsync(context, TestContext.Current.CancellationToken));
+
+                Assert.Equal(string.Format(CultureInfo.InvariantCulture,
+                    UpdateCommandStrings.FailedToRestoreAfterUpdateFormat, projectFile.FullName), exception.Message);
+                Assert.Equal(
+                    [(OutputLineStream.StdOut, restoreMessage), (OutputLineStream.StdOut, restoreError), (OutputLineStream.StdErr, stderrMessage)],
+                    interaction.DisplayedLines);
+                Assert.Equal(originalProject, await File.ReadAllBytesAsync(projectFile.FullName));
+            }
+            else
+            {
+                var result = await updater.UpdateProjectAsync(context, TestContext.Current.CancellationToken);
+
+                Assert.True(result.UpdatedApplied);
+                Assert.Empty(interaction.DisplayedLines);
+            }
+        }
+
+        var logEntries = (await File.ReadAllLinesAsync(logFilePath)).Select(line =>
+        {
+            Assert.True(CliLogFormat.TryParseFileLogLine(line, out var entry));
+            return entry;
+        });
+        Assert.Equal(
+            [
+                new CliLogFormat.FileLogEntry(CliLogFormat.FileLevelTokens.Information, CliLogFormat.Categories.Package, restoreMessage),
+                new CliLogFormat.FileLogEntry(CliLogFormat.FileLevelTokens.Information, CliLogFormat.Categories.Package, restoreError),
+                new CliLogFormat.FileLogEntry(CliLogFormat.FileLevelTokens.Error, CliLogFormat.Categories.Package, stderrMessage)
+            ],
+            logEntries);
     }
 
     private static async Task<FileInfo> WriteCurrentPolicyAsync(TemporaryWorkspace workspace, string source, bool configureCache)

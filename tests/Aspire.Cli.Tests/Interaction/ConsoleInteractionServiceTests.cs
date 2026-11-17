@@ -251,7 +251,7 @@ public class ConsoleInteractionServiceTests(ITestOutputHelper outputHelper)
         var command = new RootCommand();
         command.Options.Add(ConfigSourceService.s_useSourceOption);
 
-        var source = await service.ResolveAndAcquireConfigSourceAsync(command.Parse("--use-config-source false"), CancellationToken.None);
+        var source = await service.ResolveAndAcquireConfigSourceAsync(command.Parse("--use-config-source false"), ConfigSourceStrings.NewUseSourcePrompt, CancellationToken.None);
 
         Assert.True(Assert.IsType<ConfigSource>(source).OptOut);
         var rendered = output.ToString();
@@ -289,7 +289,7 @@ public class ConsoleInteractionServiceTests(ITestOutputHelper outputHelper)
         var command = new RootCommand();
         command.Options.Add(ConfigSourceService.s_useSourceOption);
 
-        var source = await service.ResolveAndAcquireConfigSourceAsync(command.Parse("--use-config-source"), CancellationToken.None);
+        var source = await service.ResolveAndAcquireConfigSourceAsync(command.Parse("--use-config-source"), ConfigSourceStrings.NewUseSourcePrompt, CancellationToken.None);
 
         Assert.False(Assert.IsType<ConfigSource>(source).OptOut);
         await Verify(output.ToString(), "txt").UseParameters(interactive).ScrubLinesWithReplace(line => line.TrimEnd());
@@ -326,7 +326,7 @@ public class ConsoleInteractionServiceTests(ITestOutputHelper outputHelper)
         var command = new RootCommand();
         command.Options.Add(ConfigSourceService.s_useSourceOption);
 
-        var source = await service.ResolveAndAcquireConfigSourceAsync(command.Parse("--use-config-source false"), CancellationToken.None);
+        var source = await service.ResolveAndAcquireConfigSourceAsync(command.Parse("--use-config-source false"), ConfigSourceStrings.NewUseSourcePrompt, CancellationToken.None);
 
         Assert.True(Assert.IsType<ConfigSource>(source).OptOut);
         await Verify(output.ToString(), "txt").UseParameters(path, reference).ScrubLinesWithReplace(line => line.TrimEnd());

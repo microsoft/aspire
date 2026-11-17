@@ -88,5 +88,6 @@ public partial class DashboardRunsDialog
         ? Loc[nameof(LayoutResources.DashboardRunSelectCurrent)]
         : DashboardRunSelect.FormatRunAge(run.StartedAtUtc, TimeProvider.GetUtcNow(), Loc);
 
-    private string FormatRunDate(DateTimeOffset startedAtUtc) => FormatHelpers.FormatDateTime(TimeProvider, startedAtUtc.UtcDateTime);
+    // The tooltip of a recording, whose label is how long ago it started ("5 minutes ago"), so it gives only the exact time.
+    private string FormatRunTooltip(DateTimeOffset startedAtUtc) => FormatHelpers.FormatTooltipDateTime(TimeProvider, startedAtUtc);
 }

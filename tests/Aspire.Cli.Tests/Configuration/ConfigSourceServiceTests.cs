@@ -110,19 +110,25 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData(null)]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task TemplateSources_RespectsCreationConsent(bool? consent)
+    [InlineData(null, false, false)]
+    [InlineData(null, true, false)]
+    [InlineData(false, false, false)]
+    [InlineData(true, false, false)]
+    [InlineData(null, false, true)]
+    [InlineData(null, true, true)]
+    [InlineData(false, false, true)]
+    [InlineData(true, false, true)]
+    public async Task TemplateSources_RespectsCreationConsent(bool? consent, bool accept, bool microsoftDefault)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var environment = new TestEnvironment(new Dictionary<string, string?>
         {
-            [CliConfigNames.InitSourceUrl] = "https://git.example/configuration"
+            [CliConfigNames.InitSourceUrl] = microsoftDefault ? null : "https://git.example/configuration"
         });
+        var detector = new TestConfigSourceDetector { IsInternal = true };
         var interaction = new TestInteractionService
         {
-            ConfirmCallback = (_, _) => false
+            ConfirmCallback = (_, _) => accept
         };
         var git = new TestConfigSourceRepository
         {
@@ -131,15 +137,17 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
                 """)!.AsObject()))
         };
         using var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(),
-            git: git, environment: environment, interaction: interaction, interactive: true);
+            git: git, environment: environment, detector: detector, interaction: interaction, interactive: true);
 
-        var source = await service.ResolveAndAcquireConfigSourceAsync(ParseConsent(consent), CancellationToken.None);
+        var source = await service.ResolveAndAcquireConfigSourceAsync(ParseConsent(consent), ConfigSourceStrings.NewUseSourcePrompt, CancellationToken.None);
         var sources = await service.GetTemplateSourcesAsync(CancellationToken.None);
         var repeatedSources = await service.GetTemplateSourcesAsync(CancellationToken.None);
 
-        if (consent is true)
+        var repository = microsoftDefault ? ConfigSourceService.MicrosoftRepository : "https://git.example/configuration";
+        if (consent ?? accept)
         {
             Assert.NotNull(source);
+            Assert.Equal(repository, source.Repository);
             Assert.Equal("enterprise", Assert.Single(sources).Key);
             Assert.Equal("enterprise", Assert.Single(repeatedSources).Key);
             Assert.Equal(1, git.Calls);
@@ -153,10 +161,11 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
             Assert.Equal(0, git.Calls);
             Assert.False(Directory.Exists(service.GetCacheDirectory(new ConfigSource
             {
-                Repository = "https://git.example/configuration",
+                Repository = repository,
                 Path = AspireConfigFile.FileName
             })));
         }
+        Assert.Equal(microsoftDefault ? 1 : 0, detector.Calls);
         Assert.False(File.Exists(Path.Combine(workspace.Path, AspireConfigFile.FileName)));
     }
 
@@ -353,7 +362,9 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         }
         if (!force)
         {
-            Assert.Equal(ConfigSourceStrings.UpdateAvailable, Assert.Single(interaction.DisplayedMessages).Message);
+            var notification = Assert.Single(interaction.DisplayedMessages);
+            Assert.Equal(ConfigSourceStrings.UpdateAvailable, notification.Message);
+            Assert.Equal(KnownEmojis.Information, notification.Emoji);
         }
         Assert.Equal(originalGlobal, await File.ReadAllTextAsync(globalFile.FullName));
         Assert.Equal(siblingConfiguration, await File.ReadAllTextAsync(siblingPath));
@@ -822,7 +833,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
                 [CliConfigNames.InitSourceRef] = expected.Ref
             }));
 
-        Assert.Equivalent(expected, await service.ResolveAndAcquireConfigSourceAsync(ParseConsent(true), CancellationToken.None), strict: true);
+        Assert.Equivalent(expected, await service.ResolveAndAcquireConfigSourceAsync(ParseConsent(true), ConfigSourceStrings.NewUseSourcePrompt, CancellationToken.None), strict: true);
         Assert.Equal(0, detector.Calls);
         Assert.Equal(1, git.Calls);
         Assert.False(File.Exists(Path.Combine(workspace.Path, AspireConfigFile.FileName)));
@@ -845,7 +856,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
                 ["ASPIRE_INIT_CONFIG"] = "invalid-legacy-variable"
             }));
 
-        var selected = await service.ResolveAndAcquireConfigSourceAsync(ParseConsent(detected ? true : null), CancellationToken.None);
+        var selected = await service.ResolveAndAcquireConfigSourceAsync(ParseConsent(detected ? true : null), ConfigSourceStrings.NewUseSourcePrompt, CancellationToken.None);
 
         Assert.Equivalent(detected ? new ConfigSource { Repository = ConfigSourceService.MicrosoftRepository, Path = AspireConfigFile.FileName } : null,
             selected, strict: true);
@@ -862,7 +873,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git,
             detector: new TestConfigSourceDetector { IsInternal = true, Outcome = outcome });
 
-        Assert.Null(await service.ResolveAndAcquireConfigSourceAsync(ParseConsent(null), CancellationToken.None));
+        Assert.Null(await service.ResolveAndAcquireConfigSourceAsync(ParseConsent(null), ConfigSourceStrings.NewUseSourcePrompt, CancellationToken.None));
         Assert.Equal(0, git.Calls);
     }
 
@@ -874,7 +885,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git);
 
         var error = await Assert.ThrowsAsync<ConfigSourceException>(() =>
-            service.ResolveAndAcquireConfigSourceAsync(ParseConsent(true), CancellationToken.None));
+            service.ResolveAndAcquireConfigSourceAsync(ParseConsent(true), ConfigSourceStrings.NewUseSourcePrompt, CancellationToken.None));
 
         Assert.Equal(string.Format(CultureInfo.CurrentCulture, ConfigSourceStrings.NoCandidate, CliConfigNames.InitSourceUrl), error.Message);
         Assert.Equal(0, git.Calls);
@@ -909,7 +920,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
             git: git, environment: environment, detector: new TestConfigSourceDetector { IsInternal = true },
             interaction: interaction, interactive: true);
 
-        var source = await service.ResolveAndAcquireConfigSourceAsync(ParseConsent(null), CancellationToken.None);
+        var source = await service.ResolveAndAcquireConfigSourceAsync(ParseConsent(null), ConfigSourceStrings.NewUseSourcePrompt, CancellationToken.None);
 
         Assert.True(prompted);
         Assert.True(Assert.IsType<ConfigSource>(source).OptOut);
@@ -933,7 +944,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
                 [CliConfigNames.InitSourceUrl] = explicitSource ? ConfigSourceService.MicrosoftRepository : null
             }));
 
-        var source = await service.ResolveAndAcquireConfigSourceAsync(ParseConsent(false), CancellationToken.None);
+        var source = await service.ResolveAndAcquireConfigSourceAsync(ParseConsent(false), ConfigSourceStrings.NewUseSourcePrompt, CancellationToken.None);
 
         Assert.True(Assert.IsType<ConfigSource>(source).OptOut);
         Assert.Equal(explicitSource ? 0 : 1, detector.Calls);
@@ -967,7 +978,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
             }));
 
         var error = await Assert.ThrowsAsync<ConfigSourceException>(() =>
-            service.ResolveAndAcquireConfigSourceAsync(ParseConsent(true), CancellationToken.None));
+            service.ResolveAndAcquireConfigSourceAsync(ParseConsent(true), ConfigSourceStrings.NewUseSourcePrompt, CancellationToken.None));
 
         Assert.Equal(string.Format(CultureInfo.CurrentCulture, ConfigSourceStrings.InvalidReadmeUrl,
             CliConfigNames.InitSourceReadmeUrl), error.Message);
@@ -986,7 +997,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
                 [CliConfigNames.InitSourceReadmeUrl] = "../invalid"
             }));
 
-        Assert.Null(await service.ResolveAndAcquireConfigSourceAsync(ParseConsent(null), CancellationToken.None));
+        Assert.Null(await service.ResolveAndAcquireConfigSourceAsync(ParseConsent(null), ConfigSourceStrings.NewUseSourcePrompt, CancellationToken.None));
         Assert.Empty(interaction.DisplayedMessages);
     }
 
@@ -1025,7 +1036,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         using var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(),
             git: git, environment: environment, interaction: interaction, interactive: interactive);
 
-        var source = await service.ResolveAndAcquireConfigSourceAsync(ParseConsent(consent), CancellationToken.None);
+        var source = await service.ResolveAndAcquireConfigSourceAsync(ParseConsent(consent), ConfigSourceStrings.NewUseSourcePrompt, CancellationToken.None);
         List<string> expectedMessages =
         [
             ConfigSourceStrings.Explanation,
@@ -1059,7 +1070,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
             detector: new TestConfigSourceDetector { IsInternal = true });
 
         Assert.Equal(ConfigSourceStrings.ConsentRequired, (await Assert.ThrowsAsync<ConfigSourceException>(() =>
-            service.ResolveAndAcquireConfigSourceAsync(ParseConsent(null), CancellationToken.None))).Message);
+            service.ResolveAndAcquireConfigSourceAsync(ParseConsent(null), ConfigSourceStrings.NewUseSourcePrompt, CancellationToken.None))).Message);
     }
 
     [Theory]
@@ -1073,7 +1084,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         {
             ConfirmCallback = (prompt, defaultValue) =>
             {
-                Assert.Equal(ConfigSourceStrings.UseSourcePrompt, prompt);
+                Assert.Equal(ConfigSourceStrings.NewUseSourcePrompt, prompt);
                 Assert.True(defaultValue);
                 return accepted;
             }
@@ -1082,7 +1093,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
             detector: new TestConfigSourceDetector { IsInternal = true }, interaction: interaction, interactive: true);
 
         Assert.Equivalent(accepted ? new ConfigSource { Repository = ConfigSourceService.MicrosoftRepository, Path = AspireConfigFile.FileName } : new ConfigSource { OptOut = true },
-            await service.ResolveAndAcquireConfigSourceAsync(ParseConsent(null), CancellationToken.None), strict: true);
+            await service.ResolveAndAcquireConfigSourceAsync(ParseConsent(null), ConfigSourceStrings.NewUseSourcePrompt, CancellationToken.None), strict: true);
         Assert.Equal(accepted ? 1 : 0, git.Calls);
         Assert.Single(interaction.BooleanPromptCalls);
     }
@@ -1096,7 +1107,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         using var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git,
             detector: new TestConfigSourceDetector { IsInternal = true }, interaction: interaction, interactive: true);
 
-        var source = await service.ResolveAndAcquireConfigSourceAsync(ParseConsent(null), CancellationToken.None);
+        var source = await service.ResolveAndAcquireConfigSourceAsync(ParseConsent(null), ConfigSourceStrings.NewUseSourcePrompt, CancellationToken.None);
 
         Assert.False(Assert.IsType<ConfigSource>(source).OptOut);
         Assert.True(Assert.Single(interaction.BooleanPromptCalls).DefaultValue);
@@ -1113,7 +1124,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git,
             detector: new TestConfigSourceDetector { IsInternal = true }, interaction: interaction, interactive: true);
 
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => service.ResolveAndAcquireConfigSourceAsync(ParseConsent(null), CancellationToken.None));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => service.ResolveAndAcquireConfigSourceAsync(ParseConsent(null), ConfigSourceStrings.NewUseSourcePrompt, CancellationToken.None));
         Assert.Equal(0, git.Calls);
         Assert.False(File.Exists(Path.Combine(workspace.Path, AspireConfigFile.FileName)));
     }
@@ -1277,7 +1288,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         using var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), environment: environment);
 
         var source = Assert.IsType<ConfigSource>(
-            await service.ResolveAndAcquireConfigSourceAsync(ParseConsent(true), TestContext.Current.CancellationToken));
+            await service.ResolveAndAcquireConfigSourceAsync(ParseConsent(true), ConfigSourceStrings.NewUseSourcePrompt, TestContext.Current.CancellationToken));
         await service.MaterializeAsync(source, workspace.WorkspaceRoot, TestContext.Current.CancellationToken);
 
         await Verify(await File.ReadAllTextAsync(Path.Combine(workspace.Path, AspireConfigFile.FileName)), "json");
@@ -2061,9 +2072,10 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task Update_ForcesFetchAndRetainsOnlyLatestSnapshot(bool changed)
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public async Task Update_ForcesFetchAndRetainsOnlyLatestSnapshot(bool sourceChanged, bool localEdits)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var context = workspace.CreateExecutionContext();
@@ -2083,9 +2095,13 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         var stale = Directory.CreateDirectory(Path.Combine(cache, Guid.NewGuid().ToString("N")));
         await File.WriteAllTextAsync(Path.Combine(stale.FullName, "stale.txt"), "obsolete snapshot");
         File.SetAttributes(Path.Combine(stale.FullName, "stale.txt"), FileAttributes.ReadOnly);
-        if (changed)
+        if (sourceChanged)
         {
             git.ReadConfiguration = (_, _) => Task.FromResult(("version-2", new JsonObject()));
+        }
+        if (localEdits)
+        {
+            await ConfigurationService.SetConfigurationInFileAsync(path, "skillSources.team.repository", "example/local");
         }
         clock.UtcNow += TimeSpan.FromSeconds(1);
         var interaction = new TestInteractionService();
@@ -2104,8 +2120,14 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
                 Assert.Equal($"[blue]{string.Format(SharedCommandStrings.FetchingSource,
                     SharedCommandStrings.GitFetchConfigurationSource, s_source.Repository)}[/]", message.Message);
                 Assert.Equal(ConsoleOutput.Error, message.ConsoleOverride);
+            },
+            message =>
+            {
+                Assert.Equal(sourceChanged || localEdits ? ConfigSourceStrings.Updated : ConfigSourceStrings.AlreadyUpToDate, message.Message);
+                Assert.Equal(sourceChanged || localEdits ? KnownEmojis.CheckMarkButton : KnownEmojis.Information, message.Emoji);
+                Assert.Equal(ConsoleOutput.Error, message.ConsoleOverride);
             });
-        if (!changed)
+        if (!sourceChanged)
         {
             Assert.Equal(original, await File.ReadAllTextAsync(path));
         }
@@ -2116,7 +2138,7 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
         var metadata = JsonSerializer.Deserialize(await File.ReadAllTextAsync(
             Path.Combine(next.GetCacheDirectory(s_source), pointer, "metadata.json")), JsonSourceGenerationContext.Default.ConfigSourceMetadata)!;
         Assert.Equal(clock.UtcNow, metadata.FetchedAt);
-        Assert.Equal(changed ? "version-2" : "version-1", metadata.Version);
+        Assert.Equal(sourceChanged ? "version-2" : "version-1", metadata.Version);
         Assert.Equal("version-1", retained.Metadata.Version);
     }
 

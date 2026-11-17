@@ -3,33 +3,27 @@
 
 namespace Aspire.Cli.Agents.Hooks;
 
-internal sealed class TelemetryHookConfigurator(
-    ITelemetryHookInstaller installer,
-    IEnumerable<IAgentClient> clients) : ITelemetryHookConfigurator
+internal sealed class TelemetryHookConfigurator(ITelemetryHookInstaller installer) : ITelemetryHookConfigurator
 {
-    public async Task<TelemetryHookConfigurationResult> ConfigureAsync(
-        AgentEnvironment detectedEnvironments, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<TelemetryHookResult>> ConfigureAsync(
+        IReadOnlyList<IAgentClient> clients,
+        CancellationToken cancellationToken)
     {
-        // VS Code and OpenCode do not yet have verified telemetry hook schemas.
-        var supportedEnvironments = detectedEnvironments &
-            (AgentEnvironment.CopilotApp | AgentEnvironment.CopilotCli | AgentEnvironment.ClaudeCode);
-        if (supportedEnvironments == AgentEnvironment.None)
+        var eligibleClients = clients.Where(client => client.SupportsTelemetryHooks).ToList();
+        if (eligibleClients.Count == 0)
         {
-            return new TelemetryHookConfigurationResult(AgentEnvironment.None, []);
+            return [];
         }
 
         // Keep compatibility scripts current for existing registrations and older clients.
         await installer.EnsureInstalledAsync(cancellationToken);
 
-        var configured = AgentEnvironment.None;
-        var skipped = new List<TelemetryHookSkip>();
-        foreach (var client in clients.Where(client => (client.Environments & supportedEnvironments) != AgentEnvironment.None))
+        var results = new List<TelemetryHookResult>(eligibleClients.Count);
+        foreach (var client in eligibleClients)
         {
-            var result = await client.ConfigureTelemetryHooksAsync(supportedEnvironments, cancellationToken);
-            configured |= result.ConfiguredEnvironments;
-            skipped.AddRange(result.Skipped);
+            results.Add(new TelemetryHookResult(client, await client.ConfigureTelemetryHookAsync(cancellationToken)));
         }
 
-        return new TelemetryHookConfigurationResult(configured, skipped);
+        return results;
     }
 }
