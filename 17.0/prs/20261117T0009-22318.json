@@ -1,0 +1,9 @@
+{
+  "author": "ellahathaway",
+  "comment": "Backport: Copilot AppImage detection in agent init",
+  "mergedAt": "2026-11-17T00:09:28Z",
+  "number": 22318,
+  "runDate": "2026-11-17T06:05:00Z",
+  "status": "included",
+  "title": "[release/17.0] Detect Copilot AppImages before first launch"
+}

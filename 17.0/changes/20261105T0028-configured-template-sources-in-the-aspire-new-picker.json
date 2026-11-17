@@ -6,7 +6,9 @@
   "changeType": "Improvements",
   "communityContributors": [],
   "description": "Interactive `aspire new` now lists templates from configured Git and directory sources under headed groups alongside built-in templates, and template sources support an optional `displayName`.",
-  "docsPrs": [],
+  "docsPrs": [
+    2057
+  ],
   "docsRequired": true,
   "emoji": "🧭",
   "firstMergedAt": "2026-11-05T00:28:25Z",

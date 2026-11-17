@@ -1,0 +1,9 @@
+{
+  "author": "joperezr",
+  "comment": "Backport: Visual Studio Aspire version discovery in empty template",
+  "mergedAt": "2026-11-17T00:09:50Z",
+  "number": 22193,
+  "runDate": "2026-11-17T06:05:00Z",
+  "status": "included",
+  "title": "[release/17.0] Restore Visual Studio Aspire version discovery in empty template"
+}

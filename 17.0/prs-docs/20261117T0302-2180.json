@@ -1,0 +1,9 @@
+{
+  "author": "maddymontaquila",
+  "comment": "Documents matching changelog entry",
+  "mergedAt": "2026-11-17T03:02:19Z",
+  "number": 2180,
+  "runDate": "2026-11-17T06:05:00Z",
+  "status": "included",
+  "title": "docs: Migrate to AddDotnetProject/DotnetProjectResource and remove Aspire.AppHost.Sdk"
+}

@@ -1,0 +1,19 @@
+{
+  "area": "Templates",
+  "areaEmoji": "📄",
+  "backport": true,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Restores the \"Enlist in Aspire orchestration\" option in Visual Studio's new-project dialog by bringing back version choice metadata in the empty AppHost template.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🪟",
+  "firstMergedAt": "2026-11-17T00:09:50Z",
+  "lastMergedAt": "2026-11-17T00:09:50Z",
+  "name": "Visual Studio Aspire version discovery in empty template",
+  "owner": "joperezr",
+  "prs": [
+    22193
+  ]
+}

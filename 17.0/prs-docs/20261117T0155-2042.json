@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "AKS guidance consolidation; no matching entry",
+  "mergedAt": "2026-11-17T01:55:03Z",
+  "number": 2042,
+  "runDate": "2026-11-17T06:05:00Z",
+  "status": "excluded",
+  "title": "[docs] Consolidate AKS cluster, registry, identity, and node pool guidance"
+}

@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": true,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "`aspire agent init` now detects Copilot AppImages in `~/Applications` or `PATH` directories before they have been launched for the first time.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "📦",
+  "firstMergedAt": "2026-11-17T00:09:28Z",
+  "lastMergedAt": "2026-11-17T00:09:28Z",
+  "name": "Copilot AppImage detection in agent init",
+  "owner": "ellahathaway",
+  "prs": [
+    22318
+  ]
+}

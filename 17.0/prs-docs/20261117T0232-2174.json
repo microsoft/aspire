@@ -1,0 +1,9 @@
+{
+  "author": "karolz-ms",
+  "comment": "Documents matching changelog entry",
+  "mergedAt": "2026-11-17T02:32:49Z",
+  "number": 2174,
+  "runDate": "2026-11-17T06:05:00Z",
+  "status": "included",
+  "title": "Document Aspire CLI shell completion (`aspire completions script`)"
+}

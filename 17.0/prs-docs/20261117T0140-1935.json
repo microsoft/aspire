@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents matching changelog entry",
+  "mergedAt": "2026-11-17T01:40:30Z",
+  "number": 1935,
+  "runDate": "2026-11-17T06:05:00Z",
+  "status": "included",
+  "title": "[docs] Document container registry images in published Kubernetes charts"
+}

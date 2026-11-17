@@ -1,0 +1,21 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "`aspire agent init` now removes older static copies of Aspire skills from project and user skill folders when a configured Aspire plugin replaces them.",
+  "docsPrs": [
+    2063
+  ],
+  "docsRequired": false,
+  "emoji": "🧹",
+  "firstMergedAt": "2026-11-17T00:22:44Z",
+  "lastMergedAt": "2026-11-17T00:22:44Z",
+  "name": "Static Aspire skill copies removed during agent init",
+  "owner": "ellahathaway",
+  "prs": [
+    22277
+  ]
+}

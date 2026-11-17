@@ -8,7 +8,9 @@
     "@vicancy"
   ],
   "description": "Azure Web PubSub hosting now supports `RunAsEmulator()`, letting AppHosts run locally against the Web PubSub emulator container without an Azure subscription, with local connection strings and hub event handler callbacks wired automatically. The emulator image is pinned to `1.0.0-beta.2`, which exposes a built-in `GET /api/health` endpoint so the resource uses Aspire's standard `WithHttpHealthCheck` instead of a custom check.",
-  "docsPrs": [],
+  "docsPrs": [
+    2185
+  ],
   "docsRequired": true,
   "emoji": "📡",
   "firstMergedAt": "2026-10-14T07:14:41Z",

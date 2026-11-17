@@ -1,0 +1,9 @@
+{
+  "author": "ellahathaway",
+  "comment": "Static Aspire skill copies removed during agent init",
+  "mergedAt": "2026-11-17T00:22:44Z",
+  "number": 22277,
+  "runDate": "2026-11-17T06:05:00Z",
+  "status": "included",
+  "title": "[release/17.0] Remove static Aspire skill copies during aspire agent init"
+}

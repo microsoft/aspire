@@ -1,14 +1,16 @@
 {
   "area": "AppHost",
-  "areaEmoji": "\ud83c\udfe0",
+  "areaEmoji": "🏠",
   "backport": false,
   "breaking": false,
   "changeType": "New features",
   "communityContributors": [],
   "description": "TypeScript AppHosts can now pass a callback to `withTerminal` to set the terminal's columns and rows. `WithTerminal` and `TerminalOptions` no longer require the `ASPIRETERMINAL001` experimental suppression.",
-  "docsPrs": [],
+  "docsPrs": [
+    1959
+  ],
   "docsRequired": true,
-  "emoji": "\ud83d\udda5\ufe0f",
+  "emoji": "🖥️",
   "firstMergedAt": "2026-10-27T08:29:27Z",
   "lastMergedAt": "2026-10-27T08:29:27Z",
   "name": "Terminal configuration callbacks in TypeScript AppHosts",

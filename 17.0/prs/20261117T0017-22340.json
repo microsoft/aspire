@@ -1,0 +1,9 @@
+{
+  "author": "maddymontaquila",
+  "comment": "Obsolete AppHost SDK reported by update --migrate",
+  "mergedAt": "2026-11-17T00:17:25Z",
+  "number": 22340,
+  "runDate": "2026-11-17T06:05:00Z",
+  "status": "included",
+  "title": "[release/17.0] Report obsolete Aspire.AppHost.Sdk in aspire update --migrate"
+}

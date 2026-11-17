@@ -1,0 +1,21 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "`aspire update --migrate` now explains that an AppHost still using the obsolete `Aspire.AppHost.Sdk` needs manual migration instead of claiming there is nothing to migrate.",
+  "docsPrs": [
+    2180
+  ],
+  "docsRequired": true,
+  "emoji": "🧳",
+  "firstMergedAt": "2026-11-17T00:17:25Z",
+  "lastMergedAt": "2026-11-17T00:17:25Z",
+  "name": "Obsolete AppHost SDK reported by update --migrate",
+  "owner": "maddymontaquila",
+  "prs": [
+    22340
+  ]
+}

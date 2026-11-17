@@ -6,7 +6,9 @@
   "changeType": "New features",
   "communityContributors": [],
   "description": "The dashboard now keeps the last terminal screen (including Sixel/Kitty graphics) visible when a workload exits or the connection drops, instead of clearing it. A disconnect banner explains what happened and offers recovery actions: restarting the owning resource for resource terminals, or closing the tab for docked terminals, while a collapsible top-right icon lets you uncover the retained output.",
-  "docsPrs": [],
+  "docsPrs": [
+    1904
+  ],
   "docsRequired": true,
   "emoji": "🔌",
   "firstMergedAt": "2026-10-17T01:36:36Z",

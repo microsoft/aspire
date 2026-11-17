@@ -1,14 +1,16 @@
 {
   "area": "AppHost",
-  "areaEmoji": "\ud83c\udfe0",
+  "areaEmoji": "🏠",
   "backport": false,
   "breaking": false,
   "changeType": "Improvements",
   "communityContributors": [],
   "description": "KubernetesManifestResource.WithField now accepts nested objects and arrays, enabling custom manifests such as CiliumNetworkPolicy from polyglot AppHosts.",
-  "docsPrs": [],
+  "docsPrs": [
+    2072
+  ],
   "docsRequired": false,
-  "emoji": "\u2638\ufe0f",
+  "emoji": "☸️",
   "firstMergedAt": "2026-11-06T05:23:54Z",
   "lastMergedAt": "2026-11-11T00:12:56Z",
   "name": "Structured Kubernetes manifest field values",

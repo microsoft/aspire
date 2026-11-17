@@ -6,7 +6,9 @@
   "changeType": "Improvements",
   "communityContributors": [],
   "description": "`aspire terminal attach` and `aspire terminal tape play` now resolve an exact resource instance ID instead of falling back to a numeric replica index or interactive picker, so commands always connect to the replica you named. Replicated resources require an exact instance ID (discoverable via `aspire ps` or `aspire describe`); the legacy `--replica`/`-r` numeric option remains hidden but functional for older scripts and VS Code extensions.",
-  "docsPrs": [],
+  "docsPrs": [
+    1913
+  ],
   "docsRequired": true,
   "emoji": "🎯",
   "firstMergedAt": "2026-10-19T22:08:48Z",
