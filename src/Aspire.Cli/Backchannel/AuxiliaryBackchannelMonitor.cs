@@ -39,6 +39,7 @@ internal sealed class AuxiliaryBackchannelMonitor(
     private static readonly TimeSpan s_initialUnreachableRetryDelay = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan s_maxUnreachableRetryDelay = TimeSpan.FromMinutes(5);
 
+    private Task? _shutdownCleanupTask;
     private readonly ConcurrentDictionary<string, AppHostAuxiliaryBackchannel> _connectionsBySocketPath = new(StringComparers.FileSystemPath);
     private readonly IReadOnlyList<AppHostSocketDirectory> _socketDirectories = AppHostSocketManager.GetSocketDirectories(executionContext.HomeDirectory.FullName);
 
@@ -339,7 +340,10 @@ internal sealed class AuxiliaryBackchannelMonitor(
                 }
             }
 
-            await Task.WhenAll(connections.Select(DisconnectAsync)).ConfigureAwait(false);
+            // Retain the cleanup so DisposeAsync can still await it if the host's shutdown timeout
+            // (200 ms in Release) expires and StopAsync returns before the AppHost finishes closing.
+            _shutdownCleanupTask = Task.WhenAll(connections.Select(DisconnectAsync));
+            await _shutdownCleanupTask.ConfigureAwait(false);
         }
     }
 
@@ -411,6 +415,18 @@ internal sealed class AuxiliaryBackchannelMonitor(
     public async ValueTask DisposeAsync()
     {
         base.Dispose();
+
+        if (_shutdownCleanupTask is { } shutdownCleanupTask)
+        {
+            try
+            {
+                await shutdownCleanupTask.ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                logger.LogDebug(ex, "Error closing auxiliary backchannel connections during shutdown");
+            }
+        }
 
         var connections = new List<AppHostAuxiliaryBackchannel>();
         foreach (var socketPath in _connectionsBySocketPath.Keys)
