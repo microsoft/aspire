@@ -8,6 +8,7 @@ using System.Text.RegularExpressions;
 using System.Xml;
 using System.Xml.Linq;
 using Aspire.Cli.Configuration;
+using Aspire.Cli.Diagnostics;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.NuGet;
@@ -28,7 +29,7 @@ internal interface IProjectUpdater
     Task<ProjectUpdateResult> UpdateProjectAsync(UpdatePackagesContext context, CancellationToken cancellationToken = default);
 }
 
-internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDotNetCliRunner runner, IInteractionService interactionService, IMemoryCache cache, CliExecutionContext executionContext, FallbackProjectParser fallbackParser, BundleNuGetService nuGetService) : IProjectUpdater
+internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDotNetCliRunner runner, IInteractionService interactionService, IMemoryCache cache, CliExecutionContext executionContext, FallbackProjectParser fallbackParser, BundleNuGetService nuGetService, FileLoggerProvider fileLoggerProvider) : IProjectUpdater
 {
     public async Task<ProjectUpdateResult> UpdateProjectAsync(UpdatePackagesContext context, CancellationToken cancellationToken = default)
     {
@@ -321,21 +322,24 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
             {
                 // Validate the complete updated graph, not old versions against a new feed or a
                 // half-updated graph. Native restore retains each referenced project's own settings.
-                await interactionService.ShowStatusAsync(
+                var restoreOutput = new OutputCollector(fileLoggerProvider, CliLogFormat.Categories.Package);
+                var restoreExitCode = await interactionService.ShowStatusAsync(
                     UpdateCommandStrings.RestoringPackagesAfterUpdate,
                     async () =>
                     {
                         await transaction.VerifyAsync(cancellationToken);
-                        var restoreExitCode = await runner.RestoreAsync(projectFile, new()
+                        return await runner.RestoreAsync(projectFile, new()
                         {
+                            StandardOutputCallback = restoreOutput.AppendOutput,
+                            StandardErrorCallback = restoreOutput.AppendError,
                             NuGetRestoreTargetsFile = restorePreview?.TargetsFile ?? repairedRestorePreview?.TargetsFile
                         }, cancellationToken);
-                        if (restoreExitCode != 0)
-                        {
-                            throw new ProjectUpdaterException(string.Format(CultureInfo.InvariantCulture, UpdateCommandStrings.FailedToRestoreAfterUpdateFormat, projectFile.FullName));
-                        }
-                        return 0;
                     });
+                if (restoreExitCode != 0)
+                {
+                    interactionService.DisplayLines(restoreOutput.GetLines());
+                    throw new ProjectUpdaterException(string.Format(CultureInfo.InvariantCulture, UpdateCommandStrings.FailedToRestoreAfterUpdateFormat, projectFile.FullName));
+                }
             }
 
             await transaction.VerifyAsync(cancellationToken);

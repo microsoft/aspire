@@ -123,6 +123,9 @@ Automatic SDK rewrites are limited to unconditional declarations. Conditional
 SDK declarations that cannot be safely classified require an explicit version
 edit; source fallback does not guess whether their MSBuild conditions are active.
 
+If the post-update package restore fails, `aspire update` displays the restore
+diagnostics and includes the restore output in its CLI log.
+
 ## Configured template sources
 
 Register named local directories or Git repositories in the
