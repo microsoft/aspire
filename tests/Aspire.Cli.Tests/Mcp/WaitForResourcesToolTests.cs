@@ -455,6 +455,12 @@ public class WaitForResourcesToolTests
                 State = "Running",
                 ErrorMessage = "secret=timeout-credential"
             },
+            ["parameter-wait"] = new()
+            {
+                Success = false,
+                TimedOut = true,
+                State = "UnresolvedParameters"
+            },
             ["disappeared"] = new()
             {
                 Success = false,
@@ -505,6 +511,12 @@ public class WaitForResourcesToolTests
                 resource,
                 "slow",
                 "Running",
+                "timeout",
+                "Timed out waiting for the target state."),
+            resource => AssertResourceOutcome(
+                resource,
+                "parameter-wait",
+                "UnresolvedParameters",
                 "timeout",
                 "Timed out waiting for the target state."),
             resource => AssertResourceOutcome(

@@ -625,6 +625,7 @@ public class ListResourcesToolTests(ITestOutputHelper outputHelper)
     [InlineData("RuntimeUnhealthy", "RuntimeUnhealthy")]
     [InlineData("Starting", "Starting")]
     [InlineData("Stopping", "Stopping")]
+    [InlineData("UnresolvedParameters", "UnresolvedParameters")]
     [InlineData("ValueMissing", "ValueMissing")]
     [InlineData("Waiting", "Waiting")]
     [InlineData("Unknown", "unknown")]

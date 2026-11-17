@@ -7,6 +7,7 @@ export const ResourceState = {
     Stopping: 'Stopping',
     Stopped: 'Stopped',
     Waiting: 'Waiting',
+    UnresolvedParameters: 'UnresolvedParameters',
     NotStarted: 'NotStarted',
     Finished: 'Finished',
     Exited: 'Exited',
