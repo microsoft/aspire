@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net11.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <IsShipping>false</IsShipping>
+    <IsAspirePolyglotCompatible>false</IsAspirePolyglotCompatible>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../../../src/Aspire.Hosting.Native.Client/Aspire.Hosting.Native.Client.csproj" />
+  </ItemGroup>
+</Project>

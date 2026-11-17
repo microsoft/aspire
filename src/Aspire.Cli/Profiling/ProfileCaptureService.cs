@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
-using System.Net.Http.Json;
 using Aspire.Cli.Bundles;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Diagnostics;

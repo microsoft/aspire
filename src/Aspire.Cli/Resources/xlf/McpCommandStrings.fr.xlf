@@ -4,22 +4,22 @@
     <body>
       <trans-unit id="CallCommand_Description">
         <source>Call an MCP tool on a running resource</source>
-        <target state="new">Call an MCP tool on a running resource</target>
+        <target state="translated">Appeler un outil MCP sur une ressource en cours d'exécution</target>
         <note />
       </trans-unit>
       <trans-unit id="CallCommand_InputOptionDescription">
         <source>JSON input to pass to the tool</source>
-        <target state="new">JSON input to pass to the tool</target>
+        <target state="translated">Entrée JSON à transmettre à l'outil</target>
         <note />
       </trans-unit>
       <trans-unit id="CallCommand_ResourceArgumentDescription">
         <source>The name of the resource that exposes the MCP tool</source>
-        <target state="new">The name of the resource that exposes the MCP tool</target>
+        <target state="translated">Le nom de la ressource qui expose l'outil MCP</target>
         <note />
       </trans-unit>
       <trans-unit id="CallCommand_ToolArgumentDescription">
         <source>The name of the MCP tool to call</source>
-        <target state="new">The name of the MCP tool to call</target>
+        <target state="translated">Le nom de l'outil MCP à appeler</target>
         <note />
       </trans-unit>
       <trans-unit id="DeprecatedCommandWarning">
@@ -29,7 +29,7 @@
       </trans-unit>
       <trans-unit id="Description">
         <source>Interact with MCP (Model Context Protocol) tools exposed by Aspire resources</source>
-        <target state="needs-review-translation">Gérez le serveur MCP (Model Context Protocol). (obsolète, utilisez « agent »)</target>
+        <target state="translated">Interagissez avec les outils MCP (Model Context Protocol) exposés par les ressources Aspire</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_AdditionalOptionsSelectPrompt">
@@ -59,7 +59,7 @@
       </trans-unit>
       <trans-unit id="InitCommand_Description">
         <source>Initialize MCP server configuration for detected agent environments (deprecated, use 'agent init')</source>
-        <target state="needs-review-translation">Initialiser la configuration du serveur MCP pour les environnements d’agent détectés. (obsolète, utilisez « agent init »)</target>
+        <target state="translated">Initialiser la configuration du serveur MCP pour les environnements d'agent détectés (obsolète ; utiliser « agent init »)</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_DetectingAgentEnvironments">
@@ -89,17 +89,17 @@
       </trans-unit>
       <trans-unit id="StartCommand_Description">
         <source>Start the MCP (Model Context Protocol) server (deprecated, use 'agent mcp')</source>
-        <target state="needs-review-translation">Démarrer le serveur MCP (Model Context Protocol). (obsolète, utilisez « agent mcp »)</target>
+        <target state="translated">Démarrez le serveur MCP (Model Context Protocol) (obsolète ; utilisez 'agent mcp')</target>
         <note />
       </trans-unit>
       <trans-unit id="ToolsCommand_Description">
         <source>List MCP tools exposed by running resources</source>
-        <target state="new">List MCP tools exposed by running resources</target>
+        <target state="translated">Lister les outils MCP exposés par les ressources en cours d'exécution</target>
         <note />
       </trans-unit>
       <trans-unit id="ToolsCommand_FormatOptionDescription">
         <source>Output format (Table or Json)</source>
-        <target state="new">Output format (Table or Json)</target>
+        <target state="translated">Format de sortie (Table ou JSON)</target>
         <note />
       </trans-unit>
     </body>

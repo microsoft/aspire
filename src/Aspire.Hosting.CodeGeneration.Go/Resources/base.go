@@ -26,12 +26,20 @@ import (
 //
 // Callers retrieve the chain's error with Err() at any logical boundary
 // (typically once at the end of a builder chain or before using the result of
-// a value-returning method).
+// a value-returning method). Every wrapper also reports the error it owns to
+// the client, and the builder's Err() and Build() combine the errors from all
+// failed handles, so failed children that were never checked still stop Build().
+//
+// Callbacks run on separate goroutines and can capture a wrapper also used by
+// the builder chain. The sticky error and lazy collection accessors are
+// synchronized; concurrent capability calls still run independently.
 
 type handleWrapperBase struct {
-	handle *handle
-	err    error
-	client *client
+	handle       *handle
+	errMu        sync.RWMutex
+	err          error
+	client       *client
+	collectionMu sync.Mutex
 }
 
 func newHandleWrapperBase(h *handle, c *client) *handleWrapperBase {
@@ -39,6 +47,11 @@ func newHandleWrapperBase(h *handle, c *client) *handleWrapperBase {
 }
 
 func newErroredHandleWrapperBase(err error, c *client) *handleWrapperBase {
+	c.recordErr(err)
+	return &handleWrapperBase{err: err, client: c}
+}
+
+func newPropagatedErroredHandleWrapperBase(err error, c *client) *handleWrapperBase {
 	return &handleWrapperBase{err: err, client: c}
 }
 
@@ -52,14 +65,40 @@ func (h *handleWrapperBase) getClient() *client { return h.client }
 
 // Err returns the first error recorded on this wrapper. Returns nil if the
 // wrapper resolved successfully and no chained operation has failed.
-func (h *handleWrapperBase) Err() error { return h.err }
+func (h *handleWrapperBase) Err() error {
+	h.errMu.RLock()
+	defer h.errMu.RUnlock()
+	return h.err
+}
 
-// setErr records an error on this wrapper. The first non-nil error wins;
-// later errors are dropped to keep failure causality clear in chains.
+// setErr records an error owned by this wrapper and reports it to the client.
+// The first non-nil error wins; later errors are dropped to keep failure
+// causality clear in chains.
 func (h *handleWrapperBase) setErr(err error) {
+	if err == nil {
+		return
+	}
+	h.errMu.Lock()
+	if h.err != nil {
+		h.errMu.Unlock()
+		return
+	}
+	h.err = err
+	h.errMu.Unlock()
+	h.client.recordErr(err)
+}
+
+// setPropagatedErr short-circuits this wrapper with an error already owned by
+// another handle without reporting the same failure to the client again.
+func (h *handleWrapperBase) setPropagatedErr(err error) {
+	if err == nil {
+		return
+	}
+	h.errMu.Lock()
 	if h.err == nil {
 		h.err = err
 	}
+	h.errMu.Unlock()
 }
 
 // ── resourceBuilderBase ───────────────────────────────────────────────────────
@@ -74,6 +113,10 @@ func newResourceBuilderBase(h *handle, c *client) *resourceBuilderBase {
 
 func newErroredResourceBuilder(err error, c *client) *resourceBuilderBase {
 	return &resourceBuilderBase{handleWrapperBase: newErroredHandleWrapperBase(err, c)}
+}
+
+func newPropagatedErroredResourceBuilder(err error, c *client) *resourceBuilderBase {
+	return &resourceBuilderBase{handleWrapperBase: newPropagatedErroredHandleWrapperBase(err, c)}
 }
 
 // ── ReferenceExpression ───────────────────────────────────────────────────────
@@ -250,8 +293,8 @@ func newListWithGetter[T any](parent *handleWrapperBase, getterCapabilityID stri
 }
 
 func (l *List[T]) resolveListHandle(ctx context.Context) (*handle, error) {
-	if l.parent.err != nil {
-		return nil, l.parent.err
+	if err := l.parent.Err(); err != nil {
+		return nil, err
 	}
 	l.handleMu.Lock()
 	cached := l.resolvedHandle
@@ -279,10 +322,20 @@ func (l *List[T]) resolveListHandle(ctx context.Context) (*handle, error) {
 	return listHandle, nil
 }
 
-// ToJSON returns the list handle as a JSON-serializable map.
+// Err returns the first error on the list's parent, including handle resolution
+// failures recorded by ToJSON.
+func (l *List[T]) Err() error { return l.parent.Err() }
+
+// ToJSON returns the list handle as a JSON-serializable map, or nil on failure.
+// Consult Err before using the result.
 func (l *List[T]) ToJSON() map[string]any {
 	h, err := l.resolveListHandle(context.Background())
-	if err != nil || h == nil {
+	if err != nil {
+		l.parent.setErr(err)
+		return nil
+	}
+	if h == nil {
+		l.parent.setErr(errors.New("aspire: list getter returned a nil handle"))
 		return nil
 	}
 	out := h.ToJSON()
@@ -301,10 +354,7 @@ func (l *List[T]) Count() (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	if n, ok := result.(float64); ok {
-		return int(n), nil
-	}
-	return 0, nil
+	return decodeAs[int](result)
 }
 
 func (l *List[T]) Get(index int) (T, error) {
@@ -411,8 +461,8 @@ func newDictWithGetter[K comparable, V any](parent *handleWrapperBase, getterCap
 }
 
 func (d *Dict[K, V]) resolveDictHandle(ctx context.Context) (*handle, error) {
-	if d.parent.err != nil {
-		return nil, d.parent.err
+	if err := d.parent.Err(); err != nil {
+		return nil, err
 	}
 	d.handleMu.Lock()
 	cached := d.resolvedHandle
@@ -440,9 +490,20 @@ func (d *Dict[K, V]) resolveDictHandle(ctx context.Context) (*handle, error) {
 	return dictHandle, nil
 }
 
+// Err returns the first error on the dictionary's parent, including handle
+// resolution failures recorded by ToJSON.
+func (d *Dict[K, V]) Err() error { return d.parent.Err() }
+
+// ToJSON returns the dictionary handle as a JSON-serializable map, or nil on
+// failure. Consult Err before using the result.
 func (d *Dict[K, V]) ToJSON() map[string]any {
 	h, err := d.resolveDictHandle(context.Background())
-	if err != nil || h == nil {
+	if err != nil {
+		d.parent.setErr(err)
+		return nil
+	}
+	if h == nil {
+		d.parent.setErr(errors.New("aspire: dictionary getter returned a nil handle"))
 		return nil
 	}
 	out := h.ToJSON()
@@ -461,10 +522,7 @@ func (d *Dict[K, V]) Count() (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	if n, ok := result.(float64); ok {
-		return int(n), nil
-	}
-	return 0, nil
+	return decodeAs[int](result)
 }
 
 func (d *Dict[K, V]) Get(key K) (V, error) {
@@ -627,6 +685,7 @@ func (d *Dict[K, V]) Clear() error {
 
 func StringPtr(s string) *string    { return &s }
 func IntPtr(i int) *int             { return &i }
+func Int64Ptr(i int64) *int64       { return &i }
 func BoolPtr(b bool) *bool          { return &b }
 func Float64Ptr(f float64) *float64 { return &f }
 
@@ -649,6 +708,8 @@ func serializeValue(value any) any {
 	}
 
 	switch v := value.(type) {
+	case json.Number:
+		return v
 	case *handle:
 		return v.ToJSON()
 	case *ReferenceExpression:
@@ -701,6 +762,11 @@ func isNil(value any) bool {
 	}
 }
 
+func isValidJSONNumber(value json.Number) bool {
+	_, err := json.Marshal(value)
+	return err == nil
+}
+
 func serializeReflectedCollection(value any) (any, bool) {
 	reflectedValue := reflect.ValueOf(value)
 	switch reflectedValue.Kind() {
@@ -734,25 +800,42 @@ func serializeReflectedCollection(value any) (any, bool) {
 }
 
 // callbackArg fetches a positional argument from the slice and decodes it
-// to T. Returns the zero value if the index is out of range or the value
-// cannot be decoded. Used by generated callback shim wrappers that adapt
-// the transport's positional `[]any` invocation back to the user's typed
-// callback signature.
+// to T. Invalid arguments panic with a private error that the callback
+// dispatcher translates into a JSON-RPC invalid-params response, before the
+// user's typed callback can run with a silently substituted zero value.
 func callbackArg[T any](args []any, idx int) T {
-	var zero T
-	if idx >= len(args) {
-		return zero
+	if idx < 0 || idx >= len(args) {
+		panic(&callbackArgumentError{fmt.Errorf("aspire: callback argument %d is missing", idx)})
 	}
 	v, err := decodeAs[T](args[idx])
 	if err != nil {
-		return zero
+		panic(&callbackArgumentError{fmt.Errorf("aspire: callback argument %d: %w", idx, err)})
 	}
+
 	return v
 }
 
+// callbackCancellationTokenArg handles the callback wire representation for
+// CancellationToken. The host sends a token ID for cancellable tokens and omits
+// the positional argument for CancellationToken.None.
+func callbackCancellationTokenArg(c *client, args []any, idx int) *CancellationToken {
+	if idx < 0 || idx >= len(args) || args[idx] == nil {
+		return nil
+	}
+	if token, ok := args[idx].(*CancellationToken); ok {
+		return token
+	}
+	if id, ok := args[idx].(string); ok && id != "" {
+		return newRemoteCancellationToken(c, id)
+	}
+	panic(&callbackArgumentError{fmt.Errorf("aspire: callback argument %d: expected a cancellation token ID", idx)})
+}
+
+type callbackArgumentError struct{ error }
+
 // decodeAs converts an arbitrary RPC result into a typed value via JSON
 // round-trip. Used by typed read methods on List/Dict and by value-returning
-// capabilities.
+// capabilities. Slices and maps are decoded element by element, see decodeInto.
 func decodeAs[T any](raw any) (T, error) {
 	var zero T
 	if raw == nil {
@@ -760,6 +843,13 @@ func decodeAs[T any](raw any) (T, error) {
 	}
 	if v, ok := raw.(T); ok {
 		return v, nil
+	}
+	if kind := reflect.TypeFor[T]().Kind(); kind == reflect.Slice || kind == reflect.Map {
+		var out T
+		if err := decodeInto(reflect.ValueOf(&out).Elem(), raw); err != nil {
+			return zero, err
+		}
+		return out, nil
 	}
 	bytes, err := json.Marshal(raw)
 	if err != nil {
@@ -773,6 +863,53 @@ func decodeAs[T any](raw any) (T, error) {
 		return zero, err
 	}
 	return out, nil
+}
+
+// decodeInto decodes raw into dst, which must be addressable and hold its zero
+// value. wrapIfHandle replaces the handle envelopes inside a []any or
+// map[string]any with wrapper values, and encoding/json cannot decode those into
+// an interface element type such as []Resource. So a list or a string-keyed map
+// is decoded one element at a time: an element that is already assignable to the
+// element type, like a handle wrapper, is stored as is, and only the others take
+// a JSON round trip.
+func decodeInto(dst reflect.Value, raw any) error {
+	if raw == nil {
+		return nil
+	}
+	if v := reflect.ValueOf(raw); v.Type().AssignableTo(dst.Type()) {
+		dst.Set(v)
+		return nil
+	}
+	switch src := raw.(type) {
+	case []any:
+		if dst.Kind() == reflect.Slice {
+			dst.Set(reflect.MakeSlice(dst.Type(), len(src), len(src)))
+			for i, item := range src {
+				if err := decodeInto(dst.Index(i), item); err != nil {
+					return fmt.Errorf("aspire: cannot decode element %d of %v: %w", i, dst.Type(), err)
+				}
+			}
+			return nil
+		}
+	case map[string]any:
+		if dst.Kind() == reflect.Map && dst.Type().Key().Kind() == reflect.String {
+			dst.Set(reflect.MakeMapWithSize(dst.Type(), len(src)))
+			for key, item := range src {
+				// Map values are not addressable, so decode into a fresh value and store a copy.
+				elem := reflect.New(dst.Type().Elem()).Elem()
+				if err := decodeInto(elem, item); err != nil {
+					return fmt.Errorf("aspire: cannot decode entry %q of %v: %w", key, dst.Type(), err)
+				}
+				dst.SetMapIndex(reflect.ValueOf(key).Convert(dst.Type().Key()), elem)
+			}
+			return nil
+		}
+	}
+	bytes, err := json.Marshal(raw)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(bytes, dst.Addr().Interface())
 }
 
 func decodeStructFields[T any](raw any) (T, bool) {
@@ -815,13 +952,13 @@ func decodeStructFields[T any](raw any) (T, bool) {
 		if !ok {
 			continue
 		}
-
-		bytes, err := json.Marshal(rawFieldValue)
-		if err != nil {
+		// Callback IDs cannot become Go func values. Other fields must decode
+		// successfully; a malformed DTO must not reach user code as zero values.
+		if fieldValue.Kind() == reflect.Func {
 			continue
 		}
-		if err := json.Unmarshal(bytes, fieldValue.Addr().Interface()); err != nil {
-			continue
+		if err := decodeInto(fieldValue, rawFieldValue); err != nil {
+			return zero, false
 		}
 	}
 
@@ -832,6 +969,23 @@ func decodeStructFields[T any](raw any) (T, bool) {
 	return structValue.Interface().(T), true
 }
 
+// callbackHandleArg fetches a positional callback argument that is a handle
+// and returns it as the callback's declared wrapper type T, built with wrap
+// when the transport delivered a raw *handle. The host tags each handle
+// argument with the callback's declared parameter type. For a resource builder
+// that is a closed generic type id (IResourceBuilder<T>) that has no registered
+// wrapper, so wrapIfHandle leaves the *handle unwrapped and callbackArg alone
+// would hand the user's callback a nil interface. Arguments that are already
+// wrapped, nil or missing fall through to callbackArg.
+func callbackHandleArg[T any](c *client, args []any, idx int, wrap func(*handle, *client) T) T {
+	if idx < len(args) {
+		if h, ok := args[idx].(*handle); ok {
+			return wrap(h, c)
+		}
+	}
+	return callbackArg[T](args, idx)
+}
+
 // ── deepUpdate ───────────────────────────────────────────────────────────────
 //
 // Used by generated code to merge variadic Options structs:
@@ -840,6 +994,15 @@ func decodeStructFields[T any](raw any) (T, bool) {
 //	for _, opt := range options {
 //	    if opt != nil { merged = deepUpdate(merged, opt) }
 //	}
+//
+// Neither argument is modified. Fields are merged by reflection rather than
+// through a JSON round trip because Options structs hold values encoding/json
+// cannot represent: callbacks (every func field fails to marshal, even a nil
+// one), *CancellationToken and handle wrappers.
+//
+// Struct fields and map entries present on both sides are merged recursively.
+// Any other value, including nil, is taken from src. A struct with unexported
+// fields (such as *CancellationToken) is opaque and is taken from src whole.
 func deepUpdate[T any](dst, src T) T {
 	dstType := reflect.TypeOf(dst)
 	srcType := reflect.TypeOf(src)
@@ -856,88 +1019,77 @@ func deepUpdate[T any](dst, src T) T {
 		return src
 	}
 
-	v := reflect.ValueOf(dst)
-	kind := v.Kind()
-	if kind == reflect.Ptr {
-		kind = v.Elem().Kind()
-	}
-
-	switch kind {
-	case reflect.Map, reflect.Struct:
-		dstMap, _ := toMap(dst)
-		srcMap, _ := toMap(src)
-		mergedMap := merge(dstMap, srcMap, 0)
-
-		bytes, _ := json.Marshal(mergedMap)
-
-		var result T
-		if reflect.TypeOf(result).Kind() == reflect.Ptr {
-			result = reflect.New(reflect.TypeOf(result).Elem()).Interface().(T)
-		}
-
-		if err := json.Unmarshal(bytes, &result); err != nil {
-			panic(fmt.Sprintf("aspire: merge error: %v", err))
-		}
-		return result
-	default:
-		return src
-	}
+	return mergeValues(reflect.ValueOf(dst), reflect.ValueOf(src), 0).Interface().(T)
 }
 
-func merge(dst, src map[string]any, depth int) map[string]any {
+func mergeValues(dst, src reflect.Value, depth int) reflect.Value {
 	const depthLimit = 32
 	if depth > depthLimit {
 		panic("aspire: deep update recursion limit of '32' exceeded")
 	}
 
-	for key, srcVal := range src {
-		if dstVal, ok := dst[key]; ok {
-			srcSub, srcOk := toMap(srcVal)
-			dstSub, dstOk := toMap(dstVal)
-
-			if srcOk && dstOk {
-				dst[key] = merge(dstSub, srcSub, depth+1)
-				continue
-			}
-		}
-		dst[key] = srcVal
+	// Interface-typed fields (any, handles) are merged by their dynamic type.
+	if dst.Kind() == reflect.Interface && src.Kind() == reflect.Interface && !dst.IsNil() && !src.IsNil() {
+		dst, src = dst.Elem(), src.Elem()
 	}
-	return dst
-}
-
-func toMap(i any) (map[string]any, bool) {
-	if i == nil {
-		return nil, false
+	if dst.Type() != src.Type() {
+		return src
 	}
 
-	v := reflect.ValueOf(i)
-	if v.Kind() == reflect.Ptr {
-		if v.IsNil() {
-			return nil, false
+	switch src.Kind() {
+	case reflect.Pointer:
+		if dst.IsNil() || src.IsNil() || !isPlainStruct(src.Type().Elem()) {
+			return src
 		}
-		v = v.Elem()
-	}
-
-	switch v.Kind() {
-	case reflect.Map:
-		m := make(map[string]any)
-		for _, k := range v.MapKeys() {
-			m[fmt.Sprintf("%v", k.Interface())] = v.MapIndex(k).Interface()
-		}
-		return m, true
+		merged := reflect.New(src.Type().Elem())
+		merged.Elem().Set(mergeValues(dst.Elem(), src.Elem(), depth))
+		return merged
 
 	case reflect.Struct:
-		m := make(map[string]any)
-		t := v.Type()
-		for i := 0; i < v.NumField(); i++ {
-			field := t.Field(i)
-			if field.PkgPath == "" {
-				m[field.Name] = v.Field(i).Interface()
-			}
+		if !isPlainStruct(src.Type()) {
+			return src
 		}
-		return m, true
+		merged := reflect.New(src.Type()).Elem()
+		for i := 0; i < merged.NumField(); i++ {
+			merged.Field(i).Set(mergeValues(dst.Field(i), src.Field(i), depth+1))
+		}
+		return merged
+
+	case reflect.Map:
+		if dst.IsNil() {
+			return src
+		}
+		if src.IsNil() {
+			return dst
+		}
+		merged := reflect.MakeMapWithSize(src.Type(), dst.Len()+src.Len())
+		for it := dst.MapRange(); it.Next(); {
+			merged.SetMapIndex(it.Key(), it.Value())
+		}
+		for it := src.MapRange(); it.Next(); {
+			value := it.Value()
+			if existing := merged.MapIndex(it.Key()); existing.IsValid() {
+				value = mergeValues(existing, value, depth+1)
+			}
+			merged.SetMapIndex(it.Key(), value)
+		}
+		return merged
 
 	default:
-		return nil, false
+		return src
 	}
+}
+
+// isPlainStruct reports whether every field of t is exported, which is what
+// lets reflection build a merged copy of it.
+func isPlainStruct(t reflect.Type) bool {
+	if t.Kind() != reflect.Struct {
+		return false
+	}
+	for i := 0; i < t.NumField(); i++ {
+		if !t.Field(i).IsExported() {
+			return false
+		}
+	}
+	return true
 }

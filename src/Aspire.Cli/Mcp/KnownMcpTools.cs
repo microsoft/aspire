@@ -9,6 +9,7 @@ namespace Aspire.Cli.Mcp;
 internal static class KnownMcpTools
 {
     internal const string ListResources = "list_resources";
+    internal const string WaitForResources = "wait_for_resources";
     internal const string ListConsoleLogs = "list_console_logs";
     internal const string ExecuteResourceCommand = "execute_resource_command";
     internal const string ListStructuredLogs = "list_structured_logs";
@@ -29,6 +30,7 @@ internal static class KnownMcpTools
     public static IReadOnlyList<string> All { get; } =
     [
         ListResources,
+        WaitForResources,
         ListConsoleLogs,
         ExecuteResourceCommand,
         ListStructuredLogs,

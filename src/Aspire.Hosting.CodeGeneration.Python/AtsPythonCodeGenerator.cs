@@ -270,7 +270,7 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
     {
         if (param.IsCallback)
         {
-            return $"self._client.register_callback({paramName}{GetCallbackParameterTypeIds(param)})";
+            return $"self._client.register_callback({paramName}{GetCallbackRegistrationOptions(param)})";
         }
         if (param.Type?.TypeId == AtsConstants.CancellationToken)
         {
@@ -283,7 +283,7 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
     {
         if (param.IsCallback)
         {
-            return $"client.register_callback({paramName}{GetCallbackParameterTypeIds(param)})";
+            return $"client.register_callback({paramName}{GetCallbackRegistrationOptions(param)})";
         }
         if (param.Type?.TypeId == AtsConstants.CancellationToken)
         {
@@ -292,12 +292,17 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
         return paramName;
     }
 
-    private static string GetCallbackParameterTypeIds(AtsParameterInfo parameter)
+    private static string GetCallbackRegistrationOptions(AtsParameterInfo parameter)
     {
+        var writeback = parameter.CallbackReturnType?.TypeId == AtsConstants.Void &&
+            parameter.CallbackParameters?.Any(p => p.Type.Category == AtsTypeCategory.Dto && p.Type.TypeId != AtsConstants.CancellationToken) == true
+            ? ", dto_writeback=True"
+            : string.Empty;
+
         if (parameter.CallbackParameters is not { Count: > 0 } callbackParameters ||
             !callbackParameters.Any(callbackParameter => IsHandleType(callbackParameter.Type)))
         {
-            return string.Empty;
+            return writeback;
         }
 
         var typeIds = callbackParameters.Select(callbackParameter =>
@@ -306,7 +311,7 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
                 : "None");
         var tupleSuffix = callbackParameters.Count == 1 ? "," : string.Empty;
 
-        return $", ({string.Join(", ", typeIds)}{tupleSuffix})";
+        return $", ({string.Join(", ", typeIds)}{tupleSuffix}){writeback}";
     }
 
     /// <summary>
@@ -916,9 +921,14 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
         foreach (var dtoType in dtoTypes.OrderBy(d => d.Name))
         {
             var className = GetDtoClassName(dtoType.TypeId);
+            var requiresFunctionalSyntax = dtoType.Properties.Any(prop =>
+                s_pythonKeywords.Contains(JsonNamingPolicy.CamelCase.ConvertName(prop.Name)));
 
-            // All DTO properties are optional in Python to allow partial objects
-            sb.AppendLine(CultureInfo.InvariantCulture, $"class {className}(typing.TypedDict, total=False):");
+            // Functional syntax preserves wire keys such as "global" that cannot be class members.
+            // String annotations keep forward references deferred, as with class-based TypedDicts.
+            sb.AppendLine(requiresFunctionalSyntax
+                ? $"{className} = typing.TypedDict(\"{className}\", {{"
+                : $"class {className}(typing.TypedDict, total=False):");
             foreach (var prop in dtoType.Properties)
             {
                 // Callback-typed DTO properties carry the same CallbackParameters/CallbackReturnType
@@ -929,7 +939,14 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
                 var propType = prop.IsCallback
                     ? GenerateCallbackTypeSignature(prop.CallbackParameters, prop.CallbackReturnType)
                     : MapDtoPropertyTypeToPython(prop.Type);
-                sb.AppendLine(CultureInfo.InvariantCulture, $"    {prop.Name}: {propType}");
+                var wireName = JsonNamingPolicy.CamelCase.ConvertName(prop.Name);
+                sb.AppendLine(requiresFunctionalSyntax
+                    ? $"    {AtsJsonCodeWriter.ToRelaxedJsonString(wireName)}: {AtsJsonCodeWriter.ToRelaxedJsonString(propType)},"
+                    : $"    {wireName}: {propType}");
+            }
+            if (requiresFunctionalSyntax)
+            {
+                sb.AppendLine("}, total=False)");
             }
             sb.AppendLine();
         }
@@ -1027,7 +1044,7 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
                 continue;
             }
 
-            members.Add($"{AtsJsonCodeWriter.ToRelaxedJsonString(property.Name)}: {RenderPythonExportedValue(propertyValue, property.Type, dtoTypesById, topLevel: false)}");
+            members.Add($"{AtsJsonCodeWriter.ToRelaxedJsonString(JsonNamingPolicy.CamelCase.ConvertName(property.Name))}: {RenderPythonExportedValue(propertyValue, property.Type, dtoTypesById, topLevel: false)}");
         }
 
         return "{ " + string.Join(", ", members) + " }";
@@ -1163,7 +1180,7 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
         sb.AppendLine("        \"\"\"Get the input with the specified name, or None if no input matches.\"\"\"");
         sb.AppendLine("        lookup_name = name.lower()");
         sb.AppendLine("        for interaction_input in self.to_array():");
-        sb.AppendLine("            input_name = interaction_input.get(\"Name\")");
+        sb.AppendLine("            input_name = interaction_input.get(\"name\")");
         sb.AppendLine("            if input_name is not None and input_name.lower() == lookup_name:");
         sb.AppendLine("                return interaction_input");
         sb.AppendLine("        return None");
@@ -1182,12 +1199,12 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
         sb.AppendLine("        interaction_input = self.get(name)");
         sb.AppendLine("        if interaction_input is None:");
         sb.AppendLine("            return \"\"");
-        sb.AppendLine("        return interaction_input.get(\"Value\") or \"\"");
+        sb.AppendLine("        return interaction_input.get(\"value\") or \"\"");
         sb.AppendLine();
 
         sb.AppendLine("    def required_value(self, name: str) -> str:");
         sb.AppendLine("        \"\"\"Get the input value with the specified name, or raise ValueError if no input matches.\"\"\"");
-        sb.AppendLine("        return self.required(name).get(\"Value\") or \"\"");
+        sb.AppendLine("        return self.required(name).get(\"value\") or \"\"");
         sb.AppendLine();
     }
 
@@ -2689,7 +2706,19 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
         {
             // This will be a big if/elif/else clause, so we start with if on the first type variation.
             clause = "if";
-            builder.AppendLine(CultureInfo.InvariantCulture, $"        if _{optionName} := kwargs.pop(\"{optionName}\", None):");
+            if (variations.All(v => v.OptionType == "typing.Literal[True]"))
+            {
+                builder.AppendLine(CultureInfo.InvariantCulture, $"        if _{optionName} := kwargs.pop(\"{optionName}\", None):");
+            }
+            else
+            {
+                // Falsy parameter values must reach the RPC, but False still disables opt-in flags
+                // unless the option also accepts an actual boolean parameter.
+                var hasFlag = variations.Any(v => v.OptionType == "typing.Literal[True]");
+                var hasBooleanParameter = variations.Any(v => v.OptionType.Split(" | ").Contains("bool"));
+                var flagGuard = hasFlag && !hasBooleanParameter ? $" and _{optionName} is not False" : string.Empty;
+                builder.AppendLine(CultureInfo.InvariantCulture, $"        if (_{optionName} := kwargs.pop(\"{optionName}\", None)) is not None{flagGuard}:");
+            }
         }
 
         // Resolve the correct capability ID for this variation.

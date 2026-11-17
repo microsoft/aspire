@@ -2,8 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable CS0618 // Type or member is obsolete
-#pragma warning disable ASPIREPIPELINES001
-#pragma warning disable ASPIREPIPELINES004
 
 using System.Text.Json;
 using Aspire.Hosting.Publishing;

@@ -105,7 +105,7 @@ public sealed class TerminalViewSession : IDisposable
             return false;
         }
 
-        // Compare endpoints such as "/dashboard/api/terminal?resource=a%20b&replica=0&viewId=..."
+        // Compare endpoints such as "/dashboard/api/terminal?resource=a%20b&viewId=..."
         // semantically: query ordering and equivalent escaping must not invalidate a registration.
         var separator = endpointPathAndQuery.IndexOf('?');
         var path = separator < 0 ? endpointPathAndQuery : endpointPathAndQuery[..separator];

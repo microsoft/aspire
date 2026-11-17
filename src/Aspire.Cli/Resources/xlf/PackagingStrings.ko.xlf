@@ -9,17 +9,17 @@
       </trans-unit>
       <trans-unit id="PackagesOverrideDirectoryHasDuplicateVersions">
         <source>The Aspire CLI packages override directory '{0}' contains more than one version of the same Aspire package, which is ambiguous because the highest version would be selected silently. Clean the directory so each Aspire* package appears exactly once. Conflicts: {1}.</source>
-        <target state="new">The Aspire CLI packages override directory '{0}' contains more than one version of the same Aspire package, which is ambiguous because the highest version would be selected silently. Clean the directory so each Aspire* package appears exactly once. Conflicts: {1}.</target>
+        <target state="translated">Aspire CLI 패키지 재정의 디렉터리 '{0}'에 동일한 Aspire 패키지의 버전이 여러 개 포함되어 있습니다. 이 경우 가장 높은 버전이 자동으로 선택되므로 어떤 버전을 사용해야 하는지 명확하지가 않습니다. 각 Aspire* 패키지가 정확히 한 번씩만 표시되도록 디렉터리를 정리하세요. 충돌: {1}.</target>
         <note>{0} is the packages override directory path. {1} is a semicolon-separated list of conflicting package ids with their versions, for example "Aspire.Hosting (13.4.1, 13.4.2)".</note>
       </trans-unit>
       <trans-unit id="PackagesOverrideDirectoryNotFound">
         <source>The Aspire CLI packages override directory '{0}' does not exist. Set ASPIRE_CLI_PACKAGES (or the install sidecar 'packages' field) to a directory that contains the .nupkg files to resolve Aspire* packages from.</source>
-        <target state="new">The Aspire CLI packages override directory '{0}' does not exist. Set ASPIRE_CLI_PACKAGES (or the install sidecar 'packages' field) to a directory that contains the .nupkg files to resolve Aspire* packages from.</target>
+        <target state="translated">Aspire CLI 패키지 재정의 디렉터리 '{0}'이(가) 없습니다. ASPIRE_CLI_PACKAGES 또는 설치 사이드카 'packages' 필드를 Aspire* 패키지를 가져올 .nupkg 파일이 포함된 디렉터리로 설정하세요.</target>
         <note>{0} is the configured packages override directory path. Shown when ASPIRE_CLI_PACKAGES or the sidecar 'packages' field points at a directory that is missing.</note>
       </trans-unit>
       <trans-unit id="StagingChannelUnavailableOnDailyCli">
         <source>The 'staging' channel cannot be resolved from a CLI with identity '{0}'. Daily, local, and per-PR CLI builds do not have a deterministic staging feed. Install a staging or stable Aspire CLI, or set 'overrideStagingFeed' (for example: aspire config set -g overrideStagingFeed &lt;feed-url&gt;) to point at the staging feed you want to use.</source>
-        <target state="new">The 'staging' channel cannot be resolved from a CLI with identity '{0}'. Daily, local, and per-PR CLI builds do not have a deterministic staging feed. Install a staging or stable Aspire CLI, or set 'overrideStagingFeed' (for example: aspire config set -g overrideStagingFeed &lt;feed-url&gt;) to point at the staging feed you want to use.</target>
+        <target state="translated">'staging' 채널은 ID가 '{0}'인 CLI에서 확인할 수 없습니다. 일일, 로컬 및 PR별 CLI 빌드에는 결정적인 준비 피드가 없습니다. 사용하려는 준비 피드를 가리키도록 준비 또는 안정적인 Aspire CLI를 설치하거나, 'overrideStagingFeed'를 설정하세요(예: aspire config set -g overrideStagingFeed &lt;feed-url&gt;).</target>
         <note>{0} is the running CLI's baked identity channel (one of daily, local, or pr-N). Shown when --channel staging is requested on a CLI that cannot produce a real staging feed. Tracks https://github.com/microsoft/aspire/issues/16652.</note>
       </trans-unit>
     </body>

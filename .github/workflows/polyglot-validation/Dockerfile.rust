@@ -37,7 +37,7 @@ RUN chmod +x /scripts/setup-local-cli.sh /scripts/test-rust.sh
 ENTRYPOINT ["/bin/bash", "-c", "\
     set -e && \
     /scripts/setup-local-cli.sh && \
-    aspire --nologo config set features:experimentalPolyglot:rust true --global && \
+    aspire --nologo config set features:experimentalPolyglotRust true --global && \
     echo '' && \
     echo '=== Running validation ===' && \
     /scripts/test-rust.sh \

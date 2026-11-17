@@ -11,8 +11,8 @@ internal static class RedisContainerImageTags
     /// <remarks>library/redis</remarks>
     public const string Image = "library/redis";
 
-    /// <remarks>8.6</remarks>
-    public const string Tag = "8.6";
+    /// <remarks>8.10</remarks>
+    public const string Tag = "8.10";
 
     /// <remarks>RedisCommanderRegistry</remarks>
     public const string RedisCommanderRegistry = "ghcr.io";
@@ -29,6 +29,6 @@ internal static class RedisContainerImageTags
     /// <remarks>redis/redisinsight</remarks>
     public const string RedisInsightImage = "redis/redisinsight";
 
-    /// <remarks>3.4</remarks>
-    public const string RedisInsightTag = "3.4";
+    /// <remarks>3.8</remarks>
+    public const string RedisInsightTag = "3.8";
 }

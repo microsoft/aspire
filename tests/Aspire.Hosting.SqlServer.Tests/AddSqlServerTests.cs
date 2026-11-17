@@ -4,7 +4,11 @@
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
+using HealthChecks.SqlServer;
+using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Options;
 using System.Net.Sockets;
 
 namespace Aspire.Hosting.SqlServer.Tests;
@@ -279,5 +283,45 @@ public class AddSqlServerTests
         var connectionString = await connectionStringResource.GetConnectionStringAsync(default);
         Assert.Equal("Server=127.0.0.1,1433;User ID=sa;Password=p@ssw0rd1;TrustServerCertificate=true", connectionString);
         Assert.Equal("Server={sqlserver.bindings.tcp.host},{sqlserver.bindings.tcp.port};User ID=sa;Password={pass.value};TrustServerCertificate=true", connectionStringResource.ConnectionStringExpression.ValueExpression);
+    }
+
+    [Fact]
+    public void HealthCheckConnectionStringDisablesPoolBlockingPeriod()
+    {
+        var connectionString = SqlServerBuilderExtensions.CreateHealthCheckConnectionString("Server=127.0.0.1,1433;User ID=sa;Password=p@ssw0rd1;TrustServerCertificate=true;Initial Catalog=mydb");
+
+        var builder = new SqlConnectionStringBuilder(connectionString);
+        Assert.Equal(PoolBlockingPeriod.NeverBlock, builder.PoolBlockingPeriod);
+        Assert.Equal("127.0.0.1,1433", builder.DataSource);
+        Assert.Equal("sa", builder.UserID);
+        Assert.Equal("p@ssw0rd1", builder.Password);
+        Assert.True(builder.TrustServerCertificate);
+        Assert.Equal("mydb", builder.InitialCatalog);
+    }
+
+    [Fact]
+    public async Task HealthChecksAreCreatedAfterConnectionStringIsAvailable()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var pass = builder.AddParameter("pass", "p@ssw0rd1");
+        var sqlServer = builder.AddSqlServer("sqlserver", pass)
+            .WithEndpoint("tcp", e => e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 1433));
+        var db = sqlServer.AddDatabase("mydb");
+
+        using var app = builder.Build();
+
+        var registrations = app.Services.GetRequiredService<IOptions<HealthCheckServiceOptions>>().Value.Registrations;
+        var serverRegistration = Assert.Single(registrations, r => r.Name == "sqlserver_check");
+        var dbRegistration = Assert.Single(registrations, r => r.Name == "mydb_check");
+
+        Assert.Equal("Connection string is unavailable", Assert.Throws<InvalidOperationException>(() => serverRegistration.Factory(app.Services)).Message);
+        Assert.Equal("Connection string is unavailable", Assert.Throws<InvalidOperationException>(() => dbRegistration.Factory(app.Services)).Message);
+
+        await builder.Eventing.PublishAsync(new ConnectionStringAvailableEvent(sqlServer.Resource, app.Services));
+        await builder.Eventing.PublishAsync(new ConnectionStringAvailableEvent(db.Resource, app.Services));
+
+        Assert.IsType<SqlServerHealthCheck>(serverRegistration.Factory(app.Services));
+        Assert.IsType<SqlServerHealthCheck>(dbRegistration.Factory(app.Services));
     }
 }

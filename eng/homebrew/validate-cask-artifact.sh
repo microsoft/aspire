@@ -98,6 +98,10 @@ TAP_ROOT=""
 remove_tap() {
   local tap_name="$1"
 
+  # `brew untap` does not remove trust entries, so drop the cask trust granted
+  # below (or implicitly by `brew install`) to avoid leaving it in the user's
+  # persistent Homebrew trust store.
+  brew untrust --cask "$tap_name/$CASK_NAME" >/dev/null 2>&1 || true
   brew untap "$tap_name" >/dev/null 2>&1 || true
 
   local tap_org="${tap_name%%/*}"
@@ -185,6 +189,11 @@ echo ""
 # All of these run in LiveRelease in `homebrew-validate-release.yml` for every
 # released version, so a regression in any of them surfaces there.
 echo "Auditing cask via local tap..."
+# Homebrew 7.0.11+ only grants implicit trust to fully qualified names for
+# install/reinstall/upgrade; `brew audit` refuses to load a cask from an
+# untrusted non-official tap. `brew test-bot` trusts the tap only inside its
+# own temporary HOME, so trust just this cask before auditing it.
+brew trust --cask "$TAP_NAME/$CASK_NAME"
 audit_args=(--cask --online)
 if [[ "$VALIDATION_MODE" == "LiveArchives" ]]; then
   audit_args=(--cask)
@@ -207,6 +216,20 @@ if [[ "$VALIDATION_MODE" == "LiveRelease" ]]; then
   test_tap_root="$(brew --repository)/Library/Taps/local/homebrew-aspire-test"
   test_cask_ref="$test_tap_name/$CASK_NAME"
   test_cask_installed=false
+  brew_prefix="$(brew --prefix)"
+  completion_files=(
+    "$brew_prefix/etc/bash_completion.d/aspire"
+    "$brew_prefix/share/zsh/site-functions/_aspire"
+    "$brew_prefix/share/fish/vendor_completions.d/aspire.fish"
+    "$brew_prefix/share/pwsh/completions/_aspire.ps1"
+  )
+
+  for completion_file in "${completion_files[@]}"; do
+    if [[ -e "$completion_file" ]]; then
+      echo "Error: completion file already exists before install: $completion_file" >&2
+      exit 1
+    fi
+  done
 
   cleanup_test_install() {
     if [[ "$test_cask_installed" == true ]]; then
@@ -251,8 +274,39 @@ if [[ "$VALIDATION_MODE" == "LiveRelease" ]]; then
   aspire_version="$(aspire --version 2>&1)"
   echo "  Version: $aspire_version"
 
+  # The native completion artifact warns on generation failures without necessarily failing
+  # installation. Assert its output separately so a successful install cannot hide a regression.
+  for completion_file in "${completion_files[@]}"; do
+    if [[ ! -s "$completion_file" ]]; then
+      echo "Error: completion file missing or empty after install: $completion_file" >&2
+      exit 1
+    fi
+  done
+
+  if command -v pwsh >/dev/null 2>&1; then
+    ASPIRE_HOMEBREW_COMPLETION_FILE="$brew_prefix/share/pwsh/completions/_aspire.ps1" \
+      pwsh -NoLogo -NoProfile -NonInteractive -Command '
+        $ErrorActionPreference = "Stop"
+        . $env:ASPIRE_HOMEBREW_COMPLETION_FILE
+        $line = "aspire comp"
+        $matches = (TabExpansion2 $line $line.Length).CompletionMatches
+        if ($matches.Count -ne 1 -or $matches[0].CompletionText -ne "completions") {
+          throw "Homebrew PowerShell completion loader did not register the CLI completer."
+        }
+      '
+  else
+    echo "PowerShell is unavailable; skipping the loader execution check."
+  fi
+
   brew uninstall --cask "$test_cask_ref"
   test_cask_installed=false
+
+  for completion_file in "${completion_files[@]}"; do
+    if [[ -e "$completion_file" ]]; then
+      echo "Error: completion file still exists after uninstall: $completion_file" >&2
+      exit 1
+    fi
+  done
 
   if command -v aspire >/dev/null 2>&1; then
     echo "Error: aspire command still found in PATH after uninstall." >&2

@@ -42,6 +42,16 @@ const session = await joinSession({
       displayName: "Aspire Team App",
       description:
         "Cross-repo team dashboard for reviews, issues, shipping, and GitHub/Azure DevOps health with actionable signals.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          previewSidebar: {
+            type: "boolean",
+            description: "Preview sidebar-only behavior by disabling agent actions for this canvas instance.",
+          },
+        },
+        additionalProperties: false,
+      },
       actions: [
         {
           name: "refresh",
@@ -220,8 +230,9 @@ const session = await joinSession({
         },
       ],
       open: async (ctx) => {
-        const entry = await startInstance(ctx.instanceId, (m) => session.log(m, { level: "debug" }));
-        return { title: "Aspire Team App", url: entry.url, status: "Team dashboard" };
+        const previewSidebar = ctx.input?.previewSidebar === true;
+        const entry = await startInstance(ctx.instanceId, (m) => session.log(m, { level: "debug" }), ctx.session, previewSidebar);
+        return { title: "Aspire Team App", url: entry.url, status: previewSidebar ? "Sidebar preview" : "Team dashboard" };
       },
       onClose: async (ctx) => {
         await stopInstance(ctx.instanceId);

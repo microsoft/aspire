@@ -170,6 +170,15 @@ internal class DevTunnelCli
         CancellationToken cancellationToken = default)
         => RunAsync(["show", tunnelId, "--json", "--nologo"], outputWriter, errorWriter, logger, cancellationToken);
 
+    public Task<int> ShowPortAsync(
+        string tunnelId,
+        int portNumber,
+        TextWriter? outputWriter = null,
+        TextWriter? errorWriter = null,
+        ILogger? logger = default,
+        CancellationToken cancellationToken = default)
+        => RunAsync(["port", "show", tunnelId, "--port-number", portNumber.ToString(CultureInfo.InvariantCulture), "--json", "--nologo"], outputWriter, errorWriter, logger, cancellationToken);
+
     public Task<int> CreatePortAsync(
         string tunnelId,
         int portNumber,
@@ -183,6 +192,7 @@ internal class DevTunnelCli
         return RunAsync(new ArgsBuilder(["port", "create", tunnelId])
             .Add("--port-number", portNumber.ToString(CultureInfo.InvariantCulture))
             .AddIfNotNull("--protocol", options.Protocol)
+            .AddIfNotNull("--description", options.Description)
             .AddValues("--labels", options.Labels)
             .Add("--json")
             .Add("--nologo")
@@ -379,9 +389,12 @@ internal class DevTunnelCli
         return psi;
     }
 
-    private static async Task PumpAsync(StreamReader reader, Action<string> onLine, CancellationToken cancellationToken = default)
+    internal static async Task PumpAsync(StreamReader reader, Action<string> onLine, CancellationToken cancellationToken = default)
     {
-        while (!reader.EndOfStream && !cancellationToken.IsCancellationRequested)
+        // EndOfStream performs a synchronous read when the buffer is empty. CLI management
+        // commands often emit nothing until they finish, so checking it here serializes callers
+        // and can prevent stderr from being drained while stdout is silent.
+        while (!cancellationToken.IsCancellationRequested)
         {
             var line = await reader.ReadLineAsync(cancellationToken).ConfigureAwait(false);
             if (line is null)

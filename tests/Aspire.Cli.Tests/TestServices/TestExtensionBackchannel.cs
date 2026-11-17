@@ -47,6 +47,7 @@ internal sealed class TestExtensionBackchannel : IExtensionBackchannel
     public Func<string?, Task>? ShowStatusAsyncCallback { get; set; }
 
     public TaskCompletionSource? PromptForSelectionAsyncCalled { get; set; }
+    public Func<string, IReadOnlyList<string>, Task<string>>? PromptForSelectionAsyncCallback { get; set; }
 
     public TaskCompletionSource? PromptForSelectionsAsyncCalled { get; set; }
     public Func<string, IReadOnlyList<string>, IReadOnlyList<string>, Task<IReadOnlyList<string>>>? PromptForSelectionsAsyncCallback { get; set; }
@@ -179,7 +180,7 @@ internal sealed class TestExtensionBackchannel : IExtensionBackchannel
             : Task.FromResult(defaultValue);
     }
 
-    public Task<T> PromptForSelectionAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, CancellationToken cancellationToken) where T : notnull
+    public async Task<T> PromptForSelectionAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, CancellationToken cancellationToken) where T : notnull
     {
         PromptForSelectionAsyncCalled?.SetResult();
 
@@ -188,7 +189,14 @@ internal sealed class TestExtensionBackchannel : IExtensionBackchannel
             throw new InvalidOperationException($"No items available for selection: {promptText}");
         }
 
-        return Task.FromResult(choices.First());
+        if (PromptForSelectionAsyncCallback is null)
+        {
+            return choices.First();
+        }
+
+        var choicesByFormattedValue = choices.ToDictionary(choice => StringUtils.RemoveMarkup(choiceFormatter(choice)));
+        var selectedValue = await PromptForSelectionAsyncCallback(promptText, choicesByFormattedValue.Keys.ToArray());
+        return choicesByFormattedValue[selectedValue];
     }
 
     public async Task<IReadOnlyList<T>> PromptForSelectionsAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, IEnumerable<T>? preSelected, CancellationToken cancellationToken) where T : notnull

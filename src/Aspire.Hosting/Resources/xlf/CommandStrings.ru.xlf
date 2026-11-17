@@ -14,42 +14,42 @@
       </trans-unit>
       <trans-unit id="RebuildDescription">
         <source>Stop the resource, rebuild the project from source, and restart. Use this to apply source code changes.</source>
-        <target state="new">Stop the resource, rebuild the project from source, and restart. Use this to apply source code changes.</target>
+        <target state="translated">Остановите ресурс, выполните заново сборку проекта из исходного кода, а затем перезапустите. Используйте этот способ, чтобы изменения в исходном коде вступили в силу.</target>
         <note />
       </trans-unit>
       <trans-unit id="RebuildName">
         <source>Rebuild</source>
-        <target state="new">Rebuild</target>
+        <target state="translated">Выполнить сборку заново</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceDeletedParameter">
         <source>Successfully deleted parameter '{0}'.</source>
-        <target state="new">Successfully deleted parameter '{0}'.</target>
+        <target state="translated">Параметр "{0}" успешно удален.</target>
         <note>{0} is the resource name.</note>
       </trans-unit>
       <trans-unit id="ResourceRebuilt">
         <source>Successfully rebuilt '{0}'.</source>
-        <target state="new">Successfully rebuilt '{0}'.</target>
+        <target state="translated">Повторная сборка "{0}" выполнена успешно.</target>
         <note>{0} is the resource name.</note>
       </trans-unit>
       <trans-unit id="ResourceRestarted">
         <source>Successfully restarted '{0}'.</source>
-        <target state="new">Successfully restarted '{0}'.</target>
+        <target state="translated">Перезагрузка "{0}" выполнена.</target>
         <note>{0} is the resource name.</note>
       </trans-unit>
       <trans-unit id="ResourceSetParameter">
         <source>Successfully set parameter '{0}'.</source>
-        <target state="new">Successfully set parameter '{0}'.</target>
+        <target state="translated">Параметр "{0}" успешно задан.</target>
         <note>{0} is the resource name.</note>
       </trans-unit>
       <trans-unit id="ResourceStarted">
         <source>Successfully started '{0}'.</source>
-        <target state="new">Successfully started '{0}'.</target>
+        <target state="translated">Успешный запуск "{0}".</target>
         <note>{0} is the resource name.</note>
       </trans-unit>
       <trans-unit id="ResourceStopped">
         <source>Successfully stopped '{0}'.</source>
-        <target state="new">Successfully stopped '{0}'.</target>
+        <target state="translated">Остановлено: "{0}".</target>
         <note>{0} is the resource name.</note>
       </trans-unit>
       <trans-unit id="RestartDescription">
@@ -99,7 +99,7 @@
       </trans-unit>
       <trans-unit id="RebuilderResourceNotFound">
         <source>Rebuilder resource for '{0}' not found.</source>
-        <target state="new">Rebuilder resource for '{0}' not found.</target>
+        <target state="translated">Ресурс выполнения сборки заново для '{0}' не найден.</target>
         <note />
       </trans-unit>
     </body>

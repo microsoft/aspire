@@ -9,7 +9,7 @@ import (
 func main() {
 	builder, err := aspire.CreateBuilder()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	// 1) AddAzurePostgresFlexibleServer — main factory method
@@ -18,14 +18,14 @@ func main() {
 		server := infrastructure.GetPostgreSqlFlexibleServer()
 		backup := server.Backup()
 		if err := backup.SetBackupRetentionDays(float64(14)).Err(); err != nil {
-			log.Fatalf(aspire.FormatError(err))
+			log.Fatal(aspire.FormatError(err))
 		}
 		if _, err := backup.BackupRetentionDays(); err != nil {
-			log.Fatalf(aspire.FormatError(err))
+			log.Fatal(aspire.FormatError(err))
 		}
 	})
 	if pg.Err() != nil {
-		log.Fatalf(aspire.FormatError(pg.Err()))
+		log.Fatal(aspire.FormatError(pg.Err()))
 	}
 
 	// 2) AddDatabase — child resource
@@ -33,20 +33,20 @@ func main() {
 		DatabaseName: aspire.StringPtr("appdb"),
 	})
 	if db.Err() != nil {
-		log.Fatalf(aspire.FormatError(db.Err()))
+		log.Fatal(aspire.FormatError(db.Err()))
 	}
 
 	// 3) WithPasswordAuthentication
 	pgAuth := builder.AddAzurePostgresFlexibleServer("pg-auth")
 	if pgAuth.Err() != nil {
-		log.Fatalf(aspire.FormatError(pgAuth.Err()))
+		log.Fatal(aspire.FormatError(pgAuth.Err()))
 	}
 	pgAuth.WithPasswordAuthentication()
 
 	// 4) RunAsContainer — run as local PostgreSQL container
 	pgContainer := builder.AddAzurePostgresFlexibleServer("pg-container")
 	if pgContainer.Err() != nil {
-		log.Fatalf(aspire.FormatError(pgContainer.Err()))
+		log.Fatal(aspire.FormatError(pgContainer.Err()))
 	}
 	pgContainer.RunAsContainer(&aspire.RunAsContainerOptions{
 		ConfigureContainer: func(container aspire.PostgresServerResource) {
@@ -54,20 +54,20 @@ func main() {
 		},
 	})
 	if pgContainer.Err() != nil {
-		log.Fatalf(aspire.FormatError(pgContainer.Err()))
+		log.Fatal(aspire.FormatError(pgContainer.Err()))
 	}
 
 	// 5) AddDatabase on container-mode server
 	dbContainer := pgContainer.AddDatabase("containerdb")
 	if dbContainer.Err() != nil {
-		log.Fatalf(aspire.FormatError(dbContainer.Err()))
+		log.Fatal(aspire.FormatError(dbContainer.Err()))
 	}
 
 	app, err := builder.Build()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 	if err := app.Run(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 }

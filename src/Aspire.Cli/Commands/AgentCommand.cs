@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Cli.Agents.Hooks;
 using Aspire.Cli.Resources;
 
 namespace Aspire.Cli.Commands;
@@ -17,7 +18,7 @@ internal sealed class AgentCommand : ParentCommand
         AgentInitCommand initCommand,
         AgentTelemetryCommand telemetryCommand,
         CommonCommandServices services)
-        : base("agent", AgentCommandStrings.Description, services)
+        : base(AgentTelemetryProtocol.AgentCommandName, AgentCommandStrings.Description, services)
     {
         Subcommands.Add(mcpCommand);
         Subcommands.Add(initCommand);

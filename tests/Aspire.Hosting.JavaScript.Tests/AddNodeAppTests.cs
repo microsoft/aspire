@@ -1,8 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREDOCKERFILEBUILDER001 // Type is for evaluation purposes only
-
 using System.Reflection;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Tests.Utils;
@@ -431,7 +429,6 @@ public class AddNodeAppTests(ITestOutputHelper outputHelper)
         : ExecutableResource(name, command, workingDirectory), IResourceWithContainerFiles;
 
 #pragma warning disable ASPIREEXTENSION001 // Type is for evaluation purposes only
-#pragma warning disable ASPIREJAVASCRIPT001 // Type is for evaluation purposes only
 
     [Fact]
     public void NodeApp_WithVSCodeDebugging_AddsSupportsDebuggingAnnotation()
@@ -633,5 +630,4 @@ public class AddNodeAppTests(ITestOutputHelper outputHelper)
     }
 
 #pragma warning restore ASPIREEXTENSION001 // Type is for evaluation purposes only
-#pragma warning restore ASPIREJAVASCRIPT001 // Type is for evaluation purposes only
 }

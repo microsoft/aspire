@@ -10,6 +10,30 @@ namespace Aspire.Hosting.Tests.Dashboard;
 [Trait("Partition", "3")]
 public class ResourcePublisherTests
 {
+    [Theory]
+    [InlineData(null, "Container")]
+    [InlineData("Redis", "Redis")]
+    public void ResourceTypeDisplayNameIsPublishedWithoutChangingResourceType(string? resourceTypeDisplayName, string expectedResourceTypeDisplayName)
+    {
+        var state = new CustomResourceSnapshot
+        {
+            ResourceType = KnownResourceTypes.Container,
+            Properties = []
+        };
+        if (resourceTypeDisplayName is not null)
+        {
+            state = state with { ResourceTypeDisplayName = resourceTypeDisplayName };
+        }
+
+        var resource = Aspire.DashboardService.Proto.V1.Resource.FromSnapshot(CreateResourceSnapshot("cache", state));
+
+        Assert.Equal("Container", resource.ResourceType);
+        Assert.Equal(expectedResourceTypeDisplayName, resource.ResourceTypeDisplayName);
+        Assert.Equal("Container", Assert.Single(resource.Properties, p => p.Name == KnownProperties.Resource.Type).Value.StringValue);
+        var serviceProperties = resource.Properties.Where(p => p.Name == KnownProperties.Resource.ResourceTypeDisplayName).Select(p => p.Value.StringValue);
+        Assert.Equal(resourceTypeDisplayName is null ? [] : new[] { expectedResourceTypeDisplayName }, serviceProperties);
+    }
+
     [Fact]
     public void ConnectionPropertiesAreConvertedToStructuredValue()
     {
@@ -201,11 +225,16 @@ public class ResourcePublisherTests
 
     private static GenericResourceSnapshot CreateResourceSnapshot(string name, params ResourcePropertySnapshot[] properties)
     {
-        return new GenericResourceSnapshot(new()
+        return CreateResourceSnapshot(name, new CustomResourceSnapshot
         {
             Properties = [.. properties],
             ResourceType = KnownResourceTypes.Container
-        })
+        });
+    }
+
+    private static GenericResourceSnapshot CreateResourceSnapshot(string name, CustomResourceSnapshot state)
+    {
+        return new GenericResourceSnapshot(state)
         {
             Name = name,
             Uid = "",

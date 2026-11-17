@@ -1,9 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREPIPELINES002
-#pragma warning disable ASPIREPIPELINES001
-
+using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure.Resources;
 using Aspire.Hosting.Azure.Utils;
 using Aspire.Hosting.Pipelines;
@@ -27,7 +25,8 @@ internal sealed class PublishModeProvisioningContextProvider(
     ITokenCredentialProvider tokenCredentialProvider,
     IDeploymentStateManager deploymentStateManager,
     DistributedApplicationExecutionContext distributedApplicationExecutionContext,
-    IPipelineActivityReporter activityReporter) : BaseProvisioningContextProvider(
+    IPipelineActivityReporter activityReporter,
+    DistributedApplicationModel applicationModel) : BaseProvisioningContextProvider(
         interactionService,
         options,
         environment,
@@ -78,7 +77,7 @@ internal sealed class PublishModeProvisioningContextProvider(
         return await base.CreateProvisioningContextAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task RetrieveAzureProvisioningOptions(CancellationToken cancellationToken = default)
+    internal async Task RetrieveAzureProvisioningOptions(CancellationToken cancellationToken = default)
     {
         while (_options.Location == null || _options.SubscriptionId == null)
         {
@@ -109,6 +108,38 @@ internal sealed class PublishModeProvisioningContextProvider(
                     continue;
                 }
             }
+        }
+
+        if (_options.TenantResourceSuffix is null &&
+            _interactionService.IsAvailable &&
+            AzureResourcePreparer.RequiresTenantResourceSuffix(applicationModel))
+        {
+            var result = await _interactionService.PromptInputsAsync(
+                AzureProvisioningStrings.InputsTitle,
+                AzureProvisioningStrings.TenantResourceSuffixSelectionMessage,
+                [
+                    new InteractionInput
+                    {
+                        Name = TenantResourceSuffixName,
+                        InputType = InputType.Text,
+                        Label = AzureProvisioningStrings.TenantResourceSuffixLabel,
+                        Required = false
+                    }
+                ],
+                new InputsDialogInteractionOptions
+                {
+                    EnableMessageMarkdown = false
+                },
+                cancellationToken).ConfigureAwait(false);
+
+            if (result.Canceled)
+            {
+                throw new OperationCanceledException(cancellationToken);
+            }
+
+            // An empty answer is a deliberate choice, so do not prompt again when context creation
+            // retrieves the options a second time after authentication.
+            _options.TenantResourceSuffix = result.Data[TenantResourceSuffixName].Value ?? string.Empty;
         }
     }
 

@@ -109,7 +109,8 @@ public static class DotnetProgramResourceBuilderExtensions
     /// </exception>
     /// <remarks>
     /// This method is intended for .NET language integrations that model programs without deriving from
-    /// <see cref="ProjectResource"/>. Ordinary projects created with <c>AddProject</c> are configured automatically.
+    /// <see cref="ProjectResource"/>. Resources added with <c>AddDotnetProject</c> from the
+    /// <c>Aspire.Hosting.Dotnet</c> package or the legacy <c>AddProject</c> are configured automatically.
     /// </remarks>
     [AspireExportIgnore(Reason = "Integration authoring API that depends on .NET project metadata and is not part of the ATS surface.")]
     public static IResourceBuilder<T> WithDotnetProgramPublishing<T>(this IResourceBuilder<T> builder)

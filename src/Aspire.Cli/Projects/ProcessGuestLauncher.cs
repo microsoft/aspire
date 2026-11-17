@@ -8,6 +8,8 @@ using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
 
+using Aspire.Shared;
+
 namespace Aspire.Cli.Projects;
 
 /// <summary>
@@ -129,6 +131,7 @@ internal sealed class ProcessGuestLauncher : IGuestProcessLauncher
             // matching hard-kill safety net if the launching CLI is terminated before graceful cleanup.
             IsolateConsole = isolateConsoleForGracefulShutdown,
             KillOnParentExit = isolateConsoleForGracefulShutdown,
+            Lifetime = ChildProcessLifetime.OwnedTree,
             GracefulShutdownSignaler = options?.GracefulShutdownSignaler,
             ShutdownService = options?.ShutdownService,
             // The guest is the AppHost's primary process; always tree-kill on escalation so no

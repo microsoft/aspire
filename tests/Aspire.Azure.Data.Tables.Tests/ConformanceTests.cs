@@ -17,7 +17,7 @@ public class ConformanceTests : ConformanceTests<TableServiceClient, AzureDataTa
     // Roles: Storage Table Data Reader, Storage Table Data Contributor
     public const string ServiceUri = "https://aspirestoragetests.table.core.windows.net/";
 
-    private static readonly Lazy<bool> s_canConnectToServer = new(GetCanConnect);
+    private static readonly Lazy<bool> s_canConnectToServer = new(() => GetCanConnectToServer(GetCanConnect));
 
     protected override ServiceLifetime ServiceLifetime => ServiceLifetime.Singleton;
 
@@ -102,6 +102,16 @@ public class ConformanceTests : ConformanceTests<TableServiceClient, AzureDataTa
 
     protected override void SetMetrics(AzureDataTablesSettings options, bool enabled)
         => throw new NotImplementedException();
+
+    // When the server isn't reachable, make TriggerActivity fail fast instead of letting the component fall back to
+    // DefaultAzureCredential, whose credential chain can take longer than the RemoteExecutor timeout.
+    protected override void ConfigureActivitySourceTestOptions(AzureDataTablesSettings options)
+    {
+        if (!CanConnectToServer)
+        {
+            options.Credential = UnavailableTokenCredential.Instance;
+        }
+    }
 
     protected override void SetTracing(AzureDataTablesSettings options, bool enabled)
         => options.DisableTracing = !enabled;

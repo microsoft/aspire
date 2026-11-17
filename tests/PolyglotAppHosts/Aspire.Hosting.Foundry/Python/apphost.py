@@ -11,9 +11,9 @@ with create_builder() as builder:
         format="Microsoft")
 
     model: FoundryModel = {
-        "Name": "gpt-4.1-mini",
-        "Version": "1",
-        "Format": "OpenAI"
+        "name": "gpt-4.1-mini",
+        "version": "1",
+        "format": "OpenAI"
     }
 
     _chat_from_model = foundry.add_deployment("chat-from-model", model)

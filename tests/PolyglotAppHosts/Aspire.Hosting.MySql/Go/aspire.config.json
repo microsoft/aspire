@@ -3,9 +3,6 @@
     "path": "apphost.go",
     "language": "go"
   },
-  "features": {
-    "experimentalPolyglot:go": true
-  },
   "packages": {
     "Aspire.Hosting.MySql": ""
   }

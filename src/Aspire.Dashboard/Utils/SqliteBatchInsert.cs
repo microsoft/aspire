@@ -16,7 +16,8 @@ internal static class SqliteBatchInsert
         int rowCount,
         string tableName,
         IReadOnlyList<string> columnNames,
-        string? returningColumnName = null)
+        string? returningColumnName = null,
+        string? onConflictClause = null)
     {
         var command = connection.CreateCommand();
         command.Transaction = (DbTransaction)transaction;
@@ -47,6 +48,11 @@ internal static class SqliteBatchInsert
                 command.Parameters.Add(parameter);
             }
             sql.Append(')');
+        }
+        if (onConflictClause is not null)
+        {
+            sql.AppendLine();
+            sql.Append(onConflictClause);
         }
         if (returningColumnName is not null)
         {
@@ -122,7 +128,7 @@ internal static class SqliteBatchInsert
         BatchInsertRows(data, batchSize, parametersPerRow, commandFactory, bindRowParameters, static command => command.ExecuteNonQuery());
     }
 
-    private static void BatchInsertRows<T>(
+    internal static void BatchInsertRows<T>(
         IReadOnlyList<T> data,
         int batchSize,
         int parametersPerRow,

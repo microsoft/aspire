@@ -122,6 +122,10 @@ CREATE INDEX IF NOT EXISTS ix_telemetry_spans_trace_order
     ON telemetry_spans(trace_id, start_time_ticks, span_id);
 CREATE INDEX IF NOT EXISTS ix_telemetry_spans_parent
     ON telemetry_spans(trace_id, parent_span_id);
+-- Peer availability and cleanup need an indexed lookup even when a peer reports its own telemetry.
+CREATE INDEX IF NOT EXISTS ix_telemetry_spans_peer
+    ON telemetry_spans(uninstrumented_peer_resource_id)
+    WHERE uninstrumented_peer_resource_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS ix_telemetry_trace_resources_order
     ON telemetry_trace_resources(trace_id, resource_order_ticks, resource_id);
 CREATE INDEX IF NOT EXISTS ix_telemetry_span_attributes_owner_key

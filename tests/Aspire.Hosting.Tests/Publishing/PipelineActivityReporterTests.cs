@@ -1,8 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREPIPELINES001
-
 using System.Globalization;
 using Aspire.Hosting.Backchannel;
 using Aspire.Hosting.Pipelines;
@@ -1400,6 +1398,6 @@ public class PublishingActivityReporterTests
         var provider = services.BuildServiceProvider();
         var logger = provider.GetRequiredService<ILogger<InteractionService>>();
         var configuration = new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build();
-        return new InteractionService(logger, new DistributedApplicationOptions(), provider, configuration, new TestInteractionFileUploadStore());
+        return new InteractionService(logger, new DistributedApplicationOptions(), provider, configuration, new TestInteractionFileUploadStore(), new InteractionServiceConsumerState());
     }
 }

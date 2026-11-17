@@ -39,7 +39,7 @@ Outerloop Tests run fails
 │  • conclusion == 'failure'            │
 │  • run_attempt <= 3                   │
 │  • event != 'pull_request'            │
-│  • repository_owner == 'microsoft'    │
+│  • repository == 'microsoft/aspire'   │
 └──────────────┬─────────────────────────┘
                │ yes
                ▼
@@ -59,7 +59,7 @@ condition holds:
 | **Attempt limit** | The run must be on attempt ≤ 3. Reruns fire from attempts 1, 2, and 3, so a run gets up to 3 automatic reruns (4 total attempts). |
 | **Failure-only triggering** | Only fires on `workflow_run.conclusion == 'failure'`. A `cancelled` run never triggers a rerun. |
 | **Scheduled/manual only** | Only fires when the outerloop run's trigger was not `pull_request` (`workflow_run.event != 'pull_request'`). PR-triggered outerloop runs (narrow paths filter) are left for the PR author to rerun manually. |
-| **Repository guard** | Only runs on `microsoft/aspire` (`github.repository_owner == 'microsoft'`). |
+| **Repository guard** | Only runs on `microsoft/aspire` (`github.repository == 'microsoft/aspire'`). |
 
 GitHub's `rerun-failed-jobs` API reruns **all** failed jobs for the attempt
 (there is no API to rerun a subset), which is exactly the desired behavior here.

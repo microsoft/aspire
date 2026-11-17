@@ -34,22 +34,22 @@
       </trans-unit>
       <trans-unit id="AppHostConnectionLostWaitingForExit">
         <source>The connection to the child AppHost was lost. Waiting for the AppHost process to exit. Press Ctrl+C to stop waiting.</source>
-        <target state="new">The connection to the child AppHost was lost. Waiting for the AppHost process to exit. Press Ctrl+C to stop waiting.</target>
+        <target state="translated">Alt AppHost ile bağlantı kesildi. AppHost işleminin sona ermesi bekleniyor. Durdurmak için Ctrl+C tuşlarına basın.</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostExitedWithCode">
         <source>AppHost process exited with code {0}.</source>
-        <target state="needs-review-translation">AppHost işlemi {0} koduyla sonlandırıldı.</target>
+        <target state="translated">AppHost işlemi {0} koduyla sonlandırıldı.</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostFailedToBuild">
         <source>AppHost failed to build.</source>
-        <target state="new">AppHost failed to build.</target>
+        <target state="translated">AppHost derlenemedi.</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostStartedSuccessfully">
         <source>AppHost started successfully.</source>
-        <target state="needs-review-translation">AppHost başarıyla başlatıldı.</target>
+        <target state="translated">AppHost başarıyla başlatıldı.</target>
         <note />
       </trans-unit>
       <trans-unit id="CheckLogsForDetails">
@@ -59,7 +59,7 @@
       </trans-unit>
       <trans-unit id="ConnectingToAppHost">
         <source>Connecting to AppHost...</source>
-        <target state="needs-review-translation">AppHost'a bağlanılıyor...</target>
+        <target state="translated">AppHost'a bağlanılıyor...</target>
         <note />
       </trans-unit>
       <trans-unit id="CopyingUserSecrets">
@@ -74,17 +74,17 @@
       </trans-unit>
       <trans-unit id="DashboardFailedToStart">
         <source>Aspire Dashboard failed to start or is disabled.</source>
-        <target state="needs-review-translation">Aspire Pano başlatılamadı.</target>
+        <target state="translated">Aspire Panosu başlatılamadı veya devre dışı bırakıldı.</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
         <source>Run an Aspire AppHost interactively for development</source>
-        <target state="needs-review-translation">Geliştirme modunda bir Aspire uygulama ana işlemini çalıştırın.</target>
+        <target state="translated">Geliştirme için Aspire AppHost'u etkileşimli olarak çalıştırın</target>
         <note />
       </trans-unit>
       <trans-unit id="DetachArgumentDescription">
         <source>Run the AppHost in the background and exit after it starts</source>
-        <target state="needs-review-translation">AppHost'u arka planda çalıştırın ve başladıktan sonra çıkın.</target>
+        <target state="translated">AppHost'u arka planda çalıştırın ve başladıktan sonra çıkın</target>
         <note />
       </trans-unit>
       <trans-unit id="Endpoints">
@@ -94,12 +94,12 @@
       </trans-unit>
       <trans-unit id="FailedToStartAppHost">
         <source>Failed to start the AppHost.</source>
-        <target state="needs-review-translation">AppHost başlatılamadı.</target>
+        <target state="translated">AppHost başlatılamadı.</target>
         <note />
       </trans-unit>
       <trans-unit id="ForceArgumentDescription">
         <source>Stop any running instance of the AppHost without prompting</source>
-        <target state="needs-review-translation">AppHost’un çalışan tüm örneklerini istemeden durdurun.</target>
+        <target state="translated">AppHost’un çalışan tüm örneklerini istemeden durdurun</target>
         <note />
       </trans-unit>
       <trans-unit id="FormatRequiresDetach">
@@ -114,7 +114,7 @@
       </trans-unit>
       <trans-unit id="InvalidAppHostStartupTimeoutEnvironmentVariable">
         <source>The {0} environment variable must be a positive number of seconds.</source>
-        <target state="new">The {0} environment variable must be a positive number of seconds.</target>
+        <target state="translated">{0} ortam değişkeni pozitif bir saniye sayısı olmalıdır.</target>
         <note>Do not localize the {0} placeholder. It is an environment variable name.</note>
       </trans-unit>
       <trans-unit id="IsCompatibleAppHostIsNull">
@@ -124,17 +124,17 @@
       </trans-unit>
       <trans-unit id="JsonArgumentDescription">
         <source>Output format for detached AppHost results</source>
-        <target state="needs-review-translation">Sonucu JSON olarak çıkar (yalnızca --detach ile geçerlidir).</target>
+        <target state="translated">Ayrılmış AppHost sonuçları için çıktı biçimi</target>
         <note />
       </trans-unit>
       <trans-unit id="IsolatedArgumentDescription">
         <source>Run in isolated mode with randomized ports and isolated user secrets, allowing multiple instances to run simultaneously</source>
-        <target state="needs-review-translation">Rastgele bağlantı noktaları ve yalıtılmış kullanıcı gizli dizileri ile yalıtılmış modda çalıştırarak birden çok örneğin aynı anda çalışmasına olanak tanıyın.</target>
+        <target state="translated">Rastgele bağlantı noktaları ve yalıtılmış kullanıcı gizli dizileri ile yalıtılmış modda çalıştırarak birden çok örneğin aynı anda çalışmasına olanak tanıyın</target>
         <note />
       </trans-unit>
       <trans-unit id="IsolatedModeRunningInstanceWarning">
         <source>A running instance of this AppHost was found and will be stopped. To run multiple isolated instances simultaneously, run from different directories such as git worktree directories.</source>
-        <target state="needs-review-translation">Bu AppHost'un çalışan bir örneği bulundu ve durdurulacak. Birden çok yalıtılmış örneği aynı anda çalıştırmak için git çalışma ağacı dizinleri gibi farklı dizinlerden çalıştırın.</target>
+        <target state="translated">Bu AppHost'un çalışan bir örneği bulundu ve durdurulacak. Birden çok yalıtılmış örneği aynı anda çalıştırmak için git çalışma ağacı dizinleri gibi farklı dizinlerden çalıştırın.</target>
         <note />
       </trans-unit>
       <trans-unit id="Logs">
@@ -144,7 +144,7 @@
       </trans-unit>
       <trans-unit id="NoBuildArgumentDescription">
         <source>Do not build or restore the project before running</source>
-        <target state="new">Do not build or restore the project before running</target>
+        <target state="translated">Çalıştırmadan önce projeyi derlemeyin veya geri yüklemeyin</target>
         <note />
       </trans-unit>
       <trans-unit id="NoBuildNotSupportedWithWatchMode">
@@ -154,7 +154,7 @@
       </trans-unit>
       <trans-unit id="PressCtrlCToStopAppHost">
         <source>Press [bold]CTRL+C[/] to stop the AppHost and exit.</source>
-        <target state="needs-review-translation">AppHost'u durdurmak ve çıkmak için [bold]CTRL+C[/] tuşlarına basın.</target>
+        <target state="translated">AppHost'u durdurmak ve çıkmak için [bold]CTRL+C[/] tuşlarına basın.</target>
         <note>[bold] should not be localized</note>
       </trans-unit>
       <trans-unit id="ProcessId">
@@ -164,7 +164,7 @@
       </trans-unit>
       <trans-unit id="ProjectArgumentDescription">
         <source>The path to the Aspire AppHost project file or a directory to search</source>
-        <target state="needs-review-translation">Aspire AppHost proje dosyasının yolu.</target>
+        <target state="translated">Aspire AppHost proje dosyasının yolu veya aranacak dizin</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectCouldNotBeRun">
@@ -174,7 +174,7 @@
       </trans-unit>
       <trans-unit id="RecentAppHostStartupOutput">
         <source>Recent AppHost startup output</source>
-        <target state="new">Recent AppHost startup output</target>
+        <target state="translated">AppHost'un son başlatma çıktısı</target>
         <note />
       </trans-unit>
       <trans-unit id="Resource">
@@ -189,17 +189,17 @@
       </trans-unit>
       <trans-unit id="StartDebugSessionArgumentDescription">
         <source>Whether to start a debug session, if running in an Aspire Terminal</source>
-        <target state="needs-review-translation">Aspire Terminal'de çalışıyorsa, hata ayıklama oturumu başlatılıp başlatılmayacağı.</target>
+        <target state="translated">Aspire Terminal'de çalışıyorsa, hata ayıklama oturumu başlatılıp başlatılmayacağı</target>
         <note />
       </trans-unit>
       <trans-unit id="StartingAppHost">
         <source>Starting Aspire AppHost...</source>
-        <target state="needs-review-translation">Aspire apphost başlatılıyor...</target>
+        <target state="translated">Aspire AppHost başlatılıyor...</target>
         <note />
       </trans-unit>
       <trans-unit id="StartingAppHostInBackground">
         <source>Starting Aspire AppHost in the background...</source>
-        <target state="needs-review-translation">Aspire apphost arka planda başlatılıyor...</target>
+        <target state="translated">Aspire AppHost arka planda başlatılıyor...</target>
         <note />
       </trans-unit>
       <trans-unit id="StartingDashboard">
@@ -209,12 +209,12 @@
       </trans-unit>
       <trans-unit id="StartingDebugSessionInExtension">
         <source>Detected aspire {0} inside the Aspire extension, starting a debug session in VS Code...</source>
-        <target state="new">Detected aspire {0} inside the Aspire extension, starting a debug session in VS Code...</target>
+        <target state="translated">Aspire uzantısı içinde Aspire {0} algılandı, VS Code'da hata ayıklama oturumu başlatılıyor...</target>
         <note />
       </trans-unit>
       <trans-unit id="StartingRunSessionInExtension">
         <source>Detected aspire {0} inside the Aspire extension, running app in VS Code. To start a debug session, add --start-debug-session.</source>
-        <target state="new">Detected aspire {0} inside the Aspire extension, running app in VS Code. To start a debug session, add --start-debug-session.</target>
+        <target state="translated">VS Code'da uygulama çalıştırılırken Aspire uzantısı içinde aspire {0} algılandı. Hata ayıklama oturumu başlatmak için --start-debug-session parametresini ekleyin.</target>
         <note />
       </trans-unit>
       <trans-unit id="State">
@@ -224,7 +224,7 @@
       </trans-unit>
       <trans-unit id="TimeoutWaitingForAppHost">
         <source>Timed out waiting {0}s for AppHost to start. If the AppHost is still building or starting, set {1} to a higher value and try again.</source>
-        <target state="new">Timed out waiting {0}s for AppHost to start. If the AppHost is still building or starting, set {1} to a higher value and try again.</target>
+        <target state="translated">AppHost'un başlamasını beklerken {0} s sonra zaman aşımına uğradı. AppHost hâlâ derleniyor veya başlatılıyorsa {1} değerini daha yüksek bir değere ayarlayıp yeniden deneyin.</target>
         <note>Do not localize the {1} placeholder. It is an environment variable name.</note>
       </trans-unit>
       <trans-unit id="Type">
@@ -234,12 +234,12 @@
       </trans-unit>
       <trans-unit id="WaitingForAppHostToStart">
         <source>Waiting for AppHost to start...</source>
-        <target state="needs-review-translation">AppHost'un başlaması bekleniyor...</target>
+        <target state="translated">AppHost'un başlaması bekleniyor...</target>
         <note />
       </trans-unit>
       <trans-unit id="WatchArgumentDescription">
         <source>Start project resources in watch mode</source>
-        <target state="needs-review-translation">Proje kaynaklarını izleme modunda başlatın.</target>
+        <target state="translated">Proje kaynaklarını izleme modunda başlatın</target>
         <note />
       </trans-unit>
     </body>

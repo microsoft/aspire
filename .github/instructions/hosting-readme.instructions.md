@@ -44,6 +44,7 @@ From your AppHost directory, add the `Aspire.Hosting.{Technology}` integration w
 
 \```bash
 aspire add Aspire.Hosting.{Technology}
+aspire add Aspire.Hosting.Dotnet
 \```
 ````
 
@@ -53,6 +54,9 @@ aspire add Aspire.Hosting.{Technology}
 - Installation command should be in a `bash` code block
 - Use consistent phrasing: "From your AppHost directory, add the `Aspire.Hosting.{Technology}` integration with the Aspire CLI:"
 - Use the exact integration ID with `aspire add` so the command works without relying on fuzzy matching or interactive selection
+- When the example also hosts a .NET service, include `aspire add Aspire.Hosting.Dotnet`.
+  That package supplies `AddDotnetProject`; the AppHost package or technology integration alone
+  is not sufficient. Do not add it for examples that only use other language resources.
 
 ### 3. Usage Example
 
@@ -66,7 +70,7 @@ Then, in the AppHost, add {a/an} {Technology} resource and reference it from ano
 \```csharp
 var {resourceName} = builder.Add{Technology}("{name}"){.AddDatabase("dbname") if applicable};
 
-var myService = builder.AddProject<Projects.MyService>()
+var myService = builder.AddDotnetProject("myservice", "../MyService/MyService.csproj")
                        .WithReference({resourceName});
 \```
 
@@ -89,6 +93,16 @@ const myService = await builder.addNodeApp("myService", "../my-service", "server
 - Show the `WithReference` pattern to demonstrate resource references
 - Include both C# and TypeScript AppHost samples when the APIs are exported for TypeScript. Do not invent TypeScript examples for advanced or C#-only APIs.
 - Keep examples simple and focused on the most common use case
+- Use `AddDotnetProject` / `addDotnetProject` for ordinary .NET services, with a resource name
+  and real AppHost-relative project path. Do not derive a path mechanically from a `Projects.*`
+  identifier or invent a generic `AddDotnetProject<T>` overload.
+- Factory extensions are in
+  `Aspire.Hosting`; explicit `DotnetProjectResource` declarations also require `Aspire.Hosting.Dotnet`,
+  and builders/capabilities use `Aspire.Hosting.ApplicationModel`.
+- For migration-specific guidance, link to the [canonical migration guide](../../docs/migrate-from-addproject.md) rather than
+  duplicating long guidance on profiles, typed helpers, build ownership, or retained legacy cases.
+  Do not append path-layout or migration-guide boilerplate to ordinary usage examples.
+  Keep Functions/MAUI-specific factories and unrelated Foundry project APIs intact.
 
 ### 4. Additional Sections (Optional)
 
@@ -199,6 +213,7 @@ From your AppHost directory, add the `Aspire.Hosting.PostgreSQL` integration wit
 
 \```bash
 aspire add Aspire.Hosting.PostgreSQL
+aspire add Aspire.Hosting.Dotnet
 \```
 
 ## Usage example
@@ -210,7 +225,7 @@ Then, in the AppHost, add a PostgreSQL resource and reference it from another re
 \```csharp
 var db = builder.AddPostgres("pgsql").AddDatabase("mydb");
 
-var myService = builder.AddProject<Projects.MyService>()
+var myService = builder.AddDotnetProject("myservice", "../MyService/MyService.csproj")
                        .WithReference(db);
 \```
 
@@ -271,6 +286,7 @@ When reviewing or creating a hosting integration README.md:
 - [ ] Title follows the format: `# {Technology} hosting integration`
 - [ ] Description starts with "Use this integration to..."
 - [ ] Installation section uses `aspire add` with the correct integration ID in a `bash` code block
+- [ ] .NET service examples include the Dotnet integration, a resource name, and an AppHost-relative path
 - [ ] Usage example shows `Add{Technology}` method with `WithReference` pattern
 - [ ] Usage example includes C# and TypeScript AppHost samples when the API is exported for TypeScript
 - [ ] Usage example uses appropriate variable names and resource names

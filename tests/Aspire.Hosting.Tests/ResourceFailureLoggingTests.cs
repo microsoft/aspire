@@ -70,6 +70,34 @@ public class ExecutableResourceFailureLoggingTests(ITestOutputHelper testOutputH
         }
     }
 
+    [Fact]
+    public async Task ExecutableWorkingDirectoryDoesNotExist()
+    {
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.DefaultOrchestratorTestLongTimeout);
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var relativeWorkingDirectory = Path.Combine("missing-working-directories", Guid.NewGuid().ToString("N"));
+        var executable = builder.AddExecutable("exe", "dotnet", ".")
+            .WithArgs("--info")
+            .WithWorkingDirectory(relativeWorkingDirectory);
+        AddFakeLogging(executable);
+
+        Assert.False(Directory.Exists(executable.Resource.WorkingDirectory));
+
+        using var app = builder.Build();
+        var logCollector = app.Services.GetFakeLogCollector();
+        await app.StartAsync(cts.Token).DefaultTimeout(TestConstants.DefaultOrchestratorTestLongTimeout);
+        await app.ResourceNotifications.WaitForResourceAsync(executable.Resource.Name, KnownResourceStates.FailedToStart, cts.Token).DefaultTimeout(TestConstants.DefaultOrchestratorTestLongTimeout);
+
+        var logLines = GetLogLines(logCollector);
+        AssertSingleLogLine(
+            logLines,
+            line => line.Contains("[sys] Failed to start a process:")
+                && line.Contains($"WorkingDirectory = {executable.Resource.WorkingDirectory}")
+                && line.Contains("Error ="),
+            "process start failure with working directory");
+    }
+
     private static void AddFakeLogging<T>(IResourceBuilder<T> builder)
         where T : IResource
     {

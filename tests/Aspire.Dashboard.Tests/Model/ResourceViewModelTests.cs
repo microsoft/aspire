@@ -14,6 +14,31 @@ namespace Aspire.Dashboard.Tests.Model;
 
 public sealed class ResourceViewModelTests
 {
+    [Theory]
+    [InlineData(null, "Container")]
+    [InlineData("", "Container")]
+    [InlineData("Redis", "Redis")]
+    public void ToViewModel_ResourceTypeDisplayNamePreservesTechnicalType(string? resourceTypeDisplayName, string expected)
+    {
+        var resource = new Resource
+        {
+            Name = "cache",
+            ResourceType = "Container",
+            CreatedAt = Timestamp.FromDateTime(s_dateTime)
+        };
+        if (resourceTypeDisplayName is not null)
+        {
+            resource.ResourceTypeDisplayName = resourceTypeDisplayName;
+        }
+
+        var vm = ToViewModel(resource);
+
+        Assert.Equal("Container", vm.ResourceType);
+        Assert.Equal(expected, vm.ResourceTypeDisplayName);
+        Assert.True(vm.IsContainer());
+        Assert.True(vm.MatchesFilter(expected));
+    }
+
     private static readonly DateTime s_dateTime = new(2000, 12, 30, 23, 59, 59, DateTimeKind.Utc);
 
     [Theory]
@@ -392,6 +417,40 @@ public sealed class ResourceViewModelTests
         // Assert
         Assert.Null(vm.IconName);
         Assert.Null(vm.IconVariant);
+    }
+
+    [Theory]
+    [InlineData("Manage", "Manage")]
+    [InlineData("Manage (pgAdmin)", "Manage (pgAdmin)")]
+    [InlineData("Manage (Commander)", "Manage (Commander)")]
+    [InlineData("Managed", "Managed")] // Doesn't equal "Manage" or start with "Manage (" - left untranslated
+    [InlineData("Data Explorer", "Data Explorer")] // Unrelated display text - left untranslated
+    public void ToViewModel_TranslatesManageDisplayText(string displayName, string expectedDisplayName)
+    {
+        // Arrange
+        var resource = new Resource
+        {
+            Name = "TestResource",
+            DisplayName = "Test Resource",
+            ResourceType = "container",
+            CreatedAt = Timestamp.FromDateTime(s_dateTime),
+            Urls =
+            {
+                new Url
+                {
+                    EndpointName = "http",
+                    FullUrl = "http://localhost:8080/",
+                    DisplayProperties = new UrlDisplayProperties { DisplayName = displayName }
+                }
+            }
+        };
+
+        // Act
+        var vm = ToViewModel(resource);
+
+        // Assert
+        var url = Assert.Single(vm.Urls);
+        Assert.Equal(expectedDisplayName, url.DisplayProperties.DisplayName);
     }
 
     private static ResourceViewModel ToViewModel(Resource resource, IKnownPropertyLookup? knownPropertyLookup = null)

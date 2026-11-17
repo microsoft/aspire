@@ -3,6 +3,7 @@
 
 using Aspire.Dashboard.Components.Controls;
 using Aspire.Dashboard.Components.Controls.Grid;
+using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Components.Pages;
 using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Components.Tests.Shared;
@@ -10,8 +11,10 @@ using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
+using Aspire.Dashboard.Tests.Shared;
 using Bunit;
 using Google.Protobuf.Collections;
+using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web.Virtualization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Localization;
@@ -28,6 +31,61 @@ namespace Aspire.Dashboard.Components.Tests.Pages;
 [UseCulture("en-US")]
 public class TracesTests : DashboardTestContext
 {
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Render_FooterShowsCountAndPauseWarningInCorrectLocation(bool isDesktop)
+    {
+        SetupTracesServices();
+        var viewport = new ViewportInformation(IsDesktop: isDesktop, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: false));
+        Services.GetRequiredService<NavigationManager>().NavigateTo("/traces");
+        Services.GetRequiredService<PauseManager>().SetTracesPaused(true);
+
+        var cut = Render<ResourcesLayout>(parameters => parameters
+            .AddCascadingValue(viewport)
+            .Add(p => p.Body, builder =>
+            {
+                builder.OpenComponent<Traces>(0);
+                builder.CloseComponent();
+            }));
+
+        cut.WaitForAssertion(() =>
+        {
+            var footer = cut.Find(isDesktop ? ".resource-footer-page-status" : "footer[style='grid-area: footer']");
+            Assert.Equal("Showing 0 traces", footer.QuerySelector(".result-count")!.TextContent.Trim());
+            Assert.Single(footer.QuerySelectorAll(".pause-warning"));
+            Assert.Single(cut.FindComponents<TotalItemsFooter>());
+        });
+    }
+
+    [Theory]
+    [InlineData(AspireDataType.StructuredLogs)]
+    [InlineData(AspireDataType.Traces)]
+    [InlineData(AspireDataType.Metrics)]
+    public async Task EmptyState_HelpDisappearsAfterAnySignalAndStaysHiddenAfterClear(AspireDataType signal)
+    {
+        SetupTracesServices();
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        Services.GetRequiredService<DimensionManager>().InvokeOnViewportInformationChanged(viewport);
+        var cut = Render<Traces>(parameters => parameters.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.Single(cut.FindAll(".telemetry-help-button")));
+        Assert.Equal(Resources.Traces.TracesNoTraces, cut.Find(".telemetry-empty-content > div").TextContent.Trim());
+
+        var repository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        await TelemetryHelpSetupHelpers.AddSignalAsync(repository, signal);
+        cut.WaitForAssertion(() => Assert.Empty(cut.FindAll(".telemetry-help-button")));
+        await repository.ClearStructuredLogsAsync();
+        await repository.ClearTracesAsync();
+        await repository.ClearMetricsAsync();
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Single(cut.FindAll(".telemetry-empty-content"));
+            Assert.Empty(cut.FindAll(".telemetry-help-button"));
+        });
+    }
+
     [Fact]
     public void Render_FocusesAccessibleScrollContainerOnInitialRender()
     {
@@ -159,6 +217,70 @@ public class TracesTests : DashboardTestContext
         cut.WaitForAssertion(() => Assert.Single(cut.FindAll(".trace-service-tag"), element => element.TextContent.Contains("(2)", StringComparison.Ordinal)));
     }
 
+    [Fact]
+    public async Task Render_TraceResources_RendersEveryResourceTagForBrowserOverflow()
+    {
+        SetupTracesServices();
+
+        var timestamp = DateTime.UnixEpoch;
+        var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        await telemetryRepository.AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
+        {
+            CreateResourceSpans("frontend", CreateSpan(traceId: "trace", spanId: "span-1", startTime: timestamp, endTime: timestamp.AddSeconds(3))),
+            CreateResourceSpans("catalogservice",
+                CreateSpan(traceId: "trace", spanId: "span-2", parentSpanId: "span-1", startTime: timestamp.AddSeconds(1), endTime: timestamp.AddSeconds(2)),
+                CreateSpan(traceId: "trace", spanId: "span-3", parentSpanId: "span-1", startTime: timestamp.AddSeconds(1), endTime: timestamp.AddSeconds(2))),
+            CreateResourceSpans("catalogdb", CreateSpan(traceId: "trace", spanId: "span-4", parentSpanId: "span-2", startTime: timestamp.AddSeconds(1), endTime: timestamp.AddSeconds(2)))
+        });
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        Services.GetRequiredService<DimensionManager>().InvokeOnViewportInformationChanged(viewport);
+        var cut = Render<Traces>(builder => builder.AddCascadingValue(viewport));
+        var grid = cut.FindComponent<AspireFluentDataGrid<TraceSummary>>();
+        await grid.InvokeAsync(grid.Instance.RefreshDataAndRenderAsync);
+        var result = await cut.InvokeAsync(() => grid.Instance.ItemsProvider!(new GridItemsProviderRequest<TraceSummary>
+        {
+            StartIndex = 0,
+            Count = 0
+        }).AsTask());
+        var expectedTags = Assert.Single(result.Items).Resources.Select(resource => $"{resource.Resource.ResourceName} ({resource.TotalSpans})").ToList();
+        Assert.Equal(3, expectedTags.Count);
+
+        // The browser decides which tags fit and fills the count, so the server renders every tag and an empty
+        // count placeholder. The hidden tags stay in the accessibility tree, and the count is presentational.
+        cut.WaitForAssertion(() =>
+        {
+            var tagLine = cut.Find("aspire-tag-overflow");
+            var children = tagLine.Children.ToList();
+            Assert.Equal(expectedTags, children.SkipLast(1).Select(child => string.Join(" ", child.TextContent.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries))));
+            Assert.All(children.SkipLast(1), child => Assert.Contains("trace-service-tag", child.ClassList));
+            var more = children[^1];
+            Assert.True(more.HasAttribute("data-tag-overflow-more"));
+            Assert.Equal("true", more.GetAttribute("aria-hidden"));
+            Assert.Equal(string.Empty, more.TextContent);
+            Assert.All(children, child =>
+            {
+                Assert.False(child.HasAttribute("data-count"));
+                Assert.False(child.HasAttribute("data-tag-overflow-hidden"));
+            });
+        });
+
+        static ResourceSpans CreateResourceSpans(string resourceName, params Span[] spans)
+        {
+            return new ResourceSpans
+            {
+                Resource = CreateResource(name: resourceName, instanceId: resourceName),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans = { spans }
+                    }
+                }
+            };
+        }
+    }
+
     [Theory]
     [InlineData(false, 1)]
     [InlineData(true, 0)]
@@ -207,7 +329,7 @@ public class TracesTests : DashboardTestContext
         FluentUISetupHelpers.SetupFluentToolbar(this);
         FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
 
-        JSInterop.SetupVoid("focusElement", _ => true);
+        JSInterop.SetupVoid("focusElement", _ => true).SetVoidResult();
 
         FluentUISetupHelpers.AddCommonDashboardServices(this);
         Services.AddSingleton<ILogger<Traces>>(NullLogger<Traces>.Instance);

@@ -4,7 +4,7 @@
     <body>
       <trans-unit id="ClearCacheOptionDescription">
         <source>Clear the deployment cache associated with the current environment and do not save deployment state</source>
-        <target state="new">Clear the deployment cache associated with the current environment and do not save deployment state</target>
+        <target state="translated">現在の環境に関連付けられているデプロイ キャッシュをクリアし、デプロイ状態を保存しません</target>
         <note />
       </trans-unit>
       <trans-unit id="DeploymentCanceled">
@@ -14,7 +14,7 @@
       </trans-unit>
       <trans-unit id="Description">
         <source>Deploy an AppHost to its deployment targets</source>
-        <target state="needs-review-translation">Aspire AppHost のコンテンツを定義された展開先にデプロイします。(プレビュー)</target>
+        <target state="translated">AppHost をその展開先にデプロイする</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationCompletedPrefix">
@@ -29,7 +29,7 @@
       </trans-unit>
       <trans-unit id="OutputPathArgumentDescription">
         <source>The optional output path for deployment artifacts</source>
-        <target state="needs-review-translation">デプロイ成果物のオプションの出力パス。</target>
+        <target state="translated">デプロイ成果物のオプションの出力パス</target>
         <note />
       </trans-unit>
     </body>

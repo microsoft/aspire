@@ -139,7 +139,7 @@ public sealed class TerminalService : IAsyncDisposable
             ? new Dictionary<string, string>(options.EnvironmentVariables, StringComparer.Ordinal)
             : null;
 
-        Hex1bPtySocketHelper.Configure();
+        var socketPath = Hex1bPtySocketHelper.CreateSocketPath();
 
         return Hex1bTerminal.CreateBuilder()
             .WithPtyProcess(process =>
@@ -147,6 +147,7 @@ public sealed class TerminalService : IAsyncDisposable
                 process.FileName = executable;
                 process.Arguments = arguments;
                 process.WorkingDirectory = workingDirectory;
+                process.WindowsPtyProxySocketPath = socketPath;
 
                 if (environment is not null)
                 {

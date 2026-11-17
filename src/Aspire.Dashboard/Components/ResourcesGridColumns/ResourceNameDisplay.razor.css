@@ -1,0 +1,17 @@
+.modern-resource-icon {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
+    height: 22px;
+    padding-inline-end: 6px;
+    margin-inline-end: var(--inline-icon-margin);
+}
+
+.modern-resource-icon ::deep .resource-icon {
+    margin-inline-end: 0;
+}
+
+.modern-resource-icon ::deep .persistent-container-badge {
+    bottom: 0;
+}

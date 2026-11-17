@@ -60,6 +60,16 @@ public class AddDotnetProjectBlazorGatewayTests(ITestOutputHelper testOutputHelp
     }
 
     [Fact]
+    public async Task AddDotnetProjectBlazorGateway_RendersCompleteProcessLaunchPlan()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var gateway = builder.AddDotnetProjectBlazorGateway("gateway");
+        using var app = builder.Build();
+
+        await AddBlazorGatewayTests.AssertGatewayProcessLaunchPlanAsync(gateway.Resource, builder, app.Services);
+    }
+
+    [Fact]
     public void AddDotnetProjectBlazorGateway_InPublishMode_ConfiguresSdkPublishing()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);

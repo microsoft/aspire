@@ -10,7 +10,7 @@ Python AppHost support is experimental. Install the Aspire CLI and Python 3.11
 or later. In a new directory for your AppHost, enable the feature and initialize it:
 
 ```bash
-aspire config set features.experimentalPolyglot:python true
+aspire config set features.experimentalPolyglotPython true
 aspire init --language python
 ```
 

@@ -5,12 +5,15 @@ using System.CommandLine;
 using System.CommandLine.Help;
 using System.Globalization;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.Configuration;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
+using Aspire.Cli.Secrets;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
+using Spectre.Console;
 
 namespace Aspire.Cli.Commands;
 
@@ -21,14 +24,18 @@ internal abstract class BaseCommand : Command
 
     protected virtual bool UpdateNotificationsEnabled { get; }
 
+    // Commands that only conditionally emit telemetry can defer provider creation and enrichment
+    // until they have work to report, rather than paying that startup cost on every invocation.
+    internal virtual bool InitializeTelemetryOnStartup => true;
+
     internal virtual bool PrefetchesTemplatePackageMetadata => false;
 
     internal bool PrefetchesTemplatePackageMetadataForInvocation
         => _prefetchesTemplatePackageMetadataForInvocation ?? PrefetchesTemplatePackageMetadata;
 
-    // JSON output cannot display update notifications, so apply this invocation-level gate outside
+    // Machine-readable output cannot display update notifications, so apply this invocation-level gate outside
     // the overridable command policy to prevent metadata-only consumers from bypassing it.
-    internal bool PrefetchesCliPackageMetadata => (UpdateNotificationsEnabled || RequiresCliPackageMetadata) && !_isJsonFormatRequested;
+    internal bool PrefetchesCliPackageMetadata => (UpdateNotificationsEnabled || RequiresCliPackageMetadata) && !_isMachineReadableFormatRequested;
 
     internal virtual bool RequiresCliPackageMetadata => false;
 
@@ -51,7 +58,7 @@ internal abstract class BaseCommand : Command
     protected virtual TimeSpan GracefulShutdownBudget => TimeSpan.Zero;
 
     private readonly CliExecutionContext _executionContext;
-    private bool _isJsonFormatRequested;
+    private bool _isMachineReadableFormatRequested;
     private bool? _prefetchesTemplatePackageMetadataForInvocation;
 
     protected CliExecutionContext ExecutionContext => _executionContext;
@@ -59,7 +66,10 @@ internal abstract class BaseCommand : Command
     protected IInteractionService InteractionService { get; }
 
     protected AspireCliTelemetry Telemetry { get; }
+    protected ConfigSourceService ConfigSources { get; }
 
+    // Commands that start an AppHost or dashboard provide their own stopping message.
+    // Other commands report a neutral cancellation.
     protected virtual string? CancellationMessage => null;
 
     private void DisplayCancellationMessage(ConsoleOutput? consoleOverride = null)
@@ -72,13 +82,15 @@ internal abstract class BaseCommand : Command
         _executionContext = services.ExecutionContext;
         InteractionService = services.InteractionService;
         Telemetry = services.Telemetry;
+        ConfigSources = services.ConfigSources;
         SetAction((Func<ParseResult, CancellationToken, Task<int>>)(async (parseResult, cancellationToken) =>
         {
+            _executionContext.ResetSourceTrustWarning();
             SelectForExecution(parseResult);
 
-            // Route human-readable output to stderr when JSON is requested so
+            // Route human-readable output to stderr when a machine-readable format is requested so
             // that only machine-readable data appears on stdout.
-            if (_isJsonFormatRequested)
+            if (_isMachineReadableFormatRequested)
             {
                 InteractionService.Console = ConsoleOutput.Error;
             }
@@ -89,6 +101,7 @@ internal abstract class BaseCommand : Command
             }
             finally
             {
+                await ConfigSources.StopChecksAsync().ConfigureAwait(false);
                 await FlushExtensionInteractionServiceAsync(InteractionService).ConfigureAwait(false);
             }
         }));
@@ -96,7 +109,7 @@ internal abstract class BaseCommand : Command
 
     internal void SelectForExecution(ParseResult parseResult)
     {
-        _isJsonFormatRequested = IsJsonFormatRequested(parseResult);
+        _isMachineReadableFormatRequested = IsMachineReadableFormatRequested(parseResult);
         _prefetchesTemplatePackageMetadataForInvocation = PrefetchesTemplatePackageMetadata;
         PrepareForExecution(parseResult);
         _executionContext.Command = this;
@@ -141,8 +154,8 @@ internal abstract class BaseCommand : Command
             // Wait for either the handler to complete or a termination signal to trigger cancellation and timeout.
             var terminationTask = services.CancellationManager.ProcessTerminationCompletionSource.Task;
 
-            // After cancellation is triggered, show "Stopping Aspire..." after 200ms if the
-            // handler hasn't completed yet, so the user knows shutdown is in progress.
+            // After cancellation is triggered, show the command's cancellation message after
+            // 200ms if the handler hasn't completed yet, so the user knows shutdown is in progress.
             var stoppingMessageTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             using var stoppingMessageRegistration = cancellationToken.Register(() =>
                 Task.Delay(200).ContinueWith(_ => stoppingMessageTcs.TrySetResult(), TaskScheduler.Default));
@@ -175,6 +188,22 @@ internal abstract class BaseCommand : Command
                 }
             }
         }
+        catch (InvalidSecretsFileException ex)
+        {
+            result = CommandResult.Failure(CliExitCodes.InvalidCommand, ex.Message);
+        }
+        catch (ConfigSourceException ex)
+        {
+            ConfigSourceService.DisplayGitOutput(InteractionService, ex.GitOutput);
+            var errorMessage = ex.Message;
+            if (ex.ReadmeUrl is { } readmeUrl)
+            {
+                errorMessage = ex.Message.EscapeMarkup() + Environment.NewLine
+                    + string.Format(CultureInfo.CurrentCulture, ConfigSourceStrings.AccessHelp,
+                        MarkupHelpers.SafeLink(InteractionService, readmeUrl));
+            }
+            result = CommandResult.Failure(CliExitCodes.InvalidCommand, errorMessage, errorMessageHasMarkup: ex.ReadmeUrl is not null);
+        }
         catch (NonInteractiveException)
         {
             // Error messages have already been displayed by the interaction service.
@@ -205,11 +234,12 @@ internal abstract class BaseCommand : Command
                 result.ErrorMessage,
                 _executionContext.LogFilePath,
                 ExecutionContext.AppHostCliLogFilePath,
+                result.ErrorMessageHasMarkup,
                 CancellationToken.None).ConfigureAwait(false);
 
         if (!displayedActionableFailure && result.ErrorMessage is not null)
         {
-            InteractionService.DisplayError(result.ErrorMessage);
+            InteractionService.DisplayError(result.ErrorMessage, allowMarkup: result.ErrorMessageHasMarkup);
         }
 
         if (result.ShouldDisplayHelp)
@@ -246,7 +276,9 @@ internal abstract class BaseCommand : Command
             }
         }
 
-        if (UpdateNotificationsEnabled && !_isJsonFormatRequested && services.Features.IsFeatureEnabled(KnownFeatures.UpdateNotificationsEnabled, true))
+        await ConfigSources.StopChecksAsync().ConfigureAwait(false);
+
+        if (UpdateNotificationsEnabled && !_isMachineReadableFormatRequested && services.Features.IsFeatureEnabled(KnownFeatures.UpdateNotificationsEnabled, true))
         {
             try
             {
@@ -262,10 +294,20 @@ internal abstract class BaseCommand : Command
             }
         }
 
+        if (!_isMachineReadableFormatRequested)
+        {
+            ConfigSources.NotifyIfUpdateAvailable();
+        }
+
         return result.ExitCode;
     }
 
     protected abstract Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Checks whether this command requests output that must not be mixed with human-readable messages.
+    /// </summary>
+    protected virtual bool IsMachineReadableFormatRequested(ParseResult parseResult) => IsJsonFormatRequested(parseResult);
 
     /// <summary>
     /// Checks whether this command has a --format option whose parsed value is <see cref="OutputFormat.Json"/>.

@@ -7,6 +7,8 @@ using Aspire.Cli.Interaction;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 
+using Aspire.Shared;
+
 namespace Aspire.Cli.Projects;
 
 /// <summary>

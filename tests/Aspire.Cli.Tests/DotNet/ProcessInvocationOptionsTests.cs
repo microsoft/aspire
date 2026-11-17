@@ -4,6 +4,7 @@
 using System.Reflection;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Tests.TestServices;
+using Aspire.Shared;
 
 namespace Aspire.Cli.Tests.DotNet;
 
@@ -21,6 +22,9 @@ public sealed class ProcessInvocationOptionsTests
             StandardErrorCallback = _ => { },
             NoLaunchProfile = true,
             NoAutoResponse = true,
+            NoRestore = true,
+            ExcludeRestorePackageImports = true,
+            NuGetRestoreTargetsFile = new FileInfo(Path.Combine(Path.GetFullPath("."), "Candidate.targets")),
             LaunchProfile = "E2E",
             StartDebugSession = true,
             Debug = true,
@@ -29,11 +33,17 @@ public sealed class ProcessInvocationOptionsTests
             KillEntireProcessTreeOnCancel = false,
             IsolateConsole = true,
             KillOnParentExit = true,
+            Lifetime = ChildProcessLifetime.AppHost,
+            CompletionPath = "exit-code",
+            CreateSupervisorStartInfo = (command, _, _) => command,
             Detached = true,
             // Internal properties are included below, so they need non-default values too.
-            DetachedUnixLauncherPathOverride = "detached-launcher-override",
             AppHostArgumentStartIndex = 3,
             EnvironmentVariableFilter = _ => false,
+            EnvironmentVariables = new Dictionary<string, string>
+            {
+                ["ASPIRE_TEST_VALUE"] = "configured",
+            },
             GracefulShutdownSignaler = new RecordingGracefulSignaler(),
             ShutdownService = new TestGracefulShutdownWindow(),
             ExtensionAppHostLaunchCompletedAsync = () => Task.CompletedTask,

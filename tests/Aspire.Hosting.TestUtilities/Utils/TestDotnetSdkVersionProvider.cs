@@ -16,6 +16,7 @@ internal sealed class TestDotnetSdkVersionProvider(string? version) : IDotnetSdk
         : SemVersion.Parse(version, SemVersionStyles.Strict);
     private readonly ConcurrentQueue<string?> _workingDirectories = [];
     private readonly ConcurrentQueue<IReadOnlyDictionary<string, string>> _probeEnvironments = [];
+    private readonly ConcurrentQueue<string> _executablePaths = [];
     private int _callCount;
 
     public int CallCount => _callCount;
@@ -24,12 +25,24 @@ internal sealed class TestDotnetSdkVersionProvider(string? version) : IDotnetSdk
 
     public IReadOnlyList<IReadOnlyDictionary<string, string>> ProbeEnvironments => [.. _probeEnvironments];
 
+    public IReadOnlyList<string> ExecutablePaths => [.. _executablePaths];
+
     public Task<SemVersion?> TryGetVersionAsync(
         string? workingDirectory,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        RecordCall(workingDirectory, s_emptyEnvironment);
+        RecordCall(workingDirectory, "dotnet", s_emptyEnvironment);
+        return Task.FromResult(_version);
+    }
+
+    public Task<SemVersion?> TryGetVersionAsync(
+        string? workingDirectory,
+        string dotnetExecutablePath,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        RecordCall(workingDirectory, dotnetExecutablePath, s_emptyEnvironment);
         return Task.FromResult(_version);
     }
 
@@ -39,7 +52,7 @@ internal sealed class TestDotnetSdkVersionProvider(string? version) : IDotnetSdk
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        RecordCall(workingDirectory, environmentVariables);
+        RecordCall(workingDirectory, "dotnet", environmentVariables);
         return Task.FromResult(DotnetSdkUtils.SupportsMultiThreadedBuild(_version));
     }
 
@@ -49,16 +62,18 @@ internal sealed class TestDotnetSdkVersionProvider(string? version) : IDotnetSdk
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        RecordCall(workingDirectory, environmentVariables);
+        RecordCall(workingDirectory, "dotnet", environmentVariables);
         return Task.FromResult(DotnetSdkUtils.SupportsFileBasedMultiThreadedBuild(_version));
     }
 
     private void RecordCall(
         string? workingDirectory,
+        string executablePath,
         IReadOnlyDictionary<string, string> environmentVariables)
     {
         Interlocked.Increment(ref _callCount);
         _workingDirectories.Enqueue(workingDirectory);
+        _executablePaths.Enqueue(executablePath);
         _probeEnvironments.Enqueue(environmentVariables.ToDictionary());
     }
 }

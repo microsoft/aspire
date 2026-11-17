@@ -108,4 +108,63 @@ internal static class BlazorWasmAppBuilder
 
         return (endpoints, runtime);
     }
+
+    public static async Task<MSBuildManifestProperties?> GetPublishPropertiesAsync(
+        string projectPath,
+        ILogger logger,
+        CancellationToken cancellationToken)
+    {
+        var result = await BlazorDotNetCliRunner.RunAsync(
+            projectPath,
+            "msbuild",
+            [
+                "-property:Configuration=Release",
+                "-getProperty:TargetFramework",
+                "-getProperty:TargetFrameworks",
+                "-getProperty:NETCoreSdkVersion",
+                "-nologo"
+            ],
+            machineReadableOutput: true,
+            cancellationToken).ConfigureAwait(false);
+
+        if (!result.Started)
+        {
+            BlazorGatewayLog.ProcessStartFailed(
+                logger,
+                result.Command,
+                projectPath,
+                result.StartException?.Message ?? "Process.Start returned null.");
+            return null;
+        }
+
+        if (result.ExitCode != 0)
+        {
+            BlazorGatewayLog.MsBuildTargetFailed(logger, projectPath, result.StandardOutput, result.StandardError);
+            return null;
+        }
+
+        MSBuildPropertiesOutput? output;
+        try
+        {
+            output = JsonSerializer.Deserialize(result.StandardOutput.Trim(), ManifestJsonContext.Default.MSBuildPropertiesOutput);
+        }
+        catch (JsonException ex)
+        {
+            BlazorGatewayLog.ManifestJsonParseFailed(logger, projectPath, ex);
+            return null;
+        }
+
+        var properties = output?.Properties;
+        if (properties is not null && string.IsNullOrEmpty(properties.TargetFramework))
+        {
+            var targetFrameworks = properties.TargetFrameworks
+                .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            properties.TargetFramework = targetFrameworks.Length == 1
+                ? targetFrameworks[0]
+                : properties.TargetFrameworks;
+        }
+
+        return properties;
+    }
+
 }

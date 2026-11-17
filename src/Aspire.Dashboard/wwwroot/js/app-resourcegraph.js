@@ -1,17 +1,27 @@
 import './d3.v7.min.js'
+import { attachResourceGraphGame } from './app-resourcegraph-game.js'
 
 let resourceGraph = null;
 
 export function initializeResourcesGraph(resourcesInterop, graphIcons) {
     resourceGraph = new ResourceGraph(resourcesInterop, graphIcons);
     resourceGraph.resize();
+    // Pages that don't offer the Aspire Outage game (the previous dashboard experience) pass no game strings. Don't
+    // attach it there: besides the Play button, it would also take the O key from the dashboard's global shortcuts.
+    if (graphIcons?.game) {
+        attachResourceGraphGame(resourceGraph, graphIcons.game);
+    }
 
     const observer = new ResizeObserver(function () {
         resourceGraph.resize();
     });
 
-    for (const child of document.getElementsByClassName('resources-summary-layout')) {
-        observer.observe(child);
+    // Observe the element the graph is drawn in rather than the page layout around it. Its size also changes when
+    // the surrounding chrome changes (for example the previous experience's tab header wrapping) and when the graph is
+    // shown or hidden.
+    const viewport = resourceGraph.getViewportElement();
+    if (viewport) {
+        observer.observe(viewport);
     }
 }
 
@@ -40,9 +50,11 @@ class ResourceGraph {
 
         // Static icon (SVG path + tooltip) shared by every node's context-menu affordance (cog).
         this.menuIcon = graphIcons ? graphIcons.menu : null;
+        this.hiddenIcon = graphIcons ? graphIcons.hidden : null;
 
         this.nodes = [];
         this.links = [];
+        this.hasFitInitialGraph = false;
 
         this.svg = d3.select('.resource-graph');
         this.baseGroup = this.svg.append("g");
@@ -140,6 +152,9 @@ class ResourceGraph {
 
         this.linkElementsG = this.baseGroup.append("g").attr("class", "links");
         this.nodeElementsG = this.baseGroup.append("g").attr("class", "nodes");
+        // Selection updates can arrive before the first resource snapshot.
+        this.linkElements = this.linkElementsG.selectAll(".resource-link");
+        this.nodeElements = this.nodeElementsG.selectAll(".resource-group");
 
         this.initializeButtons();
     }
@@ -151,7 +166,35 @@ class ResourceGraph {
     }
 
     resetZoomAndPan() {
-        this.svg.transition().call(this.zoom.transform, d3.zoomIdentity);
+        this.fitGraph(true);
+    }
+
+    // Returns false when the graph couldn't be measured, e.g. because it is hidden behind another tab.
+    fitGraph(animate) {
+        const bounds = this.baseGroup.node()?.getBBox();
+        const viewport = this.getViewportSize();
+        if (!bounds || !viewport || bounds.width <= 0 || bounds.height <= 0) {
+            const selection = animate ? this.svg.transition().duration(300) : this.svg;
+            selection.call(this.zoom.transform, d3.zoomIdentity);
+            return false;
+        }
+
+        const padding = 64;
+        const availableWidth = Math.max(viewport.width - (padding * 2), 1);
+        const availableHeight = Math.max(viewport.height - (padding * 2), 1);
+        const fitScale = Math.min(availableWidth / bounds.width, availableHeight / bounds.height);
+        // Avoid both extremes: don't enlarge a small graph, and don't reduce a large graph to an unreadable thumbnail.
+        // Larger topologies can still be panned after reset.
+        const scale = Math.min(Math.max(fitScale, 0.55), 1);
+        const centerX = bounds.x + (bounds.width / 2);
+        const centerY = bounds.y + (bounds.height / 2);
+        const transform = d3.zoomIdentity
+            .translate(-centerX * scale, -centerY * scale)
+            .scale(scale);
+
+        const selection = animate ? this.svg.transition().duration(300) : this.svg;
+        selection.call(this.zoom.transform, transform);
+        return true;
     }
 
     zoomIn() {
@@ -177,12 +220,37 @@ class ResourceGraph {
             .attr("d", 'M0,-5L10,0L0,5');
     }
 
+    // The element the SVG is drawn in (.resource-graph-container). Every page that hosts the graph (the overview, the
+    // /graph page and the previous experience's resources page) sizes the SVG with CSS to fill it, so its size is the
+    // drawing area. A page that left the SVG sized by its viewBox would create a resize feedback loop here. Don't measure an ancestor such as
+    // .resources-summary-layout: on the previous experience's page it also contains the tab header, so a viewBox built
+    // from it is taller than the graph area and pushes the bottom-anchored graph controls out of view.
+    getViewportElement() {
+        return this.svg.node()?.parentElement ?? null;
+    }
+
+    getViewportSize() {
+        const viewport = this.getViewportElement();
+        if (!viewport || viewport.clientWidth <= 0 || viewport.clientHeight <= 0) {
+            return null;
+        }
+
+        return { width: viewport.clientWidth, height: viewport.clientHeight };
+    }
+
     resize() {
-        var container = document.querySelector(".resources-summary-layout");
-        if (container) {
-            var width = container.clientWidth;
-            var height = Math.max(container.clientHeight - 50, 0);
-            this.svg.attr("viewBox", [-width / 2, -height / 2, width, height]);
+        // A hidden graph (another tab or overview mode is selected) has no size. Keep the last viewBox until it is shown.
+        const viewport = this.getViewportSize();
+        if (!viewport) {
+            return;
+        }
+
+        this.svg.attr("viewBox", [-viewport.width / 2, -viewport.height / 2, viewport.width, viewport.height]);
+
+        // Resources can arrive while the graph is hidden, when there is nothing to measure. Fit them the first time the
+        // graph has a size.
+        if (!this.hasFitInitialGraph && this.nodes.length > 0) {
+            this.hasFitInitialGraph = this.fitGraph(false);
         }
     }
 
@@ -196,6 +264,9 @@ class ResourceGraph {
             return false;
         }
         if (r1.displayName !== r2.displayName) {
+            return false;
+        }
+        if (r1.isHidden !== r2.isHidden) {
             return false;
         }
         if (!this.iconEqual(r1.resourceIcon, r2.resourceIcon)) {
@@ -272,6 +343,7 @@ class ResourceGraph {
                     endpointText: resource.endpointText,
                     resourceIcon: createIcon(resource.resourceIcon),
                     stateIcon: createIcon(resource.stateIcon),
+                    isHidden: resource.isHidden,
                     degree: degree
                 });
             } else {
@@ -283,6 +355,7 @@ class ResourceGraph {
                     endpointText: resource.endpointText,
                     resourceIcon: createIcon(resource.resourceIcon),
                     stateIcon: createIcon(resource.stateIcon),
+                    isHidden: resource.isHidden,
                     degree: degree
                 });
             }
@@ -347,13 +420,14 @@ class ResourceGraph {
             .attr("resource-name", n => n.id)
             .call(this.dragDrop);
 
+        // Enter/leave keeps hover stable while moving between a node's child shapes.
         var newNodesContainer = newNodes
             .append("g")
             .attr("class", "resource-scale")
             .on('click', this.selectNode)
             .on('contextmenu', this.nodeContextMenu)
-            .on('mouseover', this.hoverNode)
-            .on('mouseout', this.unHoverNode);
+            .on('mouseenter', this.hoverNode)
+            .on('mouseleave', this.unHoverNode);
         newNodesContainer
             .append("circle")
             .attr("r", 56)
@@ -372,8 +446,7 @@ class ResourceGraph {
         iconPath
             .attr("fill", n => n.resourceIcon.color)
             .attr("d", n => n.resourceIcon.path)
-            .append("title")
-            .text(n => n.resourceIcon.tooltip);
+            .attr("data-tooltip", n => n.resourceIcon.tooltip);
 
         // Icon paths could be mixed size. We need to transform icons to always be displayed at a consistent size.
         iconPath.each(function (d) {
@@ -384,7 +457,12 @@ class ResourceGraph {
             const bbox = node.getBBox();
 
             const available = Math.max(1, iconSize - 2);
-            const scale = available / Math.max(bbox.width, bbox.height);
+            const largestDimension = Math.max(bbox.width, bbox.height);
+            if (!Number.isFinite(largestDimension) || largestDimension <= 0) {
+                path.attr("transform", null);
+                return;
+            }
+            const scale = available / largestDimension;
 
             const cx = bbox.x + bbox.width / 2;
             const cy = bbox.y + bbox.height / 2;
@@ -400,7 +478,6 @@ class ResourceGraph {
             .attr("class", "resource-endpoint")
             .style("display", n => n.endpointText ? null : "none");
         endpointGroup.append("text");
-        endpointGroup.append("title");
 
         // Resource status
         var statusGroup = newNodesContainer
@@ -411,23 +488,40 @@ class ResourceGraph {
             .attr("r", 8)
             .attr("cy", 8)
             .attr("cx", 8)
-            .attr("class", "resource-status-circle")
-            .append("title");
+            .attr("class", "resource-status-circle");
         statusGroup
             .append("path")
-            .attr("class", "resource-status-path")
-            .append("title");
+            .attr("class", "resource-status-path");
 
         var resourceNameGroup = newNodesContainer
             .append("g")
             .attr("transform", "translate(0,71)")
             .attr("class", "resource-name");
         resourceNameGroup
+            .append("rect")
+            .attr("class", "resource-name-hitbox");
+        resourceNameGroup
             .append("text")
             .text(n => trimText(n.label, 30));
-        resourceNameGroup
-            .append("title")
-            .text(n => n.label);
+        resourceNameGroup.attr("data-tooltip", n => n.label);
+
+        if (this.hiddenIcon) {
+            var hiddenIconGroup = resourceNameGroup
+                .append("g")
+                .attr("class", "resource-hidden-icon")
+                .style("display", n => n.isHidden ? null : "none");
+            hiddenIconGroup
+                .append("rect")
+                .attr("class", "resource-hidden-icon-hitbox")
+                .attr("x", -4)
+                .attr("width", 20);
+            hiddenIconGroup
+                .append("path")
+                .attr("d", this.hiddenIcon.path);
+            hiddenIconGroup
+                .append("title")
+                .text(this.hiddenIcon.tooltip);
+        }
 
         // Context menu affordance. A cog positioned on the circle rim directly below the status badge.
         // The status badge sits at the top-right via "scale(1.6) translate(14,-34)" (center ~(35,-42)),
@@ -453,9 +547,7 @@ class ResourceGraph {
             .append("circle")
             .attr("r", 14)
             .attr("class", "resource-menu-cog-background");
-        cogGroup
-            .append("title")
-            .text(n => this.getResourceMenuLabel(n));
+        cogGroup.attr("data-tooltip", n => this.getResourceMenuLabel(n));
         if (this.menuIcon) {
             var cogIcon = cogGroup
                 .append("path")
@@ -467,7 +559,12 @@ class ResourceGraph {
                 const iconSize = 16;
                 const path = d3.select(this);
                 const bbox = this.getBBox();
-                const scale = iconSize / Math.max(bbox.width, bbox.height);
+                const largestDimension = Math.max(bbox.width, bbox.height);
+                if (!Number.isFinite(largestDimension) || largestDimension <= 0) {
+                    path.attr("transform", null);
+                    return;
+                }
+                const scale = iconSize / largestDimension;
                 const cx = bbox.x + bbox.width / 2;
                 const cy = bbox.y + bbox.height / 2;
 
@@ -479,14 +576,38 @@ class ResourceGraph {
             .attr("opacity", 1);
 
         this.nodeElements = newNodes.merge(this.nodeElements);
+        this.nodeElements.classed('resource-group-hidden', n => n.isHidden);
 
         // Set resource values that change.
         this.nodeElementsG
             .selectAll(".resource-group")
+            .select(".resource-name")
+            .each(function (n) {
+                const nameGroup = d3.select(this);
+                const bounds = nameGroup.select("text").node().getBBox();
+                const hitboxHeight = Math.max(bounds.height, 16);
+                nameGroup.select(".resource-name-hitbox")
+                    .attr("x", bounds.x)
+                    .attr("y", bounds.y + (bounds.height - hitboxHeight) / 2)
+                    .attr("width", bounds.width)
+                    .attr("height", hitboxHeight);
+                const hiddenIconGroup = nameGroup
+                    .select(".resource-hidden-icon")
+                    .style("display", n.isHidden ? null : "none");
+                if (n.isHidden && !hiddenIconGroup.empty()) {
+                    // Join the icon's hitbox to the measured label, including the gap between them.
+                    hiddenIconGroup.attr("transform",
+                        `translate(${bounds.x + bounds.width + 4},${bounds.y + (bounds.height - 16) / 2})`);
+                    hiddenIconGroup.select(".resource-hidden-icon-hitbox")
+                        .attr("y", (16 - hitboxHeight) / 2)
+                        .attr("height", hitboxHeight);
+                }
+            });
+        this.nodeElementsG
+            .selectAll(".resource-group")
             .select(".resource-menu-cog")
             .attr("aria-label", n => this.getResourceMenuLabel(n))
-            .select("title")
-            .text(n => this.getResourceMenuLabel(n));
+            .attr("data-tooltip", n => this.getResourceMenuLabel(n));
         this.nodeElementsG
             .selectAll(".resource-group")
             .select(".resource-endpoint")
@@ -496,20 +617,17 @@ class ResourceGraph {
         this.nodeElementsG
             .selectAll(".resource-group")
             .select(".resource-endpoint")
-            .select("title")
-            .text(n => n.endpointText || "");
+            .attr("data-tooltip", n => n.endpointText || "");
         this.nodeElementsG
             .selectAll(".resource-group")
             .select(".resource-status-circle")
-            .select("title")
-            .text(n => n.stateIcon.tooltip);
+            .attr("data-tooltip", n => n.stateIcon.tooltip);
         this.nodeElementsG
             .selectAll(".resource-group")
             .select(".resource-status-path")
             .attr("d", n => n.stateIcon.path)
             .attr("fill", n => n.stateIcon.color)
-            .select("title")
-            .text(n => n.stateIcon.tooltip);
+            .attr("data-tooltip", n => n.stateIcon.tooltip);
 
         // Update links
         this.linkElements = this.linkElementsG
@@ -545,6 +663,10 @@ class ResourceGraph {
             this.simulation.alpha(1);
             for (let i = 0; i < 300; i++) {
                 this.simulation.tick();
+            }
+            this.onTick();
+            if (!this.hasFitInitialGraph) {
+                this.hasFitInitialGraph = this.fitGraph(false);
             }
         }
 
@@ -605,6 +727,7 @@ class ResourceGraph {
 
         // Prevent default browser context menu.
         event.preventDefault();
+        event.stopPropagation();
 
         await this.openResourceContextMenu(data.id, event.clientX, event.clientY, null, null);
     };
@@ -699,7 +822,7 @@ class ResourceGraph {
     }
 
     hoverNode = (event) => {
-        var mouseoverNode = event.target.__data__;
+        var mouseoverNode = event.currentTarget.__data__;
 
         this.updateNodeHighlights(mouseoverNode);
     }
@@ -723,6 +846,9 @@ class ResourceGraph {
         // we modify the styles to highlight selected nodes
         this.nodeElements.attr('class', (node) => {
             var classNames = ['resource-group'];
+            if (node.isHidden) {
+                classNames.push('resource-group-hidden');
+            }
             if (this.nodeEquals(node, mouseoverNode)) {
                 classNames.push('resource-group-hover');
             }

@@ -22,6 +22,18 @@ public partial class ChartFilters
     [Parameter]
     public EventCallback<bool> ShowCountChanged { get; set; }
 
+    /// <summary>
+    /// Gets or sets whether the instrument is a counter, which can show its change per interval or its running total.
+    /// </summary>
+    [Parameter, EditorRequired]
+    public required bool IsCounter { get; set; }
+
+    [Parameter, EditorRequired]
+    public required bool ShowChangePerInterval { get; set; }
+
+    [Parameter]
+    public EventCallback<bool> ShowChangePerIntervalChanged { get; set; }
+
     [Parameter, EditorRequired]
     public required ImmutableList<DimensionFilterViewModel> DimensionFilters { get; set; }
 
@@ -51,4 +63,6 @@ public partial class ChartFilters
     private Task OnFilterSelectionChangedAsync(DimensionFilterViewModel filter) => OnDimensionValuesChanged.InvokeAsync(filter);
 
     private Task OnShowCountChangedAsync(bool value) => ShowCountChanged.InvokeAsync(value);
+
+    private Task OnShowChangePerIntervalChangedAsync(bool value) => ShowChangePerIntervalChanged.InvokeAsync(value);
 }

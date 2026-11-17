@@ -113,6 +113,70 @@ public class ReferenceExpressionTests
         Assert.Equal("Text: foo", await b.Build().GetValueAsync(default));
     }
 
+    // Same cases as TestReferenceExpressionCreateInputStringTreatedAsLiteral: the builder must treat
+    // appended strings as literals, like ReferenceExpression.Create does.
+    public static TheoryData<string, string, string> BuilderStringTreatedAsLiteralCases => new()
+    {
+        { "world", "Hello world", "Hello world" },
+        { "{", "Hello {{", "Hello {" },
+        { "}", "Hello }}", "Hello }" },
+        { "{1}", "Hello {{1}}", "Hello {1}" },
+        { "{x}", "Hello {{x}}", "Hello {x}" },
+        { "{{x}}", "Hello {{x}}", "Hello {x}" },
+    };
+
+    [Theory]
+    [MemberData(nameof(BuilderStringTreatedAsLiteralCases))]
+    public void ReferenceExpressionBuilderAppendLiteralTreatsInputAsLiteral(string input, string expectedFormat, string expectedExpression)
+    {
+        var builder = new ReferenceExpressionBuilder();
+        builder.AppendLiteral("Hello ");
+        builder.AppendLiteral(input);
+
+        var refExpression = builder.Build();
+        Assert.Equal(expectedFormat, refExpression.Format);
+        Assert.Equal(expectedExpression, refExpression.ValueExpression);
+    }
+
+    [Theory]
+    [MemberData(nameof(BuilderStringTreatedAsLiteralCases))]
+    public void ReferenceExpressionBuilderAppendFormattedStringTreatsInputAsLiteral(string input, string expectedFormat, string expectedExpression)
+    {
+        var builder = new ReferenceExpressionBuilder();
+        builder.AppendLiteral("Hello ");
+        builder.AppendFormatted(input);
+
+        var refExpression = builder.Build();
+        Assert.Equal(expectedFormat, refExpression.Format);
+        Assert.Equal(expectedExpression, refExpression.ValueExpression);
+    }
+
+    [Theory]
+    [MemberData(nameof(BuilderStringTreatedAsLiteralCases))]
+    public void ReferenceExpressionBuilderAppendFormattedStringWithNullFormatTreatsInputAsLiteral(string input, string expectedFormat, string expectedExpression)
+    {
+        var builder = new ReferenceExpressionBuilder();
+        builder.AppendLiteral("Hello ");
+        builder.AppendFormatted(input, format: null);
+
+        var refExpression = builder.Build();
+        Assert.Equal(expectedFormat, refExpression.Format);
+        Assert.Equal(expectedExpression, refExpression.ValueExpression);
+    }
+
+    [Fact]
+    public async Task ReferenceExpressionBuilderAppendKeepsJsonBraces()
+    {
+        var v = new Value();
+
+        var builder = new ReferenceExpressionBuilder();
+        builder.Append($$"""{"myjson":"myvalue","api_uri":"{{v}}"}""");
+        var expr = builder.Build();
+
+        Assert.Equal("""{"myjson":"myvalue","api_uri":"{value}"}""", expr.ValueExpression);
+        Assert.Equal("""{"myjson":"myvalue","api_uri":"Hello World"}""", await expr.GetValueAsync(default));
+    }
+
     private sealed class Value : IValueProvider, IManifestExpressionProvider
     {
         public string ValueExpression => "{value}";

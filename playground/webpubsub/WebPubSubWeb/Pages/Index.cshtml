@@ -47,7 +47,7 @@
         let output = document.querySelector('#output');
         chatConnection.onmessage = event => {
             let message = JSON.parse(event.data);
-            if (message.type === 'message' && message.group === 'group1') {
+            if (message.type === 'message') {
                 addMessage(message.data);
             }
         };

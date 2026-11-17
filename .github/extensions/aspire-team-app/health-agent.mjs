@@ -23,7 +23,7 @@ export function resolveHealthActionTarget(raw, target = "current-session") {
   return "new-session";
 }
 
-export function buildHealthActionPrompt(kind, raw, target = "current-session") {
+export function buildHealthActionPrompt(kind, raw, target = "current-session", prefs = {}) {
   if (!HEALTH_ACTION_KINDS.includes(kind)) throw new Error(`Unknown health action: ${kind}`);
   if (!HEALTH_ACTION_TARGETS.includes(target)) throw new Error(`Unknown health action target: ${target}`);
   const source = normalizeHealthActionSource(raw);
@@ -31,7 +31,7 @@ export function buildHealthActionPrompt(kind, raw, target = "current-session") {
   const effectiveTarget = resolveHealthActionTarget(source, target);
 
   if (effectiveTarget === "new-session") {
-    return newRepositorySessionPrompt(kind, source);
+    return newRepositorySessionPrompt(kind, source, prefs.detachedSessions === true);
   }
   return currentSessionPrompt(kind, source);
 }
@@ -70,7 +70,7 @@ Work in THIS session. Treat the canonical pipeline URL as an opaque identifier: 
 ${intent}`;
 }
 
-function newRepositorySessionPrompt(kind, source) {
+function newRepositorySessionPrompt(kind, source, detachedSessions) {
   const repository = source.mappedRepository;
   const providerInstruction = source.provider === "github"
     ? `Use GitHub CLI/API to refetch default-branch checks for ${source.url}.`
@@ -81,7 +81,7 @@ function newRepositorySessionPrompt(kind, source) {
 
   return `Open a NEW project session for ${repository}; do not perform the repository work in this session.
 
-Use list_projects to find the configured project whose GitHub repository is ${repository}, then call create_session with that project and an autopilot kickoff. If the project is not configured, explain that it must be added and do not silently clone it.
+Use list_repositories to find the configured repository whose GitHub repository is ${repository}, then call create_session with its returned ID as project_id and an autopilot kickoff.${detachedSessions ? " Set detached: true and workspace_type: \"worktree\". Verify with get_session that the returned session has no parent or coordinating creator; report creation or verification failures rather than opening a child session. Results and questions belong in the detached session, not this dashboard conversation." : ""} If the repository is not configured or the match is ambiguous, explain the problem and do not silently clone it.
 
 Kickoff instruction:
 ${kickoff}

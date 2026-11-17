@@ -1,0 +1,1 @@
+﻿{"apiVersion":"usvc-dev.developer.microsoft.com/v1","kind":"Container","metadata":{"name":"test-worker"},"spec":{"env":[{"name":"CUSTOM","value":"configured"}],"args":["--work"],"image":"example/worker:1","ports":[{"containerPort":4567,"hostIP":"127.0.0.1","protocol":"TCP"}]}}

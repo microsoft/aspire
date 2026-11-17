@@ -5,12 +5,12 @@ using System.Globalization;
 using System.Text;
 using Aspire.Hosting;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Dashboard.Model;
 using Aspire.Hosting.Redis;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 #pragma warning disable ASPIRECERTIFICATES001
-#pragma warning disable ASPIREDOCKERFILEBUILDER001
 #pragma warning disable ASPIRETERMINAL001
 
 namespace Aspire.Hosting;
@@ -294,10 +294,10 @@ public static class RedisBuilderExtensions
                                       .WithImage(RedisContainerImageTags.RedisCommanderImage, RedisContainerImageTags.RedisCommanderTag)
                                       .WithImageRegistry(RedisContainerImageTags.RedisCommanderRegistry)
                                       .WithIconName("WindowDatabase")
-                                      .WithHttpEndpoint(targetPort: 8081, name: "http")
+                                      .WithHttpEndpoint(targetPort: 8081, name: RedisCommanderResource.PrimaryEndpointName)
                                       .ExcludeFromManifest();
 
-            AddManagementLinks(resourceBuilder, "http", "Manage (Commander)");
+            AddManagementLinks(resourceBuilder, resource.PrimaryEndpoint, "Manage (Commander)");
 
             builder.ApplicationBuilder.Eventing.Subscribe<BeforeResourceStartedEvent>(resource, async (e, ct) =>
             {
@@ -339,7 +339,7 @@ public static class RedisBuilderExtensions
 
             configureContainer?.Invoke(resourceBuilder);
 
-            resourceBuilder.WithRelationship(builder.Resource, "RedisCommander");
+            resourceBuilder.WithRelationship(builder.Resource, KnownRelationshipTypes.Manages);
 
             return builder;
         }
@@ -376,7 +376,7 @@ public static class RedisBuilderExtensions
                 .WithImage(RedisContainerImageTags.RedisInsightImage, RedisContainerImageTags.RedisInsightTag)
                 .WithImageRegistry(RedisContainerImageTags.RedisInsightRegistry)
                 .WithIconName("WindowDatabase")
-                .WithHttpEndpoint(targetPort: 5540, name: "http")
+                .WithHttpEndpoint(targetPort: 5540, name: RedisInsightResource.PrimaryEndpointName)
                 .WithEnvironment(context =>
                 {
                     var redisInstances = builder.ApplicationBuilder.Resources.OfType<RedisResource>();
@@ -407,7 +407,7 @@ public static class RedisBuilderExtensions
                         counter++;
                     }
                 })
-                .WithRelationship(builder.Resource, "RedisInsight")
+                .WithRelationship(builder.Resource, KnownRelationshipTypes.Manages)
                 .WithCertificateTrustConfiguration(ctx =>
                 {
                     var redisInstances = builder.ApplicationBuilder.Resources.OfType<RedisResource>();
@@ -446,7 +446,7 @@ public static class RedisBuilderExtensions
                 resourceBuilder.WithEndpoint("http", ep => ep.UriScheme = "https");
             });
 
-            AddManagementLinks(resourceBuilder, "http", "Manage (Insights)");
+            AddManagementLinks(resourceBuilder, resource.PrimaryEndpoint, "Manage (Insights)");
 
             configureContainer?.Invoke(resourceBuilder);
 
@@ -455,24 +455,24 @@ public static class RedisBuilderExtensions
     }
 
     /// <summary>
-    /// Hides <paramref name="resourceBuilder"/> and adds a "Manage" URL pointing at its <paramref name="endpointName"/>
+    /// Hides <paramref name="resourceBuilder"/> and adds a "Manage" URL pointing at its <paramref name="endpoint"/>
     /// endpoint to every <see cref="RedisResource"/> in the app.
     /// </summary>
-    private static void AddManagementLinks<T>(IResourceBuilder<T> resourceBuilder, string endpointName, string displayText)
+    private static void AddManagementLinks<T>(IResourceBuilder<T> resourceBuilder, EndpointReference endpoint, string displayText)
         where T : IResourceWithEndpoints
     {
         resourceBuilder.WithHidden();
 
-        var endpoint = resourceBuilder.GetEndpoint(endpointName);
         resourceBuilder.ApplicationBuilder.OnBeforeStart((@event, ct) =>
         {
             foreach (var redisResource in @event.Model.Resources.OfType<RedisResource>())
             {
-                redisResource.Annotations.Add(new ResourceUrlAnnotation
+                resourceBuilder.WithRelationship(redisResource, KnownRelationshipTypes.Manages);
+
+                resourceBuilder.ApplicationBuilder.CreateResourceBuilder(redisResource).WithUrlForEndpoint(endpoint, url =>
                 {
-                    Url = "/",
-                    DisplayText = displayText,
-                    Endpoint = endpoint
+                    url.DisplayText = displayText;
+                    url.DisplayOrder = 1;
                 });
             }
 

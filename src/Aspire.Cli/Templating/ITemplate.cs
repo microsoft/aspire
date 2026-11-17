@@ -21,6 +21,11 @@ internal interface ITemplate
     string Description { get; }
 
     /// <summary>
+    /// Gets additional descriptive text used for searching without changing prompt labels.
+    /// </summary>
+    string? SearchDescription { get; }
+
+    /// <summary>
     /// Gets a value indicating whether this is an empty/scaffold-only template.
     /// </summary>
     bool IsEmpty { get; }

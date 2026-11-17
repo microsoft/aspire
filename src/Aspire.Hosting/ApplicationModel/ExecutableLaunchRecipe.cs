@@ -193,7 +193,7 @@ internal sealed class ExecutableLaunchContext(
 /// </param>
 /// <param name="environmentVariables">The resolved environment variables for the executable.</param>
 /// <param name="launchConfigurations">The serialized launch configurations supplied to an IDE.</param>
-/// <param name="displayArguments">The arguments projected into the dashboard command line.</param>
+/// <param name="launchArguments">The resolved arguments and their execution and dashboard projections.</param>
 internal sealed class ExecutableLaunchPlan(
     string command,
     string workingDirectory,
@@ -201,7 +201,7 @@ internal sealed class ExecutableLaunchPlan(
     IReadOnlyList<string>? arguments,
     IEnumerable<KeyValuePair<string, string>> environmentVariables,
     IEnumerable<JsonElement> launchConfigurations,
-    IEnumerable<ExecutableLaunchArgument> displayArguments)
+    IEnumerable<ExecutableLaunchArgument> launchArguments)
 {
     /// <summary>
     /// Gets the executable path or command name.
@@ -236,9 +236,15 @@ internal sealed class ExecutableLaunchPlan(
     public IReadOnlyList<JsonElement> LaunchConfigurations { get; } = launchConfigurations.ToArray();
 
     /// <summary>
+    /// Gets the resolved arguments and their execution and dashboard projections.
+    /// </summary>
+    public IReadOnlyList<ExecutableLaunchArgument> LaunchArguments { get; } = launchArguments.ToArray();
+
+    /// <summary>
     /// Gets the arguments projected into the dashboard command line.
     /// </summary>
-    public IReadOnlyList<ExecutableLaunchArgument> DisplayArguments { get; } = displayArguments.ToArray();
+    public IReadOnlyList<ExecutableLaunchArgument> DisplayArguments { get; } =
+        launchArguments.Where(static argument => argument.Display).ToArray();
 }
 
 /// <summary>
@@ -327,7 +333,7 @@ internal sealed class DirectExecutableLaunchRecipe : IExecutableLaunchRecipe
         var omittedLaunchToolArgumentCount = omitLaunchToolArguments ? launchToolArgumentCount : 0;
 
         var executableArguments = new List<string>(arguments.Count - omittedLaunchToolArgumentCount);
-        var displayArguments = new List<ExecutableLaunchArgument>(arguments.Count);
+        var launchArguments = new List<ExecutableLaunchArgument>(arguments.Count);
         var nextExecutableArgumentIndex = 0;
 
         for (var i = 0; i < arguments.Count; i++)
@@ -343,16 +349,13 @@ internal sealed class DirectExecutableLaunchRecipe : IExecutableLaunchRecipe
                 executableArguments.Add(argument.Value);
             }
 
-            if (display)
-            {
-                displayArguments.Add(new(
-                    argument.Value,
-                    argument.IsSensitive,
-                    executable,
-                    display,
-                    effectiveArgumentIndex,
-                    isLaunchToolArgument ? ExecutableLaunchArgumentRole.LaunchTool : ExecutableLaunchArgumentRole.Application));
-            }
+            launchArguments.Add(new(
+                argument.Value,
+                argument.IsSensitive,
+                executable,
+                display,
+                effectiveArgumentIndex,
+                isLaunchToolArgument ? ExecutableLaunchArgumentRole.LaunchTool : ExecutableLaunchArgumentRole.Application));
         }
 
         var launchConfigurations = await CreateLaunchConfigurationsAsync(context).ConfigureAwait(false);
@@ -364,7 +367,7 @@ internal sealed class DirectExecutableLaunchRecipe : IExecutableLaunchRecipe
             executableArguments.Count > 0 ? executableArguments : null,
             context.ExecutionConfiguration.EnvironmentVariables,
             launchConfigurations,
-            displayArguments);
+            launchArguments);
     }
 
     private static async Task<IReadOnlyList<JsonElement>> CreateLaunchConfigurationsAsync(ExecutableLaunchContext context)
@@ -457,7 +460,8 @@ internal sealed class ProjectExecutableLaunchRecipe : IExecutableLaunchRecipe
                     projectArguments,
                     projectMetadata,
                     context.Configuration,
-                    context.DistributedApplicationOptions.Configuration);
+                    context.DistributedApplicationOptions.Configuration,
+                    context.DistributedApplicationOptions.GlobalArtifactsPath);
             }
         }
 
@@ -512,7 +516,8 @@ internal sealed class ProjectExecutableLaunchRecipe : IExecutableLaunchRecipe
                 launchArguments,
                 dotnetProjectLaunchArgumentIndex,
                 executableArgumentStartIndex,
-                context.DistributedApplicationOptions.Configuration);
+                context.DistributedApplicationOptions.Configuration,
+                context.DistributedApplicationOptions.GlobalArtifactsPath);
         }
 
         projectArguments.AddRange(launchArguments.Where(static argument => argument.Executable).Select(static argument => argument.Value));
@@ -524,7 +529,7 @@ internal sealed class ProjectExecutableLaunchRecipe : IExecutableLaunchRecipe
             projectArguments.Count > 0 ? projectArguments : null,
             context.ExecutionConfiguration.EnvironmentVariables,
             launchConfigurations,
-            launchArguments.Where(static argument => argument.Display));
+            launchArguments);
     }
 
     private static async Task<IReadOnlyList<JsonElement>> CreateLaunchConfigurationsAsync(
@@ -603,7 +608,8 @@ internal sealed class ProjectExecutableLaunchRecipe : IExecutableLaunchRecipe
         List<string> projectArguments,
         IProjectMetadata projectMetadata,
         IConfiguration configuration,
-        string? appHostConfiguration)
+        string? appHostConfiguration,
+        string? appHostGlobalArtifactsPath)
     {
         // `dotnet watch` does not work with file-based apps yet, so use `dotnet run` in that case.
         if (configuration.GetBool("DOTNET_WATCH") is not true || projectMetadata.IsFileBasedApp)
@@ -619,6 +625,7 @@ internal sealed class ProjectExecutableLaunchRecipe : IExecutableLaunchRecipe
             {
                 projectArguments.Add("--no-build");
             }
+            AddArtifactsPathArguments(projectArguments, appHostGlobalArtifactsPath);
         }
         else
         {
@@ -639,6 +646,17 @@ internal sealed class ProjectExecutableLaunchRecipe : IExecutableLaunchRecipe
         // Aspire already materializes launch-profile settings into the application model, so allowing `dotnet`
         // to apply the profile again would let it override the resolved environment.
         projectArguments.Add("--no-launch-profile");
+    }
+
+    // An artifacts path passed to the AppHost build as a global property also redirected the output of the project
+    // resources it built, so `dotnet run` has to use the same artifacts path to find (or produce) that output.
+    // See https://github.com/microsoft/aspire/issues/6887.
+    private static void AddArtifactsPathArguments(List<string> arguments, string? appHostGlobalArtifactsPath)
+    {
+        if (!string.IsNullOrEmpty(appHostGlobalArtifactsPath))
+        {
+            arguments.AddRange(["--artifacts-path", appHostGlobalArtifactsPath]);
+        }
     }
 
     private static (List<ExecutableLaunchArgument> LaunchArguments, int? DotnetProjectLaunchArgumentIndex) BuildLaunchArguments(
@@ -838,7 +856,8 @@ internal sealed class ProjectExecutableLaunchRecipe : IExecutableLaunchRecipe
         List<ExecutableLaunchArgument> launchArguments,
         int? dotnetProjectLaunchArgumentIndex,
         int executableArgumentStartIndex,
-        string? appHostConfiguration)
+        string? appHostConfiguration,
+        string? appHostGlobalArtifactsPath)
     {
         if (dotnetProjectLaunchArgumentIndex is not { } projectLaunchIndex)
         {
@@ -850,6 +869,12 @@ internal sealed class ProjectExecutableLaunchRecipe : IExecutableLaunchRecipe
             !ContainsDotnetProjectLaunchOption(launchArguments, "--configuration", "-c"))
         {
             argumentsToInsert.AddRange(["--configuration", appHostConfiguration]);
+        }
+
+        if (string.Equals(launchArguments[projectLaunchIndex].Value, "run", StringComparison.Ordinal) &&
+            !ContainsDotnetProjectLaunchOption(launchArguments, "--artifacts-path"))
+        {
+            AddArtifactsPathArguments(argumentsToInsert, appHostGlobalArtifactsPath);
         }
 
         if (!ContainsDotnetProjectLaunchOption(launchArguments, "--no-launch-profile") &&

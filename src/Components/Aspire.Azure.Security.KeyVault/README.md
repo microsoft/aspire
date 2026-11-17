@@ -158,18 +158,21 @@ In your AppHost project, install the Aspire Azure KeyVault Hosting library with 
 
 ```dotnetcli
 dotnet add package Aspire.Hosting.Azure.KeyVault
+dotnet add package Aspire.Hosting.Dotnet
 ```
 
 Then, in the _AppHost.cs_ file of `AppHost`, add a Key Vault connection and consume the connection using the following methods:
 
 ```csharp
+using Aspire.Hosting.ApplicationModel;
+
 // Service registration
-var keyVault = builder.ExecutionContext.IsPublishMode
+IResourceBuilder<IResourceWithConnectionString> keyVault = builder.ExecutionContext.IsPublishMode
     ? builder.AddAzureKeyVault("secrets")
     : builder.AddConnectionString("secrets");
 
 // Service consumption
-var myService = builder.AddProject<Projects.MyService>()
+var myService = builder.AddDotnetProject("myservice", "../MyService/MyService.csproj")
                        .WithReference(keyVault);
 ```
 

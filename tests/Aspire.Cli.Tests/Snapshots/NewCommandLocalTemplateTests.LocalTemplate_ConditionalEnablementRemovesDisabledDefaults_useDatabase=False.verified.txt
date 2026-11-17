@@ -1,0 +1,7 @@
+﻿{
+  settings.txt:
+Database enabled: False
+Mode: ModeValue
+Token: TokenValue
+
+}

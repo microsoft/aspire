@@ -19,7 +19,7 @@ namespace Aspire.Hosting.Azure;
 internal sealed class AcrLoginService : IAcrLoginService
 {
     private const string AcrUsername = "00000000-0000-0000-0000-000000000000";
-    private const string AcrScope = "https://containerregistry.azure.net/.default";
+    internal const string AcrScope = "https://containerregistry.azure.net/.default";
     // Thirty attempts at a two-second cadence gives new registries about a minute
     // for DNS, data-plane, and RBAC propagation without blocking deployment for too long.
     private const int MaxLoginAttempts = 30;

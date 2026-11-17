@@ -16,6 +16,38 @@ namespace Aspire.Hosting.Tests.Eventing;
 public class DistributedApplicationBuilderEventingTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
+    public async Task NonBlockingConcurrentInvokesCallbacksBeforeReturning()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var entered = false;
+        var publisherThread = Environment.CurrentManagedThreadId;
+        var callbackThread = 0;
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var completed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        builder.Eventing.Subscribe<DummyEvent>(async (_, ct) =>
+        {
+            callbackThread = Environment.CurrentManagedThreadId;
+            entered = true;
+            await release.Task.WaitAsync(ct);
+            completed.SetResult();
+        });
+
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
+        try
+        {
+            await builder.Eventing.PublishAsync(new DummyEvent(), EventDispatchBehavior.NonBlockingConcurrent, cts.Token).DefaultTimeout();
+            Assert.True(entered);
+            Assert.Equal(publisherThread, callbackThread);
+            Assert.False(completed.Task.IsCompleted);
+        }
+        finally
+        {
+            release.SetResult();
+            await completed.Task.DefaultTimeout();
+        }
+    }
+
+    [Fact]
     public async Task EventsCanBePublishedBlockSequential()
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);

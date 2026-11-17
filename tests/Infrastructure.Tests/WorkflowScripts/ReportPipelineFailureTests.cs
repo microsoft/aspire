@@ -45,12 +45,12 @@ public sealed class ReportPipelineFailureTests : IDisposable
     [RequiresTools(["node"])]
     public async Task BuildIssueTitleIsNeutral()
     {
-        // The title must not pre-classify the failure as test-vs-infra: a nightly
+        // The title must not pre-classify the failure as test-vs-infra: a scheduled
         // deployment/smoke failure can be either, and these pipelines do not inspect
         // results to tell them apart.
         var title = await InvokeHarnessAsync<string>("buildIssueTitle", new { displayName = "Deployment E2E Tests" });
 
-        Assert.Equal("Nightly run failing: Deployment E2E Tests", title);
+        Assert.Equal("Scheduled run failing: Deployment E2E Tests", title);
     }
 
     [Fact]
@@ -69,7 +69,7 @@ public sealed class ReportPipelineFailureTests : IDisposable
             });
 
         Assert.Contains("<!-- ci-failure:deployment-tests.yml:scheduled -->", body);
-        Assert.Contains("is failing on its nightly run", body);
+        Assert.Contains("is failing on its scheduled run", body);
         Assert.Contains("comment below", body);
         Assert.DoesNotContain("ci-failure-runs:begin", body);
         Assert.DoesNotContain("[run #", body);

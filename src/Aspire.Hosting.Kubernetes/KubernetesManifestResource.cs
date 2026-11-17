@@ -75,16 +75,17 @@ internal sealed class KubernetesManifestResource : BaseKubernetesResource
     /// Adds or updates a manifest field using a dot-separated path.
     /// </summary>
     /// <remarks>
-    /// Polyglot SDKs currently support scalar field values only. Use dot-separated paths to build nested objects with
-    /// scalar leaf values; array values are not supported by this method.
+    /// Values can be JSON-compatible primitives, objects, or arrays. To preserve keys containing dots, such as
+    /// <c>app.kubernetes.io/component</c>, pass an object containing those keys at the parent field path.
+    /// Setting a field replaces any existing value at that path.
     /// </remarks>
     /// <param name="path">The dot-separated manifest field path, for example <c>spec.replicas</c> or <c>data.username</c>.</param>
-    /// <param name="value">The field value.</param>
+    /// <param name="value">The JSON-compatible field value.</param>
     /// <returns>This manifest resource.</returns>
     [AspireExport]
     public KubernetesManifestResource WithField(
         string path,
-        [AspireUnion(typeof(string), typeof(double), typeof(bool))] object value)
+        object value)
     {
         var segments = ParseFieldPath(path);
 
@@ -225,8 +226,10 @@ internal sealed class KubernetesManifestResource : BaseKubernetesResource
             JsonValueKind.True => true,
             JsonValueKind.False => false,
             JsonValueKind.Number when element.TryGetInt64(out var longValue) => longValue,
-            JsonValueKind.Number => element.GetDouble(),
+            JsonValueKind.Number => NormalizeFloatingPointValue(element.GetDouble()),
             JsonValueKind.Array => element.EnumerateArray().Select(NormalizeJsonElement).ToList(),
+            // ATS handles use { "$handle": "...", "$type": "..." }, including inside JSON subtrees.
+            JsonValueKind.Object when element.TryGetProperty("$handle", out _) => throw new ArgumentException("Manifest field values must be JSON-compatible primitives, dictionaries, or arrays. Resource handles are not supported.", nameof(element)),
             JsonValueKind.Object => element.EnumerateObject().ToDictionary(prop => prop.Name, prop => NormalizeJsonElement(prop.Value), StringComparer.Ordinal),
             _ => throw new ArgumentException($"Unsupported JSON value kind '{element.ValueKind}'.", nameof(element))
         };
@@ -234,6 +237,11 @@ internal sealed class KubernetesManifestResource : BaseKubernetesResource
 
     private static Dictionary<string, object?> NormalizeDictionary(IDictionary dictionary)
     {
+        if (dictionary.Contains("$handle"))
+        {
+            throw new ArgumentException("Manifest field values must be JSON-compatible primitives, dictionaries, or arrays. Resource handles are not supported.", nameof(dictionary));
+        }
+
         var result = new Dictionary<string, object?>(StringComparer.Ordinal);
 
         foreach (DictionaryEntry entry in dictionary)

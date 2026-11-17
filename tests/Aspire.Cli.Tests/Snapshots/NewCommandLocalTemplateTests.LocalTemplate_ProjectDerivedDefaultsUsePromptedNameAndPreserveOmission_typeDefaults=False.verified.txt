@@ -1,0 +1,8 @@
+﻿{
+  names.txt:
+Display=Typed.Project Name
+Short=Typed-Project-Name
+RawDisplay=
+RawShort=
+
+}

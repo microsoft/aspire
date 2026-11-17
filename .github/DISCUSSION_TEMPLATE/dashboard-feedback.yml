@@ -1,0 +1,24 @@
+title: "[Dashboard feedback] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping us improve the Aspire Dashboard.
+
+        If you opened this form from the Dashboard, your feedback was copied to the clipboard. Paste it into the field below, review it, and submit the discussion.
+
+  - type: textarea
+    id: dashboard-feedback
+    attributes:
+      label: Dashboard experience feedback
+      description: Paste the feedback copied by the Aspire Dashboard.
+      placeholder: Paste the generated dashboard feedback here.
+    validations:
+      required: true
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional context
+      description: Add anything else that would help us understand your workflow or priorities.
+      placeholder: Optional additional context.

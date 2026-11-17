@@ -200,7 +200,7 @@ internal sealed class SdkDumpCommand : BaseCommand
                 return CliExitCodes.FailedToBuildArtifacts;
             }
 
-            await using var serverSession = _serverSessionFactory.Create(appHostServerProject, environmentVariables: null, debug: false, gracefulShutdownSignaler: null, shutdownService: null, isolateConsole: false, cancellationToken);
+            await using var serverSession = _serverSessionFactory.Create(appHostServerProject, environmentVariables: null, debug: false, gracefulShutdownSignaler: null, shutdownService: null, isolateConsole: false, ownsProject: true, cancellationToken);
             // Short-lived RPC session: StartAsync() spawns the server. We never observe the
             // exit-code task (WaitForExitAsync) because disposal flows the exit code through the
             // activity scope and the only failure mode we care about surfaces via the RPC call below.
@@ -299,7 +299,7 @@ internal sealed class SdkDumpCommand : BaseCommand
                 return CliExitCodes.FailedToBuildArtifacts;
             }
 
-            await using var serverSession = _serverSessionFactory.Create(appHostServerProject, environmentVariables: null, debug: false, gracefulShutdownSignaler: null, shutdownService: null, isolateConsole: false, cancellationToken);
+            await using var serverSession = _serverSessionFactory.Create(appHostServerProject, environmentVariables: null, debug: false, gracefulShutdownSignaler: null, shutdownService: null, isolateConsole: false, ownsProject: true, cancellationToken);
             // Short-lived RPC session: StartAsync() spawns the server. We never observe the
             // exit-code task (WaitForExitAsync) because disposal flows the exit code through the
             // activity scope and the only failure mode we care about surfaces via the RPC call below.
@@ -389,7 +389,7 @@ internal sealed class SdkDumpCommand : BaseCommand
         capabilities.Diagnostics.RemoveAll(d => d.Severity == "Info");
 
         var packageVersions = integrations
-            .Where(i => i.IsPackageReference)
+            .Where(i => i.Source == IntegrationSource.Nuget)
             .Select(i => new PackageInfo { Name = i.Name, Version = i.Version! })
             .ToList();
         if (packageVersions.Count > 0)

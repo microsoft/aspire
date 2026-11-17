@@ -4,7 +4,7 @@
     <body>
       <trans-unit id="Description">
         <source>Browse and search Aspire documentation and API reference from aspire.dev</source>
-        <target state="needs-review-translation">Parcourir et rechercher la documentation Aspire sur aspire.dev.</target>
+        <target state="translated">Parcourez et recherchez dans la documentation et la référence de l'API Aspire sur aspire.dev</target>
         <note />
       </trans-unit>
       <trans-unit id="DocumentNotFound">
@@ -14,7 +14,7 @@
       </trans-unit>
       <trans-unit id="FormatOptionDescription">
         <source>Output format (Table or Json)</source>
-        <target state="needs-review-translation">Format de sortie (Tableau ou JSON).</target>
+        <target state="translated">Format de sortie (Table ou JSON)</target>
         <note />
       </trans-unit>
       <trans-unit id="FoundDocumentationPages">
@@ -29,7 +29,7 @@
       </trans-unit>
       <trans-unit id="GetDescription">
         <source>Get the full content of a documentation page by its slug</source>
-        <target state="needs-review-translation">Obtenez le contenu complet d’une page de documentation grâce à son identifiant.</target>
+        <target state="translated">Récupérez le contenu complet d'une page de documentation à partir de son slug</target>
         <note />
       </trans-unit>
       <trans-unit id="HeaderScore">
@@ -59,12 +59,12 @@
       </trans-unit>
       <trans-unit id="LimitOptionDescription">
         <source>Maximum number of search results to return (default: 5, max: 10)</source>
-        <target state="needs-review-translation">Nombre maximal de résultats de recherche à retourner (par défaut : 5, max : 10).</target>
+        <target state="translated">Nombre maximal de résultats de recherche à retourner (par défaut : 5, max. : 10)</target>
         <note />
       </trans-unit>
       <trans-unit id="ListDescription">
         <source>List all available Aspire documentation pages</source>
-        <target state="needs-review-translation">Listez toutes les pages de documentation Aspire disponibles.</target>
+        <target state="translated">Lister toutes les pages de documentation Aspire disponibles</target>
         <note />
       </trans-unit>
       <trans-unit id="LoadingDocumentation">
@@ -84,22 +84,22 @@
       </trans-unit>
       <trans-unit id="QueryArgumentDescription">
         <source>The search query</source>
-        <target state="needs-review-translation">La requête de recherche.</target>
+        <target state="translated">La requête de recherche</target>
         <note />
       </trans-unit>
       <trans-unit id="SearchDescription">
         <source>Search Aspire documentation by keywords</source>
-        <target state="needs-review-translation">Rechercher la documentation Aspire par mots-clés.</target>
+        <target state="translated">Rechercher dans la documentation Aspire par mots-clés</target>
         <note />
       </trans-unit>
       <trans-unit id="SectionOptionDescription">
         <source>Return only the specified section of the page</source>
-        <target state="needs-review-translation">Retourner uniquement la section spécifiée de la page.</target>
+        <target state="translated">Retourner uniquement la section spécifiée de la page</target>
         <note />
       </trans-unit>
       <trans-unit id="SlugArgumentDescription">
         <source>The slug of the documentation page (e.g., 'redis-integration')</source>
-        <target state="needs-review-translation">Identifiant de la page de documentation (par ex., « redis-integration »).</target>
+        <target state="translated">Le slug de la page de documentation (par ex. « redis-integration »)</target>
         <note />
       </trans-unit>
     </body>

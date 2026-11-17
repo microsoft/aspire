@@ -14,7 +14,7 @@ The new command group lives under `aspire docs`, but it uses a different ingesti
 1. Expose API reference content through the Aspire CLI.
 2. Reuse the existing fetch, ETag, and disk-cache patterns where possible.
 3. Preserve API hierarchy so the CLI can browse the catalog without dumping every API at once.
-4. Support C# and TypeScript API reference pages.
+4. Support C#, TypeScript, and Go API reference pages.
 5. Return markdown for `get` operations.
 
 ## Non-goals
@@ -45,6 +45,10 @@ aspire docs api list csharp/<package>/<type>
 aspire docs api list typescript
 aspire docs api list typescript/<module>
 aspire docs api list typescript/<module>/<symbol>
+
+aspire docs api list go
+aspire docs api list go/<module>
+aspire docs api list go/<module>/<symbol>
 ```
 
 ### Scope semantics
@@ -57,6 +61,9 @@ aspire docs api list typescript/<module>/<symbol>
 | `typescript` | Top-level TypeScript modules |
 | `typescript/<module>` | Direct symbols in the module |
 | `typescript/<module>/<symbol>` | Members under the symbol |
+| `go` | Top-level Go modules |
+| `go/<module>` | Direct symbols in the module |
+| `go/<module>/<symbol>` | Members under the symbol |
 
 If a scope has no children, `list` returns no results instead of expanding sideways or returning sibling scopes.
 
@@ -76,6 +83,9 @@ csharp/aspire.azure.ai.inference/aspireazureaiinferenceextensions
 typescript/aspire.hosting.azure.appconfiguration
 typescript/aspire.hosting.azure.appconfiguration/azureappconfigurationresource
 typescript/aspire.hosting.azure.appconfiguration/azureappconfigurationresource/runasemulator
+go/aspire.hosting.azure.appconfiguration
+go/aspire.hosting.azure.appconfiguration/azureappconfigurationresource
+go/aspire.hosting.azure.appconfiguration/azureappconfigurationresource/runasemulator
 ```
 
 ## Hierarchy model
@@ -102,6 +112,24 @@ This aligns with the sitemap more directly:
 module -> symbol -> member
 ```
 
+### Go
+
+Go uses the same hierarchy as TypeScript:
+
+```text
+language -> module -> symbol -> member
+```
+
+Each level maps to a sitemap route:
+
+```text
+/reference/api/go/<module>/
+/reference/api/go/<module>/<symbol>/
+/reference/api/go/<module>/<symbol>/<member>/
+```
+
+A module is an Aspire package such as `aspire.hosting.redis`. A module item is reported as a `symbol` when it has member pages (for example, an interface with methods), and as a `member` otherwise (for example, a top-level function or a type without member pages). Items under a symbol, such as methods and properties, are reported as `member`.
+
 ## Search behavior
 
 `search` performs weighted lexical matching over the indexed API map.
@@ -115,7 +143,7 @@ The index should prioritize:
 5. Member-group matches
 6. Summary and description snippets when available from future index metadata
 
-The `--language` option limits results to a supported API language. Today the supported language set is `csharp` and `typescript`.
+The `--language` option limits results to a supported API language. Today the supported language set is `csharp`, `typescript`, and `go`.
 
 Search results should include enough metadata for the user to copy the returned identifier directly into `aspire docs api get`.
 
@@ -142,7 +170,7 @@ The implementation should not hardcode the sitemap and markdown endpoints direct
 The API pipeline consists of:
 
 1. Fetch sitemap
-2. Parse C# and TypeScript API routes
+2. Parse C#, TypeScript, and Go API routes
 3. Build a hierarchical API map
 4. Persist the built index to disk
 5. Use the index to serve `list`, `search`, and `get`
@@ -188,7 +216,7 @@ The feature requires tests for:
 
 - sitemap parsing and filtering
 - C# member-group page indexing
-- TypeScript hierarchy parsing
+- TypeScript and Go hierarchy parsing
 - ETag-aware fetch behavior
 - disk-persisted API index caching
 - scoped `list`

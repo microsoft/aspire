@@ -197,6 +197,9 @@ public sealed partial class SqliteTelemetryRepository
     {
         using var connection = _database.OpenConnection();
         using var interrupt = connection.RegisterInterrupt(cancellationToken);
+        // Read the selected logs and their attributes from one snapshot so trimming
+        // cannot remove attributes after the page has been selected.
+        using var transaction = connection.BeginTransaction(deferred: true);
         var query = BuildLogQuery(context);
         query.Parameters.Add("StartIndex", context.StartIndex);
         query.Parameters.Add("Count", context.Count);
@@ -255,7 +258,7 @@ public sealed partial class SqliteTelemetryRepository
             LEFT JOIN paged_logs pl ON 1 = 1
             ORDER BY pl.timestamp_ticks, pl.log_id DESC;
             """,
-            query.Parameters).AsList();
+            query.Parameters, transaction).AsList();
 
         var totalCount = checked((int)pageRecords[0].TotalItemCount);
         var records = pageRecords
@@ -265,7 +268,7 @@ public sealed partial class SqliteTelemetryRepository
         return new PagedResult<OtlpLogEntry>
         {
             TotalItemCount = totalCount,
-            Items = MaterializeLogs(connection, records),
+            Items = MaterializeLogs(connection, records, transaction),
             IsFull = totalCount >= _otlpContext.Options.MaxLogCount
         };
     }
@@ -402,6 +405,9 @@ public sealed partial class SqliteTelemetryRepository
     private OtlpLogEntry? GetLogFromDatabase(long logId)
     {
         using var connection = _database.OpenConnection();
+        // Read the log and its attributes from one snapshot so trimming cannot
+        // remove the attributes between queries.
+        using var transaction = connection.BeginTransaction(deferred: true);
         var records = connection.Query<PageLogRecord>("""
             SELECT
                 l.log_id AS LogId,
@@ -430,8 +436,8 @@ public sealed partial class SqliteTelemetryRepository
             JOIN telemetry_resources r ON r.resource_id = l.resource_id
             JOIN telemetry_scopes s ON s.scope_id = l.scope_id
             WHERE l.log_id = @LogId;
-            """, new { LogId = logId }).AsList();
-        return records.Count == 0 ? null : MaterializeLogs(connection, records)[0];
+            """, new { LogId = logId }, transaction).AsList();
+        return records.Count == 0 ? null : MaterializeLogs(connection, records, transaction)[0];
     }
 
     private List<string> GetLogPropertyKeysFromDatabase(ResourceKey? resourceKey, CancellationToken cancellationToken)
@@ -668,7 +674,7 @@ public sealed partial class SqliteTelemetryRepository
         return operation is null ? "0 = 1" : $"{expression} {operation} @{parameterName}";
     }
 
-    private List<OtlpLogEntry> MaterializeLogs(SqliteConnection connection, List<PageLogRecord> records)
+    private List<OtlpLogEntry> MaterializeLogs(SqliteConnection connection, List<PageLogRecord> records, SqliteTransaction transaction)
     {
         if (records.Count == 0)
         {
@@ -684,7 +690,7 @@ public sealed partial class SqliteTelemetryRepository
                 FROM telemetry_log_attributes
                 WHERE log_id IN @Ids
                 ORDER BY log_id, ordinal;
-                """, new { Ids = logIdBatch }));
+                """, new { Ids = logIdBatch }, transaction));
         }
         var logAttributes = attributeRecords.ToLookup(record => record.OwnerId);
         var results = new List<OtlpLogEntry>(records.Count);

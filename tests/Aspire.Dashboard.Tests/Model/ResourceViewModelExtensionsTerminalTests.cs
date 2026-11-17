@@ -30,44 +30,32 @@ public class ResourceViewModelExtensionsTerminalTests
         Assert.False(resource.HasTerminal());
     }
 
-    [Fact]
-    public void TryGetTerminalReplicaInfo_ReturnsParsedValues()
+    [Theory]
+    [InlineData(true, null, null)]
+    [InlineData(true, null, "1")]
+    [InlineData(true, "not-a-number", "1")]
+    [InlineData(true, "2", "not-a-number")]
+    [InlineData(true, "2", "5")]
+    [InlineData(false, null, null)]
+    [InlineData(false, "0", "1")]
+    public void HasUsableTerminal_DependsOnlyOnEnabledMarker(bool enabled, string? replicaIndex, string? replicaCount)
     {
-        var resource = ModelTestHelpers.CreateResource(
-            properties: new Dictionary<string, ResourcePropertyViewModel>
-            {
-                [KnownProperties.Terminal.ReplicaIndex] = StringProperty(KnownProperties.Terminal.ReplicaIndex, "2"),
-                [KnownProperties.Terminal.ReplicaCount] = StringProperty(KnownProperties.Terminal.ReplicaCount, "5"),
-            });
+        var properties = new Dictionary<string, ResourcePropertyViewModel>();
+        if (enabled)
+        {
+            properties[KnownProperties.Terminal.Enabled] = StringProperty(KnownProperties.Terminal.Enabled, "true");
+        }
+        if (replicaIndex is not null)
+        {
+            properties[KnownProperties.Terminal.ReplicaIndex] = StringProperty(KnownProperties.Terminal.ReplicaIndex, replicaIndex);
+        }
+        if (replicaCount is not null)
+        {
+            properties[KnownProperties.Terminal.ReplicaCount] = StringProperty(KnownProperties.Terminal.ReplicaCount, replicaCount);
+        }
+        var resource = ModelTestHelpers.CreateResource(properties: properties);
 
-        Assert.True(resource.TryGetTerminalReplicaInfo(out var index, out var count));
-        Assert.Equal(2, index);
-        Assert.Equal(5, count);
-    }
-
-    [Fact]
-    public void TryGetTerminalReplicaInfo_FalseWhenIndexMissing()
-    {
-        var resource = ModelTestHelpers.CreateResource(
-            properties: new Dictionary<string, ResourcePropertyViewModel>
-            {
-                [KnownProperties.Terminal.ReplicaCount] = StringProperty(KnownProperties.Terminal.ReplicaCount, "1"),
-            });
-
-        Assert.False(resource.TryGetTerminalReplicaInfo(out _, out _));
-    }
-
-    [Fact]
-    public void TryGetTerminalReplicaInfo_FalseWhenIndexUnparseable()
-    {
-        var resource = ModelTestHelpers.CreateResource(
-            properties: new Dictionary<string, ResourcePropertyViewModel>
-            {
-                [KnownProperties.Terminal.ReplicaIndex] = StringProperty(KnownProperties.Terminal.ReplicaIndex, "not-a-number"),
-                [KnownProperties.Terminal.ReplicaCount] = StringProperty(KnownProperties.Terminal.ReplicaCount, "1"),
-            });
-
-        Assert.False(resource.TryGetTerminalReplicaInfo(out _, out _));
+        Assert.Equal(enabled, ResourceSelectHelpers.HasUsableTerminal(resource));
     }
 
     [Fact]

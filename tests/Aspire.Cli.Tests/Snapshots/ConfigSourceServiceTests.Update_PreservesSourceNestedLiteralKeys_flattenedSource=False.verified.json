@@ -1,0 +1,25 @@
+﻿{
+  "configSource": {
+    "repository": "https://git.example/organization/config",
+    "path": "teams/platform.json",
+    "appliedVersion": "version-2"
+  },
+  "skillSources": {
+    "team": {
+      "repository": "example/remote",
+      "custom": {
+        "setting": "remote"
+      }
+    }
+  },
+  "profiles": {
+    "dev:local": {
+      "environmentVariables": {
+        "Logging:LogLevel:Default": "Debug"
+      }
+    }
+  },
+  "custom": {
+    "setting": "root-flat"
+  }
+}

@@ -1,8 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREAZURE001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
@@ -21,6 +19,7 @@ public class AzureRunAsEmulatorModeTests(ITestOutputHelper testOutputHelper)
         { "Azure Service Bus", (builder, configure) => builder.AddAzureServiceBus("servicebus").RunAsEmulator(_ => configure()).Resource },
         { "Azure SignalR", (builder, configure) => builder.AddAzureSignalR("signalr").RunAsEmulator(_ => configure()).Resource },
         { "Azure Storage", (builder, configure) => builder.AddAzureStorage("storage").RunAsEmulator(_ => configure()).Resource },
+        { "Azure Web PubSub", (builder, configure) => builder.AddAzureWebPubSub("webpubsub").RunAsEmulator(_ => configure()).Resource },
     };
 
     [Theory]

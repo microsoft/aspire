@@ -35,6 +35,8 @@ public class RoutesTests : DashboardTestContext
     [InlineData("/error/404")]
     [InlineData("/terminal-window/apphost/shell")]
     [InlineData("/owned-missing")]
+    [InlineData("/legacy")]
+    [InlineData("/legacy/owned-missing")]
     public void UnauthenticatedBrowserToken_RedirectsWithoutProtectedLayout(string route)
     {
         this.AddAuthorization().SetNotAuthorized();

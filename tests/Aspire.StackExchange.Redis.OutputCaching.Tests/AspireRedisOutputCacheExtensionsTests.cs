@@ -37,4 +37,28 @@ public class AspireRedisOutputCacheExtensionsTests
         // note the RedisOutputCacheStore is internal
         Assert.StartsWith("Redis", cacheStore.GetType().Name);
     }
+
+#if NET11_0_OR_GREATER
+    [Theory]
+    [InlineData("plain")]
+    [InlineData("keyed")]
+    [InlineData("builder")]
+    public void RegistersOutputCachePolicyProvider(string api)
+    {
+        var builder = Host.CreateEmptyApplicationBuilder(null);
+        builder.Configuration["ConnectionStrings:redis"] = "localhost:6379,abortConnect=false";
+
+        switch (api)
+        {
+            case "plain":   builder.AddRedisOutputCache("redis"); break;
+            case "keyed":   builder.AddKeyedRedisOutputCache("redis"); break;
+            case "builder": builder.AddRedisClientBuilder("redis").WithOutputCache(); break;
+        }
+
+        using var host = builder.Build();
+
+        Assert.NotNull(host.Services.GetService<IOutputCachePolicyProvider>());
+    }
+#endif
+
 }

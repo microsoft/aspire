@@ -11,7 +11,7 @@
 .interaction-input-dialog .interaction-input ::deep fluent-field,
 .interaction-input-dialog .interaction-input ::deep .file-input-container,
 .interaction-input-dialog .interaction-input ::deep .interaction-input-label {
-    width: 75%;
+    width: 100%;
     /* Prevent long select/combox controls from extending outside the dialog. This can happen when there is very long placeholder text */
     max-width: 500px;
 }
@@ -30,7 +30,7 @@
 .interaction-input-dialog .interaction-input ::deep .uploaded-files-list {
     display: flex;
     flex-direction: column;
-    row-gap: 4px;
+    row-gap: var(--aspire-space-1);
 }
 
 .interaction-input-dialog .interaction-input ::deep .input-description {
@@ -40,7 +40,7 @@
 .interaction-input-dialog .interaction-input ::deep .input-description,
 .interaction-input-dialog .interaction-input ::deep .input-description p {
     color: var(--foreground-settings-text);
-    font-size: var(--fontSizeBase200);
+    font-size: var(--aspire-font-size-secondary);
 }
 
 .interaction-input-dialog .interaction-input ::deep .input-description p,

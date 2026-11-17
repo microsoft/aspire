@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.ApplicationModel.Docker;
@@ -20,7 +19,6 @@ public static class ContainerFilesExtensions
     /// <param name="logger">An optional logger used to record warnings if container image names cannot be determined for source resources.</param>
     /// <returns>The same DockerfileBuilder instance with additional instructions for container files, enabling method chaining.</returns>
     [AspireExportIgnore(Reason = "Polyglot-facing wrappers are exported from DockerfileBuilderExports with a curated signature.")]
-    [Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static DockerfileBuilder AddContainerFilesStages(this DockerfileBuilder builder, IResource resource, ILogger? logger)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -78,7 +76,6 @@ public static class ContainerFilesExtensions
     /// </para>
     /// </remarks>
     [AspireExportIgnore(Reason = "Polyglot-facing wrappers are exported from DockerfileBuilderExports with a curated signature.")]
-    [Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static DockerfileStage AddContainerFiles(this DockerfileStage stage, IResource resource, string rootDestinationPath, ILogger? logger)
     {
         ArgumentNullException.ThrowIfNull(stage);

@@ -1,0 +1,40 @@
+﻿<configurations>
+  <preview>
+    <configuration>
+      <packageSources>
+        <add key="aspire-test" value="https://selected.example/v3/index.json" />
+      </packageSources>
+      <disabledPackageSources>
+        <clear />
+        <add key="aspire-staging" value="true" />
+      </disabledPackageSources>
+      <packageSourceMapping>
+        <clear />
+        <packageSource key="aspire-daily">
+          <package pattern="Aspire.Hosting.Private" />
+        </packageSource>
+        <packageSource key="team-alias">
+          <package pattern="Contoso.*" />
+        </packageSource>
+        <packageSource key="public">
+          <package pattern="*" />
+        </packageSource>
+        <packageSource key="aspire-test">
+          <package pattern="Aspire*" />
+        </packageSource>
+      </packageSourceMapping>
+    </configuration>
+  </preview>
+  <persisted>
+    <configuration>
+      <packageSources>
+        <add key="aspire-test" value="https://selected.example/v3/index.json" />
+      </packageSources>
+      <packageSourceMapping>
+        <packageSource key="aspire-test">
+          <package pattern="Aspire*" />
+        </packageSource>
+      </packageSourceMapping>
+    </configuration>
+  </persisted>
+</configurations>

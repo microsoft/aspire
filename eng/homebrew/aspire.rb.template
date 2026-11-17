@@ -25,7 +25,29 @@ cask "aspire" do
   # platform / single-platform conventions.
   depends_on :macos
 
+  # A normal managed artifact can create share/pwsh and owns uninstall cleanup.
+  # The completion generator's sandbox only permits its final output directory,
+  # so it cannot create a missing share/pwsh parent on a fresh Homebrew install.
+  # https://github.com/Homebrew/brew/blob/main/Library/Homebrew/cask/artifact/generated_completion.rb
+  generated_script "aspire-completion.ps1", content: <<~'POWERSHELL'
+    #requires -Version 7.0
+    & {
+        $completionScript = aspire completions script pwsh | Out-String
+        if ($LASTEXITCODE -ne 0) {
+            throw 'Aspire could not generate PowerShell completions.'
+        }
+        Invoke-Expression $completionScript
+    }
+  POWERSHELL
+
   binary "aspire"
+
+  # Homebrew owns generation, replacement, and removal; no user profile is edited.
+  # https://docs.brew.sh/Cask-Cookbook#stanza-generate_completions_from_executable
+  generate_completions_from_executable "aspire", "completions", "script",
+                                       shells: [:bash, :zsh, :fish]
+
+  artifact "aspire-completion.ps1", target: "#{HOMEBREW_PREFIX}/share/pwsh/completions/_aspire.ps1"
 
   # The sidecar tells the CLI which install channel placed this binary, so
   # behaviors like self-update can route through `brew` instead of overwriting

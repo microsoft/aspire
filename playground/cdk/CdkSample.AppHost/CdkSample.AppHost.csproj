@@ -15,6 +15,7 @@
 
   <ItemGroup>
     <AspireProjectOrPackageReference Include="Aspire.Hosting.Azure" />
+    <AspireProjectOrPackageReference Include="Aspire.Hosting.Dotnet" />
     <AspireProjectOrPackageReference Include="Aspire.Hosting.Azure.KeyVault" />
     <AspireProjectOrPackageReference Include="Aspire.Hosting.Azure.Redis" />
     <AspireProjectOrPackageReference Include="Aspire.Hosting.Azure.PostgreSQL" />

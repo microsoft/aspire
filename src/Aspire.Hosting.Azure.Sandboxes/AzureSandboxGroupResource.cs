@@ -1,12 +1,9 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIREPIPELINES003
 #pragma warning disable ASPIREAZURE001
-#pragma warning disable ASPIRECOMPUTE002
 
-using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure.Sandboxes.Provisioning;
 using Aspire.Hosting.Pipelines;
@@ -287,7 +284,6 @@ public sealed class AzureSandboxGroupResource : AzureProvisioningResource, IAzur
     }
 
     /// <inheritdoc/>
-    [Experimental("ASPIRECOMPUTE002", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public ReferenceExpression GetHostAddressExpression(EndpointReference endpointReference)
     {
         ArgumentNullException.ThrowIfNull(endpointReference);
@@ -296,7 +292,6 @@ public sealed class AzureSandboxGroupResource : AzureProvisioningResource, IAzur
     }
 
     /// <inheritdoc/>
-    [Experimental("ASPIRECOMPUTE002", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public ReferenceExpression GetEndpointPropertyExpression(EndpointReferenceExpression endpointReferenceExpression)
     {
         ArgumentNullException.ThrowIfNull(endpointReferenceExpression);

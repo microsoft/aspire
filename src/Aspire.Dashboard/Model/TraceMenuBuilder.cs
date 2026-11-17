@@ -53,7 +53,7 @@ public sealed class TraceMenuBuilder
         OtlpTrace trace,
         bool showViewDetails = true)
     {
-        AddMenuItems(menuItems, trace.TraceId, () => trace, showViewDetails);
+        AddMenuItems(menuItems, trace.TraceId, () => trace, showViewDetails ? DashboardUrls.TraceDetailUrl(trace.TraceId) : null);
     }
 
     /// <summary>
@@ -61,22 +61,25 @@ public sealed class TraceMenuBuilder
     /// </summary>
     /// <param name="menuItems">The list to add menu items to.</param>
     /// <param name="summary">The trace summary to create menu items for.</param>
-    /// <param name="showViewDetails">Whether to include the View Details menu item. Defaults to <c>true</c>.</param>
+    /// <param name="traceDetailUrl">
+    /// The URL the View Details menu item navigates to. Callers pass the hosting page's contextual URL so the
+    /// trace detail keeps the list's resource selection and filters, the same as clicking the row.
+    /// </param>
     public void AddMenuItems(
         List<MenuButtonItem> menuItems,
         TraceSummary summary,
-        bool showViewDetails = true)
+        string traceDetailUrl)
     {
-        AddMenuItems(menuItems, summary.TraceId, () => _dataSource.TelemetryRepository.GetTrace(summary.TraceId), showViewDetails);
+        AddMenuItems(menuItems, summary.TraceId, () => _dataSource.TelemetryRepository.GetTrace(summary.TraceId), traceDetailUrl);
     }
 
     private void AddMenuItems(
         List<MenuButtonItem> menuItems,
         string traceId,
         Func<OtlpTrace?> getTrace,
-        bool showViewDetails)
+        string? viewDetailsUrl)
     {
-        if (showViewDetails)
+        if (viewDetailsUrl is not null)
         {
             menuItems.Add(new MenuButtonItem
             {
@@ -84,7 +87,7 @@ public sealed class TraceMenuBuilder
                 Icon = s_viewDetailsIcon,
                 OnClick = () =>
                 {
-                    _navigationManager.NavigateTo(DashboardUrls.TraceDetailUrl(traceId));
+                    _navigationManager.NavigateTo(viewDetailsUrl);
                     return Task.CompletedTask;
                 }
             });

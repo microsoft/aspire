@@ -1,0 +1,22 @@
+@using Aspire.Dashboard.Resources
+@inject IStringLocalizer<Layout> Loc
+
+<div class="coming-soon">
+    <div class="coming-soon-icon" aria-hidden="true">
+        <FluentIcon Value="@Icon" Width="32px" Color="Color.Custom" CustomColor="var(--colorBrandForeground1)" />
+    </div>
+    <h1 class="coming-soon-title">@Title</h1>
+    <p class="coming-soon-description">@Description</p>
+    <span class="coming-soon-badge">@Loc[nameof(Layout.PlaceholderPageComingSoon)]</span>
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public required Icon Icon { get; set; }
+
+    [Parameter, EditorRequired]
+    public required string Title { get; set; }
+
+    [Parameter, EditorRequired]
+    public required string Description { get; set; }
+}

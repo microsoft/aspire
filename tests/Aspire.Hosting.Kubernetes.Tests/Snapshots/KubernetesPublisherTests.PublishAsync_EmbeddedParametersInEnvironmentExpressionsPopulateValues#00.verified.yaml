@@ -4,6 +4,8 @@ secrets:
     SECRET_URL: ""
     token: ""
 config:
+  env_dashboard:
+    ASPIRE_DASHBOARD_TELEMETRY_OPTOUT: "true"
   myapp:
     SOME_URL: ""
     host: ""

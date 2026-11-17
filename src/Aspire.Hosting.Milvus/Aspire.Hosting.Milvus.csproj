@@ -11,6 +11,7 @@
 
   <ItemGroup>
     <Compile Include="$(SharedDir)StringComparers.cs" Link="Utils\StringComparers.cs" />
+    <Compile Include="$(SharedDir)/Model/KnownRelationshipTypes.cs" LinkBase="Shared" />
   </ItemGroup>
 
   <ItemGroup>

@@ -1,0 +1,39 @@
+﻿@using Aspire.Dashboard.Resources
+@inject IStringLocalizer<Layout> Loc
+@inject IDashboardClient DashboardClient
+
+<FluentAppBar PopoverShowSearch="false" Class="desktop-nav-menu">
+    @if (DashboardClient.IsEnabled)
+    {
+        <FluentAppBarItem
+            Href="@LegacyNavUrls.ToLegacyUrl(DashboardUrls.ResourcesUrl())"
+            Match="@(_isResources ? NavLinkMatch.Prefix : NavLinkMatch.All)"
+            IconRest="ResourcesIcon()"
+            IconActive="ResourcesIcon(active: true)"
+            Text="@Loc[nameof(Layout.NavMenuResourcesTab)]" />
+        <FluentAppBarItem Href="@LegacyNavUrls.ToLegacyUrl(DashboardUrls.ConsoleLogsUrl())"
+            IconRest="ConsoleLogsIcon()"
+            IconActive="ConsoleLogsIcon(active: true)"
+            Text="@Loc[nameof(Layout.NavMenuConsoleLogsTab)]" />
+    }
+    <FluentAppBarItem Href="@LegacyNavUrls.ToLegacyUrl(DashboardUrls.StructuredLogsUrl())"
+        IconRest="StructuredLogsIcon()"
+        IconActive="StructuredLogsIcon(active: true)"
+        Text="@Loc[nameof(Layout.NavMenuStructuredLogsTab)]" />
+    <FluentAppBarItem Href="@LegacyNavUrls.ToLegacyUrl(DashboardUrls.TracesUrl())"
+        IconRest="TracesIcon()"
+        IconActive="TracesIcon(active: true)"
+        Text="@Loc[nameof(Layout.NavMenuTracesTab)]" />
+    <FluentAppBarItem
+        Href="@LegacyNavUrls.ToLegacyUrl(DashboardUrls.MetricsUrl())"
+        IconRest="MetricsIcon()"
+        IconActive="MetricsIcon(active: true)"
+        Text="@Loc[nameof(Layout.NavMenuMetricsTab)]" />
+    @if (DashboardClient.IsEnabled && HasResourceTerminals)
+    {
+        <FluentAppBarItem Href="@LegacyNavUrls.ToLegacyUrl(DashboardUrls.TerminalsUrl())"
+            IconRest="TerminalsIcon()"
+            IconActive="TerminalsIcon(active: true)"
+            Text="@Loc[nameof(Layout.NavMenuTerminalsTab)]" />
+    }
+</FluentAppBar>

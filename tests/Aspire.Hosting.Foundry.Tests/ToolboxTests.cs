@@ -2,8 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIRECOMPUTE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-#pragma warning disable ASPIREPIPELINES001 // Pipelines APIs are experimental.
-#pragma warning disable ASPIREAZURE001 // AzureEnvironmentResource is experimental.
 
 using System.ClientModel.Primitives;
 using System.Net;
@@ -326,7 +324,7 @@ public class ToolboxTests
     }
 
     [Fact]
-    public async Task WebSearchToolDefinition_ConvertsToProjectsAgentTool()
+    public async Task WebSearchToolDefinition_ConvertsToToolboxTool()
     {
         var tool = new FoundryToolboxWebSearchToolDefinition("web-search");
 
@@ -359,7 +357,7 @@ public class ToolboxTests
     }
 
     [Fact]
-    public async Task AzureAISearchToolDefinition_ConvertsToAzureAISearchTool()
+    public async Task AzureAISearchToolDefinition_ConvertsToAzureAISearchToolboxTool()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var project = builder.AddFoundry("account")
@@ -380,8 +378,8 @@ public class ToolboxTests
 
         var projectTool = (await def.ResolveAsync(CancellationToken.None)).Tool;
 
-        var aiSearch = Assert.IsType<AzureAISearchTool>(projectTool);
-        var index = Assert.Single(aiSearch.Options.Indexes);
+        var aiSearch = Assert.IsType<AzureAISearchToolboxTool>(projectTool);
+        var index = Assert.Single(aiSearch.AzureAiSearch.Indexes);
         Assert.Equal("/subscriptions/sub/resourceGroups/rg/connections/search", index.ProjectConnectionId);
         Assert.Equal("docs", index.IndexName);
         var json = ModelReaderWriter.Write(

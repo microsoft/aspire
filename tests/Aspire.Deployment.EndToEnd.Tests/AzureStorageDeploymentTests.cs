@@ -150,9 +150,11 @@ builder.Build().Run();
 
             // Step 8: Verify the Azure Storage account was created
             output.WriteLine("Step 8: Verifying Azure Storage account...");
-            await auto.TypeAsync($"az storage account list -g \"{resourceGroupName}\" --query \"[].name\" -o tsv");
-            await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
+            await DotnetProjectDeploymentHelpers.RunScriptAsync(auto, counter, $$"""
+                set -euo pipefail
+                az storage account list -g {{resourceGroupName}} --subscription {{subscriptionId}} -o json |
+                    jq -e 'length == 1'
+                """, TimeSpan.FromSeconds(30));
 
             // Step 9: Clean up Azure resources using aspire destroy
             output.WriteLine("Step 9: Destroying Azure deployment...");
@@ -263,7 +265,7 @@ builder.Build().Run();
 
             var content = File.ReadAllText(appHostFilePath);
 
-            content = content.Replace(
+            content = DotnetProjectDeploymentHelpers.ReplaceExactlyOnce(content,
                 "var builder = DistributedApplication.CreateBuilder(args);",
                 """
 var builder = DistributedApplication.CreateBuilder(args);
@@ -272,11 +274,12 @@ var storage = builder.AddAzureStorage("storage");
 var blobs = storage.AddBlobs("blobs");
 """);
 
-            content = content.Replace(
-                $"var apiService = builder.AddProject<Projects.{projectName}_ApiService>(\"apiservice\")",
-                $"var apiService = builder.AddProject<Projects.{projectName}_ApiService>(\"apiservice\")\n    .WithReference(blobs)");
+            var apiServiceDeclaration = $"var apiService = builder.AddDotnetProject(\"apiservice\", \"../{projectName}.ApiService/{projectName}.ApiService.csproj\")";
+            content = DotnetProjectDeploymentHelpers.ReplaceExactlyOnce(content,
+                apiServiceDeclaration,
+                $"{apiServiceDeclaration}\n    .WithReference(blobs)");
 
-            content = content.Replace(
+            content = DotnetProjectDeploymentHelpers.ReplaceExactlyOnce(content,
                 ".WithReference(apiService)",
                 """
 .WithReference(apiService)
@@ -291,7 +294,7 @@ builder.AddAzureContainerAppEnvironment("infra");
 builder.Build().Run();
 """;
 
-            content = content.Replace(buildRunPattern, replacement);
+            content = DotnetProjectDeploymentHelpers.ReplaceExactlyOnce(content, buildRunPattern, replacement);
             File.WriteAllText(appHostFilePath, content);
 
             output.WriteLine($"Modified AppHost.cs with shared Azure Storage references at: {appHostFilePath}");
@@ -312,10 +315,38 @@ builder.Build().Run();
             await auto.WaitForPipelineSuccessAsync(timeout: TimeSpan.FromMinutes(25));
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
 
-            output.WriteLine("Step 8: Verifying Azure Storage account...");
-            await auto.TypeAsync($"az storage account list -g \"{resourceGroupName}\" --query \"[].name\" -o tsv");
-            await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
+            output.WriteLine("Step 8: Verifying both workloads reference the shared storage account...");
+            // Listing an empty account collection succeeds. Verify one account, both deployed
+            // connection strings, and blob data access for each workload's managed identity.
+            await DotnetProjectDeploymentHelpers.RunScriptAsync(auto, counter, $$"""
+                set -euo pipefail
+                az() { command az "$@" --subscription {{subscriptionId}}; }
+                storage=$(az storage account list -g {{resourceGroupName}} -o json)
+                echo "$storage" | jq -e 'length == 1'
+                storage_id=$(echo "$storage" | jq -er '.[0].id')
+                endpoint=$(echo "$storage" | jq -er '.[0].primaryEndpoints.blob')
+                # Principal IDs suffice; Graph name lookup would require a new token after the
+                # short-lived CI OIDC assertion has expired during deployment.
+                roles=$(az role assignment list --scope "$storage_id" --fill-principal-name false -o json)
+                apps=$(az containerapp list -g {{resourceGroupName}} -o json)
+                for resource in apiservice webfrontend; do
+                    app=$(echo "$apps" | jq -er --arg resource "$resource" \
+                        '[.[] | select(.name | startswith($resource))] | if length == 1 then .[0].name else error("Expected one workload") end')
+                    config=$(az containerapp show -g {{resourceGroupName}} -n "$app" -o json)
+                    echo "$config" | jq -e --arg endpoint "$endpoint" \
+                        '[.properties.template.containers[].env[] | select(.name == "ConnectionStrings__blobs")] |
+                         length == 1 and all(.[]; .value == $endpoint)'
+                    client_id=$(echo "$config" | jq -er \
+                        '[.properties.template.containers[].env[] | select(.name == "AZURE_CLIENT_ID")] |
+                         if length == 1 then .[0].value else error("Expected one workload client ID") end')
+                    principal_id=$(echo "$config" | jq -er --arg client "$client_id" \
+                        '[.identity.userAssignedIdentities[] | select(.clientId == $client)] |
+                         if length == 1 then .[0].principalId else error("Workload identity is not attached") end')
+                    echo "$roles" | jq -e --arg principal "$principal_id" \
+                        'any(.[]; .principalId == $principal and .roleDefinitionName == "Storage Blob Data Contributor")'
+                    echo "$resource references the shared blob endpoint with blob data access"
+                done
+                """, TimeSpan.FromMinutes(3));
 
             output.WriteLine("Step 9: Destroying Azure deployment...");
             await auto.AspireDestroyAsync(counter);

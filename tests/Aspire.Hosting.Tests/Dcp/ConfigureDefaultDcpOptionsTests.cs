@@ -9,6 +9,20 @@ namespace Aspire.Hosting.Tests.Dcp;
 public class ConfigureDefaultDcpOptionsTests
 {
     [Fact]
+    public void ExplicitEmptyInvocationOverrideClearsLegacyDispatcherArguments()
+    {
+        var options = ConfigureWithDcpPublisher(new()
+        {
+            ["ASPIRE_TERMINAL_HOST_PATH"] = "/native/Aspire.TerminalHost",
+            ["ASPIRE_TERMINAL_HOST_INVOCATION_ARGS"] = string.Empty,
+            ["DcpPublisher:TerminalHostInvocationArgs"] = "terminalhost"
+        });
+
+        Assert.Equal("/native/Aspire.TerminalHost", options.TerminalHostPath);
+        Assert.Equal(string.Empty, options.TerminalHostInvocationArgs);
+    }
+
+    [Fact]
     public void KubernetesApiTimeoutDefaultsToFortySecondsWithTwentyAdditionalInitializationSeconds()
     {
         var options = ConfigureWithDcpPublisher([]);

@@ -1,0 +1,8 @@
+﻿<configuration>
+  <packageSources>
+    <clear />
+    <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
+    <add key="custom" value="https://example.com/custom/nuget/v3/index.json" />
+    <add key="aspire-test" value="https://example.com/aspire-daily" />
+  </packageSources>
+</configuration>

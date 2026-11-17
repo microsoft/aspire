@@ -68,7 +68,7 @@ public class SdkInstallerTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("add");
+        var result = command.Parse("add redis");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(CliExitCodes.SdkNotInstalled, exitCode);

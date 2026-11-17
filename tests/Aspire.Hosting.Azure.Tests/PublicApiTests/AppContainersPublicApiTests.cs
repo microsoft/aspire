@@ -102,7 +102,9 @@ public class AppContainersPublicApiTests(ITestOutputHelper testOutputHelper)
     public void PublishAsAzureContainerAppForProjectShouldThrowWhenConfigureIsNull()
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+#pragma warning disable CS0618 // Retain published legacy ProjectResource overload and return-type validation.
         var project = builder.AddProject<ProjectA>("serviceA", o => o.ExcludeLaunchProfile = true);
+#pragma warning restore CS0618
         Action<AzureResourceInfrastructure, ContainerApp> configure = null!;
 
         var action = () => project.PublishAsAzureContainerApp(configure);

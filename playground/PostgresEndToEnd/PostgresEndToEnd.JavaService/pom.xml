@@ -13,12 +13,19 @@
         <maven.compiler.source>17</maven.compiler.source>
         <maven.compiler.target>17</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <netty.version>4.1.133.Final</netty.version>
+        <netty.version>4.1.137.Final</netty.version>
         <reactor-netty.version>1.2.17</reactor-netty.version>
     </properties>
 
     <dependencyManagement>
         <dependencies>
+            <dependency>
+                <groupId>com.fasterxml.jackson</groupId>
+                <artifactId>jackson-bom</artifactId>
+                <version>2.21.7</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
             <!--
                 These overrides pin transitive versions brought in by azure-identity, Javalin,
                 and the PostgreSQL JDBC driver so Component Governance sees patched versions
@@ -34,7 +41,7 @@
             <dependency>
                 <groupId>org.postgresql</groupId>
                 <artifactId>postgresql</artifactId>
-                <version>42.7.11</version>
+                <version>42.7.12</version>
             </dependency>
             <dependency>
                 <groupId>io.projectreactor.netty</groupId>
@@ -58,12 +65,12 @@
         <dependency>
             <groupId>io.javalin</groupId>
             <artifactId>javalin</artifactId>
-            <version>7.2.2</version>
+            <version>7.2.3</version>
         </dependency>
         <dependency>
             <groupId>org.postgresql</groupId>
             <artifactId>postgresql</artifactId>
-            <version>42.7.11</version>
+            <version>42.7.12</version>
         </dependency>
         <dependency>
             <groupId>org.slf4j</groupId>
@@ -83,7 +90,6 @@
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
-            <version>2.21.5</version>
         </dependency>
     </dependencies>
 

@@ -1,0 +1,17 @@
+{
+  "name": "entra-id-node-web",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "express": "^5.2.1",
+    "express-session": "^1.19.0",
+    "openid-client": "^6.8.8"
+  }
+}

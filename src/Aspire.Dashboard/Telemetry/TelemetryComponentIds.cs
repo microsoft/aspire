@@ -14,6 +14,7 @@ public static class TelemetryComponentIds
     public const string Metrics = nameof(Metrics);
     public const string Error = nameof(Error);
     public const string ConsoleLogs = nameof(ConsoleLogs);
+    public const string Terminals = nameof(Terminals);
 
     // Controls
     public const string TraceDetail = nameof(TraceDetail);

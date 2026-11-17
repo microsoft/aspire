@@ -78,12 +78,22 @@ internal sealed class AppHostCliBackchannel(
 
         logger.LogDebug("Requesting stop");
 
-        await rpc.InvokeWithProfilingAsync(
-            profilingTelemetry,
-            "apphost",
-            "RequestStopAsync",
-            [],
-            cancellationToken);
+        try
+        {
+            await rpc.InvokeWithProfilingAsync(
+                profilingTelemetry,
+                "apphost",
+                "RequestStopAsync",
+                [],
+                cancellationToken);
+        }
+        catch (Exception ex) when (!cancellationToken.IsCancellationRequested && BackchannelDisconnectHelpers.IsExpectedDisconnect(ex))
+        {
+            // The AppHost stops its application before StreamJsonRpc writes the response, so shutdown
+            // can close the backchannel first. A closed backchannel means the AppHost is gone or exiting,
+            // which is the outcome the caller asked for. Callers observe the real result from the AppHost's exit code.
+            logger.LogDebug(ex, "Backchannel closed before the AppHost acknowledged the stop request.");
+        }
     }
 
     public async Task NotifyAppHostReadyAsync(CancellationToken cancellationToken)
@@ -168,7 +178,7 @@ internal sealed class AppHostCliBackchannel(
 
                 logger.LogDebug("Received {OperationName} async enumerable", operationName);
             }
-            catch (Exception ex) when (_autoReconnect && !cancellationToken.IsCancellationRequested && IsConnectionLostException(ex))
+            catch (Exception ex) when (_autoReconnect && !cancellationToken.IsCancellationRequested && BackchannelDisconnectHelpers.IsExpectedDisconnect(ex))
             {
                 logger.LogDebug("Connection lost while getting {OperationName}, waiting for reconnect...", operationName);
                 await WaitForReconnectionAsync(cancellationToken).ConfigureAwait(false);
@@ -218,7 +228,7 @@ internal sealed class AppHostCliBackchannel(
                     }
                     current = enumerator.Current;
                 }
-                catch (Exception ex) when (_autoReconnect && !cancellationToken.IsCancellationRequested && IsConnectionLostException(ex))
+                catch (Exception ex) when (_autoReconnect && !cancellationToken.IsCancellationRequested && BackchannelDisconnectHelpers.IsExpectedDisconnect(ex))
                 {
                     source.RetryBecauseConnectionLost = true;
 
@@ -236,18 +246,11 @@ internal sealed class AppHostCliBackchannel(
             {
                 await enumerator.DisposeAsync().ConfigureAwait(false);
             }
-            catch (Exception ex) when (IsConnectionLostException(ex))
+            catch (Exception ex) when (BackchannelDisconnectHelpers.IsExpectedDisconnect(ex))
             {
                 logger.LogDebug("Ignoring connection lost exception during enumerator disposal");
             }
         }
-    }
-
-    private static bool IsConnectionLostException(Exception ex)
-    {
-        return ex is ConnectionLostException
-            || ex is ObjectDisposedException
-            || (ex is OperationCanceledException && ex.InnerException is ConnectionLostException);
     }
 
     private async Task WaitForReconnectionAsync(CancellationToken cancellationToken)

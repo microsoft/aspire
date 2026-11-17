@@ -10,6 +10,7 @@ From your AppHost directory, add the `Aspire.Hosting.Nats` integration with the 
 
 ```bash
 aspire add Aspire.Hosting.Nats
+aspire add Aspire.Hosting.Dotnet
 ```
 
 ## Usage example
@@ -21,7 +22,7 @@ In the AppHost, add a NATS resource and reference it from another resource with 
 ```csharp
 var nats = builder.AddNats("nats");
 
-var myService = builder.AddProject<Projects.MyService>()
+var myService = builder.AddDotnetProject("myservice", "../MyService/MyService.csproj")
                        .WithReference(nats);
 ```
 

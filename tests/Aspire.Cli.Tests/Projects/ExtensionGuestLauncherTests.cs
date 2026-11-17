@@ -200,7 +200,7 @@ public class ExtensionGuestLauncherTests
         public IExtensionBackchannel Backchannel => throw new NotImplementedException();
 
         public Task FlushAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
-        public Task<bool> TryDisplayCommandFailureAsync(string? errorMessage, string cliLogFilePath, string? appHostCliLogFilePath, CancellationToken cancellationToken) => throw new NotImplementedException();
+        public Task<bool> TryDisplayCommandFailureAsync(string? errorMessage, string cliLogFilePath, string? appHostCliLogFilePath, bool allowMarkup, CancellationToken cancellationToken) => throw new NotImplementedException();
         public void DisplayError(string errorMessage, IReadOnlyList<InteractionMessageAction> actions, bool allowMarkup = false) => throw new NotImplementedException();
         public void DisplayMessage(KnownEmoji emoji, string message, IReadOnlyList<InteractionMessageAction> actions, bool allowMarkup = false, ConsoleOutput? consoleOverride = null) => throw new NotImplementedException();
 
@@ -227,7 +227,7 @@ public class ExtensionGuestLauncherTests
         public Task<T> ShowStatusAsync<T>(string statusText, Func<Task<T>> action, KnownEmoji? emoji = null, bool allowMarkup = false) => throw new NotImplementedException();
         public Task<T> ShowDynamicStatusAsync<T>(string initialStatusText, Func<Action<string>, Task<T>> action, KnownEmoji? emoji = null) => throw new NotImplementedException();
         public void ShowStatus(string statusText, Action action, KnownEmoji? emoji = null, bool allowMarkup = false) => throw new NotImplementedException();
-        public Task<string> PromptForStringAsync(string promptText, Func<string, Spectre.Console.ValidationResult>? validator = null, bool isSecret = false, bool required = false, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default) => throw new NotImplementedException();
+        public Task<string> PromptForStringAsync(string promptText, Func<string, Spectre.Console.ValidationResult>? validator = null, bool isSecret = false, bool required = false, PromptBinding<string?>? binding = null, bool logResponse = true, CancellationToken cancellationToken = default) => throw new NotImplementedException();
         public Task<string> PromptForFilePathAsync(string promptText, Func<string, Spectre.Console.ValidationResult>? validator = null, bool directory = false, bool required = false, PromptBinding<string?>? binding = null, bool retryOnValidationFailure = false, CancellationToken cancellationToken = default) => throw new NotImplementedException();
         public Task<T> PromptForSelectionAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, PromptBinding<string?>? binding = null, bool echoSelected = true, CancellationToken cancellationToken = default) where T : notnull => throw new NotImplementedException();
         public Task<IReadOnlyList<T>> PromptForSelectionsAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, IEnumerable<T>? preSelected = null, bool optional = false, PromptBinding<string?>? binding = null, bool echoSelected = true, IEnumerable<T>? bindingChoices = null, CancellationToken cancellationToken = default) where T : notnull => throw new NotImplementedException();

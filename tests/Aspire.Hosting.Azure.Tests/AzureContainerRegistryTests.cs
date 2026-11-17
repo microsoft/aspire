@@ -1,8 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREPIPELINES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure.AppContainers;
 using Aspire.Hosting.Pipelines;
@@ -78,7 +76,9 @@ public class AzureContainerRegistryTests(ITestOutputHelper testOutputHelper)
 
         // Create a container registry and assign roles to a project
         var acr = builder.AddAzureContainerRegistry("acr");
+#pragma warning disable CS0618 // Retain legacy ProjectResource Azure publishing/provisioning contracts with synthetic metadata.
         builder.AddProject<Project>("api", launchProfileName: null)
+#pragma warning restore CS0618
             .WithRoleAssignments(acr, ContainerRegistryBuiltInRole.AcrPull, ContainerRegistryBuiltInRole.AcrPush);
 
         using var app = builder.Build();
@@ -243,6 +243,22 @@ public class AzureContainerRegistryTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public async Task WithPurgeTask_ZeroAgo_MatchesDefaultCountRetention()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var acr = builder.AddAzureContainerRegistry("acr")
+            .WithPurgeTask("0 1 * * *", ago: TimeSpan.Zero);
+        using var defaultBuilder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var defaultAcr = defaultBuilder.AddAzureContainerRegistry("acr")
+            .WithPurgeTask("0 1 * * *");
+
+        var (_, bicep) = await GetManifestWithBicep(acr.Resource);
+        var (_, defaultBicep) = await GetManifestWithBicep(defaultAcr.Resource);
+
+        Assert.Equal(defaultBicep, bicep);
+    }
+
+    [Fact]
     public async Task WithPurgeTask_MultipleTasks_GeneratesUniqueNames()
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
@@ -314,7 +330,8 @@ public class AzureContainerRegistryTests(ITestOutputHelper testOutputHelper)
 
         var acr = builder.AddAzureContainerRegistry("acr");
 
-        Assert.Throws<ArgumentOutOfRangeException>(() => acr.WithPurgeTask("0 1 * * *", ago: TimeSpan.Parse(ago)));
+        var exception = Assert.Throws<ArgumentOutOfRangeException>(() => acr.WithPurgeTask("0 1 * * *", ago: TimeSpan.Parse(ago)));
+        Assert.Equal("ago", exception.ParamName);
     }
 
     [Fact]

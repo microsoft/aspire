@@ -13,8 +13,13 @@ public sealed class TestServiceProvider : IServiceProvider
     private readonly ServiceContainer _serviceContainer = new ServiceContainer();
 
     public TestServiceProvider(IConfiguration? configuration = null)
+        : this((DcpInfo?)null, configuration)
     {
-        _serviceContainer.AddService(typeof(IDcpDependencyCheckService), new TestDcpDependencyCheckService());
+    }
+
+    internal TestServiceProvider(DcpInfo? dcpInfo, IConfiguration? configuration = null)
+    {
+        _serviceContainer.AddService(typeof(IDcpDependencyCheckService), new TestDcpDependencyCheckService(dcpInfo));
         _serviceContainer.AddService(typeof(IConfiguration), configuration ?? new ConfigurationManager());
     }
 

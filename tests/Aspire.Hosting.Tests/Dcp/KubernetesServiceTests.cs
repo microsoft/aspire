@@ -1,8 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREFILESYSTEM001 // IFileSystemService is for evaluation purposes only.
-
 using System.Collections.Concurrent;
 using System.Globalization;
 using System.Net;
@@ -12,6 +10,8 @@ using System.Text.Json;
 using System.Threading.Channels;
 using Aspire.Hosting.Dcp;
 using Aspire.Hosting.Dcp.Model;
+using Aspire.Hosting.Tests.Utils;
+using Aspire.Hosting.Utils;
 using k8s;
 using k8s.Autorest;
 using k8s.Models;
@@ -21,9 +21,11 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Time.Testing;
 using Polly.Timeout;
 
 namespace Aspire.Hosting.Tests.Dcp;
@@ -31,838 +33,83 @@ namespace Aspire.Hosting.Tests.Dcp;
 public class KubernetesServiceTests(DcpApiServerCertificateFixture certificateFixture) : IClassFixture<DcpApiServerCertificateFixture>
 {
     [Fact]
-    public async Task CreateAsync_DoesNotReadOrRetrySuccessfulCreate()
+    public async Task CleanupResourcesAsync_UsesSystemTime_WhenApplicationTimeProviderIsReplaced()
     {
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
-        var (service, kubeconfigPath, fileSystem) = CreateService();
-        using var disposableFileSystem = fileSystem;
-        using var disposableService = service;
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.LongTimeoutDuration);
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var timeProvider = new FakeTimeProvider();
+        builder.Services.AddSingleton<TimeProvider>(timeProvider);
+        using var app = builder.Build();
+        var service = app.Services.GetRequiredService<IKubernetesService>();
+        var locations = app.Services.GetRequiredService<Locations>();
         var requests = new ConcurrentQueue<string>();
-        await using var server = await StartServerAsync(cts.Token, requestHandler: async context =>
-        {
-            requests.Enqueue(context.Request.Method);
-            var created = await ReadContainerAsync(context);
-            created.Metadata.Uid = "created-object";
-            await WriteContainerAsync(context, created, StatusCodes.Status201Created);
-        });
-        WriteKubeconfig(kubeconfigPath, server.Port);
-
-        var result = await service.CreateAsync(Container.Create("frontend", "test-image"), cts.Token);
-
-        Assert.Equal("created-object", result.Metadata.Uid);
-        Assert.Equal(["POST"], requests.ToArray());
-    }
-
-    [Fact]
-    public async Task DcpKubernetesClient_UsesCallerDeadlineInsteadOfSdkTimeout()
-    {
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
-        var requests = new ConcurrentQueue<string>();
-        await using var server = await StartServerAsync(cts.Token, requestHandler: async context =>
-        {
-            requests.Enqueue(context.Request.Method);
-            var created = await ReadContainerAsync(context);
-            created.Metadata.Uid = "created-object";
-            await Task.Delay(TimeSpan.FromMilliseconds(500), context.RequestAborted);
-            await WriteContainerAsync(context, created, StatusCodes.Status201Created);
-        });
-        using var client = new DcpKubernetesClient(new KubernetesClientConfiguration
-        {
-            Host = $"https://127.0.0.1:{server.Port}",
-            SkipTlsVerify = true,
-            HttpClientTimeout = TimeSpan.FromMilliseconds(100),
-        });
-
-        using var response = await client.CustomObjects.CreateClusterCustomObjectWithHttpMessagesAsync(
-            Container.Create("frontend", "test-image"),
-            "usvc-dev.developer.microsoft.com",
-            "v1",
-            "containers",
-            cancellationToken: cts.Token);
-        var result = KubernetesJson.Deserialize<Container>(response.Body.ToString());
-
-        Assert.Equal("created-object", result.Metadata.Uid);
-        Assert.Equal(["POST"], requests.ToArray());
-    }
-
-    [Theory]
-    [InlineData(null)]
-    [InlineData("test-namespace")]
-    public async Task CreateAsync_ReconcilesGatewayTimeoutAfterCommit(string? namespaceParameter)
-    {
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
-        var (service, kubeconfigPath, fileSystem) = CreateService();
-        using var disposableFileSystem = fileSystem;
-        using var disposableService = service;
-        var requests = new ConcurrentQueue<string>();
-        Container? stored = null;
-        await using var server = await StartServerAsync(cts.Token, requestHandler: async context =>
-        {
-            requests.Enqueue($"{context.Request.Method} {context.Request.Path}");
-            if (HttpMethods.IsPost(context.Request.Method))
-            {
-                var created = await ReadContainerAsync(context);
-                created.Metadata.Uid = "created-object";
-                Volatile.Write(ref stored, created);
-                await WriteStatusAsync(context, StatusCodes.Status504GatewayTimeout, "Timeout");
-                return;
-            }
-
-            await WriteContainerAsync(context, Volatile.Read(ref stored)!);
-        });
-        WriteKubeconfig(kubeconfigPath, server.Port);
-        var container = Container.Create("frontend", "test-image");
-        container.Metadata.NamespaceProperty = namespaceParameter;
-
-        var result = await service.CreateAsync(container, cts.Token);
-
-        Assert.Equal("created-object", result.Metadata.Uid);
-        Assert.Equal("frontend", result.Metadata.Name);
-        Assert.Equal(namespaceParameter, result.Metadata.NamespaceProperty);
-        var collectionPath = namespaceParameter is null
-            ? "/apis/usvc-dev.developer.microsoft.com/v1/containers"
-            : $"/apis/usvc-dev.developer.microsoft.com/v1/namespaces/{namespaceParameter}/containers";
-        Assert.Equal([$"POST {collectionPath}", $"GET {collectionPath}/frontend"], requests.ToArray());
-    }
-
-    [Theory]
-    [InlineData(429)]
-    [InlineData(502)]
-    [InlineData(503)]
-    [InlineData(504)]
-    public async Task CreateAsync_RetriesTransientFailureAfterConfirmingObjectAbsent(int statusCode)
-    {
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
-        var (service, kubeconfigPath, fileSystem) = CreateService();
-        using var disposableFileSystem = fileSystem;
-        using var disposableService = service;
-        var requests = new ConcurrentQueue<string>();
-        var postedObjects = new ConcurrentQueue<Container>();
-        var postCount = 0;
-        await using var server = await StartServerAsync(cts.Token, requestHandler: async context =>
-        {
-            requests.Enqueue(context.Request.Method);
-            if (HttpMethods.IsGet(context.Request.Method))
-            {
-                await WriteStatusAsync(context, StatusCodes.Status404NotFound, "NotFound");
-                return;
-            }
-
-            var created = await ReadContainerAsync(context);
-            postedObjects.Enqueue(created);
-            if (Interlocked.Increment(ref postCount) == 1)
-            {
-                await WriteStatusAsync(context, statusCode, "TransientFailure");
-                return;
-            }
-
-            created.Metadata.Uid = "retried-object";
-            await WriteContainerAsync(context, created, StatusCodes.Status201Created);
-        });
-        WriteKubeconfig(kubeconfigPath, server.Port);
-        var container = Container.Create("frontend", "test-image");
-        container.Annotate("existing-annotation", "preserved");
-
-        var result = await service.CreateAsync(container, cts.Token);
-
-        Assert.Equal("retried-object", result.Metadata.Uid);
-        Assert.Equal(["POST", "GET", "POST"], requests.ToArray());
-        Assert.Collection(postedObjects,
-            first =>
-            {
-                Assert.Equal("frontend", first.Metadata.Name);
-                Assert.Equal("test-image", first.Spec.Image);
-                Assert.Equal(container.Metadata.Annotations, first.Metadata.Annotations);
-            },
-            second =>
-            {
-                Assert.Equal("frontend", second.Metadata.Name);
-                Assert.Equal("test-image", second.Spec.Image);
-                Assert.Equal(container.Metadata.Annotations, second.Metadata.Annotations);
-            });
-    }
-
-    [Fact]
-    public async Task CreateAsync_ReconcilesAlreadyExistsWhenOriginalCreateCommitsAfterNotFound()
-    {
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
-        var (service, kubeconfigPath, fileSystem) = CreateService();
-        using var disposableFileSystem = fileSystem;
-        using var disposableService = service;
-        var requests = new ConcurrentQueue<string>();
-        Container? original = null;
-        var postCount = 0;
-        await using var server = await StartServerAsync(cts.Token, requestHandler: async context =>
-        {
-            requests.Enqueue(context.Request.Method);
-            if (HttpMethods.IsPost(context.Request.Method))
-            {
-                var created = await ReadContainerAsync(context);
-                if (Interlocked.Increment(ref postCount) == 1)
-                {
-                    created.Metadata.Uid = "late-original";
-                    Volatile.Write(ref original, created);
-                    await WriteStatusAsync(context, StatusCodes.Status504GatewayTimeout, "Timeout");
-                }
-                else
-                {
-                    Assert.Equal(Volatile.Read(ref original)!.Metadata.Name, created.Metadata.Name);
-                    Assert.Equal(Volatile.Read(ref original)!.Spec.Image, created.Spec.Image);
-                    await WriteStatusAsync(context, StatusCodes.Status409Conflict, "AlreadyExists");
-                }
-
-                return;
-            }
-
-            if (Volatile.Read(ref postCount) == 1)
-            {
-                await WriteStatusAsync(context, StatusCodes.Status404NotFound, "NotFound");
-                return;
-            }
-
-            await WriteContainerAsync(context, Volatile.Read(ref original)!);
-        });
-        WriteKubeconfig(kubeconfigPath, server.Port);
-
-        var result = await service.CreateAsync(Container.Create("frontend", "test-image"), cts.Token);
-
-        Assert.Equal("late-original", result.Metadata.Uid);
-        Assert.Equal(["POST", "GET", "POST", "GET"], requests.ToArray());
-    }
-
-    [Theory]
-    [InlineData(429)]
-    [InlineData(502)]
-    [InlineData(503)]
-    [InlineData(504)]
-    public async Task CreateAsync_RetriesCreateAfterTransientConfirmationFailure(int confirmationStatusCode)
-    {
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
-        var (service, kubeconfigPath, fileSystem) = CreateService();
-        using var disposableFileSystem = fileSystem;
-        using var disposableService = service;
-        var requests = new ConcurrentQueue<string>();
-        Container? stored = null;
-        var postCount = 0;
         var getCount = 0;
         await using var server = await StartServerAsync(cts.Token, requestHandler: async context =>
         {
             requests.Enqueue(context.Request.Method);
-            if (HttpMethods.IsPost(context.Request.Method))
+            var cleanupComplete = context.Request.Method == HttpMethods.Get && Interlocked.Increment(ref getCount) == 2;
+            context.Response.ContentType = "application/json";
+            await context.Response.WriteAsync(KubernetesJson.Serialize(new ApiServerExecution
             {
-                var created = await ReadContainerAsync(context);
-                if (Interlocked.Increment(ref postCount) == 1)
-                {
-                    created.Metadata.Uid = "original-object";
-                    Volatile.Write(ref stored, created);
-                    await WriteStatusAsync(context, StatusCodes.Status504GatewayTimeout, "Timeout");
-                }
-                else
-                {
-                    await WriteStatusAsync(context, StatusCodes.Status409Conflict, "AlreadyExists");
-                }
-            }
-            else if (Interlocked.Increment(ref getCount) == 1)
-            {
-                await WriteStatusAsync(context, confirmationStatusCode, "TransientFailure");
-            }
-            else
-            {
-                await WriteContainerAsync(context, Volatile.Read(ref stored)!);
-            }
+                ApiServerStatus = cleanupComplete ? ApiServerStatus.CleanupComplete : ApiServerStatus.CleaningResources
+            }), context.RequestAborted);
         });
-        WriteKubeconfig(kubeconfigPath, server.Port);
+        WriteKubeconfig(locations.DcpKubeconfigPath, server.Port);
 
-        var result = await service.CreateAsync(Container.Create("frontend", "test-image"), cts.Token);
-
-        Assert.Equal("original-object", result.Metadata.Uid);
-        Assert.Equal(["POST", "GET", "POST", "GET"], requests.ToArray());
-    }
-
-    [Theory]
-    [InlineData("""{"kind":"Status","reason":"Conflict","code":409}""")]
-    [InlineData("""{"kind":"Status","reason":409,"code":409}""")]
-    [InlineData("[]")]
-    [InlineData("not-json")]
-    public async Task CreateAsync_DoesNotConfirmOtherConflictsAfterAmbiguousCreate(string errorBody)
-    {
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
-        var (service, kubeconfigPath, fileSystem) = CreateService();
-        using var disposableFileSystem = fileSystem;
-        using var disposableService = service;
-        var requests = new ConcurrentQueue<string>();
-        var postCount = 0;
-        await using var server = await StartServerAsync(cts.Token, requestHandler: async context =>
+        // Keep the application clock frozen while DCP cleanup requires a retry.
+        // External process cleanup must progress independently of application test time.
+        try
         {
-            requests.Enqueue(context.Request.Method);
-            if (HttpMethods.IsGet(context.Request.Method))
-            {
-                await WriteStatusAsync(context, StatusCodes.Status404NotFound, "NotFound");
-            }
-            else if (Interlocked.Increment(ref postCount) == 1)
-            {
-                await WriteStatusAsync(context, StatusCodes.Status504GatewayTimeout, "Timeout");
-            }
-            else
-            {
-                context.Response.StatusCode = StatusCodes.Status409Conflict;
-                context.Response.ContentType = "application/json";
-                await context.Response.WriteAsync(errorBody, context.RequestAborted);
-            }
-        });
-        WriteKubeconfig(kubeconfigPath, server.Port);
+            await service.CleanupResourcesAsync(cts.Token).DefaultTimeout();
 
-        var exception = await Assert.ThrowsAsync<HttpOperationException>(
-            () => service.CreateAsync(Container.Create("frontend", "test-image"), cts.Token));
-
-        Assert.Equal(HttpStatusCode.Conflict, exception.Response.StatusCode);
-        Assert.Equal(["POST", "GET", "POST"], requests.ToArray());
-    }
-
-    [Theory]
-    [InlineData(400)]
-    [InlineData(401)]
-    [InlineData(403)]
-    [InlineData(404)]
-    [InlineData(409)]
-    [InlineData(422)]
-    [InlineData(500)]
-    public async Task CreateAsync_DoesNotRetryPermanentFailureOrInitialConflict(int statusCode)
-    {
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
-        var (service, kubeconfigPath, fileSystem) = CreateService();
-        using var disposableFileSystem = fileSystem;
-        using var disposableService = service;
-        var requests = new ConcurrentQueue<string>();
-        await using var server = await StartServerAsync(cts.Token, requestHandler: async context =>
-        {
-            requests.Enqueue(context.Request.Method);
-            await WriteStatusAsync(context, statusCode, statusCode == 409 ? "AlreadyExists" : "PermanentFailure");
-        });
-        WriteKubeconfig(kubeconfigPath, server.Port);
-
-        var exception = await Assert.ThrowsAsync<HttpOperationException>(
-            () => service.CreateAsync(Container.Create("frontend", "test-image"), cts.Token));
-
-        Assert.Equal((HttpStatusCode)statusCode, exception.Response.StatusCode);
-        Assert.Equal(["POST"], requests.ToArray());
-    }
-
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task CreateAsync_ReconcilesExistingObjectByName(bool hasAnnotations)
-    {
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
-        var (service, kubeconfigPath, fileSystem) = CreateService();
-        using var disposableFileSystem = fileSystem;
-        using var disposableService = service;
-        var requests = new ConcurrentQueue<string>();
-        await using var server = await StartServerAsync(cts.Token, requestHandler: async context =>
-        {
-            requests.Enqueue(context.Request.Method);
-            if (HttpMethods.IsPost(context.Request.Method))
-            {
-                await WriteStatusAsync(context, StatusCodes.Status504GatewayTimeout, "Timeout");
-                return;
-            }
-
-            var existing = Container.Create("frontend", "test-image");
-            existing.Metadata.Uid = "existing-object";
-            if (hasAnnotations)
-            {
-                existing.Annotate("existing-annotation", "preserved");
-            }
-
-            await WriteContainerAsync(context, existing);
-        });
-        WriteKubeconfig(kubeconfigPath, server.Port);
-
-        var result = await service.CreateAsync(Container.Create("frontend", "test-image"), cts.Token);
-
-        Assert.Equal("existing-object", result.Metadata.Uid);
-        if (hasAnnotations)
-        {
-            Assert.Equal("preserved", result.Metadata.Annotations["existing-annotation"]);
+            Assert.Equal(["PATCH", "GET", "GET"], requests.ToArray());
+            Assert.Same(timeProvider, app.Services.GetRequiredService<TimeProvider>());
         }
-
-        Assert.Equal(["POST", "GET"], requests.ToArray());
-    }
-
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task CreateAsync_RecoversAfterAttemptTimeout(bool committedBeforeTimeout)
-    {
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
-        var (service, kubeconfigPath, fileSystem) = CreateService(
-            kubernetesApiTimeout: TimeSpan.FromMilliseconds(500),
-            kubernetesInitializationAdditionalTimeout: TimeSpan.FromSeconds(4.5),
-            createRecoveryTimeout: TimeSpan.FromSeconds(10));
-        using var disposableFileSystem = fileSystem;
-        using var disposableService = service;
-        var requests = new ConcurrentQueue<string>();
-        var canceledRequest = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        Container? stored = null;
-        var postCount = 0;
-        await using var server = await StartServerAsync(cts.Token, requestHandler: async context =>
+        finally
         {
-            if (context.Request.Path.Value!.EndsWith("/containers", StringComparison.Ordinal) &&
-                HttpMethods.IsGet(context.Request.Method))
-            {
-                context.Response.ContentType = "application/json";
-                await context.Response.WriteAsync("""{"apiVersion":"usvc-dev.developer.microsoft.com/v1","kind":"ContainerList","items":[]}""");
-                return;
-            }
-
-            requests.Enqueue(context.Request.Method);
-            if (HttpMethods.IsGet(context.Request.Method))
-            {
-                if (Volatile.Read(ref stored) is { } existing)
-                {
-                    await WriteContainerAsync(context, existing);
-                }
-                else
-                {
-                    await WriteStatusAsync(context, StatusCodes.Status404NotFound, "NotFound");
-                }
-
-                return;
-            }
-
-            var created = await ReadContainerAsync(context);
-            if (Interlocked.Increment(ref postCount) == 1)
-            {
-                if (committedBeforeTimeout)
-                {
-                    Volatile.Write(ref stored, created);
-                }
-
-                try
-                {
-                    await Task.Delay(Timeout.InfiniteTimeSpan, context.RequestAborted);
-                }
-                catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
-                {
-                    canceledRequest.TrySetResult();
-                    throw;
-                }
-            }
-            else
-            {
-                await WriteContainerAsync(context, created, StatusCodes.Status201Created);
-            }
-        });
-        WriteKubeconfig(kubeconfigPath, server.Port);
-        Assert.Empty(await service.ListAsync<Container>(cancellationToken: cts.Token));
-
-        var result = await service.CreateAsync(Container.Create("frontend", "test-image"), cts.Token);
-
-        await canceledRequest.Task.WaitAsync(cts.Token);
-        Assert.Equal("frontend", result.Metadata.Name);
-        Assert.Equal(committedBeforeTimeout ? ["POST", "GET"] : ["POST", "GET", "POST"], requests.ToArray());
+            cts.Cancel();
+        }
     }
 
     [Fact]
-    public async Task CreateAsync_ReconcilesLostResponseAfterCommit()
+    public async Task StopServerAsync_CompletesWhenServerStopsBeforeAcknowledgingStopRequest()
     {
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.LongTimeoutDuration);
         var (service, kubeconfigPath, fileSystem) = CreateService();
         using var disposableFileSystem = fileSystem;
         using var disposableService = service;
         var requests = new ConcurrentQueue<string>();
-        Container? stored = null;
-        await using var server = await StartServerAsync(cts.Token, requestHandler: async context =>
+        var stopRequested = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var server = await StartServerAsync(cts.Token, requestHandler: context =>
         {
             requests.Enqueue(context.Request.Method);
-            if (HttpMethods.IsPost(context.Request.Method))
-            {
-                Volatile.Write(ref stored, await ReadContainerAsync(context));
-                context.Abort();
-                return;
-            }
 
-            await WriteContainerAsync(context, Volatile.Read(ref stored)!);
+            // DCP processes the stop request and shuts down its API server before the response reaches the client.
+            context.Abort();
+            stopRequested.TrySetResult();
+            return Task.CompletedTask;
         });
-        WriteKubeconfig(kubeconfigPath, server.Port);
-
-        var result = await service.CreateAsync(Container.Create("frontend", "test-image"), cts.Token);
-
-        Assert.Equal("frontend", result.Metadata.Name);
-        Assert.Equal(["POST", "GET"], requests.ToArray());
-    }
-
-    [Fact]
-    public async Task CreateAsync_RetriesCreateAfterConfirmationTimeout()
-    {
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
-        var (service, kubeconfigPath, fileSystem) = CreateService(
-            kubernetesApiTimeout: TimeSpan.FromMilliseconds(500),
-            createRecoveryTimeout: TimeSpan.FromSeconds(10));
-        using var disposableFileSystem = fileSystem;
-        using var disposableService = service;
-        var requests = new ConcurrentQueue<string>();
-        var requestCanceled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        Container? stored = null;
-        var postCount = 0;
-        var getCount = 0;
-        await using var server = await StartServerAsync(cts.Token, requestHandler: async context =>
+        var serverDisposed = false;
+        try
         {
-            if (HttpMethods.IsGet(context.Request.Method) &&
-                context.Request.Path.Value!.EndsWith("/containers", StringComparison.Ordinal))
-            {
-                context.Response.ContentType = "application/json";
-                await context.Response.WriteAsync("""{"apiVersion":"usvc-dev.developer.microsoft.com/v1","kind":"ContainerList","items":[]}""");
-                return;
-            }
+            WriteKubeconfig(kubeconfigPath, server.Port);
 
-            requests.Enqueue(context.Request.Method);
-            if (HttpMethods.IsPost(context.Request.Method))
-            {
-                var created = await ReadContainerAsync(context);
-                if (Interlocked.Increment(ref postCount) == 1)
-                {
-                    created.Metadata.Uid = "original-object";
-                    Volatile.Write(ref stored, created);
-                    await WriteStatusAsync(context, StatusCodes.Status504GatewayTimeout, "Timeout");
-                }
-                else
-                {
-                    await WriteStatusAsync(context, StatusCodes.Status409Conflict, "AlreadyExists");
-                }
+            var stopTask = service.StopServerAsync(ResourceCleanup.Full, cts.Token);
 
-                return;
-            }
+            await stopRequested.Task.WaitAsync(cts.Token);
+            await server.DisposeAsync();
+            serverDisposed = true;
 
-            if (Interlocked.Increment(ref getCount) == 1)
-            {
-                try
-                {
-                    await Task.Delay(Timeout.InfiniteTimeSpan, context.RequestAborted);
-                }
-                catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
-                {
-                    requestCanceled.TrySetResult();
-                    throw;
-                }
-
-                return;
-            }
-
-            await WriteContainerAsync(context, Volatile.Read(ref stored)!);
-        });
-        WriteKubeconfig(kubeconfigPath, server.Port);
-        Assert.Empty(await service.ListAsync<Container>(cancellationToken: cts.Token));
-
-        var result = await service.CreateAsync(Container.Create("frontend", "test-image"), cts.Token);
-
-        await requestCanceled.Task.WaitAsync(cts.Token);
-        Assert.Equal("original-object", result.Metadata.Uid);
-        Assert.Equal(["POST", "GET", "POST", "GET"], requests.ToArray());
-    }
-
-    [Fact]
-    public async Task CreateAsync_RetriesWhenAlreadyExistsCannotBeConfirmed()
-    {
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
-        var (service, kubeconfigPath, fileSystem) = CreateService();
-        using var disposableFileSystem = fileSystem;
-        using var disposableService = service;
-        var requests = new ConcurrentQueue<string>();
-        var postCount = 0;
-        await using var server = await StartServerAsync(cts.Token, requestHandler: async context =>
+            await stopTask.DefaultTimeout();
+            Assert.All(requests, method => Assert.Equal(HttpMethods.Patch, method));
+        }
+        finally
         {
-            requests.Enqueue(context.Request.Method);
-            if (HttpMethods.IsGet(context.Request.Method))
+            if (!serverDisposed)
             {
-                await WriteStatusAsync(context, StatusCodes.Status404NotFound, "NotFound");
-                return;
+                await server.DisposeAsync();
             }
-
-            var created = await ReadContainerAsync(context);
-            switch (Interlocked.Increment(ref postCount))
-            {
-                case 1:
-                    await WriteStatusAsync(context, StatusCodes.Status504GatewayTimeout, "Timeout");
-                    break;
-                case 2:
-                    await WriteStatusAsync(context, StatusCodes.Status409Conflict, "AlreadyExists");
-                    break;
-                default:
-                    created.Metadata.Uid = "retried-object";
-                    await WriteContainerAsync(context, created, StatusCodes.Status201Created);
-                    break;
-            }
-        });
-        WriteKubeconfig(kubeconfigPath, server.Port);
-
-        var result = await service.CreateAsync(Container.Create("frontend", "test-image"), cts.Token);
-
-        Assert.Equal("retried-object", result.Metadata.Uid);
-        Assert.Equal(["POST", "GET", "POST", "GET", "POST"], requests.ToArray());
-    }
-
-    [Theory]
-    [InlineData(false, 3600)]
-    [InlineData(false, int.MaxValue)]
-    [InlineData(true, 0)]
-    public async Task CreateAsync_RecoveryBudgetIncludesServerRequestedRetryDelay(bool useHttpDate, int retryAfterSeconds)
-    {
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
-        var recoveryTimeout = TimeSpan.FromMilliseconds(500);
-        var (service, kubeconfigPath, fileSystem) = CreateService(createRecoveryTimeout: recoveryTimeout);
-        using var disposableFileSystem = fileSystem;
-        using var disposableService = service;
-        var requests = new ConcurrentQueue<string>();
-        await using var server = await StartServerAsync(cts.Token, requestHandler: async context =>
-        {
-            requests.Enqueue(context.Request.Method);
-            if (HttpMethods.IsGet(context.Request.Method))
-            {
-                await WriteStatusAsync(context, StatusCodes.Status404NotFound, "NotFound");
-                return;
-            }
-
-            context.Response.Headers.RetryAfter = useHttpDate
-                ? DateTimeOffset.UtcNow.AddHours(1).ToString("r", CultureInfo.InvariantCulture)
-                : retryAfterSeconds.ToString(CultureInfo.InvariantCulture);
-            await WriteStatusAsync(context, StatusCodes.Status504GatewayTimeout, "Timeout");
-        });
-        WriteKubeconfig(kubeconfigPath, server.Port);
-
-        var exception = await Assert.ThrowsAsync<TimeoutRejectedException>(
-            () => service.CreateAsync(Container.Create("frontend", "test-image"), cts.Token));
-
-        Assert.Equal(recoveryTimeout, exception.Timeout);
-        Assert.Equal(["POST", "GET"], requests.ToArray());
-    }
-
-    [Theory]
-    [InlineData(false, 3600)]
-    [InlineData(false, int.MaxValue)]
-    [InlineData(true, 0)]
-    public async Task CreateAsync_RecoveryBudgetIncludesConfirmationRetryDelay(bool useHttpDate, int retryAfterSeconds)
-    {
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
-        var recoveryTimeout = TimeSpan.FromMilliseconds(500);
-        var (service, kubeconfigPath, fileSystem) = CreateService(createRecoveryTimeout: recoveryTimeout);
-        using var disposableFileSystem = fileSystem;
-        using var disposableService = service;
-        var requests = new ConcurrentQueue<string>();
-        await using var server = await StartServerAsync(cts.Token, requestHandler: async context =>
-        {
-            requests.Enqueue(context.Request.Method);
-            if (HttpMethods.IsPost(context.Request.Method))
-            {
-                await WriteStatusAsync(context, StatusCodes.Status504GatewayTimeout, "Timeout");
-                return;
-            }
-
-            context.Response.Headers.RetryAfter = useHttpDate
-                ? DateTimeOffset.UtcNow.AddHours(1).ToString("r", CultureInfo.InvariantCulture)
-                : retryAfterSeconds.ToString(CultureInfo.InvariantCulture);
-            await WriteStatusAsync(context, StatusCodes.Status429TooManyRequests, "TooManyRequests");
-        });
-        WriteKubeconfig(kubeconfigPath, server.Port);
-
-        var exception = await Assert.ThrowsAsync<TimeoutRejectedException>(
-            () => service.CreateAsync(Container.Create("frontend", "test-image"), cts.Token));
-
-        Assert.Equal(recoveryTimeout, exception.Timeout);
-        Assert.Equal(["POST", "GET"], requests.ToArray());
-    }
-
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task CreateAsync_ConfirmationTimeCountsTowardRetryAfter(bool useHttpDate)
-    {
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
-        var (service, kubeconfigPath, fileSystem) = CreateService(createRecoveryTimeout: TimeSpan.FromSeconds(4.5));
-        using var disposableFileSystem = fileSystem;
-        using var disposableService = service;
-        var requests = new ConcurrentQueue<string>();
-        var postCount = 0;
-        await using var server = await StartServerAsync(cts.Token, requestHandler: async context =>
-        {
-            if (HttpMethods.IsGet(context.Request.Method) &&
-                context.Request.Path.Value!.EndsWith("/containers", StringComparison.Ordinal))
-            {
-                context.Response.ContentType = "application/json";
-                await context.Response.WriteAsync("""{"apiVersion":"usvc-dev.developer.microsoft.com/v1","kind":"ContainerList","items":[]}""");
-                return;
-            }
-
-            requests.Enqueue(context.Request.Method);
-            if (HttpMethods.IsGet(context.Request.Method))
-            {
-                // Both retry hints expire before confirmation finishes. Restarting the original delay
-                // after this read would exhaust the recovery budget before the second POST.
-                await Task.Delay(TimeSpan.FromSeconds(3.2), context.RequestAborted);
-                await WriteStatusAsync(context, StatusCodes.Status404NotFound, "NotFound");
-                return;
-            }
-
-            var created = await ReadContainerAsync(context);
-            if (Interlocked.Increment(ref postCount) == 1)
-            {
-                context.Response.Headers.RetryAfter = useHttpDate
-                    ? DateTimeOffset.FromUnixTimeSeconds(DateTimeOffset.UtcNow.ToUnixTimeSeconds() + 3).ToString("r", CultureInfo.InvariantCulture)
-                    : "2";
-                await WriteStatusAsync(context, StatusCodes.Status504GatewayTimeout, "Timeout");
-                return;
-            }
-
-            created.Metadata.Uid = "retried-object";
-            await WriteContainerAsync(context, created, StatusCodes.Status201Created);
-        });
-        WriteKubeconfig(kubeconfigPath, server.Port);
-        Assert.Empty(await service.ListAsync<Container>(cancellationToken: cts.Token));
-
-        var result = await service.CreateAsync(Container.Create("frontend", "test-image"), cts.Token);
-
-        Assert.Equal("retried-object", result.Metadata.Uid);
-        Assert.Equal(["POST", "GET", "POST"], requests.ToArray());
-    }
-
-    [Fact]
-    public async Task CreateAsync_InitializationTimeoutDoesNotConfirmOrAdoptExistingObject()
-    {
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
-        var (service, kubeconfigPath, fileSystem) = CreateService(
-            kubernetesApiTimeout: TimeSpan.FromMilliseconds(500),
-            kubernetesInitializationAdditionalTimeout: TimeSpan.FromMilliseconds(500),
-            createRecoveryTimeout: TimeSpan.FromSeconds(5));
-        using var disposableFileSystem = fileSystem;
-        using var disposableService = service;
-        var requests = new ConcurrentQueue<string>();
-        await using var server = await StartServerAsync(cts.Token, requestHandler: async context =>
-        {
-            requests.Enqueue(context.Request.Method);
-            if (HttpMethods.IsGet(context.Request.Method))
-            {
-                var existing = Container.Create("frontend", "test-image");
-                existing.Metadata.Uid = "pre-existing-object";
-                await WriteContainerAsync(context, existing);
-            }
-            else
-            {
-                await WriteStatusAsync(context, StatusCodes.Status409Conflict, "AlreadyExists");
-            }
-        });
-
-        var createTask = service.CreateAsync(Container.Create("frontend", "test-image"), cts.Token);
-
-        // Let the first initialization budget expire before making kubeconfig available.
-        await Task.Delay(TimeSpan.FromSeconds(1.2), cts.Token);
-        Assert.Empty(requests);
-        WriteKubeconfig(kubeconfigPath, server.Port);
-        var exception = await Assert.ThrowsAsync<HttpOperationException>(() => createTask);
-
-        Assert.Equal(HttpStatusCode.Conflict, exception.Response.StatusCode);
-        Assert.Equal(["POST"], requests.ToArray());
-    }
-
-    [Fact]
-    public async Task CreateAsync_RecoveryBudgetCancelsStalledReconciliation()
-    {
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
-        var recoveryTimeout = TimeSpan.FromSeconds(2);
-        var (service, kubeconfigPath, fileSystem) = CreateService(
-            kubernetesApiTimeout: TimeSpan.FromSeconds(1),
-            kubernetesInitializationAdditionalTimeout: TimeSpan.FromSeconds(4),
-            createRecoveryTimeout: recoveryTimeout);
-        using var disposableFileSystem = fileSystem;
-        using var disposableService = service;
-        var requests = new ConcurrentQueue<string>();
-        var requestCanceled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        await using var server = await StartServerAsync(cts.Token, requestHandler: async context =>
-        {
-            requests.Enqueue(context.Request.Method);
-            if (HttpMethods.IsPost(context.Request.Method))
-            {
-                await WriteStatusAsync(context, StatusCodes.Status504GatewayTimeout, "Timeout");
-                return;
-            }
-
-            try
-            {
-                await Task.Delay(Timeout.InfiniteTimeSpan, context.RequestAborted);
-            }
-            catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
-            {
-                requestCanceled.TrySetResult();
-                throw;
-            }
-        });
-        WriteKubeconfig(kubeconfigPath, server.Port);
-
-        var exception = await Assert.ThrowsAsync<TimeoutRejectedException>(
-            () => service.CreateAsync(Container.Create("frontend", "test-image"), cts.Token));
-
-        await requestCanceled.Task.WaitAsync(cts.Token);
-        Assert.Equal(recoveryTimeout, exception.Timeout);
-        Assert.Equal(["POST", "GET"], requests.ToArray());
-    }
-
-    [Fact]
-    public async Task CreateAsync_DoesNotRetryPermanentReconciliationFailure()
-    {
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
-        var (service, kubeconfigPath, fileSystem) = CreateService();
-        using var disposableFileSystem = fileSystem;
-        using var disposableService = service;
-        var requests = new ConcurrentQueue<string>();
-        await using var server = await StartServerAsync(cts.Token, requestHandler: async context =>
-        {
-            requests.Enqueue(context.Request.Method);
-            await WriteStatusAsync(context,
-                HttpMethods.IsPost(context.Request.Method) ? StatusCodes.Status504GatewayTimeout : StatusCodes.Status403Forbidden,
-                "Failure");
-        });
-        WriteKubeconfig(kubeconfigPath, server.Port);
-
-        var exception = await Assert.ThrowsAsync<HttpOperationException>(
-            () => service.CreateAsync(Container.Create("frontend", "test-image"), cts.Token));
-
-        Assert.Equal(HttpStatusCode.Forbidden, exception.Response.StatusCode);
-        Assert.Equal(["POST", "GET"], requests.ToArray());
-    }
-
-    [Fact]
-    public async Task CreateAsync_CallerCancellationDoesNotReconcileOrRetry()
-    {
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
-        using var createCts = CancellationTokenSource.CreateLinkedTokenSource(cts.Token);
-        var (service, kubeconfigPath, fileSystem) = CreateService();
-        using var disposableFileSystem = fileSystem;
-        using var disposableService = service;
-        var requests = new ConcurrentQueue<string>();
-        var requestArrived = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var requestCanceled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        await using var server = await StartServerAsync(cts.Token, requestHandler: async context =>
-        {
-            requests.Enqueue(context.Request.Method);
-            requestArrived.TrySetResult();
-            try
-            {
-                await Task.Delay(Timeout.InfiniteTimeSpan, context.RequestAborted);
-            }
-            catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
-            {
-                requestCanceled.TrySetResult();
-                throw;
-            }
-        });
-        WriteKubeconfig(kubeconfigPath, server.Port);
-
-        var createTask = service.CreateAsync(Container.Create("frontend", "test-image"), createCts.Token);
-        await requestArrived.Task.WaitAsync(cts.Token);
-        createCts.Cancel();
-
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => createTask);
-        await requestCanceled.Task.WaitAsync(cts.Token);
-        Assert.Equal(["POST"], requests.ToArray());
+        }
     }
 
     [Theory]
@@ -1036,7 +283,7 @@ public class KubernetesServiceTests(DcpApiServerCertificateFixture certificateFi
         using var watchCts = CancellationTokenSource.CreateLinkedTokenSource(cts.Token);
         var (service, kubeconfigPath, fileSystem) = CreateService(
             kubernetesApiTimeout: TimeSpan.FromMilliseconds(500),
-            kubernetesInitializationAdditionalTimeout: TimeSpan.FromSeconds(5));
+            kubernetesInitializationAdditionalTimeout: TimeSpan.FromSeconds(4.5));
         using var disposableFileSystem = fileSystem;
         using var disposableService = service;
         var responseStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -1706,7 +953,864 @@ public class KubernetesServiceTests(DcpApiServerCertificateFixture certificateFi
         int successfulRequestNumber = 1,
         Func<HttpContext, Task>? requestHandler = null)
     {
-        return TestDcpApiServer.StartAsync(certificateFixture.Certificate, cancellationToken, successfulRequestNumber, requestHandler);
+        return TestDcpApiServer.StartAsync(certificateFixture.Certificate, cancellationToken, successfulRequestNumber, requestHandler).DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task CreateAsync_DoesNotReadOrRetrySuccessfulCreate()
+    {
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.LongTimeoutDuration);
+        var (service, kubeconfigPath, fileSystem) = CreateService();
+        using var disposableFileSystem = fileSystem;
+        using var disposableService = service;
+        var requests = new ConcurrentQueue<string>();
+        await using var server = await StartServerAsync(cts.Token, requestHandler: async context =>
+        {
+            requests.Enqueue(context.Request.Method);
+            var created = await ReadContainerAsync(context);
+            created.Metadata.Uid = "created-object";
+            await WriteContainerAsync(context, created, StatusCodes.Status201Created);
+        });
+        WriteKubeconfig(kubeconfigPath, server.Port);
+
+        var result = await service.CreateAsync(Container.Create("frontend", "test-image"), cts.Token);
+
+        Assert.Equal("created-object", result.Metadata.Uid);
+        Assert.Equal(["POST"], requests.ToArray());
+    }
+
+    [Fact]
+    public async Task DcpKubernetesClient_UsesCallerDeadlineInsteadOfSdkTimeout()
+    {
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.LongTimeoutDuration);
+        var requests = new ConcurrentQueue<string>();
+        await using var server = await StartServerAsync(cts.Token, requestHandler: async context =>
+        {
+            requests.Enqueue(context.Request.Method);
+            var created = await ReadContainerAsync(context);
+            created.Metadata.Uid = "created-object";
+            await Task.Delay(TimeSpan.FromMilliseconds(500), context.RequestAborted);
+            await WriteContainerAsync(context, created, StatusCodes.Status201Created);
+        });
+        using var client = new DcpKubernetesClient(new KubernetesClientConfiguration
+        {
+            Host = $"https://127.0.0.1:{server.Port}",
+            SkipTlsVerify = true,
+            HttpClientTimeout = TimeSpan.FromMilliseconds(100),
+        });
+
+        using var response = await client.CustomObjects.CreateClusterCustomObjectWithHttpMessagesAsync(
+            Container.Create("frontend", "test-image"),
+            "usvc-dev.developer.microsoft.com",
+            "v1",
+            "containers",
+            cancellationToken: cts.Token);
+        var result = KubernetesJson.Deserialize<Container>(response.Body.ToString());
+
+        Assert.Equal("created-object", result.Metadata.Uid);
+        Assert.Equal(["POST"], requests.ToArray());
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("test-namespace")]
+    public async Task CreateAsync_ReconcilesGatewayTimeoutAfterCommit(string? namespaceParameter)
+    {
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.LongTimeoutDuration);
+        var (service, kubeconfigPath, fileSystem) = CreateService();
+        using var disposableFileSystem = fileSystem;
+        using var disposableService = service;
+        var requests = new ConcurrentQueue<string>();
+        Container? stored = null;
+        await using var server = await StartServerAsync(cts.Token, requestHandler: async context =>
+        {
+            requests.Enqueue($"{context.Request.Method} {context.Request.Path}");
+            if (HttpMethods.IsPost(context.Request.Method))
+            {
+                var created = await ReadContainerAsync(context);
+                created.Metadata.Uid = "created-object";
+                Volatile.Write(ref stored, created);
+                await WriteStatusAsync(context, StatusCodes.Status504GatewayTimeout, "Timeout");
+                return;
+            }
+
+            await WriteContainerAsync(context, Volatile.Read(ref stored)!);
+        });
+        WriteKubeconfig(kubeconfigPath, server.Port);
+        var container = Container.Create("frontend", "test-image");
+        container.Metadata.NamespaceProperty = namespaceParameter;
+
+        var result = await service.CreateAsync(container, cts.Token);
+
+        Assert.Equal("created-object", result.Metadata.Uid);
+        Assert.Equal("frontend", result.Metadata.Name);
+        Assert.Equal(namespaceParameter, result.Metadata.NamespaceProperty);
+        var collectionPath = namespaceParameter is null
+            ? "/apis/usvc-dev.developer.microsoft.com/v1/containers"
+            : $"/apis/usvc-dev.developer.microsoft.com/v1/namespaces/{namespaceParameter}/containers";
+        Assert.Equal([$"POST {collectionPath}", $"GET {collectionPath}/frontend"], requests.ToArray());
+    }
+
+    [Theory]
+    [InlineData(429)]
+    [InlineData(502)]
+    [InlineData(503)]
+    [InlineData(504)]
+    public async Task CreateAsync_RetriesTransientFailureAfterConfirmingObjectAbsent(int statusCode)
+    {
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.LongTimeoutDuration);
+        var (service, kubeconfigPath, fileSystem) = CreateService();
+        using var disposableFileSystem = fileSystem;
+        using var disposableService = service;
+        var requests = new ConcurrentQueue<string>();
+        var postedObjects = new ConcurrentQueue<Container>();
+        var postCount = 0;
+        await using var server = await StartServerAsync(cts.Token, requestHandler: async context =>
+        {
+            requests.Enqueue(context.Request.Method);
+            if (HttpMethods.IsGet(context.Request.Method))
+            {
+                await WriteStatusAsync(context, StatusCodes.Status404NotFound, "NotFound");
+                return;
+            }
+
+            var created = await ReadContainerAsync(context);
+            postedObjects.Enqueue(created);
+            if (Interlocked.Increment(ref postCount) == 1)
+            {
+                await WriteStatusAsync(context, statusCode, "TransientFailure");
+                return;
+            }
+
+            created.Metadata.Uid = "retried-object";
+            await WriteContainerAsync(context, created, StatusCodes.Status201Created);
+        });
+        WriteKubeconfig(kubeconfigPath, server.Port);
+        var container = Container.Create("frontend", "test-image");
+        container.Annotate("existing-annotation", "preserved");
+
+        var result = await service.CreateAsync(container, cts.Token);
+
+        Assert.Equal("retried-object", result.Metadata.Uid);
+        Assert.Equal(["POST", "GET", "POST"], requests.ToArray());
+        Assert.Collection(postedObjects,
+            first =>
+            {
+                Assert.Equal("frontend", first.Metadata.Name);
+                Assert.Equal("test-image", first.Spec.Image);
+                Assert.Equal(container.Metadata.Annotations, first.Metadata.Annotations);
+            },
+            second =>
+            {
+                Assert.Equal("frontend", second.Metadata.Name);
+                Assert.Equal("test-image", second.Spec.Image);
+                Assert.Equal(container.Metadata.Annotations, second.Metadata.Annotations);
+            });
+    }
+
+    [Fact]
+    public async Task CreateAsync_ReconcilesAlreadyExistsWhenOriginalCreateCommitsAfterNotFound()
+    {
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.LongTimeoutDuration);
+        var (service, kubeconfigPath, fileSystem) = CreateService();
+        using var disposableFileSystem = fileSystem;
+        using var disposableService = service;
+        var requests = new ConcurrentQueue<string>();
+        Container? original = null;
+        var postCount = 0;
+        await using var server = await StartServerAsync(cts.Token, requestHandler: async context =>
+        {
+            requests.Enqueue(context.Request.Method);
+            if (HttpMethods.IsPost(context.Request.Method))
+            {
+                var created = await ReadContainerAsync(context);
+                if (Interlocked.Increment(ref postCount) == 1)
+                {
+                    created.Metadata.Uid = "late-original";
+                    Volatile.Write(ref original, created);
+                    await WriteStatusAsync(context, StatusCodes.Status504GatewayTimeout, "Timeout");
+                }
+                else
+                {
+                    Assert.Equal(Volatile.Read(ref original)!.Metadata.Name, created.Metadata.Name);
+                    Assert.Equal(Volatile.Read(ref original)!.Spec.Image, created.Spec.Image);
+                    await WriteStatusAsync(context, StatusCodes.Status409Conflict, "AlreadyExists");
+                }
+
+                return;
+            }
+
+            if (Volatile.Read(ref postCount) == 1)
+            {
+                await WriteStatusAsync(context, StatusCodes.Status404NotFound, "NotFound");
+                return;
+            }
+
+            await WriteContainerAsync(context, Volatile.Read(ref original)!);
+        });
+        WriteKubeconfig(kubeconfigPath, server.Port);
+
+        var result = await service.CreateAsync(Container.Create("frontend", "test-image"), cts.Token);
+
+        Assert.Equal("late-original", result.Metadata.Uid);
+        Assert.Equal(["POST", "GET", "POST", "GET"], requests.ToArray());
+    }
+
+    [Theory]
+    [InlineData(429)]
+    [InlineData(502)]
+    [InlineData(503)]
+    [InlineData(504)]
+    public async Task CreateAsync_RetriesCreateAfterTransientConfirmationFailure(int confirmationStatusCode)
+    {
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.LongTimeoutDuration);
+        var (service, kubeconfigPath, fileSystem) = CreateService();
+        using var disposableFileSystem = fileSystem;
+        using var disposableService = service;
+        var requests = new ConcurrentQueue<string>();
+        Container? stored = null;
+        var postCount = 0;
+        var getCount = 0;
+        await using var server = await StartServerAsync(cts.Token, requestHandler: async context =>
+        {
+            requests.Enqueue(context.Request.Method);
+            if (HttpMethods.IsPost(context.Request.Method))
+            {
+                var created = await ReadContainerAsync(context);
+                if (Interlocked.Increment(ref postCount) == 1)
+                {
+                    created.Metadata.Uid = "original-object";
+                    Volatile.Write(ref stored, created);
+                    await WriteStatusAsync(context, StatusCodes.Status504GatewayTimeout, "Timeout");
+                }
+                else
+                {
+                    await WriteStatusAsync(context, StatusCodes.Status409Conflict, "AlreadyExists");
+                }
+            }
+            else if (Interlocked.Increment(ref getCount) == 1)
+            {
+                await WriteStatusAsync(context, confirmationStatusCode, "TransientFailure");
+            }
+            else
+            {
+                await WriteContainerAsync(context, Volatile.Read(ref stored)!);
+            }
+        });
+        WriteKubeconfig(kubeconfigPath, server.Port);
+
+        var result = await service.CreateAsync(Container.Create("frontend", "test-image"), cts.Token);
+
+        Assert.Equal("original-object", result.Metadata.Uid);
+        Assert.Equal(["POST", "GET", "POST", "GET"], requests.ToArray());
+    }
+
+    [Theory]
+    [InlineData("""{"kind":"Status","reason":"Conflict","code":409}""")]
+    [InlineData("""{"kind":"Status","reason":409,"code":409}""")]
+    [InlineData("[]")]
+    [InlineData("not-json")]
+    public async Task CreateAsync_DoesNotConfirmOtherConflictsAfterAmbiguousCreate(string errorBody)
+    {
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.LongTimeoutDuration);
+        var (service, kubeconfigPath, fileSystem) = CreateService();
+        using var disposableFileSystem = fileSystem;
+        using var disposableService = service;
+        var requests = new ConcurrentQueue<string>();
+        var postCount = 0;
+        await using var server = await StartServerAsync(cts.Token, requestHandler: async context =>
+        {
+            requests.Enqueue(context.Request.Method);
+            if (HttpMethods.IsGet(context.Request.Method))
+            {
+                await WriteStatusAsync(context, StatusCodes.Status404NotFound, "NotFound");
+            }
+            else if (Interlocked.Increment(ref postCount) == 1)
+            {
+                await WriteStatusAsync(context, StatusCodes.Status504GatewayTimeout, "Timeout");
+            }
+            else
+            {
+                context.Response.StatusCode = StatusCodes.Status409Conflict;
+                context.Response.ContentType = "application/json";
+                await context.Response.WriteAsync(errorBody, context.RequestAborted);
+            }
+        });
+        WriteKubeconfig(kubeconfigPath, server.Port);
+
+        var exception = await Assert.ThrowsAsync<HttpOperationException>(
+            () => service.CreateAsync(Container.Create("frontend", "test-image"), cts.Token));
+
+        Assert.Equal(HttpStatusCode.Conflict, exception.Response.StatusCode);
+        Assert.Equal(["POST", "GET", "POST"], requests.ToArray());
+    }
+
+    [Theory]
+    [InlineData(400)]
+    [InlineData(401)]
+    [InlineData(403)]
+    [InlineData(404)]
+    [InlineData(409)]
+    [InlineData(422)]
+    [InlineData(500)]
+    public async Task CreateAsync_DoesNotRetryPermanentFailureOrInitialConflict(int statusCode)
+    {
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.LongTimeoutDuration);
+        var (service, kubeconfigPath, fileSystem) = CreateService();
+        using var disposableFileSystem = fileSystem;
+        using var disposableService = service;
+        var requests = new ConcurrentQueue<string>();
+        await using var server = await StartServerAsync(cts.Token, requestHandler: async context =>
+        {
+            requests.Enqueue(context.Request.Method);
+            await WriteStatusAsync(context, statusCode, statusCode == 409 ? "AlreadyExists" : "PermanentFailure");
+        });
+        WriteKubeconfig(kubeconfigPath, server.Port);
+
+        var exception = await Assert.ThrowsAsync<HttpOperationException>(
+            () => service.CreateAsync(Container.Create("frontend", "test-image"), cts.Token));
+
+        Assert.Equal((HttpStatusCode)statusCode, exception.Response.StatusCode);
+        Assert.Equal(["POST"], requests.ToArray());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task CreateAsync_ReconcilesExistingObjectByName(bool hasAnnotations)
+    {
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.LongTimeoutDuration);
+        var (service, kubeconfigPath, fileSystem) = CreateService();
+        using var disposableFileSystem = fileSystem;
+        using var disposableService = service;
+        var requests = new ConcurrentQueue<string>();
+        await using var server = await StartServerAsync(cts.Token, requestHandler: async context =>
+        {
+            requests.Enqueue(context.Request.Method);
+            if (HttpMethods.IsPost(context.Request.Method))
+            {
+                await WriteStatusAsync(context, StatusCodes.Status504GatewayTimeout, "Timeout");
+                return;
+            }
+
+            var existing = Container.Create("frontend", "test-image");
+            existing.Metadata.Uid = "existing-object";
+            if (hasAnnotations)
+            {
+                existing.Annotate("existing-annotation", "preserved");
+            }
+
+            await WriteContainerAsync(context, existing);
+        });
+        WriteKubeconfig(kubeconfigPath, server.Port);
+
+        var result = await service.CreateAsync(Container.Create("frontend", "test-image"), cts.Token);
+
+        Assert.Equal("existing-object", result.Metadata.Uid);
+        if (hasAnnotations)
+        {
+            Assert.Equal("preserved", result.Metadata.Annotations["existing-annotation"]);
+        }
+
+        Assert.Equal(["POST", "GET"], requests.ToArray());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task CreateAsync_RecoversAfterAttemptTimeout(bool committedBeforeTimeout)
+    {
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.LongTimeoutDuration);
+        var (service, kubeconfigPath, fileSystem) = CreateService(
+            kubernetesApiTimeout: TimeSpan.FromMilliseconds(500),
+            kubernetesInitializationAdditionalTimeout: TimeSpan.FromSeconds(4.5),
+            createRecoveryTimeout: TimeSpan.FromSeconds(10));
+        using var disposableFileSystem = fileSystem;
+        using var disposableService = service;
+        var requests = new ConcurrentQueue<string>();
+        var canceledRequest = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        Container? stored = null;
+        var postCount = 0;
+        await using var server = await StartServerAsync(cts.Token, requestHandler: async context =>
+        {
+            if (context.Request.Path.Value!.EndsWith("/containers", StringComparison.Ordinal) &&
+                HttpMethods.IsGet(context.Request.Method))
+            {
+                context.Response.ContentType = "application/json";
+                await context.Response.WriteAsync("""{"apiVersion":"usvc-dev.developer.microsoft.com/v1","kind":"ContainerList","items":[]}""");
+                return;
+            }
+
+            requests.Enqueue(context.Request.Method);
+            if (HttpMethods.IsGet(context.Request.Method))
+            {
+                if (Volatile.Read(ref stored) is { } existing)
+                {
+                    await WriteContainerAsync(context, existing);
+                }
+                else
+                {
+                    await WriteStatusAsync(context, StatusCodes.Status404NotFound, "NotFound");
+                }
+
+                return;
+            }
+
+            var created = await ReadContainerAsync(context);
+            if (Interlocked.Increment(ref postCount) == 1)
+            {
+                if (committedBeforeTimeout)
+                {
+                    Volatile.Write(ref stored, created);
+                }
+
+                try
+                {
+                    await Task.Delay(Timeout.InfiniteTimeSpan, context.RequestAborted);
+                }
+                catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
+                {
+                    canceledRequest.TrySetResult();
+                    throw;
+                }
+            }
+            else
+            {
+                await WriteContainerAsync(context, created, StatusCodes.Status201Created);
+            }
+        });
+        WriteKubeconfig(kubeconfigPath, server.Port);
+        Assert.Empty(await service.ListAsync<Container>(cancellationToken: cts.Token));
+
+        var result = await service.CreateAsync(Container.Create("frontend", "test-image"), cts.Token);
+
+        await canceledRequest.Task.WaitAsync(cts.Token);
+        Assert.Equal("frontend", result.Metadata.Name);
+        Assert.Equal(committedBeforeTimeout ? ["POST", "GET"] : ["POST", "GET", "POST"], requests.ToArray());
+    }
+
+    [Fact]
+    public async Task CreateAsync_ReconcilesLostResponseAfterCommit()
+    {
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.LongTimeoutDuration);
+        var (service, kubeconfigPath, fileSystem) = CreateService();
+        using var disposableFileSystem = fileSystem;
+        using var disposableService = service;
+        var requests = new ConcurrentQueue<string>();
+        Container? stored = null;
+        await using var server = await StartServerAsync(cts.Token, requestHandler: async context =>
+        {
+            requests.Enqueue(context.Request.Method);
+            if (HttpMethods.IsPost(context.Request.Method))
+            {
+                Volatile.Write(ref stored, await ReadContainerAsync(context));
+                context.Abort();
+                return;
+            }
+
+            await WriteContainerAsync(context, Volatile.Read(ref stored)!);
+        });
+        WriteKubeconfig(kubeconfigPath, server.Port);
+
+        var result = await service.CreateAsync(Container.Create("frontend", "test-image"), cts.Token);
+
+        Assert.Equal("frontend", result.Metadata.Name);
+        Assert.Equal(["POST", "GET"], requests.ToArray());
+    }
+
+    [Fact]
+    public async Task CreateAsync_RetriesCreateAfterConfirmationTimeout()
+    {
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.LongTimeoutDuration);
+        var (service, kubeconfigPath, fileSystem) = CreateService(
+            kubernetesApiTimeout: TimeSpan.FromMilliseconds(500),
+            createRecoveryTimeout: TimeSpan.FromSeconds(10));
+        using var disposableFileSystem = fileSystem;
+        using var disposableService = service;
+        var requests = new ConcurrentQueue<string>();
+        var requestCanceled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        Container? stored = null;
+        var postCount = 0;
+        var getCount = 0;
+        await using var server = await StartServerAsync(cts.Token, requestHandler: async context =>
+        {
+            if (HttpMethods.IsGet(context.Request.Method) &&
+                context.Request.Path.Value!.EndsWith("/containers", StringComparison.Ordinal))
+            {
+                context.Response.ContentType = "application/json";
+                await context.Response.WriteAsync("""{"apiVersion":"usvc-dev.developer.microsoft.com/v1","kind":"ContainerList","items":[]}""");
+                return;
+            }
+
+            requests.Enqueue(context.Request.Method);
+            if (HttpMethods.IsPost(context.Request.Method))
+            {
+                var created = await ReadContainerAsync(context);
+                if (Interlocked.Increment(ref postCount) == 1)
+                {
+                    created.Metadata.Uid = "original-object";
+                    Volatile.Write(ref stored, created);
+                    await WriteStatusAsync(context, StatusCodes.Status504GatewayTimeout, "Timeout");
+                }
+                else
+                {
+                    await WriteStatusAsync(context, StatusCodes.Status409Conflict, "AlreadyExists");
+                }
+
+                return;
+            }
+
+            if (Interlocked.Increment(ref getCount) == 1)
+            {
+                try
+                {
+                    await Task.Delay(Timeout.InfiniteTimeSpan, context.RequestAborted);
+                }
+                catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
+                {
+                    requestCanceled.TrySetResult();
+                    throw;
+                }
+
+                return;
+            }
+
+            await WriteContainerAsync(context, Volatile.Read(ref stored)!);
+        });
+        WriteKubeconfig(kubeconfigPath, server.Port);
+        Assert.Empty(await service.ListAsync<Container>(cancellationToken: cts.Token));
+
+        var result = await service.CreateAsync(Container.Create("frontend", "test-image"), cts.Token);
+
+        await requestCanceled.Task.WaitAsync(cts.Token);
+        Assert.Equal("original-object", result.Metadata.Uid);
+        Assert.Equal(["POST", "GET", "POST", "GET"], requests.ToArray());
+    }
+
+    [Fact]
+    public async Task CreateAsync_RetriesWhenAlreadyExistsCannotBeConfirmed()
+    {
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.LongTimeoutDuration);
+        var (service, kubeconfigPath, fileSystem) = CreateService();
+        using var disposableFileSystem = fileSystem;
+        using var disposableService = service;
+        var requests = new ConcurrentQueue<string>();
+        var postCount = 0;
+        await using var server = await StartServerAsync(cts.Token, requestHandler: async context =>
+        {
+            requests.Enqueue(context.Request.Method);
+            if (HttpMethods.IsGet(context.Request.Method))
+            {
+                await WriteStatusAsync(context, StatusCodes.Status404NotFound, "NotFound");
+                return;
+            }
+
+            var created = await ReadContainerAsync(context);
+            switch (Interlocked.Increment(ref postCount))
+            {
+                case 1:
+                    await WriteStatusAsync(context, StatusCodes.Status504GatewayTimeout, "Timeout");
+                    break;
+                case 2:
+                    await WriteStatusAsync(context, StatusCodes.Status409Conflict, "AlreadyExists");
+                    break;
+                default:
+                    created.Metadata.Uid = "retried-object";
+                    await WriteContainerAsync(context, created, StatusCodes.Status201Created);
+                    break;
+            }
+        });
+        WriteKubeconfig(kubeconfigPath, server.Port);
+
+        var result = await service.CreateAsync(Container.Create("frontend", "test-image"), cts.Token);
+
+        Assert.Equal("retried-object", result.Metadata.Uid);
+        Assert.Equal(["POST", "GET", "POST", "GET", "POST"], requests.ToArray());
+    }
+
+    [Theory]
+    [InlineData(false, 3600)]
+    [InlineData(false, int.MaxValue)]
+    [InlineData(true, 0)]
+    public async Task CreateAsync_RecoveryBudgetIncludesServerRequestedRetryDelay(bool useHttpDate, int retryAfterSeconds)
+    {
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.LongTimeoutDuration);
+        var recoveryTimeout = TimeSpan.FromMilliseconds(500);
+        var timeProvider = new SignalingFakeTimeProvider(recoveryTimeout);
+        var (service, kubeconfigPath, fileSystem) = CreateService(createRecoveryTimeout: recoveryTimeout, timeProvider: timeProvider);
+        using var disposableFileSystem = fileSystem;
+        using var disposableService = service;
+        var requests = new ConcurrentQueue<string>();
+        await using var server = await StartServerAsync(cts.Token, requestHandler: async context =>
+        {
+            requests.Enqueue(context.Request.Method);
+            if (HttpMethods.IsGet(context.Request.Method))
+            {
+                await WriteStatusAsync(context, StatusCodes.Status404NotFound, "NotFound");
+                return;
+            }
+
+            context.Response.Headers.RetryAfter = useHttpDate
+                ? timeProvider.GetUtcNow().AddHours(1).ToString("r", CultureInfo.InvariantCulture)
+                : retryAfterSeconds.ToString(CultureInfo.InvariantCulture);
+            await WriteStatusAsync(context, StatusCodes.Status504GatewayTimeout, "Timeout");
+        });
+        WriteKubeconfig(kubeconfigPath, server.Port);
+
+        var createTask = service.CreateAsync(Container.Create("frontend", "test-image"), cts.Token);
+        // Let initialization and confirmation finish before expiring the budget inside the retry delay.
+        await timeProvider.TimerCreated.WaitAsync(cts.Token).DefaultTimeout();
+        Assert.False(createTask.IsCompleted);
+        Assert.Equal(["POST", "GET"], requests.ToArray());
+        timeProvider.Advance(recoveryTimeout);
+
+        var exception = await Assert.ThrowsAsync<TimeoutRejectedException>(() => createTask).DefaultTimeout();
+
+        Assert.Equal(recoveryTimeout, exception.Timeout);
+        Assert.Equal(["POST", "GET"], requests.ToArray());
+    }
+
+    [Theory]
+    [InlineData(false, 3600)]
+    [InlineData(false, int.MaxValue)]
+    [InlineData(true, 0)]
+    public async Task CreateAsync_RecoveryBudgetIncludesConfirmationRetryDelay(bool useHttpDate, int retryAfterSeconds)
+    {
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.LongTimeoutDuration);
+        var recoveryTimeout = TimeSpan.FromSeconds(2);
+        var timeProvider = new SignalingFakeTimeProvider(recoveryTimeout);
+        var (service, kubeconfigPath, fileSystem) = CreateService(createRecoveryTimeout: recoveryTimeout, timeProvider: timeProvider);
+        using var disposableFileSystem = fileSystem;
+        using var disposableService = service;
+        var requests = new ConcurrentQueue<string>();
+        await using var server = await StartServerAsync(cts.Token, requestHandler: async context =>
+        {
+            requests.Enqueue(context.Request.Method);
+            if (HttpMethods.IsPost(context.Request.Method))
+            {
+                await WriteStatusAsync(context, StatusCodes.Status504GatewayTimeout, "Timeout");
+                return;
+            }
+
+            context.Response.Headers.RetryAfter = useHttpDate
+                ? timeProvider.GetUtcNow().AddHours(1).ToString("r", CultureInfo.InvariantCulture)
+                : retryAfterSeconds.ToString(CultureInfo.InvariantCulture);
+            await WriteStatusAsync(context, StatusCodes.Status429TooManyRequests, "TooManyRequests");
+        });
+        WriteKubeconfig(kubeconfigPath, server.Port);
+
+        var createTask = service.CreateAsync(Container.Create("frontend", "test-image"), cts.Token);
+        // The 429 response must reach the client and schedule its retry wait before time advances.
+        await timeProvider.TimerCreated.WaitAsync(cts.Token).DefaultTimeout();
+        Assert.False(createTask.IsCompleted);
+        Assert.Equal(["POST", "GET"], requests.ToArray());
+        timeProvider.Advance(recoveryTimeout);
+
+        var exception = await Assert.ThrowsAsync<TimeoutRejectedException>(() => createTask).DefaultTimeout();
+
+        Assert.Equal(recoveryTimeout, exception.Timeout);
+        Assert.Equal(["POST", "GET"], requests.ToArray());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task CreateAsync_ConfirmationTimeCountsTowardRetryAfter(bool useHttpDate)
+    {
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.LongTimeoutDuration);
+        var timeProvider = new FakeTimeProvider();
+        var (service, kubeconfigPath, fileSystem) = CreateService(createRecoveryTimeout: TimeSpan.FromSeconds(4.5), timeProvider: timeProvider);
+        using var disposableFileSystem = fileSystem;
+        using var disposableService = service;
+        var requests = new ConcurrentQueue<string>();
+        var postCount = 0;
+        await using var server = await StartServerAsync(cts.Token, requestHandler: async context =>
+        {
+            if (HttpMethods.IsGet(context.Request.Method) &&
+                context.Request.Path.Value!.EndsWith("/containers", StringComparison.Ordinal))
+            {
+                context.Response.ContentType = "application/json";
+                await context.Response.WriteAsync("""{"apiVersion":"usvc-dev.developer.microsoft.com/v1","kind":"ContainerList","items":[]}""");
+                return;
+            }
+
+            requests.Enqueue(context.Request.Method);
+            if (HttpMethods.IsGet(context.Request.Method))
+            {
+                // Both retry hints expire before confirmation finishes. Restarting the original delay
+                // after this read would exhaust the recovery budget before the second POST.
+                timeProvider.Advance(TimeSpan.FromSeconds(3.2));
+                await WriteStatusAsync(context, StatusCodes.Status404NotFound, "NotFound");
+                return;
+            }
+
+            var created = await ReadContainerAsync(context);
+            if (Interlocked.Increment(ref postCount) == 1)
+            {
+                context.Response.Headers.RetryAfter = useHttpDate
+                    ? DateTimeOffset.FromUnixTimeSeconds(timeProvider.GetUtcNow().ToUnixTimeSeconds() + 3).ToString("r", CultureInfo.InvariantCulture)
+                    : "2";
+                await WriteStatusAsync(context, StatusCodes.Status504GatewayTimeout, "Timeout");
+                return;
+            }
+
+            created.Metadata.Uid = "retried-object";
+            await WriteContainerAsync(context, created, StatusCodes.Status201Created);
+        });
+        WriteKubeconfig(kubeconfigPath, server.Port);
+        Assert.Empty(await service.ListAsync<Container>(cancellationToken: cts.Token).DefaultTimeout());
+
+        var result = await service.CreateAsync(Container.Create("frontend", "test-image"), cts.Token).DefaultTimeout();
+
+        Assert.Equal("retried-object", result.Metadata.Uid);
+        Assert.Equal(["POST", "GET", "POST"], requests.ToArray());
+    }
+
+    [Fact]
+    public async Task CreateAsync_InitializationTimeoutDoesNotConfirmOrAdoptExistingObject()
+    {
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.LongTimeoutDuration);
+        var (service, kubeconfigPath, fileSystem) = CreateService(
+            kubernetesApiTimeout: TimeSpan.FromMilliseconds(500),
+            kubernetesInitializationAdditionalTimeout: TimeSpan.FromMilliseconds(500),
+            createRecoveryTimeout: TimeSpan.FromSeconds(5));
+        using var disposableFileSystem = fileSystem;
+        using var disposableService = service;
+        var requests = new ConcurrentQueue<string>();
+        await using var server = await StartServerAsync(cts.Token, requestHandler: async context =>
+        {
+            requests.Enqueue(context.Request.Method);
+            if (HttpMethods.IsGet(context.Request.Method))
+            {
+                var existing = Container.Create("frontend", "test-image");
+                existing.Metadata.Uid = "pre-existing-object";
+                await WriteContainerAsync(context, existing);
+            }
+            else
+            {
+                await WriteStatusAsync(context, StatusCodes.Status409Conflict, "AlreadyExists");
+            }
+        });
+
+        var createTask = service.CreateAsync(Container.Create("frontend", "test-image"), cts.Token);
+
+        // Let the first initialization budget expire before making kubeconfig available.
+        await Task.Delay(TimeSpan.FromSeconds(1.2), cts.Token);
+        Assert.Empty(requests);
+        WriteKubeconfig(kubeconfigPath, server.Port);
+        var exception = await Assert.ThrowsAsync<HttpOperationException>(() => createTask);
+
+        Assert.Equal(HttpStatusCode.Conflict, exception.Response.StatusCode);
+        Assert.Equal(["POST"], requests.ToArray());
+    }
+
+    [Fact]
+    public async Task CreateAsync_RecoveryBudgetCancelsStalledReconciliation()
+    {
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.LongTimeoutDuration);
+        var timeProvider = new FakeTimeProvider();
+        var recoveryTimeout = TimeSpan.FromSeconds(2);
+        var (service, kubeconfigPath, fileSystem) = CreateService(
+            kubernetesApiTimeout: TimeSpan.FromSeconds(1),
+            kubernetesInitializationAdditionalTimeout: TimeSpan.FromSeconds(4),
+            createRecoveryTimeout: recoveryTimeout,
+            timeProvider: timeProvider);
+        using var disposableFileSystem = fileSystem;
+        using var disposableService = service;
+        var requests = new ConcurrentQueue<string>();
+        var requestArrived = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var requestCanceled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        await using var server = await StartServerAsync(cts.Token, requestHandler: async context =>
+        {
+            requests.Enqueue(context.Request.Method);
+            if (HttpMethods.IsPost(context.Request.Method))
+            {
+                await WriteStatusAsync(context, StatusCodes.Status504GatewayTimeout, "Timeout");
+                return;
+            }
+
+            try
+            {
+                requestArrived.TrySetResult();
+                await Task.Delay(Timeout.InfiniteTimeSpan, context.RequestAborted);
+            }
+            catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
+            {
+                requestCanceled.TrySetResult();
+                throw;
+            }
+        });
+        WriteKubeconfig(kubeconfigPath, server.Port);
+
+        var createTask = service.CreateAsync(Container.Create("frontend", "test-image"), cts.Token);
+        await requestArrived.Task.DefaultTimeout();
+        Assert.Equal(["POST", "GET"], requests.ToArray());
+        timeProvider.Advance(recoveryTimeout);
+        var exception = await Assert.ThrowsAsync<TimeoutRejectedException>(() => createTask).DefaultTimeout();
+
+        await requestCanceled.Task.DefaultTimeout();
+        Assert.Equal(recoveryTimeout, exception.Timeout);
+        Assert.Equal(["POST", "GET"], requests.ToArray());
+    }
+
+    [Fact]
+    public async Task CreateAsync_DoesNotRetryPermanentReconciliationFailure()
+    {
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.LongTimeoutDuration);
+        var (service, kubeconfigPath, fileSystem) = CreateService();
+        using var disposableFileSystem = fileSystem;
+        using var disposableService = service;
+        var requests = new ConcurrentQueue<string>();
+        await using var server = await StartServerAsync(cts.Token, requestHandler: async context =>
+        {
+            requests.Enqueue(context.Request.Method);
+            await WriteStatusAsync(context,
+                HttpMethods.IsPost(context.Request.Method) ? StatusCodes.Status504GatewayTimeout : StatusCodes.Status403Forbidden,
+                "Failure");
+        });
+        WriteKubeconfig(kubeconfigPath, server.Port);
+
+        var exception = await Assert.ThrowsAsync<HttpOperationException>(
+            () => service.CreateAsync(Container.Create("frontend", "test-image"), cts.Token));
+
+        Assert.Equal(HttpStatusCode.Forbidden, exception.Response.StatusCode);
+        Assert.Equal(["POST", "GET"], requests.ToArray());
+    }
+
+    [Fact]
+    public async Task CreateAsync_CallerCancellationDoesNotReconcileOrRetry()
+    {
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.LongTimeoutDuration);
+        using var createCts = CancellationTokenSource.CreateLinkedTokenSource(cts.Token);
+        var (service, kubeconfigPath, fileSystem) = CreateService();
+        using var disposableFileSystem = fileSystem;
+        using var disposableService = service;
+        var requests = new ConcurrentQueue<string>();
+        var requestArrived = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var requestCanceled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        await using var server = await StartServerAsync(cts.Token, requestHandler: async context =>
+        {
+            requests.Enqueue(context.Request.Method);
+            requestArrived.TrySetResult();
+            try
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, context.RequestAborted);
+            }
+            catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
+            {
+                requestCanceled.TrySetResult();
+                throw;
+            }
+        });
+        WriteKubeconfig(kubeconfigPath, server.Port);
+
+        var createTask = service.CreateAsync(Container.Create("frontend", "test-image"), createCts.Token);
+        await requestArrived.Task.WaitAsync(cts.Token);
+        createCts.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => createTask);
+        await requestCanceled.Task.WaitAsync(cts.Token);
+        Assert.Equal(["POST"], requests.ToArray());
     }
 
     // Verifies that establishing the connection happens inside the retry loop: when the kubeconfig does not
@@ -1714,9 +1818,11 @@ public class KubernetesServiceTests(DcpApiServerCertificateFixture certificateFi
     [Fact]
     public async Task ExecuteWithRetry_EstablishesConnection_WhenKubeconfigInitiallyMissing()
     {
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.LongTimeoutDuration);
 
-        var (service, kubeconfigPath, fileSystem) = CreateService();
+        var retryInterval = TimeSpan.FromMilliseconds(50);
+        var timeProvider = new SignalingFakeTimeProvider(retryInterval);
+        var (service, kubeconfigPath, fileSystem) = CreateService(timeProvider: timeProvider);
         using var disposableFileSystem = fileSystem;
         using var disposableService = service;
 
@@ -1725,22 +1831,25 @@ public class KubernetesServiceTests(DcpApiServerCertificateFixture certificateFi
 
         var listTask = service.ListAsync<Container>(cancellationToken: cts.Token);
 
-        await Task.Delay(300, cts.Token);
+        await timeProvider.TimerCreated.DefaultTimeout();
 
         await using var server = await StartServerAsync(cts.Token);
         WriteKubeconfig(kubeconfigPath, server.Port);
+        timeProvider.Advance(retryInterval);
 
-        var result = await listTask;
+        var result = await listTask.DefaultTimeout();
         Assert.Empty(result);
     }
 
     [Fact]
     public async Task ExecuteWithRetry_UsesInitializationTimeout_WhenKubeconfigAppearsAfterApiRetryBudget()
     {
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.LongTimeoutDuration);
 
+        var timeProvider = new SignalingFakeTimeProvider(TimeSpan.FromMilliseconds(50));
         var (service, kubeconfigPath, fileSystem) = CreateService(
-            kubernetesApiTimeout: TimeSpan.FromSeconds(1));
+            kubernetesApiTimeout: TimeSpan.FromSeconds(1),
+            timeProvider: timeProvider);
         using var disposableFileSystem = fileSystem;
         using var disposableService = service;
 
@@ -1748,19 +1857,20 @@ public class KubernetesServiceTests(DcpApiServerCertificateFixture certificateFi
 
         // Kubeconfig availability is not proof of API readiness, so the operation starts with
         // the initialization budget rather than the shorter steady-state budget.
-        await Task.Delay(TimeSpan.FromSeconds(2), cts.Token);
+        await timeProvider.TimerCreated.DefaultTimeout();
 
         await using var server = await StartServerAsync(cts.Token);
         WriteKubeconfig(kubeconfigPath, server.Port);
+        timeProvider.Advance(TimeSpan.FromSeconds(2));
 
-        var result = await listTask;
+        var result = await listTask.DefaultTimeout();
         Assert.Empty(result);
     }
 
     [Fact]
     public async Task ExecuteWithRetry_InitializationBudgetIncludesApiTimeoutPlusAdditionalTime()
     {
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.LongTimeoutDuration);
         var (service, kubeconfigPath, fileSystem) = CreateService(
             kubernetesApiTimeout: TimeSpan.FromSeconds(1),
             kubernetesInitializationAdditionalTimeout: TimeSpan.FromSeconds(1));
@@ -1779,7 +1889,7 @@ public class KubernetesServiceTests(DcpApiServerCertificateFixture certificateFi
     [Fact]
     public async Task ExecuteWithRetry_ZeroInitializationAllowanceUsesApiBudget()
     {
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.LongTimeoutDuration);
         var (service, kubeconfigPath, fileSystem) = CreateService(
             kubernetesApiTimeout: TimeSpan.FromSeconds(1),
             kubernetesInitializationAdditionalTimeout: TimeSpan.Zero);
@@ -1797,35 +1907,59 @@ public class KubernetesServiceTests(DcpApiServerCertificateFixture certificateFi
     [Fact]
     public async Task ExecuteWithRetry_ClientSetupAndApiRequestShareInitializationBudget()
     {
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.LongTimeoutDuration);
+        var timeProvider = new SignalingFakeTimeProvider(TimeSpan.FromMilliseconds(50));
         var (service, kubeconfigPath, fileSystem) = CreateService(
             kubernetesApiTimeout: TimeSpan.FromSeconds(1),
-            kubernetesInitializationAdditionalTimeout: TimeSpan.FromSeconds(3));
+            kubernetesInitializationAdditionalTimeout: TimeSpan.FromSeconds(3),
+            timeProvider: timeProvider);
         using var disposableFileSystem = fileSystem;
         using var disposableService = service;
-        await using var server = await StartServerAsync(cts.Token);
-        server.DelayResponses(TimeSpan.FromSeconds(3));
+        var responseStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var requestCanceled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        await using var server = await StartServerAsync(cts.Token, requestHandler: async context =>
+        {
+            var responseDelay = Task.Delay(TimeSpan.FromSeconds(3), timeProvider, context.RequestAborted);
+            responseStarted.TrySetResult();
+            try
+            {
+                await responseDelay;
+                context.Response.ContentType = "application/json";
+                await context.Response.WriteAsync("""{"apiVersion":"usvc-dev.developer.microsoft.com/v1","kind":"ContainerList","items":[]}""", context.RequestAborted);
+            }
+            catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
+            {
+                requestCanceled.TrySetResult();
+                throw;
+            }
+        });
 
         var listTask = service.ListAsync<Container>(cancellationToken: cts.Token);
-        await Task.Delay(TimeSpan.FromSeconds(2), cts.Token);
+        await timeProvider.TimerCreated.DefaultTimeout();
         WriteKubeconfig(kubeconfigPath, server.Port);
+        timeProvider.Advance(TimeSpan.FromSeconds(2));
+        await responseStarted.Task.DefaultTimeout();
+        timeProvider.Advance(TimeSpan.FromSeconds(2));
 
         // Setup and the HTTP response each fit individually, but their sum exceeds the shared budget.
-        await Assert.ThrowsAsync<TimeoutRejectedException>(() => listTask);
-        await server.WaitForRequestCancellationAsync(cts.Token);
+        await Assert.ThrowsAsync<TimeoutRejectedException>(() => listTask).DefaultTimeout();
+        await requestCanceled.Task.DefaultTimeout();
     }
 
     [Fact]
     public async Task CreateAsync_ConfirmsTimedOutWrite_WhenSetupConsumesInitializationBudget()
     {
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.LongTimeoutDuration);
+        var timeProvider = new SignalingFakeTimeProvider(TimeSpan.FromMilliseconds(50));
         var (service, kubeconfigPath, fileSystem) = CreateService(
             kubernetesApiTimeout: TimeSpan.FromSeconds(1),
             kubernetesInitializationAdditionalTimeout: TimeSpan.FromSeconds(3),
-            createRecoveryTimeout: TimeSpan.FromSeconds(10));
+            createRecoveryTimeout: TimeSpan.FromSeconds(10),
+            timeProvider: timeProvider);
         using var disposableFileSystem = fileSystem;
         using var disposableService = service;
         var requests = new ConcurrentQueue<string>();
+        var responseStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var requestCanceled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         Container? stored = null;
         await using var server = await StartServerAsync(cts.Token, requestHandler: async context =>
@@ -1842,7 +1976,9 @@ public class KubernetesServiceTests(DcpApiServerCertificateFixture certificateFi
             Volatile.Write(ref stored, created);
             try
             {
-                await Task.Delay(TimeSpan.FromSeconds(3), context.RequestAborted);
+                var responseDelay = Task.Delay(TimeSpan.FromSeconds(3), timeProvider, context.RequestAborted);
+                responseStarted.TrySetResult();
+                await responseDelay;
                 await WriteContainerAsync(context, created, StatusCodes.Status201Created);
             }
             catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
@@ -1853,12 +1989,15 @@ public class KubernetesServiceTests(DcpApiServerCertificateFixture certificateFi
         });
 
         var createTask = service.CreateAsync(Container.Create("frontend", "test-image"), cts.Token);
-        await Task.Delay(TimeSpan.FromSeconds(2), cts.Token);
+        await timeProvider.TimerCreated.DefaultTimeout();
         WriteKubeconfig(kubeconfigPath, server.Port);
+        timeProvider.Advance(TimeSpan.FromSeconds(2));
+        await responseStarted.Task.DefaultTimeout();
+        timeProvider.Advance(TimeSpan.FromSeconds(2));
 
-        var result = await createTask;
+        var result = await createTask.DefaultTimeout();
 
-        await requestCanceled.Task.WaitAsync(cts.Token);
+        await requestCanceled.Task.DefaultTimeout();
         Assert.Equal("committed-object", result.Metadata.Uid);
         Assert.Equal(["POST", "GET"], requests.ToArray());
     }
@@ -1866,7 +2005,7 @@ public class KubernetesServiceTests(DcpApiServerCertificateFixture certificateFi
     [Fact]
     public async Task ExecuteWithRetry_UsesInitializationTimeout_UntilFirstApiOperationSucceeds()
     {
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.LongTimeoutDuration);
 
         var (service, kubeconfigPath, fileSystem) = CreateService(
             kubernetesApiTimeout: TimeSpan.FromMilliseconds(500),
@@ -1889,7 +2028,7 @@ public class KubernetesServiceTests(DcpApiServerCertificateFixture certificateFi
     [Fact]
     public async Task ExecuteWithRetry_UsesApiRetryDuration_AfterFirstApiOperationSucceeds()
     {
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.LongTimeoutDuration);
 
         var (service, kubeconfigPath, fileSystem) = CreateService(
             kubernetesApiTimeout: TimeSpan.FromMilliseconds(500),
@@ -1915,7 +2054,7 @@ public class KubernetesServiceTests(DcpApiServerCertificateFixture certificateFi
     [InlineData(nameof(KubernetesService.DeleteAsync))]
     public async Task ExecuteWithRetry_CancelsApiRequest_WhenRetryDurationExpires(string operationName)
     {
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.LongTimeoutDuration);
 
         var (service, kubeconfigPath, fileSystem) = CreateService(
             kubernetesApiTimeout: TimeSpan.FromMilliseconds(500),
@@ -1944,7 +2083,7 @@ public class KubernetesServiceTests(DcpApiServerCertificateFixture certificateFi
     [Fact]
     public async Task ExecuteWithRetry_ReadinessDoesNotShortenInFlightOperation()
     {
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.LongTimeoutDuration);
         var (service, kubeconfigPath, fileSystem) = CreateService(
             kubernetesApiTimeout: TimeSpan.FromMilliseconds(500),
             kubernetesInitializationAdditionalTimeout: TimeSpan.FromSeconds(4.5));
@@ -1989,7 +2128,7 @@ public class KubernetesServiceTests(DcpApiServerCertificateFixture certificateFi
     [Fact]
     public async Task WatchAsync_DoesNotMarkApiReady_WhileHttpResponseIsPending()
     {
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.LongTimeoutDuration);
         using var watchCts = CancellationTokenSource.CreateLinkedTokenSource(cts.Token);
 
         var (service, kubeconfigPath, fileSystem) = CreateService(
@@ -2023,7 +2162,7 @@ public class KubernetesServiceTests(DcpApiServerCertificateFixture certificateFi
     [Fact]
     public async Task WatchAsync_ReconnectUsesApiTimeout_AfterAnotherOperationConfirmsReadiness()
     {
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.LongTimeoutDuration);
         using var watchCts = CancellationTokenSource.CreateLinkedTokenSource(cts.Token);
         var (service, kubeconfigPath, fileSystem) = CreateService(
             kubernetesApiTimeout: TimeSpan.FromMilliseconds(250),
@@ -2058,11 +2197,13 @@ public class KubernetesServiceTests(DcpApiServerCertificateFixture certificateFi
     [Fact]
     public async Task WatchAsync_ConnectedStreamOutlivesApiTimeout()
     {
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.LongTimeoutDuration);
         using var watchCts = CancellationTokenSource.CreateLinkedTokenSource(cts.Token);
+        var timeProvider = new FakeTimeProvider();
         var (service, kubeconfigPath, fileSystem) = CreateService(
             kubernetesApiTimeout: TimeSpan.FromMilliseconds(500),
-            kubernetesInitializationAdditionalTimeout: TimeSpan.FromSeconds(1.5));
+            kubernetesInitializationAdditionalTimeout: TimeSpan.FromSeconds(1.5),
+            timeProvider: timeProvider);
         using var disposableFileSystem = fileSystem;
         using var disposableService = service;
         var requestCanceled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -2087,31 +2228,33 @@ public class KubernetesServiceTests(DcpApiServerCertificateFixture certificateFi
         WriteKubeconfig(kubeconfigPath, server.Port);
 
         await using var watchEnumerator = service.WatchAsync<Container>(cancellationToken: watchCts.Token).GetAsyncEnumerator();
-        Assert.True(await watchEnumerator.MoveNextAsync());
+        Assert.True(await watchEnumerator.MoveNextAsync().DefaultTimeout());
         Assert.Equal(WatchEventType.Added, watchEnumerator.Current.Item1);
         Assert.Equal("frontend", watchEnumerator.Current.Item2.Metadata.Name);
         var watchTask = watchEnumerator.MoveNextAsync().AsTask();
         try
         {
-            await Task.Delay(TimeSpan.FromSeconds(3), cts.Token);
+            timeProvider.Advance(TimeSpan.FromSeconds(3));
             Assert.False(watchTask.IsCompleted);
         }
         finally
         {
             watchCts.Cancel();
-            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => watchTask);
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => watchTask).DefaultTimeout();
         }
 
-        await requestCanceled.Task.WaitAsync(cts.Token);
+        await requestCanceled.Task.DefaultTimeout();
     }
 
     [Fact]
     public async Task GetLogStreamAsync_ConnectedStreamOutlivesApiTimeout()
     {
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.LongTimeoutDuration);
+        var timeProvider = new FakeTimeProvider();
         var (service, kubeconfigPath, fileSystem) = CreateService(
             kubernetesApiTimeout: TimeSpan.FromMilliseconds(500),
-            kubernetesInitializationAdditionalTimeout: TimeSpan.FromSeconds(1.5));
+            kubernetesInitializationAdditionalTimeout: TimeSpan.FromSeconds(1.5),
+            timeProvider: timeProvider);
         using var disposableFileSystem = fileSystem;
         using var disposableService = service;
         var continueStream = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -2127,12 +2270,12 @@ public class KubernetesServiceTests(DcpApiServerCertificateFixture certificateFi
 
         try
         {
-            await using var stream = await service.GetLogStreamAsync(Container.Create("frontend", "test-image"), "stdout", cts.Token);
+            await using var stream = await service.GetLogStreamAsync(Container.Create("frontend", "test-image"), "stdout", cts.Token).DefaultTimeout();
             using var reader = new StreamReader(stream, leaveOpen: true);
-            Assert.Equal("first", await reader.ReadLineAsync(cts.Token));
-            await Task.Delay(TimeSpan.FromSeconds(3), cts.Token);
+            Assert.Equal("first", await reader.ReadLineAsync(cts.Token).DefaultTimeout());
+            timeProvider.Advance(TimeSpan.FromSeconds(3));
             continueStream.TrySetResult();
-            Assert.Equal("second", await reader.ReadLineAsync(cts.Token));
+            Assert.Equal("second", await reader.ReadLineAsync(cts.Token).DefaultTimeout());
         }
         finally
         {
@@ -2143,7 +2286,7 @@ public class KubernetesServiceTests(DcpApiServerCertificateFixture certificateFi
     [Fact]
     public async Task WatchAsync_RemainsActiveBeyondApiRetryTimeout()
     {
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.LongTimeoutDuration);
         using var watchCts = CancellationTokenSource.CreateLinkedTokenSource(cts.Token);
 
         var (service, kubeconfigPath, fileSystem) = CreateService(
@@ -2174,9 +2317,11 @@ public class KubernetesServiceTests(DcpApiServerCertificateFixture certificateFi
     [Fact]
     public async Task ExecuteWithRetry_EstablishesConnection_WhenKubeconfigInitiallyPartiallyWritten()
     {
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.LongTimeoutDuration);
 
-        var (service, kubeconfigPath, fileSystem) = CreateService();
+        var retryInterval = TimeSpan.FromMilliseconds(50);
+        var timeProvider = new SignalingFakeTimeProvider(retryInterval);
+        var (service, kubeconfigPath, fileSystem) = CreateService(timeProvider: timeProvider);
         using var disposableFileSystem = fileSystem;
         using var disposableService = service;
 
@@ -2185,22 +2330,24 @@ public class KubernetesServiceTests(DcpApiServerCertificateFixture certificateFi
 
         var listTask = service.ListAsync<Container>(cancellationToken: cts.Token);
 
-        // Give the read pipeline time to observe and retry the partial file before we finish writing it.
-        await Task.Delay(300, cts.Token);
+        // Observe a failed read and its scheduled retry before completing the partial file.
+        await timeProvider.TimerCreated.DefaultTimeout();
 
         await using var server = await StartServerAsync(cts.Token);
 
         // Finish the write by appending the remainder onto the same file. In-flight DCP calls will now succeed.
         CompleteKubeconfig(kubeconfigPath, server.Port);
+        timeProvider.Advance(retryInterval);
 
-        var result = await listTask;
+        var result = await listTask.DefaultTimeout();
         Assert.Empty(result);
     }
 
     private static (KubernetesService Service, string KubeconfigPath, IDisposable FileSystem) CreateService(
         TimeSpan? kubernetesApiTimeout = null,
         TimeSpan? kubernetesInitializationAdditionalTimeout = null,
-        TimeSpan? createRecoveryTimeout = null)
+        TimeSpan? createRecoveryTimeout = null,
+        TimeProvider? timeProvider = null)
     {
         var configuration = new ConfigurationBuilder().Build();
 
@@ -2220,7 +2367,7 @@ public class KubernetesServiceTests(DcpApiServerCertificateFixture certificateFi
                 KubernetesCreateRecoveryTimeout = createRecoveryTimeout ?? TimeSpan.FromMinutes(2),
             });
 
-            var service = new KubernetesService(NullLogger<KubernetesService>.Instance, dcpOptions, locations, configuration);
+            var service = new KubernetesService(NullLogger<KubernetesService>.Instance, dcpOptions, locations, configuration, timeProvider ?? TimeProvider.System);
 
             return (service, locations.DcpKubeconfigPath, fileSystem);
         }

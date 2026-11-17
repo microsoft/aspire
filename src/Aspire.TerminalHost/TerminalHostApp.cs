@@ -149,6 +149,7 @@ public sealed class TerminalHostApp : IAsyncDisposable
                 {
                     var fault = replicaRun.Exception?.GetBaseException();
                     _logger.LogError(fault, "Replica recycle loop terminated with a fault; exiting non-zero.");
+                    await Console.Error.WriteLineAsync($"[Aspire.TerminalHost] Replica recycle loop failed: {fault}", CancellationToken.None).ConfigureAwait(false);
                     return 1;
                 }
 
@@ -156,6 +157,7 @@ public sealed class TerminalHostApp : IAsyncDisposable
                 // permanent condition it considered fatal but didn't throw. Treat as
                 // an abnormal exit so DCP doesn't quietly keep a wedged process.
                 _logger.LogError("Replica recycle loop completed unexpectedly without cancellation; exiting non-zero.");
+                await Console.Error.WriteLineAsync("[Aspire.TerminalHost] Replica recycle loop completed unexpectedly without cancellation.", CancellationToken.None).ConfigureAwait(false);
                 return 1;
             }
 
@@ -168,6 +170,10 @@ public sealed class TerminalHostApp : IAsyncDisposable
         catch (Exception ex)
         {
             _logger.LogError(ex, "Terminal host failed.");
+            // Hidden terminal hosts have no telemetry logger; startup failures must still
+            // reach DCP's stderr capture rather than disappear into NullLoggerFactory.
+            // Do not cancel failure diagnostics when shutdown has already been requested.
+            await Console.Error.WriteLineAsync($"[Aspire.TerminalHost] Terminal host failed: {ex}", CancellationToken.None).ConfigureAwait(false);
             return 1;
         }
         finally
@@ -260,7 +266,7 @@ public sealed class TerminalHostApp : IAsyncDisposable
         }
         catch (TerminalHostArgsException ex)
         {
-            await Console.Error.WriteLineAsync($"[Aspire.TerminalHost] {ex.Message}")
+            await Console.Error.WriteLineAsync($"[Aspire.TerminalHost] {ex.Message}", CancellationToken.None)
                 .ConfigureAwait(false);
             return 64; // EX_USAGE
         }
@@ -281,7 +287,7 @@ public sealed class TerminalHostApp : IAsyncDisposable
 
             // Log only the header length: its value contains the dashboard OTLP API key.
             await Console.Error.WriteLineAsync(
-                $"[Aspire.TerminalHost] startup pid={Environment.ProcessId} otel=on endpoint='{otlpEndpoint}' protocol='{otlpProtocol}' headers.len={otlpHeaders?.Length ?? 0} service='{serviceName}' resource='{resourceAttrs}'")
+                $"[Aspire.TerminalHost] startup pid={Environment.ProcessId} otel=on endpoint='{otlpEndpoint}' protocol='{otlpProtocol}' headers.len={otlpHeaders?.Length ?? 0} service='{serviceName}' resource='{resourceAttrs}'", CancellationToken.None)
                 .ConfigureAwait(false);
 
             // Surface OTLP exporter failures (cert trust, connection refused, 401, schema
@@ -354,8 +360,8 @@ public sealed class TerminalHostApp : IAsyncDisposable
 
     internal static HostApplicationBuilder? CreateTelemetryHostBuilder(IConfiguration configuration)
     {
-        // An inherited OTLP endpoint must not turn a hidden implementation detail into
-        // a telemetry resource. The AppHost explicitly sets this flag from ShowTerminalHost.
+        // Standalone runs require explicit telemetry activation; the AppHost enables this flag
+        // only when the dashboard is enabled, independently of terminal-host visibility.
         // Malformed values (e.g. "not-a-bool") must leave telemetry disabled, not stop the terminal.
         if (!configuration.GetBool(KnownConfigNames.TerminalHostTelemetryEnabled, defaultValue: false) ||
             string.IsNullOrEmpty(configuration["OTEL_EXPORTER_OTLP_ENDPOINT"]))

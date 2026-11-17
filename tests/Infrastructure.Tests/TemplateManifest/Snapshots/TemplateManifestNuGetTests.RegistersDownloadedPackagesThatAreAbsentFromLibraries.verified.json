@@ -1,0 +1,24 @@
+﻿{
+  "$schema": "https://json.schemastore.org/component-detection-manifest.json",
+  "version": 1,
+  "registrations": [
+    {
+      "component": {
+        "type": "nuget",
+        "nuget": {
+          "name": "external.downloadfixture",
+          "version": "1.0.0"
+        }
+      }
+    },
+    {
+      "component": {
+        "type": "nuget",
+        "nuget": {
+          "name": "external.downloadfixture",
+          "version": "2.0.0"
+        }
+      }
+    }
+  ]
+}

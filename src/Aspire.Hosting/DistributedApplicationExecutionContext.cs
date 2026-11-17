@@ -98,6 +98,10 @@ public class DistributedApplicationExecutionContext
         }
     }
 
+    // Optional bookkeeping must also work for standalone contexts and before the container is built.
+    // Operations that require AppHost initialization must use Services so missing services still throw.
+    internal IServiceProvider? ServicesOrNull => _options?.Services;
+
     /// <summary>
     /// Returns true if the current operation is publishing.
     /// </summary>

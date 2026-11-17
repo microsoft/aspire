@@ -2,4 +2,6 @@
   public:
     hostname: ""
 secrets: {}
-config: {}
+config:
+  env_dashboard:
+    ASPIRE_DASHBOARD_TELEMETRY_OPTOUT: "true"

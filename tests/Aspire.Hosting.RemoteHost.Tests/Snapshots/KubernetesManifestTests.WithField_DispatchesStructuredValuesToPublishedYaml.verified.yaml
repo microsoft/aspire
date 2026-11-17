@@ -1,0 +1,25 @@
+﻿---
+apiVersion: cilium.io/v2
+kind: CiliumNetworkPolicy
+metadata:
+  name: "api-netpol"
+  labels:
+    app.kubernetes.io/name: "{{ .Chart.Name }}"
+    app.kubernetes.io/component: "api"
+    app.kubernetes.io/instance: "{{ .Release.Name }}"
+spec:
+  endpointSelector:
+    matchLabels:
+      app.kubernetes.io/component: "api"
+  ingress:
+    - fromEndpoints:
+        - matchLabels:
+            app.kubernetes.io/component: "frontend"
+      toPorts:
+        - ports:
+            - port: "8080"
+              protocol: "TCP"
+  egress: []
+  enableDefaultDeny:
+    ingress: true
+  description: "Frontend access to API"

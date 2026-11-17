@@ -346,6 +346,38 @@ public class ChartFiltersTests : DashboardTestContext
         Assert.Equal(["DELETE", "GET", "POST"], ordered);
     }
 
+    [Theory]
+    [InlineData(OtlpInstrumentType.Sum, true, true)]
+    [InlineData(OtlpInstrumentType.Sum, false, false)]
+    [InlineData(OtlpInstrumentType.Gauge, false, false)]
+    public async Task Render_Counter_ShowsChangePerIntervalOption(OtlpInstrumentType instrumentType, bool isCounter, bool expectOption)
+    {
+        SetupChartFilters();
+        bool? changedValue = null;
+
+        var cut = Render<ChartFilters>(builder =>
+        {
+            builder.Add(p => p.InstrumentType, instrumentType);
+            builder.Add(p => p.ShowCount, false);
+            builder.Add(p => p.IsCounter, isCounter);
+            builder.Add(p => p.ShowChangePerInterval, true);
+            builder.Add(p => p.ShowChangePerIntervalChanged, EventCallback.Factory.Create<bool>(this, value => changedValue = value));
+            builder.Add(p => p.DimensionFilters, []);
+        });
+
+        var switches = cut.FindComponents<FluentSwitch>().Where(s => s.Instance.Class?.Contains("counter-change-per-interval-switch") == true).ToList();
+        if (!expectOption)
+        {
+            Assert.Empty(switches);
+            return;
+        }
+
+        var optionSwitch = Assert.Single(switches);
+        Assert.True(optionSwitch.Instance.Value);
+        await cut.InvokeAsync(() => optionSwitch.Instance.ValueChanged.InvokeAsync(false));
+        Assert.False(changedValue);
+    }
+
     private IRenderedComponent<ChartFilters> RenderChartFilters(
         DimensionFilterViewModel dimensionFilter,
         Action<DimensionFilterViewModel>? onDimensionValuesChanged = null)
@@ -354,6 +386,8 @@ public class ChartFiltersTests : DashboardTestContext
         {
             builder.Add(p => p.InstrumentType, OtlpInstrumentType.Sum);
             builder.Add(p => p.ShowCount, false);
+            builder.Add(p => p.IsCounter, false);
+            builder.Add(p => p.ShowChangePerInterval, true);
             builder.Add(p => p.DimensionFilters, [dimensionFilter]);
             if (onDimensionValuesChanged is not null)
             {

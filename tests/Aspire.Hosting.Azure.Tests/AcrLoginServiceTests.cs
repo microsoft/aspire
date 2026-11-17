@@ -6,12 +6,51 @@
 using System.Net;
 using Aspire.Hosting.Tests.Publishing;
 using Azure.Core;
+using Azure.Identity;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Hosting.Azure.Tests;
 
 public class AcrLoginServiceTests
 {
+    [Theory]
+    [InlineData(false, 16, false)]
+    [InlineData(true, 16, true)]
+    [InlineData(true, 61, false)]
+    public async Task LoginAsync_StaticAssertionRequiresUsableCachedAudienceToken(bool preAcquire, int elapsedMinutes, bool succeeds)
+    {
+        var credential = new FederatedTokenCredential();
+        await credential.GetTokenAsync(new TokenRequestContext(["https://management.azure.com/.default"]), CancellationToken.None);
+        if (preAcquire)
+        {
+            await credential.GetTokenAsync(new TokenRequestContext([AcrLoginService.AcrScope]), CancellationToken.None);
+        }
+        credential.Advance(TimeSpan.FromMinutes(elapsedMinutes));
+
+        var handler = new CallbackHttpMessageHandler((_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("""{"refresh_token":"refresh-token"}""")
+        }));
+        var runtime = new FakeContainerRuntime();
+        var timeProvider = new ImmediateTimeProvider();
+        var service = new AcrLoginService(new TestHttpClientFactory(handler), runtime, NullLogger<AcrLoginService>.Instance, timeProvider);
+
+        if (succeeds)
+        {
+            await service.LoginAsync("registry.azurecr.io", "tenant", credential);
+        }
+        else
+        {
+            var exception = await Assert.ThrowsAsync<AuthenticationFailedException>(() => service.LoginAsync("registry.azurecr.io", "tenant", credential));
+            Assert.Equal("AADSTS700024: Client assertion is not within its valid time range.", exception.Message);
+        }
+
+        Assert.Equal(succeeds ? 1 : 0, handler.CallCount);
+        Assert.Equal(succeeds ? 1 : 0, runtime.ResolveAsyncCallCount);
+        Assert.Equal(succeeds, runtime.WasLoginToRegistryCalled);
+        Assert.Equal(0, timeProvider.DelayCount);
+    }
+
     [Fact]
     public async Task LoginAsync_RetriesTransientExchangeFailures()
     {

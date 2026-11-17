@@ -1,0 +1,50 @@
+@namespace Aspire.Dashboard.Components
+
+@using System.Globalization
+@using Aspire.Dashboard.Otlp.Model
+
+@inherits LiveSparklinesBase
+
+<ul class="overview-metric-tiles">
+    @foreach (var instrument in Instruments)
+    {
+        var sparkline = GetSparkline(instrument);
+        @* The meter isn't shown, to keep tiles compact; the tooltip still names it. *@
+        <li @key="instrument.GetKey()">
+            <a class="overview-metric-tile live-metric-tile"
+               href="@GetInstrumentUrl(instrument)"
+               data-tooltip="@GetTooltip(instrument)">
+                @* The sparkline is the tile's background, so the tile stays as small as its text. *@
+                <MetricSparkline Data="@sparkline" Class="live-metric-tile-sparkline" />
+                <span class="overview-metric-name">@instrument.Name</span>
+                <span class="live-metric-tile-value">
+                    @if (sparkline.LatestValue is { } latestValue)
+                    {
+                        @if (instrument.Type == OtlpInstrumentType.Histogram)
+                        {
+                            <span class="live-metric-tile-label">P50</span>
+                        }
+                        <span class="live-metric-tile-number">@FormatCompactValue(latestValue, CultureInfo.CurrentCulture)</span>
+                        <span class="live-metric-tile-unit">@FormatUnit(instrument, latestValue)</span>
+                    }
+                    else
+                    {
+                        <span class="live-metric-tile-unit">&ndash;</span>
+                    }
+                </span>
+            </a>
+        </li>
+    }
+</ul>
+
+@code {
+    [Parameter, EditorRequired]
+    public required Func<OtlpInstrumentSummary, string> GetInstrumentUrl { get; set; }
+
+    // e.g. "System.Runtime › dotnet.gc.heap.total_allocated — The approximate number of bytes allocated..."
+    private static string GetTooltip(OtlpInstrumentSummary instrument)
+    {
+        var tooltip = $"{instrument.Parent.Name} › {instrument.Name}";
+        return string.IsNullOrEmpty(instrument.Description) ? tooltip : $"{tooltip} — {instrument.Description}";
+    }
+}

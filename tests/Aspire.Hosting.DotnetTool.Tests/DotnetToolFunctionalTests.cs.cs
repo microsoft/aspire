@@ -34,9 +34,8 @@ public class DotnetToolFunctionalTests(ITestOutputHelper testOutputHelper)
     {
         var cts = new CancellationTokenSource(TimeSpan.FromMinutes(2));
         using var builder = TestDistributedApplicationBuilder.Create().WithTestAndResourceLogging(testOutputHelper);
-        // A cached tool can run without consulting package sources, so use a unique package ID.
         var resource = builder
-            .AddDotnetTool("tool", $"nonexistent-tool-{Guid.NewGuid():N}")
+            .AddDotnetTool("tool", "aspire-nonexistent-dotnet-tool")
             .WithArgs("--help")
             .WithToolSource("./fake-package-feed")
             .WithToolIgnoreExistingFeeds();

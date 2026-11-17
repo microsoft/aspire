@@ -27,17 +27,14 @@
   <data name="ReplicaNotFound" xml:space="preserve">
     <value>Replica index {0} is not available for resource '{1}'. Available indices: {2}.</value>
   </data>
-  <data name="ReplicaRequired" xml:space="preserve">
-    <value>Resource '{0}' has {1} replicas. Pass --replica &lt;index&gt; to choose one in non-interactive mode.</value>
+  <data name="ResourceAmbiguous" xml:space="preserve">
+    <value>Resource '{0}' matches multiple instances. Specify an exact instance ID. Available instance IDs: {1}.</value>
   </data>
-  <data name="SelectReplica" xml:space="preserve">
-    <value>Select a replica of '{0}' to attach to:</value>
+  <data name="ResourceInstanceRequired" xml:space="preserve">
+    <value>Resource '{0}' has multiple terminal instances. Specify an exact instance ID from 'aspire ps' or 'aspire describe'.</value>
   </data>
-  <data name="ReplicaRunning" xml:space="preserve">
-    <value>{0} (running)</value>
-  </data>
-  <data name="ReplicaExited" xml:space="preserve">
-    <value>{0} (exited code={1})</value>
+  <data name="InstanceTerminalUnavailable" xml:space="preserve">
+    <value>Cannot resolve the terminal endpoint for instance '{0}' because its replica metadata is missing, invalid, or unavailable. Use 'aspire ps' or 'aspire describe' to check the current resource instances.</value>
   </data>
   <data name="TapeDescription" xml:space="preserve">
     <value>Run VHS tape scripts against resource terminals.</value>
@@ -46,16 +43,13 @@
     <value>Play a VHS tape against a running resource terminal and print its final screen.</value>
   </data>
   <data name="ResourceArgumentDescription" xml:space="preserve">
-    <value>The name of the resource whose terminal runs the tape.</value>
+    <value>The resource display name for a singleton, or the exact resource instance ID for a replica. Use 'aspire ps' or 'aspire describe' to discover instance IDs.</value>
   </data>
   <data name="ResourceRequired" xml:space="preserve">
     <value>A resource name is required.</value>
   </data>
   <data name="TapeFileDescription" xml:space="preserve">
     <value>The path to the VHS .tape file to play.</value>
-  </data>
-  <data name="ReplicaOptionDescription" xml:space="preserve">
-    <value>The 0-based replica index. Required for replicated resources in non-interactive mode.</value>
   </data>
   <data name="TapeSelectAppHostAction" xml:space="preserve">
     <value>play a terminal tape</value>

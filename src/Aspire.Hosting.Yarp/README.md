@@ -10,6 +10,7 @@ From your AppHost directory, add the `Aspire.Hosting.Yarp` integration with the 
 
 ```bash
 aspire add Aspire.Hosting.Yarp
+aspire add Aspire.Hosting.Dotnet
 ```
 
 ## Usage examples
@@ -21,8 +22,8 @@ The modern approach uses programmatic configuration with the `WithConfiguration`
 ```csharp
 var builder = DistributedApplication.CreateBuilder(args);
 
-var backendService = builder.AddProject<Projects.Backend>("backend");
-var frontendService = builder.AddProject<Projects.Frontend>("frontend");
+var backendService = builder.AddDotnetProject("backend", "../Backend/Backend.csproj");
+var frontendService = builder.AddDotnetProject("frontend", "../Frontend/Frontend.csproj");
 
 var gateway = builder.AddYarp("gateway")
                      .WithConfiguration(yarp =>
@@ -181,7 +182,7 @@ builder.AddYarp("gateway")
 ### Terminate TLS and proxy h2c (for gRPC)
 
 ```csharp
-var grpcBackend = builder.AddProject<Projects.GrpcBackend>("grpc-backend");
+var grpcBackend = builder.AddDotnetProject("grpc-backend", "../GrpcBackend/GrpcBackend.csproj");
 
 builder.AddYarp("gateway")
     .WithHostHttpsPort(8080)

@@ -21,17 +21,6 @@ cd "$WORK_DIR"
 
 # Initialize Go AppHost
 echo "Creating Go apphost project..."
-# TODO: once go is not an experiment feature, remove 
-cat << 'EOF' > aspire.config.json
-{
-  "appHost": {},
-  "features": {
-    "experimentalPolyglot:go": true
-  },
-  "packages": {}
-}
-EOF
-
 aspire init --language go --non-interactive -d
 
 cat <<'EOF' > appsettings.json
@@ -65,12 +54,39 @@ if grep -q "builder.Build()" apphost.go; then
         print "\tif err != nil {"
         print "\t\tlog.Fatalf(\"Failed to read appsettings.json: %v\", err)"
         print "\t}"
-        print "\tif appSettingsValue != \"from-appsettings\" {"
-        print "\t\tlog.Fatalf(\"Expected appsettings.json value, got %q\", appSettingsValue)"
+        print "\tif appSettingsValue == nil {"
+        print "\t\tlog.Fatal(\"Expected appsettings.json value, got nil\")"
+        print "\t}"
+        print "\tif *appSettingsValue != \"from-appsettings\" {"
+        print "\t\tlog.Fatalf(\"Expected appsettings.json value, got %q\", *appSettingsValue)"
+        print "\t}"
+        print "\tmissingValue, err := builder.GetConfiguration().GetConfigValue(\"PolyglotTest:Missing\")"
+        print "\tif err != nil {"
+        print "\t\tlog.Fatalf(\"Failed to read missing configuration key: %v\", err)"
+        print "\t}"
+        print "\tif missingValue != nil {"
+        print "\t\tlog.Fatalf(\"Expected missing configuration key to return nil, got %q\", *missingValue)"
+        print "\t}"
+        print "\tchildren, err := builder.GetConfiguration().GetChildren()"
+        print "\tif err != nil {"
+        print "\t\tlog.Fatalf(\"Failed to decode configuration children: %v\", err)"
+        print "\t}"
+        print "\tfoundSection := false"
+        print "\tfor _, child := range children {"
+        print "\t\tkey, err := child.Key()"
+        print "\t\tif err != nil {"
+        print "\t\t\tlog.Fatalf(\"Failed to read configuration child key: %v\", err)"
+        print "\t\t}"
+        print "\t\tif key == \"PolyglotTest\" {"
+        print "\t\t\tfoundSection = true"
+        print "\t\t}"
+        print "\t}"
+        print "\tif !foundSection {"
+        print "\t\tlog.Fatal(\"Configuration children did not include PolyglotTest\")"
         print "\t}"
         print ""
         print "\t// Add Redis cache resource"
-        print "\tredis := builder.AddRedis(\"cache\", &aspire.AddRedisOptions{Port: aspire.Float64Ptr(0)}).WithImageRegistry(\"netaspireci.azurecr.io\")"
+        print "\tredis := builder.AddRedis(\"cache\", &aspire.AddRedisOptions{Port: aspire.IntPtr(0)}).WithImageRegistry(\"netaspireci.azurecr.io\")"
         print "\tif err := redis.Err(); err != nil {"
         print "\t\tlog.Fatalf(\"Failed to set up Redis: %v\", err)"
         print "\t}"

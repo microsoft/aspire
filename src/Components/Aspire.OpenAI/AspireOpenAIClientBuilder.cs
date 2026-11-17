@@ -18,8 +18,9 @@ namespace Aspire.OpenAI;
 /// <param name="connectionName">The name used to retrieve the connection string from the ConnectionStrings configuration section.</param>
 /// <param name="serviceKey">The service key used to register the <see cref="OpenAIClient"/> service, if any.</param>
 /// <param name="disableTracing">A flag to indicate whether tracing should be disabled.</param>
+/// <param name="disableMetrics">A flag to indicate whether metrics should be disabled.</param>
 /// <param name="enableSensitiveTelemetryData">A flag indicating whether potentially sensitive information should be included in telemetry.</param>
-public class AspireOpenAIClientBuilder(IHostApplicationBuilder hostBuilder, string connectionName, string? serviceKey, bool disableTracing, bool enableSensitiveTelemetryData)
+public class AspireOpenAIClientBuilder(IHostApplicationBuilder hostBuilder, string connectionName, string? serviceKey, bool disableTracing, bool disableMetrics, bool enableSensitiveTelemetryData)
 {
     private const string DeploymentKey = "Deployment";
     private const string ModelKey = "Model";
@@ -45,6 +46,11 @@ public class AspireOpenAIClientBuilder(IHostApplicationBuilder hostBuilder, stri
     public bool DisableTracing { get; } = disableTracing;
 
     /// <summary>
+    /// Gets a flag indicating whether metrics should be disabled.
+    /// </summary>
+    public bool DisableMetrics { get; } = disableMetrics;
+
+    /// <summary>
     /// Gets a flag indicating whether potentially sensitive information should be included in telemetry.
     /// </summary>
     public bool EnableSensitiveTelemetryData { get; } = enableSensitiveTelemetryData;
@@ -61,7 +67,10 @@ public class AspireOpenAIClientBuilder(IHostApplicationBuilder hostBuilder, stri
         string? deploymentName = null;
 
         var configuration = HostBuilder.Configuration;
-        if (configuration.TryGetConnectionString(ConnectionName, out var connectionString))
+        // Azure clients also accept a bare endpoint such as "https://account.openai.azure.com".
+        // In that form the model/deployment is supplied by settings, not connection-string fields.
+        if (configuration.TryGetConnectionString(ConnectionName, out var connectionString) &&
+            !Uri.TryCreate(connectionString, UriKind.Absolute, out _))
         {
             // Some hosting solutions require named deployments, while others identify the target directly by model name.
             var connectionBuilder = new DbConnectionStringBuilder { ConnectionString = connectionString };

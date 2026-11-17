@@ -1,0 +1,11 @@
+﻿┌─────────────┬────────────────────────────────────────────┐
+│ Name        │ Configuration                              │
+├─────────────┼────────────────────────────────────────────┤
+│ empty       │ -                                          │
+│ git-head    │ repository: https://example.test/head      │
+│ Local [red] │ path: /templates/with [brackets]           │
+│ unfinished  │ ref: main                                  │
+│ z-git       │ repository: https://example.test/templates │
+│             │ path: templates/api                        │
+│             │ ref: release/17.0                          │
+└─────────────┴────────────────────────────────────────────┘

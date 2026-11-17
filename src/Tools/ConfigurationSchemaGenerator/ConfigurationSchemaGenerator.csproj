@@ -22,7 +22,7 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" />
     <PackageReference Include="System.CommandLine" />
-    <PackageReference Include="System.Text.Json" VersionOverride="$(SystemTextJsonPreviewVersion)" />
+    <PackageReference Include="System.Text.Json" VersionOverride="$(SystemTextJsonNet10Version)" />
 
     <InternalsVisibleTo Include="$(AssemblyName).Tests" />
   </ItemGroup>

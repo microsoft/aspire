@@ -3,6 +3,8 @@
 
 using System.Diagnostics;
 using Aspire.Cli.Telemetry;
+using Aspire.Shared.Telemetry;
+using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -49,8 +51,13 @@ internal sealed class TelemetryFixture : IDisposable
         logger ??= NullLogger<AspireCliTelemetry>.Instance;
         executionContext ??= Utils.TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(AppContext.BaseDirectory));
         TagsSource = new TelemetryTagsSource(NullLogger<TelemetryTagsSource>.Instance);
+        Telemetry = new AspireCliTelemetry(logger,
+            machineInfoProvider, ciEnvironmentDetector, codingAgentDetector, internalMicrosoftDetector,
+            telemetryConfiguration ?? new TelemetryConfiguration { ReportedTelemetryEnabled = true },
+            ReportedSourceName, DiagnosticsSourceName, executionContext, TagsSource);
+        Telemetry.SetEventLogger(logger);
 
-        // Simulate CliTagEnrichmentProcessor behavior: in production, tags are added
+        // Simulate ActivityTagEnrichmentProcessor behavior: in production, tags are added
         // in OnEnd before export. Tests assert on live activities before they
         // stop, so we add tags in ActivityStarted instead to make them visible immediately.
         _listener = new ActivityListener
@@ -69,7 +76,7 @@ internal sealed class TelemetryFixture : IDisposable
                             continue;
                         }
 
-                        activity.SetTag(tag.Key, tag.Value);
+                        Telemetry.SetActivityProperty(activity, tag.Key, tag.Value);
                     }
                 }
             },
@@ -77,14 +84,11 @@ internal sealed class TelemetryFixture : IDisposable
         };
         ActivitySource.AddActivityListener(_listener);
 
-        Telemetry = telemetryConfiguration is null
-            ? new AspireCliTelemetry(logger, machineInfoProvider, ciEnvironmentDetector, codingAgentDetector, internalMicrosoftDetector, ReportedSourceName, DiagnosticsSourceName, executionContext, TagsSource)
-            : new AspireCliTelemetry(logger, machineInfoProvider, ciEnvironmentDetector, codingAgentDetector, internalMicrosoftDetector, telemetryConfiguration, ReportedSourceName, DiagnosticsSourceName, executionContext, TagsSource);
         if (initialize)
         {
             Telemetry.Initialize();
             // Wait for background tag calculation to complete so tests can assert on tags.
-            Telemetry.GetDefaultTagsAsync().GetAwaiter().GetResult();
+            Telemetry.GetDefaultTagsAsync().DefaultTimeout().GetAwaiter().GetResult();
         }
     }
 
@@ -114,23 +118,16 @@ internal sealed class TelemetryFixture : IDisposable
     public Activity? CapturedActivity { get; private set; }
 
     /// <inheritdoc/>
-    public void Dispose() => _listener.Dispose();
+    public void Dispose()
+    {
+        Telemetry.Dispose();
+        _listener.Dispose();
+    }
 
     /// <summary>
     /// A test implementation of <see cref="IMachineInformationProvider"/> with configurable values.
     /// </summary>
-    internal sealed class TestMachineInformationProvider : IMachineInformationProvider
-    {
-        public string? DeviceId { get; set; } = "test-device-id";
-        public string MacAddressHash { get; set; } = "test-mac-hash";
-        public string UserName { get; set; } = string.Empty;
-        public string UserDomainName { get; set; } = string.Empty;
-        public Func<Task<string?>>? GetDeviceIdCallback { get; set; }
-        public Func<Task<string>>? GetMacAddressHashCallback { get; set; }
-
-        public Task<string?> GetOrCreateDeviceId() => GetDeviceIdCallback?.Invoke() ?? Task.FromResult(DeviceId);
-        public Task<string> GetMacAddressHash() => GetMacAddressHashCallback?.Invoke() ?? Task.FromResult(MacAddressHash);
-    }
+    internal sealed class TestMachineInformationProvider : Aspire.Tests.Shared.Telemetry.TestMachineInformationProvider;
 
     /// <summary>
     /// A test implementation of <see cref="ICIEnvironmentDetector"/> with configurable result.
@@ -155,38 +152,5 @@ internal sealed class TelemetryFixture : IDisposable
     /// <summary>
     /// A test implementation of <see cref="IInternalMicrosoftDetector"/> with configurable result.
     /// </summary>
-    internal sealed class TestInternalMicrosoftDetector : IInternalMicrosoftDetector
-    {
-        public bool IsInternalMicrosoft { get; set; }
-        public string? Source { get; set; }
-        public string? Alias { get; set; }
-        public string? Domain { get; set; }
-        public IReadOnlyList<InternalMicrosoftProbeDiagnostic> ProbeDiagnostics { get; set; } = [];
-        public Exception? ExceptionToThrow { get; set; }
-        public Func<CancellationToken, Task<InternalMicrosoftDetectionResult>>? DetectionCallback { get; set; }
-        public int InvocationCount { get; private set; }
-
-        public Task<InternalMicrosoftDetectionResult> IsInternalMicrosoftMachineAsync(CancellationToken cancellationToken = default)
-        {
-            InvocationCount++;
-            if (ExceptionToThrow is not null)
-            {
-                return Task.FromException<InternalMicrosoftDetectionResult>(ExceptionToThrow);
-            }
-            if (DetectionCallback is not null)
-            {
-                return DetectionCallback(cancellationToken);
-            }
-
-            return Task.FromResult(new InternalMicrosoftDetectionResult(
-                IsInternalMicrosoft,
-                Source,
-                Alias,
-                Domain,
-                IsInternalMicrosoft ? InternalMicrosoftDetectorOutcome.Detected : InternalMicrosoftDetectorOutcome.NotDetected,
-                InternalMicrosoftDetectorCacheStatus.Miss,
-                TimeSpan.FromMilliseconds(1),
-                ProbeDiagnostics));
-        }
-    }
+    internal sealed class TestInternalMicrosoftDetector : Aspire.Tests.Shared.Telemetry.TestInternalMicrosoftDetector;
 }

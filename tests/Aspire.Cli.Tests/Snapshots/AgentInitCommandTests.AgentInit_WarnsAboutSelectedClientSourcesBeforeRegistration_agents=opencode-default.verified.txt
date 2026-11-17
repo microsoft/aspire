@@ -1,0 +1,12 @@
+﻿{
+  Sources:
+                  Name:  default
+   OpenCode V1 catalog:  https://raw.githubusercontent.com/microsoft/aspire-skills/main/opencode/v1/
+   OpenCode V2 catalog:  https://raw.githubusercontent.com/microsoft/aspire-skills/main/opencode/v2/
+
+,
+  Warnings: [
+    One or more skill sources are configured. A skill source lets an organization share skills to customize your development experience.,
+    [yellow]Only use sources you trust. Content from these sources can run code on your machine.[/]
+  ]
+}

@@ -1,12 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIRECOMPUTE002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-#pragma warning disable ASPIREDOCKERFILEBUILDER001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-#pragma warning disable ASPIREPIPELINES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-#pragma warning disable ASPIREACANAMING001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-#pragma warning disable ASPIREACANAMING002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using Aspire.Hosting.ApplicationModel;
@@ -27,6 +22,27 @@ namespace Aspire.Hosting.Azure.Tests;
 
 public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
 {
+    [Fact]
+    public async Task EnvironmentVariableWithBicepOutputReferenceProviderIsPublishedAsItsOutput()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
+
+        builder.AddAzureContainerAppEnvironment("env");
+        var identity = builder.AddAzureUserAssignedIdentity("identity");
+
+        var api = builder.AddContainer("api", "myimage")
+            .WithEnvironment(context => context.EnvironmentVariables["CLIENT_ID"] = new TestBicepOutputReferenceProvider(identity.Resource.ClientId));
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var resource = Assert.IsAssignableFrom<AzureProvisioningResource>(api.Resource.GetDeploymentTargetAnnotation()?.DeploymentTarget);
+        var (_, bicep) = await GetManifestWithBicep(resource);
+
+        await Verify(bicep, "bicep");
+    }
+
     [Fact]
     public async Task AddContainerAppsInfrastructureAddsDeploymentTargetWithContainerAppToContainerResources()
     {
@@ -97,7 +113,9 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
 
         var env = builder.AddAzureContainerAppEnvironment("env");
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource Azure publishing/provisioning contracts with synthetic metadata.
         builder.AddProject<Project>("api", launchProfileName: null)
+#pragma warning restore CS0618
             .WithHttpEndpoint();
 
         using var app = builder.Build();
@@ -160,7 +178,9 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
             .AddProject("project");
 
         // The agent app is deployed to the Foundry project compute environment via AsHostedAgent.
+#pragma warning disable CS0618 // Retain legacy ProjectResource Azure publishing/provisioning contracts with synthetic metadata.
         var agent = builder.AddProject<Project>("agent", launchProfileName: null);
+#pragma warning restore CS0618
         agent.AsHostedAgent(project, HostedAgentProtocol.Responses, "2.0.0");
 
         // The web app is deployed to Azure Container Apps and references the Foundry hosted agent.
@@ -170,7 +190,9 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
         // does not declare one itself. See issue #17904.
         // WithReference(agent) exercises the bare EndpointReference branch; the explicit
         // Property(Url) environment variable exercises the EndpointReferenceExpression branch.
+#pragma warning disable CS0618 // Retain legacy ProjectResource Azure publishing/provisioning contracts with synthetic metadata.
         var web = builder.AddProject<Project>("web", launchProfileName: null)
+#pragma warning restore CS0618
             .WithHttpEndpoint()
             .WithExternalHttpEndpoints()
             .WithComputeEnvironment(acaEnv)
@@ -372,7 +394,9 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
         // Normal parameters
         var value = builder.AddParameter("value1", "y");
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource Azure publishing/provisioning contracts with synthetic metadata.
         var project = builder.AddProject<Project>("api", launchProfileName: null)
+#pragma warning restore CS0618
             .WithHttpEndpoint()
             .WithHttpsEndpoint()
             .WithHttpEndpoint(name: "internal")
@@ -477,7 +501,9 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
         // Normal parameters
         var value = builder.AddParameter("value1", "y");
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource Azure publishing/provisioning contracts with synthetic metadata.
         var project = builder.AddProject<Project>("api", launchProfileName: null)
+#pragma warning restore CS0618
             .WithHttpEndpoint()
             .WithHttpsEndpoint()
             .WithHttpEndpoint(name: "internal")
@@ -786,7 +812,9 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
 
         builder.AddAzureContainerAppEnvironment("env");
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource Azure publishing/provisioning contracts with synthetic metadata.
         builder.AddProject<Project>("project", launchProfileName: null)
+#pragma warning restore CS0618
             .WithVolume("project-data", "/srv/project", env: "DATA_PATH");
         builder.AddExecutable("executable", "node", ".")
             .PublishAsDockerFile()
@@ -1100,7 +1128,9 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
 
         builder.AddAzureContainerAppEnvironment("env");
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource Azure publishing/provisioning contracts with synthetic metadata.
         builder.AddProject<Project>("api", launchProfileName: null)
+#pragma warning restore CS0618
                .WithHttpEndpoint()
                .WithHttpsEndpoint();
 
@@ -1138,7 +1168,9 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
             .PublishAsExisting(storageName, storageRG);
         var blobs = storage.AddBlobs("blobs");
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource Azure publishing/provisioning contracts with synthetic metadata.
         builder.AddProject<Project>("api", launchProfileName: null)
+#pragma warning restore CS0618
                .WithRoleAssignments(storage, StorageBuiltInRole.StorageBlobDataReader);
 
         using var app = builder.Build();
@@ -1182,7 +1214,9 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
         var cosmos = builder.AddAzureCosmosDB("cosmos")
             .PublishAsExisting(cosmosName, cosmosRG);
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource Azure publishing/provisioning contracts with synthetic metadata.
         builder.AddProject<Project>("api", launchProfileName: null)
+#pragma warning restore CS0618
                .WithReference(cosmos);
 
         using var app = builder.Build();
@@ -1223,7 +1257,9 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
         var redis = builder.AddAzureManagedRedis("redis")
             .PublishAsExisting("myredis", "myRG");
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource Azure publishing/provisioning contracts with synthetic metadata.
         builder.AddProject<Project>("api", launchProfileName: null)
+#pragma warning restore CS0618
             .WithReference(redis);
 
         using var app = builder.Build();
@@ -1533,6 +1569,17 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
               .AppendContentAsFile(bicep, "bicep");
     }
 
+    [Theory]
+    [InlineData(nameof(AzureContainerAppExtensions.WithCompactResourceNaming))]
+    [InlineData(nameof(AzureContainerAppExtensions.WithUniqueResourceNaming))]
+    public void ResourceNamingApisAreStable(string methodName)
+    {
+        var method = typeof(AzureContainerAppExtensions).GetMethod(methodName);
+
+        Assert.NotNull(method);
+        Assert.Empty(method.GetCustomAttributes(typeof(ExperimentalAttribute), inherit: false));
+    }
+
     [Fact]
     public async Task AddContainerAppEnvironmentWithCompactNamingPreservesUniqueString()
     {
@@ -1629,7 +1676,9 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
             .WithAzureContainerRegistry(registry);
 
         // Add a container that will use the environment
+#pragma warning disable CS0618 // Retain legacy ProjectResource Azure publishing/provisioning contracts with synthetic metadata.
         builder.AddProject<Project>("api", launchProfileName: null)
+#pragma warning restore CS0618
             .WithHttpEndpoint();
 
         using var app = builder.Build();
@@ -1680,7 +1729,9 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
             .WithAzureLogAnalyticsWorkspace(workspace);
 
         // Add a container that will use the environment
+#pragma warning disable CS0618 // Retain legacy ProjectResource Azure publishing/provisioning contracts with synthetic metadata.
         builder.AddProject<Project>("api", launchProfileName: null)
+#pragma warning restore CS0618
             .WithHttpEndpoint();
 
         using var app = builder.Build();
@@ -1906,11 +1957,15 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
         }
 
         await RunTest(builder =>
+#pragma warning disable CS0618 // Retain legacy ProjectResource Azure publishing/provisioning contracts with synthetic metadata.
             builder.AddProject<Projects.ServiceA>("ServiceA", launchProfileName: null)
+#pragma warning restore CS0618
                 .PublishAsAzureContainerApp((_, _) => { }));
 
         await RunTest(builder =>
+#pragma warning disable CS0618 // Retain legacy ProjectResource Azure publishing/provisioning contracts with synthetic metadata.
             builder.AddProject<Projects.ServiceA>("ServiceA", launchProfileName: null)
+#pragma warning restore CS0618
                 .PublishAsAzureContainerAppJob());
 
         await RunTest(builder =>
@@ -2435,7 +2490,9 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     {
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
         builder.AddAzureContainerAppEnvironment("env");
+#pragma warning disable CS0618 // Retain legacy ProjectResource Azure publishing/provisioning contracts with synthetic metadata.
         builder.AddProject<Project>("job", launchProfileName: null)
+#pragma warning restore CS0618
             .PublishAsAzureContainerAppJob();
 
         using var app = builder.Build();
@@ -2458,7 +2515,9 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
         builder.AddAzureContainerAppEnvironment("env");
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource Azure publishing/provisioning contracts with synthetic metadata.
         builder.AddProject<Project>("job", launchProfileName: null)
+#pragma warning restore CS0618
             .PublishAsAzureContainerApp((infra, app) => { })
             .PublishAsAzureContainerAppJob();
 
@@ -2609,19 +2668,19 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
 
         builder.AddAzureContainerAppEnvironment("env");
 
-#pragma warning disable ASPIREPROBES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
         builder
             .AddContainer("api", "myimage")
             .WithHttpEndpoint()
             .WithHttpProbe(ProbeType.Readiness, "/ready")
             .WithHttpProbe(ProbeType.Liveness, "/health");
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource Azure publishing/provisioning contracts with synthetic metadata.
         builder
             .AddProject<Project>("project1", launchProfileName: null)
+#pragma warning restore CS0618
             .WithHttpEndpoint()
             .WithHttpProbe(ProbeType.Readiness, "/ready", initialDelaySeconds: 60)
             .WithHttpProbe(ProbeType.Liveness, "/health");
-#pragma warning restore ASPIREPROBES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
         using var app = builder.Build();
 
@@ -2651,17 +2710,17 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
 
         builder.AddAzureContainerAppEnvironment("env");
 
-#pragma warning disable ASPIREPROBES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
         builder
             .AddContainer("api", "myimage")
             .WithHttpEndpoint(targetPort: 1111)
             .WithHttpProbe(ProbeType.Liveness, "/health");
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource Azure publishing/provisioning contracts with synthetic metadata.
         builder
             .AddProject<Project>("project1", launchProfileName: null)
+#pragma warning restore CS0618
             .WithHttpEndpoint(targetPort: 1111)
             .WithHttpProbe(ProbeType.Liveness, "/health");
-#pragma warning restore ASPIREPROBES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
         using var app = builder.Build();
 
@@ -2691,17 +2750,17 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
 
         builder.AddAzureContainerAppEnvironment("env");
 
-#pragma warning disable ASPIREPROBES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
         builder
             .AddContainer("api", "myimage")
             .WithHttpsEndpoint(targetPort: 1111)
             .WithHttpProbe(ProbeType.Liveness, "/health");
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource Azure publishing/provisioning contracts with synthetic metadata.
         builder
             .AddProject<Project>("project1", launchProfileName: null)
+#pragma warning restore CS0618
             .WithHttpsEndpoint(targetPort: 1111)
             .WithHttpProbe(ProbeType.Liveness, "/health");
-#pragma warning restore ASPIREPROBES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
         using var app = builder.Build();
 
@@ -2804,8 +2863,10 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
 
         var env = builder.AddAzureContainerAppEnvironment("env");
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource Azure publishing/provisioning contracts with synthetic metadata.
         var project = builder
             .AddProject<Project>("project1", launchProfileName: null)
+#pragma warning restore CS0618
             .WithHttpEndpoint();
 
         var endpointReferenceEx = env.Resource.GetHostAddressExpression(project.GetEndpoint("http"));
@@ -2835,13 +2896,13 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
         env.Resource.Outputs["AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN"] = "example.azurecontainerapps.io";
         env.Resource.ProvisioningTaskCompletionSource?.TrySetResult();
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource Azure publishing/provisioning contracts with synthetic metadata.
         var project = builder
             .AddProject<Project>("project1", launchProfileName: null)
+#pragma warning restore CS0618
             .WithEndpoint(port: 8080, targetPort: 5000, scheme: "http", name: "http", isExternal: true);
 
-#pragma warning disable ASPIRECOMPUTE002
         var expression = env.Resource.GetEndpointPropertyExpression(project.GetEndpoint("http").Property(property));
-#pragma warning restore ASPIRECOMPUTE002
 
         Assert.Equal(expected, await expression.GetValueAsync(default));
     }
@@ -2852,7 +2913,9 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputHelper);
 
         builder.AddAzureContainerAppEnvironment("env");
+#pragma warning disable CS0618 // Retain legacy ProjectResource Azure publishing/provisioning contracts with synthetic metadata.
         builder.AddProject<Project>("api", launchProfileName: null)
+#pragma warning restore CS0618
             .WithHttpEndpoint();
 
         using var app = builder.Build();
@@ -2876,7 +2939,9 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
 
         builder.AddAzureContainerAppEnvironment("env");
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource Azure publishing/provisioning contracts with synthetic metadata.
         builder.AddProject<Project>("api", launchProfileName: null)
+#pragma warning restore CS0618
             .WithHttpEndpoint();
 
         using var app = builder.Build();
@@ -2900,7 +2965,9 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
         builder.AddAzureContainerAppEnvironment("env")
             .WithAzureContainerRegistry(customRegistry);
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource Azure publishing/provisioning contracts with synthetic metadata.
         builder.AddProject<Project>("api", launchProfileName: null)
+#pragma warning restore CS0618
             .WithHttpEndpoint();
 
         using var app = builder.Build();
@@ -2939,7 +3006,9 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
         builder.AddAzureContainerAppEnvironment("env")
             .WithAzdResourceNaming();
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource Azure publishing/provisioning contracts with synthetic metadata.
         builder.AddProject<Project>("api", launchProfileName: null)
+#pragma warning restore CS0618
             .WithHttpEndpoint();
 
         using var app = builder.Build();
@@ -2966,13 +3035,17 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
         var appService = builder.AddAzureAppServiceEnvironment("appservice");
 
         // Project targeted to ACA
+#pragma warning disable CS0618 // Retain legacy ProjectResource Azure publishing/provisioning contracts with synthetic metadata.
         var webappaca = builder.AddProject<Project>("webappaca", launchProfileName: null)
+#pragma warning restore CS0618
             .WithHttpEndpoint()
             .WithExternalHttpEndpoints()
             .WithComputeEnvironment(aca);
 
         // Project targeted to App Service
+#pragma warning disable CS0618 // Retain legacy ProjectResource Azure publishing/provisioning contracts with synthetic metadata.
         var webappservice = builder.AddProject<Project>("webappservice", launchProfileName: null)
+#pragma warning restore CS0618
             .WithHttpEndpoint()
             .WithExternalHttpEndpoints()
             .WithComputeEnvironment(appService);
@@ -3041,7 +3114,9 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
 
         var redis = builder.AddRedis("cache");
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource Azure publishing/provisioning contracts with synthetic metadata.
         builder.AddProject<Project>("api", launchProfileName: null)
+#pragma warning restore CS0618
             .WithReference(redis);
 
         using var app = builder.Build();
@@ -3072,7 +3147,9 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
         var redis = builder.AddRedis("cache");
         redis.WithEndpoint("tcp", e => e.TlsEnabled = true);
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource Azure publishing/provisioning contracts with synthetic metadata.
         builder.AddProject<Project>("api", launchProfileName: null)
+#pragma warning restore CS0618
             .WithReference(redis);
 
         using var app = builder.Build();
@@ -3102,7 +3179,9 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
 
         var featureFlag = builder.AddParameter("enable-feature");
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource Azure publishing/provisioning contracts with synthetic metadata.
         var project = builder.AddProject<Project>("api", launchProfileName: null);
+#pragma warning restore CS0618
 
         project.WithEnvironment(context =>
         {
@@ -3143,7 +3222,9 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
         var featureFlag = builder.AddParameter("enable-feature");
         var connectionPrefix = builder.AddParameter("connection-prefix");
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource Azure publishing/provisioning contracts with synthetic metadata.
         var project = builder.AddProject<Project>("api", launchProfileName: null);
+#pragma warning restore CS0618
 
         project.WithEnvironment(context =>
         {
@@ -3184,7 +3265,9 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
         var outerFlag = builder.AddParameter("outer-flag");
         var innerFlag = builder.AddParameter("inner-flag");
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource Azure publishing/provisioning contracts with synthetic metadata.
         var project = builder.AddProject<Project>("api", launchProfileName: null);
+#pragma warning restore CS0618
 
         project.WithEnvironment(context =>
         {

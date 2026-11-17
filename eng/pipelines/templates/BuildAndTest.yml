@@ -54,14 +54,6 @@ parameters:
   - name: runPublish
     type: boolean
     default: false
-  # Set to true on jobs that should run Aspire.Templates.Tests inline after the
-  # main build (the unofficial pipeline does this — it has no separate
-  # template_tests stage). The restructured official pipeline runs templates in
-  # its own parallel `template_tests` stage and leaves this default off so the
-  # critical-path Windows Build job stays small.
-  - name: runTemplateTests
-    type: boolean
-    default: false
 
 steps:
   # Internal pipeline: Build with pack+sign
@@ -105,6 +97,23 @@ steps:
       displayName: 🟣Build
 
   - ${{ if ne(parameters.runAsPublic, 'true') }}:
+    # All same-build packages must exist before restoring template graphs. Keep the generated
+    # manifest under the existing CG scan root until the job's normal scan has completed.
+    - pwsh: |
+        & "$(Build.SourcesDirectory)/eng/scripts/generate-template-cgmanifest.ps1" `
+          -Configuration '${{ parameters.buildConfig }}'
+      displayName: 🟣Generate template component manifest
+
+    - task: 1ES.PublishPipelineArtifact@1
+      displayName: 🟣Publish template component manifest
+      inputs:
+        path: '$(Build.SourcesDirectory)/artifacts/cg/templates/cgmanifest.json'
+        artifactName: template-component-manifest
+        # Diagnostic inventory, not a shipping payload. 1ES SBOM generation expects an
+        # artifact directory and fails on this single-file path; existing shipping SBOMs remain enabled.
+        sbomEnabled: false
+        isProduction: false
+
     - ${{ if eq(parameters.validateNpmPackageSignatures, true) }}:
       - pwsh: |
           & "$(Build.SourcesDirectory)/eng/scripts/validate-npm-package-signatures.ps1" `
@@ -198,33 +207,6 @@ steps:
         inputs:
           PathtoPublish: '${{ parameters.repoArtifactsPath }}/packages/Release/vscode'
           ArtifactName: aspire-vscode-extension
-
-    # Template tests run inline here when the caller doesn't have a separate
-    # template_tests stage (the unofficial pipeline). The restructured official
-    # pipeline owns templates in its own parallel stage and leaves this off.
-    - ${{ if eq(parameters.runTemplateTests, true) }}:
-      - script: ${{ parameters.dotnetScript }}
-                build
-                tests/workloads.proj
-                /p:SkipPackageCheckForTemplatesTesting=true
-        displayName: 🟣Prepare sdks for templates testing
-
-      - script: ${{ parameters.buildScript }}
-                -build
-                -restore
-                -test
-                -configuration ${{ parameters.buildConfig }}
-                /bl:${{ parameters.repoLogPath }}/BuildTemplatesTests.binlog
-                $(_OfficialBuildIdArgs)
-                $(_InternalBuildArgs)
-                /p:SkipTests=false
-                -projects $(Build.SourcesDirectory)\tests\Aspire.Templates.Tests\Aspire.Templates.Tests.csproj
-        env:
-          RunOnlyBasicBuildTemplateTests: true
-          DEV_TEMP: $(Build.SourcesDirectory)\..
-          DOTNET_ROOT: $(Build.SourcesDirectory)\.dotnet
-          TEST_LOG_PATH: $(Build.SourcesDirectory)\artifacts\log\$(_BuildConfig)\Aspire.Templates.Tests
-        displayName: 🟣Run Template tests
 
   # Public pipeline - helix tests
   - ${{ if eq(parameters.runAsPublic, 'true') }}:

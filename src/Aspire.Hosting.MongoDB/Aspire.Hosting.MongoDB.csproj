@@ -12,6 +12,7 @@
   <ItemGroup>
     <Compile Include="$(SharedDir)ContainerReplCommand.cs" Link="Utils\ContainerReplCommand.cs" />
     <Compile Include="$(SharedDir)StringComparers.cs" Link="Utils\StringComparers.cs" />
+    <Compile Include="$(SharedDir)/Model/KnownRelationshipTypes.cs" LinkBase="Shared" />
   </ItemGroup>
 
   <ItemGroup>

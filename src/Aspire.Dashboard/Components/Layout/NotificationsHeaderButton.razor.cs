@@ -9,6 +9,8 @@ namespace Aspire.Dashboard.Components.Layout;
 
 public partial class NotificationsHeaderButton : ComponentBase, IDisposable
 {
+    private const int OverflowCount = 9;
+
     [Parameter, EditorRequired]
     public required Func<Task> OnClick { get; set; }
 

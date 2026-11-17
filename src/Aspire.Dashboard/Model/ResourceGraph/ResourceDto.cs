@@ -16,4 +16,5 @@ public sealed class ResourceDto
     public required string? EndpointUrl { get; init; }
     public required string? EndpointText { get; init; }
     public required ImmutableArray<string> ReferencedNames { get; init; }
+    public required bool IsHidden { get; init; }
 }

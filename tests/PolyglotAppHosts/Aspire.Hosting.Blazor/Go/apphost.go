@@ -9,13 +9,13 @@ import (
 func main() {
 	builder, err := aspire.CreateBuilder()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
-	weatherApi := builder.AddProject("weatherapi", "./src/WeatherApi",
-		&aspire.AddProjectOptions{LaunchProfileOrOptions: "http"})
-	timeApi := builder.AddProject("timeapi", "./src/TimeApi",
-		&aspire.AddProjectOptions{LaunchProfileOrOptions: "https"})
+	weatherApi := builder.AddDotnetProject("weatherapi", "./src/WeatherApi",
+		&aspire.AddDotnetProjectOptions{Options: &aspire.DotnetProjectOptions{LaunchProfileName: aspire.StringPtr("http")}})
+	timeApi := builder.AddDotnetProject("timeapi", "./src/TimeApi",
+		&aspire.AddDotnetProjectOptions{Options: &aspire.DotnetProjectOptions{LaunchProfileName: aspire.StringPtr("https")}})
 	timeApi.WithHttpsEndpoint(&aspire.WithHttpsEndpointOptions{Name: aspire.StringPtr("api")})
 
 	blazorApp := builder.AddBlazorWasmProject("app", "./src/Client/Client.csproj")
@@ -34,9 +34,9 @@ func main() {
 
 	app, err := builder.Build()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 	if err := app.Run(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 }

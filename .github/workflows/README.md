@@ -10,15 +10,22 @@ recompiling:
 gh extension upgrade aw
 gh aw version
 gh aw fix
-gh aw compile --force-refresh-action-pins
-gh aw compile
+gh aw compile --force-refresh-action-pins --schedule-seed microsoft/aspire
+node .github/workflows/auto-sec/publication-guard.js
+gh aw compile --schedule-seed microsoft/aspire
+node .github/workflows/auto-sec/publication-guard.js
 ```
+
+Each compilation replaces `auto-sec.lock.yml` with raw compiler output, so run
+`publication-guard.js` after every compile pass. Compare the hardened outputs of
+both passes to check that the complete generation sequence is idempotent.
 
 `gh aw fix` is a dry run unless `--write` is supplied. Its write mode also refreshes
 authoring agents and skills; apply source migrations deliberately rather than
 adding unrelated scaffolding. Keep the pinned `setup-cli` action and its `version`
 input in `copilot-setup-steps.yml` aligned with the compiler used to generate the
-workflows.
+workflows and with `validate-agentic-workflows.yml`. Updating only the setup
+action does not update the installed compiler; its `version` input controls that.
 
 Commit the generated `.lock.yml` files and `.github/aw/actions-lock.json` alongside
 their source changes. `agentics-maintenance-microsoft-aspire.dev.yml` is generated
@@ -26,10 +33,51 @@ by the same full compilation despite not having a `.lock.yml` suffix. Do not edi
 generated workflows manually. The second compilation should produce no further
 changes.
 
+Always pass `--schedule-seed microsoft/aspire` when generating workflows for this
+repository. The literal `microsoft/aspire` string and each workflow's identifier
+deterministically select a time for flexible schedules such as `daily around 9am`.
+Without an explicit seed, gh-aw derives the repository identity from Git remotes;
+forks or checkouts without a remote can generate a different cron expression than
+CI. Two compilations in the same checkout can agree while still differing from CI.
+The explicit seed preserves the canonical schedule regardless of checkout context.
+
+`validate-agentic-workflows.yml` recompiles with the pinned gh-aw version, checks
+for generated-file drift, runs `gh aw lint --shellcheck` as a blocking lint gate,
+and runs the `Category=AgenticWorkflow` contracts in `Infrastructure.Tests`.
+Class-level traits group generated-workflow, validation trigger/drift, and shared
+process-runner tests without including unrelated negative-test diagnostics.
+Apply this trait to new agentic contract classes so dedicated validation includes them.
+Main CI covers selector routing when the trigger map or lint policy changes.
+README-only changes do not trigger dedicated agentic validation; new Markdown
+workflow sources still trigger it even before their generated locks exist.
+
+Compile-time lint diagnostics alone are not a blocking gate. The lint command
+owns the actionlint image and compatibility exceptions; `.github/actionlint.yaml`
+is shared by both lint paths: it configures the runner label for handwritten
+workflow linting and scopes the known stale-check output workaround to the
+affected generated workflows. Main CI separately runs pinned core actionlint
+over handwritten workflows and their local actions through
+`lint-handwritten-workflows.sh`, which selects the files and excludes gh-aw output.
+The version and linux_amd64 archive SHA-256 are pinned in `.github/actionlint-version.json`,
+outside `.github/workflows`, so the Aspire bot can update them without workflow-write access.
+The weekly `update-actionlint.yml` workflow opens a draft PR when a newer release exists. It
+verifies the downloaded archive against the release API `sha256:` digest and lints the
+handwritten workflows with the candidate before proposing the bump. That digest comes from the
+same upstream release, so review the release notes; the committed hash then makes CI detect any
+later substitution of the archive. Manual dispatch defaults to `validate`, which does not change
+the updater branch or open a PR and is safe to run from a fork; `propose` runs only from the
+upstream repository's default branch and follows the scheduled PR-update path when a newer release
+is available. Scheduled and `propose` runs are serialized end to end by a shared concurrency
+group, so each run picks its release only after the previous run has pushed.
+
 Explicit action versions in Markdown survive recompilation, so update deprecated
 inputs and action runtimes in the sources, not just the generated YAML. The
 `client-id` input to `actions/create-github-app-token` replaces `app-id`; the
 existing `ASPIRE_BOT_APP_ID` secret remains the identity source.
+
+Action upgrades must update Markdown references before regenerating locks and
+the action-pin cache. A generated-only pin update is not reproducible and the
+drift check rejects it, even if the changed action versions are otherwise valid.
 
 The compiler's diagnostic `agent` artifact does not include arbitrary files from
 `/tmp/gh-aw/agent/`. Workflows that publish custom agent files must upload a named
@@ -42,96 +90,159 @@ Node 20 action. There is no supported Node 24 upgrade for that dependency;
 replacing it requires a separate migration of its authentication and locking
 behavior, rather than merely changing an action pin.
 
-## Main to Release 14.0 Synchronization
+## Auto-sec dependency reconciliation
 
-`sync-main-to-release-14.yml` keeps the advance `release/14.0` integration branch
-up to date while `main` develops 13.6. It runs daily at **08:23 UTC** and can be
-dispatched manually, but only from `main` in `microsoft/aspire`.
+`auto-sec.md` runs every 12 hours (and on demand). It reconciles open Dependabot
+alerts, including malware alerts, and version-mapped code scanning alerts against
+open Dependabot PRs. Pure code findings are out of scope. Only npm (npm, yarn,
+pnpm), pip (`uv.lock`, `pyproject.toml`), NuGet (`Directory.Packages.props`), and
+GitHub Actions alerts are handled; alerts in other ecosystems, such as Maven,
+Gradle, Go, Cargo, or `requirements.txt`, are reported as blocked.
 
-The workflow uses the existing Aspire App secrets (`ASPIRE_BOT_APP_ID` and
-`ASPIRE_BOT_PRIVATE_KEY`) with repository-scoped contents and pull-request write
-permissions. It only calls GitHub APIs; it never checks out or executes branch
-code with the bot token.
+Dependabot coverage collection fails on GitHub API errors instead of treating
+unavailable contents as an absent file. Paginated REST file statuses identify
+added/deleted sides and the original path of renamed files; missing expected
+contents stop reconciliation before the agent can propose a duplicate fix.
 
-The token deliberately uses the App's existing permissions, without requesting
-workflow-write access or requiring an installation permission update. Synchronizing
-already-existing workflow files with these permissions still needs live validation.
-If GitHub rejects a sync involving workflow files, the run fails visibly and a
-maintainer can complete that sync manually, using a merge commit. Investigate the
-actual failure before requesting broader App permissions; do not drop workflow
-changes from the sync or substitute more privileged credentials automatically.
+- **Dependabot PRs** that fix an open alert are approved by the Aspire bot App only
+  when `.github/workflows/auto-sec/auto-sec.js` re-verifies every gate in the
+  `approve_dependabot_pr` safe-output job. The gates are:
+  - only manifest or lock files change, every commit is a GitHub-verified
+    commit authored by Dependabot, and `package.json`, `pyproject.toml`, and
+    `Directory.Packages.props` change only one version token on dependency-version
+    lines (for `package.json`, only inside the dependency, override, and resolution
+    maps, with only single-bound npm selectors eligible for edits; compound
+    selectors may remain unchanged)
+  - no package source or feed is added (only the dnceng public feeds and sources the
+    file already uses are accepted)
+  - the alert's own manifest is changed and carries the fixed version, and no copy
+    of the package there stays below it or inside any range the advisory lists
+  - CI and statuses are green, and the PR head is unchanged when the review is submitted
+  - every package version the diff introduces, listed in the PR body or not, stays
+    within the same major version (same minor for `0.x`) and was published at least
+    7 days ago
+  - no package the diff changes has an open malware alert (those always need a human
+    review)
+- Approval API, input, and summary failures fail the job with fixed
+  `gate-evaluation-failed` or `approval-submission-failed` reason codes, not raw
+  exception text. Unconfirmed submissions do not count as confirmed approvals,
+  but still consume the submission quota because the remote review may have succeeded.
+- **Remaining alerts** are fixed in a single `[auto-sec]` PR on
+  `auto-sec/security-updates`, labeled `auto-sec`. Later runs update that PR
+  instead of opening another one. A deterministic step in the safe-outputs job
+  fails the run if the agent asks to push to any PR other than the open
+  `auto-sec/security-updates` PR from this repository. A second step checks the
+  agent's patch (sent with the `am` transport so the checked patch is the one
+  applied) and fails the run unless each changed manifest, rebuilt in full from
+  the base blob the patch names, differs only in dependency versions, or if any
+  file adds an unapproved package source. NuGet bumps are made only when the fixed version
+  already restores from an approved dnceng feed that `NuGet.config` package source
+  mapping assigns to the package. Otherwise the alert is reported as blocked on
+  mirroring.
+- The PR body and run summaries intentionally contain only package and version
+  summaries, never advisory details. Before publication, safe-output objects are
+  rebuilt from validated primitive fields; extra properties and unused transport
+  metadata are stripped rather than copied into public artifacts.
+  Code-writing requests are mutually exclusive, and version policy is checked
+  separately for each patch artifact so overlapping paths cannot hide an update.
+  All lockfile additions accept only recognized dependency-data syntax, not new
+  free-text metadata. JSON additions also require schema-defined locations in the
+  reconstructed npm lockfile, not merely package/version-shaped keys; duplicate
+  properties are rejected because parsing would discard earlier values. Unchanged
+  pre-existing metadata is preserved. New override/resolution entries and unsupported
+  lockfile metadata require human intervention and are reported as `update-failed`.
+  Every patch artifact must contain a reconstructed dependency version change;
+  metadata-only patches are rejected. Regenerated package metadata must belong to
+  the specific installed entry whose version changes, not an unchanged copy of
+  that package or an unrelated upgrade. New or re-keyed entries at a version already
+  installed must preserve its existing metadata. npm project/package identities
+  remain unchanged. npm workspace-root selectors and pnpm importer/snapshot
+  references can regenerate only against installed targets with matching version
+  transitions; they cannot authorize changing the consumer's artifact metadata.
+  Other regeneration on unchanged owners requires human intervention.
+  Compound npm selector edits also require human intervention: reducing `>=1 <2`
+  to its first bound cannot prove changes to the other bounds non-breaking.
+  Public summary rows are bound to reconstructed manifest/package/version changes,
+  covering every update exactly once per manifest/package/target in the emitted batch.
+  Commit and push summaries instead cover each distinct package/from/target tuple
+  exactly once, including all prior versions and coalescing identical tuples across
+  manifests. Each commit is bound to its own reconstructed changes; the push message
+  covers the complete batch. Empty, partial, and normalized duplicate summaries
+  cannot authorize publication. Intermediate-only targets absent from final files
+  remain blocked by the final-state version-policy boundary.
+  A created PR's fixed body explicitly identifies its table as the initial batch,
+  not a cumulative inventory; subsequent updates remain in validated commit messages
+  and the full branch diff. A live cumulative body refresh is not implemented.
+  Counts-only reports require unique, positive blocked-reason counts whose sum equals the blocked total;
+  the breakdown is omitted only when that total is zero.
+  Manifest paths must be canonical repository-relative paths; dot-segment aliases,
+  rooted paths, backslashes, and empty path segments cannot authorize publication.
+  Reconstruction, version-only manifest edits, source authorization, and artifact
+  binding are checked before public artifact upload, not just before application.
+  Patch transport also rejects opaque preambles, dates, diffstat text, metadata,
+  and newline markers; hunk context labels must originate in the trusted base.
+  Dependabot approval requires the current base commit to be an ancestor of the
+  requested head, so the patched head proves the merge result rather than omitting
+  newer base-side occurrences. The base SHA and ancestry are rechecked before
+  submission; API failures or a moved base prevent approval.
+  Changed yarn/pnpm fields must occupy supported schema locations in the rebuilt
+  file; version-shaped scalars in arbitrary fields and changed duplicate keys
+  cannot authorize publication. Unsupported legacy fields may remain unchanged
+  at their original locations but cannot regenerate alongside an upgrade.
+  Only the canonical patch filenames are accepted; opaque bundles and symlinks
+  are rejected. Framework base-commit headers are supported as typed SHAs bound,
+  like output transport metadata, to the workflow snapshot or live auto-sec ref.
+  The pre-upload scrub reads bases from the immutable workflow checkout and the
+  bot-owned branch, not arbitrary agent-written blobs; unavailable bases block
+  publication. Pushes to an existing auto-sec PR also require its author to match
+  the configured Aspire bot identity; the branch name alone cannot authorize reuse.
+  Create requests also pass a live gate before the handler can recreate the ref:
+  any open PR using that branch blocks creation. An existing ref is reusable only
+  when its current SHA matches a closed bot-authored auto-sec PR in this repository
+  targeting main with the expected label and title; unowned or moved refs fail closed.
+  Approval comparisons preserve renamed manifests' original paths. Only explicit
+  added/removed file statuses permit an empty side; missing expected contents or
+  unsupported rename metadata blocks evaluation rather than hiding prior versions.
+  uv local-source descriptors count as delivery sources,
+  and pnpm tarball binding covers both inline and block-style resolution tables.
+  Before backend startup, the runner exclusively creates the safe-output file
+  with mode `0600`. Container appends therefore preserve runner ownership so
+  the post-agent scrub can rewrite it; an existing file blocks initialization.
+  Collection also snapshots aggregate alert and excluded-code-finding counts
+  beside the trusted gate module, outside the agent's writable mounts. Public
+  reports must match those totals and assign every in-scope alert exactly one
+  disposition; contradictory counts, duplicate reports, and unavailable or invalid
+  snapshots block publication.
+  The writable framework directory retains only validated safe outputs and patches:
+  all other entries, including prompts and telemetry, are removed before summaries
+  can consume them. Telemetry-dependent framework steps report that telemetry is
+  withheld rather than parsing agent-written files or fabricating zero metrics.
+  The compiler hardening also redirects the gateway and agent host-shell stdout
+  and stderr to `/dev/null` before execution, including inherited child streams.
+  Alert collection suppresses its own diagnostics. Pre-scrub error detection and
+  secret-redaction parsers are withheld because they can re-emit private log data;
+  their transcript-derived classifications are unavailable, not reported as zero.
+  GitHub still records actual execution failures and exit statuses. Unsupported
+  execution layouts fail compilation rather than silently losing this boundary.
 
-Each batch creates a `sync/main-to-release-14.0/<main-sha>` branch pointing at a
-snapshot of `main`, then opens a PR into `release/14.0`. There is at most one open
-sync PR. An open PR is reconciled rather than replaced or force-pushed, preserving
-manual conflict resolutions and avoiding CI churn. Commits arriving on `main`
-while that PR is open are picked up by the next run after it merges.
+Prerequisites:
+- The `auto-sec` label must exist.
+- The Aspire bot App needs pull request write access, and contents write access to
+  push the `auto-sec` branch.
 
-### Auto-merge prerequisites
+Because the compiler's Windows build mis-handles redaction paths, compile this
+workflow on Linux or WSL.
 
-- Enable **Allow merge commits** and **Allow auto-merge** in repository settings.
-- Allow merge commits in every ruleset applying to `release/14.0`. A separate
-  `main` ruleset can continue requiring squash merges for normal feature PRs.
-- Ensure branch push restrictions allow the Aspire App to merge. Required status
-  checks and reviews are respected, not bypassed or self-approved by the bot.
-
-With an approval requirement, a maintainer still needs to approve each PR; it
-then merges automatically when the remaining requirements pass. Fully unattended
-merges also require a deliberate branch-policy decision about reviews. The
-workflow does not change any repository settings or branch protections.
-
-To exempt only the App from approvals, use an approval-only ruleset targeting
-exactly `release/14.0`, with the Aspire App in its bypass list using **For pull
-requests only**. Keep required CI (including `Final Results`) in a **separate**
-ruleset without an App bypass. Keep force-push and deletion protections outside
-the bypassable ruleset too. Remove or adjust overlapping approval requirements,
-including classic branch protection: a more permissive ruleset does not override
-another rule. The bypass is granted to the merging App, not to a PR author; this
-workflow additionally verifies the PR's bot author, repository, branch prefix,
-and workflow marker before requesting a merge.
-
-Native auto-merge is intentionally the only deferred merge mechanism here.
-There are [reports that App approval bypasses are not honored by native
-auto-merge](https://github.com/orgs/community/discussions/190610), even when the
-normal merge API honors them. If a sync PR remains blocked on approval after CI
-passes, approve it manually; a CI-completion merge handler can be considered
-later. Do not solve that problem by giving the App permission to bypass CI.
-See GitHub's [bypass configuration](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/creating-rulesets-for-a-repository#granting-bypass-permissions-for-your-branch-or-tag-ruleset)
-and [rule layering](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/about-rulesets#about-rule-layering)
-documentation.
-
-If repository merge commits or auto-merge are disabled, the workflow leaves the
-PR open, warns in the run summary, and retries on the next run. Conflicts likewise
-leave an actionable PR open. Immediately mergeable states (`clean`, `has_hooks`,
-and `unstable`, matching GitHub CLI) use a normal merge commit with an expected-head
-check, without an administrative bypass. GitHub still enforces non-bypassable
-required checks, and a rejected merge fails the run rather than being ignored. If
-GitHub has not computed mergeability after a short retry window, rerun the
-workflow from `main` or let the next daily run reconcile it. Other API or
-permission failures fail the run and are covered by the scheduled-workflow watchdog.
-
-### Resolving conflicts
-
-Fetch and check out the sync PR's branch, merge `origin/release/14.0` into it,
-resolve conflicts, and push to that same branch. Keep the **14.0** version in
-`eng/Versions.props` when resolving version conflicts; other dependency changes
-from `main` should still flow forward. The next run retries enabling auto-merge.
-
-Never resolve these conflicts by merging `release/14.0` into `main`: doing so
-would leak 14.0-only changes into 13.6. Always merge sync PRs using **merge commits**,
-not squash or rebase, so Git can recognize already-integrated main commits.
-
-### Ending the temporary branch arrangement
-
-1. Create `release/13.6` from `main` for stabilization.
-2. Disable this workflow in Actions, cancel any queued/active runs, and merge or
-   close any outstanding sync PR before starting the reverse integration.
-3. Merge `release/14.0` back into `main`, preserving its 14.0 version. Prefer a
-   merge commit for this one-off integration too; a squash-only `main` ruleset
-   needs a temporary exception if preserving that ancestry.
-4. Remove the temporary synchronization workflow and its watchdog entry from
-   `monitor-scheduled-workflows.config.json`. `main` now develops 14.0; 13.6 fixes
-   can follow the normal release-branch backmerge process.
+After compiling `auto-sec`, run
+`node .github/workflows/auto-sec/publication-guard.js`. The pinned compiler emits
+`always()` on post-agent publication steps without a custom scrub-success hook.
+This deterministic compilation pass gates every step after the scrub on both its
+successful outcome and explicit `publication_ready` output. CI applies the same
+pass before checking generated-file drift. It also restricts both uploads to
+validated safe-output files and the two canonical patch filenames; no framework
+logs, prompts, telemetry, or opaque bundles are uploaded. Failed or skipped scrubbing blocks
+summaries, output ingestion, and both artifact uploads even when filesystem errors
+leave private files on disk. Do not replace this gate with best-effort deletion.
 
 ## Quarantine/Disable Test Workflow
 

@@ -284,6 +284,7 @@ internal static class ExecutableState
 internal sealed class Executable : CustomResource<ExecutableSpec, ExecutableStatus>, IKubernetesStaticMetadata
 {
     public const string LaunchConfigurationsAnnotation = "executable.usvc-dev.developer.microsoft.com/launch-configurations";
+    public const string SensitiveEffectiveArgumentIndexesAnnotation = "executable.usvc-dev.developer.microsoft.com/sensitive-effective-argument-indexes";
 
     [JsonConstructor]
     public Executable(ExecutableSpec spec) : base(spec) { }

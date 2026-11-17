@@ -17,6 +17,7 @@
     <AspireProjectOrPackageReference Include="Aspire.Hosting.Azure" />
     <AspireProjectOrPackageReference Include="Aspire.Hosting.Azure.Sql" />
     <AspireProjectOrPackageReference Include="Aspire.Hosting.AppHost" />
+    <AspireProjectOrPackageReference Include="Aspire.Hosting.Dotnet" />
     <AspireProjectOrPackageReference Include="Aspire.Hosting.EntityFrameworkCore" />
 
     <ProjectReference Include="..\SqlServerEndToEnd.ApiService\SqlServerEndToEnd.ApiService.csproj" />

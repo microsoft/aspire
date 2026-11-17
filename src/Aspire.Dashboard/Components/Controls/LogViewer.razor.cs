@@ -1,11 +1,10 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Globalization;
 using System.Text;
-using Aspire.Dashboard.Extensions;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Resources;
+using Aspire.Dashboard.Utils;
 using Aspire.Shared.ConsoleLogs;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web.Virtualization;
@@ -30,7 +29,6 @@ public sealed partial class LogViewer
             : HashCode.Combine(item.Type, item.LineNumber));
     private static readonly MarkupString s_spaceMarkup = new MarkupString("&#32;");
 
-    private readonly EndAnchorItemsProviderState _endAnchorItemsProviderState = new();
     private LogEntries? _logEntries;
 
     private IList<LogEntry>? _visibleEntriesCache;
@@ -138,11 +136,6 @@ public sealed partial class LogViewer
     {
         var entries = GetVisibleEntries();
 
-        if (_endAnchorItemsProviderState.GetInitialResult(r.StartIndex, entries, entries.Count) is { } initialResult)
-        {
-            return ValueTask.FromResult(new ItemsProviderResult<LogEntry>(initialResult.Items, initialResult.TotalItemCount));
-        }
-
         return ValueTask.FromResult(new ItemsProviderResult<LogEntry>(entries.Skip(r.StartIndex).Take(r.Count), entries.Count));
     }
 
@@ -226,8 +219,6 @@ public sealed partial class LogViewer
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        var refreshForEndAnchor = _endAnchorItemsProviderState.TryBeginRefresh();
-
         if (_visibleEntriesChanged)
         {
             _visibleEntriesChanged = false;
@@ -238,10 +229,7 @@ public sealed partial class LogViewer
             // force a second full scan of the log buffer.
             await RefreshVirtualizeAsync();
         }
-        else if (refreshForEndAnchor)
-        {
-            await RefreshVirtualizeAsync();
-        }
+
         if (firstRender)
         {
             Logger.LogDebug("Initializing log viewer.");
@@ -255,8 +243,8 @@ public sealed partial class LogViewer
     private string GetDisplayTimestamp(DateTimeOffset timestamp)
     {
         return IsTimestampUtc
-            ? timestamp.UtcDateTime.ToString(KnownFormats.ConsoleLogsUITimestampUtcFormat, CultureInfo.InvariantCulture)
-            : TimeProvider.ToLocal(timestamp).ToString(KnownFormats.ConsoleLogsUITimestampLocalFormat, CultureInfo.InvariantCulture);
+            ? FormatHelpers.FormatUtcDateTime(TimeProvider, timestamp.UtcDateTime)
+            : FormatHelpers.FormatDateTime(TimeProvider, timestamp.UtcDateTime);
     }
 
     private string GetLogContainerClass()

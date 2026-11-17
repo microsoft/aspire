@@ -1,0 +1,132 @@
+﻿@namespace Aspire.Dashboard.Components
+
+@using Aspire.Dashboard.Resources
+@inject IStringLocalizer<ControlsStrings> ControlsStringsLoc
+@inject IStringLocalizer<Aspire.Dashboard.Resources.Layout> Loc
+@inject IStringLocalizer<Aspire.Dashboard.Resources.Resources> ResourcesLoc
+
+@* The resource pane's filters. A popover rather than a menu: choosing values must not close it or move focus, it
+   scrolls when there is more than fits, and its sections collapse so a long list of tags doesn't push the others off
+   screen. *@
+<span class="resource-pane-filter">
+    <FluentButton @ref="_button"
+                  Id="@ButtonId"
+                  Class="resource-pane-button"
+                  Style="@($"anchor-name: --{ButtonId}")"
+                  IconOnly="true"
+                  Appearance="@(IsFiltered ? ButtonAppearance.Primary : ButtonAppearance.Default)"
+                  @onclick="TogglePopover"
+                  aria-haspopup="dialog"
+                  aria-expanded="@(_isOpen ? "true" : "false")"
+                  data-tooltip="@Title"
+                  data-tooltip-positioning="above"
+                  aria-label="@Title">
+        <FluentIcon Value="@(new Icons.Regular.Size16.Filter())" Color="Color.Custom" CustomColor="currentColor" />
+    </FluentButton>
+
+    <FluentPopover AnchorId="@ButtonId"
+                   Opened="@_isOpen"
+                   OpenedChanged="@OnOpenedChanged"
+                   Class="resource-filter-popover"
+                   Style="@($"--resource-filter-anchor: --{ButtonId};")">
+        @if (_isOpen)
+        {
+            var groups = Groups();
+            var counts = GetCounts(groups);
+            <div class="resource-filter" role="group" aria-label="@Title" @onkeydown="OnKeyDownAsync">
+                <div class="resource-filter-header">
+                    <FluentIcon Value="@(new Icons.Regular.Size16.Filter())"
+                                Width="16px"
+                                Class="resource-filter-header-icon"
+                                Color="Color.Custom"
+                                CustomColor="currentColor" />
+                    <strong class="resource-filter-header-title">@Title</strong>
+                </div>
+                <div class="resource-filter-body">
+                    @foreach (var group in groups)
+                    {
+                        var options = group.Values.ToArray().OrderBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase).ToList();
+                        var trailingOptions = group.TrailingOptions ?? [];
+                        var optionCount = options.Count + trailingOptions.Count;
+                        var selectedCount = options.Count(pair => pair.Value) + trailingOptions.Count(option => option.IsVisible());
+                        var isExpanded = IsExpanded(group, options);
+                        var allState = selectedCount == optionCount ? true : selectedCount == 0 ? false : (bool?)null;
+
+                        <section class="resource-filter-group" @key="group.Id">
+                            <button type="button"
+                                    class="resource-filter-group-header"
+                                    aria-expanded="@(isExpanded ? "true" : "false")"
+                                    @onclick="@(() => ToggleGroup(group.Id, isExpanded))">
+                                <span class="resource-filter-group-name">@group.Header</span>
+                                @if (allState != true)
+                                {
+                                    @* Only a group that filters something says so. A group that shows everything stays quiet. *@
+                                    <span class="resource-filter-group-summary" data-tooltip="@($"{selectedCount}/{optionCount}")">@selectedCount/@optionCount</span>
+                                }
+                                <span class="resource-filter-chevron @(isExpanded ? null : "collapsed")" aria-hidden="true">
+                                    <FluentIcon Value="@(new Icons.Regular.Size12.ChevronDown())" Color="Color.Custom" CustomColor="currentColor" />
+                                </span>
+                            </button>
+
+                            @if (isExpanded)
+                            {
+                                <div class="resource-filter-options">
+                                    <FluentCheckbox Label="@ControlsStringsLoc[nameof(ControlsStrings.LabelAll)]"
+                                                    Class="aspire-checkbox"
+                                                    ThreeState="true"
+                                                    ShowIndeterminate="false"
+                                                    ThreeStateOrderUncheckToIntermediate="true"
+                                                    Value="@(allState is true)"
+                                                    @bind-CheckState:get="allState"
+                                                    @bind-CheckState:set="@(state => SetAllAsync(group, state is true))" />
+                                    @foreach (var (key, isChecked) in options)
+                                    {
+                                        var label = group.GetText?.Invoke(key) ?? (string.IsNullOrEmpty(key) ? ResourcesLoc[nameof(Aspire.Dashboard.Resources.Resources.ResourceFilterOptionEmpty)] : key);
+                                        <div class="resource-filter-option" @key="@($"{group.Id}:{key}")">
+                                            <FluentCheckbox Label="@label"
+                                                            Class="aspire-checkbox"
+                                                            data-tooltip="@label"
+                                                            @bind-Value:get="isChecked"
+                                                            @bind-Value:set="@(value => SetValueAsync(group, key, value))" />
+                                            <span class="resource-filter-count" aria-hidden="true">@counts[group.Id].GetValueOrDefault(key)</span>
+                                        </div>
+                                    }
+                                    @foreach (var option in trailingOptions)
+                                    {
+                                        var isVisible = option.IsVisible();
+                                        <div class="resource-filter-option" @key="@($"{group.Id}:trailing:{option.Key}")">
+                                            <FluentCheckbox Label="@option.Label"
+                                                            Class="aspire-checkbox"
+                                                            data-tooltip="@option.Label"
+                                                            @bind-Value:get="isVisible"
+                                                            @bind-Value:set="@(value => SetOptionAsync(option, value))" />
+                                            <span class="resource-filter-count" aria-hidden="true">@option.GetCount()</span>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </section>
+                    }
+                </div>
+
+                @* Changes apply as they are made. OK only closes the popover, so there is always a way to dismiss it. *@
+                <div class="resource-filter-footer">
+                    @* aria-disabled as well as Disabled: the disabled attribute on the custom element isn't a native one, so
+                       accessibility checkers and assistive technology otherwise read the dimmed button as an active one. *@
+                    <FluentButton Appearance="ButtonAppearance.Default"
+                                  Class="resource-filter-reset"
+                                  Disabled="@(!IsFiltered)"
+                                  aria-disabled="@(!IsFiltered ? "true" : null)"
+                                  OnClick="@ResetAsync">
+                        @Loc[nameof(Aspire.Dashboard.Resources.Layout.ResourcePaneFilterReset)]
+                    </FluentButton>
+                    <FluentButton Appearance="ButtonAppearance.Primary"
+                                  Class="resource-filter-done"
+                                  OnClick="@Close">
+                        @Loc[nameof(Aspire.Dashboard.Resources.Layout.ResourcePaneFilterDone)]
+                    </FluentButton>
+                </div>
+            </div>
+        }
+    </FluentPopover>
+</span>

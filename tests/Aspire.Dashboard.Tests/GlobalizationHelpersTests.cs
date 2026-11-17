@@ -89,7 +89,6 @@ public class GlobalizationHelpersTests
 
     [Theory]
     [InlineData("en", "en-US", "en-US")]
-    // ASP.NET Core only falls back to parent cultures for predefined cultures.
     [InlineData("en", "en-XX", null)]
     [InlineData("de", "en-US", null)]
     [InlineData("zh-Hans", "en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7", "zh-CN")]

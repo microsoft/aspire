@@ -9,6 +9,10 @@ import { AspireTerminalProvider } from './utils/AspireTerminalProvider';
 import { AspireEditorCommandProvider } from './editor/AspireEditorCommandProvider';
 import type { AspireDebugConsoleOutputEvent } from './types/extensionApi';
 import { extensionLogOutputChannel } from './utils/logging';
+import type { AppHostDataRepository } from './data/AppHostDataRepository';
+import { resetEditorAssistanceWindowState } from './services/editorAssistanceWindowState';
+import { type EditorResourceSessionSnapshot } from './services/appHostLaunchContracts';
+import { getOrCreateIdentityForCurrentAppHostTarget, type OpaqueAppHostIdentity } from './utils/appHostIdentity';
 
 export class AspireExtensionContext implements vscode.Disposable {
     private static readonly _cliStopTimeoutMs = 5_000;
@@ -19,6 +23,7 @@ export class AspireExtensionContext implements vscode.Disposable {
     private _debugConfigProvider?: AspireDebugConfigurationProvider;
     private _terminalProvider?: AspireTerminalProvider;
     private _editorCommandProvider?: AspireEditorCommandProvider;
+    private _dataRepository?: Pick<AppHostDataRepository, 'shutdown' | 'dispose'>;
 
     private _aspireDebugSessions: AspireDebugSession[] = [];
     private readonly _debugSessionStateSubscriptions = new Map<string, vscode.Disposable>();
@@ -35,13 +40,14 @@ export class AspireExtensionContext implements vscode.Disposable {
     readonly onDidChangeDebugSessions = this._onDidChangeDebugSessions.event;
     readonly onDidReceiveDebugConsoleOutput = this._onDidReceiveDebugConsoleOutput.event;
 
-    initialize(rpcServer: AspireRpcServer, extensionContext: vscode.ExtensionContext, debugConfigProvider: AspireDebugConfigurationProvider, dcpServer: AspireDcpServer, terminalProvider: AspireTerminalProvider, editorCommandProvider: AspireEditorCommandProvider): void {
+    initialize(rpcServer: AspireRpcServer, extensionContext: vscode.ExtensionContext, debugConfigProvider: AspireDebugConfigurationProvider, dcpServer: AspireDcpServer, terminalProvider: AspireTerminalProvider, editorCommandProvider: AspireEditorCommandProvider, dataRepository: Pick<AppHostDataRepository, 'shutdown' | 'dispose'>): void {
         this._rpcServer = rpcServer;
         this._extensionContext = extensionContext;
         this._debugConfigProvider = debugConfigProvider;
         this._dcpServer = dcpServer;
         this._terminalProvider = terminalProvider;
         this._editorCommandProvider = editorCommandProvider;
+        this._dataRepository = dataRepository;
     }
 
     get rpcServer(): AspireRpcServer {
@@ -77,6 +83,48 @@ export class AspireExtensionContext implements vscode.Disposable {
         // Disposed sessions can remain tracked only as CLI process owners. They must still be
         // visible to deactivation, but not to RPC lookups or extension-state snapshots.
         return this._aspireDebugSessions.filter(session => !session.isDisposed);
+    }
+
+    get editorResourceSessions(): readonly EditorResourceSessionSnapshot[] {
+        return this.aspireDebugSessions.flatMap(session =>
+            session.editorResourceSessions.map(resourceSession => ({
+                appHostPath: resourceSession.appHostPath,
+                ...(resourceSession.appHostIdentity === undefined
+                    ? {}
+                    : { appHostIdentity: resourceSession.appHostIdentity }),
+                targetPath: resourceSession.targetPath,
+                ...(resourceSession.resourceExecutablePaths === undefined
+                    ? {}
+                    : { resourceExecutablePaths: [...resourceSession.resourceExecutablePaths] }),
+                state: resourceSession.state,
+                mode: resourceSession.mode,
+            })));
+    }
+
+    getAspireDebugSessionsForAppHostIdentity(identity: OpaqueAppHostIdentity): readonly AspireDebugSession[] {
+        return this.aspireDebugSessions.filter(session => {
+            const appHostPath = session.resolvedAppHostPath ?? session.appHostPath;
+            return session.operationKind === 'run' &&
+                appHostPath !== undefined &&
+                (session.appHostIdentity ?? getOrCreateIdentityForCurrentAppHostTarget(appHostPath)) === identity;
+        });
+    }
+
+    getAspireDebugSessionDashboardOwners(): readonly {
+        readonly appHostIdentity: OpaqueAppHostIdentity;
+        readonly session: AspireDebugSession;
+    }[] {
+        return this.aspireDebugSessions.flatMap(session => {
+            const appHostPath = session.resolvedAppHostPath ?? session.appHostPath;
+            if (session.operationKind !== 'run' || appHostPath === undefined) {
+                return [];
+            }
+
+            return [{
+                appHostIdentity: session.appHostIdentity ?? getOrCreateIdentityForCurrentAppHostTarget(appHostPath),
+                session,
+            }];
+        });
     }
 
     addAspireDebugSession(debugSession: AspireDebugSession) {
@@ -170,6 +218,7 @@ export class AspireExtensionContext implements vscode.Disposable {
     }
 
     private async _deactivateCore(): Promise<void> {
+        const dataShutdown = this._shutdownDataRepository();
         let stopFailures: unknown[] = [];
         try {
             // Finish debugger shutdown before asking the CLI to exit. A cooperative CLI stop can
@@ -178,15 +227,13 @@ export class AspireExtensionContext implements vscode.Disposable {
             stopFailures = await this._waitForOrderedDebugSessionStops();
             await this._waitForCliStopRequests();
 
-            // A session can be registered while the CLI requests are settling, after the initial
-            // ordered-stop drain has closed. Those sessions are refused as context owners and run
-            // their complete ordered/CLI/process finalization through this tracked drain.
             this._isShutdownRegistrationClosed = true;
-            stopFailures.push(...await this._drainLateDebugSessionStops(true));
         }
         finally {
-            await this._forceTerminateCliProcesses();
-            this._disposeCore();
+            stopFailures.push(...await dataShutdown);
+            // Data cleanup can admit more late debug sessions. Keep the final drain and its
+            // atomic empty-check-and-dispose step after that cleanup settles.
+            stopFailures.push(...await this._drainLateDebugSessionStops(true));
         }
 
         if (stopFailures.length === 1) {
@@ -194,6 +241,16 @@ export class AspireExtensionContext implements vscode.Disposable {
         }
         if (stopFailures.length > 1) {
             throw new AggregateError(stopFailures);
+        }
+    }
+
+    private async _shutdownDataRepository(): Promise<unknown[]> {
+        try {
+            await this._dataRepository?.shutdown();
+            return [];
+        }
+        catch (error) {
+            return [error];
         }
     }
 
@@ -402,6 +459,8 @@ export class AspireExtensionContext implements vscode.Disposable {
         }
 
         this._isDisposed = true;
+        this._dataRepository?.dispose();
+        resetEditorAssistanceWindowState();
         this._debugSessionStateSubscriptions.forEach(disposable => disposable.dispose());
         this._debugSessionStateSubscriptions.clear();
         this._debugSessionOutputSubscriptions.forEach(disposable => disposable.dispose());

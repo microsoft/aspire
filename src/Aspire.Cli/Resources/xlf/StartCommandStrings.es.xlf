@@ -4,7 +4,7 @@
     <body>
       <trans-unit id="Description">
         <source>Start an AppHost in the background</source>
-        <target state="new">Start an AppHost in the background</target>
+        <target state="translated">Iniciar un AppHost en segundo plano</target>
         <note />
       </trans-unit>
     </body>

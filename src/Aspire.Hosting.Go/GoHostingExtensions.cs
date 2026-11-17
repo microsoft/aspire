@@ -2,8 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREEXTENSION001
-#pragma warning disable ASPIREDOCKERFILEBUILDER001
-#pragma warning disable ASPIREPIPELINES001
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.ApplicationModel.Docker;
@@ -161,6 +159,10 @@ public static class GoHostingExtensions
             })
             .WithRequiredCommand("go", "https://go.dev/dl/")
             .WithOtlpExporter()
+            // Go has no standard host flag. Bind locally in run mode to avoid exposing the app on
+            // network interfaces; published containers must listen on all interfaces.
+            .WithEnvironment("HOST", builder.ExecutionContext.IsPublishMode ? "0.0.0.0" : "localhost")
+            .ConfigureGoCertificateTrust()
             .WithVSCodeDebugging()
             .PublishAsDockerFile(containerBuilder =>
             {
@@ -310,6 +312,43 @@ public static class GoHostingExtensions
             rb.WithAnnotation(new GoRaceDetectorAnnotation(), ResourceAnnotationMutationBehavior.Replace);
         }
 
+        if (builder.ExecutionContext.IsPublishMode &&
+            builder.TryCreateResourceBuilder<ContainerResource>(resource.Name, out var containerBuilder))
+        {
+            var validationStepName = $"validate-go-dockerfile-package-path-{resource.Name}";
+
+            // The step is added to the pipeline instead of as a PipelineStepAnnotation on the container because
+            // WithDockerfile replaces the container's step annotation, which would drop this step (or throw when
+            // more than one exists) if the Dockerfile is configured again after this point.
+            builder.Pipeline.AddStep(new PipelineStep
+            {
+                Name = validationStepName,
+                Description = $"Warns when Go app '{resource.Name}' publishes an existing Dockerfile that ignores its package path.",
+                RequiredBySteps = [WellKnownPipelineSteps.Build, WellKnownPipelineSteps.Publish],
+                Resource = containerBuilder.Resource,
+                Action = context =>
+                {
+                    // A resource excluded from the manifest is never published, so there is nothing to warn about.
+                    if (!containerBuilder.Resource.IsExcludedFromPublish())
+                    {
+                        WarnIfExistingDockerfileIgnoresPackagePath(resource, containerBuilder.Resource, context.Logger);
+                    }
+
+                    return Task.CompletedTask;
+                }
+            });
+
+            // Deploy environments such as Azure Container Apps run the image build step without the aggregate
+            // Build step, so the image build must wait for this step itself to surface the warning before a
+            // potentially long build instead of after it.
+            containerBuilder.WithPipelineConfiguration(context =>
+            {
+                var validationStep = context.GetSteps(containerBuilder.Resource).FirstOrDefault(step => step.Name == validationStepName);
+
+                context.GetSteps(containerBuilder.Resource, WellKnownPipelineTags.BuildCompute).DependsOn(validationStep);
+            });
+        }
+
         // Ensure source resources (that provide container files) build before this Go image.
         rb.WithPipelineConfiguration(context =>
         {
@@ -375,7 +414,9 @@ public static class GoHostingExtensions
 
             var tidy = builder.ApplicationBuilder
                 .AddResource(tidyResource)
+                .ConfigureGoCertificateTrust()
                 .WithArgs("mod", "tidy", "-e")
+                .WithParentRelationship(builder.Resource)
                 .ExcludeFromManifest();
 
             // Store the builder reference so WithModVendor/WithModDownload can chain after tidy.
@@ -424,6 +465,7 @@ public static class GoHostingExtensions
 
             var vendor = builder.ApplicationBuilder
                 .AddResource(vendorResource)
+                .ConfigureGoCertificateTrust()
                 .WithArgs("mod", "vendor")
                 .ExcludeFromManifest();
 
@@ -470,6 +512,7 @@ public static class GoHostingExtensions
 
             var download = builder.ApplicationBuilder
                 .AddResource(downloadResource)
+                .ConfigureGoCertificateTrust()
                 .WithArgs("mod", "download")
                 .ExcludeFromManifest();
 
@@ -518,6 +561,7 @@ public static class GoHostingExtensions
 
             var vet = builder.ApplicationBuilder
                 .AddResource(vetResource)
+                .ConfigureGoCertificateTrust()
                 .WithArgs("vet", "./...")
                 .ExcludeFromManifest();
 
@@ -734,7 +778,23 @@ public static class GoHostingExtensions
 
         var resource = builder.Resource;
 
-        return builder.WithDebugSupport(
+        if (builder.ApplicationBuilder.ExecutionContext.IsRunMode)
+        {
+            // CLI-started resources must also support attaching later. Append after model configuration
+            // so GOFLAGS set by a later WithEnvironment call participates in the merge.
+            builder.ApplicationBuilder.OnBeforeStart((_, _) =>
+            {
+                if (!resource.HasAnnotationOfType<GoDelveServerAnnotation>() &&
+                    !resource.HasAnnotationOfType<GoLdFlagsAnnotation>())
+                {
+                    builder.WithEnvironment(GoRunDebugging.ConfigureEnvironmentAsync);
+                }
+
+                return Task.CompletedTask;
+            });
+        }
+
+        builder.WithDebugSupport(
             mode =>
             {
                 // Resolve annotations when DCP creates the launch configuration so later
@@ -753,7 +813,17 @@ public static class GoHostingExtensions
                     BuildFlags = buildFlags.Length > 0 ? buildFlags : null
                 };
             },
-            "go")
+            "go");
+
+        if (resource.TryGetLastAnnotation<SupportsDebuggingAnnotation>(out var debugSupport))
+        {
+            // Keep non-debug runs as DCP-managed go run processes so the PID identifies the launcher,
+            // matching CLI starts. Delve's noDebug launch does not emit a DAP process event:
+            // https://github.com/go-delve/delve/blob/v1.25.2/service/dap/server.go
+            debugSupport.RequiresDebugMode = true;
+        }
+
+        return builder
             .WithLaunchToolArgs(static ctx =>
             {
                 // The executable resource normally starts as:
@@ -783,7 +853,6 @@ public static class GoHostingExtensions
                 {
                     ctx.Args.Add($"-ldflags={ldFlagsAnnotation.Flags}");
                 }
-
                 if (ctx.Resource.TryGetLastAnnotation<GoGcFlagsAnnotation>(out var gcFlagsAnnotation))
                 {
                     ctx.Args.Add($"-gcflags={gcFlagsAnnotation.Flags}");
@@ -794,6 +863,40 @@ public static class GoHostingExtensions
                     : ".");
             },
             ownedByLaunchConfigurationType: "go");
+    }
+
+    /// <summary>
+    /// Warns when publish uses an existing Dockerfile but the app was given a non-default package path.
+    /// </summary>
+    private static void WarnIfExistingDockerfileIgnoresPackagePath(GoAppResource resource, ContainerResource containerResource, ILogger logger)
+    {
+        if (containerResource.Entrypoint is not null ||
+            !containerResource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out var dockerfileBuildAnnotation) ||
+            dockerfileBuildAnnotation.DockerfileFactory is not null ||
+            !resource.TryGetLastAnnotation<GoPackagePathAnnotation>(out var packagePath))
+        {
+            return;
+        }
+
+        // GoPackagePathAnnotation is added for any package path other than the literal ".", so spellings
+        // such as "./" and "./." that still resolve to the app directory must be excluded here.
+        if (Path.GetRelativePath(resource.WorkingDirectory, Path.GetFullPath(packagePath.PackagePath, resource.WorkingDirectory)) == ".")
+        {
+            return;
+        }
+
+        // Existing Dockerfiles are user-authored, so Aspire cannot know which package they build or which
+        // binary they run, and unlike the Python entrypoint there is no later API that re-points it. This is
+        // a warning rather than an error because a Dockerfile that already builds and runs the requested
+        // package is valid, and failing would break such apps that published fine before this check existed.
+        // An explicit container entrypoint is honored and skips the warning.
+        logger.LogWarning(
+            "Go app resource '{ResourceName}' is configured to run package '{PackagePath}', but publish is using the existing Dockerfile '{DockerfilePath}'. " +
+            "Aspire does not change an existing Dockerfile, so the published image runs whatever that Dockerfile builds and starts. " +
+            "Make sure it builds and runs that package, remove or rename the Dockerfile so Aspire can generate one, or call PublishAsDockerFile(...) and set the container entrypoint explicitly.",
+            resource.Name,
+            packagePath.PackagePath,
+            dockerfileBuildAnnotation.DockerfilePath);
     }
 
     /// <summary>
@@ -848,6 +951,29 @@ public static class GoHostingExtensions
         }
 
         return parts;
+    }
+
+    private static IResourceBuilder<T> ConfigureGoCertificateTrust<T>(this IResourceBuilder<T> builder)
+        where T : IResourceWithEnvironment, IResourceWithArgs
+    {
+        // Go 1.27 uses SSL_CERT_FILE and SSL_CERT_DIR as replacements for the platform verifier
+        // on macOS and Windows. Include system roots in the generated bundle on those platforms.
+        // Linux still loads its default bundle alongside SSL_CERT_DIR, so Append remains appropriate.
+        // See https://go.dev/doc/go1.27 and https://github.com/microsoft/aspire/issues/21198.
+        var usesSystemRoots = OperatingSystem.IsMacOS() || OperatingSystem.IsWindows();
+        return builder
+            .WithCertificateTrustScope(usesSystemRoots ? CertificateTrustScope.System : CertificateTrustScope.Append)
+            .WithCertificateTrustConfiguration(ctx =>
+            {
+                if (ctx.Scope == CertificateTrustScope.Append && usesSystemRoots)
+                {
+                    var resourceLogger = ctx.ExecutionContext.Services.GetRequiredService<ResourceLoggerService>();
+                    resourceLogger.GetLogger(ctx.Resource).LogWarning(
+                        "Certificate trust scope is set to 'Append', but since Go 1.27, Go on macOS and Windows trusts only the configured certificates instead of adding them to the system roots, so public certificate authorities will not be trusted. Use 'System' to trust both.");
+                }
+
+                return Task.CompletedTask;
+            });
     }
 
     /// <summary>

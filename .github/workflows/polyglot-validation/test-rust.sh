@@ -14,6 +14,27 @@ fi
 echo "Aspire CLI version:"
 aspire --version
 
+# Compile integration fixtures without starting them: some model cloud resources that must
+# never be provisioned by SDK validation.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -d "/workspace/tests/PolyglotAppHosts" ]; then
+    VALIDATION_ROOT="/workspace/tests/PolyglotAppHosts"
+else
+    VALIDATION_ROOT="$SCRIPT_DIR/../../../tests/PolyglotAppHosts"
+fi
+if [ ! -d "$VALIDATION_ROOT" ]; then
+    echo "ERROR: Cannot find tests/PolyglotAppHosts directory" >&2
+    exit 1
+fi
+while IFS= read -r app_dir; do
+    echo "=== Rust SDK fixture: $(basename "$(dirname "$app_dir")") ==="
+    (
+        cd "$app_dir"
+        aspire restore --non-interactive --apphost apphost.rs
+        cargo check
+    )
+done < <(find "$VALIDATION_ROOT" -mindepth 2 -maxdepth 2 -type d -name Rust | sort)
+
 # Create project directory
 WORK_DIR=$(mktemp -d)
 echo "Working directory: $WORK_DIR"
@@ -48,7 +69,7 @@ aspire add Aspire.Hosting.Redis --non-interactive -d 2>&1 || {
 # Verify appsettings.json through the generated SDK before adding Redis.
 echo "Configuring apphost.rs with appsettings validation and Redis..."
 if [ -f "apphost.rs" ] && grep -q "builder.build()" apphost.rs; then
-    sed -i '/builder.build()/i\    let appsettings_value = builder.get_configuration()?.get_config_value("PolyglotTest:Value")?;\n    if appsettings_value != "from-appsettings" {\n        return Err(format!("Expected appsettings.json value, got \\"{appsettings_value}\\"").into());\n    }\n\n    // Add Redis cache resource\n    builder.add_redis("cache", None, None)?.with_image_registry("netaspireci.azurecr.io")?;' apphost.rs
+    sed -i '/builder.build()/i\    let appsettings_value = builder.get_configuration()?.get_config_value("PolyglotTest:Value")?;\n    if appsettings_value.as_deref() != Some("from-appsettings") {\n        return Err(format!("Expected appsettings.json value, got {appsettings_value:?}").into());\n    }\n    let missing_value = builder.get_configuration()?.get_config_value("PolyglotTest:Missing")?;\n    if missing_value.is_some() {\n        return Err(format!("Expected missing configuration key to return None, got {missing_value:?}").into());\n    }\n\n    // Add Redis cache resource\n    builder.add_redis("cache", None, None)?.with_image_registry("netaspireci.azurecr.io")?;' apphost.rs
     echo "✅ appsettings validation and Redis configuration added to apphost.rs"
 fi
 

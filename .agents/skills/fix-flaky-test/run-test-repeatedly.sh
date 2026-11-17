@@ -236,7 +236,7 @@ for i in $(seq 1 "$ITERATIONS"); do
     run_with_timeout 180 "${TEST_CMD[@]}" >> "$ITER_LOG" 2>&1
     EXIT_CODE=$?
 
-    # Detect zero-test runs (exit code 8 is masked by --ignore-exit-code 8 in Testing.props)
+    # Detect zero-test runs (exit code 8 is masked by --ignore-exit-code 8 in Testing.targets)
     # Match case-insensitively: MTP's native runner emits a lowercase "total: N" summary,
     # while VSTest emits "Total: N". A case-sensitive match misses MTP and mis-flags every
     # passing MTP run as a zero-test failure.

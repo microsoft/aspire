@@ -14,6 +14,7 @@ From your AppHost directory, add the `Aspire.Hosting.Azure.PostgreSQL` integrati
 
 ```bash
 aspire add Aspire.Hosting.Azure.PostgreSQL
+aspire add Aspire.Hosting.Dotnet
 ```
 
 ## Configure Azure Provisioning for local development
@@ -41,7 +42,7 @@ In the AppHost, register a Postgres database and reference it from another resou
 var postgresdb = builder.AddAzurePostgresFlexibleServer("pg")
                         .AddDatabase("postgresdb");
 
-var myService = builder.AddProject<Projects.MyService>()
+var myService = builder.AddDotnetProject("myservice", "../MyService/MyService.csproj")
                        .WithReference(postgresdb);
 ```
 

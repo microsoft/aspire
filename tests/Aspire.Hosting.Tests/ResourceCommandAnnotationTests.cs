@@ -1,8 +1,14 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREPROJECTS001 // ProjectLaunchDefaultsAnnotation is experimental.
+
+using Aspire.Dashboard.Model;
 using Aspire.Hosting.Resources;
+using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Hosting.Tests;
 
@@ -175,5 +181,119 @@ public class ResourceCommandAnnotationTests
 
         Assert.Equal(CommandStrings.RebuildName, rebuildCommand.DisplayName);
         Assert.Equal(CommandStrings.RebuildDescription, rebuildCommand.DisplayDescription);
+    }
+
+    [Theory]
+    [InlineData("aspire-dashboard", false)]
+    [InlineData("project", true)]
+    public void ProjectCommandCancellationToken_UsesAppHostLifetimeForDashboard(string resourceName, bool expectedCanceled)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        using var app = builder.Build();
+        using var commandCancellation = new CancellationTokenSource();
+        commandCancellation.Cancel();
+
+        var projectResource = new ProjectResource(resourceName);
+        projectResource.Annotations.Add(new ProjectLaunchDefaultsAnnotation());
+        var context = new ExecuteCommandContext
+        {
+            ResourceName = resourceName,
+            Services = app.Services,
+            CancellationToken = commandCancellation.Token,
+            Arguments = new InteractionInputCollection([]),
+            Logger = NullLogger.Instance
+        };
+
+        var cancellationToken = CommandsConfigurationExtensions.GetCommandCancellationToken(context, projectResource);
+
+        Assert.Equal(expectedCanceled, cancellationToken.IsCancellationRequested);
+        if (!expectedCanceled)
+        {
+            Assert.Equal(app.Services.GetRequiredService<IHostApplicationLifetime>().ApplicationStopping, cancellationToken);
+        }
+    }
+
+    [Theory]
+    [InlineData("Exited", null, false)]
+    [InlineData("Exited", 0, true)]
+    [InlineData("Finished", 1, true)]
+    [InlineData("FailedToStart", null, true)]
+    [InlineData("Running", null, false)]
+    public void IsRebuildComplete_RequiresExitCodeForTerminalState(string state, int? exitCode, bool expected)
+    {
+        var resource = new ProjectResource("project");
+        var resourceEvent = new ResourceEvent(resource, "project-rebuilder", new CustomResourceSnapshot
+        {
+            ResourceType = KnownResourceTypes.Executable,
+            State = new ResourceStateSnapshot(state, null),
+            ExitCode = exitCode,
+            Properties = []
+        });
+
+        Assert.Equal(expected, CommandsConfigurationExtensions.IsRebuildComplete(resourceEvent, "project-rebuilder"));
+    }
+
+    [Theory]
+    [InlineData("Running", true)]
+    [InlineData("Starting", true)]
+    [InlineData("Waiting", false)]
+    [InlineData("NotStarted", false)]
+    [InlineData("Finished", false)]
+    [InlineData("Exited", false)]
+    [InlineData("FailedToStart", false)]
+    [InlineData("", true)]
+    [InlineData(null, true)]
+    [InlineData("Stopping", false)]
+    public void ShouldRestartAfterRebuild_RestartsReplicasThatWereRunningOrStarting(string? preRebuildState, bool expected)
+    {
+        Assert.Equal(expected, CommandsConfigurationExtensions.ShouldRestartAfterRebuild(preRebuildState));
+    }
+
+    [Theory]
+    [InlineData(true, "Running", "Restart")]
+    [InlineData(true, "Starting", "Restart")]
+    [InlineData(true, "", "Restart")]
+    [InlineData(true, null, "Restart")]
+    [InlineData(true, "Waiting", "LeaveWaiting")]
+    [InlineData(true, "Finished", "RestorePriorState")]
+    [InlineData(true, "Exited", "RestorePriorState")]
+    [InlineData(true, "FailedToStart", "RestorePriorState")]
+    [InlineData(true, "NotStarted", "RestorePriorState")]
+    [InlineData(false, null, "None")]
+    public void GetReplicaActionAfterRebuild_ReturnsActionForPreRebuildState(bool hasPreRebuildState, string? preRebuildState, string expected)
+    {
+        Assert.Equal(expected, CommandsConfigurationExtensions.GetReplicaActionAfterRebuild(hasPreRebuildState, preRebuildState).ToString());
+    }
+
+    [Theory]
+    [InlineData("Stopping", "Finished", "Finished")]
+    [InlineData("Stopping", "Exited", "Exited")]
+    [InlineData("Stopping", "Stopping", "Stopping")]
+    [InlineData("Finished", "Finished", "Finished")]
+    [InlineData("FailedToStart", "FailedToStart", "FailedToStart")]
+    [InlineData("NotStarted", "NotStarted", "NotStarted")]
+    [InlineData("Finished", null, "Finished")]
+    public void GetRestoredStateAfterRebuild_PrefersTerminalStateReachedAfterStopping(string preRebuildState, string? postStopState, string expected)
+    {
+        Assert.Equal(expected, CommandsConfigurationExtensions.GetRestoredStateAfterRebuild(preRebuildState, postStopState));
+    }
+
+    [Theory]
+    [InlineData("Building", "Finished")]
+    [InlineData("Starting", "Starting")]
+    [InlineData("Running", "Running")]
+    [InlineData("Exited", "Exited")]
+    public void RestoreIfStillBuilding_OnlyReplacesBuildingState(string currentState, string expected)
+    {
+        var snapshot = new CustomResourceSnapshot
+        {
+            ResourceType = KnownResourceTypes.Project,
+            State = new ResourceStateSnapshot(currentState, null),
+            Properties = []
+        };
+
+        var restored = CommandsConfigurationExtensions.RestoreIfStillBuilding(snapshot, KnownResourceStates.Finished);
+
+        Assert.Equal(expected, restored.State?.Text);
     }
 }

@@ -97,6 +97,23 @@ public class ResourceGraphMapperTests
     }
 
     [Fact]
+    public void MapResource_HiddenResource_IsMarkedHidden()
+    {
+        // Arrange
+        var resource = ModelTestHelpers.CreateResource("hidden-app", displayName: "hidden-app", hidden: true);
+        var resources = new Dictionary<string, ResourceViewModel>
+        {
+            [resource.Name] = resource,
+        };
+
+        // Act
+        var dto = ResourceGraphMapper.MapResource(resource, resources.Values, resources, new TestStringLocalizer<Columns>(), showHiddenResources: true, _iconResolver);
+
+        // Assert
+        Assert.True(dto.IsHidden);
+    }
+
+    [Fact]
     public void MapResource_ParameterResource_NoEndpoint()
     {
         // Arrange

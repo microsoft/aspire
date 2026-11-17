@@ -176,8 +176,6 @@ public abstract class StarterTemplateRunTestsBase<T> : TemplateTestsBase, IClass
     }
 }
 
-public sealed record ResourceRow(string Type, string Name, string State, string SourceContains);
-
 public sealed record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
 {
     public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);

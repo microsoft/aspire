@@ -97,6 +97,19 @@ export class AppHostLaunchReservations implements vscode.Disposable {
     }
 
     /**
+     * Returns whether a concrete external run launch is still waiting for its debug
+     * session to start.
+     *
+     * External reservations are created only for `run` configurations. Requiring a
+     * proven identity match keeps a workspace-scoped reservation from making every
+     * AppHost in that workspace appear to be starting.
+     */
+    hasPendingExternalRunLaunch(appHostPath: string): boolean {
+        return Array.from(this._externalReservationExpiries.keys()).some(reservedPath =>
+            compareAppHostIdentity(reservedPath, appHostPath) === 'same');
+    }
+
+    /**
      * Claims the launching slot for an AppHost, or reports that another launch already
      * holds it.
      *

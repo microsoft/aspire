@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Dashboard.Components.Controls;
-using Aspire.Dashboard.Components.Pages;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Telemetry;
 using Aspire.Dashboard.Utils;
@@ -45,6 +44,8 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
     private bool _isVisible;
     private bool _disposed;
     private string? _activeTerminalId;
+    private string? _activeResourceTerminalName;
+    private TerminalView? _resourceTerminalView;
 
     private int _heightPx = DefaultHeightPx;
     private int _maximumHeightPx = MaximumHeightPx;
@@ -80,6 +81,15 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
     public required IDashboardClient DashboardClient { get; init; }
 
     [Inject]
+    public required IResourceRepository ResourceRepository { get; init; }
+
+    [Inject]
+    public required NavigationManager NavigationManager { get; init; }
+
+    [Inject]
+    public required TerminalDockState DockState { get; init; }
+
+    [Inject]
     public required ShortcutManager ShortcutManager { get; init; }
 
     [Inject]
@@ -96,6 +106,10 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
 
     [Inject]
     public required IJSRuntime JS { get; init; }
+
+    /// <summary>Gets or sets the route prefix used to detach a terminal into an independent window.</summary>
+    [Parameter]
+    public string TerminalWindowPathPrefix { get; set; } = "terminal-window";
 
     public IReadOnlySet<AspireKeyboardShortcut> SubscribedShortcuts { get; } = new HashSet<AspireKeyboardShortcut>
     {
@@ -154,6 +168,7 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
             [new(TelemetryPropertyKeys.TerminalDockTrigger, new AspireTelemetryProperty(trigger))], Logger);
         _hasBeenOpened = true;
         _isVisible = true;
+        SelectResourceTerminal();
     }
 
     protected override Task OnAfterRenderAsync(bool firstRender)
@@ -186,7 +201,7 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
             if (!_disposed)
             {
                 _tabNavigationRegistrationStarted = true;
-                await _jsModule.InvokeVoidAsync("registerTabNavigation", _dockElement).ConfigureAwait(true);
+                await _jsModule.InvokeVoidAsync("registerTabNavigation", _dockElement, _selfRef).ConfigureAwait(true);
             }
         }
         catch (JSDisconnectedException)
@@ -226,6 +241,7 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
         TelemetryContext?.Dispose();
         TelemetryContext = null;
         _isVisible = false;
+        DockState.Update(isVisible: false, resourceName: null);
     }
 
     private void Activate(string terminalId)
@@ -240,7 +256,73 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
         _activeTerminalId = terminalId;
     }
 
-    private bool IsPanelVisible => _terminals.Count == 0;
+    private ResourceViewModel? ActiveResourceTerminal =>
+        _activeResourceTerminalName is { } name
+            ? ResourceRepository.GetResources().FirstOrDefault(resource =>
+                string.Equals(resource.Name, name, StringComparisons.ResourceName) &&
+                ResourceSelectHelpers.HasUsableTerminal(resource))
+            : null;
+
+    private bool IsPanelVisible => _terminals.Count == 0 && ActiveResourceTerminal is null;
+
+    private void SelectResourceTerminal()
+    {
+        if (_terminals.Count > 0)
+        {
+            _activeResourceTerminalName = null;
+            DockState.Update(_isVisible, resourceName: null);
+            return;
+        }
+
+        var resources = ResourceRepository.GetResources()
+            .Where(ResourceSelectHelpers.HasUsableTerminal)
+            .ToList();
+        if (resources.Count == 0)
+        {
+            _activeResourceTerminalName = null;
+            DockState.Update(_isVisible, resourceName: null);
+            return;
+        }
+
+        var selectedNames = ResourcesLayout.ParseLocation(
+            NavigationManager.ToBaseRelativePath(NavigationManager.Uri)).SelectedResourceNames;
+        _activeResourceTerminalName = resources.FirstOrDefault(resource =>
+                selectedNames.Contains(resource.Name, StringComparers.ResourceName) ||
+                selectedNames.Contains(resource.DisplayName, StringComparers.ResourceName))
+            ?.Name
+            ?? resources[0].Name;
+        DockState.Update(_isVisible, _activeResourceTerminalName);
+    }
+
+    /// <summary>
+    /// Moves a dock tab relative to another tab without changing the active terminal or its viewer.
+    /// </summary>
+    /// <param name="terminalId">The terminal being moved.</param>
+    /// <param name="targetId">The terminal that anchors the new position.</param>
+    /// <param name="after">Whether to insert after the target instead of before it.</param>
+    /// <returns>A task that completes when the tab order is updated.</returns>
+    [JSInvokable]
+    public Task ReorderTerminalAsync(string terminalId, string targetId, bool after) => InvokeAsync(() =>
+    {
+        if (_disposed || terminalId == targetId)
+        {
+            return;
+        }
+
+        var sourceIndex = _terminals.FindIndex(t => t.TerminalId == terminalId);
+        var targetIndex = _terminals.FindIndex(t => t.TerminalId == targetId);
+        if (sourceIndex < 0 || targetIndex < 0)
+        {
+            Logger.LogDebug("Ignored reordering removed dock terminal {TerminalId} relative to {TargetId}.", terminalId, targetId);
+            return;
+        }
+
+        var terminal = _terminals[sourceIndex];
+        _terminals.RemoveAt(sourceIndex);
+        targetIndex = _terminals.FindIndex(t => t.TerminalId == targetId);
+        _terminals.Insert(targetIndex + (after ? 1 : 0), terminal);
+        StateHasChanged();
+    });
 
     private bool IsPaneActive(string terminalId) => terminalId == _activeTerminalId;
 
@@ -249,7 +331,7 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
     private string GetPaneId(string terminalId) => $"{_elementIdPrefix}-pane-{terminalId}";
 
     private string? ActiveTerminalWindowUrl => _activeTerminalId is { } id
-        ? $"terminal-window/apphost/{Uri.EscapeDataString(id)}"
+        ? $"{TerminalWindowPathPrefix.Trim('/')}/apphost/{Uri.EscapeDataString(id)}"
         : null;
 
     private int? ActiveTerminalFontSize => _activeTerminalId is { } id && _terminalViews.TryGetValue(id, out var view)
@@ -399,8 +481,15 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
                     if (update.KindCase == WatchTerminalsUpdate.KindOneofCase.Snapshot)
                     {
                         var previousActiveIndex = _terminals.FindIndex(t => t.TerminalId == _activeTerminalId);
+                        // Keep this browser's tab order across recovery snapshots; append newly discovered terminals.
+                        var snapshotById = update.Snapshot.Terminals.ToDictionary(t => t.TerminalId, StringComparer.Ordinal);
+                        var ordered = _terminals.Where(t => snapshotById.ContainsKey(t.TerminalId))
+                            .Select(t => snapshotById[t.TerminalId]).ToList();
+                        var existingIds = ordered.Select(t => t.TerminalId).ToHashSet(StringComparer.Ordinal);
+                        ordered.AddRange(update.Snapshot.Terminals.Where(t => !existingIds.Contains(t.TerminalId)));
                         _terminals.Clear();
-                        _terminals.AddRange(update.Snapshot.Terminals);
+                        _terminals.AddRange(ordered);
+                        SelectResourceTerminal();
                         if (!_terminals.Any(t => t.TerminalId == _activeTerminalId))
                         {
                             // Snapshots can also remove the active tab; use the same adjacent fallback as removal.
@@ -434,6 +523,8 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
                     {
                         endedTerminalIds.Add(endedTerminalId);
                     }
+
+                    SelectResourceTerminal();
 
                     if (_hasBeenOpened)
                     {
@@ -536,6 +627,7 @@ public sealed partial class TerminalDock : ComponentBase, IGlobalKeydownListener
         _disposed = true;
         TelemetryContext?.Dispose();
         TelemetryContext = null;
+        DockState.Update(isVisible: false, resourceName: null);
         ShortcutManager.RemoveGlobalKeydownListener(this);
 
         // Stop updates before releasing browser-side state. A queued dispatcher callback observes _disposed and

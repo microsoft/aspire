@@ -139,6 +139,7 @@ internal static class Selection
         new Dictionary<string, string>(StringComparer.Ordinal)
         {
             ["Aspire.Deployment.EndToEnd.Tests"] = "deployment workflow-only",
+            ["Aspire.Dashboard.Playwright.Tests"] = "outerloop-only",
             ["Aspire.EndToEnd.Tests"] = "outerloop-only",
             ["Aspire.Oracle.EntityFrameworkCore.Tests"] = "outerloop-only",
         };

@@ -196,12 +196,4 @@
   <data name="ConsoleLogsNoWrapLogs" xml:space="preserve">
     <value>Don't wrap log lines</value>
   </data>
-  <data name="ConsoleLogsViewConsoleOption" xml:space="preserve">
-    <value>Console logs</value>
-    <comment>Option in the View dropdown that shows the resource's console logs.</comment>
-  </data>
-  <data name="ConsoleLogsViewTerminalOption" xml:space="preserve">
-    <value>Terminal</value>
-    <comment>Option in the View dropdown that shows the resource's interactive terminal.</comment>
-  </data>
 </root>

@@ -17,6 +17,7 @@
     <AspireProjectOrPackageReference Include="Aspire.Hosting.Azure" />
     <AspireProjectOrPackageReference Include="Aspire.Hosting.Azure.Search" />
     <AspireProjectOrPackageReference Include="Aspire.Hosting.AppHost" />
+    <AspireProjectOrPackageReference Include="Aspire.Hosting.Dotnet" />
     <ProjectReference Include="..\AzureSearch.ApiService\AzureSearch.ApiService.csproj" />
   </ItemGroup>
 

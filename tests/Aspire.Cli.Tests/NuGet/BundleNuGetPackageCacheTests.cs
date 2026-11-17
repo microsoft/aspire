@@ -16,6 +16,61 @@ namespace Aspire.Cli.Tests.NuGet;
 public class BundleNuGetPackageCacheTests(ITestOutputHelper outputHelper)
 {
     [Fact]
+    public async Task SearchPreservesNativeClientDiagnostics()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.NuGetClientFactory = _ => new FakeNuGetClient
+            {
+                SearchLimitReached = true,
+                SearchFailedSources = ["private-feed"],
+                SearchCallback = (_, _, _, _, _, _, _) => Task.FromResult<IReadOnlyList<NuGetSearchResult>>(
+                    [new("Acme.Hosting.Redis", "1.0.0", "feed", ["1.0.0"])])
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var packages = await CreateCache(provider).GetPackagesAsync(
+            workspace.WorkspaceRoot, "Acme.Hosting.", filter: _ => true,
+            prerelease: true, nugetConfigFile: null, useCache: true, TestContext.Current.CancellationToken);
+
+        Assert.True(packages.LimitReached);
+        Assert.Equal(["private-feed"], packages.FailedSources);
+        Assert.Equal("Acme.Hosting.Redis", Assert.Single(packages.Packages).Id);
+    }
+
+    [Fact]
+    public async Task FilteredSearchDoesNotLimitResultsBeforeApplyingAllowedPatterns()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var calls = 0;
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.NuGetClientFactory = _ => new FakeNuGetClient
+            {
+                SearchCallback = (query, _, take, _, _, _, _) =>
+                {
+                    calls++;
+                    Assert.Equal("", query);
+                    Assert.Equal(int.MaxValue, take);
+                    return Task.FromResult<IReadOnlyList<NuGetSearchResult>>(
+                        [new("Unapproved.Package", "1.0.0", "feed", ["1.0.0"]),
+                         new("Acme.Hosting.Redis", "1.0.0", "feed", ["1.0.0"])]);
+                }
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var packages = await CreateCache(provider).GetPackagesAsync(
+            workspace.WorkspaceRoot, "", id => id.StartsWith("Acme.", StringComparison.OrdinalIgnoreCase),
+            prerelease: true, nugetConfigFile: null, useCache: true, TestContext.Current.CancellationToken);
+
+        Assert.Equal(1, calls);
+        Assert.Equal("Acme.Hosting.Redis", Assert.Single(packages.Packages).Id);
+    }
+
+    [Fact]
     public async Task NonAspireCliPackagesWillNotBeConsidered()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -57,6 +112,8 @@ public class BundleNuGetPackageCacheTests(ITestOutputHelper outputHelper)
                 {
                     SearchCallback = (_, _, _, _, _, _, _) => Task.FromResult<IReadOnlyList<NuGetSearchResult>>(
                     [
+                        new("Aspire.Azure.AI.Inference", "9.4.0", "nuget.org", ["9.4.0"]),
+                        new("Aspire.Azure.AI.OpenAI", "9.4.0", "nuget.org", ["9.4.0"]),
                         new("Aspire.Hosting.Redis", "9.4.0", "nuget.org", ["9.4.0"]),
                         new("Aspire.Hosting.Dapr", "9.4.0", "nuget.org", ["9.4.0"]),
                         new("Aspire.Hosting.GitHub.Models", "9.4.0", "nuget.org", ["9.4.0"]),
@@ -73,12 +130,14 @@ public class BundleNuGetPackageCacheTests(ITestOutputHelper outputHelper)
         var packages = await nuGetPackageCache.GetPackagesAsync(workspace.WorkspaceRoot, "Aspire.Hosting", null, prerelease: false, nugetConfigFile: null, useCache: true, CancellationToken.None).DefaultTimeout();
 
         // Should include regular packages but exclude deprecated Dapr package
-        var packageIds = packages.Select(p => p.Id).ToList();
+        var packageIds = packages.Packages.Select(p => p.Id).ToList();
         Assert.Contains("Aspire.Hosting.Redis", packageIds);
         Assert.Contains("Aspire.Hosting.PostgreSQL", packageIds);
         Assert.DoesNotContain("Aspire.Hosting.Dapr", packageIds);
         Assert.DoesNotContain("Aspire.Hosting.GitHub.Models", packageIds);
         Assert.DoesNotContain("Aspire.Hosting.NodeJs", packageIds);
+        Assert.DoesNotContain("Aspire.Azure.AI.Inference", packageIds);
+        Assert.DoesNotContain("Aspire.Azure.AI.OpenAI", packageIds);
     }
 
     [Fact]
@@ -96,6 +155,8 @@ public class BundleNuGetPackageCacheTests(ITestOutputHelper outputHelper)
                 {
                     SearchCallback = (_, _, _, _, _, _, _) => Task.FromResult<IReadOnlyList<NuGetSearchResult>>(
                     [
+                        new("Aspire.Azure.AI.Inference", "9.4.0", "nuget.org", ["9.4.0"]),
+                        new("Aspire.Azure.AI.OpenAI", "9.4.0", "nuget.org", ["9.4.0"]),
                         new("Aspire.Hosting.Redis", "9.4.0", "nuget.org", ["9.4.0"]),
                         new("Aspire.Hosting.Dapr", "9.4.0", "nuget.org", ["9.4.0"]),
                         new("Aspire.Hosting.GitHub.Models", "9.4.0", "nuget.org", ["9.4.0"]),
@@ -112,12 +173,15 @@ public class BundleNuGetPackageCacheTests(ITestOutputHelper outputHelper)
         var packages = await nuGetPackageCache.GetPackagesAsync(workspace.WorkspaceRoot, "Aspire.Hosting", null, prerelease: false, nugetConfigFile: null, useCache: true, CancellationToken.None).DefaultTimeout();
 
         // Should include all packages including deprecated Dapr package when showing deprecated is enabled
-        var packageIds = packages.Select(p => p.Id).ToList();
+        var packageIds = packages.Packages.Select(p => p.Id).ToList();
         Assert.Contains("Aspire.Hosting.Redis", packageIds);
         Assert.Contains("Aspire.Hosting.PostgreSQL", packageIds);
         Assert.Contains("Aspire.Hosting.Dapr", packageIds);
         Assert.Contains("Aspire.Hosting.GitHub.Models", packageIds);
         Assert.Contains("Aspire.Hosting.NodeJs", packageIds);
+        // The deprecated-package flag does not expand hosting discovery to client packages.
+        Assert.DoesNotContain("Aspire.Azure.AI.Inference", packageIds);
+        Assert.DoesNotContain("Aspire.Azure.AI.OpenAI", packageIds);
     }
 
     [Fact]
@@ -155,7 +219,7 @@ public class BundleNuGetPackageCacheTests(ITestOutputHelper outputHelper)
             CancellationToken.None).DefaultTimeout();
 
         // Custom filter should bypass deprecated package filtering
-        var packageIds = packages.Select(p => p.Id).ToList();
+        var packageIds = packages.Packages.Select(p => p.Id).ToList();
         Assert.Contains("Aspire.Hosting.Dapr", packageIds);
         Assert.DoesNotContain("Aspire.Hosting.Redis", packageIds);
         Assert.DoesNotContain("Other.Package", packageIds);
@@ -187,7 +251,7 @@ public class BundleNuGetPackageCacheTests(ITestOutputHelper outputHelper)
         var packages = await nuGetPackageCache.GetPackagesAsync(workspace.WorkspaceRoot, "Aspire.Hosting", null, prerelease: false, nugetConfigFile: null, useCache: true, CancellationToken.None).DefaultTimeout();
 
         // Should filter out all case variations of deprecated package
-        var packageIds = packages.Select(p => p.Id).ToList();
+        var packageIds = packages.Packages.Select(p => p.Id).ToList();
         Assert.Contains("Aspire.Hosting.Redis", packageIds);
         Assert.DoesNotContain("aspire.hosting.dapr", packageIds);
         Assert.DoesNotContain("ASPIRE.HOSTING.DAPR", packageIds);
@@ -219,7 +283,7 @@ public class BundleNuGetPackageCacheTests(ITestOutputHelper outputHelper)
         var packages = await nuGetPackageCache.GetPackagesAsync(workspace.WorkspaceRoot, "Aspire.Hosting", filter: null, prerelease: false, nugetConfigFile: null, useCache: true, CancellationToken.None).DefaultTimeout();
 
         Assert.Collection(
-            packages.Select(p => p.Id),
+            packages.Packages.Select(p => p.Id),
             id => Assert.Equal("Aspire.Hosting.Redis", id),
             id => Assert.Equal("Aspire.Hosting.PostgreSQL", id));
     }
@@ -416,5 +480,6 @@ public class BundleNuGetPackageCacheTests(ITestOutputHelper outputHelper)
         new BundleNuGetPackageCache(
             provider.GetRequiredService<INuGetClient>(),
             NullLogger<BundleNuGetPackageCache>.Instance,
-            provider.GetRequiredService<IFeatures>());
+            provider.GetRequiredService<IFeatures>(),
+            provider.GetRequiredService<BundleNuGetService>());
 }

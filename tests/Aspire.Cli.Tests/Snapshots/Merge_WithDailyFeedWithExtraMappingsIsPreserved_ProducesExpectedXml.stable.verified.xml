@@ -7,12 +7,10 @@
   </packageSources>
   <packageSourceMapping>
     <packageSource key="dotnet9">
+      <package pattern="Aspire*" />
       <package pattern="Microsoft.Extensions.SpecialPackage*" />
     </packageSource>
-    <packageSource key="NuGet">
-      <package pattern="*" />
-    </packageSource>
-    <packageSource key="hexesoft">
+    <packageSource key="https://api.nuget.org/v3/index.json">
       <package pattern="*" />
     </packageSource>
   </packageSourceMapping>

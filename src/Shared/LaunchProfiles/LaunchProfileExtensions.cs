@@ -67,7 +67,7 @@ internal static class LaunchProfileExtensions
 
     private static LaunchSettings? GetLaunchSettings(this IProjectMetadata projectMetadata, string resourceName)
     {
-        // For testing
+        // Metadata can override conventional locations, for example VB's My Project directory.
         if (projectMetadata.LaunchSettings is { } launchSettings)
         {
             return launchSettings;

@@ -34,16 +34,16 @@ max-daily-ai-credits: -1
 # ──────────────────────────────────────────────────────────
 # To change the target milestone, update the MILESTONE value
 # in the env block below, then run:
-#   gh aw compile
+#   gh aw compile --schedule-seed microsoft/aspire
 # ──────────────────────────────────────────────────────────
 
 env:
   PRODUCT: "Aspire"
   REPO: "microsoft/aspire"
   DOCS_REPO: "microsoft/aspire.dev"
-  MILESTONE_START: "2026-08-19"
-  MILESTONE: "13.6"
-  PREVIOUS_MILESTONE: "13.5"
+  MILESTONE_START: "2026-09-30"
+  MILESTONE: "17.0"
+  PREVIOUS_MILESTONE: "13.6"
   RELEASE_NOTES_URL: "https://aka.ms/aspire/update-latest"
   BATCH_SIZE: "20"
 
@@ -54,6 +54,7 @@ on:
 
 jobs:
   fetch-data:
+    if: github.repository == 'microsoft/aspire'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -109,7 +110,7 @@ jobs:
             # PR number from the filename instead of reading every JSON file (which
             # can fail when the glob expands to hundreds of arguments).
             if [ -d "$PRS_DIR" ]; then
-              PRS_LISTING=$(ls "$PRS_DIR" 2>/dev/null \
+              PRS_LISTING=$(find "$PRS_DIR" -maxdepth 1 -type f -printf '%f\n' \
                 | sed -n 's/.*-\([0-9]*\)\.json$/\1/p' \
                 | jq -Rs '[split("\n") | .[] | select(. != "") | tonumber]')
               if echo "$PRS_LISTING" | jq -e 'type == "array" and length > 0' >/dev/null 2>&1; then
@@ -120,7 +121,7 @@ jobs:
 
             DOCS_PRS_DIR="$MEMORY_DIR/prs-docs"
             if [ -d "$DOCS_PRS_DIR" ]; then
-              DOCS_PRS_LISTING=$(ls "$DOCS_PRS_DIR" 2>/dev/null \
+              DOCS_PRS_LISTING=$(find "$DOCS_PRS_DIR" -maxdepth 1 -type f -printf '%f\n' \
                 | sed -n 's/.*-\([0-9]*\)\.json$/\1/p' \
                 | jq -Rs '[split("\n") | .[] | select(. != "") | tonumber]')
               if echo "$DOCS_PRS_LISTING" | jq -e 'type == "array" and length > 0' >/dev/null 2>&1; then
@@ -318,7 +319,7 @@ jobs:
           name: changelog-data
           path: /tmp/gh-aw/
 
-if: github.repository_owner == 'microsoft' && needs.fetch-data.outputs.has-work == 'true'
+if: github.repository == 'microsoft/aspire' && needs.fetch-data.outputs.has-work == 'true'
 
 permissions:
   contents: read
@@ -520,7 +521,7 @@ previous entries. A companion feedback issue collects editorial comments.
 
 <!-- Keep the hardcoded values below in sync with the env block above. -->
 > **Note:** `${PRODUCT}`, `${REPO}`, `${DOCS_REPO}`, `${MILESTONE_START}`, `${MILESTONE}`, `${PREVIOUS_MILESTONE}`, `${RELEASE_NOTES_URL}`, and `${BATCH_SIZE}` refer to values set in the workflow's
-> `env` block (currently **`Aspire`**, **`microsoft/aspire`**, **`microsoft/aspire.dev`**, **`2026-08-19`**, **`13.6`**, **`13.5`**, **`https://aka.ms/aspire/update-latest`**, and **`20`**). All file names,
+> `env` block (currently **`Aspire`**, **`microsoft/aspire`**, **`microsoft/aspire.dev`**, **`2026-09-30`**, **`17.0`**, **`13.6`**, **`https://aka.ms/aspire/update-latest`**, and **`20`**). All file names,
 > titles, and references below derive from those values.
 
 ## Important: available tools

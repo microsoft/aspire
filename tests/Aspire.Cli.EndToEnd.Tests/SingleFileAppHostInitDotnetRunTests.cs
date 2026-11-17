@@ -45,6 +45,7 @@ public sealed class SingleFileAppHostInitDotnetRunTests(ITestOutputHelper output
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
         await auto.InstallAspireCliAsync(strategy, counter);
+        await auto.RunCommandAsync("unset AspireUseCliBundle", counter);
 
         // Run aspire init without --language so the interactive language prompt is shown,
         // then accept the default '> C#' selection.
@@ -69,7 +70,20 @@ public sealed class SingleFileAppHostInitDotnetRunTests(ITestOutputHelper output
 
         Assert.True(File.Exists(appHostCs), $"Expected apphost.cs to exist at: {appHostCs}");
         Assert.True(File.Exists(aspireConfigJson), $"Expected aspire.config.json to exist at: {aspireConfigJson}");
-        Assert.Contains("#:property AspireUseCliBundle=true", File.ReadAllText(appHostCs));
+        var appHostSource = File.ReadAllText(appHostCs);
+        var version = CliE2ETestHelpers.GetAppHostVersion(appHostSource);
+        var compatibilityDirective = CliE2ETestHelpers.GetExpectedCliBundleCompatibilityDirective(version);
+        var expected = $$"""
+            #:package Aspire.Hosting.AppHost@{{version}}
+            #:package Aspire.Hosting.Dotnet@{{version}}{{compatibilityDirective}}
+
+            var builder = DistributedApplication.CreateBuilder(args);
+
+            // The aspireify skill will wire up your projects here.
+
+            builder.Build().Run();
+            """;
+        Assert.Equal(expected.ReplaceLineEndings("\n"), appHostSource.ReplaceLineEndings("\n").TrimEnd('\n'));
         Assert.True(
             File.Exists(appHostRunJson),
             $"Expected apphost.run.json to exist at: {appHostRunJson}. "
@@ -91,7 +105,7 @@ public sealed class SingleFileAppHostInitDotnetRunTests(ITestOutputHelper output
         Assert.False(string.IsNullOrWhiteSpace(httpsEnv["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"]?.GetValue<string>()));
         Assert.False(string.IsNullOrWhiteSpace(httpsEnv["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"]?.GetValue<string>()));
 
-        // The generated AppHost opts into the CLI bundle, so `dotnet run` delegates to the
+        // The generated AppHost uses the CLI bundle by default, so `dotnet run` delegates to the
         // CLI and displays its startup message instead of the direct AppHost log message.
         await auto.TypeAsync("dotnet run apphost.cs");
         await auto.EnterAsync();

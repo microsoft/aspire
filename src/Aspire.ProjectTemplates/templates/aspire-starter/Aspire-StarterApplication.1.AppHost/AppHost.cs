@@ -4,10 +4,10 @@ var builder = DistributedApplication.CreateBuilder(args);
 var cache = builder.AddRedis("cache");
 
 #endif
-var apiService = builder.AddProject<Projects.GeneratedClassNamePrefix_ApiService>("apiservice")
+var apiService = builder.AddDotnetProject("apiservice", "../Aspire-StarterApplication.1.ApiService/Aspire-StarterApplication.1.ApiService.csproj")
     .WithHttpHealthCheck("/health");
 
-builder.AddProject<Projects.GeneratedClassNamePrefix_Web>("webfrontend")
+builder.AddDotnetProject("webfrontend", "../Aspire-StarterApplication.1.Web/Aspire-StarterApplication.1.Web.csproj")
     .WithExternalHttpEndpoints()
     .WithHttpHealthCheck("/health")
 #if UseRedisCache

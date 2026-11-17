@@ -3,6 +3,8 @@ parameters:
     api_image: "api:latest"
 secrets: {}
 config:
+  env_dashboard:
+    ASPIRE_DASHBOARD_TELEMETRY_OPTOUT: "true"
   api:
     PORT: "8000"
   gateway:

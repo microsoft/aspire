@@ -1,0 +1,15 @@
+﻿---
+apiVersion: "v1"
+kind: "PersistentVolumeClaim"
+metadata:
+  name: "data"
+  labels:
+    stage: "second"
+spec:
+  storageClassName: ""
+  volumeName: "replacement-volume"
+  accessModes:
+    - "ReadWriteOnce"
+  resources:
+    requests:
+      storage: "1Gi"

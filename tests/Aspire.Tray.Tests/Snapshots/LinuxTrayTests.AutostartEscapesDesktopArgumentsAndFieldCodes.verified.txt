@@ -1,0 +1,8 @@
+﻿[Desktop Entry]
+Type=Application
+Name=Aspire Tray
+Comment=Manage local Aspire AppHosts
+Exec="/opt/Aspire \\"A & B\\"/\\$100%%\\`back\\\\slash/aspire" tray start --non-interactive --nologo
+Terminal=false
+X-Aspire-Tray-Version=1
+X-Aspire-Tray-Entry=L29wdC9Bc3BpcmUgIkEgJiBCIi8kMTAwJWBiYWNrXHNsYXNoL2FzcGlyZQ==

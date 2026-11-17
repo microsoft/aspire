@@ -282,7 +282,7 @@ This is especially common with:
 
 **Important:** Do NOT blindly bump transitive pinned versions of `Microsoft.Extensions.*` or `System.*` packages. These affect the shared framework surface area and could force customers onto versions that break their applications. Always flag these for human review.
 
-**Example:** Updating `Pomelo.EntityFrameworkCore.MySql` from 8.x to 9.x pulls in `Microsoft.EntityFrameworkCore.Relational 9.0.0`, which transitively requires `Microsoft.Extensions.Caching.Memory >= 9.0.0`. But the net8.0 TFM pins it to `8.0.x`, causing NU1109. This requires careful analysis of whether the pinned version can be safely bumped.
+Package major versions do not have to match the target framework: a compatible dependency can lift to 11.x even for `net10.0`. Prefer framework-provided assemblies over explicit package references, including `System.Text.Json` and the `Microsoft.Extensions.*` abstractions now provided by .NET 11's `Microsoft.NETCore.App`. Keep references where an older supported target still needs them. EF providers can impose narrower constraints; Pomelo currently remains on EF Core 9 with project-local health-check pins. Inspect the provider's dependency ranges rather than assuming its major version follows the project's TFM.
 
 ### 4. Watch for broken transitive dependency metadata (NU1603)
 
@@ -306,12 +306,10 @@ After all pipelines complete, clear the NuGet cache again and re-run restore to 
 
 Some external dependencies have known constraints:
 
-- **`Pomelo.EntityFrameworkCore.MySql`** — Major version bumps lift `Microsoft.EntityFrameworkCore` and its transitive `Microsoft.Extensions.*` dependencies, which conflict with net8.0 LTS pinning. Always verify compatibility across all target frameworks.
+- **`Pomelo.EntityFrameworkCore.MySql`** — The net10 integration currently retains the EF Core 9 provider and matching project-local health-check pins. Revisit those pins together when upgrading the provider.
 - **`Microsoft.AI.Foundry.Local`** — Has historically had broken transitive dependency metadata (NU1603). Check if the issue is resolved before updating.
 - **`Spectre.Console`** — Currently on pre-release. Always update to the latest pre-release, not the latest stable. Verify hyperlink rendering behavior hasn't changed (test: `ConsoleActivityLoggerTests`).
 - **`Milvus.Client`** — No stable release exists. Always stays on pre-release.
-- **`Humanizer.Core`** — Version 3.x ships a Roslyn analyzer that requires `System.Collections.Immutable` 9.0.0, which is incompatible with the .NET 8 SDK. Cannot update until the upstream issue is fixed ([Humanizr/Humanizer#1672](https://github.com/Humanizr/Humanizer/issues/1672)).
-- **`StreamJsonRpc`** — Version 2.24.x ships a Roslyn analyzer targeting Roslyn 4.14.0, incompatible with the .NET 8 SDK. Cannot update until the upstream issue is fixed ([microsoft/vs-streamjsonrpc#1399](https://github.com/microsoft/vs-streamjsonrpc/issues/1399)).
 - **`Azure.Monitor.OpenTelemetry.Exporter`** — Version 1.6.0 introduced AOT warnings. Hold at 1.5.0 until resolved. Version is in `eng/Versions.props`.
 - **`Microsoft.FluentUI.AspNetCore.Components`** and **`Microsoft.FluentUI.AspNetCore.Components.Icons`** — Must not be automatically updated. Updates to these packages often have breaking changes and require careful manual testing of the dashboard. Always flag these for human review and manual update.
 
@@ -322,7 +320,7 @@ Some external dependencies have known constraints:
 - **Always check nuget.org** — The mirroring pipeline pulls from nuget.org
 - **Verify versions exist** — Before triggering the pipeline, confirm the version exists on nuget.org
 - **Don't modify NuGet.config** — Package sources are managed separately; this skill only handles version updates. Temporary nuget.org additions for verification must be reverted before committing.
-- **Don't modify eng/Version.Details.xml** — That file is managed by Dependency Flow automation (Maestro/Darc)
+- **Use Darc for managed dependency flow** — `eng/Version.Details.xml` tracks the .NET 11 package line, using canonical properties in `eng/Versions.props` (package ID without punctuation plus `Version`). The `Net10Version` properties are manual .NET 10 servicing pins: update them together without changing the .NET 11 flow records. Framework-provided .NET 11 abstractions have no managed package records; retain only their .NET 10 pins. During an explicitly requested initial migration, align each managed record's version, repository URI, and SHA with the actual package's nuspec and its canonical property; do not invent source metadata or change cloud subscriptions. Keep compatibility aliases derived from canonical properties.
 - **Ask before proceeding** — Always present the version summary and get user confirmation before triggering pipelines
 
 ## Fallback: Triggering Pipelines via Azure CLI Directly

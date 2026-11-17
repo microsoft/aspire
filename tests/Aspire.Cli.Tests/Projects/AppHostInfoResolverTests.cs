@@ -11,6 +11,41 @@ namespace Aspire.Cli.Tests.Projects;
 
 public sealed class AppHostInfoResolverTests(ITestOutputHelper outputHelper)
 {
+    [Theory]
+    [InlineData("", "Aspire.Hosting.AppHost", false, true)]
+    [InlineData("", "aspire.hosting.apphost", true, true)]
+    [InlineData("false", "Aspire.Hosting.AppHost", false, false)]
+    [InlineData("false", "Aspire.Hosting.AppHost", true, false)]
+    [InlineData("", "Aspire.Hosting", false, false)]
+    [InlineData("true", "Aspire.Hosting.AppHost", false, true)]
+    public async Task GetAppHostInfoAsync_RecognizesUnrestoredPackageAppHosts(string hostProperty, string packageId, bool centralVersion, bool expectedHost)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var projectFile = CreateProjectFile(workspace);
+        var runner = new TestDotNetCliRunner
+        {
+            GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) => (0, JsonDocument.Parse($$"""
+                {
+                  "Properties": { "IsAspireHost": "{{hostProperty}}" },
+                  "Items": {
+                    "PackageReference": [
+                      { "Identity": "{{packageId}}", "Version": {{(centralVersion ? "null" : "\"17.0.0-preview.1\"")}} }
+                    ],
+                    "PackageVersion": [
+                      { "Identity": "{{packageId}}", "Version": "17.0.0-preview.1" }
+                    ]
+                  }
+                }
+                """)),
+        };
+        var resolver = new AppHostInfoResolver(runner, new NullAppHostInfoDiskCache());
+
+        var info = await resolver.GetAppHostInfoAsync(projectFile, CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal(expectedHost, info.IsAspireHost);
+        Assert.Equal(expectedHost ? "17.0.0-preview.1" : null, info.AspireHostingVersion);
+    }
+
     [Fact]
     public async Task GetAppHostInfoAsync_UsesDiskCacheWhenPresent()
     {

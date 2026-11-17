@@ -399,6 +399,71 @@ public class TerminalHostAppTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task ConsumerHandshakeWaitsForProducerBeforeAndAfterRecycle()
+    {
+        var (args, workspace, control) = BuildArgs();
+        using var disp = workspace;
+        await using var app = new TerminalHostApp(args, NullLoggerFactory.Instance);
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        var hostTask = app.RunAsync(timeout.Token);
+
+        try
+        {
+            await WaitForFileAsync(control, TimeSpan.FromSeconds(10));
+            for (var cycle = 0; cycle < 2; cycle++)
+            {
+                await WaitForFileAsync(args.ProducerUdsPath, TimeSpan.FromSeconds(10));
+                await WaitForFileAsync(args.ConsumerUdsPath, TimeSpan.FromSeconds(10));
+                var transportConnected = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                await using var consumer = new Hmp1WorkloadAdapter(new Hmp1ClientOptions
+                {
+                    StreamFactory = async ct =>
+                    {
+                        var stream = await Hmp1Transports.ConnectUnixSocket(args.ConsumerUdsPath, ct);
+                        transportConnected.TrySetResult();
+                        return stream;
+                    },
+                    DefaultRole = Hmp1Role.Secondary
+                });
+                var handshake = consumer.ConnectAsync(timeout.Token);
+                try
+                {
+                    await transportConnected.Task.WaitAsync(timeout.Token);
+                    // The socket is ready, but no live screen exists yet. A successful
+                    // handshake here would overwrite the browser's retained screen.
+                    await Assert.ThrowsAsync<TimeoutException>(() => handshake.WaitAsync(TimeSpan.FromMilliseconds(200)));
+                    Assert.Equal(0, app.SnapshotSession().AttachedPeerCount);
+
+                    await using var producer = await ConnectProducerAsync(args.ProducerUdsPath, TimeSpan.FromSeconds(5));
+                    await producer.SendHelloAsync(80, 24, timeout.Token);
+                    await handshake.WaitAsync(timeout.Token);
+                    Assert.True(consumer.IsConnected);
+                    await WaitForAsync(() => app.SnapshotSession().AttachedPeerCount == 1,
+                        TimeSpan.FromSeconds(5), "The viewer should attach after its producer connects.");
+                }
+                finally
+                {
+                    if (!handshake.IsCompleted)
+                    {
+                        await timeout.CancelAsync();
+                    }
+                    await handshake;
+                }
+
+                await consumer.DisconnectedTask.WaitAsync(timeout.Token);
+                await WaitForAsync(() => app.SnapshotSession().RestartCount == cycle + 1,
+                    TimeSpan.FromSeconds(10), "The replica should recycle after producer disconnect.");
+            }
+        }
+        finally
+        {
+            app.RequestShutdown();
+            await timeout.CancelAsync();
+            await hostTask.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+    }
+
+    [Fact]
     public async Task GracefulCancellationDeletesProducerAndConsumerSockets()
     {
         // Regression for https://github.com/microsoft/aspire/issues/19302: on a graceful
@@ -706,7 +771,7 @@ public class TerminalHostAppTests(ITestOutputHelper outputHelper)
             Path.Combine(parentFile, "consumer.sock"),
             presentation,
             NullLogger<Hmp1UdsServerListenerFilter>.Instance,
-            _ => { }));
+            _ => { }, Task.CompletedTask));
     }
 
     [Fact]
@@ -727,7 +792,7 @@ public class TerminalHostAppTests(ITestOutputHelper outputHelper)
             socketPath,
             presentation,
             NullLogger<Hmp1UdsServerListenerFilter>.Instance,
-            _ => { });
+            _ => { }, Task.CompletedTask);
         await listener.OnSessionStartAsync(80, 24, DateTimeOffset.UtcNow);
 
         Task? endTask = null;
@@ -1230,7 +1295,7 @@ public class TerminalHostAppTests(ITestOutputHelper outputHelper)
             args.ConsumerUdsPath,
             presentation,
             NullLogger<Hmp1UdsServerListenerFilter>.Instance,
-            ex => connected.TrySetException(ex));
+            ex => connected.TrySetException(ex), Task.CompletedTask);
         AssertSocketIsRestrictedToOwningUser(args.ConsumerUdsPath);
         await listener.OnSessionStartAsync(80, 24, DateTimeOffset.UtcNow);
 
@@ -1319,7 +1384,7 @@ public class TerminalHostAppTests(ITestOutputHelper outputHelper)
         {
             await using var presentation = new Hmp1PresentationAdapter();
             Assert.Throws<IOException>(() => new Hmp1UdsServerListenerFilter(
-                path, presentation, NullLogger<Hmp1UdsServerListenerFilter>.Instance, _ => { }));
+                path, presentation, NullLogger<Hmp1UdsServerListenerFilter>.Instance, _ => { }, Task.CompletedTask));
         }
 
         Assert.Equal("not our socket", await File.ReadAllTextAsync(path));

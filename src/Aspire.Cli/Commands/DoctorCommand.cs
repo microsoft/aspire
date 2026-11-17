@@ -174,7 +174,6 @@ internal sealed class DoctorCommand : BaseCommand
 
         _ansiConsole.Write(new Padder(grid, new Padding(2, 0)));
 
-        // Secondary grid: details, fix suggestions, and links (indented further than message)
         var hasDetails = !string.IsNullOrEmpty(result.Details);
         var hasFix = !string.IsNullOrEmpty(result.Fix);
         var hasLink = !string.IsNullOrEmpty(result.Link);
@@ -213,7 +212,7 @@ internal sealed class DoctorCommand : BaseCommand
         return status switch
         {
             EnvironmentCheckStatus.Pass => (KnownEmojis.CheckMarkButton, "green"),
-            EnvironmentCheckStatus.Warning => (KnownEmojis.Warning, "yellow"),
+            EnvironmentCheckStatus.Warning => (KnownEmojis.PoliceCarLight, "yellow"),
             EnvironmentCheckStatus.Fail => (KnownEmojis.CrossMark, "red"),
             _ => (KnownEmojis.Information, "grey")
         };

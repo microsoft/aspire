@@ -39,12 +39,6 @@ public partial class HostedAgentConfiguration(string image)
     public ContentFilterConfiguration? ContentFilterConfiguration { get; set; }
 
     /// <summary>
-    /// Tools available to the hosted agent.
-    /// </summary>
-    [AspireExportIgnore(Reason = "Azure SDK-specific type not usable from polyglot hosts.")]
-    public IList<ProjectsAgentTool> Tools { get; init; } = [];
-
-    /// <summary>
     /// The protocols that the agent supports for ingress communication of the containers.
     /// </summary>
     /// <remarks>
@@ -122,22 +116,15 @@ public partial class HostedAgentConfiguration(string image)
         ValidateProtocolVersions(targetResourceName);
 
         var def = new HostedAgentDefinition(
+            versions: ProtocolVersions,
             cpu: CpuString,
             memory: MemoryString)
         {
             ContainerConfiguration = new ContainerConfiguration(Image)
         };
-        foreach (var protocolVersion in ProtocolVersions)
-        {
-            def.ProtocolVersions.Add(protocolVersion);
-        }
         if (ContentFilterConfiguration is not null)
         {
             def.ContentFilterConfiguration = ContentFilterConfiguration;
-        }
-        foreach (var tool in Tools)
-        {
-            def.Tools.Add(tool);
         }
         foreach (var envVar in EnvironmentVariables)
         {

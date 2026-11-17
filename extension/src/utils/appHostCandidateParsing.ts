@@ -1,5 +1,6 @@
 import { extensionLogOutputChannel } from './logging';
 import { isSamePath } from './paths/comparison';
+import { isSameFileSystemEntry } from './paths/fileSystemIdentity';
 import type { AppHostCandidate, AppHostProjectSearchResult, CandidateAppHostDisplayInfo, IncrementalCandidateCallback, LegacyAppHostProjectSearchResult } from './appHostCandidateTypes';
 
 export function createLsStreamCandidateHandler(onCandidate: IncrementalCandidateCallback): (line: string) => void {
@@ -86,11 +87,29 @@ export function parseLegacyGetAppHostsOutput(output: string): LegacyAppHostProje
 }
 
 export function toCandidatesFromLegacySearchResult(parsed: LegacyAppHostProjectSearchResult): CandidateAppHostDisplayInfo[] {
-    return parsed.all_project_file_candidates.filter(candidate => typeof candidate === 'string').map(candidatePath => ({
-        path: candidatePath,
-        language: 'csharp',
-        status: 'buildable',
-    }));
+    const candidatePaths = parsed.all_project_file_candidates.filter(candidate => typeof candidate === 'string');
+    const selectedPath = parsed.selected_project_file;
+    let selectedIndex = selectedPath
+        ? candidatePaths.findIndex(candidatePath => isSameFileSystemEntry(candidatePath, selectedPath))
+        : -1;
+
+    // Older CLIs can report a selected project outside the enumerated candidates:
+    // {"selected_project_file":"/external/AppHost.csproj","all_project_file_candidates":[]}
+    if (selectedPath && selectedIndex === -1) {
+        selectedIndex = candidatePaths.push(selectedPath) - 1;
+    }
+
+    return candidatePaths.map((candidatePath, index) => {
+        const candidate: CandidateAppHostDisplayInfo = {
+            path: candidatePath,
+            language: 'csharp',
+            status: 'buildable',
+        };
+        if (index === selectedIndex) {
+            candidate.selected = true;
+        }
+        return candidate;
+    });
 }
 
 function isLsCandidate(obj: unknown): obj is CandidateAppHostDisplayInfo {

@@ -113,6 +113,7 @@ public class PRScriptInstallerModeTests(ITestOutputHelper testOutput)
         var brewPrefix = Path.Combine(env.TempDirectory, "brew-prefix");
         var brewLog = Path.Combine(env.TempDirectory, "brew.log");
         var codesignLog = Path.Combine(env.TempDirectory, "codesign.log");
+        var brewTrustStore = Path.Combine(env.TempDirectory, "brew-trust.txt");
 
         Directory.CreateDirectory(mockBinDir);
         Directory.CreateDirectory(brewRepository);
@@ -164,7 +165,33 @@ public class PRScriptInstallerModeTests(ITestOutputHelper testOutput)
                 echo "# generated tap" > "$tap_root/README.md"
                 exit 0
                 ;;
-              style|audit|info)
+              style|info)
+                exit 0
+                ;;
+              trust)
+                # Mirrors Homebrew 7.0.11+: non-install commands such as `audit` need explicit
+                # trust for casks from non-official taps, persisted in the user's trust store.
+                if [[ "${2:-}" != "--cask" || -z "${3:-}" ]]; then
+                  echo "unexpected brew trust arguments: $*" >&2
+                  exit 1
+                fi
+                echo "$3" >> "{{brewTrustStore}}"
+                exit 0
+                ;;
+              untrust)
+                if [[ "${2:-}" != "--cask" || -z "${3:-}" ]] || ! grep -qxF "$3" "{{brewTrustStore}}" 2>/dev/null; then
+                  exit 1
+                fi
+                grep -vxF "$3" "{{brewTrustStore}}" > "{{brewTrustStore}}.tmp" || true
+                mv "{{brewTrustStore}}.tmp" "{{brewTrustStore}}"
+                exit 0
+                ;;
+              audit)
+                cask="${@: -1}"
+                if ! grep -qxF "$cask" "{{brewTrustStore}}" 2>/dev/null; then
+                  echo "Error: Refusing to load cask $cask from untrusted tap ${cask%/*}." >&2
+                  exit 1
+                fi
                 exit 0
                 ;;
               test-bot)
@@ -177,6 +204,8 @@ public class PRScriptInstallerModeTests(ITestOutputHelper testOutput)
                 exit 0
                 ;;
               install)
+                # Installing a fully qualified cask implicitly trusts that cask.
+                echo "${@: -1}" >> "{{brewTrustStore}}"
                 create_aspire
                 exit 0
                 ;;
@@ -600,6 +629,36 @@ public class PRScriptInstallerModeTests(ITestOutputHelper testOutput)
             "--validation-mode", "LiveArchives");
 
         result.EnsureSuccessful();
+    }
+
+    [Fact]
+    [RequiresTools(["ruby"])]
+    [SkipOnPlatform(TestPlatforms.Windows, "Bash script tests require bash shell")]
+    public async Task Bash_ValidateHomebrewCask_TrustsLocalTapCaskForAuditAndRemovesTrust()
+    {
+        using var env = new TestEnvironment();
+        var caskPath = Path.Combine(env.TempDirectory, "aspire.rb");
+        await File.WriteAllTextAsync(caskPath, "cask \"aspire\" do\n  version \"13.3.0\"\nend\n");
+        var mockBinDir = await CreateMockHomebrewBinAsync(env, aspireExitCode: 0);
+        using var cmd = new ScriptToolCommand("eng/homebrew/validate-cask-artifact.sh", env, _testOutput);
+        cmd.WithEnvironmentVariable("PATH", $"{mockBinDir}{Path.PathSeparator}/usr/bin:/bin:/usr/sbin:/sbin");
+
+        var result = await cmd.ExecuteAsync(
+            "--cask-file", caskPath,
+            "--validation-mode", "LiveArchives");
+
+        result.EnsureSuccessful();
+
+        // Homebrew 7.0.11+ refuses to audit a cask from the temporary local tap unless it is
+        // explicitly trusted, and `brew untap` leaves trust entries behind.
+        var brewLog = (await File.ReadAllLinesAsync(Path.Combine(env.TempDirectory, "brew.log"))).ToList();
+        var trustIndex = brewLog.IndexOf("trust --cask local/aspire/aspire");
+        var auditIndex = brewLog.IndexOf("audit --cask local/aspire/aspire");
+        Assert.True(trustIndex >= 0, "Expected the local tap cask to be trusted before auditing.");
+        Assert.True(auditIndex > trustIndex, "Expected the local tap cask to be audited after it is trusted.");
+        Assert.Contains("untrust --cask local/aspire/aspire", brewLog.Skip(auditIndex));
+        var trustStore = Path.Combine(env.TempDirectory, "brew-trust.txt");
+        Assert.Equal(string.Empty, File.Exists(trustStore) ? (await File.ReadAllTextAsync(trustStore)).Trim() : string.Empty);
     }
 
     [Fact]

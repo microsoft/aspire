@@ -19,8 +19,8 @@ namespace Aspire.TestUtilities;
 /// <c>IsOSPlatform(Linux)</c>, so on macOS it is never even tried. Nothing in the provider chain looks at
 /// a path containing "podman". Without this, every Testcontainers-backed fixture fails on a Podman-only
 /// host with <c>DockerUnavailableException</c> ("Docker is either not running or misconfigured...").
-/// See https://github.com/testcontainers/testcontainers-dotnet/blob/4.8.1/src/Testcontainers/Configurations/TestcontainersSettings.cs
-/// and https://github.com/testcontainers/testcontainers-dotnet/blob/4.8.1/src/Testcontainers/Builders/RootlessUnixEndpointAuthenticationProvider.cs
+/// See https://github.com/testcontainers/testcontainers-dotnet/blob/4.15.0/src/Testcontainers/Configurations/TestcontainersSettings.cs
+/// and https://github.com/testcontainers/testcontainers-dotnet/blob/4.15.0/src/Testcontainers/Builders/RootlessUnixEndpointAuthenticationProvider.cs
 /// </para>
 /// <para>
 /// Configuration has to happen before the first <c>ContainerBuilder</c> is constructed, because
@@ -32,7 +32,8 @@ namespace Aspire.TestUtilities;
 /// a module initializer, which would only cover the assemblies it happened to be compiled into.
 /// </para>
 /// <para>
-/// Podman cannot always be reached, though: Testcontainers 4.8.1 cannot drive it over a Windows named pipe,
+/// Podman cannot always be reached reliably, though: Windows named-pipe endpoints remain excluded
+/// because of https://github.com/testcontainers/Docker.DotNet/issues/30,
 /// and on Linux <c>podman</c> runs daemonlessly with no API socket unless <c>podman system service</c> is
 /// running. Those hosts still run containers perfectly well through DCP, so they keep
 /// <see cref="TestFeature.ContainerRuntime"/>; it is <see cref="TestFeature.Testcontainers"/> that consults
@@ -114,12 +115,9 @@ internal static class TestcontainersPodmanConfiguration
     {
         var dockerHost = getEnvironmentVariable(DockerHostVariable);
 
-        // Windows talks to the engine over a named pipe, and Podman-on-Windows needs fixes that are not in
-        // Testcontainers 4.8.1 (https://github.com/testcontainers/testcontainers-dotnet/issues/1438). There
-        // is nothing to configure, so the only question is whether the developer already pointed
-        // Testcontainers at something it can actually use. A Podman pipe is rejected rather than trusted,
-        // because running the fixtures against it only produces DockerUnavailableException instead of the
-        // skip the caller wants. A Docker Desktop install is handled by the caller, which additionally
+        // Keep Podman named pipes excluded until connection reliability is resolved and validated:
+        // https://github.com/testcontainers/Docker.DotNet/issues/30.
+        // A Docker Desktop install is handled by the caller, which additionally
         // treats the `docker` CLI being on PATH as proof of a reachable endpoint.
         if (isWindows)
         {
@@ -189,7 +187,7 @@ internal static class TestcontainersPodmanConfiguration
     /// </summary>
     private static bool DockerSocketExists(string? homeDirectory, Func<string, string?> getEnvironmentVariable, Func<string?, bool> socketExists)
     {
-        // Mirrors the socket paths Testcontainers 4.8.1 probes on Unix, plus the Docker Desktop socket.
+        // Mirrors the socket paths Testcontainers probes on Unix, plus the Docker Desktop socket.
         string?[] candidates =
         [
             "/var/run/docker.sock",

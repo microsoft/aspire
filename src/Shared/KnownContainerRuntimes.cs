@@ -7,4 +7,5 @@ internal static class KnownContainerRuntimes
 {
     public const string Docker = "docker";
     public const string Podman = "podman";
+    public const string Wslc = "wslc";
 }

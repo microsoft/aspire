@@ -1,0 +1,8 @@
+﻿{
+  names.txt:
+Display=Demo
+Short=Demo
+RawDisplay=
+RawShort=
+
+}

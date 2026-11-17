@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
@@ -10,7 +10,6 @@
     <!--#if (UseRedisCache) -->
     <PackageReference Include="Aspire.StackExchange.Redis.OutputCaching" Version="!!REPLACE_WITH_LATEST_VERSION!!" />
     <!--#endif -->
-    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="!!REPLACE_WITH_ASPNETCORE_OPENAPI_9_VERSION!!" Condition=" '$(Framework)' == 'net9.0' " />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="!!REPLACE_WITH_ASPNETCORE_OPENAPI_10_VERSION!!" Condition=" '$(Framework)' == 'net10.0' " />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="!!REPLACE_WITH_ASPNETCORE_OPENAPI_11_VERSION!!" Condition=" '$(Framework)' == 'net11.0' " />
     <PackageReference Include="Microsoft.Extensions.Http.Resilience" Version="!!REPLACE_WITH_DOTNET_EXTENSIONS_VERSION!!" />

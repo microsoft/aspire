@@ -61,6 +61,21 @@ internal sealed record LanguageInfo(
     bool PreserveUnchangedGeneratedFiles = false)
 {
     /// <summary>
+    /// The hosting packages a new AppHost in this language records in <c>aspire.config.json</c> when it
+    /// is scaffolded (by <c>aspire init</c> or an empty AppHost template). They are the packages that
+    /// language's AppHosts almost always need, so recording them up front puts their resource APIs in
+    /// the generated SDK instead of making every user discover and run <c>aspire add</c> first.
+    /// </summary>
+    /// <remarks>
+    /// The scaffolder reads this list rather than naming packages itself, so it is the one place that
+    /// decides what a language gets by default. The starter templates ship a static
+    /// <c>aspire.config.json</c> that must keep listing at least these packages. Empty when the language
+    /// has no default hosting package, so it adds nothing beyond the code generation package in
+    /// <see cref="PackageName"/>.
+    /// </remarks>
+    public IReadOnlyList<string> DefaultHostingPackages { get; init; } = [];
+
+    /// <summary>
     /// The default folder path where generated code is placed for guest languages.
     /// </summary>
     internal static string GeneratedFolderName { get; } = Path.Combine(".aspire", "modules");

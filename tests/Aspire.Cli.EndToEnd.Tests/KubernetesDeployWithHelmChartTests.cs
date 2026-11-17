@@ -64,7 +64,7 @@ public sealed class KubernetesDeployWithHelmChartTests(ITestOutputHelper output)
                 var registryEndpoint = builder.AddParameter("registryendpoint");
                 var registry = builder.AddContainerRegistry("registry", registryEndpoint);
 
-                var api = builder.AddProject<Projects.{{ProjectName}}_ApiService>("server")
+                var api = builder.AddDotnetProject("server", "../{{ProjectName}}.ApiService/{{ProjectName}}.ApiService.csproj")
                     .WithExternalHttpEndpoints();
 
                 var k8s = builder.AddKubernetesEnvironment("env")

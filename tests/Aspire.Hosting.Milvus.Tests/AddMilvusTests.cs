@@ -88,10 +88,12 @@ public class AddMilvusTests(ITestOutputHelper testOutputHelper)
         Assert.Equal($"Endpoint=http://localhost:19530;Key=root:pass", connectionString);
     }
 
-    [Fact]
-    public async Task MilvusClientAppWithReferenceContainsConnectionStrings()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task MilvusClientAppWithReferenceContainsConnectionStrings(bool useDotnetProject)
     {
-        var appBuilder = DistributedApplication.CreateBuilder();
+        using var appBuilder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
         var pass = appBuilder.AddParameter("apikey", "pass");
 
@@ -102,8 +104,12 @@ public class AddMilvusTests(ITestOutputHelper testOutputHelper)
                 e.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(KnownNetworkIdentifiers.DefaultAspireContainerNetwork, new AllocatedEndpoint(e, "my-milvus.dev.internal", MilvusPortGrpc, EndpointBindingMode.SingleAddress, targetPortExpression: null, networkId: KnownNetworkIdentifiers.DefaultAspireContainerNetwork));
             });
 
-        var projectA = appBuilder.AddProject<ProjectA>("projecta", o => o.ExcludeLaunchProfile = true)
-            .WithReference(milvus);
+#pragma warning disable CS0618 // Exercise connection-string consumers through both project factories.
+        IResourceBuilder<IResourceWithEnvironment> projectA = useDotnetProject
+            ? appBuilder.AddDotnetProject("projecta", "projecta.csproj", o => o.ExcludeLaunchProfile = true)
+            : appBuilder.AddProject<ProjectA>("projecta", o => o.ExcludeLaunchProfile = true);
+#pragma warning restore CS0618
+        projectA.WithReference(milvus);
 
         // Call environment variable callbacks.
         var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(projectA.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance);
@@ -201,6 +207,19 @@ public class AddMilvusTests(ITestOutputHelper testOutputHelper)
         Assert.Equal(ProtocolType.Tcp, grpcEndpoint.Protocol);
         Assert.Equal("http2", grpcEndpoint.Transport);
         Assert.Equal("http", grpcEndpoint.UriScheme);
+    }
+
+    [Fact]
+    public void WithAttuHidesTheAttuResource()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var milvus = builder.AddMilvus("milvus").WithAttu();
+
+        var attu = Assert.Single(builder.Resources.OfType<AttuResource>());
+        var hidden = Assert.Single(attu.Annotations.OfType<HiddenAnnotation>());
+        Assert.Equal(HiddenBehavior.Always, hidden.Behavior);
+        Assert.Single(attu.Annotations.OfType<ResourceRelationshipAnnotation>(), r => r.Type == "Parent" && r.Resource == milvus.Resource);
+        Assert.Single(attu.Annotations.OfType<ResourceRelationshipAnnotation>(), r => r.Type == "Manages" && r.Resource == milvus.Resource);
     }
 
     private sealed class ProjectA : IProjectMetadata

@@ -3,6 +3,8 @@
     executable_image: "executable:latest"
 secrets: {}
 config:
+  env_dashboard:
+    ASPIRE_DASHBOARD_TELEMETRY_OPTOUT: "true"
   container:
     DATA_PATH: "/srv/container"
   executable:

@@ -33,6 +33,10 @@ inputs:
     description: 'Create the pull request as a draft'
     required: false
     default: 'false'
+  update-existing-pr-metadata:
+    description: 'Update the title and body when the pull request already exists'
+    required: false
+    default: 'false'
 outputs:
   pull-request-number:
     description: 'The pull request number'
@@ -96,6 +100,7 @@ runs:
         PR_BODY: ${{ inputs.body }}
         LABELS: ${{ inputs.labels }}
         DRAFT: ${{ inputs.draft }}
+        UPDATE_EXISTING_PR_METADATA: ${{ inputs.update-existing-pr-metadata }}
       run: |
         # Check if a PR already exists for this branch
         EXISTING_PR=$(gh pr list --head "$BRANCH" --base "$BASE" --json number,url --jq '.[0] // empty')
@@ -104,9 +109,14 @@ runs:
           PR_NUMBER=$(echo "$EXISTING_PR" | jq -r '.number')
           PR_URL=$(echo "$EXISTING_PR" | jq -r '.url')
           echo "Pull request #$PR_NUMBER already exists: $PR_URL"
-          echo "pull-request-number=$PR_NUMBER" >> $GITHUB_OUTPUT
-          echo "pull-request-url=$PR_URL" >> $GITHUB_OUTPUT
-          echo "pull-request-operation=none" >> $GITHUB_OUTPUT
+          echo "pull-request-number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+          echo "pull-request-url=$PR_URL" >> "$GITHUB_OUTPUT"
+          if [ "$UPDATE_EXISTING_PR_METADATA" = "true" ]; then
+            gh pr edit "$PR_NUMBER" --title "$PR_TITLE" --body-file - <<< "$PR_BODY"
+            echo "pull-request-operation=updated" >> "$GITHUB_OUTPUT"
+          else
+            echo "pull-request-operation=none" >> "$GITHUB_OUTPUT"
+          fi
         else
           # Build label arguments as a bash array (avoids eval/injection).
           # Filter out any labels that don't exist in the repo — `gh pr create`
@@ -157,7 +167,7 @@ runs:
 
           PR_NUMBER=$(gh pr view "$BRANCH" --json number --jq '.number')
           echo "Created pull request #$PR_NUMBER: $PR_URL"
-          echo "pull-request-number=$PR_NUMBER" >> $GITHUB_OUTPUT
-          echo "pull-request-url=$PR_URL" >> $GITHUB_OUTPUT
-          echo "pull-request-operation=created" >> $GITHUB_OUTPUT
+          echo "pull-request-number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+          echo "pull-request-url=$PR_URL" >> "$GITHUB_OUTPUT"
+          echo "pull-request-operation=created" >> "$GITHUB_OUTPUT"
         fi

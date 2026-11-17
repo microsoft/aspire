@@ -1,0 +1,30 @@
+﻿# PowerShell 7+ completion for Aspire. Dot-source this file from $PROFILE.
+& {
+    $completer = {
+        param($wordToComplete, $commandAst, $cursorPosition)
+
+        # The cursor is relative to the entire input, but an AST can start after a
+        # pipeline/statement or use a quoted executable with the call operator (&).
+        $commandEnd = $commandAst.CommandElements[0].Extent.EndOffset
+        $argumentStart = $commandEnd - $commandAst.Extent.StartOffset
+        $argumentLength = [Math]::Max(0, $cursorPosition - $commandEnd)
+        # AST extents exclude trailing whitespace after the last token.
+        $arguments = $commandAst.ToString().Substring($argumentStart)
+        $line = 'aspire' + $arguments.PadRight($argumentLength).Substring(0, $argumentLength)
+        $prefix = $wordToComplete.TrimStart([char[]]@("'", '"'))
+        & aspire '[suggest]' $line 2>$null | ForEach-Object {
+            if (-not [string]::IsNullOrWhiteSpace($_) -and $_.StartsWith($prefix, [System.StringComparison]::OrdinalIgnoreCase)) {
+                $text = $_
+                if ($text -match '[\s''"`$;&|<>(){}\[\]*?@#]') {
+                    $text = "'" + $text.Replace("'", "''") + "'"
+                }
+                [System.Management.Automation.CompletionResult]::new(
+                    $text, $_, [System.Management.Automation.CompletionResultType]::ParameterValue, $_)
+            }
+        }
+    }
+    Register-ArgumentCompleter -Native -CommandName aspire, aspire.exe, aspire.cmd -ScriptBlock $completer
+    # npm uses aspire.ps1 in PowerShell. Script-level registration (without a
+    # ParameterName) uses the same three arguments but a separate completer table.
+    Register-ArgumentCompleter -CommandName aspire, aspire.ps1 -ScriptBlock $completer
+}

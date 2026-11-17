@@ -26,26 +26,44 @@ import { ConfigInfoProvider } from './utils/configInfoProvider';
 import { AppHostLaunchService } from './services/AppHostLaunchService';
 import { stopExternalAppHost } from './services/AppHostStopper';
 import { cloneAppHostState, createStateSnapshot, getDashboardUrl } from './extensionState';
-import { createE2eStateFileBridge } from './testing/e2eStateFileBridge';
+import { createE2ePsFollowProcessTracker, createE2eStateFileBridge } from './testing/e2eStateFileBridge';
 import type { AspireAppHostState, AspireExtensionApi, AspireExtensionStateSnapshot, WaitForStateOptions } from './types/extensionApi';
 import { AppHostsViewTelemetry } from './views/AppHostsViewTelemetry';
 import { CliPathEnvironmentSynchronizer } from './utils/cliPathEnvironment';
 import { CliPathRejectionNotifier } from './utils/cliPathRejectionNotifier';
 import { cliPathResolver } from './utils/cliPath';
 import { AppHostLifecycleToolService, registerAppHostLifecycleTools } from './lm/appHostLifecycleTools';
+import { AppHostTargetResolverService } from './lm/appHostTargetResolverService';
+import { AspireResourceDebugToolService, registerAspireResourceDebugTool } from './lm/resourceDebugTools';
 import { registerInstrumentedCommand } from './activation/instrumentedCommand';
 import { registerCliCommands } from './activation/registerCliCommands';
 import { registerTreeViewCommands } from './activation/registerTreeViewCommands';
 import { registerCodeLensCommands } from './activation/registerCodeLensCommands';
-import { initializeHotReloadAdvisory } from './debugger/hotReload';
+import { extensionResourceAttachProviders, ResourceAttachProviderRegistry } from './debugger/resourceAttachProviders';
+import { ResourceDebugService } from './debugger/resourceDebugService';
+import { ResourceDebugSessionRegistry } from './debugger/resourceDebugSessionRegistry';
+import { ExtensionResourceDebugTelemetry, monotonicResourceDebugClock } from './debugger/resourceDebugTelemetry';
+import { compareAppHostIdentity } from './utils/appHostIdentity';
+import { resetEditorAssistanceWindowState } from './services/editorAssistanceWindowState';
+import { SafeAppHostTargetResolver } from './lm/safeAppHostTargetResolver';
+import { EditorStateSnapshotService } from './lm/editorStateSnapshotService';
+import { EditorAssistanceToolService } from './lm/editorAssistanceToolService';
+import { registerEditorAssistanceTools } from './lm/editorAssistanceToolAdapters';
+import { EditorUiHandoffService } from './lm/editorUiHandoffService';
+import { readLatestLaunchFailure } from './services/launchFailureStore';
+import { getHotReloadDiagnostics, initializeHotReloadAdvisory } from './debugger/hotReload';
 import { InternalMicrosoftTelemetryProvider } from './utils/internalMicrosoftTelemetry';
 import { OutdatedCliNotifier } from './utils/outdatedCliNotifier';
 import { onDidResolveCliForOperation } from './utils/cliOperationResolution';
 import { FileSystemOutdatedCliSuppressionStore } from './utils/outdatedCliSuppressionStore';
+import { initializeUsefulnessSurvey } from './services/initializeUsefulnessSurvey';
 
 let aspireExtensionContext = new AspireExtensionContext();
 
 export async function activate(context: vscode.ExtensionContext) {
+  context.subscriptions.push(createE2ePsFollowProcessTracker());
+  resetEditorAssistanceWindowState();
+  aspireExtensionContext = new AspireExtensionContext();
   initializeHotReloadAdvisory(context.workspaceState);
 
   const gitCommitSha = readGitCommitSha(context);
@@ -131,31 +149,63 @@ export async function activate(context: vscode.ExtensionContext) {
   }));
   const appHostDiscoveryService = new AppHostDiscoveryService(terminalProvider, configInfoProvider);
   context.subscriptions.push(appHostDiscoveryService);
+  const dataRepository = new AppHostDataRepository(terminalProvider, appHostDiscoveryService, configInfoProvider);
 
   // Meaningful-engagement reporter must outlive every command callback so it
   // can observe the first invocation. Wire it before any command is
   // registered so even synchronous early invocations (rare but possible) are
   // observed via the telemetry pipeline.
-  engagement = new MeaningfulEngagementReporter(appHostDiscoveryService);
+  engagement = new MeaningfulEngagementReporter(dataRepository);
   context.subscriptions.push(engagement);
 
   const appHostLaunchService = new AppHostLaunchService(configInfoProvider);
   context.subscriptions.push(appHostLaunchService);
+  initializeUsefulnessSurvey(context, appHostLaunchService);
 
   const editorCommandProvider = new AspireEditorCommandProvider(appHostDiscoveryService, appHostLaunchService);
 
   const cliCommandRegistrations = registerCliCommands(terminalProvider, editorCommandProvider, configInfoProvider);
 
   // Aspire panel - running app hosts tree view
-  const dataRepository = new AppHostDataRepository(terminalProvider, appHostDiscoveryService, configInfoProvider);
+  const resourceDebugTelemetry = new ExtensionResourceDebugTelemetry();
+  const resourceDebugClock = monotonicResourceDebugClock;
+  const resourceDebugSessionRegistry = new ResourceDebugSessionRegistry(vscode.debug, {
+    telemetry: resourceDebugTelemetry,
+    clock: resourceDebugClock,
+  });
+  const resourceDebugService = new ResourceDebugService({
+    appHostRepository: dataRepository,
+    attachProviders: new ResourceAttachProviderRegistry(extensionResourceAttachProviders),
+    sessionRegistry: resourceDebugSessionRegistry,
+    startDebugging: (workspaceFolder, configuration) =>
+      vscode.debug.startDebugging(workspaceFolder, configuration),
+    isProcessAlreadyDebugged: processId =>
+      aspireExtensionContext.aspireDebugSessions.some(session => session.hasResourceDebugSessionProcess(processId)),
+    getDebugSessionConfiguration: appHost => {
+      const matchingSessions = aspireExtensionContext.aspireDebugSessions.filter(session => {
+        if (compareAppHostIdentity(session.resolvedAppHostPath ?? session.appHostPath, appHost.absolutePath) !== 'same') {
+          return false;
+        }
+
+        return appHost.cliPid !== undefined
+          ? session.cliProcessId === appHost.cliPid
+          : session.operationKind === 'run';
+      });
+
+      return matchingSessions.length === 1 ? matchingSessions[0].configuration : undefined;
+    },
+    telemetry: resourceDebugTelemetry,
+    clock: resourceDebugClock,
+  });
+  context.subscriptions.push(resourceDebugService);
   appHostLaunchService.setEditorSessionProvider(() => aspireExtensionContext.aspireDebugSessions);
   appHostLaunchService.setRunningAppHostProvider(async token => {
     const appHosts = await dataRepository.fetchRunningAppHostsOnce(token);
     return appHosts.map(appHost => ({ appHostPath: appHost.appHostPath }));
   });
-  appHostLaunchService.setExternalAppHostStopper((appHostPath, token) =>
-    stopExternalAppHost(terminalProvider, appHostPath, token));
-  const appHostTreeProvider = new AspireAppHostTreeProvider(dataRepository, terminalProvider, appHostLaunchService, context.globalState, vscode.env.clipboard, configInfoProvider);
+  appHostLaunchService.setExternalAppHostStopper((appHost, token) =>
+    stopExternalAppHost(terminalProvider, appHost, token));
+  const appHostTreeProvider = new AspireAppHostTreeProvider(dataRepository, terminalProvider, appHostLaunchService, resourceDebugService, context.globalState, vscode.env.clipboard, configInfoProvider);
   const appHostTreeView = vscode.window.createTreeView('aspire-vscode.appHosts', {
     treeDataProvider: appHostTreeProvider,
     showCollapseAll: true,
@@ -228,26 +278,65 @@ export async function activate(context: vscode.ExtensionContext) {
     getAspireDebugSession: aspireExtensionContext.getAspireDebugSession.bind(aspireExtensionContext),
   }));
 
-  aspireExtensionContext.initialize(rpcServer, context, dynamicDebugConfigProvider, dcpServer, terminalProvider, editorCommandProvider);
+  aspireExtensionContext.initialize(rpcServer, context, dynamicDebugConfigProvider, dcpServer, terminalProvider, editorCommandProvider, dataRepository);
 
-  // Register Aspire MCP server definition provider so the Aspire MCP server
-  // appears automatically in VS Code's MCP tools list for Aspire workspaces.
-  const mcpProvider = new AspireMcpServerDefinitionProvider(cliPathResolver);
+  // Register Aspire MCP server definition provider so one Aspire MCP server per discovered
+  // AppHost appears automatically in VS Code's MCP tools list for Aspire workspaces.
+  // The provider subscribes to discovery and configuration events in its constructor, so it is
+  // only built when the MCP API exists to dispose it; otherwise those subscriptions would outlive
+  // the extension on VS Code versions that cannot host the provider at all.
   if (typeof vscode.lm?.registerMcpServerDefinitionProvider === 'function') {
-    context.subscriptions.push(vscode.lm.registerMcpServerDefinitionProvider('aspire-mcp-server', mcpProvider));
+    const mcpProvider = new AspireMcpServerDefinitionProvider({
+      appHostDiscovery: appHostDiscoveryService,
+      capabilityProbe: configInfoProvider,
+    }, cliPathResolver);
     context.subscriptions.push(mcpProvider);
-    mcpProvider.refresh();
+    context.subscriptions.push(vscode.lm.registerMcpServerDefinitionProvider('aspire-mcp-server', mcpProvider));
+    void mcpProvider.refresh();
   }
 
   // Language model tools that let an agent use the same AppHost lifecycle service as the
   // editor and Aspire tree instead of maintaining a separate start/stop policy.
+  const appHostTargetResolver = new SafeAppHostTargetResolver(appHostDiscoveryService);
   const appHostLifecycleToolService = new AppHostLifecycleToolService({
     launchService: appHostLaunchService,
     discoveryService: appHostDiscoveryService,
-  });
+  }, appHostTargetResolver);
   context.subscriptions.push(appHostLifecycleToolService);
   const appHostLifecycleToolRegistration = registerAppHostLifecycleTools(appHostLifecycleToolService);
   context.subscriptions.push(appHostLifecycleToolRegistration);
+  const resourceDebugToolService = new AspireResourceDebugToolService({
+    targetResolver: new AppHostTargetResolverService(appHostTargetResolver),
+    resourceDebugger: resourceDebugService,
+  });
+  context.subscriptions.push(resourceDebugToolService);
+  const resourceDebugToolRegistration = registerAspireResourceDebugTool(resourceDebugToolService);
+  context.subscriptions.push(resourceDebugToolRegistration);
+
+  // Editor-assistance tools use the same safe AppHost registry and editor-owned session
+  // projections as lifecycle tools. UI side effects stay isolated behind the handoff service.
+  const editorStateSnapshotService = new EditorStateSnapshotService({
+    launchService: appHostLaunchService,
+    targetResolver: appHostTargetResolver,
+  });
+  const editorUiHandoffService = new EditorUiHandoffService({
+    targetResolver: appHostTargetResolver,
+    appHostRepository: dataRepository,
+    output: extensionLogOutputChannel,
+    getAspireDebugSessionOwners: () =>
+      aspireExtensionContext.getAspireDebugSessionDashboardOwners(),
+  });
+  const editorAssistanceToolService = new EditorAssistanceToolService({
+    targetResolver: appHostTargetResolver,
+    snapshotService: editorStateSnapshotService,
+    resourceRepository: dataRepository,
+    getEditorResourceSessions: () => aspireExtensionContext.editorResourceSessions,
+    readLatestLaunchFailure,
+    readHotReloadDiagnostics: getHotReloadDiagnostics,
+    uiHandoffService: editorUiHandoffService,
+  });
+  const editorAssistanceToolRegistration = registerEditorAssistanceTools(editorAssistanceToolService);
+  context.subscriptions.push(editorAssistanceToolRegistration);
 
   const getEnableSettingsFileCreationPromptOnStartup = () => vscode.workspace.getConfiguration('aspire').get<boolean>('enableSettingsFileCreationPromptOnStartup', true);
   const setEnableSettingsFileCreationPromptOnStartup = async (value: boolean) => await vscode.workspace.getConfiguration('aspire').update('enableSettingsFileCreationPromptOnStartup', value, vscode.ConfigurationTarget.Workspace);
@@ -289,7 +378,29 @@ export async function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(appHostLaunchService.onDidChangeLaunchingState(fireStateChanged));
   context.subscriptions.push(appHostTreeProvider.onDidChangeStoppingState(fireStateChanged));
   context.subscriptions.push(aspireExtensionContext.onDidChangeDebugSessions(fireStateChanged));
-  const e2eStateFileBridge = createE2eStateFileBridge(context, aspireExtensionContext, dataRepository, appHostLaunchService, appHostTreeProvider, terminalProvider, onDidChangeStateEmitter.event, appHostLifecycleToolRegistration.tools);
+  const e2eLanguageModelTools = new Map<string, {
+    readonly tool: vscode.LanguageModelTool<unknown>;
+    readonly registered: boolean;
+  }>();
+  for (const [name, tool] of appHostLifecycleToolRegistration.tools) {
+    e2eLanguageModelTools.set(name, {
+      tool,
+      registered: appHostLifecycleToolRegistration.registered,
+    });
+  }
+  for (const [name, tool] of resourceDebugToolRegistration.tools) {
+    e2eLanguageModelTools.set(name, {
+      tool,
+      registered: resourceDebugToolRegistration.registered,
+    });
+  }
+  for (const [name, tool] of editorAssistanceToolRegistration.tools) {
+    e2eLanguageModelTools.set(name, {
+      tool,
+      registered: editorAssistanceToolRegistration.registered,
+    });
+  }
+  const e2eStateFileBridge = createE2eStateFileBridge(context, aspireExtensionContext, dataRepository, appHostLaunchService, appHostTreeProvider, terminalProvider, onDidChangeStateEmitter.event, e2eLanguageModelTools);
   context.subscriptions.push(e2eStateFileBridge);
 
   await cliPathEnvironmentInitialization;

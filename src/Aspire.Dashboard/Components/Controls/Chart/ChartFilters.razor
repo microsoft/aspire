@@ -9,7 +9,7 @@
     {
         <div class="metrics-filters-section">
             <h5>@Loc[nameof(ControlsStrings.ChartContainerFiltersHeader)]</h5>
-            <FluentDataGrid Class="aspire-spaced-grid" ItemsProvider="@EnumerableGridItemsProvider.Create(() => DimensionFilters)"
+            <DisposalSafeFluentDataGrid Class="aspire-spaced-grid" ItemsProvider="@EnumerableGridItemsProvider.Create(() => DimensionFilters)"
                             ItemKey="@(filter => filter.Name)"
                             GridTemplateColumns="200px 1fr auto"
                             GenerateHeader="DataGridGeneratedHeaderType.None"
@@ -36,7 +36,7 @@
                         </span>
                     </AspireTemplateColumn>
                 </ChildContent>
-            </FluentDataGrid>
+            </DisposalSafeFluentDataGrid>
             @foreach (var filter in DimensionFilters)
             {
                 <ChartFilterPopover @key="filter.Name"
@@ -57,6 +57,18 @@
                               Label="@Loc[nameof(ControlsStrings.ChartContainerShowCountLabel)]"
                               Value="@ShowCount"
                               ValueChanged="@OnShowCountChangedAsync"/>
+            </div>
+        </div>
+    }
+    else if (IsCounter)
+    {
+        <div class="metrics-filters-section">
+            <h5>@Loc[nameof(ControlsStrings.ChartContainerOptionsHeader)]</h5>
+            <div>
+                <FluentSwitch Class="table-switch counter-change-per-interval-switch"
+                              Label="@Loc[nameof(ControlsStrings.ChartContainerShowChangePerIntervalLabel)]"
+                              Value="@ShowChangePerInterval"
+                              ValueChanged="@OnShowChangePerIntervalChangedAsync"/>
             </div>
         </div>
     }

@@ -9,6 +9,7 @@ using System.Text.Json;
 using System.Xml.Linq;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Packaging;
+using Aspire.Cli.DotNet;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Utils;
 using Aspire.Cli.Tests.Mcp;
@@ -71,6 +72,15 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
         Assert.Equal(1, buildCount);
     }
 
+    [Fact]
+    public void DiscoveryIdentityMatchesTheExistingProjectPath()
+    {
+        var path = _workspace.CreateDirectory("App Path With Spaces").FullName;
+        var project = CreateProject(path);
+
+        Assert.Equal(project.GetInstanceIdentifier(), DotNetBasedAppHostServerProject.GetDefaultInstanceIdentifier(path));
+    }
+
         [Fact]
         public async Task CreateProjectFiles_RestoreRootConfigDirectory_PreservesRelativeSources()
         {
@@ -131,7 +141,7 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
                 var (projectFilePath, _) = await project.CreateProjectFilesAsync([]).DefaultTimeout();
 
                 Assert.Equal(repoRoot.FullName, XDocument.Load(projectFilePath).Descendants("RestoreRootConfigDirectory").Single().Value);
-                Assert.False(NuGetConfigMerger.TryFindNuGetConfigInDirectory(projectModelPath, out _));
+                Assert.False(DotNetAppHostNuGetConfigMerger.TryFindNuGetConfigInDirectory(projectModelPath, out _));
 
                 // Evaluate NuGet's actual settings without restoring packages. A relative source such as
                 // <add key="repo-feed" value="./feed" /> must resolve beside the original config file.
@@ -287,7 +297,7 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
         var doc = XDocument.Load(projectPath);
 
         var noneElement = doc.Descendants("None")
-            .FirstOrDefault(e => e.Attribute("Include")?.Value == "appsettings.json");
+            .FirstOrDefault(e => e.Attribute("Update")?.Value == "appsettings.json");
 
         Assert.NotNull(noneElement);
         Assert.Equal("PreserveNewest", noneElement.Attribute("CopyToOutputDirectory")?.Value);
@@ -314,6 +324,11 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
     [Fact]
     public async Task CreateProjectFiles_ExactAspirePackageRestoresInsteadOfUsingCheckoutProject()
     {
+        var integrationDirectory = _workspace.WorkspaceRoot.CreateSubdirectory(
+            Path.Combine("src", "Aspire.Hosting.PostgreSQL"));
+        var integrationProjectPath = Path.Combine(integrationDirectory.FullName, "Aspire.Hosting.PostgreSQL.csproj");
+        await File.WriteAllTextAsync(integrationProjectPath, "<Project />");
+
         var project = CreateProject();
         var integrations = new[]
         {
@@ -333,6 +348,9 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
 
         Assert.Equal("[13.1.0]", packageReference.Attribute("VersionOverride")?.Value);
         Assert.Null(packageReference.Attribute("Version"));
+        Assert.Contains(
+            document.Descendants("ProjectReference"),
+            element => element.Attribute("Include")?.Value == integrationProjectPath);
         Assert.DoesNotContain(
             document.Descendants("PackageReference"),
             element => element.Attribute("Include")?.Value == "Aspire.Hosting.PostgreSQL");
@@ -363,6 +381,31 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
         Assert.DoesNotContain(
             document.Descendants("PackageReference"),
             element => element.Attribute("Include")?.Value == "Aspire.Hosting.Redis");
+    }
+
+    [Fact]
+    public async Task CreateProjectFiles_DeduplicatesProjectReferencesUsingPlatformPathComparison()
+    {
+        var project = CreateProject();
+        var firstProjectPath = Path.Combine(_workspace.WorkspaceRoot.FullName, "Integration", "Integration.csproj");
+        var secondProjectPath = Path.Combine(_workspace.WorkspaceRoot.FullName, "integration", "Integration.csproj");
+        var integrations = new[]
+        {
+            IntegrationReference.FromProject("FirstIntegration", firstProjectPath),
+            IntegrationReference.FromProject("SecondIntegration", secondProjectPath)
+        };
+
+        var (projectPath, _) = await project.CreateProjectFilesAsync(integrations).DefaultTimeout();
+
+        var document = XDocument.Load(projectPath);
+        var projectReferences = document.Descendants("ProjectReference")
+            .Select(element => element.Attribute("Include")?.Value)
+            .ToArray();
+        string[] expectedPaths = OperatingSystem.IsWindows()
+            ? [firstProjectPath]
+            : [firstProjectPath, secondProjectPath];
+
+        Assert.Equal(expectedPaths, projectReferences);
     }
 
     [Fact]
@@ -600,6 +643,42 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
         // Aspire package version exists in both the hive and the channel feed.
         Assert.Equal(overrideSource, sources[0]);
         Assert.Contains("https://pkgs.dev.azure.com/fake/v3/index.json", sources);
+    }
+
+    [Fact]
+    public async Task CreateProjectFiles_WithoutConfiguredChannel_UsesExplicitChannelSources()
+    {
+        var appPath = _workspace.WorkspaceRoot.FullName;
+        var nugetCache = new FakeNuGetPackageCache();
+        const string channelFeed = "https://pkgs.dev.azure.com/fake/v3/index.json";
+        var dailyChannel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Prerelease, new[]
+        {
+            new PackageMapping("Aspire*", channelFeed)
+        }, nugetCache, new TestFeatures(), NullLogger.Instance);
+        var packagingService = new TestPackagingService
+        {
+            GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([dailyChannel])
+        };
+
+        var projectModelPath = Path.Combine(appPath, ".aspire_server");
+        var project = new DotNetBasedAppHostServerProject(
+            appPath,
+            "test.sock",
+            appPath,
+            new TestDotNetCliRunner(),
+            packagingService,
+            new TestProcessExecutionFactory(),
+            new TestEnvironment(),
+            NullLogger<DotNetBasedAppHostServerProject>.Instance,
+            projectModelPath);
+
+        var (projectFilePath, channelName) = await project.CreateProjectFilesAsync(
+            [IntegrationReference.FromPackage("Aspire.Hosting", "13.1.0")]).DefaultTimeout();
+
+        var projectDoc = XDocument.Load(projectFilePath);
+        var restoreSources = projectDoc.Descendants("RestoreAdditionalProjectSources").FirstOrDefault()?.Value;
+        Assert.Equal(channelFeed, restoreSources);
+        Assert.Equal("daily", channelName);
     }
 
     [Fact]

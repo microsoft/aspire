@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 
 namespace Aspire.Hosting.ApplicationModel;
@@ -18,8 +17,11 @@ public interface IComputeEnvironmentResource : IResource
     /// <returns>A <see cref="ReferenceExpression"/> representing the host address or host name (not a full URL).</returns>
     /// <remarks>
     /// The returned value typically contains only the host name or address, without scheme, port, or path information.
+    /// Implementations that support host-address resolution must override this method.
+    /// The default implementation throws <see cref="NotImplementedException"/> so environments that
+    /// do not support this capability can still implement <see cref="IComputeEnvironmentResource"/>.
     /// </remarks>
-    [Experimental("ASPIRECOMPUTE002", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    /// <exception cref="NotImplementedException">Thrown when the environment does not implement host-address resolution.</exception>
     ReferenceExpression GetHostAddressExpression(EndpointReference endpointReference) => throw new NotImplementedException();
 
     /// <summary>
@@ -33,10 +35,13 @@ public interface IComputeEnvironmentResource : IResource
     /// The default implementation composes values from <see cref="GetHostAddressExpression(EndpointReference)"/>,
     /// the endpoint scheme, and endpoint ports. HTTP and HTTPS endpoints use ports 80 and 443 respectively
     /// when no explicit port is configured.
+    /// Environments can override this method to provide their own endpoint-property mappings.
+    /// Host-dependent properties require an implementation of <see cref="GetHostAddressExpression(EndpointReference)"/>.
     /// </remarks>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="endpointReferenceExpression"/> is <see langword="null"/>.</exception>
     /// <exception cref="InvalidOperationException">Thrown when the requested endpoint property is unsupported, or when a non-HTTP/HTTPS endpoint does not specify a port.</exception>
-    [Experimental("ASPIRECOMPUTE002", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    /// <exception cref="NotSupportedException">Thrown when the environment does not implement browser-origin resolution.</exception>
+    /// <exception cref="NotImplementedException">Thrown when a host-dependent property is requested and the environment does not implement host-address resolution.</exception>
     ReferenceExpression GetEndpointPropertyExpression(EndpointReferenceExpression endpointReferenceExpression)
     {
         ArgumentNullException.ThrowIfNull(endpointReferenceExpression);
@@ -44,6 +49,12 @@ public interface IComputeEnvironmentResource : IResource
         var endpointReference = endpointReferenceExpression.Endpoint;
         var property = endpointReferenceExpression.Property;
         var endpoint = endpointReference.EndpointAnnotation;
+        if (property is EndpointProperty.BrowserOrigins or EndpointProperty.PrimaryBrowserOrigin)
+        {
+            throw new NotSupportedException(
+                $"Compute environment '{Name}' cannot provide browser origins for endpoint '{endpoint.Name}' on resource '{endpointReference.Resource.Name}' because it does not implement deployed browser-origin resolution. " +
+                "An endpoint host address alone does not establish a browser-facing origin. Use an environment that supports browser origins or supply an explicit origin parameter.");
+        }
         var scheme = endpoint.UriScheme;
         var port = endpoint.Port ?? GetDefaultPort(scheme, endpoint);
         var host = new Lazy<ReferenceExpression>(() => GetHostAddressExpression(endpointReference));

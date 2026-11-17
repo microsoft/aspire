@@ -43,9 +43,8 @@ internal sealed class DcpOptions
 
     /// <summary>
     /// Optional invocation args that must be prepended when launching <see cref="TerminalHostPath"/>.
-    /// In the CLI bundle case the path is the multi-mode <c>aspire-managed</c> exe and this is set
-    /// to <c>"terminalhost"</c> so the dispatcher routes to <c>TerminalHostApp.RunAsync</c>.
-    /// Empty for the standalone per-RID NuGet package and inner-loop cases.
+    /// Set to <c>"terminalhost"</c> when using the managed compatibility forwarder.
+    /// Empty for the standalone Native AOT bundle executable and managed inner-loop builds.
     /// </summary>
     public string? TerminalHostInvocationArgs { get; set; }
 
@@ -165,6 +164,11 @@ internal sealed class DcpOptions
     /// Enables Aspire container tunnel for container-to-host connectivity across all container orchestrators.
     /// </summary>
     public bool EnableAspireContainerTunnel { get; set; } = true;
+
+    /// <summary>
+    /// The base container image used to build the Aspire container tunnel client proxy image.
+    /// </summary>
+    public string? ContainerTunnelBaseImage { get; set; }
 }
 
 internal class ValidateDcpOptions(DistributedApplicationExecutionContext executionContext) : IValidateOptions<DcpOptions>
@@ -302,15 +306,15 @@ internal class ConfigureDefaultDcpOptions(
             options.TerminalHostPath = GetMetadataValue(assemblyMetadata, TerminalHostPathMetadataKey);
         }
 
-        // Terminal Host invocation args (used when the binary is the multi-mode aspire-managed exe in the bundle).
+        // An explicitly empty override clears dispatcher arguments baked in by an older SDK.
         var configTerminalHostInvocationArgs = configuration[BundleDiscovery.TerminalHostInvocationArgsEnvVar];
-        if (!string.IsNullOrEmpty(configTerminalHostInvocationArgs))
+        if (configTerminalHostInvocationArgs is not null)
         {
             options.TerminalHostInvocationArgs = configTerminalHostInvocationArgs;
         }
-        else if (!string.IsNullOrEmpty(dcpPublisherConfiguration[nameof(options.TerminalHostInvocationArgs)]))
+        else if (dcpPublisherConfiguration[nameof(options.TerminalHostInvocationArgs)] is { } configuredInvocationArgs)
         {
-            options.TerminalHostInvocationArgs = dcpPublisherConfiguration[nameof(options.TerminalHostInvocationArgs)];
+            options.TerminalHostInvocationArgs = configuredInvocationArgs;
         }
         else
         {
@@ -399,6 +403,15 @@ internal class ConfigureDefaultDcpOptions(
         options.DiagnosticsLogLevel = dcpPublisherConfiguration[nameof(options.DiagnosticsLogLevel)];
         options.PreserveExecutableLogs = dcpPublisherConfiguration.GetValue<bool?>(nameof(options.PreserveExecutableLogs), options.PreserveExecutableLogs);
         options.EnableAspireContainerTunnel = configuration.GetValue(KnownConfigNames.EnableContainerTunnel, options.EnableAspireContainerTunnel);
+
+        if (!string.IsNullOrEmpty(dcpPublisherConfiguration[nameof(options.ContainerTunnelBaseImage)]))
+        {
+            options.ContainerTunnelBaseImage = dcpPublisherConfiguration[nameof(options.ContainerTunnelBaseImage)];
+        }
+        else if (!string.IsNullOrEmpty(configuration[KnownConfigNames.ContainerTunnelBaseImage]))
+        {
+            options.ContainerTunnelBaseImage = configuration[KnownConfigNames.ContainerTunnelBaseImage];
+        }
     }
 
     private static void ApplyProxylessEndpointPortRangeOverride(DcpOptions options, IConfiguration configuration)

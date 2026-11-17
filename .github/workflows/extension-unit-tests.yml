@@ -2,15 +2,6 @@ name: VS Code extension unit tests
 
 on:
   workflow_call:
-    inputs:
-      packageVsix:
-        required: false
-        type: boolean
-        default: true
-      extensionVersionOverride:
-        required: false
-        type: string
-        default: ''
 
 permissions:
   contents: read
@@ -18,6 +9,7 @@ permissions:
 jobs:
   extension_tests_win:
     name: Run VS Code extension unit tests (Windows)
+    if: ${{ github.repository == 'microsoft/aspire' }}
     runs-on: windows-latest
     env:
       NPM_REGISTRY: https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/
@@ -27,9 +19,9 @@ jobs:
         working-directory: ./extension
     steps:
       - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Setup Node.js environment
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '22.x'
       - name: Install Corepack
@@ -82,35 +74,25 @@ jobs:
         run: |
           node -e "const fs = require('fs'); const allow = 'pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm'; const bad = fs.readFileSync('yarn.lock', 'utf8').split(/\r?\n/).filter(l => /^\s*resolved\s+\x22/.test(l)).filter(l => !l.includes(allow)); if (bad.length) { throw new Error('extension/yarn.lock contains resolved entries outside the internal dotnet-public-npm feed. Regenerate it through the internal feed before restoring. First offender -> ' + bad[0]); }"
       - name: Install dependencies
-        run: corepack yarn install --frozen-lockfile --non-interactive
+        # The dnceng npm feed intermittently returns 429 Too Many Requests, and
+        # Yarn 1 only retries 408/5xx responses. Mirror the bounded install
+        # retry used by extension-e2e-tests.yml. Tests themselves are not retried.
+        run: |
+          for ($attempt = 1; $attempt -le 3; $attempt++) {
+            corepack yarn install --frozen-lockfile --non-interactive
+            if ($LASTEXITCODE -eq 0) {
+              exit 0
+            }
+
+            $exitCode = $LASTEXITCODE
+            if ($attempt -eq 3) {
+              Write-Error "corepack yarn install failed after $attempt attempts."
+              exit $exitCode
+            }
+
+            $delay = $attempt * 30
+            Write-Host "corepack yarn install failed with exit code $exitCode. Retrying in ${delay}s (attempt $($attempt + 1) of 3)."
+            Start-Sleep -Seconds $delay
+          }
       - name: Run tests
         run: corepack yarn test
-      # The VSIX steps run even when 'Run tests' failed. The E2E workflow installs
-      # this artifact but deliberately runs independently from the unit-test result,
-      # so packaging must use !cancelled() rather than the default success() check.
-      - name: Override extension version for PR builds
-        if: ${{ inputs.packageVsix && !cancelled() && inputs.extensionVersionOverride != '' }}
-        run: corepack yarn version --new-version "${{ inputs.extensionVersionOverride }}" --no-git-tag-version
-      - name: Package VSIX
-        if: ${{ inputs.packageVsix && !cancelled() }}
-        env:
-          ASPIRE_EXTENSION_E2E_INCLUDE_BRIDGE: "true"
-        run: corepack yarn run vsce package --pre-release -o out/aspire-extension.vsix
-      - name: Assert E2E VSIX contains bridge
-        if: ${{ inputs.packageVsix && !cancelled() }}
-        run: ../.github/scripts/assert-extension-e2e-bridge-vsix.ps1 -VsixPath out/aspire-extension.vsix -Expected Present
-      # Packaged separately because the E2E VSIX intentionally contains the bridge.
-      # No env override here reproduces the shipping build, where webpack stubs the
-      # bridge in production mode and step-scoped env values do not leak.
-      - name: Package production VSIX
-        if: ${{ inputs.packageVsix && !cancelled() }}
-        run: corepack yarn run vsce package --pre-release -o out/aspire-extension-production.vsix
-      - name: Assert production VSIX excludes bridge
-        if: ${{ inputs.packageVsix && !cancelled() }}
-        run: ../.github/scripts/assert-extension-e2e-bridge-vsix.ps1 -VsixPath out/aspire-extension-production.vsix -Expected Absent
-      - name: Upload VSIX
-        if: ${{ inputs.packageVsix && !cancelled() }}
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
-        with:
-          name: aspire-extension
-          path: extension/out/aspire-extension.vsix

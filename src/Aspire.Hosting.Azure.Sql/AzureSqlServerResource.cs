@@ -29,6 +29,9 @@ namespace Aspire.Hosting.Azure;
 [AspireExport(ExposeProperties = true)]
 public class AzureSqlServerResource : AzureProvisioningResource, IResourceWithConnectionString, IAzurePrivateEndpointTarget, IAzurePrivateEndpointTargetNotification, IAzureNspAssociationTarget
 {
+    /// <inheritdoc/>
+    public override string ResourceTypeDisplayName => "Azure SQL Server";
+
     private readonly Dictionary<string, AzureSqlDatabaseResource> _databases = new Dictionary<string, AzureSqlDatabaseResource>(StringComparers.ResourceName);
     private readonly bool _createdWithInnerResource;
 
@@ -772,9 +775,7 @@ public class AzureSqlServerResource : AzureProvisioningResource, IResourceWithCo
 
         public IDistributedApplicationEventing Eventing => throw new NotImplementedException();
 
-#pragma warning disable ASPIREPIPELINES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
         public IDistributedApplicationPipeline Pipeline => throw new NotImplementedException();
-#pragma warning restore ASPIREPIPELINES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
         public DistributedApplication Build()
         {
