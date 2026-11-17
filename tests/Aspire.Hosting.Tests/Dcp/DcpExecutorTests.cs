@@ -11368,6 +11368,127 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         AssertEffectiveArgumentIndexesMatchSpecArgs(argAnnotations, container.Spec.Args);
     }
 
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task ManualStartPublishesStartingBeforeLifecycleEvent(bool container, bool persistent)
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        IResourceBuilder<IResource> resource = container
+            ? builder.AddContainer("resource", "image")
+            : builder.AddExecutable("resource", "command", "");
+        resource.WithExplicitStart();
+        if (persistent)
+        {
+            resource.WithPersistentLifetime();
+        }
+
+        using var app = builder.Build();
+        var notifications = app.ResourceNotifications;
+        var events = new DcpExecutorEvents();
+        events.Subscribe<OnResourceChangedContext>(context =>
+            notifications.PublishUpdateAsync(context.Resource, context.DcpResourceName, context.UpdateSnapshot));
+        var startingEvents = 0;
+        events.Subscribe<OnResourceStartingContext>(context =>
+        {
+            Assert.NotNull(context.DcpResourceName);
+            Assert.True(notifications.TryGetCurrentState(context.DcpResourceName, out var current));
+            Assert.Equal(KnownResourceStates.Starting, current.Snapshot.State?.Text);
+            startingEvents++;
+            return Task.CompletedTask;
+        });
+        var kubernetesService = new TestKubernetesService();
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["AppHost:Sha256"] = "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+        }).Build();
+        await using var executor = CreateAppExecutor(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            configuration: configuration,
+            kubernetesService: kubernetesService,
+            events: events);
+        await executor.RunApplicationAsync().DefaultTimeout();
+
+        var instance = DcpExecutor.GetDcpInstance(resource.Resource, instanceIndex: 0);
+        Assert.True(notifications.TryGetCurrentState(instance.Name, out var idle));
+        Assert.Equal(KnownResourceStates.NotStarted, idle.Snapshot.State?.Text);
+        Assert.Equal(0, startingEvents);
+
+        await executor.StartResourceAsync(executor.GetResource(instance.Name), TestContext.Current.CancellationToken).DefaultTimeout();
+
+        Assert.Equal(1, startingEvents);
+    }
+
+    [Fact]
+    public async Task ManualStartReportsMissingPostgresPasswordBeforeLifecycleEvent()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+        var password = builder.AddParameter("password", secret: true);
+        password.Resource.EnsureValueTask();
+        var postgres = builder.AddPostgres("postgres", password: password).WithExplicitStart();
+        var idlePostgres = builder.AddPostgres("idle-postgres", password: password).WithExplicitStart();
+        using var app = builder.Build();
+        var notifications = app.ResourceNotifications;
+        var events = new DcpExecutorEvents();
+        events.Subscribe<OnResourceChangedContext>(context =>
+            notifications.PublishUpdateAsync(context.Resource, context.DcpResourceName, context.UpdateSnapshot));
+        var connectionStringReadStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        events.Subscribe<OnConnectionStringAvailableContext>(async context =>
+        {
+            var read = builder.Eventing.PublishAsync(new ConnectionStringAvailableEvent(context.Resource, app.Services), context.CancellationToken);
+            connectionStringReadStarted.TrySetResult();
+            await read;
+        });
+        var startingEvents = 0;
+        events.Subscribe<OnResourceStartingContext>(_ =>
+        {
+            startingEvents++;
+            return Task.CompletedTask;
+        });
+        var kubernetesService = new TestKubernetesService();
+        await using var executor = CreateAppExecutor(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            kubernetesService: kubernetesService,
+            events: events);
+        await executor.RunApplicationAsync().DefaultTimeout();
+
+        var instance = DcpExecutor.GetDcpInstance(postgres.Resource, instanceIndex: 0);
+        var idleInstance = DcpExecutor.GetDcpInstance(idlePostgres.Resource, instanceIndex: 0);
+        Assert.True(notifications.TryGetCurrentState(instance.Name, out var initial));
+        Assert.Equal(KnownResourceStates.NotStarted, initial.Snapshot.State?.Text);
+        Assert.False(connectionStringReadStarted.Task.IsCompleted);
+
+        var startup = executor.StartResourceAsync(executor.GetResource(instance.Name), TestContext.Current.CancellationToken);
+        try
+        {
+            await connectionStringReadStarted.Task.DefaultTimeout();
+            Assert.False(startup.IsCompleted);
+            Assert.Equal(0, startingEvents);
+            Assert.True(notifications.TryGetCurrentState(instance.Name, out var waiting));
+            Assert.Equal(KnownResourceStates.UnresolvedParameters, waiting.Snapshot.State?.Text);
+            var unresolved = Assert.Single(waiting.Snapshot.Properties, p => p.Name == KnownProperties.Resource.UnresolvedParameters);
+            Assert.Equal(new[] { password.Resource.Name }, Assert.IsType<string[]>(unresolved.Value));
+            Assert.True(notifications.TryGetCurrentState(idleInstance.Name, out var idle));
+            Assert.Equal(KnownResourceStates.NotStarted, idle.Snapshot.State?.Text);
+        }
+        finally
+        {
+            await password.Resource.SetValueAsync("password-value");
+            await startup.DefaultTimeout();
+        }
+
+        Assert.Equal(1, startingEvents);
+        Assert.True(notifications.TryGetCurrentState(instance.Name, out var started));
+        Assert.Empty(started.Snapshot.Properties.Where(p => p.Name == KnownProperties.Resource.UnresolvedParameters));
+        var created = Assert.Single(GetCreatedContainersForResource(kubernetesService, postgres.Resource.Name));
+        Assert.Contains(created.Spec.Env!, e => e is { Name: "POSTGRES_PASSWORD", Value: "password-value" });
+        Assert.Empty(GetCreatedContainersForResource(kubernetesService, idlePostgres.Resource.Name));
+        Assert.True(notifications.TryGetCurrentState(idleInstance.Name, out var stillIdle));
+        Assert.Equal(KnownResourceStates.NotStarted, stillIdle.Snapshot.State?.Text);
+    }
+
     [Fact]
     public async Task ExecutionConfigurationCallbacksDeferredForExplicitStartExecutableUntilManualStart()
     {

@@ -1173,12 +1173,14 @@ internal sealed class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAsyncDispo
             {
                 // We need to handle explicit start persistent resources specially on first launch as they may already be running, so we need to register them with DCP to discover their status.
                 case RenderedModelResource<Container> { DcpResource.Spec.Start: false } cr when !DcpModelUtilities.ShouldDeferCreateForExplicitStart(cr.ModelResource, cr.DcpResource.Spec.Start):
+                    await PublishStartingStateAsync().ConfigureAwait(false);
                     await PublishConnectionStringAvailableEventAsync(cr.ModelResource, cancellationToken).ConfigureAwait(false);
                     await _executorEvents.PublishAsync(new OnResourceStartingContext(cancellationToken, resourceType, cr.ModelResource, cr.DcpResourceName)).ConfigureAwait(false);
                     await PatchDcpObjectAsync(cr.DcpResource, static c => c.Spec.Start = true, cancellationToken).ConfigureAwait(false);
                     break;
 
                 case RenderedModelResource<Executable> { DcpResource.Spec.Start: false } er when !DcpModelUtilities.ShouldDeferCreateForExplicitStart(er.ModelResource, er.DcpResource.Spec.Start):
+                    await PublishStartingStateAsync().ConfigureAwait(false);
                     await PublishConnectionStringAvailableEventAsync(er.ModelResource, cancellationToken).ConfigureAwait(false);
                     await _executorEvents.PublishAsync(new OnResourceStartingContext(cancellationToken, resourceType, er.ModelResource, er.DcpResourceName)).ConfigureAwait(false);
                     await PatchDcpObjectAsync(er.DcpResource, static e => e.Spec.Start = true, cancellationToken).ConfigureAwait(false);
@@ -1190,6 +1192,7 @@ internal sealed class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAsyncDispo
                     // Ensure we explicitly start the container even if original container was created in "delay-start" mode.
                     cr.DcpResource.Spec.Start = true;
 
+                    await PublishStartingStateAsync().ConfigureAwait(false);
                     await PublishConnectionStringAvailableEventAsync(resourceReference.ModelResource, cancellationToken).ConfigureAwait(false);
                     await _executorEvents.PublishAsync(new OnResourceStartingContext(cancellationToken, resourceType, resourceReference.ModelResource, resourceReference.DcpResourceName)).ConfigureAwait(false);
                     var containerEndpointContext = await _containerNetworkEndpointContextSource.Task.ConfigureAwait(false);
@@ -1202,6 +1205,7 @@ internal sealed class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAsyncDispo
                     // Ensure we explicitly start the executable even if original executable was created in "delay-start" mode.
                     er.DcpResource.Spec.Start = true;
 
+                    await PublishStartingStateAsync().ConfigureAwait(false);
                     await PublishConnectionStringAvailableEventAsync(resourceReference.ModelResource, cancellationToken).ConfigureAwait(false);
                     await _executorEvents.PublishAsync(new OnResourceStartingContext(cancellationToken, resourceType, resourceReference.ModelResource, resourceReference.DcpResourceName)).ConfigureAwait(false);
                     var executableEndpointContext = await _containerNetworkEndpointContextSource.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -1225,6 +1229,20 @@ internal sealed class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAsyncDispo
 
             await _executorEvents.PublishAsync(new OnResourceFailedToStartContext(cancellationToken, resourceType, resourceReference.ModelResource, resourceReference.DcpResourceName, ex.Message)).ConfigureAwait(false);
             throw;
+        }
+
+        Task PublishStartingStateAsync()
+        {
+            // Mark only this instance active before connection-string callbacks can block on parameters.
+            // Keep OnResourceStartingContext later so BeforeResourceStartedEvent ordering is unchanged.
+            return _executorEvents.PublishAsync(new OnResourceChangedContext(
+                cancellationToken,
+                resourceType,
+                resourceReference.ModelResource,
+                resourceReference.DcpResourceName,
+                new ResourceStatus(KnownResourceStates.Starting, null, null),
+                PreviousState: null,
+                UpdateSnapshot: static snapshot => snapshot with { State = KnownResourceStates.Starting }));
         }
     }
 
