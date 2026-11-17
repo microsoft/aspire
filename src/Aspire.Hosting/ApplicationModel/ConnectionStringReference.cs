@@ -52,6 +52,8 @@ public class ConnectionStringReference(IResourceWithConnectionString resource, b
     /// </remarks>
     public ReferenceExpression ConnectionStringExpression => _connectionStringExpression ?? Resource.ConnectionStringExpression;
 
+    internal ReferenceExpression? SelectedConnectionStringExpression => _connectionStringExpression;
+
     // Alias equivalence must not depend on mutable expression text or last-wins optionality.
     internal string ValueName { get; } = nameof(IResourceWithConnectionString.ConnectionStringExpression);
 

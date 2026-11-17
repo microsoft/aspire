@@ -73,7 +73,7 @@ public interface IResourceWithConnectionString : IResource, IExpressionValue, IV
     /// properties.</returns>
     IEnumerable<KeyValuePair<string, ReferenceExpression>> GetConnectionProperties() => [];
 
-    private static (bool Legacy, bool Contextual) GetConnectionStringImplementations(Type resourceType) =>
+    internal static (bool Legacy, bool Contextual) GetConnectionStringImplementations(Type resourceType) =>
         s_connectionStringImplementations.GetOrAdd(resourceType, static type =>
         {
             // The interface map distinguishes the default fallback from class or derived-interface
