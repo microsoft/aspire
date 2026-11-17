@@ -35,6 +35,13 @@ const myService = await builder.addNodeApp("myService", "../my-service", "server
                        .withReference(redis);
 ```
 
+## TLS endpoints
+
+When TLS is enabled in run mode, the primary endpoint uses TLS on container port 6380,
+and a secondary non-TLS endpoint uses container port 6379. Host ports are allocated
+dynamically unless configured explicitly. The `port` argument to `AddRedis` continues
+to select the primary endpoint's host port.
+
 ## REPL
 
 Call `WithRepl()` to opt into a **REPL** command on the Redis resource in the dashboard:
