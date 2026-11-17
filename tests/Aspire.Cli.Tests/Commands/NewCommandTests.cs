@@ -2491,6 +2491,38 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.False(Directory.Exists(Path.Combine(outputDir, ".agents", "skills")));
     }
 
+    [Theory]
+    [InlineData("", false)]
+    [InlineData(" --remove-skill-copies", true)]
+    [InlineData(" --remove-skill-copies=false", false)]
+    public async Task NewCommandNonInteractive_RemovesSkillCopiesOnlyWhenRequested(string option, bool removed)
+    {
+        // `aspire new` requires an empty output directory, so only user-level copies can exist here.
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var homeDirectory = workspace.CreateDirectory("fake-home");
+        var skillDirectory = Path.Combine(homeDirectory.FullName, ".agents", "skills", CommonAgentApplicators.AspireSkillName);
+        Directory.CreateDirectory(skillDirectory);
+        await File.WriteAllTextAsync(Path.Combine(skillDirectory, "SKILL.md"), "My customized Aspire instructions.");
+        var services = CreateServiceCollection(workspace, options =>
+        {
+            options.CliExecutionContextFactory = _ => TestExecutionContextHelper.CreateExecutionContext(
+                workspace.WorkspaceRoot, identityChannel: PackageChannelNames.Stable, homeDirectory: homeDirectory);
+            options.CliHostEnvironmentFactory = (sp) =>
+            {
+                var configuration = sp.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>();
+                return new CliHostEnvironment(configuration, nonInteractive: true);
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<NewCommand>();
+        var result = command.Parse($"new aspire-empty --name TestApp --output ./output --agents copilot --scope global --skills aspire{option}");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal(!removed, Directory.Exists(skillDirectory));
+    }
+
     [Fact]
     public async Task NewCommandNonInteractiveWithoutTemplate_DisplaysErrorWithAvailableTemplates()
     {

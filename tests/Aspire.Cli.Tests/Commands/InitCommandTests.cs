@@ -1121,6 +1121,28 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
+    [InlineData("", false)]
+    [InlineData(" --remove-skill-copies", true)]
+    [InlineData(" --remove-skill-copies=false", false)]
+    public async Task InitCommand_NonInteractive_RemovesSkillCopiesOnlyWhenRequested(string option, bool removed)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var skillDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", CommonAgentApplicators.AspireSkillName);
+        Directory.CreateDirectory(skillDirectory);
+        await File.WriteAllTextAsync(Path.Combine(skillDirectory, "SKILL.md"), "My customized Aspire instructions.");
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var serviceProvider = services.BuildServiceProvider();
+        var command = serviceProvider.GetRequiredService<RootCommand>();
+
+        var parseResult = command.Parse($"init --non-interactive --agents copilot --scope project --skills aspire{option}");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal(!removed, Directory.Exists(skillDirectory));
+    }
+
+    [Theory]
     [InlineData("13.6.1", false, true)]
     [InlineData("17.0.0-preview.1.26479.11", true, true)]
     [InlineData("17.1.0-preview.1.26556.5", true, false)]
