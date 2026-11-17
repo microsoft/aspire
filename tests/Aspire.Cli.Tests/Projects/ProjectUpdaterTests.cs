@@ -4,6 +4,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Configuration;
+using Aspire.Cli.Diagnostics;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Packaging;
@@ -127,7 +128,8 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
             provider.GetRequiredService<IMemoryCache>(),
             CreateExecutionContext(workspace.WorkspaceRoot),
             provider.GetRequiredService<FallbackProjectParser>(),
-            provider.GetRequiredService<BundleNuGetService>());
+            provider.GetRequiredService<BundleNuGetService>(),
+            provider.GetRequiredService<FileLoggerProvider>());
         var channel = (await provider.GetRequiredService<IPackagingService>().GetChannelsAsync().DefaultTimeout())
             .Single(c => c.Name == "daily");
 
@@ -289,7 +291,8 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
             provider.GetRequiredService<IMemoryCache>(),
             CreateExecutionContext(workspace.WorkspaceRoot),
             provider.GetRequiredService<FallbackProjectParser>(),
-            provider.GetRequiredService<BundleNuGetService>());
+            provider.GetRequiredService<BundleNuGetService>(),
+            provider.GetRequiredService<FileLoggerProvider>());
         var channel = (await provider.GetRequiredService<IPackagingService>().GetChannelsAsync().DefaultTimeout())
             .Single(c => c.Name == "daily");
 
@@ -377,7 +380,8 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
             provider.GetRequiredService<IMemoryCache>(),
             CreateExecutionContext(workspace.WorkspaceRoot),
             provider.GetRequiredService<FallbackProjectParser>(),
-            provider.GetRequiredService<BundleNuGetService>());
+            provider.GetRequiredService<BundleNuGetService>(),
+            provider.GetRequiredService<FileLoggerProvider>());
         var channel = (await provider.GetRequiredService<IPackagingService>().GetChannelsAsync().DefaultTimeout())
             .Single(c => c.Name == "daily");
 
@@ -2761,7 +2765,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
         var selectedChannel = channels.Single(c => c.Name == "default");
 
-        var projectUpdater = new ProjectUpdater(logger, runner, interactionService, cache, executionContext, fallbackParser, provider.GetRequiredService<BundleNuGetService>());
+        var projectUpdater = new ProjectUpdater(logger, runner, interactionService, cache, executionContext, fallbackParser, provider.GetRequiredService<BundleNuGetService>(), provider.GetRequiredService<FileLoggerProvider>());
         var updateResult = await projectUpdater.UpdateProjectAsync(CreateUpdateContext(appHostProjectFile, selectedChannel)).DefaultTimeout();
 
         // Should not throw ProjectUpdaterException; should produce update steps including AppHost SDK
@@ -2863,7 +2867,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
         var selectedChannel = channels.Single(c => c.Name == "default");
 
-        var projectUpdater = new ProjectUpdater(logger, runner, interactionService, cache, executionContext, fallbackParser, provider.GetRequiredService<BundleNuGetService>());
+        var projectUpdater = new ProjectUpdater(logger, runner, interactionService, cache, executionContext, fallbackParser, provider.GetRequiredService<BundleNuGetService>(), provider.GetRequiredService<FileLoggerProvider>());
         var updateResult = await projectUpdater.UpdateProjectAsync(CreateUpdateContext(appHostProjectFile, selectedChannel)).DefaultTimeout();
 
         // Should discover package reference (version may be absent) and not crash
@@ -2942,7 +2946,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
         var selectedChannel = channels.Single(c => c.Name == "default");
 
-        var projectUpdater = new ProjectUpdater(logger, runner, interactionService, cache, executionContext, fallbackParser, provider.GetRequiredService<BundleNuGetService>());
+        var projectUpdater = new ProjectUpdater(logger, runner, interactionService, cache, executionContext, fallbackParser, provider.GetRequiredService<BundleNuGetService>(), provider.GetRequiredService<FileLoggerProvider>());
 
         // Should throw ProjectUpdaterException due to invalid XML
         await Assert.ThrowsAsync<ProjectUpdaterException>(() =>
@@ -3025,7 +3029,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
         var selectedChannel = channels.Single(c => c.Name == "default");
 
-        var projectUpdater = new ProjectUpdater(logger, runner, interactionService, cache, executionContext, fallbackParser, provider.GetRequiredService<BundleNuGetService>());
+        var projectUpdater = new ProjectUpdater(logger, runner, interactionService, cache, executionContext, fallbackParser, provider.GetRequiredService<BundleNuGetService>(), provider.GetRequiredService<FileLoggerProvider>());
         var updateResult = await projectUpdater.UpdateProjectAsync(CreateUpdateContext(appHostProjectFile, selectedChannel)).DefaultTimeout();
 
         // Normal path unaffected - no updates needed since version is already current
@@ -3104,7 +3108,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
         var selectedChannel = channels.Single(c => c.Name == "default");
 
-        var projectUpdater = new ProjectUpdater(logger, runner, interactionService, cache, executionContext, fallbackParser, provider.GetRequiredService<BundleNuGetService>());
+        var projectUpdater = new ProjectUpdater(logger, runner, interactionService, cache, executionContext, fallbackParser, provider.GetRequiredService<BundleNuGetService>(), provider.GetRequiredService<FileLoggerProvider>());
         var updateResult = await projectUpdater.UpdateProjectAsync(CreateUpdateContext(appHostFile, selectedChannel)).DefaultTimeout();
 
         Assert.True(updateResult.UpdatedApplied);
@@ -3367,7 +3371,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
         var selectedChannel = channels.Single(c => c.Name == "default");
 
-        var projectUpdater = new ProjectUpdater(logger, runner, interactionService, cache, executionContext, fallbackParser, provider.GetRequiredService<BundleNuGetService>());
+        var projectUpdater = new ProjectUpdater(logger, runner, interactionService, cache, executionContext, fallbackParser, provider.GetRequiredService<BundleNuGetService>(), provider.GetRequiredService<FileLoggerProvider>());
         var updateResult = await projectUpdater.UpdateProjectAsync(CreateUpdateContext(appHostFile, selectedChannel)).DefaultTimeout();
 
         Assert.True(updateResult.UpdatedApplied);
@@ -3455,7 +3459,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
         var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
         var selectedChannel = channels.Single(c => c.Name == "default");
 
-        var projectUpdater = new ProjectUpdater(logger, runner, interactionService, cache, executionContext, fallbackParser, provider.GetRequiredService<BundleNuGetService>());
+        var projectUpdater = new ProjectUpdater(logger, runner, interactionService, cache, executionContext, fallbackParser, provider.GetRequiredService<BundleNuGetService>(), provider.GetRequiredService<FileLoggerProvider>());
 
         // This should not throw and should handle the * version gracefully
         var updateResult = await projectUpdater.UpdateProjectAsync(CreateUpdateContext(appHostProjectFile, selectedChannel)).DefaultTimeout();
