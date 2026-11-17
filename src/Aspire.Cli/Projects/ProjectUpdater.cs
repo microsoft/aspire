@@ -358,6 +358,9 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
                         await transaction.VerifyAsync(cancellationToken);
                         return await runner.RestoreAsync(projectFile, new()
                         {
+                            // ChildProcess traces raw output before callbacks run. Only the redacted
+                            // callback messages may reach the logger, including at Trace verbosity.
+                            SuppressLogging = true,
                             StandardOutputCallback = line =>
                             {
                                 var redacted = PackageSourceRedactor.RedactOccurrences(line, sensitiveSources);

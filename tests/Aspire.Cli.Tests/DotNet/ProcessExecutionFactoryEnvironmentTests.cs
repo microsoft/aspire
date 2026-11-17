@@ -9,7 +9,9 @@ using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Hosting;
 using Aspire.TestUtilities;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging.Testing;
 
 namespace Aspire.Cli.Tests.DotNet;
 
@@ -18,6 +20,45 @@ public sealed class ProcessExecutionFactoryEnvironmentTests(ITestOutputHelper ou
 {
     private const string SelectionOrigin = "explicit-launch-configuration";
     private const string ControlEnvVarName = "ASPIRE_TEST_PROCESS_EXECUTION_FACTORY_CONTROL";
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task CreateExecution_LoggingSuppressionPreservesCallbacksWithoutRawTraceOutput(bool suppressLogging)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        const string diagnostic = "https://user:password@feed.example/index.json?sig=token";
+        var script = ProcessTestHelpers.CreateScript(workspace.WorkspaceRoot, "diagnostics",
+            $"printf '%s\\n' '{diagnostic}'\nprintf '%s\\n' '{diagnostic}' >&2",
+            $"@echo off\r\necho {diagnostic}\r\necho {diagnostic} 1>&2");
+        var logger = new FakeLogger<ProcessExecutionFactory>();
+        Assert.True(logger.IsEnabled(LogLevel.Trace));
+        var stdout = new List<string>();
+        var stderr = new List<string>();
+        var factory = new ProcessExecutionFactory(new TestEnvironment(), logger);
+        await using var execution = factory.CreateExecution(script, [], null, workspace.WorkspaceRoot, new ProcessInvocationOptions
+        {
+            SuppressLogging = suppressLogging,
+            StandardOutputCallback = stdout.Add,
+            StandardErrorCallback = stderr.Add
+        });
+
+        Assert.True(await execution.StartAsync(TestContext.Current.CancellationToken));
+        Assert.Equal(0, await execution.WaitForExitAsync(TestContext.Current.CancellationToken));
+        Assert.Equal([diagnostic], stdout);
+        Assert.Equal([diagnostic], stderr);
+        var traceMessages = logger.Collector.GetSnapshot()
+            .Where(record => record.Level == LogLevel.Trace && record.Message.Contains(diagnostic, StringComparison.Ordinal))
+            .Select(record => record.Message);
+        if (suppressLogging)
+        {
+            Assert.Empty(logger.Collector.GetSnapshot());
+        }
+        else
+        {
+            Assert.Equal(2, traceMessages.Count());
+        }
+    }
 
     [Fact]
     public async Task CreateExecution_FromStartInfo_PreservesRawArguments()

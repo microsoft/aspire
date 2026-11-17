@@ -1727,6 +1727,7 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
         };
         runner.RestoreAsyncCallback = (_, options, _) =>
         {
+            Assert.True(options.SuppressLogging);
             options.StandardOutputCallback?.Invoke(restoreMessage);
             options.StandardOutputCallback?.Invoke(restoreError);
             options.StandardErrorCallback?.Invoke(stderrMessage);
