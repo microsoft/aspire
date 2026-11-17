@@ -609,7 +609,11 @@ internal sealed class UpdateCommand : BaseCommand
 
         if (pending.Count == 0)
         {
-            InteractionService.DisplaySubtleMessage(MigrationStrings.NothingToMigrate);
+            // Removing Aspire.AppHost.Sdk is intentionally not an automatic migration, so don't claim the
+            // project already follows the latest conventions when the next build will still emit ASPIRE012.
+            InteractionService.DisplaySubtleMessage(DotNetAppHostProject.UsesObsoleteAppHostSdk(projectFile)
+                ? MigrationStrings.NoAutomaticMigrationsAppHostSdkObsolete
+                : MigrationStrings.NothingToMigrate);
             return;
         }
 
