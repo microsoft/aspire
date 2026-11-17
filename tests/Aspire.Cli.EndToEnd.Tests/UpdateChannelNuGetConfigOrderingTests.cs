@@ -102,6 +102,7 @@ public sealed class UpdateChannelNuGetConfigOrderingTests(ITestOutputHelper outp
               <PropertyGroup>
                 <TargetFramework>net10.0</TargetFramework>
                 <NuGetAudit>false</NuGetAudit>
+                <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
               </PropertyGroup>
               <ItemGroup>
                 <PackageReference Include="Aspire.Hosting.Redis" Version="[{{sdkVersion}}]" />
@@ -136,7 +137,7 @@ public sealed class UpdateChannelNuGetConfigOrderingTests(ITestOutputHelper outp
         // during apply. The original SDK and application closure remain warm in the user cache.
         await auto.RunCommandAsync("dotnet nuget remove source seed-local --configfile nuget.config", counter);
         var originals = new Dictionary<string, byte[]>();
-        foreach (var path in new[] { projectPath, configPath, nugetPath })
+        foreach (var path in new[] { projectPath, configPath, nugetPath, Path.Combine(root, "packages.lock.json") })
         {
             originals.Add(path, await File.ReadAllBytesAsync(path));
         }
@@ -176,21 +177,22 @@ public sealed class UpdateChannelNuGetConfigOrderingTests(ITestOutputHelper outp
         // Remove the only feed copy while retaining the extracted package. An ordinary warm
         // restore still succeeds, but validation must download into its own empty package folder.
         File.Delete(packagePath);
-        await auto.RunCommandAsync("dotnet restore AppHost.csproj --force --no-http-cache", counter, TimeSpan.FromMinutes(3));
+        await auto.RunCommandAsync("dotnet restore AppHost.csproj --locked-mode --force --no-http-cache", counter, TimeSpan.FromMinutes(3));
         var cachedDependency = Path.Combine(root, ".nuget-packages", dependencyId.ToLowerInvariant(), dependencyVersion);
         Assert.True(File.Exists(Path.Combine(cachedDependency, ".nupkg.metadata")));
+        // Validation restore outputs are redirected to private storage, so the project's own
+        // restore outputs must be untouched even when validation fails.
+        var assetsPath = Path.Combine(root, "obj", "project.assets.json");
+        var originalAssets = await File.ReadAllBytesAsync(assetsPath);
         await auto.RunCommandAsync(
             dryRunCommand + " --non-interactive --log-level debug > dry-run-output.txt 2>&1; printf '%s' \"$?\" > dry-run-exit.txt",
             counter, TimeSpan.FromMinutes(3));
         await AssertValidationFailedAsync();
-        // The CLI does not forward native restore output. Its assets file records diagnostics as:
-        // { "code": "NU1101", "level": "Error", "libraryId": "Contoso.UpdateValidation.Dependency", ... }
-        var restoreDiagnostics = JsonNode.Parse(
-            await File.ReadAllTextAsync(Path.Combine(root, "obj", "project.assets.json")))!["logs"]!.AsArray();
-        Assert.Single(restoreDiagnostics, diagnostic => diagnostic is { } error
-            && error["code"]?.GetValue<string>() == "NU1101"
-            && error["level"]?.GetValue<string>() == "Error"
-            && error["libraryId"]?.GetValue<string>() == dependencyId);
+        // Failed validation displays the native restore output, for example:
+        //   error NU1101: Unable to find package Contoso.UpdateValidation.Dependency. No packages exist with this id in source(s): ...
+        Assert.Contains($"NU1101: Unable to find package {dependencyId}",
+            await File.ReadAllTextAsync(Path.Combine(root, "dry-run-output.txt")));
+        Assert.Equal(originalAssets, await File.ReadAllBytesAsync(assetsPath));
         await AssertOriginalsAsync();
         Assert.Empty(Directory.GetFiles(root, "*.aspire-backup*"));
         Assert.True(File.Exists(Path.Combine(cachedDependency, ".nupkg.metadata")));
