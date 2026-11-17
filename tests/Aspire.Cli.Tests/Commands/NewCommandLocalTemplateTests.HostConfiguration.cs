@@ -3,12 +3,17 @@
 
 using System.Globalization;
 using System.Text.Json;
+using System.Xml.Linq;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.TemplateEngine.Abstractions.Installer;
+using Microsoft.TemplateEngine.Edge;
+using Microsoft.TemplateEngine.Edge.Settings;
+using Microsoft.TemplateEngine.Edge.Template;
 using RootCommand = Aspire.Cli.Commands.RootCommand;
 
 namespace Aspire.Cli.Tests.Commands;
@@ -399,19 +404,7 @@ public partial class NewCommandLocalTemplateTests
         string? packagedVersion, string identityVersion)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var source = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory,
-            "..", "..", "..", "..", "..", "src", "Aspire.ProjectTemplates", "templates", templateName));
-        var template = workspace.CreateDirectory("template");
-        FileSystemHelper.CopyDirectory(source, template.FullName);
-        if (packagedVersion is not null)
-        {
-            var configurationPath = Path.Combine(template.FullName, ".template.config", "template.json");
-            // Packaging replaces this metadata with major.minor, not the full SDK version.
-            // Keep the unmodified source template covered as well.
-            await File.WriteAllTextAsync(configurationPath,
-                (await File.ReadAllTextAsync(configurationPath))
-                    .Replace("!!REPLACE_WITH_LATEST_MAJOR_MINOR_VERSION!!", packagedVersion, StringComparison.Ordinal));
-        }
+        await CopyBuiltInTemplateAsync(workspace, templateName, packagedVersion);
         var interaction = new TestInteractionService();
         foreach (var _ in expectedBooleans)
         {
@@ -467,5 +460,96 @@ public partial class NewCommandLocalTemplateTests
                 }
             }
         }
+    }
+
+    [Theory]
+    [InlineData(true, "17.0.0")]
+    [InlineData(false, "17.0.0")]
+    [InlineData(true, "17.0.0-preview.1")]
+    [InlineData(false, "17.0.0-preview.1")]
+    [InlineData(true, "17.0.0-pr.21506.gabcdef12")]
+    [InlineData(false, "17.0.0-pr.21506.gabcdef12")]
+    public async Task LocalTemplate_EmptyTemplateRetainsPackagedVersionsWithoutPrompting(bool interactive, string identityVersion)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var template = await CopyBuiltInTemplateAsync(workspace, "aspire-empty", "17.0");
+        const string packagedVersion = "17.0.0-preview.1.26528.15";
+        foreach (var path in Directory.GetFiles(template.FullName, "*.csproj", SearchOption.AllDirectories))
+        {
+            await File.WriteAllTextAsync(path, (await File.ReadAllTextAsync(path))
+                .Replace("!!REPLACE_WITH_LATEST_VERSION!!", packagedVersion, StringComparison.Ordinal));
+        }
+
+        var interaction = new TestInteractionService();
+        interaction.PromptForSelectionCallback = (_, _, _, _) => throw new InvalidOperationException("The empty template must not prompt for choices.");
+        var services = CreateServices(workspace, interaction, interactive);
+        services.AddSingleton(workspace.CreateExecutionContext(identityChannel: "stable", identityVersion: identityVersion));
+        using var provider = services.BuildServiceProvider();
+
+        var exitCode = await provider.GetRequiredService<RootCommand>()
+            .Parse("new --template-path template --name Demo --output out --suppress-agent-init")
+            .InvokeAsync().DefaultTimeout();
+
+        Assert.True(exitCode == CliExitCodes.Success, string.Join(Environment.NewLine, interaction.DisplayedErrors));
+        Assert.Empty(interaction.DisplayedErrors);
+        Assert.Empty(interaction.StringPromptCalls);
+        Assert.Empty(interaction.BooleanPromptCalls);
+        var appHost = XDocument.Load(Path.Combine(workspace.Path, "out", "Demo.AppHost", "Demo.AppHost.csproj"));
+        Assert.Equal(
+            [("Aspire.Hosting.AppHost", packagedVersion), ("Aspire.Hosting.Dotnet", packagedVersion)],
+            appHost.Descendants("PackageReference").Select(reference => (reference.Attribute("Include")!.Value, reference.Attribute("Version")!.Value)));
+    }
+
+    [Theory]
+    [InlineData("vs")]
+    [InlineData("dotnetcli")]
+    public async Task LocalTemplate_EmptyTemplateExposesNumericVersionChoicesToOtherHosts(string hostIdentifier)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var template = await CopyBuiltInTemplateAsync(workspace, "aspire-empty", "17.0");
+        var components = Microsoft.TemplateEngine.Edge.Components.AllComponents
+            .Concat(Microsoft.TemplateEngine.Orchestrator.RunnableProjects.Components.AllComponents).ToList();
+        using var host = new DefaultTemplateEngineHost(hostIdentifier, "1.0.0", builtIns: components);
+        using var settings = new EngineEnvironmentSettings(host, virtualizeSettings: true);
+        using var manager = new TemplatePackageManager(settings);
+        var installed = await manager.GetBuiltInManagedProvider().InstallAsync([new InstallRequest(template.FullName)], CancellationToken.None);
+        Assert.True(Assert.Single(installed).Success);
+
+        var discoveredTemplate = Assert.Single(await manager.GetTemplatesAsync(CancellationToken.None));
+        var version = Assert.Single(discoveredTemplate.ParameterDefinitions, parameter => parameter.Name == "AspireVersion");
+        Assert.Equal("choice", version.DataType);
+        Assert.Equal(["17.0"], version.Choices!.Keys);
+        Assert.Equal("17.0", version.DefaultValue);
+        Assert.Equal("net10.0;net11.0", discoveredTemplate.TagsCollection["aspire-17.0-tfms"]);
+
+        var creator = new TemplateCreator(settings);
+        var result = await creator.InstantiateAsync(discoveredTemplate, "Demo", null, Path.Combine(workspace.Path, "out"),
+            new Dictionary<string, string?> { ["AspireVersion"] = "17.0" }, dryRun: true);
+        Assert.Equal(CreationResultStatus.Success, result.Status);
+
+        // A disabled parameter would accept this invalid choice, so rejection also verifies
+        // that version selection remains enabled for Visual Studio and dotnet new.
+        var invalid = await creator.InstantiateAsync(discoveredTemplate, "Demo", null, Path.Combine(workspace.Path, "invalid"),
+            new Dictionary<string, string?> { ["AspireVersion"] = "17.0.0-preview.1" }, dryRun: true);
+        Assert.Equal(CreationResultStatus.InvalidParamValues, invalid.Status);
+    }
+
+    private static async Task<DirectoryInfo> CopyBuiltInTemplateAsync(TemporaryWorkspace workspace, string templateName, string? packagedVersion)
+    {
+        var source = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory,
+            "..", "..", "..", "..", "..", "src", "Aspire.ProjectTemplates", "templates", templateName));
+        var template = workspace.CreateDirectory("template");
+        FileSystemHelper.CopyDirectory(source, template.FullName);
+        if (packagedVersion is not null)
+        {
+            var configurationPath = Path.Combine(template.FullName, ".template.config", "template.json");
+            // Packaging replaces this metadata with major.minor, not the full SDK version.
+            // Keep the unmodified source template covered as well.
+            await File.WriteAllTextAsync(configurationPath,
+                (await File.ReadAllTextAsync(configurationPath))
+                    .Replace("!!REPLACE_WITH_LATEST_MAJOR_MINOR_VERSION!!", packagedVersion, StringComparison.Ordinal));
+        }
+
+        return template;
     }
 }
