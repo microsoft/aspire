@@ -2457,12 +2457,8 @@ public static class ResourceBuilderExtensions
         return builder.WithAnnotation(new ResourceUrlsCallbackAnnotation(async c =>
         {
             var endpoint = url.ValueProviders.OfType<EndpointReference>().FirstOrDefault();
-            var urlValue = await url.GetValueAsync(new ValueProviderContext
-            {
-                ExecutionContext = c.ExecutionContext,
-                Caller = c.Resource,
-                Network = KnownNetworkIdentifiers.LocalhostNetwork
-            }, c.CancellationToken).ConfigureAwait(false);
+            var urlValue = await url.GetValueAsync(
+                ValueProviderContext.ForHost(c.ExecutionContext, c.Resource), c.CancellationToken).ConfigureAwait(false);
             if (!string.IsNullOrEmpty(urlValue))
             {
                 c.Urls.Add(new() { Endpoint = endpoint, Url = urlValue, DisplayText = displayText });

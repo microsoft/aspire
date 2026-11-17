@@ -621,12 +621,7 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerNetw
             // it does not mean these values are consumed on the container's runtime network
             // (for example, they may be embedded in browser assets). An endpoint reference's
             // explicitly selected network still takes precedence over this default.
-            var valueContext = new ValueProviderContext
-            {
-                ExecutionContext = executionContext,
-                Caller = modelContainerResource,
-                Network = KnownNetworkIdentifiers.LocalhostNetwork
-            };
+            var valueContext = ValueProviderContext.ForHost(executionContext, modelContainerResource);
 
             foreach (var buildArgument in dockerfileBuildAnnotation.BuildArguments)
             {

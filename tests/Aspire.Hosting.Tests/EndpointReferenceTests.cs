@@ -4,6 +4,7 @@
 using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using Aspire.Hosting.Utils;
+using Microsoft.AspNetCore.InternalTesting;
 
 namespace Aspire.Hosting.Tests;
 
@@ -336,6 +337,30 @@ public class EndpointReferenceTests
             networkId: KnownNetworkIdentifiers.DefaultAspireContainerNetwork);
 
         var ex = Assert.Throws<InvalidOperationException>(() => annotation.AllocatedEndpoint = mismatchedEndpoint);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task HostContextPreservesExplicitEndpointNetwork(bool explicitNetwork)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var server = builder.AddContainer("server", "image").WithHttpEndpoint(targetPort: 8080);
+        var caller = builder.AddContainer("caller", "image").Resource;
+        var endpoint = explicitNetwork
+            ? server.GetEndpoint("http", KnownNetworkIdentifiers.DefaultAspireContainerNetwork)
+            : server.GetEndpoint("http");
+        var annotation = endpoint.EndpointAnnotation;
+        annotation.AllocatedEndpoint = new(annotation, "localhost", 18080);
+        annotation.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(
+            KnownNetworkIdentifiers.DefaultAspireContainerNetwork,
+            new(annotation, "server", 8080, EndpointBindingMode.SingleAddress, networkId: KnownNetworkIdentifiers.DefaultAspireContainerNetwork));
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
+
+        var value = await endpoint.Property(EndpointProperty.Url).GetValueAsync(
+            ValueProviderContext.ForHost(builder.ExecutionContext, caller), cts.Token);
+
+        Assert.Equal(explicitNetwork ? "http://server:8080" : "http://localhost:18080", value);
     }
 
     [Theory]

@@ -128,12 +128,7 @@ public static class MongoDBReplicaSetBuilderExtensions
                     await evt.Eventing.PublishAsync(new BeforeResourceStartedEvent(resource, evt.Services), ct)
                         .ConfigureAwait(false);
 
-                    var valueContext = new ValueProviderContext
-                    {
-                        ExecutionContext = builder.ExecutionContext,
-                        Caller = resource,
-                        Network = KnownNetworkIdentifiers.LocalhostNetwork
-                    };
+                    var valueContext = ValueProviderContext.ForHost(builder.ExecutionContext, resource);
                     connectionString = await rsResource.ConnectionStringExpression.GetValueAsync(valueContext, ct).ConfigureAwait(false);
 
                     await evt.Eventing.PublishAsync(new ConnectionStringAvailableEvent(resource, evt.Services), ct)

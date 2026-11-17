@@ -125,12 +125,8 @@ public static class AzureKustoBuilderExtensions
         KustoConnectionStringBuilder? kcsb = null;
         resourceBuilder.OnConnectionStringAvailable(async (db, evt, ct) =>
         {
-            var connectionString = await db.ConnectionStringExpression.GetValueAsync(new ValueProviderContext
-            {
-                ExecutionContext = builder.ApplicationBuilder.ExecutionContext,
-                Caller = db,
-                Network = KnownNetworkIdentifiers.LocalhostNetwork
-            }, ct).ConfigureAwait(false) ??
+            var connectionString = await db.ConnectionStringExpression.GetValueAsync(
+                ValueProviderContext.ForHost(builder.ApplicationBuilder.ExecutionContext, db), ct).ConfigureAwait(false) ??
             throw new DistributedApplicationException($"ConnectionStringAvailableEvent published for resource '{db.Name}', but the connection string was null.");
 
             kcsb = GetConnectionStringBuilder(builder.Resource, connectionString);
@@ -245,12 +241,8 @@ public static class AzureKustoBuilderExtensions
         KustoConnectionStringBuilder? kcsb = null;
         resourceBuilder.OnConnectionStringAvailable(async (resource, evt, ct) =>
         {
-            var connectionString = await resource.ConnectionStringExpression.GetValueAsync(new ValueProviderContext
-            {
-                ExecutionContext = resourceBuilder.ApplicationBuilder.ExecutionContext,
-                Caller = resource,
-                Network = KnownNetworkIdentifiers.LocalhostNetwork
-            }, ct).ConfigureAwait(false) ??
+            var connectionString = await resource.ConnectionStringExpression.GetValueAsync(
+                ValueProviderContext.ForHost(resourceBuilder.ApplicationBuilder.ExecutionContext, resource), ct).ConfigureAwait(false) ??
             throw new DistributedApplicationException($"ConnectionStringAvailableEvent published for resource '{resource.Name}', but the connection string was null.");
 
             kcsb = GetConnectionStringBuilder(resource, connectionString);
