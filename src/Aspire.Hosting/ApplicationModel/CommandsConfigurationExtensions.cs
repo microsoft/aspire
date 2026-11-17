@@ -398,6 +398,9 @@ internal static class CommandsConfigurationExtensions
 
         if (IsWaitingForStartup(preRebuildState))
         {
+            // Replicas normally share parameter dependencies and values, so a parameter-blocked replica
+            // resuming during a running sibling's rebuild is not a realistic startup scenario. Different
+            // waits would require custom per-invocation configuration rather than ordinary replica startup.
             return RebuildReplicaAction.LeaveWaiting;
         }
 

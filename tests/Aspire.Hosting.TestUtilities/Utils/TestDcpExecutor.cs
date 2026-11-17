@@ -10,7 +10,6 @@ internal sealed class TestDcpExecutor : IDcpExecutor
 {
     private readonly Dictionary<string, IResourceReference> _resources = new(StringComparers.ResourceName);
     private readonly ConcurrentQueue<string> _startedResources = new();
-    private readonly ConcurrentQueue<string> _stoppedResources = new();
 
     /// <summary>
     /// DCP resource names passed to <see cref="StartResourceAsync"/>, in the order they were requested.
@@ -21,10 +20,6 @@ internal sealed class TestDcpExecutor : IDcpExecutor
     /// swallowed because the snapshot claimed the resource was already on its way up".
     /// </remarks>
     public IReadOnlyCollection<string> StartedResources => _startedResources;
-
-    public IReadOnlyCollection<string> StoppedResources => _stoppedResources;
-
-    public Func<IResourceReference, CancellationToken, Task>? StartResourceCallback { get; set; }
 
     /// <summary>
     /// Registers a resource so that <see cref="GetResource"/> can resolve it, mimicking a DCP resource that was
@@ -47,16 +42,12 @@ internal sealed class TestDcpExecutor : IDcpExecutor
     public Task StartResourceAsync(IResourceReference resourceReference, CancellationToken cancellationToken)
     {
         _startedResources.Enqueue(resourceReference.DcpResourceName);
-        return StartResourceCallback?.Invoke(resourceReference, cancellationToken) ?? Task.CompletedTask;
+        return Task.CompletedTask;
     }
 
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
-    public Task StopResourceAsync(IResourceReference resource, CancellationToken cancellationToken)
-    {
-        _stoppedResources.Enqueue(resource.DcpResourceName);
-        return Task.CompletedTask;
-    }
+    public Task StopResourceAsync(IResourceReference resource, CancellationToken cancellationToken) => Task.CompletedTask;
 
     private sealed class TestResourceReference(IResource modelResource, string dcpResourceName) : IResourceReference
     {
