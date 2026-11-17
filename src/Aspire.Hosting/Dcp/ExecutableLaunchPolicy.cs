@@ -6,28 +6,19 @@
 
 using System.Diagnostics;
 using Aspire.Hosting.ApplicationModel;
-using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Configuration;
 
 namespace Aspire.Hosting.Dcp;
 
 internal sealed class ExecutableLaunchPolicy(IConfiguration configuration)
 {
-    private const string AzureFunctionsLaunchConfigurationType = "azure-functions";
-
     private readonly IConfiguration _configuration = configuration;
 
     public ExecutableLaunchDecision Decide(IResource resource)
     {
-        if (resource.HasAnnotationOfType<ForceProcessExecutionAnnotation>() || resource.HasPersistentLifetime())
-        {
-            return new(
-                ExecutableLaunchMechanism.Process,
-                ExecutableLaunchMode.NoDebug,
-                projectLaunchMode: GetProjectLaunchMode());
-        }
-
-        var supportsDebugging = resource.SupportsDebugging(_configuration, out var debugSupport);
+        var debugSupportDecision = resource.GetEffectiveDebugSupportDecision(_configuration);
+        var debugSupport = debugSupportDecision.EffectiveAnnotation;
+        var supportsDebugging = debugSupport is not null;
 
         if (resource is ProjectResource)
         {
@@ -54,15 +45,7 @@ internal sealed class ExecutableLaunchPolicy(IConfiguration configuration)
                     ExecutableLaunchMechanism.Ide,
                     GetLaunchMode(debugSupport.LaunchConfigurationType),
                     debugSupport,
-                    projectLaunchMode: GetProjectLaunchMode());
-            }
-
-            if (ShouldUseCompatibilityProjectLaunch(resource, debugSupport))
-            {
-                return new(
-                    ExecutableLaunchMechanism.Ide,
-                    GetLaunchMode(KnownLaunchConfigurationTypes.Project),
-                    useCompatibilityProjectLaunchConfiguration: true,
+                    materializeLaunchProfileArguments: debugSupportDecision.UsesAzureFunctionsProjectCompatibility,
                     projectLaunchMode: GetProjectLaunchMode());
             }
         }
@@ -78,64 +61,6 @@ internal sealed class ExecutableLaunchPolicy(IConfiguration configuration)
             ExecutableLaunchMechanism.Process,
             ExecutableLaunchMode.NoDebug,
             projectLaunchMode: GetProjectLaunchMode());
-    }
-
-    private bool ShouldUseCompatibilityProjectLaunch(
-        IResource resource,
-        SupportsDebuggingAnnotation? debugSupport)
-    {
-        if (string.IsNullOrEmpty(_configuration[DcpExecutor.DebugSessionPortVar]))
-        {
-            return false;
-        }
-
-        var hasExplicitProjectLaunchCapability = HasExplicitProjectLaunchCapability();
-
-        // Capability-less IDE sessions can only launch projects loaded in the solution, so bare .cs files stay on
-        // the Process path. An IDE that explicitly advertises "project" can launch the same .cs project configuration
-        // through this compatibility path even when the resource has no SupportsDebuggingAnnotation.
-        if (resource.TryGetProjectMetadata(out var projectMetadata) &&
-            projectMetadata.IsFileBasedApp &&
-            !hasExplicitProjectLaunchCapability)
-        {
-            return false;
-        }
-
-        if (resource.TryGetLastAnnotation<ExecutableAnnotation>(out _) &&
-            debugSupport?.LaunchConfigurationType is not null and not KnownLaunchConfigurationTypes.Project)
-        {
-            return false;
-        }
-
-        if (debugSupport is not null && !string.IsNullOrEmpty(_configuration[KnownConfigNames.DebugSessionInfo]))
-        {
-            // Azure Functions projects should use the legacy "project" launch configuration only when the active IDE
-            // advertises native project support and the session is not owned by an Aspire extension. Extension-managed
-            // sessions treat the advertised custom launch types as an exact contract, so an unsupported
-            // "azure-functions" type must not use the "project" compatibility launch.
-            var useAzureFunctionsProjectFallback =
-                debugSupport.LaunchConfigurationType == AzureFunctionsLaunchConfigurationType &&
-                hasExplicitProjectLaunchCapability &&
-                string.IsNullOrEmpty(_configuration[KnownConfigNames.ExtensionEndpoint]);
-
-            if (!useAzureFunctionsProjectFallback)
-            {
-                return false;
-            }
-        }
-
-        // A directly added legacy ProjectResource may not declare a launch configuration type at all. Preserve its
-        // historical Visual Studio-compatible behavior and treat it as a project launch whenever a debug session is
-        // active. Project v2 resources declare their capability explicitly and do not use this compatibility path.
-        return true;
-    }
-
-    private bool HasExplicitProjectLaunchCapability()
-    {
-        return DebugSessionInfoParser.TryGetSupportedLaunchConfigurations(
-            _configuration[KnownConfigNames.DebugSessionInfo],
-            out var supportedLaunchConfigurations)
-            && supportedLaunchConfigurations?.Contains(KnownLaunchConfigurationTypes.Project) is true;
     }
 
     private string GetLaunchMode(string? launchConfigurationType)
