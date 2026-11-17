@@ -164,7 +164,7 @@ internal sealed class SdkDumpCommand : BaseCommand
     private Task<IAppHostServerProject> CreateCapabilityScannerProjectAsync(string tempDir, CancellationToken cancellationToken)
     {
         var repoRoot = AspireRepositoryDetector.DetectRepositoryRoot(tempDir);
-        return _appHostServerProjectFactory.CreateAsync(tempDir, restoreRootConfigDirectory: repoRoot, cancellationToken);
+        return _appHostServerProjectFactory.CreateForSdkCommandsAsync(tempDir, restoreRootConfigDirectory: repoRoot, cancellationToken);
     }
 
     private async Task<int> DumpCapabilitiesAsync(
@@ -173,7 +173,7 @@ internal sealed class SdkDumpCommand : BaseCommand
         OutputFormat format,
         CancellationToken cancellationToken)
     {
-        var tempDirectory = Directory.CreateTempSubdirectory("aspire-sdk-dump-");
+        var tempDirectory = CliPathHelper.CreateSdkWorkingDirectory(ExecutionContext.AspireHomeDirectory);
         var tempDir = tempDirectory.FullName;
 
         try
@@ -272,7 +272,7 @@ internal sealed class SdkDumpCommand : BaseCommand
         OutputFormat format,
         CancellationToken cancellationToken)
     {
-        var tempDirectory = Directory.CreateTempSubdirectory("aspire-sdk-dump-");
+        var tempDirectory = CliPathHelper.CreateSdkWorkingDirectory(ExecutionContext.AspireHomeDirectory);
         var tempDir = tempDirectory.FullName;
 
         try

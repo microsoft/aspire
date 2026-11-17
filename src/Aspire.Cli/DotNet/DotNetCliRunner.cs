@@ -78,6 +78,11 @@ internal sealed class ProcessInvocationOptions
     /// </summary>
     public FileInfo? NuGetRestoreTargetsFile { get; set; }
 
+    /// <summary>
+    /// Disables automatic MSBuild response files for CLI-generated projects without changing user project builds.
+    /// </summary>
+    public bool NoAutoResponse { get; set; }
+
     public string? LaunchProfile { get; set; }
     public bool StartDebugSession { get; set; }
     public bool Debug { get; set; }
@@ -185,6 +190,7 @@ internal sealed class ProcessInvocationOptions
         NoRestore = NoRestore,
         ExcludeRestorePackageImports = ExcludeRestorePackageImports,
         NuGetRestoreTargetsFile = NuGetRestoreTargetsFile,
+        NoAutoResponse = NoAutoResponse,
         LaunchProfile = LaunchProfile,
         StartDebugSession = StartDebugSession,
         Debug = Debug,
@@ -1264,6 +1270,11 @@ internal sealed class DotNetCliRunner(
             cliArgs = [.. cliArgs, $"-property:NuGetRestoreTargets={MSBuildEscaping.Escape(restoreTargets.FullName)}"];
         }
 
+        if (options.NoAutoResponse)
+        {
+            cliArgs = [.. cliArgs, "-noAutoResponse"];
+        }
+
         return await ExecuteAsync(
             args: cliArgs,
             env: null,
@@ -1284,6 +1295,10 @@ internal sealed class DotNetCliRunner(
         var noRestoreSwitch = noRestore ? "--no-restore" : string.Empty;
         string[] cliArgs = ["build", noRestoreSwitch, projectFilePath.FullName];
         cliArgs = [.. cliArgs.Where(arg => !string.IsNullOrWhiteSpace(arg))];
+        if (options.NoAutoResponse)
+        {
+            cliArgs = [.. cliArgs, "-noAutoResponse"];
+        }
 
         // File-based AppHosts derive their RunCommand during build. Persist suppression into that
         // generated command so the later dotnet run --no-build cannot recursively invoke Aspire CLI.

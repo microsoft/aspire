@@ -142,6 +142,105 @@ public class ExecutionConfigurationGathererTests
         Assert.Equal(
             [argumentReference, environmentReference, launchToolReference],
             references.OrderBy(reference => reference.EndpointName));
+
+        var endpointReferences = context.GetEndpointReferences(
+            new DistributedApplicationModel(builder.Resources),
+            KnownNetworkIdentifiers.LocalhostNetwork);
+        Assert.Equal(
+            [argumentReference, environmentReference, launchToolReference],
+            endpointReferences.OrderBy(reference => reference.EndpointName));
+    }
+
+    [Theory]
+    [InlineData("http://localhost:17092/path", true)]
+    [InlineData("http://127.0.0.1:17092/path", true)]
+    [InlineData("http://[::1]:17092/path", true)]
+    [InlineData("http://localhost:17093/path", false)]
+    [InlineData("http://collector.example:17092/path", false)]
+    [InlineData("Server=localhost;Database=test", false)]
+    public void GetEndpointReferencesNormalizesLegacyHostUrls(string url, bool matchesEndpoint)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var target = builder.AddExecutable("target", "target.exe", ".")
+            .WithEndpoint(name: "http", port: 17092, targetPort: 5000);
+        var hostUrl = new HostUrl(url);
+        var context = new ExecutionConfigurationGathererContext();
+        context.EnvironmentVariables["TARGET_URL"] = ReferenceExpression.Create($"{hostUrl}");
+        context.Arguments.Add(ReferenceExpression.Create($"{hostUrl}"));
+
+        var references = context.GetEndpointReferences(
+            new DistributedApplicationModel(builder.Resources),
+            KnownNetworkIdentifiers.DefaultAspireContainerNetwork);
+
+        if (matchesEndpoint)
+        {
+            var endpoint = Assert.Single(references);
+            Assert.Same(target.Resource, endpoint.Resource);
+            Assert.Equal("http", endpoint.EndpointName);
+            Assert.Equal(KnownNetworkIdentifiers.DefaultAspireContainerNetwork, endpoint.ContextNetworkID);
+        }
+        else
+        {
+            Assert.Empty(references);
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void GetEndpointReferencesPreservesNetworkContext(bool containerNetwork)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var target = builder.AddExecutable("target", "target.exe", ".")
+            .WithEndpoint(name: "http", port: 17092, targetPort: 5000)
+            .WithEndpoint(name: "modeled", port: 17093, targetPort: 5001);
+        var modeledReference = target.GetEndpoint("modeled", KnownNetworkIdentifiers.DefaultAspireContainerNetwork);
+        var networkContext = containerNetwork
+            ? KnownNetworkIdentifiers.DefaultAspireContainerNetwork
+            : KnownNetworkIdentifiers.LocalhostNetwork;
+        var context = new ExecutionConfigurationGathererContext();
+        context.Arguments.Add(modeledReference);
+        context.EnvironmentVariables["TARGET_URL"] = new HostUrl("http://localhost:17092/path");
+
+        var references = context.GetEndpointReferences(new DistributedApplicationModel(builder.Resources), networkContext);
+
+        Assert.Collection(references.OrderBy(endpoint => endpoint.EndpointName, StringComparers.EndpointAnnotationName),
+            endpoint =>
+            {
+                Assert.Same(target.Resource, endpoint.Resource);
+                Assert.Equal("http", endpoint.EndpointName);
+                Assert.Equal(networkContext, endpoint.ContextNetworkID);
+            },
+            endpoint => Assert.Same(modeledReference, endpoint));
+    }
+
+    [Fact]
+    public void GetEndpointReferencesUsesFirstMatchingHostEndpoint()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        builder.AddContainer("container", "image")
+            .WithEndpoint(name: "http", port: 17092, targetPort: 5000);
+        builder.AddExecutable("non-host", "non-host.exe", ".")
+            .WithAnnotation(new EndpointAnnotation(
+                System.Net.Sockets.ProtocolType.Tcp,
+                KnownNetworkIdentifiers.DefaultAspireContainerNetwork,
+                name: "internal",
+                port: 17092,
+                targetPort: 5001));
+        var firstHost = builder.AddExecutable("first-host", "first-host.exe", ".")
+            .WithEndpoint(name: "first", port: 17092, targetPort: 5002);
+        builder.AddExecutable("second-host", "second-host.exe", ".")
+            .WithEndpoint(name: "second", port: 17092, targetPort: 5003);
+        var context = new ExecutionConfigurationGathererContext();
+        context.EnvironmentVariables["TARGET_URL"] = new HostUrl("http://localhost:17092/path");
+
+        var endpoint = Assert.Single(context.GetEndpointReferences(
+            new DistributedApplicationModel(builder.Resources),
+            KnownNetworkIdentifiers.DefaultAspireContainerNetwork));
+
+        Assert.Same(firstHost.Resource, endpoint.Resource);
+        Assert.Equal("first", endpoint.EndpointName);
+        Assert.Equal(KnownNetworkIdentifiers.DefaultAspireContainerNetwork, endpoint.ContextNetworkID);
     }
 
     #endregion
