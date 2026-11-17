@@ -1025,6 +1025,9 @@ public class ResourceNotificationService : IDisposable
 
     internal async ValueTask<string?> WaitForParameterAsync(IResource resource, ParameterResource parameter, ValueTask<string?> valueTask)
     {
+        // Known limitation: the caller identifies a model resource, not a specific replica,
+        // so a parameter read is attributed to every replica.
+
         // Capture instance IDs once so cancellation removes waits from the instances that registered
         // them, even if the resource's replica set changes in the meantime.
         var resourceIds = resource.GetResolvedResourceNames();
