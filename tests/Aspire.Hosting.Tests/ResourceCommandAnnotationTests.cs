@@ -258,6 +258,7 @@ public class ResourceCommandAnnotationTests
     [InlineData(true, "", "Restart")]
     [InlineData(true, null, "Restart")]
     [InlineData(true, "Waiting", "LeaveWaiting")]
+    [InlineData(true, "UnresolvedParameters", "LeaveWaiting")]
     [InlineData(true, "Finished", "RestorePriorState")]
     [InlineData(true, "Exited", "RestorePriorState")]
     [InlineData(true, "FailedToStart", "RestorePriorState")]

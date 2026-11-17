@@ -2,8 +2,11 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Threading.Channels;
+using Aspire.Dashboard.Model;
+using Aspire.Hosting.Dcp;
 using Aspire.Hosting.Orchestrator;
 using Aspire.Hosting.Testing;
+using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
@@ -1846,6 +1849,97 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
         finally
         {
             File.Delete(keepAlivePath);
+        }
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ExecuteCommandAsync_RebuildCommand_PreservesParameterBlockedReplica(bool resolveParameterDuringBuild)
+    {
+        using var builder = CreateBuilder();
+        var executor = new TestDcpExecutor();
+        builder.Services.AddSingleton<IDcpExecutor>(executor);
+
+        var parameter = builder.AddParameter("parameter").Resource;
+        parameter.EnsureValueTask();
+        var project = builder.AddExecutable("project", "unused", ".")
+            .WithAnnotation(new DcpInstancesAnnotation([
+                new DcpInstance("project-running", "running", 0),
+                new DcpInstance("project-waiting", "waiting", 1)
+            ]));
+#pragma warning disable ASPIREPROJECTS001 // ProjectLaunchDefaultsAnnotation is experimental.
+        project.WithAnnotation(new ProjectLaunchDefaultsAnnotation());
+#pragma warning restore ASPIREPROJECTS001
+        project.Resource.AddLifeCycleCommands();
+        var rebuilder = builder.AddResource(new ProjectRebuilderResource(
+            "project-rebuilder", project.Resource, Path.Combine(AppContext.BaseDirectory, "project.csproj")));
+        executor.AddResource(project.Resource, "project-running");
+        executor.AddResource(project.Resource, "project-waiting");
+        executor.AddResource(rebuilder.Resource, rebuilder.Resource.Name);
+
+        using var app = builder.Build();
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
+        await app.ResourceNotifications.PublishUpdateAsync(project.Resource, "project-running", s => s with { State = KnownResourceStates.Running });
+        await app.ResourceNotifications.PublishUpdateAsync(project.Resource, "project-waiting", s => s with { State = KnownResourceStates.Starting });
+        var read = parameter.GetValueAsync(
+            new ValueProviderContext { ExecutionContext = builder.ExecutionContext, Caller = project.Resource }, cts.Token).AsTask();
+
+        var buildStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var completeBuild = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        executor.StartResourceCallback = async (resource, cancellationToken) =>
+        {
+            if (resource.ModelResource == rebuilder.Resource)
+            {
+                buildStarted.SetResult();
+                await completeBuild.Task.WaitAsync(cancellationToken);
+                await app.ResourceNotifications.PublishUpdateAsync(rebuilder.Resource, s => s with
+                {
+                    State = KnownResourceStates.Finished,
+                    ExitCode = 0
+                });
+            }
+        };
+
+        var rebuild = app.ResourceCommands.ExecuteCommandAsync("project-running", KnownResourceCommands.RebuildCommand, cts.Token);
+        try
+        {
+            await buildStarted.Task.DefaultTimeout();
+            Assert.Equal(["project-running"], executor.StoppedResources);
+            Assert.True(app.ResourceNotifications.TryGetCurrentState("project-waiting", out var waitingReplica));
+            Assert.Equal(KnownResourceStates.UnresolvedParameters, waitingReplica.Snapshot.State?.Text);
+            Assert.Collection(waitingReplica.Snapshot.Properties, property =>
+            {
+                Assert.Equal(KnownProperties.Resource.UnresolvedParameters, property.Name);
+                Assert.Equal(["parameter"], Assert.IsType<string[]>(property.Value));
+            });
+
+            if (resolveParameterDuringBuild)
+            {
+                await parameter.SetValueAsync("value");
+                Assert.Equal("value", await read.DefaultTimeout());
+            }
+
+            completeBuild.SetResult();
+            var result = await rebuild.DefaultTimeout();
+            Assert.True(result.Success, result.Message);
+            Assert.Equal([rebuilder.Resource.Name, "project-running"], executor.StartedResources);
+            Assert.True(app.ResourceNotifications.TryGetCurrentState("project-waiting", out waitingReplica));
+            Assert.Equal(resolveParameterDuringBuild ? KnownResourceStates.Starting : KnownResourceStates.UnresolvedParameters,
+                waitingReplica.Snapshot.State?.Text);
+
+            await parameter.SetValueAsync("value");
+            Assert.Equal("value", await read.DefaultTimeout());
+            Assert.True(app.ResourceNotifications.TryGetCurrentState("project-waiting", out waitingReplica));
+            Assert.Equal(KnownResourceStates.Starting, waitingReplica.Snapshot.State?.Text);
+            Assert.Empty(waitingReplica.Snapshot.Properties);
+        }
+        finally
+        {
+            completeBuild.TrySetResult();
+            await parameter.SetValueAsync("value");
+            await read.DefaultTimeout();
+            await rebuild.DefaultTimeout();
         }
     }
 
