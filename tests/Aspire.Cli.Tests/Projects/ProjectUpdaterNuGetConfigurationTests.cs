@@ -1666,38 +1666,63 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
     }
 
     [Theory]
-    [InlineData("AppHost.csproj", false)]
-    [InlineData("apphost.cs", false)]
-    [InlineData("AppHost.csproj", true)]
-    [InlineData("apphost.cs", true)]
-    public async Task UpdateAsync_RestoreDiagnosticsAreRedactedBeforeLoggingAndFailureDisplay(string fileName, bool restoreFails)
+    [InlineData("AppHost.csproj", false, false)]
+    [InlineData("apphost.cs", false, false)]
+    [InlineData("AppHost.csproj", true, false)]
+    [InlineData("apphost.cs", true, false)]
+    [InlineData("AppHost.csproj", false, true)]
+    [InlineData("apphost.cs", false, true)]
+    [InlineData("AppHost.csproj", true, true)]
+    [InlineData("apphost.cs", true, true)]
+    public async Task UpdateAsync_RestoreDiagnosticsAreRedactedBeforeLoggingAndFailureDisplay(string fileName, bool restoreFails, bool useMsBuildSources)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = await CreateAppHostAsync(workspace, fileName);
         var originalProject = await File.ReadAllBytesAsync(projectFile.FullName);
         const string restoreMessage = "Determining projects to restore...";
-        const string rootSource = "https://root:root-password@root.example/v3/index.json?sig=root-token";
-        const string childSource = "https://child:child-password@child.example/v3/index.json?sig=child-token";
+        const string rootSource = "https://root:root%40password@root.example/v3/index.json?sig=root-token";
+        const string childSource = "https://child:child-password@child.example/v3/index.json?sig=child%3Btoken";
         const string restoreError = $"Restore failed for {rootSource}";
         const string stderrMessage = $"Restore failed for {childSource}";
         const string redactedError = "Restore failed for https://***@root.example/v3/index.json";
         const string redactedStderr = "Restore failed for https://***@child.example/v3/index.json";
-        await File.WriteAllTextAsync(Path.Combine(workspace.Path, "NuGet.Config"),
-            $"""<configuration><packageSources><clear /><add key="root" value="{rootSource}" /></packageSources></configuration>""");
+        if (!useMsBuildSources)
+        {
+            await File.WriteAllTextAsync(Path.Combine(workspace.Path, "NuGet.Config"),
+                $"""<configuration><packageSources><clear /><add key="root" value="{rootSource}" /></packageSources></configuration>""");
+        }
         var childDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "Child"));
         var childProject = await CreateAppHostAsync(workspace, "Child/Child.csproj");
-        await File.WriteAllTextAsync(Path.Combine(childDirectory.FullName, "NuGet.Config"),
-            $"""<configuration><packageSources><add key="child" value="{childSource}" /></packageSources></configuration>""");
-        var runner = CreateRunner(projectFile, hasExplicitChannel: false);
-        runner.GetProjectItemsAndPropertiesAsyncCallback = (file, _, _, _, _) =>
+        if (!useMsBuildSources)
         {
+            await File.WriteAllTextAsync(Path.Combine(childDirectory.FullName, "NuGet.Config"),
+                $"""<configuration><packageSources><add key="child" value="{childSource}" /></packageSources></configuration>""");
+        }
+        var runner = CreateRunner(projectFile, hasExplicitChannel: false);
+        runner.GetProjectItemsAndPropertiesAsyncCallback = (file, _, properties, options, _) =>
+        {
+            Assert.Contains("RestoreAdditionalProjectSources", properties);
+            Assert.True(options.SuppressLogging);
             if (file.FullName == childProject.FullName)
             {
-                return (0, JsonDocument.Parse("""{"Items":{},"Properties":{}}"""));
+                var childEvaluation = new JsonObject
+                {
+                    ["Items"] = new JsonObject(),
+                    ["Properties"] = new JsonObject()
+                };
+                if (useMsBuildSources)
+                {
+                    childEvaluation.WithProperty("RestoreAdditionalProjectSources", $" ; {childSource};https://public.example/feed; ");
+                }
+                return (0, JsonDocument.Parse(childEvaluation.ToJsonString()));
             }
             var evaluation = new JsonObject().WithSdkVersion("9.4.1")
                 .WithPackageReference("Aspire.Hosting.Redis", "9.4.1")
                 .WithProjectReference(childProject.FullName);
+            if (useMsBuildSources)
+            {
+                evaluation.WithProperty("RestoreAdditionalProjectSources", $"https://public.example/feed;{rootSource};");
+            }
             return (0, JsonDocument.Parse(evaluation.ToJsonString()));
         };
         runner.RestoreAsyncCallback = (_, options, _) =>

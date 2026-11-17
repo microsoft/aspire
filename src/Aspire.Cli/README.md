@@ -132,7 +132,9 @@ backups; leftover backups require separate consent to replace. See the
 
 Validation restore diagnostics are logged and displayed on failure. Credential
 material from known package sources is redacted before diagnostics are buffered
-or logged, using the candidate and discovered referenced-project configurations.
+or logged, using the candidate and discovered referenced-project configurations
+and their planning-time evaluated `RestoreAdditionalProjectSources` values. Sources introduced
+only by targets during restore are not discovered by this evaluation-time redaction.
 
 ## Configured template sources
 
