@@ -17,8 +17,7 @@ internal sealed class ExecutableLaunchPolicy(IConfiguration configuration)
     public ExecutableLaunchDecision Decide(IResource resource)
     {
         var debugSupportDecision = resource.GetEffectiveDebugSupportDecision(_configuration);
-        var debugSupport = debugSupportDecision.EffectiveAnnotation;
-        var supportsDebugging = debugSupport is not null;
+        var effectiveDebugSupport = debugSupportDecision.EffectiveAnnotation;
 
         if (resource is ProjectResource)
         {
@@ -27,10 +26,10 @@ internal sealed class ExecutableLaunchPolicy(IConfiguration configuration)
                 // A project launch override is a complete Process invocation. A supported custom debug producer
                 // may still contribute optional launch metadata, matching the existing MAUI behavior, but its
                 // success does not determine whether the Process invocation can run.
-                var metadataProducer = supportsDebugging &&
-                    debugSupport is not null &&
-                    !KnownLaunchConfigurationTypes.IsProject(debugSupport.LaunchConfigurationType)
-                        ? debugSupport
+                var metadataProducer =
+                    debugSupportDecision.SupportedDeclaredAnnotation is { } supportedDeclaredAnnotation &&
+                    !KnownLaunchConfigurationTypes.IsProject(supportedDeclaredAnnotation.LaunchConfigurationType)
+                        ? supportedDeclaredAnnotation
                         : null;
                 return new(
                     ExecutableLaunchMechanism.Process,
@@ -39,22 +38,39 @@ internal sealed class ExecutableLaunchPolicy(IConfiguration configuration)
                     projectLaunchMode: GetProjectLaunchMode());
             }
 
-            if (supportsDebugging && debugSupport is not null)
+            if (effectiveDebugSupport is not null)
             {
+                if (debugSupportDecision.UsesCompatibilityProjectLaunch)
+                {
+                    return new(
+                        ExecutableLaunchMechanism.Ide,
+                        GetLaunchMode(effectiveDebugSupport.LaunchConfigurationType),
+                        useCompatibilityProjectLaunchConfiguration: true,
+                        materializeLaunchProfileArguments: debugSupportDecision.UsesAzureFunctionsProjectCompatibility,
+                        projectLaunchMode: GetProjectLaunchMode());
+                }
+
+                var declaredProducer = debugSupportDecision.SupportedDeclaredAnnotation ??
+                    throw new InvalidOperationException(
+                        $"Resource '{resource.Name}' selected declared debug support without an active declared producer.");
+
                 return new(
                     ExecutableLaunchMechanism.Ide,
-                    GetLaunchMode(debugSupport.LaunchConfigurationType),
-                    debugSupport,
-                    materializeLaunchProfileArguments: debugSupportDecision.UsesAzureFunctionsProjectCompatibility,
+                    GetLaunchMode(declaredProducer.LaunchConfigurationType),
+                    declaredProducer,
                     projectLaunchMode: GetProjectLaunchMode());
             }
         }
-        else if (supportsDebugging && debugSupport is not null)
+        else if (effectiveDebugSupport is not null)
         {
+            var declaredProducer = debugSupportDecision.SupportedDeclaredAnnotation ??
+                throw new InvalidOperationException(
+                    $"Resource '{resource.Name}' selected declared debug support without an active declared producer.");
+
             return new(
                 ExecutableLaunchMechanism.Ide,
-                GetLaunchMode(debugSupport.LaunchConfigurationType),
-                debugSupport);
+                GetLaunchMode(declaredProducer.LaunchConfigurationType),
+                declaredProducer);
         }
 
         return new(
