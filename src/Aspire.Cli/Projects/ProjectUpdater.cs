@@ -258,11 +258,11 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
                 await transaction.PrepareBackupsAsync(
                     candidateSteps.SelectMany(static step => step.Files), interactionService, context.SupportsInteractiveInput, cancellationToken);
             }
-            using var restorePreview = configurationCandidate is null || restoreConfigurationDeferred
+            using var restorePreview = restoreConfigurationDeferred || (configurationCandidate is null && dryRunRestore is null)
                 ? null
                 : await DotNetAppHostRestorePreview.CreateAsync(
                     nuGetService, configurationCandidate, restoreConfiguration!, projectFile,
-                    updatePlan.ProjectRestoreTargets, cancellationToken);
+                    updatePlan.ProjectRestoreTargets, dryRunRestore?.RestoreOutputDirectory, cancellationToken);
             // SDK acquisition needs the frozen candidate hierarchy but not evaluated MSBuild
             // restore targets. Those are unavailable until the missing SDK has been repaired.
             using var repairReplacement = restoreConfigurationDeferred && configurationCandidate is not null
@@ -313,10 +313,10 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
                 restoreConfiguration = await ReadRestoreConfigurationForUpdateAsync(
                     context, allowFailedEvaluation: false, cancellationToken, dryRunRestore?.EnvironmentVariables);
             }
-            using var repairedRestorePreview = restoreConfigurationDeferred && configurationCandidate is not null
+            using var repairedRestorePreview = restoreConfigurationDeferred && (configurationCandidate is not null || dryRunRestore is not null)
                 ? await DotNetAppHostRestorePreview.CreateAsync(
                     nuGetService, configurationCandidate, restoreConfiguration!, projectFile,
-                    updatePlan.ProjectRestoreTargets, cancellationToken)
+                    updatePlan.ProjectRestoreTargets, dryRunRestore?.RestoreOutputDirectory, cancellationToken)
                 : null;
 
             interactionService.DisplayEmptyLine();
@@ -2047,6 +2047,8 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
     {
         private readonly TemporaryCacheDirectory _directory;
         internal DirectoryInfo Directory { get; }
+        // Validation restore outputs, including lockfiles, are written here instead of the project tree.
+        internal DirectoryInfo RestoreOutputDirectory { get; }
 
         internal DryRunRestoreDirectory(DirectoryInfo aspireHomeDirectory)
         {
@@ -2065,6 +2067,7 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
             try
             {
                 Directory.CreateSubdirectory("fallback-packages");
+                RestoreOutputDirectory = Directory.CreateSubdirectory("restore-output");
             }
             catch
             {
