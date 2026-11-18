@@ -417,8 +417,13 @@ public class DebugSupportExtensionsTests(ITestOutputHelper outputHelper)
         Assert.False(executable.Resource.SupportsDebugging(CreateConfiguration(), out _));
     }
 
-    [Fact]
-    public void SupportsDebuggingReturnsEffectiveProjectAnnotationForAzureFunctionsCompatibility()
+    [Theory]
+    [InlineData(null)]
+    [InlineData("{\"protocols_supported\":[\"2025-10-01\"]}")]
+    [InlineData("{\"protocols_supported\":[\"2025-10-01\"],\"supported_launch_configurations\":null}")]
+    [InlineData("{ not json")]
+    [InlineData("{\"protocols_supported\":[\"2025-10-01\"],\"supported_launch_configurations\":[\"project\"]}")]
+    public void SupportsDebuggingReturnsEffectiveProjectAnnotationForAzureFunctionsCompatibility(string? debugSessionInfo)
     {
         using var builder = TestDistributedApplicationBuilder.Create();
 #pragma warning disable CS0618 // Retain legacy ProjectResource IDE launch-configuration compatibility.
@@ -431,8 +436,7 @@ public class DebugSupportExtensionsTests(ITestOutputHelper outputHelper)
             "azure-functions");
         var declaredAnnotation = project.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().Single();
 
-        var configuration = CreateConfiguration(
-            debugSessionInfo: CreateDebugSessionInfo([KnownLaunchConfigurationTypes.Project]));
+        var configuration = CreateConfiguration(debugSessionInfo: debugSessionInfo);
 
         Assert.True(project.Resource.SupportsDebugging(configuration, out var effectiveAnnotation));
         Assert.Equal(KnownLaunchConfigurationTypes.Project, effectiveAnnotation.LaunchConfigurationType);
