@@ -60,6 +60,8 @@ namespace Aspire.Hosting.Azure
 
         public AzureSqlServerResource Parent { get { throw null; } }
 
+        public override string ResourceTypeDisplayName { get { throw null; } }
+
         public ApplicationModel.ReferenceExpression UriExpression { get { throw null; } }
 
         System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, ApplicationModel.ReferenceExpression>> ApplicationModel.IResourceWithConnectionString.GetConnectionProperties() { throw null; }
@@ -96,6 +98,8 @@ namespace Aspire.Hosting.Azure
         public BicepOutputReference NameOutputReference { get { throw null; } }
 
         public ApplicationModel.ReferenceExpression Port { get { throw null; } }
+
+        public override string ResourceTypeDisplayName { get { throw null; } }
 
         public ApplicationModel.ReferenceExpression UriExpression { get { throw null; } }
 

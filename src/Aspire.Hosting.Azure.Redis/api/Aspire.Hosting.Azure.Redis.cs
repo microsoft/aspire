@@ -67,6 +67,8 @@ namespace Aspire.Hosting.Azure
 
         public ApplicationModel.ReferenceExpression Port { get { throw null; } }
 
+        public override string ResourceTypeDisplayName { get { throw null; } }
+
         public ApplicationModel.ReferenceExpression UriExpression { get { throw null; } }
 
         [System.Diagnostics.CodeAnalysis.MemberNotNullWhen(true, "ConnectionStringSecretOutput")]
@@ -99,6 +101,8 @@ namespace Aspire.Hosting.Azure
 
         public ApplicationModel.ReferenceExpression? Password { get { throw null; } }
 
+        public override string ResourceTypeDisplayName { get { throw null; } }
+
         [System.Diagnostics.CodeAnalysis.MemberNotNullWhen(true, "ConnectionStringSecretOutput")]
         public bool UseAccessKeyAuthentication { get { throw null; } }
 
@@ -119,5 +123,7 @@ namespace Aspire.Hosting.Azure
         public ApplicationModel.ReferenceExpression ConnectionStringExpression { get { throw null; } }
 
         public override string Name { get { throw null; } }
+
+        public override string ResourceTypeDisplayName { get { throw null; } }
     }
 }

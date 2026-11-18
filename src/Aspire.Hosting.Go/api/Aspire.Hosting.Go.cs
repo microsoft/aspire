@@ -74,5 +74,7 @@ namespace Aspire.Hosting.Go
     public partial class GoAppResource : ApplicationModel.ExecutableResource, IResourceWithServiceDiscovery, ApplicationModel.IResourceWithEndpoints, ApplicationModel.IResource, ApplicationModel.IContainerFilesDestinationResource
     {
         public GoAppResource(string name, string workingDirectory) : base(default!, default!, default!) { }
+
+        public override string ResourceTypeDisplayName { get { throw null; } }
     }
 }

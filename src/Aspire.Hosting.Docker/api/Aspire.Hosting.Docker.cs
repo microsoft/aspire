@@ -82,6 +82,8 @@ namespace Aspire.Hosting.Docker
         public ApplicationModel.EndpointReference OtlpGrpcEndpoint { get { throw null; } }
 
         public ApplicationModel.EndpointReference PrimaryEndpoint { get { throw null; } }
+
+        public override string ResourceTypeDisplayName { get { throw null; } }
     }
 
     [AspireExport(ExposeProperties = true, ExposeMethods = true)]
@@ -93,7 +95,8 @@ namespace Aspire.Hosting.Docker
 
         public string? DefaultNetworkName { get { throw null; } set { } }
 
-        [System.Diagnostics.CodeAnalysis.Experimental("ASPIRECOMPUTE002", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        public override string ResourceTypeDisplayName { get { throw null; } }
+
         public ApplicationModel.ReferenceExpression GetHostAddressExpression(ApplicationModel.EndpointReference endpointReference) { throw null; }
     }
 
@@ -110,6 +113,8 @@ namespace Aspire.Hosting.Docker
         public DockerComposeServiceResource(string name, ApplicationModel.IResource resource, DockerComposeEnvironmentResource composeEnvironmentResource) : base(default!) { }
 
         public DockerComposeEnvironmentResource Parent { get { throw null; } }
+
+        public override string ResourceTypeDisplayName { get { throw null; } }
     }
 }
 
@@ -639,7 +644,7 @@ namespace Aspire.Hosting.Docker.Resources.ServiceNodes.Swarm
         public string? FailureAction { get { throw null; } set { } }
 
         [YamlDotNet.Serialization.YamlMember(Alias = "max_failure_ratio")]
-        public string? MaxFailureRatio { get { throw null; } set { } }
+        public double? MaxFailureRatio { get { throw null; } set { } }
 
         [YamlDotNet.Serialization.YamlMember(Alias = "monitor")]
         public string? Monitor { get { throw null; } set { } }

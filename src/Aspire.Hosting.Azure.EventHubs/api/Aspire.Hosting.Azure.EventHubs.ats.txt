@@ -23,5 +23,6 @@ Aspire.Hosting.Azure/AzureEventHubResource.connectionStringExpression(context: A
 Aspire.Hosting.Azure/AzureEventHubResource.hubName(context: Aspire.Hosting.Azure.EventHubs/Aspire.Hosting.Azure.AzureEventHubResource) -> string
 Aspire.Hosting.Azure/AzureEventHubResource.parent(context: Aspire.Hosting.Azure.EventHubs/Aspire.Hosting.Azure.AzureEventHubResource) -> Aspire.Hosting.Azure.EventHubs/Aspire.Hosting.Azure.AzureEventHubsResource
 Aspire.Hosting.Azure/AzureEventHubResource.partitionCount(context: Aspire.Hosting.Azure.EventHubs/Aspire.Hosting.Azure.AzureEventHubResource) -> number
+Aspire.Hosting.Azure/AzureEventHubResource.resourceTypeDisplayName(context: Aspire.Hosting.Azure.EventHubs/Aspire.Hosting.Azure.AzureEventHubResource) -> string
 Aspire.Hosting.Azure/AzureEventHubResource.setHubName(context: Aspire.Hosting.Azure.EventHubs/Aspire.Hosting.Azure.AzureEventHubResource, value: string) -> Aspire.Hosting.Azure.EventHubs/Aspire.Hosting.Azure.AzureEventHubResource
 Aspire.Hosting.Azure/AzureEventHubResource.setPartitionCount(context: Aspire.Hosting.Azure.EventHubs/Aspire.Hosting.Azure.AzureEventHubResource, value: number) -> Aspire.Hosting.Azure.EventHubs/Aspire.Hosting.Azure.AzureEventHubResource
