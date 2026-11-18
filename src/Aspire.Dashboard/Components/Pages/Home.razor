@@ -1,3 +1,11 @@
 @page "/"
+@inject IStringLocalizer<Dashboard.Resources.Layout> Loc
 
-@* The dashboard opens on the full resource list, with all resources selected. *@
+@if (!DashboardClient.IsEnabled)
+{
+    <PageTitle><ApplicationName AdditionalText="@Loc[nameof(Dashboard.Resources.Layout.ResourceTabOverview)]" /></PageTitle>
+    <div class="standalone-overview">
+        <h1>@Loc[nameof(Dashboard.Resources.Layout.ResourceTabOverview)]</h1>
+        <ApplicationSummary />
+    </div>
+}

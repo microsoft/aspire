@@ -3,6 +3,14 @@
 @using Aspire.Dashboard.Resources
 @using Aspire.Shared
 
+@if (!DashboardClient.IsEnabled)
+{
+    <div class="home">
+        @TelemetrySections()
+    </div>
+    return;
+}
+
 <StableSectionContent SectionName="@ResourcesLayout.HeaderActionsSectionName">
     <div class="overview-header-actions">
         @if (GetMissingParameterCount() is > 0 and var missingParameterCount)
@@ -50,12 +58,7 @@
         @if (ViewPreferences.GroupOverview == GroupOverview.Summary)
         {
             @HeroSection(summary)
-            @ActivitySection()
-            @InsightsSection()
-            <div class="home-problems">
-                @RecentErrorsSection()
-                @RecentTracesSection()
-            </div>
+            @TelemetrySections()
         }
 
         <div class="resources-summary-layout home-resource-graph-layout"
@@ -113,6 +116,19 @@
 </div>
 
 @code {
+    private RenderFragment TelemetrySections() => __builder =>
+    {
+        @ActivitySection()
+        @if (DashboardClient.IsEnabled)
+        {
+            @InsightsSection()
+        }
+        <div class="home-problems">
+            @RecentErrorsSection()
+            @RecentTracesSection()
+        </div>
+    };
+
     private RenderFragment HeroSection(HealthSummary summary) => __builder =>
     {
         var heroState = GetHeroStateClass(summary);

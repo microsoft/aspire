@@ -94,7 +94,7 @@ public class FrontendOpenIdConnectAuthTests(ITestOutputHelper testOutputHelper)
 
     private static void ConfigureOpenIdConnect(Dictionary<string, string?> config, MockOpenIdAuthority.Authority authority)
     {
-        // Configure the resource service, as otherwise HTTP requests are redirected to /structuredlogs before OIDC
+        // Use the AppHost configuration for these authentication tests.
         config[DashboardConfigNames.ResourceServiceClientAuthModeName.ConfigKey] = "Unsecured";
         config[DashboardConfigNames.ResourceServiceUrlName.ConfigKey] = "https://localhost:1234"; // won't actually exist
 

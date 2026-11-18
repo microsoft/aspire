@@ -138,16 +138,16 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
                 .OrderBy(resource => resource.DisplayName, StringComparers.ResourceName)
                 .Select(resource => resource.Name));
 
-    private bool ShowsMovingActivityWindow => ViewPreferences.GroupOverview == GroupOverview.Summary && !TelemetryRepository.IsReadOnly;
+    private GroupOverview SelectedOverview => DashboardClient.IsEnabled ? ViewPreferences.GroupOverview : GroupOverview.Summary;
+
+    private bool ShowsMovingActivityWindow => SelectedOverview == GroupOverview.Summary && !TelemetryRepository.IsReadOnly;
 
     protected override async Task OnInitializedAsync()
     {
-        ViewPreferences.Changed += OnViewPreferencesChanged;
-        await ViewPreferences.EnsureLoadedAsync();
-
-        if (!DashboardClient.IsEnabled)
+        if (DashboardClient.IsEnabled)
         {
-            return;
+            ViewPreferences.Changed += OnViewPreferencesChanged;
+            await ViewPreferences.EnsureLoadedAsync();
         }
 
         _unviewedErrorCounts = TelemetryRepository.GetResourceUnviewedErrorLogsCount();
@@ -156,6 +156,11 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
         _metricsSubscription = TelemetryRepository.OnNewMetrics(null, SubscriptionType.Other, OnTelemetryChanged);
         QueueTelemetryRefresh();
         _activityRefreshTask = RefreshActivityPeriodicallyAsync(_cts.Token);
+
+        if (!DashboardClient.IsEnabled)
+        {
+            return;
+        }
 
         var (snapshot, subscription) = await DataSource.ResourceRepository.SubscribeResourcesAsync(_cts.Token);
         foreach (var resource in snapshot)
@@ -191,7 +196,7 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (_isDisposing || ViewPreferences.GroupOverview != GroupOverview.Graph || _graphInitialized || _graphInitializing)
+        if (_isDisposing || SelectedOverview != GroupOverview.Graph || _graphInitialized || _graphInitializing)
         {
             return;
         }

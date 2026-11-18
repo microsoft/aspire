@@ -44,7 +44,7 @@ public class FrontendBrowserTokenAuthTests
 
         // Assert
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Equal(DashboardUrls.LoginUrl(returnUrl: DashboardUrls.StructuredLogsUrl()), response.RequestMessage!.RequestUri!.PathAndQuery);
+        Assert.Equal(DashboardUrls.LoginUrl(returnUrl: DashboardUrls.HomeUrl()), response.RequestMessage!.RequestUri!.PathAndQuery);
     }
 
     [Fact]

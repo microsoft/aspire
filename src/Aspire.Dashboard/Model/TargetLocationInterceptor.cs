@@ -39,11 +39,6 @@ internal static class TargetLocationInterceptor
     /// </summary>
     public static bool IsResourceServicePath(string path)
     {
-        if (string.Equals(path, ResourcesPath, StringComparisons.UrlPath))
-        {
-            return true;
-        }
-
         var trimmedPath = path.TrimStart('/');
         var firstSegment = trimmedPath.Split('/', 2)[0];
 

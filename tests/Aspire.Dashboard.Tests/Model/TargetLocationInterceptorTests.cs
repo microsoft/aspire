@@ -9,30 +9,29 @@ namespace Aspire.Dashboard.Tests.Model;
 public sealed class TargetLocationInterceptorTests
 {
     [Fact]
-    public void InterceptTargetLocation_RelativeRoot_Redirect()
+    public void InterceptTargetLocation_RelativeRoot_OpensOverview()
     {
-        Assert.True(TargetLocationInterceptor.InterceptTargetLocation("http://localhost", "/", out var newTargetLocation));
-        Assert.Equal(TargetLocationInterceptor.StructuredLogsPath, newTargetLocation);
+        Assert.False(TargetLocationInterceptor.InterceptTargetLocation("http://localhost", "/", out _));
     }
 
     [Fact]
     public void InterceptTargetLocation_Absolute_Redirect()
     {
-        Assert.True(TargetLocationInterceptor.InterceptTargetLocation("http://localhost", "http://localhost/", out var newTargetLocation));
+        Assert.True(TargetLocationInterceptor.InterceptTargetLocation("http://localhost", "http://localhost/resources/", out var newTargetLocation));
         Assert.Equal(TargetLocationInterceptor.StructuredLogsPath, newTargetLocation);
     }
 
     [Fact]
     public void InterceptTargetLocation_Absolute_WithoutTrailingSlash_Redirect()
     {
-        Assert.True(TargetLocationInterceptor.InterceptTargetLocation("http://localhost", "http://localhost", out var newTargetLocation));
+        Assert.True(TargetLocationInterceptor.InterceptTargetLocation("http://localhost", "http://localhost/resources", out var newTargetLocation));
         Assert.Equal(TargetLocationInterceptor.StructuredLogsPath, newTargetLocation);
     }
 
     [Fact]
     public void InterceptTargetLocation_AbsoluteDifferentCase_Redirect()
     {
-        Assert.True(TargetLocationInterceptor.InterceptTargetLocation("http://LOCALHOST", "http://localhost/", out var newTargetLocation));
+        Assert.True(TargetLocationInterceptor.InterceptTargetLocation("http://LOCALHOST", "http://localhost/resources/", out var newTargetLocation));
         Assert.Equal(TargetLocationInterceptor.StructuredLogsPath, newTargetLocation);
     }
 
@@ -45,17 +44,17 @@ public sealed class TargetLocationInterceptorTests
     [Fact]
     public void InterceptTargetLocation_DifferentHost_Unchanged()
     {
-        Assert.False(TargetLocationInterceptor.InterceptTargetLocation("http://localhost", "http://localhost:8888/", out _));
+        Assert.False(TargetLocationInterceptor.InterceptTargetLocation("http://localhost", "http://localhost:8888/resources", out _));
     }
 
     [Fact]
     public void InterceptTargetLocation_DifferentHost_TrailingSlash_Unchanged()
     {
-        Assert.False(TargetLocationInterceptor.InterceptTargetLocation("http://localhost/", "http://localhost:8888/", out _));
+        Assert.False(TargetLocationInterceptor.InterceptTargetLocation("http://localhost/", "http://localhost:8888/resources", out _));
     }
 
     [Theory]
-    [InlineData("/", true)]
+    [InlineData("/", false)]
     [InlineData("/resources", true)]
     [InlineData("/resources/frontend", true)]
     [InlineData("/RESOURCES/frontend", true)]
@@ -72,7 +71,7 @@ public sealed class TargetLocationInterceptorTests
 
     // The previous experience keeps main's behavior, where only the resources root needs the resource service.
     [Theory]
-    [InlineData("/", "/structuredlogs")]
+    [InlineData("/", null)]
     [InlineData("/resources/frontend", "/structuredlogs")]
     [InlineData("/legacy", "/legacy/structuredlogs")]
     [InlineData("/legacy/", "/legacy/structuredlogs")]

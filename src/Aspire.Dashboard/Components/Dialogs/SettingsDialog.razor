@@ -30,7 +30,7 @@
                                  ShowOptionText="true" />
             </div>
 
-            <div class="input-container setting-row">
+            <div class="input-container setting-row" hidden="@(!DashboardClient.IsEnabled)">
                 <span class="setting-title aspire-field-label">@Loc[nameof(Dialogs.SettingsDialogGroupOverview)]</span>
                 <IconToggleGroup TValue="GroupOverview"
                                  Label="@Loc[nameof(Dialogs.SettingsDialogGroupOverview)]"

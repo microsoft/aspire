@@ -1,0 +1,10 @@
+.standalone-overview {
+    box-sizing: border-box;
+    height: 100%;
+    overflow: auto;
+    padding: var(--aspire-space-4);
+}
+
+.standalone-overview h1 {
+    margin: 0 0 var(--aspire-space-4);
+}
