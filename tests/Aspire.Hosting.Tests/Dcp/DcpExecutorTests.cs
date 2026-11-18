@@ -7066,6 +7066,9 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
 
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(configDict).Build();
 
+        Assert.True(projectBuilder.Resource.SupportsDebugging(configuration, out var effectiveIdeLaunchAnnotation));
+        Assert.Equal(KnownLaunchConfigurationTypes.Project, effectiveIdeLaunchAnnotation.LaunchConfigurationType);
+
         var kubernetesService = new TestKubernetesService();
         using var app = builder.Build();
         var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
@@ -7103,17 +7106,23 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         var runSessionInfo = new RunSessionInfo
         {
             ProtocolsSupported = ["coreclr"],
-            SupportedLaunchConfigurations = ["project"]
+            SupportedLaunchConfigurations = [
+                KnownLaunchConfigurationTypes.Project,
+                DebugSupportExtensions.AspireExtensionBaselineCapability
+            ]
         };
 
         var configDict = new Dictionary<string, string?>
         {
             [DcpExecutor.DebugSessionPortVar] = "12345",
             [KnownConfigNames.DebugSessionInfo] = JsonSerializer.Serialize(runSessionInfo),
-            [KnownConfigNames.ExtensionEndpoint] = "http://localhost:1234"
+            [KnownConfigNames.ExtensionEndpoint] = extensionEndpoint
         };
 
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(configDict).Build();
+
+        Assert.False(projectBuilder.Resource.SupportsDebugging(configuration, out var declaredIdeLaunchAnnotation));
+        Assert.Equal("azure-functions", Assert.IsType<SupportsDebuggingAnnotation>(declaredIdeLaunchAnnotation).LaunchConfigurationType);
 
         var kubernetesService = new TestKubernetesService();
         using var app = builder.Build();
@@ -7373,23 +7382,17 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         var runSessionInfo = new RunSessionInfo
         {
             ProtocolsSupported = ["coreclr"],
-            SupportedLaunchConfigurations = [
-                KnownLaunchConfigurationTypes.Project,
-                DebugSupportExtensions.AspireExtensionBaselineCapability
-            ]
+            SupportedLaunchConfigurations = ["project"]
         };
 
         var configDict = new Dictionary<string, string?>
         {
             [DcpExecutor.DebugSessionPortVar] = "12345",
             [KnownConfigNames.DebugSessionInfo] = JsonSerializer.Serialize(runSessionInfo),
-            [KnownConfigNames.ExtensionEndpoint] = extensionEndpoint
+            [KnownConfigNames.ExtensionEndpoint] = "http://localhost:1234"
         };
 
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(configDict).Build();
-
-        Assert.False(projectBuilder.Resource.SupportsDebugging(configuration, out var declaredIdeLaunchAnnotation));
-        Assert.Equal("azure-functions", Assert.IsType<SupportsDebuggingAnnotation>(declaredIdeLaunchAnnotation).LaunchConfigurationType);
 
         var kubernetesService = new TestKubernetesService();
         using var app = builder.Build();
@@ -7558,9 +7561,6 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         };
 
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(configDict).Build();
-
-        Assert.True(projectBuilder.Resource.SupportsDebugging(configuration, out var effectiveIdeLaunchAnnotation));
-        Assert.Equal(KnownLaunchConfigurationTypes.Project, effectiveIdeLaunchAnnotation.LaunchConfigurationType);
 
         var kubernetesService = new TestKubernetesService();
         using var app = builder.Build();
