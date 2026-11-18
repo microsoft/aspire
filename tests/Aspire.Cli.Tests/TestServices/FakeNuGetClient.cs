@@ -11,6 +11,7 @@ namespace Aspire.Cli.Tests.TestServices;
 internal sealed class FakeNuGetClient : INuGetClient
 {
     public int RestoreCallCount { get; private set; }
+    public bool LastAcquisitionBypassedCaches { get; private set; }
     public int WriteManifestCallCount { get; private set; }
     public int SearchCallCount { get; private set; }
     public bool SearchLimitReached { get; init; }
@@ -104,10 +105,14 @@ internal sealed class FakeNuGetClient : INuGetClient
         string workingDirectory,
         string globalPackagesFolder,
         IReadOnlyList<string> sensitiveSources,
+        bool bypassCaches,
         CancellationToken cancellationToken)
-        => RestoreAsync([package], global::NuGet.Frameworks.FrameworkConstants.CommonFrameworks.NetStandard.GetShortFolderName(),
+    {
+        LastAcquisitionBypassedCaches = bypassCaches;
+        return RestoreAsync([package], global::NuGet.Frameworks.FrameworkConstants.CommonFrameworks.NetStandard.GetShortFolderName(),
             runtimeIdentifier: null, outputPath, sources: [], nugetConfigPaths: [],
             workingDirectory, globalPackagesFolder, sensitiveSources, cancellationToken);
+    }
 
     public Task WriteManifestAsync(
         string assetsFilePath,

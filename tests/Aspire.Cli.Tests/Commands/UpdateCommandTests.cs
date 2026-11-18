@@ -2908,6 +2908,53 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
+    [InlineData("update --channel daily", false, true)]
+    [InlineData("update --channel daily --dry-run", true, true)]
+    [InlineData("update --quality daily --dry-run --non-interactive", true, true)]
+    [InlineData("update", false, false)]
+    public async Task UpdateCommand_PassesDryRunToProjectUpdater(string arguments, bool dryRun, bool hasExplicitChannel)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var (exitCode, context, _, _) = await RunUpdateAndCaptureContextAsync(
+            workspace, arguments, workspace.WorkspaceRoot, "local", includeLocalInChannels: false,
+            selectedChannelName: null, KnownLanguageId.CSharp, "AppHost.csproj");
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.NotNull(context);
+        Assert.Equal(dryRun, context.DryRun);
+        Assert.Equal(hasExplicitChannel, context.HasExplicitChannel);
+    }
+
+    [Theory]
+    [InlineData("update --dry-run")]
+    [InlineData("update --channel daily --dry-run --self")]
+    [InlineData("update --channel daily --dry-run --migrate")]
+    public void UpdateCommand_RejectsInvalidDryRunOptions(string arguments)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        using var provider = CliTestHelper.CreateServiceCollection(workspace, outputHelper).BuildServiceProvider();
+
+        var result = provider.GetRequiredService<RootCommand>().Parse(arguments);
+
+        Assert.Equal(UpdateCommandStrings.DryRunRequiresChannel, Assert.Single(result.Errors).Message);
+    }
+
+    [Theory]
+    [InlineData(KnownLanguageId.TypeScript, "apphost.mts")]
+    [InlineData(KnownLanguageId.Python, "apphost.py")]
+    public async Task UpdateCommand_RejectsGuestDryRun(string languageId, string fileName)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var (exitCode, context, promptInvoked, _) = await RunUpdateAndCaptureContextAsync(
+            workspace, "update --channel daily --dry-run", workspace.WorkspaceRoot, "local",
+            includeLocalInChannels: false, selectedChannelName: null, languageId, fileName);
+
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+        Assert.Null(context);
+        Assert.False(promptInvoked);
+    }
+
+    [Theory]
     [InlineData("parent", "daily")]
     [InlineData("parent", "staging")]
     [InlineData("global", "daily")]
@@ -3116,6 +3163,11 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
 
             options.ProjectLocatorFactory = _ => new TestProjectLocator()
             {
+                FindAppHostProjectFilesAsyncCallback = (_, _, _, skipValidation) =>
+                {
+                    Assert.True(skipValidation);
+                    return Task.FromResult(new List<FileInfo> { new(Path.Combine(projectDirectory.FullName, appHostFileName)) });
+                },
                 UseOrFindAppHostProjectFileAsyncCallback = (projectFile, _, _) =>
                 {
                     return Task.FromResult<FileInfo?>(new FileInfo(Path.Combine(projectDirectory.FullName, appHostFileName)));
