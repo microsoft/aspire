@@ -800,7 +800,7 @@ internal static class CliE2EAutomatorHelpers
         //   [7 OK] $ aspire update --channel stable
         // and the command finishes at "[8 OK] $ " or "[8 ERR:1] $ ".
         var commandPromptText = $"[{counter.Value - 1} OK] $ ";
-        var successPromptText = $"[{counter.Value} OK] $ ";
+        var successPromptText = $"[{counter.Value} OK] $";
         var errorPromptText = $"[{counter.Value} ERR:";
         var sawCliSelfUpdatePrompt = false;
         var sawError = false;
