@@ -17,7 +17,9 @@ Aspire.Hosting.Azure/AzureKustoClusterResource.clusterUri(context: Aspire.Hostin
 Aspire.Hosting.Azure/AzureKustoClusterResource.connectionStringExpression(context: Aspire.Hosting.Azure.Kusto/Aspire.Hosting.Azure.AzureKustoClusterResource) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression
 Aspire.Hosting.Azure/AzureKustoClusterResource.isEmulator(context: Aspire.Hosting.Azure.Kusto/Aspire.Hosting.Azure.AzureKustoClusterResource) -> boolean
 Aspire.Hosting.Azure/AzureKustoClusterResource.nameOutputReference(context: Aspire.Hosting.Azure.Kusto/Aspire.Hosting.Azure.AzureKustoClusterResource) -> Aspire.Hosting.Azure/Aspire.Hosting.Azure.BicepOutputReference
+Aspire.Hosting.Azure/AzureKustoClusterResource.resourceTypeDisplayName(context: Aspire.Hosting.Azure.Kusto/Aspire.Hosting.Azure.AzureKustoClusterResource) -> string
 Aspire.Hosting.Azure/AzureKustoClusterResource.uriExpression(context: Aspire.Hosting.Azure.Kusto/Aspire.Hosting.Azure.AzureKustoClusterResource) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression
 Aspire.Hosting.Azure/AzureKustoReadWriteDatabaseResource.connectionStringExpression(context: Aspire.Hosting.Azure.Kusto/Aspire.Hosting.Azure.AzureKustoReadWriteDatabaseResource) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression
 Aspire.Hosting.Azure/AzureKustoReadWriteDatabaseResource.databaseName(context: Aspire.Hosting.Azure.Kusto/Aspire.Hosting.Azure.AzureKustoReadWriteDatabaseResource) -> string
 Aspire.Hosting.Azure/AzureKustoReadWriteDatabaseResource.parent(context: Aspire.Hosting.Azure.Kusto/Aspire.Hosting.Azure.AzureKustoReadWriteDatabaseResource) -> Aspire.Hosting.Azure.Kusto/Aspire.Hosting.Azure.AzureKustoClusterResource
+Aspire.Hosting.Azure/AzureKustoReadWriteDatabaseResource.resourceTypeDisplayName(context: Aspire.Hosting.Azure.Kusto/Aspire.Hosting.Azure.AzureKustoReadWriteDatabaseResource) -> string

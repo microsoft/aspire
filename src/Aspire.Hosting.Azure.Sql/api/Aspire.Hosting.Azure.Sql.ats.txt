@@ -17,6 +17,7 @@ Aspire.Hosting.Azure/AzureSqlDatabaseResource.databaseName(context: Aspire.Hosti
 Aspire.Hosting.Azure/AzureSqlDatabaseResource.isContainer(context: Aspire.Hosting.Azure.Sql/Aspire.Hosting.Azure.AzureSqlDatabaseResource) -> boolean
 Aspire.Hosting.Azure/AzureSqlDatabaseResource.jdbcConnectionString(context: Aspire.Hosting.Azure.Sql/Aspire.Hosting.Azure.AzureSqlDatabaseResource) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression
 Aspire.Hosting.Azure/AzureSqlDatabaseResource.parent(context: Aspire.Hosting.Azure.Sql/Aspire.Hosting.Azure.AzureSqlDatabaseResource) -> Aspire.Hosting.Azure.Sql/Aspire.Hosting.Azure.AzureSqlServerResource
+Aspire.Hosting.Azure/AzureSqlDatabaseResource.resourceTypeDisplayName(context: Aspire.Hosting.Azure.Sql/Aspire.Hosting.Azure.AzureSqlDatabaseResource) -> string
 Aspire.Hosting.Azure/AzureSqlDatabaseResource.uriExpression(context: Aspire.Hosting.Azure.Sql/Aspire.Hosting.Azure.AzureSqlDatabaseResource) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression
 Aspire.Hosting.Azure/AzureSqlServerResource.azureSqlDatabases(context: Aspire.Hosting.Azure.Sql/Aspire.Hosting.Azure.AzureSqlServerResource) -> Aspire.Hosting/Dict<string,Aspire.Hosting.Azure.Sql/Aspire.Hosting.Azure.AzureSqlDatabaseResource>
 Aspire.Hosting.Azure/AzureSqlServerResource.connectionStringExpression(context: Aspire.Hosting.Azure.Sql/Aspire.Hosting.Azure.AzureSqlServerResource) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression
@@ -28,4 +29,5 @@ Aspire.Hosting.Azure/AzureSqlServerResource.isContainer(context: Aspire.Hosting.
 Aspire.Hosting.Azure/AzureSqlServerResource.jdbcConnectionString(context: Aspire.Hosting.Azure.Sql/Aspire.Hosting.Azure.AzureSqlServerResource) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression
 Aspire.Hosting.Azure/AzureSqlServerResource.nameOutputReference(context: Aspire.Hosting.Azure.Sql/Aspire.Hosting.Azure.AzureSqlServerResource) -> Aspire.Hosting.Azure/Aspire.Hosting.Azure.BicepOutputReference
 Aspire.Hosting.Azure/AzureSqlServerResource.port(context: Aspire.Hosting.Azure.Sql/Aspire.Hosting.Azure.AzureSqlServerResource) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression
+Aspire.Hosting.Azure/AzureSqlServerResource.resourceTypeDisplayName(context: Aspire.Hosting.Azure.Sql/Aspire.Hosting.Azure.AzureSqlServerResource) -> string
 Aspire.Hosting.Azure/AzureSqlServerResource.uriExpression(context: Aspire.Hosting.Azure.Sql/Aspire.Hosting.Azure.AzureSqlServerResource) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression
