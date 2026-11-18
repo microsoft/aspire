@@ -32,6 +32,10 @@ internal sealed class DotNetAppHostRestorePreview : IDisposable
     /// </summary>
     internal NuGetPackageOperationConfiguration? RootConfiguration => _configurations.FirstOrDefault();
 
+    internal IEnumerable<string> GetSensitiveSourceValues(BundleNuGetService nuGetService, CancellationToken cancellationToken)
+        => _configurations.SelectMany(configuration =>
+            nuGetService.GetNuGetSettings(configuration.EffectiveWorkingDirectory.FullName, cancellationToken).SensitiveSourceValues);
+
     /// <param name="nuGetService">The NuGet service used to evaluate candidate configuration.</param>
     /// <param name="candidate">The configuration candidate to preview, if any.</param>
     /// <param name="restoreSettings">The root project's evaluated restore settings.</param>

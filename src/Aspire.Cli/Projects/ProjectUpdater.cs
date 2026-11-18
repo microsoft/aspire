@@ -341,6 +341,18 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
             {
                 // Validate the complete updated graph, not old versions against a new feed or a
                 // half-updated graph. Native restore retains each referenced project's own settings.
+                // Redact before buffering or logging, using both the candidate hierarchy and
+                // referenced projects' settings, just as in-process NuGet operations do.
+                // Redaction is best effort to reduce sensitive data in logs, not a security guarantee.
+                // Default log access relies on filesystem permissions: owner-only on Unix and inherited ACLs on Windows.
+                var sensitiveSources = updatePlan.AmbientPolicies.Keys
+                    .SelectMany(directory => nuGetService.GetNuGetSettings(directory, cancellationToken).SensitiveSourceValues)
+                    .Concat(updatePlan.SensitiveSourceValues)
+                    .Concat(nuGetService.GetNuGetSettings(candidatePackageConfiguration.EffectiveWorkingDirectory.FullName, cancellationToken).SensitiveSourceValues)
+                    .Concat(restorePreview?.GetSensitiveSourceValues(nuGetService, cancellationToken) ?? [])
+                    .Concat(repairedRestorePreview?.GetSensitiveSourceValues(nuGetService, cancellationToken) ?? [])
+                    .Distinct(StringComparer.Ordinal)
+                    .ToArray();
                 var restoreOutput = new OutputCollector(fileLoggerProvider, CliLogFormat.Categories.Package);
                 var restoreExitCode = await interactionService.ShowStatusAsync(
                     UpdateCommandStrings.RestoringPackagesAfterUpdate,
@@ -349,8 +361,19 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
                         await transaction.VerifyAsync(cancellationToken);
                         return await runner.RestoreAsync(projectFile, new()
                         {
-                            StandardOutputCallback = restoreOutput.AppendOutput,
-                            StandardErrorCallback = restoreOutput.AppendError,
+                            // ChildProcess traces raw output before callbacks run. Only the redacted
+                            // callback messages may reach the logger, including at Trace verbosity.
+                            SuppressLogging = true,
+                            StandardOutputCallback = line =>
+                            {
+                                var redacted = PackageSourceRedactor.RedactOccurrences(line, sensitiveSources);
+                                restoreOutput.AppendOutput(redacted);
+                            },
+                            StandardErrorCallback = line =>
+                            {
+                                var redacted = PackageSourceRedactor.RedactOccurrences(line, sensitiveSources);
+                                restoreOutput.AppendError(redacted);
+                            },
                             NuGetRestoreTargetsFile = restorePreview?.TargetsFile ?? repairedRestorePreview?.TargetsFile,
                             IsolatedRestorePackagesDirectory = dryRunRestore is null ? null : new DirectoryInfo(dryRunRestore.PackagesDirectory),
                             EnvironmentVariables = dryRunRestore?.EnvironmentVariables
@@ -359,7 +382,7 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
                 if (restoreExitCode != 0)
                 {
                     interactionService.DisplayLines(restoreOutput.GetLines());
-                    throw new ProjectUpdaterException(string.Format(CultureInfo.InvariantCulture, UpdateCommandStrings.FailedToRestoreAfterUpdateFormat, projectFile.FullName));
+                    throw new ProjectUpdaterException(string.Format(CultureInfo.InvariantCulture, UpdateCommandStrings.FailedToRestoreAfterUpdateFormat, channel.Name, projectFile.FullName));
                 }
             }
 
@@ -599,7 +622,7 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
 
     private async Task<JsonDocument> GetItemsAndPropertiesAsync(FileInfo projectFile, CancellationToken cancellationToken)
     {
-        return await GetItemsAndPropertiesAsync(projectFile, ["PackageReference", "ProjectReference"], ["AspireHostingSDKVersion", "ManagePackageVersionsCentrally", "NuGetRestoreTargets", "_UsingAspireAppHostSdk", "_AspireAppHostPackageVersion", "DirectoryBuildPropsPath", "DirectoryBuildTargetsPath", "MSBuildAllProjects", "MSBuildProjectFullPath"], cancellationToken);
+        return await GetItemsAndPropertiesAsync(projectFile, ["PackageReference", "ProjectReference"], ["AspireHostingSDKVersion", "ManagePackageVersionsCentrally", "NuGetRestoreTargets", "_UsingAspireAppHostSdk", "_AspireAppHostPackageVersion", "DirectoryBuildPropsPath", "DirectoryBuildTargetsPath", "MSBuildAllProjects", "MSBuildProjectFullPath", "RestoreAdditionalProjectSources"], cancellationToken);
     }
 
     private async Task<JsonDocument> GetItemsAndPropertiesAsync(FileInfo projectFile, string[] items, string[] properties, CancellationToken cancellationToken)
@@ -614,7 +637,9 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
             return await runner.GetProjectItemsAndPropertiesAsync(projectFile, items, properties, targets: [], new()
             {
                 NoRestore = true,
-                ExcludeRestorePackageImports = true
+                ExcludeRestorePackageImports = true,
+                // Evaluated source properties may contain credentials, including on failed probes.
+                SuppressLogging = true
             }, cancellationToken);
         });
 
@@ -628,7 +653,7 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
 
     private async Task<JsonDocument> GetItemsAndPropertiesWithFallbackAsync(FileInfo projectFile, UpdateContext context, CancellationToken cancellationToken)
     {
-        return await GetItemsAndPropertiesWithFallbackAsync(projectFile, ["PackageReference", "ProjectReference"], ["AspireHostingSDKVersion", "ManagePackageVersionsCentrally", "NuGetRestoreTargets", "_UsingAspireAppHostSdk", "_AspireAppHostPackageVersion", "DirectoryBuildPropsPath", "DirectoryBuildTargetsPath", "MSBuildAllProjects", "MSBuildProjectFullPath"], context, cancellationToken);
+        return await GetItemsAndPropertiesWithFallbackAsync(projectFile, ["PackageReference", "ProjectReference"], ["AspireHostingSDKVersion", "ManagePackageVersionsCentrally", "NuGetRestoreTargets", "_UsingAspireAppHostSdk", "_AspireAppHostPackageVersion", "DirectoryBuildPropsPath", "DirectoryBuildTargetsPath", "MSBuildAllProjects", "MSBuildProjectFullPath", "RestoreAdditionalProjectSources"], context, cancellationToken);
     }
 
     private async Task<JsonDocument> GetItemsAndPropertiesWithFallbackAsync(FileInfo projectFile, string[] items, string[] properties, UpdateContext context, CancellationToken cancellationToken)
@@ -1424,6 +1449,20 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
         var evaluatedProjectFile = projectFile;
         if (itemsAndPropertiesDocument.RootElement.TryGetProperty("Properties", out var propertiesElement))
         {
+            if (propertiesElement.TryGetProperty("RestoreAdditionalProjectSources", out var additionalSources))
+            {
+                // -getProperty returns an already MSBuild-unescaped list, for example:
+                // https://user:p%40ss@feed.example/v3/index.json?sig=a%3Bb;https://other.example/feed
+                // Split the list without URI-decoding it again, which would corrupt encoded credentials.
+                foreach (var source in (additionalSources.GetString() ?? string.Empty)
+                    .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                {
+                    if (PackageSourceOverrideMappings.HasCredentialMaterial(source))
+                    {
+                        context.SensitiveSourceValues.Add(source);
+                    }
+                }
+            }
             if (string.Equals(projectFile.Extension, ".cs", StringComparison.OrdinalIgnoreCase) &&
                 propertiesElement.TryGetProperty("MSBuildProjectFullPath", out var evaluatedPath) &&
                 evaluatedPath.GetString() is { Length: > 0 } path)
@@ -2085,6 +2124,7 @@ internal sealed class UpdateContext(FileInfo appHostProjectFile, PackageChannel 
     public HashSet<string> VisitedProjects { get; } = new();
     public Dictionary<string, string> ProjectRestoreTargets { get; } = new(StringComparers.FileSystemPath);
     public Dictionary<string, string> AmbientPolicies { get; } = new(StringComparers.FileSystemPath);
+    public HashSet<string> SensitiveSourceValues { get; } = new(StringComparer.Ordinal);
     public Dictionary<string, byte[]?> OriginalFiles { get; } = new(StringComparers.FileSystemPath);
     public bool FallbackParsing { get; set; }
     public bool UsesAppHostSdk { get; set; } = true;

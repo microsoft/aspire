@@ -175,6 +175,8 @@ internal sealed class BundleNuGetService : INuGetService
         }
         catch (NuGetOperationException ex)
         {
+            // Redaction is best effort to reduce sensitive data in logs, not a security guarantee.
+            // Default log access relies on filesystem permissions: owner-only on Unix and inherited ACLs on Windows.
             var redactedOutput = PackageSourceRedactor.RedactOccurrences(ex.Output, sensitiveSources);
             _logger.LogError("Package restore failed");
             _logger.LogError("Package restore stderr: {Error}", redactedOutput);
