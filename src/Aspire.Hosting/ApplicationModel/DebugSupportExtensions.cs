@@ -360,7 +360,7 @@ public static class DebugSupportExtensions
             return false;
         }
 
-        if (declaredAnnotation is not null && hasDebugSessionInfo)
+        if (declaredAnnotation is not null && hasDebugSessionInfo && supportedLaunchConfigurations is not null)
         {
             if (declaredAnnotation.LaunchConfigurationType != AzureFunctionsLaunchConfigurationType ||
                 !hasExplicitProjectLaunchCapability)
