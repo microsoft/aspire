@@ -2,6 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable CS0618 // Retain legacy project launch, watch, custom-debug, and subtype compatibility.
+#pragma warning disable ASPIREAZUREFUNCTIONS001 // Azure Functions hosting APIs are experimental.
+#pragma warning disable ASPIRECOMMAND001 // Required-command annotations are removed to keep these launch-policy tests hermetic.
 #pragma warning disable ASPIREEXTENSION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIRECERTIFICATES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREPERSISTENCE001 // Resource lifetime APIs are experimental.
@@ -17,6 +19,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Channels;
 using Aspire.Dashboard.Model;
+using Aspire.Hosting.Azure;
 using Aspire.Hosting.Dcp;
 using Aspire.Hosting.Dcp.Model;
 using Aspire.Hosting.DevTunnels;
@@ -7516,11 +7519,64 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task ProjectWithNonProjectAnnotation_VSCodeExplicitlyUnsupported_RunsInProcess()
+    public async Task ProjectWithNonProjectAnnotation_VisualStudioProjectCapability_UsesProjectIdeExecution()
     {
-        // Guard: When VS Code extension sends DEBUG_SESSION_INFO with SupportedLaunchConfigurations
-        // that do NOT include the custom type, the resource should fall to Process mode. This ensures
-        // the else-if branch doesn't over-capture VS Code scenarios.
+        // Visual Studio advertises its native "project" launcher but not extension-specific types such as
+        // "azure-functions". Its capability list does not carry the Aspire extension baseline marker, so use
+        // the native project launcher and let Visual Studio own the process and load its symbols.
+        var builder = DistributedApplication.CreateBuilder();
+
+        var projectBuilder = builder.AddProject<TestProject>("proj", launchProfileName: null);
+        var annotationToRemove = projectBuilder.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().FirstOrDefault();
+        if (annotationToRemove is not null)
+        {
+            projectBuilder.Resource.Annotations.Remove(annotationToRemove);
+        }
+        projectBuilder
+            .WithArgs("app-arg")
+            .WithDebugSupport(mode => new ExecutableLaunchConfiguration("azure-functions") { Mode = mode }, "azure-functions");
+
+        var runSessionInfo = new RunSessionInfo
+        {
+            ProtocolsSupported = ["coreclr"],
+            SupportedLaunchConfigurations = ["project", "browser"]
+        };
+
+        var configDict = new Dictionary<string, string?>
+        {
+            [DcpExecutor.DebugSessionPortVar] = "12345",
+            [KnownConfigNames.DebugSessionInfo] = JsonSerializer.Serialize(runSessionInfo)
+        };
+
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(configDict).Build();
+
+        Assert.True(projectBuilder.Resource.SupportsDebugging(configuration, out var effectiveIdeLaunchAnnotation));
+        Assert.Equal(KnownLaunchConfigurationTypes.Project, effectiveIdeLaunchAnnotation.LaunchConfigurationType);
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, configuration: configuration);
+
+        await appExecutor.RunApplicationAsync();
+
+        var exe = GetCreatedExecutableForResource(kubernetesService, "proj");
+        Assert.Equal(ExecutionType.IDE, exe.Spec.ExecutionType);
+        Assert.Equal(["app-arg"], exe.Spec.Args);
+        Assert.Null(exe.Spec.FallbackExecutionTypes);
+
+        Assert.True(exe.TryGetAnnotationAsObjectList<ProjectLaunchConfiguration>(Executable.LaunchConfigurationsAnnotation, out var launchConfigs));
+        var launchConfig = Assert.Single(launchConfigs);
+        Assert.Equal(KnownLaunchConfigurationTypes.Project, launchConfig.Type);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("http://localhost:1234")]
+    public async Task ProjectWithNonProjectAnnotation_AspireExtensionExplicitlyUnsupported_RunsInProcess(string? extensionEndpoint)
+    {
+        // Aspire extension sessions can omit the RPC endpoint in leased tests and detached CLI children. The
+        // baseline capability survives in DEBUG_SESSION_INFO, so the launch-type list remains authoritative.
         var builder = DistributedApplication.CreateBuilder();
 
         var projectBuilder = builder.AddProject<TestProject>("proj", launchProfileName: null);
@@ -7534,14 +7590,116 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         var runSessionInfo = new RunSessionInfo
         {
             ProtocolsSupported = ["coreclr"],
-            SupportedLaunchConfigurations = ["project"]
+            SupportedLaunchConfigurations = [
+                KnownLaunchConfigurationTypes.Project,
+                DebugSupportExtensions.AspireExtensionBaselineCapability
+            ]
         };
 
         var configDict = new Dictionary<string, string?>
         {
             [DcpExecutor.DebugSessionPortVar] = "12345",
             [KnownConfigNames.DebugSessionInfo] = JsonSerializer.Serialize(runSessionInfo),
-            [KnownConfigNames.ExtensionEndpoint] = "http://localhost:1234"
+            [KnownConfigNames.ExtensionEndpoint] = extensionEndpoint
+        };
+
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(configDict).Build();
+
+        Assert.False(projectBuilder.Resource.SupportsDebugging(configuration, out var declaredIdeLaunchAnnotation));
+        Assert.Equal("azure-functions", Assert.IsType<SupportsDebuggingAnnotation>(declaredIdeLaunchAnnotation).LaunchConfigurationType);
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, configuration: configuration);
+
+        await appExecutor.RunApplicationAsync();
+
+        var exe = GetCreatedExecutableForResource(kubernetesService, "proj");
+        Assert.Equal(ExecutionType.Process, exe.Spec.ExecutionType);
+    }
+
+    [Fact]
+    public async Task AzureFunctionsProjectWithFixedHttpsPort_VisualStudioProjectCapability_UsesLaunchProfile()
+    {
+        var exe = await CreateAzureFunctionsProjectExecutableAsync<TestAzureFunctionsProjectWithFixedHttpsPort>(
+            7071,
+            sendDebugSessionInfo: true);
+
+        Assert.Equal(ExecutionType.IDE, exe.Spec.ExecutionType);
+        Assert.Null(exe.Spec.Args);
+
+        Assert.True(exe.TryGetAnnotationAsObjectList<ProjectLaunchConfiguration>(Executable.LaunchConfigurationsAnnotation, out var launchConfigs));
+        var launchConfig = Assert.Single(launchConfigs);
+        Assert.Equal(KnownLaunchConfigurationTypes.Project, launchConfig.Type);
+        Assert.Equal("func", launchConfig.LaunchProfile);
+    }
+
+    [Fact]
+    public async Task AzureFunctionsProjectWithFixedHttpsPortAndRetainedLaunchToolPrefix_VisualStudioProjectCapability_PreservesLaunchProfileArguments()
+    {
+        var exe = await CreateAzureFunctionsProjectExecutableAsync<TestAzureFunctionsProjectWithFixedHttpsPort>(
+            7071,
+            sendDebugSessionInfo: true,
+            static functions => functions.WithLaunchToolArgs(
+                static context => context.Args.Add("launch-tool"),
+                ownedByLaunchConfigurationType: "azure-functions"));
+
+        Assert.Equal(ExecutionType.IDE, exe.Spec.ExecutionType);
+        Assert.Equal(["launch-tool", "--port", "7071", "--useHttps"], exe.Spec.Args);
+
+        Assert.True(exe.TryGetAnnotationAsObjectList<ProjectLaunchConfiguration>(Executable.LaunchConfigurationsAnnotation, out var launchConfigs));
+        var launchConfig = Assert.Single(launchConfigs);
+        Assert.Equal(KnownLaunchConfigurationTypes.Project, launchConfig.Type);
+        Assert.Equal("func", launchConfig.LaunchProfile);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("{\"protocols_supported\":[\"2025-10-01\"]}")]
+    [InlineData("{\"protocols_supported\":[\"2025-10-01\"],\"supported_launch_configurations\":null}")]
+    [InlineData("{invalid json}")]
+    [InlineData("{\"protocols_supported\":[\"coreclr\"],\"supported_launch_configurations\":[\"project\"]}")]
+    public async Task AzureFunctionsProjectWithDynamicHttpsPort_ProjectCompatibilityLaunch_PreservesLaunchProfileArguments(string? debugSessionInfo)
+    {
+        var exe = await CreateAzureFunctionsProjectExecutableAsync<TestAzureFunctionsProjectWithDynamicHttpsPort>(
+            9876,
+            debugSessionInfo,
+            static _ => { });
+
+        Assert.Equal(ExecutionType.IDE, exe.Spec.ExecutionType);
+        Assert.Equal(["--useHttps", "--verbose", "--port", "9876"], exe.Spec.Args);
+
+        Assert.True(exe.TryGetAnnotationAsObjectList<ProjectLaunchConfiguration>(Executable.LaunchConfigurationsAnnotation, out var launchConfigs));
+        var launchConfig = Assert.Single(launchConfigs);
+        Assert.Equal(KnownLaunchConfigurationTypes.Project, launchConfig.Type);
+        Assert.Equal("func", launchConfig.LaunchProfile);
+    }
+
+    [Fact]
+    public async Task ProjectWithNonProjectAnnotation_NativeIdeWithoutProjectSupport_RunsInProcess()
+    {
+        // A native IDE must explicitly advertise "project" before Aspire can use the compatibility launcher.
+        var builder = DistributedApplication.CreateBuilder();
+
+        var projectBuilder = builder.AddProject<TestProject>("proj", launchProfileName: null);
+        var annotationToRemove = projectBuilder.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().FirstOrDefault();
+        if (annotationToRemove is not null)
+        {
+            projectBuilder.Resource.Annotations.Remove(annotationToRemove);
+        }
+        projectBuilder.WithDebugSupport(mode => new ExecutableLaunchConfiguration("azure-functions") { Mode = mode }, "azure-functions");
+
+        var runSessionInfo = new RunSessionInfo
+        {
+            ProtocolsSupported = ["coreclr"],
+            SupportedLaunchConfigurations = ["browser"]
+        };
+
+        var configDict = new Dictionary<string, string?>
+        {
+            [DcpExecutor.DebugSessionPortVar] = "12345",
+            [KnownConfigNames.DebugSessionInfo] = JsonSerializer.Serialize(runSessionInfo)
         };
 
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(configDict).Build();
@@ -7555,6 +7713,123 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
 
         var exe = GetCreatedExecutableForResource(kubernetesService, "proj");
         Assert.Equal(ExecutionType.Process, exe.Spec.ExecutionType);
+    }
+
+    [Fact]
+    public async Task ProjectWithOtherCustomAnnotation_VisualStudioProjectCapability_RunsInProcess()
+    {
+        // The native project fallback is an Azure Functions compatibility contract, not a general fallback for
+        // every custom launch configuration type.
+        var builder = DistributedApplication.CreateBuilder();
+
+        var projectBuilder = builder.AddProject<TestProject>("proj", launchProfileName: null);
+        var annotationToRemove = projectBuilder.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().FirstOrDefault();
+        if (annotationToRemove is not null)
+        {
+            projectBuilder.Resource.Annotations.Remove(annotationToRemove);
+        }
+        projectBuilder.WithDebugSupport(mode => new ExecutableLaunchConfiguration("custom-debug") { Mode = mode }, "custom-debug");
+
+        var runSessionInfo = new RunSessionInfo
+        {
+            ProtocolsSupported = ["coreclr"],
+            SupportedLaunchConfigurations = ["project", "browser"]
+        };
+
+        var configDict = new Dictionary<string, string?>
+        {
+            [DcpExecutor.DebugSessionPortVar] = "12345",
+            [KnownConfigNames.DebugSessionInfo] = JsonSerializer.Serialize(runSessionInfo)
+        };
+
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(configDict).Build();
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, configuration: configuration);
+
+        await appExecutor.RunApplicationAsync();
+
+        var exe = GetCreatedExecutableForResource(kubernetesService, "proj");
+        Assert.Equal(ExecutionType.Process, exe.Spec.ExecutionType);
+    }
+
+    private static Task<Executable> CreateAzureFunctionsProjectExecutableAsync<TProject>(int targetPort, bool sendDebugSessionInfo)
+        where TProject : IProjectMetadata, new()
+    {
+        return CreateAzureFunctionsProjectExecutableAsync<TProject>(targetPort, sendDebugSessionInfo, static _ => { });
+    }
+
+    private static Task<Executable> CreateAzureFunctionsProjectExecutableAsync<TProject>(
+        int targetPort,
+        bool sendDebugSessionInfo,
+        Action<IResourceBuilder<AzureFunctionsProjectResource>> configureResource)
+        where TProject : IProjectMetadata, new()
+    {
+        var debugSessionInfo = sendDebugSessionInfo
+            ? JsonSerializer.Serialize(new RunSessionInfo
+            {
+                ProtocolsSupported = ["coreclr"],
+                SupportedLaunchConfigurations = [KnownLaunchConfigurationTypes.Project]
+            })
+            : null;
+
+        return CreateAzureFunctionsProjectExecutableAsync<TProject>(
+            targetPort,
+            debugSessionInfo,
+            configureResource);
+    }
+
+    private static async Task<Executable> CreateAzureFunctionsProjectExecutableAsync<TProject>(
+        int targetPort,
+        string? debugSessionInfo,
+        Action<IResourceBuilder<AzureFunctionsProjectResource>> configureResource)
+        where TProject : IProjectMetadata, new()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var functions = builder.AddAzureFunctionsProject<TProject>("func")
+            .WithEndpoint("https", endpoint =>
+            {
+                endpoint.AllocatedEndpoint = new(endpoint, "localhost", targetPort);
+                endpoint.TargetPort = targetPort;
+            });
+
+        configureResource(functions);
+
+        foreach (var annotation in functions.Resource.Annotations.OfType<RequiredCommandAnnotation>().ToArray())
+        {
+            functions.Resource.Annotations.Remove(annotation);
+        }
+
+        // Compatibility project launches apply both when Visual Studio 2026 advertises "project" without
+        // "azure-functions" and when an IDE session omits a usable supported_launch_configurations list.
+        var configurationValues = new Dictionary<string, string?>
+        {
+            [DcpExecutor.DebugSessionPortVar] = "12345"
+        };
+        if (debugSessionInfo is not null)
+        {
+            configurationValues[KnownConfigNames.DebugSessionInfo] = debugSessionInfo;
+        }
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(configurationValues)
+            .Build();
+
+        Assert.True(functions.Resource.SupportsDebugging(configuration, out var effectiveIdeLaunchAnnotation));
+        Assert.Equal(KnownLaunchConfigurationTypes.Project, effectiveIdeLaunchAnnotation.LaunchConfigurationType);
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        await using var appExecutor = CreateAppExecutor(
+            distributedAppModel,
+            kubernetesService: kubernetesService,
+            configuration: configuration);
+
+        await appExecutor.RunApplicationAsync();
+
+        return GetCreatedExecutableForResource(kubernetesService, "func");
     }
 
     public static TheoryData<string, string[]> MauiProjectLaunchConfigurationsForProcessExecution => new()
@@ -8730,6 +9005,47 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         Assert.Equal("project", launchConfigs[0].Type);
     }
 
+    [Fact]
+    public async Task ProjectExecutable_NoSupportsDebuggingAnnotation_CapabilityListOmitsProject_RunsInProcessMode()
+    {
+        // An advertised capability list is authoritative even for a project that declares no launch configuration
+        // type. The VS Code extension omits "project" without the C# extension and rejects a "project" run session,
+        // so Aspire must start the resource as a process. Inspection must report the same ownership decision.
+        var builder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
+        {
+            AssemblyName = typeof(DistributedApplicationTests).Assembly.FullName
+        });
+
+        var projectBuilder = builder.AddProject<Projects.ServiceA>("ServiceA", launchProfileName: null);
+        var annotationToRemove = projectBuilder.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().Single();
+        projectBuilder.Resource.Annotations.Remove(annotationToRemove);
+
+        var configDict = new Dictionary<string, string?>
+        {
+            [DcpExecutor.DebugSessionPortVar] = "12345",
+            [KnownConfigNames.DebugSessionInfo] = JsonSerializer.Serialize(new RunSessionInfo
+            {
+                ProtocolsSupported = ["2025-10-01"],
+                SupportedLaunchConfigurations = ["go", "python"]
+            })
+        };
+
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(configDict).Build();
+
+        Assert.False(projectBuilder.Resource.SupportsDebugging(configuration, out var returnedAnnotation));
+        Assert.Null(returnedAnnotation);
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, configuration: configuration);
+
+        await appExecutor.RunApplicationAsync();
+
+        var exe = GetCreatedExecutableForResource(kubernetesService, "ServiceA");
+        Assert.Equal(ExecutionType.Process, exe.Spec.ExecutionType);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -8991,6 +9307,85 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
             arg => Assert.EndsWith("ServiceA.csproj", arg, StringComparison.Ordinal),
             arg => Assert.Equal("--configuration", arg),
             arg => Assert.Equal(GetTestAssemblyConfiguration(), arg));
+    }
+
+    [Fact]
+    public async Task ProjectExecutable_WithLaunchArgsOverride_UsesProcessArgumentsAndPreservesSupportedCustomMetadata()
+    {
+        var builder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
+        {
+            AssemblyName = typeof(DistributedApplicationTests).Assembly.FullName
+        });
+
+        var projectBuilder = builder.AddProject<Projects.ServiceA>("ServiceA", launchProfileName: null);
+        var defaultDebugSupport = projectBuilder.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().Single();
+        projectBuilder.Resource.Annotations.Remove(defaultDebugSupport);
+        projectBuilder.WithDebugSupport(
+            mode => new ExecutableLaunchConfiguration("custom") { Mode = mode },
+            "custom");
+#pragma warning disable ASPIREPROJECTS001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+        projectBuilder.Resource.Annotations.Add(new ProjectLaunchArgsOverrideAnnotation(["build", "/t:Run"]));
+#pragma warning restore ASPIREPROJECTS001
+
+        var debugSessionInfo = JsonSerializer.Serialize(new RunSessionInfo
+        {
+            ProtocolsSupported = ["coreclr"],
+            SupportedLaunchConfigurations = ["custom"]
+        });
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [DcpExecutor.DebugSessionPortVar] = "12345",
+                [KnownConfigNames.DebugSessionInfo] = debugSessionInfo,
+                [KnownConfigNames.DebugSessionRunMode] = ExecutableLaunchMode.Debug
+            })
+            .Build();
+        projectBuilder.WithArgs(context =>
+        {
+            if (!context.Resource.SupportsDebugging(configuration, out _))
+            {
+                context.Args.Add("process-arg");
+            }
+        });
+
+        Assert.False(projectBuilder.Resource.SupportsDebugging(configuration, out var declaredIdeLaunchAnnotation));
+        Assert.Equal("custom", Assert.IsType<SupportsDebuggingAnnotation>(declaredIdeLaunchAnnotation).LaunchConfigurationType);
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var appExecutor = CreateAppExecutor(
+            distributedAppModel,
+            kubernetesService: kubernetesService,
+            configuration: configuration);
+
+        await appExecutor.RunApplicationAsync();
+
+        var exe = GetCreatedExecutableForResource(kubernetesService, "ServiceA");
+        Assert.Equal(ExecutionType.Process, exe.Spec.ExecutionType);
+        var expectedArgs = new List<string>
+        {
+            "build",
+            "/t:Run",
+            projectBuilder.Resource.GetProjectMetadata().ProjectPath
+        };
+        if (GetTestAssemblyConfiguration() is { } configurationName)
+        {
+            expectedArgs.AddRange(["--configuration", configurationName]);
+        }
+        expectedArgs.Add("process-arg");
+        Assert.Equal(expectedArgs, exe.Spec.Args);
+
+        Assert.True(exe.Metadata.Annotations.TryGetValue(
+            Executable.LaunchConfigurationsAnnotation,
+            out var launchConfigurationsJson));
+        using var launchConfigurations = JsonDocument.Parse(launchConfigurationsJson);
+        Assert.Collection(
+            launchConfigurations.RootElement.EnumerateArray(),
+            projectLaunchConfiguration =>
+                Assert.Equal(KnownLaunchConfigurationTypes.Project, projectLaunchConfiguration.GetProperty("type").GetString()),
+            customLaunchConfiguration =>
+                Assert.Equal("custom", customLaunchConfiguration.GetProperty("type").GetString()));
     }
 
     [Fact]
@@ -11762,11 +12157,19 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         }
         projectBuilder.WithDebugSupport(mode => new ExecutableLaunchConfiguration("azure-functions") { Mode = mode }, "azure-functions");
 
-        // Extension does NOT list "azure-functions" in SupportedLaunchConfigurations
+        // The Aspire extension does NOT list "azure-functions" in SupportedLaunchConfigurations.
+        // Its baseline capability makes the advertised launch types authoritative.
         var configDict = new Dictionary<string, string?>
         {
             [DcpExecutor.DebugSessionPortVar] = "12345",
-            [KnownConfigNames.DebugSessionInfo] = JsonSerializer.Serialize(new RunSessionInfo { ProtocolsSupported = ["coreclr"], SupportedLaunchConfigurations = ["project"] }),
+            [KnownConfigNames.DebugSessionInfo] = JsonSerializer.Serialize(new RunSessionInfo
+            {
+                ProtocolsSupported = ["coreclr"],
+                SupportedLaunchConfigurations = [
+                    KnownLaunchConfigurationTypes.Project,
+                    DebugSupportExtensions.AspireExtensionBaselineCapability
+                ]
+            }),
             [KnownConfigNames.ExtensionEndpoint] = "http://localhost:1234"
         };
 
@@ -12363,6 +12766,33 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     {
         public string ProjectPath => "TestProject";
         public LaunchSettings LaunchSettings { get; } = new();
+    }
+
+    private sealed class TestAzureFunctionsProjectWithFixedHttpsPort : IProjectMetadata
+    {
+        public string ProjectPath => "TestAzureFunctionsProjectWithFixedHttpsPort";
+        public LaunchSettings LaunchSettings { get; } = CreateAzureFunctionsLaunchSettings("--port 7071 --useHttps");
+    }
+
+    private sealed class TestAzureFunctionsProjectWithDynamicHttpsPort : IProjectMetadata
+    {
+        public string ProjectPath => "TestAzureFunctionsProjectWithDynamicHttpsPort";
+        public LaunchSettings LaunchSettings { get; } = CreateAzureFunctionsLaunchSettings("--useHttps --verbose");
+    }
+
+    private static LaunchSettings CreateAzureFunctionsLaunchSettings(string commandLineArgs)
+    {
+        return new()
+        {
+            Profiles = new Dictionary<string, LaunchProfile>
+            {
+                ["func"] = new()
+                {
+                    CommandLineArgs = commandLineArgs,
+                    LaunchBrowser = false
+                }
+            }
+        };
     }
 
     private sealed class TestFileBasedProject(string projectPath) : IProjectMetadata
