@@ -343,6 +343,8 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
                 // half-updated graph. Native restore retains each referenced project's own settings.
                 // Redact before buffering or logging, using both the candidate hierarchy and
                 // referenced projects' settings, just as in-process NuGet operations do.
+                // Redaction is best effort to reduce sensitive data in logs, not a security guarantee.
+                // Default log access relies on filesystem permissions: owner-only on Unix and inherited ACLs on Windows.
                 var sensitiveSources = updatePlan.AmbientPolicies.Keys
                     .SelectMany(directory => nuGetService.GetNuGetSettings(directory, cancellationToken).SensitiveSourceValues)
                     .Concat(updatePlan.SensitiveSourceValues)

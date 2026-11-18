@@ -130,11 +130,16 @@ conflicts still fail in either mode. Dry runs restore source files from adjacent
 backups; leftover backups require separate consent to replace. See the
 [update validation details](../../docs/specs/polyglot-integration-restore.md#shared-policy-previews-and-net-persistence).
 
-Validation restore diagnostics are logged and displayed on failure. Credential
-material from known package sources is redacted before diagnostics are buffered
-or logged, using the candidate and discovered referenced-project configurations
-and their planning-time evaluated `RestoreAdditionalProjectSources` values. Sources introduced
-only by targets during restore are not discovered by this evaluation-time redaction.
+Validation restore output is saved to the CLI log and displayed when restore
+fails. The CLI attempts to remove credentials from package source URLs, but
+redaction is best effort, not a security guarantee. Check logs and error
+messages for sensitive information before sharing them.
+
+By default, CLI logs are stored under the user's Aspire home. On Unix, the CLI
+restricts log files and the log directory to the current user; on Windows, it
+relies on inherited filesystem ACLs. Logs remain accessible to processes running
+as the same user, and custom `--log-file` locations may have different directory
+and ACL properties.
 
 ## Configured template sources
 
