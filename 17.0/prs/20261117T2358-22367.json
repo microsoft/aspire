@@ -1,0 +1,9 @@
+{
+  "author": "joperezr",
+  "comment": "Merge-forward of release/13.6 into release/17.0; carries previously shipped servicing fixes, no distinct new 17.0 change",
+  "mergedAt": "2026-11-17T23:58:14Z",
+  "number": 22367,
+  "runDate": "2026-11-18T00:06:48Z",
+  "status": "excluded",
+  "title": "Merge release/13.6 into release/17.0 after 13.6.5 security release"
+}

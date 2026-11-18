@@ -1,14 +1,16 @@
 {
   "area": "AppHost",
-  "areaEmoji": "🏠",
+  "areaEmoji": "\ud83c\udfe0",
   "backport": false,
   "breaking": false,
   "changeType": "Bug fixes",
   "communityContributors": [],
   "description": "Steps depending on per-resource provisioning steps such as `provision-<name>-containerapp` no longer fail with an 'unknown step' error at startup.",
-  "docsPrs": [],
-  "docsRequired": false,
-  "emoji": "⛓️",
+  "docsPrs": [
+    2035
+  ],
+  "docsRequired": true,
+  "emoji": "\u26d3\ufe0f",
   "firstMergedAt": "2026-11-03T03:54:32Z",
   "lastMergedAt": "2026-11-03T03:54:32Z",
   "name": "Pipeline steps can depend on deployment-target steps created during before-start",

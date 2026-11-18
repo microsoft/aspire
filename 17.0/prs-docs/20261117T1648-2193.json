@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Docs site build tooling",
+  "mergedAt": "2026-11-17T16:48:34Z",
+  "number": 2193,
+  "runDate": "2026-11-18T00:06:48Z",
+  "status": "excluded",
+  "title": "Speed up OG image rendering ~9x"
+}

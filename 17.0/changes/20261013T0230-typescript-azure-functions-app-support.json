@@ -1,14 +1,16 @@
 {
   "area": "AppHost",
-  "areaEmoji": "🏠",
+  "areaEmoji": "\ud83c\udfe0",
   "backport": false,
   "breaking": false,
   "changeType": "New features",
   "communityContributors": [],
   "description": "AppHost can now model, run, publish, and deploy TypeScript/JavaScript Azure Functions apps (Node worker) as directory-based resources, with local Core Tools launch support and deterministic Dockerfile publishing for Azure Container Apps.",
-  "docsPrs": [],
+  "docsPrs": [
+    1878
+  ],
   "docsRequired": true,
-  "emoji": "⚡",
+  "emoji": "\u26a1",
   "firstMergedAt": "2026-10-13T02:30:31Z",
   "lastMergedAt": "2026-10-13T02:30:31Z",
   "name": "TypeScript Azure Functions app support",
