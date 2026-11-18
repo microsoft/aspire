@@ -7655,13 +7655,17 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task AzureFunctionsProjectWithDynamicHttpsPort_ProjectCompatibilityLaunch_PreservesLaunchProfileArguments(bool sendDebugSessionInfo)
+    [InlineData(null)]
+    [InlineData("{\"protocols_supported\":[\"2025-10-01\"]}")]
+    [InlineData("{\"protocols_supported\":[\"2025-10-01\"],\"supported_launch_configurations\":null}")]
+    [InlineData("{invalid json}")]
+    [InlineData("{\"protocols_supported\":[\"coreclr\"],\"supported_launch_configurations\":[\"project\"]}")]
+    public async Task AzureFunctionsProjectWithDynamicHttpsPort_ProjectCompatibilityLaunch_PreservesLaunchProfileArguments(string? debugSessionInfo)
     {
         var exe = await CreateAzureFunctionsProjectExecutableAsync<TestAzureFunctionsProjectWithDynamicHttpsPort>(
             9876,
-            sendDebugSessionInfo);
+            debugSessionInfo,
+            static _ => { });
 
         Assert.Equal(ExecutionType.IDE, exe.Spec.ExecutionType);
         Assert.Equal(["--useHttps", "--verbose", "--port", "9876"], exe.Spec.Args);
@@ -7757,9 +7761,29 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         return CreateAzureFunctionsProjectExecutableAsync<TProject>(targetPort, sendDebugSessionInfo, static _ => { });
     }
 
-    private static async Task<Executable> CreateAzureFunctionsProjectExecutableAsync<TProject>(
+    private static Task<Executable> CreateAzureFunctionsProjectExecutableAsync<TProject>(
         int targetPort,
         bool sendDebugSessionInfo,
+        Action<IResourceBuilder<AzureFunctionsProjectResource>> configureResource)
+        where TProject : IProjectMetadata, new()
+    {
+        var debugSessionInfo = sendDebugSessionInfo
+            ? JsonSerializer.Serialize(new RunSessionInfo
+            {
+                ProtocolsSupported = ["coreclr"],
+                SupportedLaunchConfigurations = [KnownLaunchConfigurationTypes.Project]
+            })
+            : null;
+
+        return CreateAzureFunctionsProjectExecutableAsync<TProject>(
+            targetPort,
+            debugSessionInfo,
+            configureResource);
+    }
+
+    private static async Task<Executable> CreateAzureFunctionsProjectExecutableAsync<TProject>(
+        int targetPort,
+        string? debugSessionInfo,
         Action<IResourceBuilder<AzureFunctionsProjectResource>> configureResource)
         where TProject : IProjectMetadata, new()
     {
@@ -7778,19 +7802,15 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
             functions.Resource.Annotations.Remove(annotation);
         }
 
-        // Both IDE sessions select the compatibility project launch: Visual Studio 2026 advertises "project" without
-        // "azure-functions", while an IDE session that omits DEBUG_SESSION_INFO gets implicit project support.
+        // Compatibility project launches apply both when Visual Studio 2026 advertises "project" without
+        // "azure-functions" and when an IDE session omits a usable supported_launch_configurations list.
         var configurationValues = new Dictionary<string, string?>
         {
             [DcpExecutor.DebugSessionPortVar] = "12345"
         };
-        if (sendDebugSessionInfo)
+        if (debugSessionInfo is not null)
         {
-            configurationValues[KnownConfigNames.DebugSessionInfo] = JsonSerializer.Serialize(new RunSessionInfo
-            {
-                ProtocolsSupported = ["coreclr"],
-                SupportedLaunchConfigurations = [KnownLaunchConfigurationTypes.Project]
-            });
+            configurationValues[KnownConfigNames.DebugSessionInfo] = debugSessionInfo;
         }
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(configurationValues)

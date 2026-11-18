@@ -112,7 +112,6 @@ public static class DebugSupportExtensions
         }
 
         var debugSessionInfo = configuration[KnownConfigNames.DebugSessionInfo];
-        var hasDebugSessionInfo = !string.IsNullOrEmpty(debugSessionInfo);
         var supportedLaunchConfigurations =
             DebugSessionInfoParser.TryGetSupportedLaunchConfigurations(debugSessionInfo, out var parsedLaunchConfigurations)
                 ? parsedLaunchConfigurations
@@ -155,7 +154,6 @@ public static class DebugSupportExtensions
             !ShouldUseCompatibilityProjectLaunch(
                 resource,
                 declaredAnnotation,
-                hasDebugSessionInfo,
                 supportedLaunchConfigurations))
         {
             return new(
@@ -328,7 +326,6 @@ public static class DebugSupportExtensions
     private static bool ShouldUseCompatibilityProjectLaunch(
         IResource resource,
         SupportsDebuggingAnnotation? declaredAnnotation,
-        bool hasDebugSessionInfo,
         string[]? supportedLaunchConfigurations)
     {
         var hasExplicitProjectLaunchCapability =
@@ -360,10 +357,13 @@ public static class DebugSupportExtensions
             return false;
         }
 
-        if (declaredAnnotation is not null && hasDebugSessionInfo && supportedLaunchConfigurations is not null)
+        // When the IDE advertised an explicit capability list (which already includes "project" at this point),
+        // only Azure Functions projects outside Aspire extension sessions fall back to the native "project"
+        // launcher. Sessions that omit supported_launch_configurations or provide unparseable DEBUG_SESSION_INFO
+        // have a null list and retain implicit Visual Studio-compatible project support.
+        if (declaredAnnotation is not null && supportedLaunchConfigurations is not null)
         {
-            if (declaredAnnotation.LaunchConfigurationType != AzureFunctionsLaunchConfigurationType ||
-                !hasExplicitProjectLaunchCapability)
+            if (declaredAnnotation.LaunchConfigurationType != AzureFunctionsLaunchConfigurationType)
             {
                 return false;
             }
@@ -373,7 +373,7 @@ public static class DebugSupportExtensions
             // capability list, including leased test sessions and detached CLI children whose extension endpoint
             // was intentionally stripped. For those sessions the advertised launch types are authoritative:
             // without "azure-functions", the generic VS Code project launcher must not replace func host startup.
-            if (supportedLaunchConfigurations?.Contains(AspireExtensionBaselineCapability) is true)
+            if (supportedLaunchConfigurations.Contains(AspireExtensionBaselineCapability))
             {
                 return false;
             }
