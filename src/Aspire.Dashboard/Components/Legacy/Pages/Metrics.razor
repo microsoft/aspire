@@ -180,10 +180,10 @@
             </div>
         </MainSection>
         <FooterSection>
-            @if (PauseText is not null)
+            @if (PausedAt is { } pausedAt)
             {
                 <div class="items-footer">
-                    <PauseWarning PauseText="@PauseText" />
+                    <PauseWarning PausedAt="@pausedAt" />
                 </div>
             }
         </FooterSection>

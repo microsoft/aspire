@@ -35,7 +35,7 @@ public partial class TotalItemsFooter
     public string? PartialText { get; set; }
 
     [Parameter]
-    public string? PauseText { get; set; }
+    public DateTime? PausedAt { get; set; }
 
     /// <summary>
     /// Called when data grid data is refreshed. This sets the count explicitly and forces the control to re-render.

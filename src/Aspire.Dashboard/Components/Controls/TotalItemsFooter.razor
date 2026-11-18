@@ -12,8 +12,8 @@
         }
     </span>
 
-    @if (PauseText is not null)
+    @if (PausedAt is { } pausedAt)
     {
-        <PauseWarning PauseText="@PauseText" />
+        <PauseWarning PausedAt="@pausedAt" />
     }
 </div>

@@ -26,7 +26,6 @@ using Google.Protobuf.Collections;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Time.Testing;
 using Microsoft.FluentUI.AspNetCore.Components;
 using OpenTelemetry.Proto.Metrics.V1;
@@ -1081,8 +1080,6 @@ public partial class MetricsTests : DashboardTestContext
         cut.WaitForState(() => cut.Instance.PageViewModel.SelectedInstrument is not null);
 
         var pauseManager = Services.GetRequiredService<PauseManager>();
-        var timeProvider = Services.GetRequiredService<BrowserTimeProvider>();
-        var loc = Services.GetRequiredService<IStringLocalizer<Resources.Metrics>>();
 
         cut.FindComponent<PauseIncomingDataSwitch>().WaitForElement("fluent-button").Click();
 
@@ -1090,12 +1087,8 @@ public partial class MetricsTests : DashboardTestContext
         {
             Assert.True(pauseManager.AreMetricsPaused(out var pausedAt));
             var pauseWarning = cut.FindComponent<PauseWarning>();
-            Assert.Equal(
-                string.Format(
-                    CultureInfo.CurrentCulture,
-                    loc[nameof(Resources.Metrics.PauseInProgressText)],
-                    FormatHelpers.FormatTimeWithOptionalDate(timeProvider, pausedAt.Value)),
-                pauseWarning.Instance.PauseText);
+            Assert.Equal(pausedAt.Value, pauseWarning.Instance.PausedAt);
+            Assert.Contains("now", pauseWarning.Markup, StringComparison.Ordinal);
             Assert.Single(cut.Find("footer").QuerySelectorAll(".pause-warning"));
         });
 
