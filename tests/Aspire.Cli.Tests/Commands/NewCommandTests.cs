@@ -1716,10 +1716,14 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData("13.6.1", false)]
-    [InlineData("17.0.0-preview.1", true)]
-    [InlineData("17.0.0", true)]
-    public async Task NewCommandCSharpTemplateUsesVersionCompatibleDirectives(string version, bool packageOnly)
+    [InlineData("13.6.1", false, true)]
+    [InlineData("17.0.0-preview.1.26479.11", true, true)]
+    [InlineData("17.0.0-preview.1.26552.6", true, true)]
+    [InlineData("17.0.0-pr.21564", true, true)]
+    [InlineData("17.0.0", true, false)]
+    [InlineData("17.1.0-preview.1", true, false)]
+    [InlineData("17.1.0-pr.21564", true, false)]
+    public async Task NewCommandCSharpTemplateUsesVersionCompatibleDirectives(string version, bool packageOnly, bool explicitBundle)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var cache = new FakeNuGetPackageCache
@@ -1737,19 +1741,25 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
         var content = await File.ReadAllTextAsync(Path.Combine(workspace.WorkspaceRoot.FullName, "output", "apphost.cs"));
-        Assert.Contains("#:property AspireUseCliBundle=true", content);
-        Assert.DoesNotContain("{{", content);
-        if (packageOnly)
+        var directives = packageOnly
+            ? $"""
+                #:package Aspire.Hosting.AppHost@{version}
+                #:package Aspire.Hosting.Dotnet@{version}
+                """
+            : $"#:sdk Aspire.AppHost.Sdk@{version}";
+        if (explicitBundle)
         {
-            Assert.Contains($"#:package Aspire.Hosting.AppHost@{version}", content);
-            Assert.Contains($"#:package Aspire.Hosting.Dotnet@{version}", content);
-            Assert.DoesNotContain("#:sdk", content);
+            directives += "\n#:property AspireUseCliBundle=true";
         }
-        else
-        {
-            Assert.Contains($"#:sdk Aspire.AppHost.Sdk@{version}", content);
-            Assert.DoesNotContain("#:package", content);
-        }
+
+        var expected = $$"""
+            {{directives}}
+
+            var builder = DistributedApplication.CreateBuilder(args);
+
+            builder.Build().Run();
+            """;
+        Assert.Equal(expected.ReplaceLineEndings("\n"), content.ReplaceLineEndings("\n").TrimEnd('\n'));
     }
 
     [Fact]
@@ -2479,6 +2489,38 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.True(AspireSkillsRemoteConfiguration.HasPluginRegistration(
             [Path.Combine(outputDir, ".github", "copilot", "settings.json")], [SkillSource.BuiltIn]));
         Assert.False(Directory.Exists(Path.Combine(outputDir, ".agents", "skills")));
+    }
+
+    [Theory]
+    [InlineData("", false)]
+    [InlineData(" --remove-skill-copies", true)]
+    [InlineData(" --remove-skill-copies=false", false)]
+    public async Task NewCommandNonInteractive_RemovesSkillCopiesOnlyWhenRequested(string option, bool removed)
+    {
+        // `aspire new` requires an empty output directory, so only user-level copies can exist here.
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var homeDirectory = workspace.CreateDirectory("fake-home");
+        var skillDirectory = Path.Combine(homeDirectory.FullName, ".agents", "skills", CommonAgentApplicators.AspireSkillName);
+        Directory.CreateDirectory(skillDirectory);
+        await File.WriteAllTextAsync(Path.Combine(skillDirectory, "SKILL.md"), "My customized Aspire instructions.");
+        var services = CreateServiceCollection(workspace, options =>
+        {
+            options.CliExecutionContextFactory = _ => TestExecutionContextHelper.CreateExecutionContext(
+                workspace.WorkspaceRoot, identityChannel: PackageChannelNames.Stable, homeDirectory: homeDirectory);
+            options.CliHostEnvironmentFactory = (sp) =>
+            {
+                var configuration = sp.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>();
+                return new CliHostEnvironment(configuration, nonInteractive: true);
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<NewCommand>();
+        var result = command.Parse($"new aspire-empty --name TestApp --output ./output --agents copilot --scope global --skills aspire{option}");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal(!removed, Directory.Exists(skillDirectory));
     }
 
     [Fact]

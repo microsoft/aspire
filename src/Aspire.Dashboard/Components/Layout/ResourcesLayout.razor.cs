@@ -191,8 +191,8 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     public required ViewportInformation ViewportInformation { get; set; }
 
     /// <summary>
-    /// The layout this one is nested in. It's told the width of the resource list, which the header's brand matches
-    /// (see <see cref="MainLayout.SetResourcePaneWidth"/>). It's absent when the layout is rendered on its own.
+    /// The containing layout, which notifies this layout when home navigation starts.
+    /// It's absent when the layout is rendered on its own.
     /// </summary>
     [CascadingParameter]
     public MainLayout? MainLayout { get; set; }
@@ -308,7 +308,6 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         if (paneWidthResult.Success)
         {
             _paneWidth = Math.Clamp(paneWidthResult.Value, MinimumPaneWidthPx, MaximumPaneWidthPx);
-            MainLayout?.SetResourcePaneWidth(_paneWidth);
         }
         // The URL selects the mode when navigating from the main navigation. Other resource URLs, such as a row's
         // link, don't include it, so the last mode is remembered.
@@ -745,7 +744,6 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         CancelPaneSelectionReveal();
         _paneWidth = Math.Clamp(widthPx, MinimumPaneWidthPx, MaximumPaneWidthPx);
         await LocalStorage.SetUnprotectedAsync(BrowserStorageKeys.ResourcePaneWidth, _paneWidth.Value);
-        MainLayout?.SetResourcePaneWidth(_paneWidth);
         StateHasChanged();
     }
 
@@ -2159,6 +2157,42 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private bool HasMultipleReplicas(ResourceViewModel resource) => GetDuplicateDisplayNames().Contains(resource.DisplayName);
 
     private OtlpResource? GetTelemetryResource(ResourceViewModel resource) => _telemetryResourcesByName.GetValueOrDefault(resource.Name);
+
+    private List<string> GetTelemetrySignals(OtlpResource resource)
+    {
+        var availability = _resourceSignalAvailability.GetValueOrDefault(resource.ResourceKey);
+        List<string> signals = [];
+        if (availability.HasLogs)
+        {
+            signals.Add(Loc[nameof(Resources.Layout.NavMenuStructuredLogsTab)]);
+        }
+        if (availability.HasTraces)
+        {
+            signals.Add(Loc[nameof(Resources.Layout.NavMenuTracesTab)]);
+        }
+        if (availability.HasMetrics)
+        {
+            signals.Add(Loc[nameof(Resources.Layout.NavMenuMetricsTab)]);
+        }
+
+        return signals;
+    }
+
+    private string GetTelemetryRowAccessibilityDescription(OtlpResource resource, string? unavailableReason)
+    {
+        var description = Loc[nameof(Resources.Layout.NavMenuTelemetrySourcesTab)].Value;
+        var signals = GetTelemetrySignals(resource);
+        if (signals.Count > 0)
+        {
+            description += $"; {string.Join(", ", signals)}";
+        }
+        if (unavailableReason is not null)
+        {
+            description += $"; {unavailableReason}";
+        }
+
+        return description;
+    }
 
     private string? GetResourceUnavailableReason(ResourceViewModel resource)
     {

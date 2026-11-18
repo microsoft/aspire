@@ -3341,16 +3341,17 @@ type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	//
 	// This method adds an McpServerEndpointAnnotation to the resource, enabling the
 	// Aspire tooling to discover and proxy the MCP server exposed by the resource.
+	// It does not create an endpoint, start an MCP server, or configure its
+	// transport or authentication. The resource must already expose an MCP server
+	// at the selected endpoint and path. Endpoint selection and URL resolution
+	// occur when tooling consumes the annotation, not when this method is called. A
+	// missing selected endpoint causes resolution to throw a
+	// DistributedApplicationException.
 	//
 	// Parameters:
 	//   - options: Optional parameters; see [WithMcpServerOption].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithMcpServer(options ...WithMcpServerOption) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 
 	// WithMergeEndpoint configures a named endpoint
@@ -3565,11 +3566,6 @@ type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	//   - options: Optional parameters; see [WithRequiredCommandValidationOption].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...WithRequiredCommandValidationOption) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 
 	// WithResourceTypeDisplayName overrides the human-readable resource type label.
@@ -7475,16 +7471,17 @@ type CSharpAppResource interface {
 	//
 	// This method adds an McpServerEndpointAnnotation to the resource, enabling the
 	// Aspire tooling to discover and proxy the MCP server exposed by the resource.
+	// It does not create an endpoint, start an MCP server, or configure its
+	// transport or authentication. The resource must already expose an MCP server
+	// at the selected endpoint and path. Endpoint selection and URL resolution
+	// occur when tooling consumes the annotation, not when this method is called. A
+	// missing selected endpoint causes resolution to throw a
+	// DistributedApplicationException.
 	//
 	// Parameters:
 	//   - options: Optional parameters; see [WithMcpServerOption].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithMcpServer(options ...WithMcpServerOption) CSharpAppResource
 
 	// WithMergeEndpoint configures a named endpoint
@@ -7708,11 +7705,6 @@ type CSharpAppResource interface {
 	//   - options: Optional parameters; see [WithRequiredCommandValidationOption].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...WithRequiredCommandValidationOption) CSharpAppResource
 
 	// WithResourceTypeDisplayName overrides the human-readable resource type label.
@@ -12494,11 +12486,6 @@ type ContainerRegistryResource interface {
 	//   - options: Optional parameters; see [WithRequiredCommandValidationOption].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...WithRequiredCommandValidationOption) ContainerRegistryResource
 
 	// WithResourceTypeDisplayName overrides the human-readable resource type label.
@@ -14915,16 +14902,17 @@ type ContainerResource interface {
 	//
 	// This method adds an McpServerEndpointAnnotation to the resource, enabling the
 	// Aspire tooling to discover and proxy the MCP server exposed by the resource.
+	// It does not create an endpoint, start an MCP server, or configure its
+	// transport or authentication. The resource must already expose an MCP server
+	// at the selected endpoint and path. Endpoint selection and URL resolution
+	// occur when tooling consumes the annotation, not when this method is called. A
+	// missing selected endpoint causes resolution to throw a
+	// DistributedApplicationException.
 	//
 	// Parameters:
 	//   - options: Optional parameters; see [WithMcpServerOption].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithMcpServer(options ...WithMcpServerOption) ContainerResource
 
 	// WithMergeEndpoint configures a named endpoint
@@ -15139,11 +15127,6 @@ type ContainerResource interface {
 	//   - options: Optional parameters; see [WithRequiredCommandValidationOption].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...WithRequiredCommandValidationOption) ContainerResource
 
 	// WithResourceTypeDisplayName overrides the human-readable resource type label.
@@ -21162,16 +21145,17 @@ type DotnetToolResource interface {
 	//
 	// This method adds an McpServerEndpointAnnotation to the resource, enabling the
 	// Aspire tooling to discover and proxy the MCP server exposed by the resource.
+	// It does not create an endpoint, start an MCP server, or configure its
+	// transport or authentication. The resource must already expose an MCP server
+	// at the selected endpoint and path. Endpoint selection and URL resolution
+	// occur when tooling consumes the annotation, not when this method is called. A
+	// missing selected endpoint causes resolution to throw a
+	// DistributedApplicationException.
 	//
 	// Parameters:
 	//   - options: Optional parameters; see [WithMcpServerOption].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithMcpServer(options ...WithMcpServerOption) DotnetToolResource
 
 	// WithMergeEndpoint configures a named endpoint
@@ -21386,11 +21370,6 @@ type DotnetToolResource interface {
 	//   - options: Optional parameters; see [WithRequiredCommandValidationOption].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...WithRequiredCommandValidationOption) DotnetToolResource
 
 	// WithResourceTypeDisplayName overrides the human-readable resource type label.
@@ -26355,16 +26334,17 @@ type ExecutableResource interface {
 	//
 	// This method adds an McpServerEndpointAnnotation to the resource, enabling the
 	// Aspire tooling to discover and proxy the MCP server exposed by the resource.
+	// It does not create an endpoint, start an MCP server, or configure its
+	// transport or authentication. The resource must already expose an MCP server
+	// at the selected endpoint and path. Endpoint selection and URL resolution
+	// occur when tooling consumes the annotation, not when this method is called. A
+	// missing selected endpoint causes resolution to throw a
+	// DistributedApplicationException.
 	//
 	// Parameters:
 	//   - options: Optional parameters; see [WithMcpServerOption].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithMcpServer(options ...WithMcpServerOption) ExecutableResource
 
 	// WithMergeEndpoint configures a named endpoint
@@ -26579,11 +26559,6 @@ type ExecutableResource interface {
 	//   - options: Optional parameters; see [WithRequiredCommandValidationOption].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...WithRequiredCommandValidationOption) ExecutableResource
 
 	// WithResourceTypeDisplayName overrides the human-readable resource type label.
@@ -30049,11 +30024,6 @@ type ExternalServiceResource interface {
 	//   - options: Optional parameters; see [WithRequiredCommandValidationOption].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...WithRequiredCommandValidationOption) ExternalServiceResource
 
 	// WithResourceTypeDisplayName overrides the human-readable resource type label.
@@ -34669,11 +34639,6 @@ type ParameterResource interface {
 	//   - options: Optional parameters; see [WithRequiredCommandValidationOption].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...WithRequiredCommandValidationOption) ParameterResource
 
 	// WithResourceTypeDisplayName overrides the human-readable resource type label.
@@ -37966,16 +37931,17 @@ type ProjectResource interface {
 	//
 	// This method adds an McpServerEndpointAnnotation to the resource, enabling the
 	// Aspire tooling to discover and proxy the MCP server exposed by the resource.
+	// It does not create an endpoint, start an MCP server, or configure its
+	// transport or authentication. The resource must already expose an MCP server
+	// at the selected endpoint and path. Endpoint selection and URL resolution
+	// occur when tooling consumes the annotation, not when this method is called. A
+	// missing selected endpoint causes resolution to throw a
+	// DistributedApplicationException.
 	//
 	// Parameters:
 	//   - options: Optional parameters; see [WithMcpServerOption].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithMcpServer(options ...WithMcpServerOption) ProjectResource
 
 	// WithMergeEndpoint configures a named endpoint
@@ -38199,11 +38165,6 @@ type ProjectResource interface {
 	//   - options: Optional parameters; see [WithRequiredCommandValidationOption].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...WithRequiredCommandValidationOption) ProjectResource
 
 	// WithResourceTypeDisplayName overrides the human-readable resource type label.
@@ -41553,11 +41514,6 @@ type RequiredCommandValidationContext interface {
 
 	// CancellationToken gets a cancellation token that can be used to cancel the
 	// validation.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	CancellationToken() (*CancellationToken, error)
 
 	// Failure creates a failed validation result with the specified message.
@@ -41567,37 +41523,17 @@ type RequiredCommandValidationContext interface {
 	//
 	// Returns: A [RequiredCommandValidationResult] indicating the command is
 	// invalid.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	Failure(validationMessage string) RequiredCommandValidationResult
 
 	// ResolvedPath gets the resolved full path to the command executable.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	ResolvedPath() (string, error)
 
 	// Services gets the service provider for accessing application services.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	Services() ServiceProvider
 
 	// Success creates a successful validation result.
 	//
 	// Returns: A [RequiredCommandValidationResult] indicating the command is valid.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	Success() RequiredCommandValidationResult
 
 	// Err returns the first error recorded on this wrapper, or nil if the wrapper
@@ -41718,24 +41654,17 @@ func (s *requiredCommandValidationContext) Success() RequiredCommandValidationRe
 
 // RequiredCommandValidationResult represents the result of validating a
 // required command.
+//
+// Failed validation logs a warning but does not prevent the resource from
+// attempting to start.
 type RequiredCommandValidationResult interface {
 	handleReference
 
 	// IsValid gets a value indicating whether the command validation succeeded.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	IsValid() (bool, error)
 
 	// ValidationMessage gets an optional validation message describing why
 	// validation failed.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	ValidationMessage() (*string, error)
 
 	// Err returns the first error recorded on this wrapper, or nil if the wrapper
@@ -44055,16 +43984,17 @@ type TestDatabaseResource interface {
 	//
 	// This method adds an McpServerEndpointAnnotation to the resource, enabling the
 	// Aspire tooling to discover and proxy the MCP server exposed by the resource.
+	// It does not create an endpoint, start an MCP server, or configure its
+	// transport or authentication. The resource must already expose an MCP server
+	// at the selected endpoint and path. Endpoint selection and URL resolution
+	// occur when tooling consumes the annotation, not when this method is called. A
+	// missing selected endpoint causes resolution to throw a
+	// DistributedApplicationException.
 	//
 	// Parameters:
 	//   - options: Optional parameters; see [WithMcpServerOption].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithMcpServer(options ...WithMcpServerOption) TestDatabaseResource
 
 	// WithMergeEndpoint configures a named endpoint
@@ -44279,11 +44209,6 @@ type TestDatabaseResource interface {
 	//   - options: Optional parameters; see [WithRequiredCommandValidationOption].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...WithRequiredCommandValidationOption) TestDatabaseResource
 
 	// WithResourceTypeDisplayName overrides the human-readable resource type label.
@@ -48541,16 +48466,17 @@ type TestRedisResource interface {
 	//
 	// This method adds an McpServerEndpointAnnotation to the resource, enabling the
 	// Aspire tooling to discover and proxy the MCP server exposed by the resource.
+	// It does not create an endpoint, start an MCP server, or configure its
+	// transport or authentication. The resource must already expose an MCP server
+	// at the selected endpoint and path. Endpoint selection and URL resolution
+	// occur when tooling consumes the annotation, not when this method is called. A
+	// missing selected endpoint causes resolution to throw a
+	// DistributedApplicationException.
 	//
 	// Parameters:
 	//   - options: Optional parameters; see [WithMcpServerOption].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithMcpServer(options ...WithMcpServerOption) TestRedisResource
 
 	// WithMergeEndpoint configures a named endpoint
@@ -48800,11 +48726,6 @@ type TestRedisResource interface {
 	//   - options: Optional parameters; see [WithRequiredCommandValidationOption].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...WithRequiredCommandValidationOption) TestRedisResource
 
 	// WithResourceTypeDisplayName overrides the human-readable resource type label.
@@ -53609,10 +53530,13 @@ func (o *WithHttpHealthCheckOptions) ToMap() map[string]any {
 // WithMcpServerOptions carries optional parameters for WithMcpServer.
 type WithMcpServerOptions struct {
 	// Path is an optional path to append to the endpoint URL when forming the MCP
-	// server address. Defaults to "/mcp".
+	// server address. Defaults to "/mcp". A leading slash is added if missing. A
+	// null or empty value uses the endpoint URL without an additional path.
 	Path *string `json:"path,omitempty"`
 	// EndpointName is an optional name of the endpoint that hosts the MCP server.
-	// If not specified, defaults to the first HTTPS or HTTP endpoint.
+	// If not specified, selects the endpoint named https, falling back to the
+	// endpoint named http. Names are matched case-insensitively; endpoints with
+	// other names must be selected explicitly, regardless of their URI scheme.
 	EndpointName *string `json:"endpointName,omitempty"`
 }
 

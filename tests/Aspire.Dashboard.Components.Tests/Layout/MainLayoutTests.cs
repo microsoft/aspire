@@ -32,6 +32,18 @@ public partial class MainLayoutTests : DashboardTestContext
     private IRenderedComponent<FluentMessageBarProvider>? _messageBarProvider;
 
     [Fact]
+    public void OnInitialize_SecuredModeUnauthenticatedUser_Throws()
+    {
+        var authorizationContext = this.AddAuthorization();
+        authorizationContext.SetNotAuthorized();
+        SetupMainLayoutServices(configureOptions: options => options.Frontend.AuthMode = FrontendAuthMode.BrowserToken);
+
+        var exception = Assert.Throws<InvalidOperationException>(() => Render<MainLayout>(builder => builder
+            .Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false))));
+        Assert.Equal("Dashboard authentication is required, but the current user is not authenticated.", exception.Message);
+    }
+
+    [Fact]
     public async Task HeaderHelp_IsSingleActionThatOpensHelpDialog()
     {
         DialogParameters? capturedParameters = null;
@@ -56,10 +68,8 @@ public partial class MainLayoutTests : DashboardTestContext
         Assert.Equal(Resources.Layout.MainLayoutHelp, capturedParameters.Title);
     }
 
-    [Theory]
-    [InlineData(".logo")]
-    [InlineData(".application-name")]
-    public async Task Logo_OpensHomeWithoutRestoringSelection(string selector)
+    [Fact]
+    public async Task HeaderHome_OpensHomeWithoutRestoringSelection()
     {
         var stored = new Dictionary<string, object?>();
         SetupMainLayoutServices(
@@ -70,7 +80,7 @@ public partial class MainLayoutTests : DashboardTestContext
         var cut = Render<MainLayout>(builder => builder.Add(p => p.ViewportInformation,
             new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false)));
 
-        await cut.InvokeAsync(() => cut.Find($"header {selector}").Click());
+        await cut.InvokeAsync(() => cut.Find("header a.brand-home").Click());
 
         // Home is the table of every resource, at its own URL, not the overview at /resources.
         Assert.Equal(DashboardUrls.HomeUrl(), "/" + navigationManager.ToBaseRelativePath(navigationManager.Uri));
@@ -91,17 +101,18 @@ public partial class MainLayoutTests : DashboardTestContext
             new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false)));
 
         // The logo and the name are one lockup, with a house after the name that says where they go.
-        var brand = cut.Find("header .header-brand .brand-home");
-        Assert.Equal(["/", "/"], brand.QuerySelectorAll("a").Select(link => link.GetAttribute("href")));
-        Assert.Single(brand.QuerySelectorAll("a.application-name .application-home-icon"));
+        var brand = Assert.Single(cut.FindAll("header .header-brand a"));
+        Assert.Contains("brand-home", brand.ClassList);
+        Assert.Equal("/", brand.GetAttribute("href"));
+        Assert.Empty(brand.QuerySelectorAll("a, button"));
+        Assert.Single(brand.QuerySelectorAll(".logo"));
+        Assert.Single(brand.QuerySelectorAll(".application-name .application-home-icon"));
         // While home is showing, the lockup is marked current, which fills the house in.
         Assert.Equal(expectCurrent, brand.ClassList.Contains("current"));
-        Assert.Equal(expectCurrent ? "page" : null, brand.QuerySelector("a.application-name")!.GetAttribute("aria-current"));
-        // The full name is the link's tooltip, so keyboard focus shows it as well as the pointer when it's truncated. It's
-        // below the link, which can span the list's column, so it doesn't cover the first tab.
-        var link = brand.QuerySelector("a.application-name")!;
-        Assert.False(string.IsNullOrEmpty(link.GetAttribute("data-tooltip")));
-        Assert.Equal("below", link.GetAttribute("data-tooltip-positioning"));
+        Assert.Equal(expectCurrent ? "page" : null, brand.GetAttribute("aria-current"));
+        // The tooltip gives the full name when it's truncated, below the link so it doesn't cover the adjacent tabs.
+        Assert.False(string.IsNullOrEmpty(brand.GetAttribute("data-tooltip")));
+        Assert.Equal("below", brand.GetAttribute("data-tooltip-positioning"));
     }
 
     [Theory]
@@ -198,7 +209,6 @@ public partial class MainLayoutTests : DashboardTestContext
                 // The view preferences are read with the layout. None are stored here.
                 case BrowserStorageKeys.ResourceListDensity:
                 case BrowserStorageKeys.GroupOverview:
-                case BrowserStorageKeys.RecordingsStyle:
                     return (false, null);
                 default:
                     throw new InvalidOperationException("Unexpected key.");
@@ -254,7 +264,6 @@ public partial class MainLayoutTests : DashboardTestContext
                 // The view preferences are read with the layout. None are stored here.
                 case BrowserStorageKeys.ResourceListDensity:
                 case BrowserStorageKeys.GroupOverview:
-                case BrowserStorageKeys.RecordingsStyle:
                     return (false, null);
                 default:
                     throw new InvalidOperationException("Unexpected key.");
@@ -295,7 +304,6 @@ public partial class MainLayoutTests : DashboardTestContext
                 // The view preferences are read with the layout. None are stored here.
                 case BrowserStorageKeys.ResourceListDensity:
                 case BrowserStorageKeys.GroupOverview:
-                case BrowserStorageKeys.RecordingsStyle:
                     return (false, null);
                 default:
                     throw new InvalidOperationException("Unexpected key.");
@@ -340,7 +348,7 @@ public partial class MainLayoutTests : DashboardTestContext
                     return (true, true);
                 }
 
-                if (key is BrowserStorageKeys.ResourceListDensity or BrowserStorageKeys.GroupOverview or BrowserStorageKeys.RecordingsStyle)
+                if (key is BrowserStorageKeys.ResourceListDensity or BrowserStorageKeys.GroupOverview)
                 {
                     return (false, null);
                 }
@@ -482,11 +490,11 @@ public partial class MainLayoutTests : DashboardTestContext
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public void RecordingsMenuSetting_ShowsTheLiveRunMenuInsteadOfTheRecordingsButton(bool isDesktop)
+    public void ObsoleteRecordingsStylePreference_DoesNotChangeRunSelector(bool isDesktop)
     {
         var localStorage = new TestLocalStorage
         {
-            OnGetUnprotectedAsync = key => key == BrowserStorageKeys.RecordingsStyle ? (true, "Menu") : (false, null)
+            OnGetUnprotectedAsync = key => key == "Aspire_Header_RecordingsStyle" ? (true, "Menu") : (false, null)
         };
         SetupMainLayoutServices(localStorage: localStorage);
 
@@ -495,17 +503,15 @@ public partial class MainLayoutTests : DashboardTestContext
             builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: isDesktop, IsUltraLowHeight: false, IsUltraLowWidth: false));
         });
 
-        cut.WaitForAssertion(() => Assert.Single(cut.FindComponents<DashboardRunMenu>()));
-        Assert.Empty(cut.FindComponents<DashboardRunSelect>());
+        cut.WaitForAssertion(() => Assert.Single(cut.FindComponents<DashboardRunSelect>()));
+        Assert.Empty(cut.FindComponents<DashboardRunMenu>());
         Assert.Empty(cut.FindComponents<DashboardRunPill>());
-        var menuButton = Assert.Single(cut.FindComponent<DashboardRunMenu>().FindComponents<AspireMenuButton>());
-        Assert.Equal("Live run", menuButton.Instance.Text);
-        Assert.Equal(["Live run", "Learn about runs"], menuButton.Instance.ItemsProvider().Where(item => !item.IsDivider).Select(item => item.Text));
+        Assert.Equal("dialog", cut.Find($"#{MainLayout.RunSelectButtonId}").GetAttribute("aria-haspopup"));
         if (isDesktop)
         {
-            // Where it was before recordings had their own panel: with the header's buttons, ahead of the help button.
-            var menuIndex = cut.Markup.IndexOf("application-run-select", StringComparison.Ordinal);
-            Assert.True(menuIndex < cut.Markup.IndexOf($"id=\"{MainLayout.HelpButtonId}\"", StringComparison.Ordinal));
+            // Run selection is the first app-wide action after navigation.
+            var runSelectIndex = cut.Markup.IndexOf("application-run-select", StringComparison.Ordinal);
+            Assert.True(runSelectIndex < cut.Markup.IndexOf($"id=\"{MainLayout.HelpButtonId}\"", StringComparison.Ordinal));
         }
     }
 
@@ -577,11 +583,7 @@ public partial class MainLayoutTests : DashboardTestContext
             content = Assert.IsType<DashboardRunsDialogContent>(dialogContent);
             return Task.CompletedTask;
         });
-        var localStorage = new TestLocalStorage
-        {
-            OnGetUnprotectedAsync = key => key == BrowserStorageKeys.RecordingsStyle ? (true, "Panel") : (false, null)
-        };
-        SetupMainLayoutServices(localStorage: localStorage, dialogService: dialogService, dashboardRunStore: runStore, sessionStorage: sessionStorage);
+        SetupMainLayoutServices(dialogService: dialogService, dashboardRunStore: runStore, sessionStorage: sessionStorage);
         await Services.GetRequiredService<DashboardViewPreferences>().EnsureLoadedAsync();
         var expectedHistoricalRunText = FormatHelpers.FormatDateTime(
             Services.GetRequiredService<BrowserTimeProvider>(),
@@ -825,11 +827,7 @@ public partial class MainLayoutTests : DashboardTestContext
                 ? Task.FromResult<(bool Success, object? Value)>((false, false))
                 : runSelectionSource.Task
         };
-        var localStorage = new TestLocalStorage
-        {
-            OnGetUnprotectedAsync = key => key == BrowserStorageKeys.RecordingsStyle ? (true, "Panel") : (false, null)
-        };
-        SetupMainLayoutServices(localStorage: localStorage, dashboardRunStore: runStore, sessionStorage: sessionStorage);
+        SetupMainLayoutServices(dashboardRunStore: runStore, sessionStorage: sessionStorage);
         var runSelection = Assert.IsType<FluentUISetupHelpers.TestDashboardRunSelection>(Services.GetRequiredService<IDashboardRunSelection>());
         var getRunsCallCount = runStore.GetRunsCallCount;
 

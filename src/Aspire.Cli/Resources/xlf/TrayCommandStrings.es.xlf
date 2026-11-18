@@ -3,12 +3,12 @@
   <file datatype="xml" source-language="en" target-language="es" original="../TrayCommandStrings.resx">
     <body>
       <trans-unit id="BundleRequired">
-        <source>The experimental Aspire tray requires a leased, versioned CLI bundle. No usable bundle was found. Install an Aspire bundle that includes the tray companion for your desktop.</source>
+        <source>The Aspire tray requires a leased, versioned CLI bundle. No usable bundle was found. Install an Aspire bundle that includes the tray companion for your desktop.</source>
         <target state="needs-review-translation">La bandeja experimental de Aspire requiere un paquete de CLI con licencia y control de versiones. No se encontró ningún paquete utilizable. Instale un paquete de Aspire para Windows o macOS que incluya la aplicación auxiliar de la bandeja.</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>Manage the desktop tray companion (Experimental)</source>
+        <source>Manage the desktop tray companion (Preview)</source>
         <target state="needs-review-translation">Administrar la aplicación auxiliar de la bandeja de Windows o macOS (Experimental)</target>
         <note />
       </trans-unit>
@@ -23,8 +23,8 @@
         <note>{0} is the start or stop subcommand name.</note>
       </trans-unit>
       <trans-unit id="NativeCliRequired">
-        <source>Starting the experimental tray requires an installed native Aspire CLI executable. Managed development builds and 'dotnet aspire.dll' are not supported.</source>
-        <target state="translated">Para iniciar la bandeja experimental, debe tener instalado un ejecutable nativo de la CLI de Aspire. No se admiten compilaciones de desarrollo administrado ni "dotnet aspire.dll".</target>
+        <source>Starting the tray requires an installed native Aspire CLI executable. Managed development builds and 'dotnet aspire.dll' are not supported.</source>
+        <target state="needs-review-translation">Para iniciar la bandeja experimental, debe tener instalado un ejecutable nativo de la CLI de Aspire. No se admiten compilaciones de desarrollo administrado ni "dotnet aspire.dll".</target>
         <note />
       </trans-unit>
       <trans-unit id="NoTrayHost">
@@ -43,8 +43,8 @@
         <note />
       </trans-unit>
       <trans-unit id="StartDescription">
-        <source>Start or restore the tray icon (Experimental)</source>
-        <target state="translated">Iniciar o restaurar el icono de la bandeja (Experimental)</target>
+        <source>Start or restore the tray icon (Preview)</source>
+        <target state="needs-review-translation">Iniciar o restaurar el icono de la bandeja (Experimental)</target>
         <note />
       </trans-unit>
       <trans-unit id="Started">
@@ -53,8 +53,8 @@
         <note />
       </trans-unit>
       <trans-unit id="StopDescription">
-        <source>Stop the tray without stopping AppHosts (Experimental)</source>
-        <target state="translated">Detener la bandeja sin detener AppHosts (Experimental)</target>
+        <source>Stop the tray without stopping AppHosts (Preview)</source>
+        <target state="needs-review-translation">Detener la bandeja sin detener AppHosts (Experimental)</target>
         <note />
       </trans-unit>
       <trans-unit id="Stopped">
@@ -63,7 +63,7 @@
         <note />
       </trans-unit>
       <trans-unit id="UnsupportedPlatform">
-        <source>The experimental Aspire tray supports Windows, macOS, and glibc Linux x64/ARM64 installations. Linux requires a graphical desktop with StatusNotifierItem support, GTK 3, and an AppIndicator library.</source>
+        <source>The Aspire tray supports Windows, macOS, and glibc Linux x64/ARM64 installations. Linux requires a graphical desktop with StatusNotifierItem support, GTK 3, and an AppIndicator library.</source>
         <target state="needs-review-translation">La bandeja experimental de Aspire admite instalaciones x64/ARM64 de Windows y macOS. No se admite Linux.</target>
         <note />
       </trans-unit>

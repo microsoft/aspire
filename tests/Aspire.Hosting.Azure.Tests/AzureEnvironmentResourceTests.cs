@@ -36,10 +36,8 @@ public class AzureEnvironmentResourceTests(ITestOutputHelper output)
         var frontend = builder.AddContainer("frontend", "image")
             .WithEndpoint(name: "endpoint", scheme: nonHttp ? "tcp" : "http", targetPort: 8080, isExternal: nonHttp);
 
-#pragma warning disable ASPIRECOMPUTE002 // Verify owner-level endpoint resolution matches native publication.
         var error = Assert.Throws<NotSupportedException>(() =>
             environment.GetEndpointPropertyExpression(frontend.GetEndpoint("endpoint").Property(property)));
-#pragma warning restore ASPIRECOMPUTE002
 
         var platform = appService ? "Azure App Service" : "Azure Container Apps";
         Assert.Equal(
