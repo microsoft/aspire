@@ -77,11 +77,15 @@ namespace Aspire.Hosting.Java
     public partial class JavaAppResource : ApplicationModel.ExecutableResource, IJavaAppResource, ApplicationModel.IResourceWithEnvironment, ApplicationModel.IResource, IResourceWithServiceDiscovery, ApplicationModel.IResourceWithEndpoints, ApplicationModel.IContainerFilesDestinationResource
     {
         public JavaAppResource(string name, string workingDirectory) : base(default!, default!, default!) { }
+
+        public override string ResourceTypeDisplayName { get { throw null; } }
     }
 
     [AspireExport(ExposeProperties = true)]
     public partial class JavaContainerResource : ApplicationModel.ContainerResource, IJavaAppResource, ApplicationModel.IResourceWithEnvironment, ApplicationModel.IResource, IResourceWithServiceDiscovery, ApplicationModel.IResourceWithEndpoints
     {
         public JavaContainerResource(string name, string? entrypoint = null) : base(default!, default) { }
+
+        public override string ResourceTypeDisplayName { get { throw null; } }
     }
 }
