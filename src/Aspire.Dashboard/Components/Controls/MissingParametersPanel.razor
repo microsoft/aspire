@@ -96,12 +96,14 @@
                                     else
                                     {
                                         <CascadingValue Name="HideFluentField" Value="@true" IsFixed="true">
-                                            <FluentCombobox @key="field.ViewModel.InputKey"
+                                            <FluentCombobox TOption="SelectViewModel<string>" TValue="string"
+                                                            @key="field.ViewModel.InputKey"
                                                             Id="@field.ViewModel.ElementId"
                                                             TOption="SelectViewModel<string>" TValue="SelectViewModel<string>"
                                                             Class="aspire-input missing-parameter-control"
-                                                            @bind-Value="field.ViewModel.SelectedOption"
-                                                            @bind-Value:after="@(() => UpdateChoiceValueStateAsync(field.ViewModel))"
+                                                            SelectedItems="@(field.ViewModel.SelectedOption is { } selectedOption ? [selectedOption] : [])"
+                                                            SelectedItemsChanged="@(options => OnChoiceSelectionChangedAsync(field.ViewModel, options))"
+                                                            OptionValue="@((SelectViewModel<string>? option) => option?.Id)"
                                                             @bind-ImmediateText:get="field.ViewModel.SelectedOption?.Name ?? field.ViewModel.Value"
                                                             @bind-ImmediateText:set="@(text => OnChoiceTextChangedAsync(field.ViewModel, text))"
                                                             Immediate="true"

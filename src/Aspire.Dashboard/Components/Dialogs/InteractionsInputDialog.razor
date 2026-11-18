@@ -126,14 +126,17 @@
                                                  ValueExpression="@(() => input.ViewModel.Value)"
                                                  IncludeInputSlot="false">
                                         <CascadingValue Name="HideFluentField" Value="@true" IsFixed="true">
-                                            <FluentCombobox @key="input.ViewModel.InputKey"
+                                            @* Parse freeform entries as text while retaining option keys and labels in SelectedItems. *@
+                                            <FluentCombobox TOption="SelectViewModel<string>" TValue="string"
+                                                            @key="input.ViewModel.InputKey"
                                                             Id="@input.ViewModel.ElementId"
                                                             autofocus="@IsFirstInput(input.ViewModel)"
                                                             TOption="SelectViewModel<string>" TValue="SelectViewModel<string>"
                                                             Class="aspire-input"
                                                             @ref="@_elementRefs[input.ViewModel]"
-                                                            @bind-Value="input.ViewModel.SelectedOption"
-                                                            @bind-Value:after="@(() => UpdateChoiceValueState(input.ViewModel))"
+                                                            SelectedItems="@(input.ViewModel.SelectedOption is { } selectedOption ? [selectedOption] : [])"
+                                                            SelectedItemsChanged="@(options => OnChoiceSelectionChanged(input.ViewModel, options))"
+                                                            OptionValue="@((SelectViewModel<string>? option) => option?.Id)"
                                                             @bind-ImmediateText:get="input.ViewModel.SelectedOption?.Name ?? input.ViewModel.Value"
                                                             @bind-ImmediateText:set="@(text => OnChoiceTextChanged(input.ViewModel, text))"
                                                             Immediate="true"
