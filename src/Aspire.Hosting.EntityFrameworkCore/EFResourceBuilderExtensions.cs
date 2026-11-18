@@ -748,9 +748,21 @@ public static class EFResourceBuilderExtensions
         {
             if (migrationResource.StartupProjectResource.TryGetAnnotationsOfType<EnvironmentCallbackAnnotation>(out var projectEnvCallbacks))
             {
+                // The tool owns the environment dictionary and the forwarding annotation's cache, but
+                // callbacks must still observe the startup project. Some callbacks derive values from
+                // the resource name or inspect its annotations, such as workload-scoped volume paths.
+                var projectContext = new EnvironmentCallbackContext(
+                    context.ExecutionContext,
+                    migrationResource.StartupProjectResource,
+                    context.EnvironmentVariables,
+                    context.CancellationToken)
+                {
+                    Logger = context.Logger,
+                };
+
                 foreach (var callback in projectEnvCallbacks)
                 {
-                    await callback.Callback(context).ConfigureAwait(false);
+                    await callback.Callback(projectContext).ConfigureAwait(false);
                 }
             }
         });
