@@ -331,7 +331,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Failed to restore packages for project {0} after update..
+        ///   Looks up a localized string similar to Validation restore for {0} channel update failed for project {1}. The update was not applied. Review the restore output for details..
         /// </summary>
         internal static string FailedToRestoreAfterUpdateFormat {
             get {

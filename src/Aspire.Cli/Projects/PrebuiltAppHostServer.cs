@@ -487,6 +487,8 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
             return safeOutput;
         }
 
+        // Redaction is best effort to reduce sensitive data in logs, not a security guarantee.
+        // Default log access relies on filesystem permissions: owner-only on Unix and inherited ACLs on Windows.
         var sensitiveSources = knownSensitiveSources
             .Concat(evaluatedSources.Where(PackageSourceOverrideMappings.HasCredentialMaterial))
             .Distinct(StringComparer.Ordinal)

@@ -1273,6 +1273,8 @@ internal sealed class NuGetClient(
     /// The helper's stderr was the only diagnostic channel back to the CLI: the CLI logged it and put it into the
     /// exception message when the operation failed. This buffers the same text for <see cref="NuGetOperationException"/>
     /// and also streams each entry to the debug log, where the CLI logged successful operations' stderr.
+    /// Redaction is best effort to reduce sensitive data in logs, not a security guarantee.
+    /// Default log access relies on filesystem permissions: owner-only on Unix and inherited ACLs on Windows.
     /// </remarks>
     private sealed class NuGetOperationOutput(
         ILogger logger,
@@ -1400,6 +1402,8 @@ internal sealed class NuGetClient(
                 sensitiveSources = _sensitiveSources;
             }
 
+            // Redaction is best effort to reduce sensitive data in logs, not a security guarantee.
+            // Default log access relies on filesystem permissions: owner-only on Unix and inherited ACLs on Windows.
             logger.LogDebug(
                 "{Message}",
                 PackageSourceRedactor.RedactOccurrences(data, sensitiveSources));

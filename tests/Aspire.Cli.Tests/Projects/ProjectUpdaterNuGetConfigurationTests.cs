@@ -18,6 +18,7 @@ using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
 using Aspire.Shared;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.Projects;
@@ -297,7 +298,7 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
         var originalProject = await File.ReadAllBytesAsync(projectFile.FullName);
         var configFile = await WriteCurrentPolicyAsync(workspace, "https://old.example/v3/index.json", configureCache: false);
         var originalConfig = await File.ReadAllBytesAsync(configFile.FullName);
-        const string newSource = "https://new.example/v3/index.json";
+        const string newSource = "https://candidate:candidate-password@new.example/v3/index.json?sig=candidate-token";
         var evaluationCount = 0;
         var restoreCount = 0;
         var runner = CreateRunner(projectFile, hasExplicitChannel: false);
@@ -347,7 +348,7 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
             Assert.Equal(originalProps, File.ReadAllText(propsPath + ".aspire-backup"));
             Assert.Equal(originalConfig, File.ReadAllBytes(configFile.FullName));
             options.StandardOutputCallback?.Invoke("Determining projects to restore...");
-            options.StandardErrorCallback?.Invoke("Native restore diagnostic.");
+            options.StandardErrorCallback?.Invoke($"Native restore diagnostic: {newSource}");
             restoreCount++;
             return restoreSucceeds ? 0 : 1;
         };
@@ -372,7 +373,7 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
 
         var interaction = Assert.IsType<TestInteractionService>(provider.GetRequiredService<IInteractionService>());
         Assert.Equal(
-            restoreSucceeds ? [] : new[] { (OutputLineStream.StdOut, "Determining projects to restore..."), (OutputLineStream.StdErr, "Native restore diagnostic.") },
+            restoreSucceeds ? [] : new[] { (OutputLineStream.StdOut, "Determining projects to restore..."), (OutputLineStream.StdErr, "Native restore diagnostic: https://***@new.example/v3/index.json") },
             interaction.DisplayedLines);
         Assert.True(evaluationCount > 0);
         Assert.Equal(1, restoreCount);
@@ -1665,29 +1666,78 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
     }
 
     [Theory]
-    [InlineData("AppHost.csproj", false)]
-    [InlineData("apphost.cs", false)]
-    [InlineData("AppHost.csproj", true)]
-    [InlineData("apphost.cs", true)]
-    public async Task UpdateAsync_RestoreDiagnosticsAreLoggedAndOnlyDisplayedOnFailure(string fileName, bool restoreFails)
+    [InlineData("AppHost.csproj", false, false)]
+    [InlineData("apphost.cs", false, false)]
+    [InlineData("AppHost.csproj", true, false)]
+    [InlineData("apphost.cs", true, false)]
+    [InlineData("AppHost.csproj", false, true)]
+    [InlineData("apphost.cs", false, true)]
+    [InlineData("AppHost.csproj", true, true)]
+    [InlineData("apphost.cs", true, true)]
+    public async Task UpdateAsync_RestoreDiagnosticsAreRedactedBeforeLoggingAndFailureDisplay(string fileName, bool restoreFails, bool useMsBuildSources)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = await CreateAppHostAsync(workspace, fileName);
         var originalProject = await File.ReadAllBytesAsync(projectFile.FullName);
         const string restoreMessage = "Determining projects to restore...";
-        const string restoreError = "error : Access to the path 'Aspire.Hosting.Tasks.dll' is denied.";
-        const string stderrMessage = "NuGet restore diagnostic on stderr.";
+        const string rootSource = "https://root:root%40password@root.example/v3/index.json?sig=root-token";
+        const string childSource = "https://child:child-password@child.example/v3/index.json?sig=child%3Btoken";
+        const string restoreError = $"Restore failed for {rootSource}";
+        const string stderrMessage = $"Restore failed for {childSource}";
+        const string redactedError = "Restore failed for https://***@root.example/v3/index.json";
+        const string redactedStderr = "Restore failed for https://***@child.example/v3/index.json";
+        if (!useMsBuildSources)
+        {
+            await File.WriteAllTextAsync(Path.Combine(workspace.Path, "NuGet.Config"),
+                $"""<configuration><packageSources><clear /><add key="root" value="{rootSource}" /></packageSources></configuration>""");
+        }
+        var childDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "Child"));
+        var childProject = await CreateAppHostAsync(workspace, "Child/Child.csproj");
+        if (!useMsBuildSources)
+        {
+            await File.WriteAllTextAsync(Path.Combine(childDirectory.FullName, "NuGet.Config"),
+                $"""<configuration><packageSources><add key="child" value="{childSource}" /></packageSources></configuration>""");
+        }
         var runner = CreateRunner(projectFile, hasExplicitChannel: false);
-        runner.GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) => CreatePackageEvaluation();
+        runner.GetProjectItemsAndPropertiesAsyncCallback = (file, _, properties, options, _) =>
+        {
+            Assert.Contains("RestoreAdditionalProjectSources", properties);
+            Assert.True(options.SuppressLogging);
+            if (file.FullName == childProject.FullName)
+            {
+                var childEvaluation = new JsonObject
+                {
+                    ["Items"] = new JsonObject(),
+                    ["Properties"] = new JsonObject()
+                };
+                if (useMsBuildSources)
+                {
+                    childEvaluation.WithProperty("RestoreAdditionalProjectSources", $" ; {childSource};https://public.example/feed; ");
+                }
+                return (0, JsonDocument.Parse(childEvaluation.ToJsonString()));
+            }
+            var evaluation = new JsonObject().WithSdkVersion("9.4.1")
+                .WithPackageReference("Aspire.Hosting.Redis", "9.4.1")
+                .WithProjectReference(childProject.FullName);
+            if (useMsBuildSources)
+            {
+                evaluation.WithProperty("RestoreAdditionalProjectSources", $"https://public.example/feed;{rootSource};");
+            }
+            return (0, JsonDocument.Parse(evaluation.ToJsonString()));
+        };
         runner.RestoreAsyncCallback = (_, options, _) =>
         {
+            Assert.True(options.SuppressLogging);
             options.StandardOutputCallback?.Invoke(restoreMessage);
             options.StandardOutputCallback?.Invoke(restoreError);
             options.StandardErrorCallback?.Invoke(stderrMessage);
             return restoreFails ? 1 : 0;
         };
         string logFilePath;
-        using (var provider = CreateServices(workspace, runner).BuildServiceProvider())
+        var services = CreateServices(workspace, runner);
+        services.AddLogging(logging => logging.AddFilter("Aspire.Cli", LogLevel.Information));
+        services.AddSingleton<ILoggerProvider>(provider => provider.GetRequiredService<FileLoggerProvider>());
+        using (var provider = services.BuildServiceProvider())
         {
             logFilePath = provider.GetRequiredService<FileLoggerProvider>().LogFilePath;
             var context = await CreateContextAsync(provider, projectFile, "default", hasExplicitChannel: false);
@@ -1699,9 +1749,9 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
                     updater.UpdateProjectAsync(context, TestContext.Current.CancellationToken));
 
                 Assert.Equal(string.Format(CultureInfo.InvariantCulture,
-                    UpdateCommandStrings.FailedToRestoreAfterUpdateFormat, projectFile.FullName), exception.Message);
+                    UpdateCommandStrings.FailedToRestoreAfterUpdateFormat, context.Channel.Name, projectFile.FullName), exception.Message);
                 Assert.Equal(
-                    [(OutputLineStream.StdOut, restoreMessage), (OutputLineStream.StdOut, restoreError), (OutputLineStream.StdErr, stderrMessage)],
+                    [(OutputLineStream.StdOut, restoreMessage), (OutputLineStream.StdOut, redactedError), (OutputLineStream.StdErr, redactedStderr)],
                     interaction.DisplayedLines);
                 Assert.Equal(originalProject, await File.ReadAllBytesAsync(projectFile.FullName));
             }
@@ -1714,16 +1764,20 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
             }
         }
 
+        var logText = await File.ReadAllTextAsync(logFilePath);
+        Assert.Equal(PackageSourceRedactor.RedactOccurrences(logText, [rootSource, childSource]), logText);
+        var category = CliLogFormat.Categories.Package;
         var logEntries = (await File.ReadAllLinesAsync(logFilePath)).Select(line =>
         {
             Assert.True(CliLogFormat.TryParseFileLogLine(line, out var entry));
             return entry;
-        });
+        }).Where(entry => entry.Category == category
+            && (entry.Message == restoreMessage || entry.Message.StartsWith("Restore failed for ", StringComparison.Ordinal)));
         Assert.Equal(
             [
-                new CliLogFormat.FileLogEntry(CliLogFormat.FileLevelTokens.Information, CliLogFormat.Categories.Package, restoreMessage),
-                new CliLogFormat.FileLogEntry(CliLogFormat.FileLevelTokens.Information, CliLogFormat.Categories.Package, restoreError),
-                new CliLogFormat.FileLogEntry(CliLogFormat.FileLevelTokens.Error, CliLogFormat.Categories.Package, stderrMessage)
+                new CliLogFormat.FileLogEntry(CliLogFormat.FileLevelTokens.Information, category, restoreMessage),
+                new CliLogFormat.FileLogEntry(CliLogFormat.FileLevelTokens.Information, category, redactedError),
+                new CliLogFormat.FileLogEntry(CliLogFormat.FileLevelTokens.Error, category, redactedStderr)
             ],
             logEntries);
     }
