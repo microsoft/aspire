@@ -131,7 +131,6 @@
                                         <FluentCombobox TOption="SelectViewModel<string>" TValue="string"
                                                         @key="input.ViewModel.InputKey"
                                                         Id="@input.ViewModel.ElementId"
-                                                        TOption="SelectViewModel<string>" TValue="SelectViewModel<string>"
                                                         Class="aspire-input parameter-value-input"
                                                         SelectedItems="@(input.ViewModel.SelectedOption is { } selectedOption ? [selectedOption] : [])"
                                                         SelectedItemsChanged="OnChoiceSelectionChanged"

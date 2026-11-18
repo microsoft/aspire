@@ -131,7 +131,6 @@
                                                             @key="input.ViewModel.InputKey"
                                                             Id="@input.ViewModel.ElementId"
                                                             autofocus="@IsFirstInput(input.ViewModel)"
-                                                            TOption="SelectViewModel<string>" TValue="SelectViewModel<string>"
                                                             Class="aspire-input"
                                                             @ref="@_elementRefs[input.ViewModel]"
                                                             SelectedItems="@(input.ViewModel.SelectedOption is { } selectedOption ? [selectedOption] : [])"

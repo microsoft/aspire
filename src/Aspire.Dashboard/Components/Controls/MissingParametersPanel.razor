@@ -99,7 +99,6 @@
                                             <FluentCombobox TOption="SelectViewModel<string>" TValue="string"
                                                             @key="field.ViewModel.InputKey"
                                                             Id="@field.ViewModel.ElementId"
-                                                            TOption="SelectViewModel<string>" TValue="SelectViewModel<string>"
                                                             Class="aspire-input missing-parameter-control"
                                                             SelectedItems="@(field.ViewModel.SelectedOption is { } selectedOption ? [selectedOption] : [])"
                                                             SelectedItemsChanged="@(options => OnChoiceSelectionChangedAsync(field.ViewModel, options))"
