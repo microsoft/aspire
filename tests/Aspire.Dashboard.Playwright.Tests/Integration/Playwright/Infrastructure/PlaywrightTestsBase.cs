@@ -33,21 +33,19 @@ public class PlaywrightTestsBase<TDashboardServerFixture> : IClassFixture<TDashb
     /// Runs a test in a new page.
     /// </summary>
     /// <param name="test">The test.</param>
-    /// <param name="useDefaultDensity">
-    /// Whether the resource list starts in the dashboard's default density, compact. Otherwise it starts comfortable:
-    /// most tests were written for its two-line rows, with their state text, availability badges and row actions shown
-    /// at rest, and set another density when they test it. Pass <see langword="true"/> to test the defaults.
+    /// <param name="useCompactDensity">
+    /// Whether to start with a saved Compact preference instead of the dashboard default.
     /// </param>
-    public async Task RunTestAsync(Func<IPage, Task> test, bool useDefaultDensity = false)
+    public async Task RunTestAsync(Func<IPage, Task> test, bool useCompactDensity = false)
     {
         var page = await CreateNewPageAsync();
-        if (!useDefaultDensity)
+        if (useCompactDensity)
         {
             // Only when nothing is stored, so a density the test chooses in the settings survives a reload. Stored
             // values are JSON, so the density is a JSON string.
             await page.AddInitScriptAsync($$"""
                 if (localStorage.getItem('{{BrowserStorageKeys.ResourceListDensity}}') === null) {
-                    localStorage.setItem('{{BrowserStorageKeys.ResourceListDensity}}', '"{{nameof(ResourceListDensity.Comfortable)}}"');
+                    localStorage.setItem('{{BrowserStorageKeys.ResourceListDensity}}', '"{{nameof(ResourceListDensity.Compact)}}"');
                 }
                 """);
         }
