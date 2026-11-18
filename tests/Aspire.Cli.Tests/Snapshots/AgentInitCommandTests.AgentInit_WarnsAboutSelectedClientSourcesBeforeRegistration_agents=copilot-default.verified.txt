@@ -1,0 +1,13 @@
+﻿{
+  Sources:
+          Name:  default
+    Git source:  https://github.com/microsoft/aspire-skills
+   Marketplace:  aspire-skills
+       Plugins:  aspire@aspire-skills
+
+,
+  Warnings: [
+    One or more skill sources are configured. A skill source lets an organization share skills to customize your development experience.,
+    [yellow]Only use sources you trust. Content from these sources can run code on your machine.[/]
+  ]
+}

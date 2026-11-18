@@ -87,10 +87,6 @@
                         <FluentSpinner Size="SpinnerSize.Small" />
                     </div>
                 }
-                else if (paneItemCount == 0 && !(isGrouped && _grouping == ResourcePaneGrouping.Tags && TagStore.GetAllTags(_resourceByName.Values).Count == 0) && !DashboardClient.IsEnabled)
-                {
-                    <div class="resource-pane-message">@Loc[nameof(Dashboard.Resources.Layout.TelemetryPaneNoSources)]</div>
-                }
 
                 @if (_isLoaded)
                 {
@@ -125,10 +121,12 @@
                     </div>
                 }
 
-                @if (_isLoaded && DashboardClient.IsEnabled && paneItemCount == 0 && !(isGrouped && _grouping == ResourcePaneGrouping.Tags && TagStore.GetAllTags(_resourceByName.Values).Count == 0))
+                @if (_isLoaded && paneItemCount == 0 && !(isGrouped && _grouping == ResourcePaneGrouping.Tags && TagStore.GetAllTags(_resourceByName.Values).Count == 0))
                 {
                     <div class="resource-pane-message">
-                        @ResourcesLoc[nameof(Dashboard.Resources.Resources.ResourcesNoResources)]
+                        @(DashboardClient.IsEnabled
+                            ? ResourcesLoc[nameof(Dashboard.Resources.Resources.ResourcesNoResources)]
+                            : Loc[nameof(Dashboard.Resources.Layout.TelemetryPaneNoSources)])
                     </div>
                 }
 
@@ -284,7 +282,7 @@
                                    href="@GetRowUrl(telemetryResourceName)"
                                    aria-current="@GetRowAriaCurrent(isSelected)"
                                    aria-label="@telemetryResourceName"
-                                   aria-description="@($"{Loc[nameof(Dashboard.Resources.Layout.NavMenuTelemetrySourcesTab)]}{(unavailableReason is not null ? $"; {unavailableReason}" : null)}")"
+                                   aria-description="@GetTelemetryRowAccessibilityDescription(telemetryResource.Resource, unavailableReason)"
                                    data-tooltip="@unavailableReason"
                                    data-resource-unavailable-reason="@unavailableReason"
                                    @onclick="@GetTelemetryRowClick(telemetryResourceName)"
@@ -299,7 +297,20 @@
                                         <span class="resource-row-title">
                                             <span class="resource-row-name"><FluentHighlighter HighlightedText="@_filter.TextFilter" Text="@telemetryResourceName" /></span>
                                         </span>
-                                        <span class="resource-row-sub resource-row-kind-label">@Loc[nameof(Dashboard.Resources.Layout.NavMenuTelemetrySourcesTab)]</span>
+                                        @if (!IsCompact)
+                                        {
+                                            var signals = GetTelemetrySignals(telemetryResource.Resource);
+                                            <span class="resource-row-sub">
+                                                @for (var i = 0; i < signals.Count; i++)
+                                                {
+                                                    if (i > 0)
+                                                    {
+                                                        <span class="resource-row-sep" aria-hidden="true">·</span>
+                                                    }
+                                                    <span>@signals[i]</span>
+                                                }
+                                            </span>
+                                        }
                                     </span>
                                 </a>
                             </div>
@@ -343,6 +354,8 @@
     <div class="resources-layout @(showCollapsedPane ? "pane-collapsed" : string.Empty) @(_isPaneFullCanvas ? "pane-full-canvas" : string.Empty) @(_animatePaneTransition ? "pane-motion-enabled" : string.Empty) @(_isPaneSelectionReveal ? "pane-selection-reveal" : string.Empty) @(!isDesktop && _isDrawerOpen ? "drawer-open" : string.Empty)"
          data-pane-location="@_lastLocation"
          data-pane-interactions-ready="@(_isOrderingRegistered ? "true" : "false")"
+         data-home-pending="@(_homeNavigation is not null ? "true" : null)"
+         data-escape-home="@(CanEscapeGoHome ? "true" : null)"
          style="@GetLayoutStyle()"
          @ref="_layoutElement">
         @* A single header keeps section subscriptions stable across viewport changes. *@
@@ -372,12 +385,9 @@
                             <SectionOutlet SectionName="@TabToolbarSectionName" />
                         </div>
                     }
-                    @* The full resource table lives on the Overview tab, the dashboard's home. The data tabs don't close
-                       into it: their own back links (such as "Traces" on a trace) and the tabs cover navigation there. *@
-                    @if (isDesktop && !IsDataTab && DetailParentUrl is { } parentUrl)
-                    {
-                        <DetailPageCloseButton ParentUrl="@parentUrl" OnClose="@(() => CloseDetailAsync(parentUrl))" ClosesOnEscape="true" />
-                    }
+                    @* No page has a close button. A tab's content is a page, scoped by the list beside it, not a
+                       pane over the table: the table is the home page, reached from the brand at the top of the
+                       list's column. Only drill-ins inside a page, such as a span's details, close. *@
                 </div>
             }
             else if (_isPaneFullCanvas)
@@ -472,20 +482,18 @@
 
 @code {
     // The resource overview shows highlighted commands with labels; the resource list shows icons and a menu.
-    // Parameters in the full-page list show only their Set parameter command. Menus are built when opened.
+    // Parameters in the full-page list show only their Set parameter command as a button, and the rest in their menu.
+    // Menus are built when opened.
     internal RenderFragment RenderResourceActions(ResourceViewModel resource, bool showLabels, ResourceGridViewModel? row, DisplayedUrl? primaryUrl = null) => __builder =>
     {
         var resourceName = GetResourceName(resource);
         var handlers = GetRowHandlers(resource);
         var actionIndex = 0;
         var highlightedIndex = 0;
-        // A compact sidebar row puts the expand toggle after its actions. Where rows can be hovered, the toggle is the
-        // only control in the rail at rest, so the actions appear before it instead of pushing it toward the name, and
-        // the tab order stays the order on screen. Other rails keep the toggle first.
         var toggleLast = IsCompact && !_isPaneFullCanvas;
         <div class="@(showLabels ? "resource-actions" : "resource-row-actions")">
-            @* The toggle itself leads the row (see the row markup). The sidebar's rail keeps its slot, so the actions
-               don't move; the full-page list's rail has no slot for it. *@
+            @* The toggle itself leads the row (see the row markup). Sidebar CSS hides its placeholder so the rail
+               reserves only visible actions; the full-page list has no placeholder. *@
             @if (!showLabels && !toggleLast && !_isPaneFullCanvas)
             {
                 RenderRowToggleSlot(__builder);
@@ -506,7 +514,9 @@
                     <FluentIcon Value="@(new Icons.Regular.Size16.Open())" Color="Color.Primary" />
                 </a>
             }
-            @* Resolved icons are shared. Set the component color rather than mutating the cached icon with WithColor. *@
+            @* Resolved icons are shared. Set the component color rather than mutating the cached icon with WithColor.
+               Every action icon takes its button's text color, labeled or not, so an icon reads as part of its button
+               and dims with it when the button is disabled. *@
             @foreach (var command in showLabels ? GetHighlightedCommands(resource) : _isPaneFullCanvas ? GetFullPageRowCommands(resource) : GetSidebarCommands(resource))
             {
                 var commandTitle = !string.IsNullOrEmpty(command.GetDisplayDescription()) ? command.GetDisplayDescription() : command.GetDisplayName();
@@ -516,7 +526,7 @@
                                   data-tooltip="@commandTitle"
                                   OnClick="@handlers.Command(command.Name)"
                                   Disabled="@IsCommandDisabled(resource, command)">
-                        <FluentIcon Value="@IconResolver.ResolveHighlightedCommandIcon(command.IconName, command.IconVariant)" Color="Color.Primary" Slot="start" />
+                        <FluentIcon Value="@IconResolver.ResolveHighlightedCommandIcon(command.IconName, command.IconVariant)" Color="Color.Custom" CustomColor="currentColor" Slot="start" />
                         @command.GetDisplayName()
                     </FluentButton>
                 }
@@ -534,16 +544,14 @@
                     </FluentButton>
                 }
             }
-            @if (showLabels || !_isPaneFullCanvas || !resource.IsParameter)
-            {
-                <AspireMenuButton ButtonAppearance="@(showLabels ? ButtonAppearance.Default : ButtonAppearance.Transparent)"
-                                  ButtonClass="@(showLabels ? null : "resource-row-action")"
-                                  Icon="@(new Icons.Regular.Size16.MoreHorizontal())"
-                                  IconColor="@(showLabels ? Color.Primary : Color.Custom)"
-                                  ItemsProvider="@handlers.MenuItems"
-                                  data-tooltip-positioning="@(!showLabels ? "above" : null)"
-                                  Title="@string.Format(CultureInfo.CurrentCulture, Loc[nameof(Dashboard.Resources.Layout.ResourcePaneResourceActions)], resourceName)" />
-            }
+            @* Every row has its menu, parameters included: it holds what the row's buttons don't, such as Delete
+               parameter, and a row without it looks broken beside the others. *@
+            <AspireMenuButton ButtonAppearance="@(showLabels ? ButtonAppearance.Default : ButtonAppearance.Transparent)"
+                              ButtonClass="@(showLabels ? null : "resource-row-action")"
+                              Icon="@(new Icons.Regular.Size16.MoreHorizontal())"
+                              ItemsProvider="@handlers.MenuItems"
+                              data-tooltip-positioning="@(!showLabels ? "above" : null)"
+                              Title="@string.Format(CultureInfo.CurrentCulture, Loc[nameof(Dashboard.Resources.Layout.ResourcePaneResourceActions)], resourceName)" />
             @if (!showLabels && toggleLast)
             {
                 RenderRowToggleSlot(__builder);
@@ -551,8 +559,6 @@
         </div>
     };
 
-    // The empty slot the sidebar's action rail keeps where the expand toggle was, so the actions stay where they were
-    // in every row. The toggle itself leads the row, before its icon.
     private static void RenderRowToggleSlot(RenderTreeBuilder __builder)
     {
         <span class="resource-row-toggle-spacer" aria-hidden="true"></span>

@@ -1,9 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREDENO001 // Deno APIs use the experimental Deno resource and enums internally
-
-using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Text;
 using Aspire.Hosting.ApplicationModel;
@@ -107,7 +104,6 @@ public static partial class JavaScriptHostingExtensions
     /// in both modes.
     /// </remarks>
     [AspireExport]
-    [Experimental("ASPIREDENO001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<DenoAppResource> WithDenoAllowAll(this IResourceBuilder<DenoAppResource> builder, bool enabled = true)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -126,7 +122,6 @@ public static partial class JavaScriptHostingExtensions
     /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="kind"/> is not a defined <see cref="DenoPermissionKind"/> value.</exception>
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
-    [Experimental("ASPIREDENO001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<DenoAppResource> WithDenoAllow(this IResourceBuilder<DenoAppResource> builder, DenoPermissionKind kind, params string[] values)
         => AddDenoPermission(builder, kind, deny: false, values);
 
@@ -139,7 +134,6 @@ public static partial class JavaScriptHostingExtensions
     /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="kind"/> is not a defined <see cref="DenoPermissionKind"/> value.</exception>
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
-    [Experimental("ASPIREDENO001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<DenoAppResource> WithDenoDeny(this IResourceBuilder<DenoAppResource> builder, DenoPermissionKind kind, params string[] values)
         => AddDenoPermission(builder, kind, deny: true, values);
 
@@ -151,7 +145,6 @@ public static partial class JavaScriptHostingExtensions
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
-    [Experimental("ASPIREDENO001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<DenoAppResource> WithDenoConfig(this IResourceBuilder<DenoAppResource> builder, string configFile)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -166,7 +159,6 @@ public static partial class JavaScriptHostingExtensions
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
-    [Experimental("ASPIREDENO001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<DenoAppResource> WithDenoImportMap(this IResourceBuilder<DenoAppResource> builder, string importMapFile)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -181,7 +173,6 @@ public static partial class JavaScriptHostingExtensions
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
-    [Experimental("ASPIREDENO001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<DenoAppResource> WithDenoLock(this IResourceBuilder<DenoAppResource> builder, string lockFile)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -197,7 +188,6 @@ public static partial class JavaScriptHostingExtensions
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
-    [Experimental("ASPIREDENO001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<DenoAppResource> WithDenoNoLock(this IResourceBuilder<DenoAppResource> builder)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -221,7 +211,6 @@ public static partial class JavaScriptHostingExtensions
     /// <c>node_modules</c> from the build context. Use <c>auto</c> or provide a custom Dockerfile for that mode.
     /// </remarks>
     [AspireExport]
-    [Experimental("ASPIREDENO001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<DenoAppResource> WithDenoNodeModulesDir(this IResourceBuilder<DenoAppResource> builder, DenoNodeModulesDirMode? mode = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -247,7 +236,6 @@ public static partial class JavaScriptHostingExtensions
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
-    [Experimental("ASPIREDENO001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<DenoAppResource> WithDenoUnstable(this IResourceBuilder<DenoAppResource> builder, params string[] features)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -279,7 +267,6 @@ public static partial class JavaScriptHostingExtensions
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
-    [Experimental("ASPIREDENO001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<DenoAppResource> WithDenoWatch(this IResourceBuilder<DenoAppResource> builder, bool hmr = false)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -306,7 +293,6 @@ public static partial class JavaScriptHostingExtensions
     /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="mode"/> is not a defined <see cref="DenoInspectMode"/> value.</exception>
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
-    [Experimental("ASPIREDENO001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<DenoAppResource> WithDenoInspect(
         this IResourceBuilder<DenoAppResource> builder,
         DenoInspectMode mode = DenoInspectMode.Inspect,
@@ -331,7 +317,6 @@ public static partial class JavaScriptHostingExtensions
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
-    [Experimental("ASPIREDENO001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<DenoAppResource> WithDenoRun(this IResourceBuilder<DenoAppResource> builder)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -352,7 +337,6 @@ public static partial class JavaScriptHostingExtensions
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
-    [Experimental("ASPIREDENO001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<DenoAppResource> WithDenoTask(this IResourceBuilder<DenoAppResource> builder, string taskName)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -406,7 +390,6 @@ public static partial class JavaScriptHostingExtensions
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
-    [Experimental("ASPIREDENO001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<DenoAppResource> WithDenoServe(this IResourceBuilder<DenoAppResource> builder)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -473,7 +456,6 @@ public static partial class JavaScriptHostingExtensions
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
-    [Experimental("ASPIREDENO001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<DenoAppResource> WithDenoScriptArgs(this IResourceBuilder<DenoAppResource> builder, params string[] args)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -492,7 +474,6 @@ public static partial class JavaScriptHostingExtensions
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
-    [Experimental("ASPIREDENO001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<DenoAppResource> WithDenoRuntimeArgs(this IResourceBuilder<DenoAppResource> builder, params string[] args)
     {
         ArgumentNullException.ThrowIfNull(builder);
