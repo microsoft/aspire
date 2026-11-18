@@ -200,9 +200,9 @@
         <note>{0} = AppHost file path.</note>
       </trans-unit>
       <trans-unit id="FailedToRestoreAfterUpdateFormat">
-        <source>Failed to restore packages for project {0} after update.</source>
-        <target state="translated">Не удалось восстановить пакеты для проекта {0} после обновления.</target>
-        <note />
+        <source>Validation restore for {0} channel update failed for project {1}. The update was not applied. Review the restore output for details.</source>
+        <target state="new">Validation restore for {0} channel update failed for project {1}. The update was not applied. Review the restore output for details.</target>
+        <note>{0} = Channel name. {1} = AppHost file path.</note>
       </trans-unit>
       <trans-unit id="FailedUpdatePackageReferenceFormat">
         <source>Failed to update package reference for {0} in project {1}.</source>
