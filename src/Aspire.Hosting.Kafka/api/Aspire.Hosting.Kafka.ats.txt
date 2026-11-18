@@ -16,3 +16,4 @@ Aspire.Hosting/KafkaServerResource.host(context: Aspire.Hosting.Kafka/Aspire.Hos
 Aspire.Hosting/KafkaServerResource.internalEndpoint(context: Aspire.Hosting.Kafka/Aspire.Hosting.KafkaServerResource) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference
 Aspire.Hosting/KafkaServerResource.port(context: Aspire.Hosting.Kafka/Aspire.Hosting.KafkaServerResource) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReferenceExpression
 Aspire.Hosting/KafkaServerResource.primaryEndpoint(context: Aspire.Hosting.Kafka/Aspire.Hosting.KafkaServerResource) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference
+Aspire.Hosting/KafkaServerResource.resourceTypeDisplayName(context: Aspire.Hosting.Kafka/Aspire.Hosting.KafkaServerResource) -> string
