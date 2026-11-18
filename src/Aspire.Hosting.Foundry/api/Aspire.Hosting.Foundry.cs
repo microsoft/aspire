@@ -472,6 +472,8 @@ namespace Aspire.Hosting.Foundry
 
         public FoundryResource Parent { get { throw null; } set { } }
 
+        public override string ResourceTypeDisplayName { get { throw null; } }
+
         public int SkuCapacity { get { throw null; } set { } }
 
         public string SkuName { get { throw null; } set { } }
@@ -497,6 +499,8 @@ namespace Aspire.Hosting.Foundry
             [AspireValue("FoundryModels")]
             public static readonly FoundryModel ClaudeHaiku45;
             [AspireValue("FoundryModels")]
+            public static readonly FoundryModel ClaudeHaiku55;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel ClaudeMythos5;
             [AspireValue("FoundryModels")]
             public static readonly FoundryModel ClaudeMythos51;
@@ -513,11 +517,17 @@ namespace Aspire.Hosting.Foundry
             [AspireValue("FoundryModels")]
             public static readonly FoundryModel ClaudeOpus5;
             [AspireValue("FoundryModels")]
+            public static readonly FoundryModel ClaudeOpus55;
+            [AspireValue("FoundryModels")]
+            public static readonly FoundryModel ClaudeOpus55Fast;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel ClaudeSonnet45;
             [AspireValue("FoundryModels")]
             public static readonly FoundryModel ClaudeSonnet46;
             [AspireValue("FoundryModels")]
             public static readonly FoundryModel ClaudeSonnet5;
+            [AspireValue("FoundryModels")]
+            public static readonly FoundryModel ClaudeSonnet55;
         }
 
         public static partial class BlackForestLabs
@@ -543,11 +553,19 @@ namespace Aspire.Hosting.Foundry
             [AspireValue("FoundryModels")]
             public static readonly FoundryModel CohereEmbedV3Multilingual;
             [AspireValue("FoundryModels")]
+            public static readonly FoundryModel CohereEmbedV5Fast;
+            [AspireValue("FoundryModels")]
+            public static readonly FoundryModel CohereEmbedV5Pro;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel CohereParseV5;
             [AspireValue("FoundryModels")]
             public static readonly FoundryModel CohereRerankV40Fast;
             [AspireValue("FoundryModels")]
             public static readonly FoundryModel CohereRerankV40Pro;
+            [AspireValue("FoundryModels")]
+            public static readonly FoundryModel CohereRerankV5Fast;
+            [AspireValue("FoundryModels")]
+            public static readonly FoundryModel CohereRerankV5Pro;
             [AspireValue("FoundryModels")]
             public static readonly FoundryModel EmbedV40;
         }
@@ -558,6 +576,8 @@ namespace Aspire.Hosting.Foundry
             public static readonly FoundryModel DeepSeekV32;
             [AspireValue("FoundryModels")]
             public static readonly FoundryModel DeepSeekV32Speciale;
+            [AspireValue("FoundryModels")]
+            public static readonly FoundryModel DeepSeekV41Flash;
             [AspireValue("FoundryModels")]
             public static readonly FoundryModel DeepSeekV4Flash;
             [AspireValue("FoundryModels")]
@@ -675,7 +695,7 @@ namespace Aspire.Hosting.Foundry
             [AspireValue("FoundryModels")]
             public static readonly FoundryModel MetaLlama318BInstruct;
             [AspireValue("FoundryModels")]
-            public static readonly FoundryModel MuseSpark;
+            public static readonly FoundryModel MuseGlimmer30B;
             [AspireValue("FoundryModels")]
             public static readonly FoundryModel MuseSpark13;
         }
@@ -729,7 +749,13 @@ namespace Aspire.Hosting.Foundry
             [AspireValue("FoundryModels")]
             public static readonly FoundryModel MaiVoice2;
             [AspireValue("FoundryModels")]
+            public static readonly FoundryModel MaiVoice21;
+            [AspireValue("FoundryModels")]
+            public static readonly FoundryModel MaiVoice21Flash;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel MaiVoice2Flash;
+            [AspireValue("FoundryModels")]
+            public static readonly FoundryModel MicrosoftDecision1;
             [AspireValue("FoundryModels")]
             public static readonly FoundryModel ModelRouter;
             [AspireValue("FoundryModels")]
@@ -766,6 +792,14 @@ namespace Aspire.Hosting.Foundry
             public static readonly FoundryModel MistralOcr40;
             [AspireValue("FoundryModels")]
             public static readonly FoundryModel MistralSmall2503;
+        }
+
+        public static partial class Nvidia
+        {
+            [AspireValue("FoundryModels")]
+            public static readonly FoundryModel Nemotron3Super120BA12BBF16;
+            [AspireValue("FoundryModels")]
+            public static readonly FoundryModel Nemotron3Ultra550BA55BBF16;
         }
 
         public static partial class OpenAI
@@ -833,7 +867,15 @@ namespace Aspire.Hosting.Foundry
             [AspireValue("FoundryModels")]
             public static readonly FoundryModel Gpt5Pro;
             [AspireValue("FoundryModels")]
+            public static readonly FoundryModel Gpt61Sol;
+            [AspireValue("FoundryModels")]
+            public static readonly FoundryModel Gpt61Terra;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel Gpt6Astra;
+            [AspireValue("FoundryModels")]
+            public static readonly FoundryModel Gpt6Luna;
+            [AspireValue("FoundryModels")]
+            public static readonly FoundryModel Gpt6Sol;
             [AspireValue("FoundryModels")]
             public static readonly FoundryModel GptAudio;
             [AspireValue("FoundryModels")]
@@ -931,6 +973,8 @@ namespace Aspire.Hosting.Foundry
             [AspireValue("FoundryModels")]
             public static readonly FoundryModel Grok46;
             [AspireValue("FoundryModels")]
+            public static readonly FoundryModel Grok47;
+            [AspireValue("FoundryModels")]
             public static readonly FoundryModel GrokCodeFast1;
         }
     }
@@ -957,6 +1001,8 @@ namespace Aspire.Hosting.Foundry
         public bool IsEmulator { get { throw null; } }
 
         public Azure.BicepOutputReference NameOutputReference { get { throw null; } }
+
+        public override string ResourceTypeDisplayName { get { throw null; } }
 
         public ApplicationModel.ReferenceExpression UriExpression { get { throw null; } }
 
@@ -1083,9 +1129,6 @@ namespace Aspire.Hosting.Foundry
 
         [AspireExportIgnore(Reason = "Azure SDK-specific type not usable from polyglot hosts.")]
         public System.Collections.Generic.IList<global::Azure.AI.Projects.Agents.ProtocolVersionRecord> ProtocolVersions { get { throw null; } init { } }
-
-        [AspireExportIgnore(Reason = "Azure SDK-specific type not usable from polyglot hosts.")]
-        public System.Collections.Generic.IList<global::Azure.AI.Projects.Agents.ProjectsAgentTool> Tools { get { throw null; } init { } }
     }
 
     public enum HostedAgentProtocol
