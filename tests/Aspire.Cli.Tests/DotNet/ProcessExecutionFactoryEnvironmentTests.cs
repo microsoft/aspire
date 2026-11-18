@@ -30,7 +30,7 @@ public sealed class ProcessExecutionFactoryEnvironmentTests(ITestOutputHelper ou
         const string diagnostic = "https://user:password@feed.example/index.json?sig=token";
         var script = ProcessTestHelpers.CreateScript(workspace.WorkspaceRoot, "diagnostics",
             $"printf '%s\\n' '{diagnostic}'\nprintf '%s\\n' '{diagnostic}' >&2",
-            $"@echo off\r\necho {diagnostic}\r\necho {diagnostic} 1>&2");
+            $"@echo off\r\necho {diagnostic}\r\n1>&2 echo {diagnostic}");
         var logger = new FakeLogger<ProcessExecutionFactory>();
         Assert.True(logger.IsEnabled(LogLevel.Trace));
         var stdout = new List<string>();
