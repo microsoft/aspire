@@ -22,6 +22,13 @@
         Loc="@Loc"/>
 </PageTitle>
 
+@if (ViewportInformation.IsDesktop && ResourcesLayout is not null)
+{
+    <StableSectionContent SectionName="@Aspire.Dashboard.Components.Layout.ResourcesLayout.FooterStatusSectionName">
+        @GetTotalItemsFooter()
+    </StableSectionContent>
+}
+
 <div class="page-content-container">
     @{
         // Inside the resources layout on desktop, the filter toolbar shares the tabs row instead of taking its own row.
@@ -141,18 +148,24 @@
             </div>
         </MainSection>
         <FooterSection>
-            <TotalItemsFooter @ref="_totalItemsFooter"
-                              TotalItemCount="@_totalItemsCount"
-                              DisplayedItemCount="@_displayedItemCount"
-                              SingularText="@Loc[nameof(Dashboard.Resources.Traces.TotalItemsFooterSingularText)]"
-                              PluralText="@Loc[nameof(Dashboard.Resources.Traces.TotalItemsFooterPluralText)]"
-                              PartialText="@Loc[nameof(Dashboard.Resources.Traces.VirtualizedLimitText)]"
-                              PauseText="@PauseText"/>
+            @if (!ViewportInformation.IsDesktop || ResourcesLayout is null)
+            {
+                @GetTotalItemsFooter()
+            }
         </FooterSection>
     </AspirePageContentLayout>
 </div>
 
 @code {
+    private RenderFragment GetTotalItemsFooter() =>
+        @<TotalItemsFooter @ref="_totalItemsFooter"
+                           TotalItemCount="@_totalItemsCount"
+                           DisplayedItemCount="@_displayedItemCount"
+                           SingularText="@Loc[nameof(Dashboard.Resources.Traces.TotalItemsFooterSingularText)]"
+                           PluralText="@Loc[nameof(Dashboard.Resources.Traces.TotalItemsFooterPluralText)]"
+                           PartialText="@Loc[nameof(Dashboard.Resources.Traces.VirtualizedLimitText)]"
+                           PauseText="@PauseText" />;
+
     private RenderFragment GetFilterToolbar() => @<text>
         @if (ResourcesLayout is null)
         {

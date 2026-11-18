@@ -13,6 +13,24 @@ internal static class KubernetesDeployTestHelpers
 {
     private const string KindRegistryOwnerLabel = "aspire.e2e.kind-registry-owner";
 
+    private const string GatewayApiStandardInstallUrl =
+        "https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.4.1/standard-install.yaml";
+
+    // Each download attempt must end on its own, or a stalled GitHub release connection uses the whole prompt
+    // timeout and the retry loop never runs. An attempt gives up after 10s without a connection, or once the
+    // transfer stays under 1 KB/s for 10s. When every attempt hangs, the worst case is 3 attempts x ~20s +
+    // 3 x 5s retry delay = ~75s, inside the Gateway API CRD install's 2-minute budget.
+    internal const int DownloadAttempts = 3;
+    internal const int DownloadRetryDelaySeconds = 5;
+    internal const int DownloadConnectTimeoutSeconds = 10;
+    internal const int DownloadStallTimeoutSeconds = 10;
+    private const int DownloadStallSpeedBytesPerSecond = 1024;
+
+    // --fail keeps an HTTP error body (for example a GitHub 504 page) from being saved as the download.
+    internal static string CurlDownloadOptions =>
+        $"-fsSL --connect-timeout {DownloadConnectTimeoutSeconds} " +
+        $"--speed-limit {DownloadStallSpeedBytesPerSecond} --speed-time {DownloadStallTimeoutSeconds}";
+
     private static string KindVersion => KubernetesE2EVersions.KindVersion;
     private static string HelmVersion => KubernetesE2EVersions.HelmVersion;
     private static string KubectlVersion => KubernetesE2EVersions.KubectlVersion;
@@ -22,6 +40,33 @@ internal static class KubernetesDeployTestHelpers
     /// </summary>
     internal static string GenerateUniqueClusterName() =>
         $"aspire-e2e-{Guid.NewGuid():N}"[..32];
+
+    /// <summary>
+    /// Builds a shell command that downloads <paramref name="url"/> to <paramref name="destination"/>,
+    /// retrying failed or stalled attempts, and exits non-zero unless <paramref name="verifyCommand"/>
+    /// succeeds on the final file.
+    /// </summary>
+    internal static string GetRetryingDownloadCommand(string displayName, string url, string destination, string verifyCommand) =>
+        $"rm -f {destination}; for i in $(seq 1 {DownloadAttempts}); do " +
+        $"curl {CurlDownloadOptions} -o {destination} \"{url}\" && {verifyCommand} && break; " +
+        $"echo \"Retry $i: {displayName} download failed, retrying in {DownloadRetryDelaySeconds}s...\"; " +
+        $"rm -f {destination}; sleep {DownloadRetryDelaySeconds}; done; {verifyCommand}";
+
+    /// <summary>
+    /// Installs the Gateway API standard CRDs into the current cluster. The manifest is downloaded with
+    /// retries first because GitHub release downloads can transiently fail (for example with a 504).
+    /// </summary>
+    internal static Task InstallGatewayApiCrdsAsync(
+        this Hex1bTerminalAutomator auto,
+        SequenceCounter counter)
+    {
+        const string manifestPath = "/tmp/gateway-api-standard-install.yaml";
+
+        return auto.RunCommandAsync(
+            GetRetryingDownloadCommand("Gateway API CRDs", GatewayApiStandardInstallUrl, manifestPath, $"test -s {manifestPath}") +
+            $" && kubectl apply --server-side -f {manifestPath}",
+            counter, TimeSpan.FromMinutes(2));
+    }
 
     /// <summary>
     /// Installs KinD, Helm, and kubectl binaries to ~/.local/bin and adds to PATH.

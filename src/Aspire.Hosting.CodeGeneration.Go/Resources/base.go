@@ -26,7 +26,9 @@ import (
 //
 // Callers retrieve the chain's error with Err() at any logical boundary
 // (typically once at the end of a builder chain or before using the result of
-// a value-returning method).
+// a value-returning method). Every wrapper also reports the error it owns to
+// the client, and the builder's Err() and Build() combine the errors from all
+// failed handles, so failed children that were never checked still stop Build().
 //
 // Callbacks run on separate goroutines and can capture a wrapper also used by
 // the builder chain. The sticky error and lazy collection accessors are
@@ -45,6 +47,11 @@ func newHandleWrapperBase(h *handle, c *client) *handleWrapperBase {
 }
 
 func newErroredHandleWrapperBase(err error, c *client) *handleWrapperBase {
+	c.recordErr(err)
+	return &handleWrapperBase{err: err, client: c}
+}
+
+func newPropagatedErroredHandleWrapperBase(err error, c *client) *handleWrapperBase {
 	return &handleWrapperBase{err: err, client: c}
 }
 
@@ -64,14 +71,34 @@ func (h *handleWrapperBase) Err() error {
 	return h.err
 }
 
-// setErr records an error on this wrapper. The first non-nil error wins;
-// later errors are dropped to keep failure causality clear in chains.
+// setErr records an error owned by this wrapper and reports it to the client.
+// The first non-nil error wins; later errors are dropped to keep failure
+// causality clear in chains.
 func (h *handleWrapperBase) setErr(err error) {
+	if err == nil {
+		return
+	}
 	h.errMu.Lock()
-	defer h.errMu.Unlock()
+	if h.err != nil {
+		h.errMu.Unlock()
+		return
+	}
+	h.err = err
+	h.errMu.Unlock()
+	h.client.recordErr(err)
+}
+
+// setPropagatedErr short-circuits this wrapper with an error already owned by
+// another handle without reporting the same failure to the client again.
+func (h *handleWrapperBase) setPropagatedErr(err error) {
+	if err == nil {
+		return
+	}
+	h.errMu.Lock()
 	if h.err == nil {
 		h.err = err
 	}
+	h.errMu.Unlock()
 }
 
 // ── resourceBuilderBase ───────────────────────────────────────────────────────
@@ -86,6 +113,10 @@ func newResourceBuilderBase(h *handle, c *client) *resourceBuilderBase {
 
 func newErroredResourceBuilder(err error, c *client) *resourceBuilderBase {
 	return &resourceBuilderBase{handleWrapperBase: newErroredHandleWrapperBase(err, c)}
+}
+
+func newPropagatedErroredResourceBuilder(err error, c *client) *resourceBuilderBase {
+	return &resourceBuilderBase{handleWrapperBase: newPropagatedErroredHandleWrapperBase(err, c)}
 }
 
 // ── ReferenceExpression ───────────────────────────────────────────────────────
@@ -323,10 +354,7 @@ func (l *List[T]) Count() (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	if n, ok := result.(float64); ok {
-		return int(n), nil
-	}
-	return 0, nil
+	return decodeAs[int](result)
 }
 
 func (l *List[T]) Get(index int) (T, error) {
@@ -494,10 +522,7 @@ func (d *Dict[K, V]) Count() (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	if n, ok := result.(float64); ok {
-		return int(n), nil
-	}
-	return 0, nil
+	return decodeAs[int](result)
 }
 
 func (d *Dict[K, V]) Get(key K) (V, error) {
@@ -660,6 +685,7 @@ func (d *Dict[K, V]) Clear() error {
 
 func StringPtr(s string) *string    { return &s }
 func IntPtr(i int) *int             { return &i }
+func Int64Ptr(i int64) *int64       { return &i }
 func BoolPtr(b bool) *bool          { return &b }
 func Float64Ptr(f float64) *float64 { return &f }
 
@@ -682,6 +708,8 @@ func serializeValue(value any) any {
 	}
 
 	switch v := value.(type) {
+	case json.Number:
+		return v
 	case *handle:
 		return v.ToJSON()
 	case *ReferenceExpression:
@@ -732,6 +760,11 @@ func isNil(value any) bool {
 	default:
 		return false
 	}
+}
+
+func isValidJSONNumber(value json.Number) bool {
+	_, err := json.Marshal(value)
+	return err == nil
 }
 
 func serializeReflectedCollection(value any) (any, bool) {

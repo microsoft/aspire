@@ -12,9 +12,9 @@ func main() {
 		log.Fatal(aspire.FormatError(err))
 	}
 
-	api := builder.AddProject("api", "./src/Api")
+	api := builder.AddDotnetProject("api", "./src/Api")
 	dotnetAPI := builder.AddDotnetProject("dotnet-api", "./src/Api/Api.csproj")
-	apiMigrations := builder.AddProject("api-migrations-project", "./src/Api.Migrations")
+	apiMigrations := builder.AddDotnetProject("api-migrations-project", "./src/Api.Migrations")
 
 	dotnetAPI.AddEFMigrations("dotnet-api-migrations")
 	api.AddEFMigrations("api-migrations").

@@ -33,7 +33,7 @@ public class ResourceOverviewTypeDisplayNameTests : DashboardTestContext
         Assert.Equal("PostgreSQL Server", values["Type"].TextContent.Trim());
 
         var graph = cut.FindComponent<ResourceRelationshipGraph>().Instance;
-        Assert.Equal(new RelationshipGraphNode("postgres", "PostgreSQL Server", Url: null), graph.Resource);
+        Assert.Equal(new RelationshipGraphNode("postgres", "PostgreSQL Server", Url: null, IsReplica: false), graph.Resource);
 
         Assert.Contains(KnownResourceTypes.Container, cut.Find(".overview-property-grid").TextContent, StringComparison.Ordinal);
     }

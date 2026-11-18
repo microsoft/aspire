@@ -2445,7 +2445,7 @@ async function closeBrowserPageThroughCdp(proxy: BrowserCdpProxy, timeoutMs: num
         // Events and replies for other request IDs are not acknowledgements of our close.
         const response = JSON.parse(data.toString()) as { id?: number; error?: unknown };
         if (response?.id === 1) {
-          finish(response.error === undefined
+          finish(response.error === undefined || isCdpProxyTargetClosedError(response.error)
             ? undefined
             : new Error(`Browser CDP Page.close failed: ${JSON.stringify(response.error)}`));
         }
@@ -2474,6 +2474,16 @@ async function closeBrowserPageThroughCdp(proxy: BrowserCdpProxy, timeoutMs: num
     socket.on('error', onError);
     socket.on('close', onClose);
   });
+}
+
+// Page.close can also destroy its target before the browser replies while the proxy socket stays
+// open. js-debug then rejects the pending request with this error instead of closing the socket.
+// Like a close after Page.close, it only ends the transport operation; the caller still requires
+// root, page, and Mono termination.
+// https://github.com/microsoft/vscode-js-debug/blob/v1.117.0/src/cdp/connection.ts#L385-L388
+function isCdpProxyTargetClosedError(error: unknown): boolean {
+  const { code, message } = (error ?? {}) as { code?: unknown; message?: unknown };
+  return code === 0 && message === 'Connection is closed';
 }
 
 function findSuccessfulBreakpointResponse(

@@ -32,9 +32,24 @@
         <target state="new">Requests per 30 seconds over the last 15 minutes</target>
         <note />
       </trans-unit>
+      <trans-unit id="HomeActivityHistoricalCaption">
+        <source>Incoming requests · last 15 min of this run</source>
+        <target state="new">Incoming requests · last 15 min of this run</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HomeActivityHistoricalTitle">
+        <source>Activity</source>
+        <target state="new">Activity</target>
+        <note />
+      </trans-unit>
       <trans-unit id="HomeActivityLoading">
         <source>Loading activity…</source>
         <target state="new">Loading activity…</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HomeActivityNoRecordedRequests">
+        <source>No requests were recorded in this run.</source>
+        <target state="new">No requests were recorded in this run.</target>
         <note />
       </trans-unit>
       <trans-unit id="HomeActivityWaiting">
@@ -417,6 +432,11 @@
         <target state="translated">Ver registros de consola</target>
         <note />
       </trans-unit>
+      <trans-unit id="ResourceDisplayOrder">
+        <source>Display order</source>
+        <target state="new">Display order</target>
+        <note>Name of the property holding the default display order a resource declares in the AppHost.</note>
+      </trans-unit>
       <trans-unit id="ResourceExpandAllChildren">
         <source>Expand child resources</source>
         <target state="translated">Expandir recursos secundarios</target>
@@ -761,11 +781,6 @@
         <source>Tags</source>
         <target state="new">Tags</target>
         <note />
-      </trans-unit>
-      <trans-unit id="ResourceTraitDashboardPosition">
-        <source>Dashboard position</source>
-        <target state="new">Dashboard position</target>
-        <note>Name of the property holding the default position a resource declares in the AppHost.</note>
       </trans-unit>
       <trans-unit id="ResourceTraitDashboardTags">
         <source>Dashboard tags</source>

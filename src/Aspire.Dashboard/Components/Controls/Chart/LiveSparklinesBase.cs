@@ -330,6 +330,14 @@ public abstract class LiveSparklinesBase : ComponentBase, IAsyncDisposable
             var increases = calculator.CalculateCounterIncreaseValues(data.Dimensions, endTimeOffset, instrument.AggregationTemporality)
                 .Where((_, i) => chartData.XValues[i] <= endTimeOffset)
                 .ToList();
+
+            // A delta counter has no running total to show. Its latest change is what the last bar shows, while the
+            // chart value is only the largest export in that interval.
+            if (instrument.AggregationTemporality == OtlpAggregationTemporality.Delta)
+            {
+                latestValue = increases.LastOrDefault(v => v is not null);
+            }
+
             return new SparklineData(latestValue, SparklineKind.Bars, SparklinePath.BuildBars(increases, SparklineWidth, SparklineHeight), string.Empty);
         }
 

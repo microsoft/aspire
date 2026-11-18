@@ -7,6 +7,10 @@ namespace Aspire.Cli.Git;
 
 internal sealed class GitClient(IGitCommandRunner commands) : IGitClient
 {
+    // Allow time for browser sign-in, MFA, and other credential-helper interaction.
+    // Git exposes no portable auth-in-progress signal, so this bounds the whole operation.
+    public static readonly TimeSpan OperationTimeout = TimeSpan.FromMinutes(5);
+
     public IGitClient WithStandardErrorHandler(Action<string> standardErrorHandler) =>
         new GitClient(commands.WithStandardErrorHandler(standardErrorHandler));
 

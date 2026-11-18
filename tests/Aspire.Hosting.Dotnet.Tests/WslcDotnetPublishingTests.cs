@@ -159,8 +159,10 @@ public class WslcDotnetPublishingTests(ITestOutputHelper output)
         }
         if (platform == ContainerTargetPlatform.AllLinux)
         {
-            expectedArguments.Add(MsBuildResponseFileFactory.CreatePropertyArgument("RuntimeIdentifiers", "linux-x64;linux-arm64"));
-            expectedArguments.Add(MsBuildResponseFileFactory.CreatePropertyArgument("ContainerRuntimeIdentifiers", "linux-x64;linux-arm64"));
+            expectedArguments.Add(MsBuildResponseFileFactory.CreatePropertyArgument("RuntimeIdentifier", string.Empty));
+            expectedArguments.Add(MsBuildResponseFileFactory.CreatePropertyArgument("ContainerRuntimeIdentifier", string.Empty));
+            expectedArguments.Add(MsBuildResponseFileFactory.CreateListPropertyArgument("RuntimeIdentifiers", ["linux-x64", "linux-arm64"]));
+            expectedArguments.Add(MsBuildResponseFileFactory.CreateListPropertyArgument("ContainerRuntimeIdentifiers", ["linux-x64", "linux-arm64"]));
         }
         else
         {

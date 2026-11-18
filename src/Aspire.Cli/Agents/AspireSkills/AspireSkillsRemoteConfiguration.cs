@@ -24,14 +24,16 @@ internal static class AspireSkillsRemoteConfiguration
         var enabled = new HashSet<string>(StringComparer.Ordinal);
         foreach (var path in settings)
         {
-            if (AgentConfiguration.ReadObject(path) is { } config &&
-                OptionalObject(config, "enabledPlugins") is { } plugins)
+            // A JSON null registers nothing, so it reads like a missing key. Other wrong types still throw
+            // InvalidOperationException from AsObject or GetValue.
+            if (AgentConfiguration.ReadObject(path)?["enabledPlugins"] is { } pluginsNode)
             {
+                var plugins = pluginsNode.AsObject();
                 foreach (var pluginName in pluginNames)
                 {
-                    if (Boolean(plugins, pluginName) is { } value)
+                    if (plugins[pluginName] is { } valueNode)
                     {
-                        if (value)
+                        if (valueNode.GetValue<bool>())
                         {
                             enabled.Add(pluginName);
                         }

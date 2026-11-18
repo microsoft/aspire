@@ -154,7 +154,7 @@ internal sealed class ConfigSourceTestContext
         await _auto.EnterAsync();
         if (!useOption)
         {
-            var consentPrompt = new CellPatternSearcher().Find("Use configuration from this source? [Y/n]:");
+            var consentPrompt = new CellPatternSearcher().Find("Create app using configuration from this source? [Y/n]:");
             await _auto.WaitUntilAsync(snapshot => consentPrompt.Search(snapshot).Count > 0,
                 timeout: TimeSpan.FromMinutes(2), description: "waiting for configuration source consent");
             // Confirmation consumes a single key; an extra Enter could reach the next prompt.
@@ -195,12 +195,13 @@ internal sealed class ConfigSourceTestContext
 
     public async Task AssertNonInteractiveConsentRequiredAsync()
     {
+        // Wrapped error text can contain ANSI style resets between words.
         await _auto.RunCommandAsync(
-            $"{NewCommand} --non-interactive > \"$ASPIRE_E2E_WORKSPACE/consent.log\" 2>&1; " +
+            $"env -u ASPIRE_ANSI_PASS_THRU NO_COLOR=1 {NewCommand} --non-interactive > \"$ASPIRE_E2E_WORKSPACE/consent.log\" 2>&1; " +
             $"result=$?; cat \"$ASPIRE_E2E_WORKSPACE/consent.log\"; test \"$result\" -eq {CliExitCodes.InvalidCommand}",
             _counter, timeout: TimeSpan.FromMinutes(3));
         var consentOutput = await File.ReadAllTextAsync(Path.Combine(_root, "consent.log"), _cancellationToken);
-        Assert.Contains("Specify --use-config-source to accept it or --use-config-source false",
+        Assert.Contains("Specify --use-config-source to use it, or --use-config-source false",
             Regex.Replace(consentOutput, @"\s+", " "));
         Assert.False(Directory.Exists(Path.Combine(_root, "SourceApp")));
         await AssertSourceNotAcquiredAsync();
@@ -209,7 +210,7 @@ internal sealed class ConfigSourceTestContext
     public async Task CreateProjectWithGitAuthenticationAsync()
     {
         await ConfigureGitAuthenticationAsync();
-        await _auto.TypeAsync($"{NewCommand} --use-config-source");
+        await _auto.TypeAsync($"{NewCommand} --use-config-source --log-file \"$ASPIRE_E2E_WORKSPACE/git-auth-cli.log\"");
         await _auto.EnterAsync();
         var authenticationPrompt = new CellPatternSearcher().Find("Configuration source Git authentication code:");
         await _auto.WaitUntilAsync(snapshot => authenticationPrompt.Search(snapshot).Count > 0,
@@ -222,6 +223,16 @@ internal sealed class ConfigSourceTestContext
         await _auto.WaitForSuccessPromptAsync(_counter, timeout: TimeSpan.FromMinutes(3));
         Assert.Equal("accepted", await File.ReadAllTextAsync(Path.Combine(_root, "git-authenticated.txt"), _cancellationToken));
         await ConfigureProjectAsync();
+    }
+
+    public async Task AssertGitOutputLoggedAsync()
+    {
+        // Export the owner-only CLI log through the container before reading it on the host.
+        await _auto.RunCommandAsync(
+            "cat \"$ASPIRE_E2E_WORKSPACE/git-auth-cli.log\" > \"$ASPIRE_E2E_WORKSPACE/actual-git-auth-cli.log\"", _counter);
+        var log = await File.ReadAllTextAsync(Path.Combine(_root, "actual-git-auth-cli.log"), _cancellationToken);
+        Assert.Contains("[DBUG] [GitCommandRunner] Git stdout: ", log);
+        Assert.Contains("[DBUG] [GitCommandRunner] Git stderr: ", log);
     }
 
     public async Task<JsonObject> AssertSourceAppliedAsync(string version)
@@ -342,10 +353,10 @@ internal sealed class ConfigSourceTestContext
 
     public async Task UpdateProjectWithSourceConsentAsync()
     {
-        await _auto.TypeAsync("aspire update --yes");
+        await _auto.TypeAsync("aspire update --yes --nuget-config-dir .");
         await _auto.EnterAsync();
         var candidate = new CellPatternSearcher().Find("Git source:");
-        var consentPrompt = new CellPatternSearcher().Find("Use configuration from this source? [Y/n]:");
+        var consentPrompt = new CellPatternSearcher().Find("Update app to use configuration from this source? [Y/n]:");
         await _auto.WaitUntilAsync(snapshot => candidate.Search(snapshot).Count > 0 && consentPrompt.Search(snapshot).Count > 0,
             timeout: TimeSpan.FromMinutes(2), description: "waiting for brownfield configuration source consent");
         await _auto.TypeAsync("y");
@@ -358,7 +369,11 @@ internal sealed class ConfigSourceTestContext
         original["skillSources"] = actual["skillSources"]!.DeepClone();
         original["integrationSources"] = actual["integrationSources"]!.DeepClone();
         original["configSource"] = actual["configSource"]!.DeepClone();
-        Assert.Equal(original.ToJsonString(), actual.ToJsonString());
+        // Plain update also synchronizes SDK metadata with the AppHost's selected package version.
+        var appHost = await File.ReadAllTextAsync(Path.Combine(_root, "SourceApp", "apphost.cs"), _cancellationToken);
+        original["sdk"] ??= new JsonObject();
+        original["sdk"]!["version"] = CliE2ETestHelpers.GetAppHostVersion(appHost);
+        Assert.True(JsonNode.DeepEquals(original, actual), $"Unexpected configuration after source adoption: {actual}");
     }
 
     public async Task AssertConfigurationUpdatedAsync(JsonObject original)

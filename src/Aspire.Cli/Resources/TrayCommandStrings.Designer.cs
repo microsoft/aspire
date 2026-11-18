@@ -61,7 +61,7 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to The experimental Aspire tray requires a leased, versioned CLI bundle. No usable bundle was found. Install an Aspire bundle that includes the tray companion for your desktop..
+        ///   Looks up a localized string similar to The Aspire tray requires a leased, versioned CLI bundle. No usable bundle was found. Install an Aspire bundle that includes the tray companion for your desktop..
         /// </summary>
         internal static string BundleRequired {
             get {
@@ -70,7 +70,7 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Manage the desktop tray companion (Experimental).
+        ///   Looks up a localized string similar to Manage the desktop tray companion (Preview).
         /// </summary>
         internal static string Description {
             get {
@@ -97,7 +97,7 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Starting the experimental tray requires an installed native Aspire CLI executable. Managed development builds and &apos;dotnet aspire.dll&apos; are not supported..
+        ///   Looks up a localized string similar to Starting the tray requires an installed native Aspire CLI executable. Managed development builds and &apos;dotnet aspire.dll&apos; are not supported..
         /// </summary>
         internal static string NativeCliRequired {
             get {
@@ -133,7 +133,7 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Start or restore the tray icon (Experimental).
+        ///   Looks up a localized string similar to Start or restore the tray icon (Preview).
         /// </summary>
         internal static string StartDescription {
             get {
@@ -151,7 +151,7 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Stop the tray without stopping AppHosts (Experimental).
+        ///   Looks up a localized string similar to Stop the tray without stopping AppHosts (Preview).
         /// </summary>
         internal static string StopDescription {
             get {
@@ -169,7 +169,7 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to The experimental Aspire tray supports Windows, macOS, and glibc Linux x64/ARM64 installations. Linux requires a graphical desktop with StatusNotifierItem support, GTK 3, and an AppIndicator library..
+        ///   Looks up a localized string similar to The Aspire tray supports Windows, macOS, and glibc Linux x64/ARM64 installations. Linux requires a graphical desktop with StatusNotifierItem support, GTK 3, and an AppIndicator library..
         /// </summary>
         internal static string UnsupportedPlatform {
             get {

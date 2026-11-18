@@ -1,6 +1,6 @@
 # Aspire Tray
 
-An experimental **C# NativeAOT** companion for the Aspire CLI, bundled on macOS, Windows, and glibc Linux.
+A preview **C# NativeAOT** companion for the Aspire CLI, bundled on macOS, Windows, and glibc Linux.
 It uses a native AppKit status item on macOS and a Win32 notification icon on Windows
 through small platform interop layers. Activating the icon opens a shared flyout panel
 on macOS, Windows, and compatible Linux desktops. Linux uses GTK 3, Cairo and
