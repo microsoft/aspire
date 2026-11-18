@@ -1,0 +1,54 @@
+{
+  "run_id": 44372012012,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/44372012012",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-18T19:27:03Z",
+  "verdict": "transient-infra",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 22208,
+    "title": "Redact restore diagnostics and clarify update validation failures",
+    "author": "danegsta",
+    "state": "closed",
+    "head_branch": "danegsta-update-restore-diagnostics",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/22208",
+    "merged_at": "2026-11-18T18:38:59Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "d6892bf7a98b3c988e4d7bdd5539625686c0b05a",
+    "failed_sha": "79127e0afa9cb87a5ba21abf5531441a33486a39",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "79127e0afa9cb87a5ba21abf5531441a33486a39",
+        "message": "Redact restore diagnostics and clarify update validation failures (#22208) ## Description `aspire update` now captures native restore diagnostics following #22355, but those diagnostics can contain credential-bearing feed URLs that are persisted in the CLI log. This follow-up applies the existing NuGet redactor before stdout or stderr is buffered or logged, while preserving useful diagnostics for troubleshooting validation failures. The redactor uses known sources from candidate and referenced-p",
+        "html_url": "https://github.com/microsoft/aspire/commit/79127e0afa9cb87a5ba21abf5531441a33486a39",
+        "pull_request": {
+          "number": 22208,
+          "title": "Redact restore diagnostics and clarify update validation failures",
+          "url": "https://github.com/microsoft/aspire/pull/22208",
+          "merged_at": "2026-11-18T18:38:59Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Build native CLI archive (macOS x64) / Build CLI (osx-x64)",
+      "id": 135041109758,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/44372012012/job/135041109758",
+      "classification": "transient-infra",
+      "reason": "Set up job failed: runner could not parse downloaded actions/setup-node action.yml (corrupt manifest); no tests ran.",
+      "failed_steps": [
+        "Set up job"
+      ]
+    }
+  ],
+  "failed_tests": [],
+  "causes": [
+    "macos-checkout-action-manifest-corrupt"
+  ]
+}

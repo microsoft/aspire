@@ -17,6 +17,13 @@
       "job": "Tests / Templates-XUnit_Default_NewUpAndBuildSupportProjectTemplatesTests / Templates-XUnit_Default_NewUpAndBuildSupportProjectTemplatesTests (macos-latest)",
       "pr_number": 19719,
       "observed_at": "2026-08-31T20:00:00Z"
+    },
+    {
+      "run_id": 44372012012,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/44372012012",
+      "job": "Tests / Build native CLI archive (macOS x64) / Build CLI (osx-x64)",
+      "observed_at": "2026-11-18T19:27:03Z",
+      "pr_number": 0
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/19737"
