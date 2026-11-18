@@ -490,6 +490,8 @@ namespace Projects%3B
   </Target>
 
   <PropertyGroup>
+    <!-- MTP test executables must keep their native entry point instead of delegating to the Aspire CLI. -->
+    <_AspireCliRunHookSuppressed Condition="'$(IsTestingPlatformApplication)' == 'true'">true</_AspireCliRunHookSuppressed>
     <_AspireCliRunHookSuppressed Condition="'$(_AspireSuppressCliRunHook)' == 'true' or '$(_AspireSuppressCliRunHook)' == '1'">true</_AspireCliRunHookSuppressed>
     <_AspireCliRunHookSuppressed Condition="'$(ASPIRE_SUPPRESS_CLI_RUN_HOOK)' == 'true' or '$(ASPIRE_SUPPRESS_CLI_RUN_HOOK)' == '1'">true</_AspireCliRunHookSuppressed>
     <_AspireMinimumCliVersion>13.5.0</_AspireMinimumCliVersion>
