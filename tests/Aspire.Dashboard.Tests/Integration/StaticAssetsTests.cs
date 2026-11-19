@@ -52,8 +52,12 @@ public partial class StaticAssetsTests(ITestOutputHelper testOutputHelper)
 
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
             Assert.NotNull(response.Headers.ETag);
-            Assert.Equal(TimeSpan.FromDays(365), response.Headers.CacheControl?.MaxAge);
-            Assert.Contains("immutable", response.Headers.CacheControl?.Extensions.Select(e => e.Name) ?? []);
+            var cacheControl = response.Headers.CacheControl;
+            Assert.NotNull(cacheControl);
+            Assert.False(cacheControl.NoCache);
+            Assert.False(cacheControl.NoStore);
+            Assert.Equal(TimeSpan.FromDays(365), cacheControl.MaxAge);
+            Assert.Contains("immutable", cacheControl.Extensions.Select(e => e.Name));
             Assert.Contains("gzip", response.Content.Headers.ContentEncoding);
             Assert.Equal("nosniff", Assert.Single(response.Headers.GetValues("X-Content-Type-Options")));
         }
