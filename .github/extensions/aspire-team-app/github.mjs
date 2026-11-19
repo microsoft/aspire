@@ -232,7 +232,7 @@ function getPullRequestLabelErrors(errors, nodes) {
       throw new Error(errors.map((item) => item?.message ?? "Unknown GraphQL error").join("; "));
     }
     const message = error.message ?? "Unknown GraphQL error";
-    errorsByNode.set(index, [...(errorsByNode.get(index) ?? []), message].join("; "));
+    errorsByNode.set(index, mergeErrors(errorsByNode.get(index), message));
   }
   return errorsByNode;
 }
@@ -993,7 +993,13 @@ export async function loadDashboard({ accounts, mode, release, prefs, dismissed,
         (pr.isMine && (isChecksFailing(pr) || pr.review.state === "changes_requested" ||
           pr.review.state === "approved" || pr.review.unresolvedThreadCount > 0 ||
           shouldHideFromSharedPullRequestLists(pr))));
-      const buckets = createAttentionBuckets(attentionPrs, login);
+      // Draft ownership does not depend on complete labels. Retain owned drafts only in
+      // draft buckets, never in shared label-dependent buckets such as Regression.
+      const buckets = createAttentionBuckets(allPrs, login).map((bucket) => ({
+        ...bucket,
+        items: bucket.items.filter(({ pullRequest: pr }) => !pr.labelsUnavailable ||
+          (pr.isMine && pr.draft && (bucket.label === "Draft" || bucket.label === "My draft PRs"))),
+      })).filter((bucket) => bucket.items.length > 0);
       const focusAll = computeFocusItems(buckets);
       const focusExclusions = computeFocusExclusionItems(focusExclusionPrs, buckets, focusAll, login);
       // Every review-mode card carries a reviewDebt flag (aged past the focus limit without an

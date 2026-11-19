@@ -176,6 +176,48 @@ test("incomplete labels do not hide verified author actions outside Needs attent
   ]);
 });
 
+test("owned drafts with incomplete labels remain in draft buckets without leaking into shared review work", async () => {
+  for (const showDrafts of [true, false]) {
+    const updatedAt = isoAgo(hourMs);
+    const nodes = [1, 2, 3].map((number) => prNode(number, updatedAt));
+    nodes[0].isDraft = true;
+    nodes[1].isDraft = true;
+    nodes[1].author.login = "joperezr";
+    nodes[2].author.login = "joperezr";
+    nodes[2].reviewRequests.nodes = [{ requestedReviewer: { __typename: "User", login: "davidfowl" } }];
+    for (const node of nodes) {
+      node.labels = transitionHistory([{ name: "regression" }], true, "labels-15");
+    }
+    globalThis.fetch = async (_url, options) => {
+      const { query } = JSON.parse(options.body);
+      if (query.includes("pullRequests")) {
+        return jsonResponse({ data: { repository: { pullRequests: transitionHistory(nodes) } } });
+      }
+      throw new Error("Label page unavailable");
+    };
+
+    const dashboard = await loadDashboard({
+      accounts: [{ token: "token", login: "davidfowl", repos: ["microsoft/aspire"] }],
+      mode: "review", prefs: {}, dismissed: [], showDrafts,
+    });
+
+    assert.deepEqual(dashboard.attention.buckets.map((bucket) => [
+      bucket.label,
+      bucket.items.map((item) => [item.pr.number, item.reason]),
+    ]), [["Draft", [[1, "Draft"]]], ["My draft PRs", [[1, "Draft"]]]], `showDrafts=${showDrafts}`);
+    assert.deepEqual(dashboard.attention.focus, []);
+    assert.deepEqual(dashboard.attention.focusRemainder, []);
+    assert.deepEqual(dashboard.attention.forMe, []);
+    assert.deepEqual(dashboard.attention.community, []);
+    assert.deepEqual(dashboard.lanes.map((lane) => [
+      lane.id,
+      lane.items.map((item) => item.pr.number),
+    ]), showDrafts ? [["your-prs", [1]]] : []);
+    assert.deepEqual(dashboard.errors, nodes.map((node) =>
+      `microsoft/aspire#${node.number}: labels unavailable; excluded from Needs attention. Label page unavailable`));
+  }
+});
+
 test("incomplete labels do not turn an explicit review request into a recommendation", async () => {
   const node = prNode(1, isoAgo(hourMs));
   node.author.login = "joperezr";
@@ -320,6 +362,29 @@ test("an error-only PR-list GraphQL response preserves GitHub's error message", 
   assert.deepEqual(seenPages, [null]);
   assert.deepEqual(dashboard.errors, ["microsoft/aspire: API rate limit exceeded"]);
   assert.deepEqual(dashboard.attention.focus, []);
+});
+
+test("multiple initial PR label GraphQL field errors retain whole messages for each PR", async () => {
+  const updatedAt = isoAgo(hourMs);
+  const nodes = [1, 2, 3].map((number) => prNode(number, updatedAt));
+  nodes[0].labels = null;
+  nodes[1].labels = null;
+  globalThis.fetch = async () => jsonResponse({
+    data: { repository: { pullRequests: transitionHistory(nodes) } },
+    errors: [
+      { message: "Label names unavailable", path: ["repository", "pullRequests", "nodes", 0, "labels", "nodes"] },
+      { message: "Label cursors unavailable", path: ["repository", "pullRequests", "nodes", 0, "labels", "pageInfo"] },
+      { message: "Other PR labels unavailable", path: ["repository", "pullRequests", "nodes", 1, "labels"] },
+    ],
+  });
+
+  const dashboard = await loadReview();
+
+  assert.deepEqual(dashboard.errors, [
+    "microsoft/aspire#1: labels unavailable; excluded from Needs attention. Label names unavailable; Label cursors unavailable",
+    "microsoft/aspire#2: labels unavailable; excluded from Needs attention. Other PR labels unavailable",
+  ]);
+  assert.deepEqual(dashboard.attention.focus.map((item) => item.pr.number), [3]);
 });
 
 test("Your PRs outside Needs attention retains an author response with incomplete labels", async () => {
