@@ -157,7 +157,7 @@ public class TracesTests : DashboardTestContext
         Services.GetRequiredService<DimensionManager>().InvokeOnViewportInformationChanged(viewport);
         var cut = Render<Traces>(builder => builder.AddCascadingValue(viewport));
         var grid = cut.FindComponent<AspireFluentDataGrid<TraceSummary>>();
-        await grid.InvokeAsync(grid.Instance.RefreshDataAndRenderAsync);
+        await grid.InvokeAsync(() => grid.Instance.RefreshDataAsync(force: true));
 
         cut.WaitForAssertion(() => Assert.All(cut.FindAll(".trace-service-tag"), element => Assert.Contains("(1)", element.TextContent, StringComparison.Ordinal)));
 
@@ -183,7 +183,7 @@ public class TracesTests : DashboardTestContext
                 }
             }
         });
-        await grid.InvokeAsync(grid.Instance.RefreshDataAndRenderAsync);
+        await grid.InvokeAsync(() => grid.Instance.RefreshDataAsync(force: true));
 
         var refreshedResult = await cut.InvokeAsync(() => grid.Instance.ItemsProvider!(new GridItemsProviderRequest<TraceSummary>
         {
@@ -236,7 +236,7 @@ public class TracesTests : DashboardTestContext
         Services.GetRequiredService<DimensionManager>().InvokeOnViewportInformationChanged(viewport);
         var cut = Render<Traces>(builder => builder.AddCascadingValue(viewport));
         var grid = cut.FindComponent<AspireFluentDataGrid<TraceSummary>>();
-        await grid.InvokeAsync(grid.Instance.RefreshDataAndRenderAsync);
+        await grid.InvokeAsync(() => grid.Instance.RefreshDataAsync(force: true));
         var result = await cut.InvokeAsync(() => grid.Instance.ItemsProvider!(new GridItemsProviderRequest<TraceSummary>
         {
             StartIndex = 0,
@@ -312,7 +312,7 @@ public class TracesTests : DashboardTestContext
         var cut = FluentUISetupHelpers.RenderMessageBarProviderWithPage<Traces>(this, viewport);
 
         var grid = cut.FindComponent<AspireFluentDataGrid<TraceSummary>>();
-        await grid.InvokeAsync(grid.Instance.RefreshDataAndRenderAsync);
+        await grid.InvokeAsync(() => grid.Instance.RefreshDataAsync(force: true));
         cut.WaitForAssertion(() => Assert.Equal(expectedMessageCount, cut.FindComponents<DashboardMessageBar>().Count));
     }
 

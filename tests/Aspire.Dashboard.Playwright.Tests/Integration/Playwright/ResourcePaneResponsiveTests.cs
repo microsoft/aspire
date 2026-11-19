@@ -601,21 +601,24 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
             await page.EmulateMediaAsync(new() { ReducedMotion = reducedMotion ? ReducedMotion.Reduce : ReducedMotion.NoPreference });
             await page.GotoAsync("/resources/cache?pane=tags");
             var tracesTab = page.GetByRole(AriaRole.Tab, new() { Name = "Traces", Exact = true });
-            if (reducedMotion)
+            await ClickResourceTabAndWaitForRenderAsync(page, async () =>
             {
-                await tracesTab.FocusAsync();
-                await tracesTab.PressAsync("Enter");
-            }
-            else
-            {
-                await tracesTab.ClickAsync();
-            }
+                if (reducedMotion)
+                {
+                    await tracesTab.FocusAsync();
+                    await tracesTab.PressAsync("Enter");
+                }
+                else
+                {
+                    await tracesTab.ClickAsync();
+                }
+            });
             await Assertions.Expect(page.Locator("#tracesScrollContainer")).ToBeFocusedAsync();
             // The data tabs select resources from the sidebar; the full-page list lives on the Overview tab.
             foreach (var name in new[] { "api", "frontend", "cache" })
             {
                 await page.Locator($".resource-pane .resource-row[data-resource-name='{name}'] .resource-row-link").First.ClickAsync();
-                await page.WaitForURLAsync($"**/traces/resource/{name}");
+                await Assertions.Expect(page).ToHaveURLAsync(new Regex($"/traces/resource/{name}$"));
                 await Assertions.Expect(page.Locator(".pane-full-canvas,.pane-selection-reveal")).ToHaveCountAsync(0);
                 var separator = page.Locator(".resource-pane-resizer");
                 await Assertions.Expect(separator).ToHaveAttributeAsync("aria-disabled", "false");
@@ -646,9 +649,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
             await page.SetViewportSizeAsync(width, height);
             await page.EmulateMediaAsync(new() { ReducedMotion = ReducedMotion.Reduce });
             // The expanded list is the dashboard's home, so it's opened directly rather than by closing a resource's
-            // overview. The overview's data grids initialize in the browser after they render, and leaving the page in the
-            // middle of that makes FluentDataGrid use a disposed JS module and end the circuit. The data tabs have no close
-            // button for it.
+            // overview. The data tabs have no close button for it.
             await page.GotoAsync(fullCanvas ? "/" : "/resources/cache?pane=tags");
             // The feedback prompt is shown above the header once the page has read browser storage, after the first
             // render, and pushes the page down. Hovering before it arrives can leave the pointer over the brand,

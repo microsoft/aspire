@@ -1780,7 +1780,7 @@ public partial class MetricsTests : DashboardTestContext
         cut.WaitForAssertion(() => Assert.Single(import.Invocations));
 
         // The removal runs on the dispatcher: from another thread, DisposeComponentsAsync can find nothing to remove
-        // while the dispatcher is busy (see DisposalSafeFluentDataGridTests).
+        // while the dispatcher is busy (see FluentDataGridLifecycleTests).
         await Renderer.Dispatcher.InvokeAsync(DisposeComponentsAsync);
         import.SetResult(module);
         await Renderer.Dispatcher.InvokeAsync(() => { });
