@@ -822,7 +822,7 @@ internal sealed class AzureAppServiceWebsiteContext(
             return;
         }
 
-        foreach (var endpointName in requests.Select(r => r.EndpointName).Distinct(StringComparer.OrdinalIgnoreCase))
+        foreach (var endpointName in requests.Where(r => r.Url?.Resource == infra.AspireResource).Select(r => r.EndpointName).Distinct(StringComparer.OrdinalIgnoreCase))
         {
             if (!_endpointMapping.TryGetValue(endpointName, out var mapping))
             {

@@ -178,6 +178,109 @@ public class AzureWebPubSubExtensionsTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public async Task EventHandlerUsesAppServiceDeployedUrl()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.AddAzureAppServiceEnvironment("env");
+        var serviceA = builder.AddProject<ProjectA>("serviceA", o => o.ExcludeLaunchProfile = true)
+            .WithHttpsEndpoint()
+            .WithExternalHttpEndpoints();
+        var wps = builder.AddAzureWebPubSub("wps1");
+        var hub = wps.AddHub("abc").AddEventHandler($"{serviceA.GetEndpoint("https")}/callbacks/{{hub}}/{{event}}?source=webpubsub");
+        serviceA.WithReference(hub);
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var handlers = Assert.Single(model.Resources.OfType<AzureProvisioningResource>(), r => r.Name == "abc-handlers");
+        var website = (AzureProvisioningResource)serviceA.Resource.GetDeploymentTargetAnnotation()!.DeploymentTarget;
+        var (_, websiteBicep) = await AzureManifestUtils.GetManifestWithBicep(website, skipPreparer: true);
+        var (manifest, handlersBicep) = await AzureManifestUtils.GetManifestWithBicep(handlers, skipPreparer: true);
+
+        Assert.Equal("{serviceA-website.outputs.https_url}/callbacks/{hub}/{event}?source=webpubsub", manifest["params"]!["abc_url_0"]!.ToString());
+        Assert.Equal([website, wps.Resource], handlers.GetAzureReferences().OrderBy(r => r.Name, StringComparer.Ordinal));
+        await Verify(websiteBicep, "bicep").AppendContentAsFile(handlersBicep, "bicep");
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task EventHandlerCanDependOnFrontDoorOutput(bool explicitUrl, bool configureFrontDoorFirst)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.AddAzureContainerAppEnvironment("env");
+        var serviceA = builder.AddProject<ProjectA>("serviceA", o => o.ExcludeLaunchProfile = true)
+            .WithHttpsEndpoint()
+            .WithExternalHttpEndpoints();
+        var frontDoor = builder.AddAzureFrontDoor("frontdoor");
+        if (configureFrontDoorFirst)
+        {
+            frontDoor.WithOrigin(serviceA);
+        }
+
+        var wps = builder.AddAzureWebPubSub("wps1");
+        var url = explicitUrl
+            ? ReferenceExpression.Create($"{frontDoor.Resource.GetEndpointUrl(serviceA.Resource.Name)}/callbacks/{{event}}?source=wps")
+            : ReferenceExpression.Create($"{serviceA.GetEndpoint("https")}/callbacks/{{event}}?source=wps");
+        var hub = wps.AddHub("abc").AddEventHandler(url);
+        serviceA.WithReference(hub);
+        if (!configureFrontDoorFirst)
+        {
+            frontDoor.WithOrigin(serviceA);
+        }
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var handlers = Assert.Single(model.Resources.OfType<AzureProvisioningResource>(), r => r.Name == "abc-handlers");
+        var (manifest, _) = await AzureManifestUtils.GetManifestWithBicep(handlers, skipPreparer: true);
+        Assert.Equal("{frontdoor.outputs.serviceA_endpointUrl}/callbacks/{event}?source=wps", manifest["params"]!["abc_url_0"]!.ToString());
+        Assert.Equal([frontDoor.Resource, wps.Resource], handlers.GetAzureReferences().OrderBy(r => r.Name, StringComparer.Ordinal));
+
+        // Front Door must still use the backend address, not resolve its origin through itself.
+        Assert.All(frontDoor.Resource.GetAzureReferences(), reference => Assert.NotSame(frontDoor.Resource, reference));
+        var containerApp = (AzureProvisioningResource)serviceA.Resource.GetDeploymentTargetAnnotation()!.DeploymentTarget;
+        Assert.Equal([wps.Resource], containerApp.GetAzureReferences().Where(r => r == wps.Resource || r == handlers || r == frontDoor.Resource));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task MultipleIngressResourcesRequireExplicitCallbackUrl(bool explicitUrl)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.AddAzureContainerAppEnvironment("env");
+        var serviceA = builder.AddProject<ProjectA>("serviceA", o => o.ExcludeLaunchProfile = true)
+            .WithHttpsEndpoint()
+            .WithExternalHttpEndpoints();
+        var first = builder.AddAzureFrontDoor("first").WithOrigin(serviceA);
+        builder.AddAzureFrontDoor("second").WithOrigin(serviceA);
+        var wps = builder.AddAzureWebPubSub("wps1");
+        var url = explicitUrl
+            ? ReferenceExpression.Create($"{first.Resource.GetEndpointUrl(serviceA.Resource.Name)}/callbacks")
+            : ReferenceExpression.Create($"{serviceA.GetEndpoint("https")}/callbacks");
+        var hub = wps.AddHub("abc").AddEventHandler(url);
+        serviceA.WithReference(hub);
+
+        using var app = builder.Build();
+        if (!explicitUrl)
+        {
+            var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => ExecuteBeforeStartHooksAsync(app, default));
+            Assert.Contains("Configure the callback with an explicit URL", exception.ToString(), StringComparison.Ordinal);
+            return;
+        }
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var handlers = Assert.Single(model.Resources.OfType<AzureProvisioningResource>(), r => r.Name == "abc-handlers");
+        Assert.Equal([first.Resource, wps.Resource], handlers.GetAzureReferences().OrderBy(r => r.Name, StringComparer.Ordinal));
+    }
+
+    [Fact]
     public async Task ConfigureConstructOverridesAddEventHandler()
     {
         using var builder = TestDistributedApplicationBuilder.Create(output);

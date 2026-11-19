@@ -392,8 +392,7 @@ public static class AzureWebPubSubExtensions
     private static void EnsureEventHandlersResource(IResourceBuilder<AzureWebPubSubHubResource> builder, ReferenceExpression urlExpression)
     {
         var endpoints = new List<EndpointReference>();
-        CollectEndpointReferences(urlExpression, endpoints);
-        if (endpoints.Count == 0)
+        if (!CollectEndpointReferences(urlExpression, endpoints))
         {
             return;
         }
@@ -426,36 +425,44 @@ public static class AzureWebPubSubExtensions
         builder.ApplicationBuilder.AddResource(eventHandlersResource);
     }
 
-    private static void CollectEndpointReferences(ReferenceExpression expression, List<EndpointReference> endpoints)
+    private static bool CollectEndpointReferences(ReferenceExpression expression, List<EndpointReference> endpoints)
     {
         if (expression.IsConditional)
         {
-            CollectEndpointReferences(expression.WhenTrue!, endpoints);
-            CollectEndpointReferences(expression.WhenFalse!, endpoints);
-            return;
+            var whenTrue = CollectEndpointReferences(expression.WhenTrue!, endpoints);
+            var whenFalse = CollectEndpointReferences(expression.WhenFalse!, endpoints);
+            return whenTrue || whenFalse;
         }
 
+        var requiresDeployment = false;
         foreach (var valueProvider in expression.ValueProviders)
         {
             switch (valueProvider)
             {
                 case EndpointReference endpoint:
                     endpoints.Add(endpoint);
+                    requiresDeployment = true;
                     break;
                 case EndpointReferenceExpression endpointExpression:
                     endpoints.Add(endpointExpression.Endpoint);
+                    requiresDeployment = true;
+                    break;
+                case BicepOutputReference:
+                    requiresDeployment = true;
                     break;
                 case ReferenceExpression nested:
-                    CollectEndpointReferences(nested, endpoints);
+                    requiresDeployment |= CollectEndpointReferences(nested, endpoints);
                     break;
             }
         }
+
+        return requiresDeployment;
     }
 
     // In publish mode an endpoint reference to a compute resource is only resolved by its
     // compute environment's publisher, so evaluating it here would wait for a local endpoint
     // allocation that never happens and deployment would hang. Substitute the URL output by the
-    // app's Azure deployment target when it provides one, otherwise the address the compute
+    // endpoint's annotation when it provides one, otherwise the address the compute
     // environment predicts for the deployed resource (the same expression API Management uses for
     // compute backends).
     private static ReferenceExpression ResolveDeployedEndpoints(ReferenceExpression expression)
@@ -535,12 +542,15 @@ public static class AzureWebPubSubExtensions
 
         if (endpointProperty is not null)
         {
-            // Prefer the URL reported by the deployed app. Referencing it makes this module wait for
-            // the app's deployment.
-            if (endpointProperty.Property == EndpointProperty.Url &&
-                endpointProperty.Endpoint.Resource.GetDeploymentTargetAnnotation()?.DeploymentTarget is IAzureDeployedEndpointUrlProvider provider)
+            if (endpointProperty.Property == EndpointProperty.Url)
             {
-                return provider.GetDeployedEndpointUrl(endpointProperty.Endpoint);
+                var endpoint = endpointProperty.Endpoint;
+                var annotation = endpoint.Resource.Annotations.OfType<AzureDeployedEndpointUrlAnnotation>()
+                    .SingleOrDefault(a => string.Equals(a.EndpointName, endpoint.EndpointName, StringComparison.OrdinalIgnoreCase));
+                if (annotation?.Url is { } url)
+                {
+                    return url;
+                }
             }
 
             // Resources without a compute environment keep their original reference.

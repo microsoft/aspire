@@ -8,16 +8,21 @@ using Azure.Provisioning;
 namespace Aspire.Hosting.Azure;
 
 /// <summary>
-/// Requests that the Azure deployment target of a compute resource emit the URL of an endpoint as
-/// it is actually deployed (for example the ingress FQDN Azure assigns to a container app) as a
-/// Bicep output.
+/// Associates a compute resource's endpoint with the Bicep output containing its deployed URL.
 /// </summary>
 /// <remarks>
-/// Azure resources that need the deployed address of a compute resource, such as a Web PubSub hub
-/// whose event handlers call back into an app, add this annotation to the compute resource while the
-/// application model is being built. Deployment targets that implement
-/// <see cref="IAzureDeployedEndpointUrlProvider"/> then emit an output named
-/// <see cref="GetOutputName(string)"/> for each requested endpoint.
+/// Add this annotation to the compute resource before deployment targets are prepared.
+/// If <see cref="Url"/> is unset, the compute environment supplies its deployed endpoint output.
+/// An ingress resource can instead supply its own output. Consumers must read the annotation after
+/// deployment targets are prepared, but before discovering provisioning dependencies or generating Bicep.
+/// There must be only one annotation for each endpoint name.
+/// <code>
+/// var callbackUrl = new AzureDeployedEndpointUrlAnnotation("https")
+/// {
+///     Url = frontDoor.Resource.GetEndpointUrl(api.Resource.Name)
+/// };
+/// api.WithAnnotation(callbackUrl);
+/// </code>
 /// </remarks>
 [Experimental("ASPIREAZURE003", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public sealed class AzureDeployedEndpointUrlAnnotation : IResourceAnnotation
@@ -38,6 +43,17 @@ public sealed class AzureDeployedEndpointUrlAnnotation : IResourceAnnotation
     public string EndpointName { get; }
 
     /// <summary>
+    /// Gets or sets the output containing the deployed base URL, without a trailing slash.
+    /// </summary>
+    /// <remarks>
+    /// The output can belong to a different resource, such as Azure Front Door. Its owning resource
+    /// determines the consumer's provisioning dependency. Leave this unset to request the compute
+    /// environment's default output. Ingress resources must resolve their backend addresses separately
+    /// rather than using this public-facing URL.
+    /// </remarks>
+    public BicepOutputReference? Url { get; set; }
+
+    /// <summary>
     /// Gets the name of the Bicep output that contains the deployed URL of an endpoint.
     /// </summary>
     /// <param name="endpointName">The name of the endpoint.</param>
@@ -47,25 +63,4 @@ public sealed class AzureDeployedEndpointUrlAnnotation : IResourceAnnotation
         ArgumentException.ThrowIfNullOrEmpty(endpointName);
         return $"{Infrastructure.NormalizeBicepIdentifier(endpointName)}_url";
     }
-}
-
-/// <summary>
-/// Implemented by Azure deployment targets that can emit the deployed URL of a compute resource's
-/// endpoints as Bicep outputs.
-/// </summary>
-/// <remarks>
-/// Implementations emit an output named <see cref="AzureDeployedEndpointUrlAnnotation.GetOutputName(string)"/>
-/// for every endpoint requested through an <see cref="AzureDeployedEndpointUrlAnnotation"/> on the
-/// target compute resource. Consumers reference that output with a <see cref="BicepOutputReference"/>,
-/// which makes their provisioning wait until the compute resource has been deployed.
-/// </remarks>
-[Experimental("ASPIREAZURE003", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-public interface IAzureDeployedEndpointUrlProvider : IAzureResource
-{
-    /// <summary>
-    /// Gets a reference to the deployed URL of an endpoint.
-    /// </summary>
-    /// <param name="endpointReference">The endpoint, which must have been requested with an <see cref="AzureDeployedEndpointUrlAnnotation"/>.</param>
-    /// <returns>A reference to the Bicep output containing the deployed URL.</returns>
-    BicepOutputReference GetDeployedEndpointUrl(EndpointReference endpointReference);
 }

@@ -13,7 +13,7 @@ namespace Aspire.Hosting.Azure.AppContainers;
 /// <summary>
 /// Represents an Azure Container App resource.
 /// </summary>
-public class AzureContainerAppResource : AzureProvisioningResource, IAzureDeployedEndpointUrlProvider
+public class AzureContainerAppResource : AzureProvisioningResource
 {
     /// <inheritdoc/>
     public override string ResourceTypeDisplayName => "Azure Container App";
@@ -106,12 +106,4 @@ public class AzureContainerAppResource : AzureProvisioningResource, IAzureDeploy
     /// Gets the target resource that this Azure Container App is being created for.
     /// </summary>
     public IResource TargetResource { get; }
-
-    /// <inheritdoc/>
-    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE003", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    public BicepOutputReference GetDeployedEndpointUrl(EndpointReference endpointReference)
-    {
-        ArgumentNullException.ThrowIfNull(endpointReference);
-        return new BicepOutputReference(AzureDeployedEndpointUrlAnnotation.GetOutputName(endpointReference.EndpointName), this);
-    }
 }

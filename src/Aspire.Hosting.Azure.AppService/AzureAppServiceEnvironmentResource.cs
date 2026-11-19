@@ -268,6 +268,13 @@ public class AzureAppServiceEnvironmentResource :
 
             var website = await appServiceEnvironmentContext.CreateAppServiceAsync(resource, provisioningOptions.Value, cancellationToken).ConfigureAwait(false);
 
+#pragma warning disable ASPIREAZURE003 // Experimental deployed endpoint URL annotations.
+            foreach (var endpoint in resource.Annotations.OfType<AzureDeployedEndpointUrlAnnotation>())
+            {
+                endpoint.Url ??= new BicepOutputReference(AzureDeployedEndpointUrlAnnotation.GetOutputName(endpoint.EndpointName), website);
+            }
+#pragma warning restore ASPIREAZURE003
+
             resource.Annotations.Add(new DeploymentTargetAnnotation(website)
             {
                 ContainerRegistry = this,

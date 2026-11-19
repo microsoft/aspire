@@ -7,6 +7,7 @@
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
+using Aspire.Hosting.Pipelines;
 using Azure.Core;
 using Azure.Provisioning;
 using Azure.Provisioning.Cdn;
@@ -171,6 +172,42 @@ public static class AzureFrontDoorExtensions
         };
 
         var resource = new AzureFrontDoorResource(name, configureInfrastructure);
+
+        resource.Annotations.Add(new PipelineStepAnnotation(_ => new PipelineStep
+        {
+            Name = $"prepare-frontdoor-endpoint-urls-{name}",
+            Description = $"Resolves public endpoint URLs for Azure Front Door {name}.",
+            RequiredBySteps = [AzureEnvironmentResource.PrepareResourcesStepName],
+            Action = _ =>
+            {
+                // Resolve after model construction, but before Azure dependency discovery can cache
+                // a template using the direct compute URL. Origin resolution above remains separate.
+                foreach (var origin in resource.Annotations.OfType<AzureFrontDoorOriginAnnotation>())
+                {
+                    var endpoint = GetOriginEndpoint(origin.Resource);
+                    // Different Front Door profiles can prepare in parallel for the same app.
+                    lock (origin.Resource.Annotations)
+                    {
+                        var annotation = origin.Resource.Annotations.OfType<AzureDeployedEndpointUrlAnnotation>()
+                            .SingleOrDefault(a => string.Equals(a.EndpointName, endpoint.EndpointName, StringComparison.OrdinalIgnoreCase));
+                        if (annotation is null)
+                        {
+                            continue;
+                        }
+
+                        if (annotation.Url is { } existing && existing.Resource != resource)
+                        {
+                            throw new InvalidOperationException(
+                                $"Endpoint '{endpoint.EndpointName}' on resource '{origin.Resource.Name}' already has a deployed URL supplied by '{existing.Resource.Name}'. Configure the callback with an explicit URL instead of assigning multiple ingress resources to the same endpoint.");
+                        }
+
+                        annotation.Url = resource.GetEndpointUrl(origin.Resource.Name);
+                    }
+                }
+
+                return Task.CompletedTask;
+            }
+        }));
 
         return builder.ExecutionContext.IsPublishMode
             ? builder.AddResource(resource).WithIconName("GlobeArrowForward")

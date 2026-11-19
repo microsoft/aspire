@@ -13,7 +13,7 @@ namespace Aspire.Hosting.Azure;
 /// <summary>
 /// Represents an Azure App Service Web Site resource.
 /// </summary>
-public class AzureAppServiceWebSiteResource : AzureProvisioningResource, IAzureDeployedEndpointUrlProvider
+public class AzureAppServiceWebSiteResource : AzureProvisioningResource
 {
     /// <inheritdoc/>
     public override string ResourceTypeDisplayName => "Azure App Service";
@@ -128,14 +128,6 @@ public class AzureAppServiceWebSiteResource : AzureProvisioningResource, IAzureD
         slotHostName += $"-{deploymentSlot}";
 
         return TruncateToMaxLength(slotHostName, MaxHostPrefixLengthWithSlot);
-    }
-
-    /// <inheritdoc/>
-    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE003", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    public BicepOutputReference GetDeployedEndpointUrl(EndpointReference endpointReference)
-    {
-        ArgumentNullException.ThrowIfNull(endpointReference);
-        return new BicepOutputReference(AzureDeployedEndpointUrlAnnotation.GetOutputName(endpointReference.EndpointName), this);
     }
 
     private static string TruncateToMaxLength(string value, int maxLength)
