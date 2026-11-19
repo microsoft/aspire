@@ -6,6 +6,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Aspire.Cli.Caching;
 using Aspire.Cli.DotNet;
+using Semver;
 
 namespace Aspire.Cli.Projects;
 
@@ -220,22 +221,47 @@ internal sealed class AppHostInfoResolver(IDotNetCliRunner runner, IAppHostInfoD
 
         if (items is not null)
         {
+            aspireHostingVersion = GetConcretePackageVersionFromItems(items.PackageReference, "Aspire.Hosting")
+                ?? GetConcretePackageVersionFromItems(items.PackageReference, "Aspire.Hosting.AppHost");
+
+            aspireHostingVersion ??= GetConcretePackageVersionFromItems(items.AspireProjectOrPackageReference, "Aspire.Hosting")
+                ?? GetConcretePackageVersionFromItems(items.AspireProjectOrPackageReference, "Aspire.Hosting.AppHost");
+
+            aspireHostingVersion ??= GetConcretePackageVersionFromItems(items.PackageVersion, "Aspire.Hosting")
+                ?? GetConcretePackageVersionFromItems(items.PackageVersion, "Aspire.Hosting.AppHost");
+        }
+
+        if (aspireHostingVersion is null &&
+            SemVersion.TryParse(properties.AspireHostingSDKVersion, SemVersionStyles.Any, out _))
+        {
+            aspireHostingVersion = properties.AspireHostingSDKVersion;
+        }
+
+        // A package item's Version is commonly an unevaluated range such as "17.*", while
+        // AspireHostingSDKVersion comes from the imported package and is the resolved version.
+        // Prefer concrete versions above, but retain the declared range as a final fallback for
+        // unrestored projects where package imports are unavailable.
+        if (aspireHostingVersion is null && items is not null)
+        {
             aspireHostingVersion = GetPackageVersionFromItems(items.PackageReference, "Aspire.Hosting")
-                ?? GetPackageVersionFromItems(items.PackageReference, "Aspire.Hosting.AppHost");
-
-            aspireHostingVersion ??= GetPackageVersionFromItems(items.AspireProjectOrPackageReference, "Aspire.Hosting")
-                ?? GetPackageVersionFromItems(items.AspireProjectOrPackageReference, "Aspire.Hosting.AppHost");
-
-            aspireHostingVersion ??= GetPackageVersionFromItems(items.PackageVersion, "Aspire.Hosting")
+                ?? GetPackageVersionFromItems(items.PackageReference, "Aspire.Hosting.AppHost")
+                ?? GetPackageVersionFromItems(items.AspireProjectOrPackageReference, "Aspire.Hosting")
+                ?? GetPackageVersionFromItems(items.AspireProjectOrPackageReference, "Aspire.Hosting.AppHost")
+                ?? GetPackageVersionFromItems(items.PackageVersion, "Aspire.Hosting")
                 ?? GetPackageVersionFromItems(items.PackageVersion, "Aspire.Hosting.AppHost");
         }
 
-        aspireHostingVersion ??= properties.AspireHostingSDKVersion;
+        aspireHostingVersion ??= string.IsNullOrWhiteSpace(properties.AspireHostingSDKVersion)
+            ? null
+            : properties.AspireHostingSDKVersion;
 
         return new AppHostProjectInfo(ExitCode: exitCode, IsAspireHost: true, AspireHostingVersion: aspireHostingVersion, IsUsingCliBundle: isUsingCliBundle, UserSecretsId: userSecretsId, RunCommand: runCommand, TargetPath: targetPath, RunWorkingDirectory: runWorkingDirectory, RunArguments: runArguments, TargetFramework: targetFramework, TargetFrameworks: targetFrameworks);
     }
 
-    private static string? GetPackageVersionFromItems(IReadOnlyList<AppHostProjectInspectionItem>? items, string packageId)
+    private static string? GetConcretePackageVersionFromItems(IReadOnlyList<AppHostProjectInspectionItem>? items, string packageId)
+        => GetPackageVersionFromItems(items, packageId, requireConcreteVersion: true);
+
+    private static string? GetPackageVersionFromItems(IReadOnlyList<AppHostProjectInspectionItem>? items, string packageId, bool requireConcreteVersion = false)
     {
         if (items is null)
         {
@@ -244,7 +270,9 @@ internal sealed class AppHostInfoResolver(IDotNetCliRunner runner, IAppHostInfoD
 
         foreach (var item in items)
         {
-            if (string.Equals(item.Identity, packageId, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(item.Identity, packageId, StringComparison.OrdinalIgnoreCase) &&
+                !string.IsNullOrWhiteSpace(item.Version) &&
+                (!requireConcreteVersion || SemVersion.TryParse(item.Version, SemVersionStyles.Any, out _)))
             {
                 return item.Version;
             }

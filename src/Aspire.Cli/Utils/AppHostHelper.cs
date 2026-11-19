@@ -7,6 +7,7 @@ using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
+using NuGet.Versioning;
 using Semver;
 
 namespace Aspire.Cli.Utils;
@@ -50,7 +51,7 @@ internal static class AppHostHelper
             return (false, null);
         }
 
-        if (!SemVersion.TryParse(aspireHostingVersion, out var aspireVersion))
+        if (!TryParseAspireHostingVersion(aspireHostingVersion, out var aspireVersion))
         {
             interactionService.DisplayError(ErrorStrings.CouldNotParseAspireSDKVersion);
             return (false, null);
@@ -66,6 +67,30 @@ internal static class AppHostHelper
         // NOTE: When we go to support < 9.2.0 app hosts this is where we'll make
         //       a determination as to whether the apphost supports backchannel or not.
         return (true, aspireHostingVersion);
+    }
+
+    internal static bool TryParseAspireHostingVersion(string? aspireHostingVersion, out SemVersion version)
+    {
+        if (SemVersion.TryParse(aspireHostingVersion, SemVersionStyles.Any, out var exactVersion))
+        {
+            version = exactVersion;
+            return true;
+        }
+
+        // NuGet floating versions are version ranges rather than concrete semantic versions.
+        // Use the range's minimum to conservatively evaluate AppHost capability gates when the
+        // resolved package version is unavailable during project evaluation.
+        if (!string.IsNullOrWhiteSpace(aspireHostingVersion) &&
+            VersionRange.TryParse(aspireHostingVersion, out var range) &&
+            range.Float is { } floatingRange &&
+            SemVersion.TryParse(floatingRange.MinVersion.ToNormalizedString(), SemVersionStyles.Strict, out var minimumVersion))
+        {
+            version = minimumVersion;
+            return true;
+        }
+
+        version = default!;
+        return false;
     }
 
     internal static async Task<(int ExitCode, bool IsAspireHost, string? AspireHostingVersion)> GetAppHostInformationAsync(IDotNetCliRunner runner, IInteractionService interactionService, FileInfo projectFile, AspireCliTelemetry telemetry, DirectoryInfo workingDirectory, CancellationToken cancellationToken)

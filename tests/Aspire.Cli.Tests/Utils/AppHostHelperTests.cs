@@ -14,7 +14,11 @@ public class AppHostHelperTests
     [InlineData("9.2.0", true)]
     [InlineData("9.3.0", true)]
     [InlineData("13.0.0-preview.1", true)]
+    [InlineData("17.*", true)]
+    [InlineData("17.1.*", true)]
+    [InlineData("9.2.*", true)]
     [InlineData("9.1.0", false)]
+    [InlineData("9.1.*", false)]
     [InlineData("8.0.0", false)]
     [InlineData("1.0.0", false)]
     public async Task CheckAppHostCompatibility_VersionCheck(string aspireVersion, bool expectedCompatible)

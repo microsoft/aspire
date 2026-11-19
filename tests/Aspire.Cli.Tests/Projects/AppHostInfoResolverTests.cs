@@ -88,6 +88,61 @@ public sealed class AppHostInfoResolverTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task GetAppHostInfoAsync_PrefersResolvedVersionOverWildcardPackageReference()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var projectFile = CreateProjectFile(workspace);
+        var runner = new TestDotNetCliRunner
+        {
+            GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) => (0, JsonDocument.Parse("""
+                {
+                  "Properties": {
+                    "IsAspireHost": "true",
+                    "AspireHostingSDKVersion": "17.0.3"
+                  },
+                  "Items": {
+                    "PackageReference": [
+                      { "Identity": "Aspire.Hosting.AppHost", "Version": "17.*" }
+                    ]
+                  }
+                }
+                """)),
+        };
+        var resolver = new AppHostInfoResolver(runner, new NullAppHostInfoDiskCache());
+
+        var info = await resolver.GetAppHostInfoAsync(projectFile, CancellationToken.None).DefaultTimeout();
+
+        Assert.True(info.IsAspireHost);
+        Assert.Equal("17.0.3", info.AspireHostingVersion);
+    }
+
+    [Fact]
+    public async Task GetAppHostInfoAsync_PreservesWildcardVersionWhenProjectIsNotRestored()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var projectFile = CreateProjectFile(workspace);
+        var runner = new TestDotNetCliRunner
+        {
+            GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) => (0, JsonDocument.Parse("""
+                {
+                  "Properties": { "IsAspireHost": "true" },
+                  "Items": {
+                    "PackageReference": [
+                      { "Identity": "Aspire.Hosting.AppHost", "Version": "17.*" }
+                    ]
+                  }
+                }
+                """)),
+        };
+        var resolver = new AppHostInfoResolver(runner, new NullAppHostInfoDiskCache());
+
+        var info = await resolver.GetAppHostInfoAsync(projectFile, CancellationToken.None).DefaultTimeout();
+
+        Assert.True(info.IsAspireHost);
+        Assert.Equal("17.*", info.AspireHostingVersion);
+    }
+
+    [Fact]
     public async Task GetAppHostInfoAsync_CachesSuccessfulMsBuildEvaluationInMemory()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
