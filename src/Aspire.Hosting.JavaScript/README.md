@@ -54,6 +54,21 @@ The runtime used for local development must be installed and available on `PATH`
 entry point directly by default; use `WithDenoTask`, `WithDenoServe`, and the other `WithDeno*` APIs
 to select another mode or configure permissions and runtime flags.
 
+### Running an npm package as a tool
+
+Use `AddNpxApp` to run a package executable without adding it to the app's dependencies:
+
+```csharp
+builder.AddNpxApp("lint", "eslint")
+    .WithNpxVersion("9.25.1")
+    .WithArgs(".", "--fix");
+```
+
+Use `WithNpxExecutable` when the package has multiple executables and npm cannot infer which one to run.
+`WithNpxArgs` adds npx options before package selection. The resource accepts the npm registry and cache
+preference through `WithNpxRegistry`, `WithNpxOffline`, `WithNpxPreferOffline`, and `WithNpxPreferOnline`.
+Node.js and npm must be installed and available on `PATH`.
+
 ## Additional documentation
 
 https://aspire.dev/integrations/gallery/
