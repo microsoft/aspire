@@ -479,6 +479,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
     [InlineData("13.6.0", false, false, false)]
     [InlineData("17.0.0-preview.1", true, true, true)]
     [InlineData("17.0.0", true, true, true)]
+    [InlineData("17.*", true, true, true)]
     public async Task RunAsync_ProjectAppHostUsingCliBundlePassesBundleEnvironmentToRunner(string hostingVersion, bool nativeExists, bool useNativeDashboard, bool supportsDirectLaunch)
     {
         UseFakeRepoRoot();

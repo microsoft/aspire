@@ -142,7 +142,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
         {
             var hostingAssembly = IntegrationPackageProbeManifest.Load(_integrationProbeManifestPath).ManagedAssemblies
                 .FirstOrDefault(static assembly => assembly.Culture is null && string.Equals(assembly.Name, "Aspire.Hosting", StringComparison.OrdinalIgnoreCase));
-            if (SemVersion.TryParse(hostingAssembly?.PackageVersion, out hostingVersion))
+            if (AppHostHelper.TryParseAspireHostingVersion(hostingAssembly?.PackageVersion, out hostingVersion))
             {
                 return true;
             }
@@ -157,7 +157,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
                 return hostingVersion is not null;
             }
 
-            return SemVersion.TryParse(sdkVersion, out hostingVersion);
+            return AppHostHelper.TryParseAspireHostingVersion(sdkVersion, out hostingVersion);
         }
         catch (Exception ex)
         {

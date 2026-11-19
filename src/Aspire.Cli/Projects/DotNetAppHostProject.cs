@@ -25,7 +25,6 @@ using Aspire.Hosting.Utils;
 using Aspire.Shared;
 using Aspire.Shared.UserSecrets;
 using Microsoft.Extensions.Logging;
-using Semver;
 
 namespace Aspire.Cli.Projects;
 
@@ -2718,7 +2717,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
 
             if (!IsUsableExecutablePath(GetEffectiveEnvironmentValue(env, BundleDiscovery.DashboardPathEnvVar)))
             {
-                SemVersion.TryParse(aspireHostingVersion, out var hostingVersion);
+                AppHostHelper.TryParseAspireHostingVersion(aspireHostingVersion, out var hostingVersion);
                 var supportsNativeDashboard = DashboardLaunchHelper.SupportsNativeDashboard(hostingVersion);
                 if (DashboardLaunchHelper.GetDashboardPath(layout, supportsNativeDashboard) is { } dashboardPath)
                 {
@@ -2732,7 +2731,7 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         // the native or compatibility contract according to the AppHost's Hosting version.
         if (!HasEnvironmentOverride(env, BundleDiscovery.TerminalHostPathEnvVar))
         {
-            SemVersion.TryParse(aspireHostingVersion, out var hostingVersion);
+            AppHostHelper.TryParseAspireHostingVersion(aspireHostingVersion, out var hostingVersion);
             var repoPath = TryGetRepoLocalTerminalHostPath();
             var launch = repoPath is not null
                 ? (Path: repoPath, InvocationArgs: string.Empty)
