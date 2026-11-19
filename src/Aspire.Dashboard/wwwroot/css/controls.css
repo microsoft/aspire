@@ -129,8 +129,7 @@ fluent-dropdown > [slot="control"] {
 }
 
 fluent-dropdown > button[slot="control"] {
-    /* Prevent the selected text from expanding a FluentField grid track past the dropdown width. */
-    width: 0;
+    width: auto;
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;

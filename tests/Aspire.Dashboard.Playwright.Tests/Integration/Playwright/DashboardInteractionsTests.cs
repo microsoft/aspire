@@ -505,6 +505,34 @@ public class DashboardInteractionsTests : PlaywrightTestsBase<DashboardInteracti
     [InlineData(false)]
     [InlineData(true)]
     [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task FilterDialog_SelectsOptionsThroughDropdowns(bool legacy)
+    {
+        await RunTestAsync(async page =>
+        {
+            var baseUrl = DashboardServerFixture.DashboardApp.FrontendSingleEndPointAccessor().GetResolvedAddress();
+            await page.Context.AddCookiesAsync([new Cookie { Name = "Aspire_Dashboard_Experience", Value = legacy ? "legacy" : "new", Url = baseUrl }]);
+            await page.GotoAsync(legacy ? "/legacy/structuredlogs" : "/structuredlogs");
+            await page.Locator($"fluent-button[aria-label='{Resources.StructuredFiltering.AddFilter}']").ClickAsync();
+
+            var parameter = page.GetByRole(AriaRole.Combobox, new() { Name = Resources.Dialogs.FilterDialogParameterInputLabel, Exact = true });
+            await Assertions.Expect(parameter).ToBeVisibleAsync();
+            await Assertions.Expect(parameter).ToHaveTextAsync("Message");
+            await parameter.ClickAsync();
+            await page.Locator("fluent-listbox:popover-open fluent-option[text='Category']").ClickAsync();
+            await Assertions.Expect(parameter).ToHaveTextAsync("Category");
+
+            var condition = page.GetByRole(AriaRole.Combobox, new() { Name = Resources.Dialogs.FilterDialogConditionInputLabel, Exact = true });
+            await Assertions.Expect(condition).ToBeVisibleAsync();
+            await condition.ClickAsync();
+            await page.Locator("fluent-listbox:popover-open fluent-option[text='==']").ClickAsync();
+            await Assertions.Expect(condition).ToHaveTextAsync("==");
+        });
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
     public async Task FilterDialog_PreservesFreeformValueOnBlur(bool legacy)
     {
         await RunTestAsync(async page =>
