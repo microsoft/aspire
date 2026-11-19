@@ -27,10 +27,10 @@ public class AgentPluginSourceTests(ITestOutputHelper output)
     {
         using var configuration = new ConfigurationManager();
         configuration.AddJsonStream(new MemoryStream(Encoding.UTF8.GetBytes("""
-            {"agentPluginSources":{"default":{},"team":{"repository":"example/team","plugins":["team","deployment"]}}}
+            {"agentPlugins":{"default":{},"team":{"repository":"example/team","plugins":["team","deployment"]}}}
             """)));
         configuration.AddJsonStream(new MemoryStream(Encoding.UTF8.GetBytes("""
-            {"agentPluginSources":{"TEAM":{"marketplace":"custom-market","ref":"main"},"other":{"repository":"example/other"}}}
+            {"agentPlugins":{"TEAM":{"marketplace":"custom-market","ref":"main"},"other":{"repository":"example/other"}}}
             """)));
 
         var sources = AgentPluginSource.Resolve(configuration);
@@ -56,9 +56,9 @@ public class AgentPluginSourceTests(ITestOutputHelper output)
     public void GetName_PreservesConfigurationKeyWhenMarketplaceDiffers(string name)
     {
         using var configuration = new ConfigurationManager();
-        configuration["agentPluginSources:default:enabled"] = "false";
-        configuration[$"agentPluginSources:{name}:repository"] = "example/team";
-        configuration[$"agentPluginSources:{name}:marketplace"] = "custom-market";
+        configuration["agentPlugins:default:enabled"] = "false";
+        configuration[$"agentPlugins:{name}:repository"] = "example/team";
+        configuration[$"agentPlugins:{name}:marketplace"] = "custom-market";
 
         var source = Assert.Single(AgentPluginSource.Resolve(configuration));
 
@@ -70,8 +70,8 @@ public class AgentPluginSourceTests(ITestOutputHelper output)
     public void Resolve_DefaultsMarketplaceToSourceName()
     {
         using var configuration = new ConfigurationManager();
-        configuration["agentPluginSources:default:enabled"] = "false";
-        configuration["agentPluginSources:team:repository"] = "example/team";
+        configuration["agentPlugins:default:enabled"] = "false";
+        configuration["agentPlugins:team:repository"] = "example/team";
 
         var source = Assert.Single(AgentPluginSource.Resolve(configuration));
 
@@ -87,18 +87,18 @@ public class AgentPluginSourceTests(ITestOutputHelper output)
     public void Resolve_RejectsDuplicateResolvedMarketplaces(string firstMarketplace, string? teamMarketplace)
     {
         using var configuration = new ConfigurationManager();
-        configuration["agentPluginSources:default:enabled"] = "false";
-        configuration["agentPluginSources:first:repository"] = "example/first";
-        configuration["agentPluginSources:first:marketplace"] = firstMarketplace;
-        configuration["agentPluginSources:team:repository"] = "example/team";
+        configuration["agentPlugins:default:enabled"] = "false";
+        configuration["agentPlugins:first:repository"] = "example/first";
+        configuration["agentPlugins:first:marketplace"] = firstMarketplace;
+        configuration["agentPlugins:team:repository"] = "example/team";
         if (teamMarketplace is not null)
         {
-            configuration["agentPluginSources:team:marketplace"] = teamMarketplace;
+            configuration["agentPlugins:team:marketplace"] = teamMarketplace;
         }
 
         var error = Assert.Throws<InvalidOperationException>(() => AgentPluginSource.Resolve(configuration));
 
-        Assert.Equal(AspireSkillsRemoteConfiguration.ExistingConfiguration("agentPluginSources.team.marketplace").Message, error.Message);
+        Assert.Equal(AspireSkillsRemoteConfiguration.ExistingConfiguration("agentPlugins.team.marketplace").Message, error.Message);
     }
 
     [Fact]
@@ -106,10 +106,10 @@ public class AgentPluginSourceTests(ITestOutputHelper output)
     {
         using var configuration = new ConfigurationManager();
         configuration.AddJsonStream(new MemoryStream(Encoding.UTF8.GetBytes("""
-            {"agentPluginSources":{"default":{"plugins":["aspire","deployment"]}}}
+            {"agentPlugins":{"default":{"plugins":["aspire","deployment"]}}}
             """)));
         configuration.AddJsonStream(new MemoryStream(Encoding.UTF8.GetBytes("""
-            {"agentPluginSources":{"default":{"plugins":["custom"]}}}
+            {"agentPlugins":{"default":{"plugins":["custom"]}}}
             """)));
 
         var source = Assert.Single(AgentPluginSource.Resolve(configuration));
@@ -117,21 +117,60 @@ public class AgentPluginSourceTests(ITestOutputHelper output)
         Assert.Equal(["custom@aspire-skills", "deployment@aspire-skills"], source.GetPluginNames());
     }
 
+    [Fact]
+    public void Resolve_ReadsLegacySkillSourcesUnlessAgentPluginsDefinesSource()
+    {
+        using var configuration = new ConfigurationManager();
+        configuration.AddJsonStream(new MemoryStream(Encoding.UTF8.GetBytes("""
+            {"skillSources":{"default":{"enabled":false},"legacy":{"repository":"example/legacy","openCodeV1Catalog":"https://example.com/v1/","openCodeV2Catalog":"https://example.com/v2/"},"team":{"repository":"example/old","plugins":["old"]}}}
+            """)));
+        configuration.AddJsonStream(new MemoryStream(Encoding.UTF8.GetBytes("""
+            {"agentPlugins":{"TEAM":{"repository":"example/team"}}}
+            """)));
+
+        var sources = AgentPluginSource.Resolve(configuration);
+
+        Assert.Collection(sources,
+            source =>
+            {
+                Assert.Equal("TEAM", source.GetName());
+                Assert.Equal("example/team", source.Repository);
+                Assert.Equal(["aspire@TEAM"], source.GetPluginNames());
+            },
+            source =>
+            {
+                Assert.Equal("legacy", source.GetName());
+                Assert.Equal("example/legacy", source.Repository);
+                Assert.Equal(["aspire@legacy"], source.GetPluginNames());
+            });
+    }
+
+    [Fact]
+    public void Resolve_ReportsLegacySkillSourcesPathForInvalidLegacySource()
+    {
+        using var configuration = new ConfigurationManager();
+        configuration["skillSources:team:enabled"] = "true";
+
+        var error = Assert.Throws<InvalidOperationException>(() => AgentPluginSource.Resolve(configuration));
+
+        Assert.Equal(AspireSkillsRemoteConfiguration.ExistingConfiguration("skillSources.team.repository").Message, error.Message);
+    }
+
     [Theory]
-    [InlineData("""{"agentPluginSources":"invalid"}""")]
-    [InlineData("""{"agentPluginSources":{"team":"invalid"}}""")]
-    [InlineData("""{"agentPluginSources":{"team":{}}}""")]
-    [InlineData("""{"agentPluginSources":{"team":{"repository":"relative/path/invalid"}}}""")]
-    [InlineData("""{"agentPluginSources":{"team":{"repository":"https://user:token@example.com/skills"}}}""")]
-    [InlineData("""{"agentPluginSources":{"team":{"repository":"example/team","marketplace":"aspire-skills"}}}""")]
-    [InlineData("""{"agentPluginSources":{"default":{"plugins":"aspire"}}}""")]
-    [InlineData("""{"agentPluginSources":{"default":{"plugins":null}}}""")]
-    [InlineData("""{"agentPluginSources":{"default":{"plugins":[]}}}""")]
-    [InlineData("""{"agentPluginSources":{"default":{"plugins":[""]}}}""")]
-    [InlineData("""{"agentPluginSources":{"default":{"plugins":["aspire",null]}}}""")]
-    [InlineData("""{"agentPluginSources":{"default":{"plugins":["aspire","invalid@name"]}}}""")]
-    [InlineData("""{"agentPluginSources":{"default":{"plugins":{"name":"aspire"}}}}""")]
-    [InlineData("""{"agentPluginSources":{"default":{"plugins":[{"name":"aspire"}]}}}""")]
+    [InlineData("""{"agentPlugins":"invalid"}""")]
+    [InlineData("""{"agentPlugins":{"team":"invalid"}}""")]
+    [InlineData("""{"agentPlugins":{"team":{}}}""")]
+    [InlineData("""{"agentPlugins":{"team":{"repository":"relative/path/invalid"}}}""")]
+    [InlineData("""{"agentPlugins":{"team":{"repository":"https://user:token@example.com/skills"}}}""")]
+    [InlineData("""{"agentPlugins":{"team":{"repository":"example/team","marketplace":"aspire-skills"}}}""")]
+    [InlineData("""{"agentPlugins":{"default":{"plugins":"aspire"}}}""")]
+    [InlineData("""{"agentPlugins":{"default":{"plugins":null}}}""")]
+    [InlineData("""{"agentPlugins":{"default":{"plugins":[]}}}""")]
+    [InlineData("""{"agentPlugins":{"default":{"plugins":[""]}}}""")]
+    [InlineData("""{"agentPlugins":{"default":{"plugins":["aspire",null]}}}""")]
+    [InlineData("""{"agentPlugins":{"default":{"plugins":["aspire","invalid@name"]}}}""")]
+    [InlineData("""{"agentPlugins":{"default":{"plugins":{"name":"aspire"}}}}""")]
+    [InlineData("""{"agentPlugins":{"default":{"plugins":[{"name":"aspire"}]}}}""")]
     public void Resolve_RejectsInvalidSources(string json)
     {
         using var configuration = new ConfigurationManager();
@@ -152,8 +191,8 @@ public class AgentPluginSourceTests(ITestOutputHelper output)
         using var configuration = new ConfigurationManager();
         configuration.AddInMemoryCollection(new Dictionary<string, string?>
         {
-            ["agentPluginSources:default:repository"] = repository,
-            ["agentPluginSources:default:ref"] = reference
+            ["agentPlugins:default:repository"] = repository,
+            ["agentPlugins:default:ref"] = reference
         });
 
         var source = Assert.Single(AgentPluginSource.Resolve(configuration));
@@ -178,11 +217,11 @@ public class AgentPluginSourceTests(ITestOutputHelper output)
     public void Resolve_RejectsInvalidRefs(string reference)
     {
         using var configuration = new ConfigurationManager();
-        configuration["agentPluginSources:default:ref"] = reference;
+        configuration["agentPlugins:default:ref"] = reference;
 
         var error = Assert.Throws<InvalidOperationException>(() => AgentPluginSource.Resolve(configuration));
 
-        Assert.Equal(AspireSkillsRemoteConfiguration.ExistingConfiguration("agentPluginSources.default.repository/ref").Message, error.Message);
+        Assert.Equal(AspireSkillsRemoteConfiguration.ExistingConfiguration("agentPlugins.default.repository/ref").Message, error.Message);
     }
 
     [Theory]
@@ -195,10 +234,10 @@ public class AgentPluginSourceTests(ITestOutputHelper output)
         using var context = new AgentConfigurationTestContext(output);
         context.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
         {
-            ["agentPluginSources:team:repository"] = "https://git.example.com/team/skills.git",
-            ["agentPluginSources:team:plugins:0"] = "team",
-            ["agentPluginSources:team:plugins:1"] = "deployment",
-            ["agentPluginSources:team:ref"] = "main"
+            ["agentPlugins:team:repository"] = "https://git.example.com/team/skills.git",
+            ["agentPlugins:team:plugins:0"] = "team",
+            ["agentPlugins:team:plugins:1"] = "deployment",
+            ["agentPlugins:team:ref"] = "main"
         });
         var scope = global ? AgentConfigurationScope.Global : AgentConfigurationScope.Project;
         if (openCodeV2)
@@ -227,8 +266,8 @@ public class AgentPluginSourceTests(ITestOutputHelper output)
     public async Task Configure_DisablesDefaultAndPreservesUnrelatedRegistrations()
     {
         using var context = new AgentConfigurationTestContext(output);
-        context.Configuration["agentPluginSources:default:enabled"] = "false";
-        context.Configuration["agentPluginSources:team:repository"] = "example/team";
+        context.Configuration["agentPlugins:default:enabled"] = "false";
+        context.Configuration["agentPlugins:team:repository"] = "example/team";
         var path = context.Copilot.GetIntegrationConfigPath(AgentConfigurationScope.Project, context.Project);
         await AgentConfigurationTestContext.WriteAsync(path, """
             {"enabledPlugins":{"other@other":false}}
@@ -247,9 +286,9 @@ public class AgentPluginSourceTests(ITestOutputHelper output)
     public async Task Configure_ConflictInAdditionalSourceDoesNotPublishAnySource(string clientId)
     {
         using var context = new AgentConfigurationTestContext(output);
-        context.Configuration["agentPluginSources:team:repository"] = "example/team";
-        context.Configuration["agentPluginSources:team:plugins:0"] = "aspire";
-        context.Configuration["agentPluginSources:team:plugins:1"] = "deployment";
+        context.Configuration["agentPlugins:team:repository"] = "example/team";
+        context.Configuration["agentPlugins:team:plugins:0"] = "aspire";
+        context.Configuration["agentPlugins:team:plugins:1"] = "deployment";
         var client = context.Clients.Single(client => client.Id == clientId);
         var path = client.GetIntegrationConfigPath(AgentConfigurationScope.Project, context.Project);
         const string original = """{"enabledPlugins":{"deployment@team":false}}""";
@@ -268,9 +307,9 @@ public class AgentPluginSourceTests(ITestOutputHelper output)
     public async Task HasIntegrationRegistration_RecognizesAdditionalPlugin(string clientId)
     {
         using var context = new AgentConfigurationTestContext(output);
-        context.Configuration["agentPluginSources:team:repository"] = "example/team";
-        context.Configuration["agentPluginSources:team:plugins:0"] = "aspire";
-        context.Configuration["agentPluginSources:team:plugins:1"] = "deployment";
+        context.Configuration["agentPlugins:team:repository"] = "example/team";
+        context.Configuration["agentPlugins:team:plugins:0"] = "aspire";
+        context.Configuration["agentPlugins:team:plugins:1"] = "deployment";
         var client = context.Clients.Single(client => client.Id == clientId);
         await AgentConfigurationTestContext.WriteAsync(
             client.GetIntegrationConfigPath(AgentConfigurationScope.Project, context.Project),
@@ -285,11 +324,11 @@ public class AgentPluginSourceTests(ITestOutputHelper output)
     public async Task Configure_AddsPluginsToExistingPinnedMarketplace(string clientId)
     {
         using var context = new AgentConfigurationTestContext(output);
-        context.Configuration["agentPluginSources:default:enabled"] = "false";
-        context.Configuration["agentPluginSources:team:repository"] = "example/team";
-        context.Configuration["agentPluginSources:team:plugins:0"] = "aspire";
-        context.Configuration["agentPluginSources:team:plugins:1"] = "deployment";
-        context.Configuration["agentPluginSources:team:ref"] = "main";
+        context.Configuration["agentPlugins:default:enabled"] = "false";
+        context.Configuration["agentPlugins:team:repository"] = "example/team";
+        context.Configuration["agentPlugins:team:plugins:0"] = "aspire";
+        context.Configuration["agentPlugins:team:plugins:1"] = "deployment";
+        context.Configuration["agentPlugins:team:ref"] = "main";
         var client = context.Clients.Single(client => client.Id == clientId);
         var path = client.GetIntegrationConfigPath(AgentConfigurationScope.Project, context.Project);
         await AgentConfigurationTestContext.WriteAsync(path, """
@@ -315,7 +354,7 @@ public class AgentPluginSourceTests(ITestOutputHelper output)
         using var context = new AgentConfigurationTestContext(output);
         var app = context.Project.CreateSubdirectory("app");
         await AgentConfigurationTestContext.WriteAsync(Path.Combine(app.FullName, "aspire.config.json"), """
-            {"agentPluginSources":{"team":{"repository":"example/team"},"default":{"enabled":false}}}
+            {"agentPlugins":{"team":{"repository":"example/team"},"default":{"enabled":false}}}
             """);
 
         var source = Assert.Single(AgentPluginSource.Resolve(app, new FileInfo(Path.Combine(context.Home.FullName, "aspire.config.json"))));
@@ -335,8 +374,8 @@ public class AgentPluginSourceTests(ITestOutputHelper output)
     public async Task Configure_PreservesExistingGitHubSourceAndPin(string clientId, string repository)
     {
         using var context = new AgentConfigurationTestContext(output);
-        context.Configuration["agentPluginSources:default:repository"] = repository;
-        context.Configuration["agentPluginSources:default:ref"] = "main";
+        context.Configuration["agentPlugins:default:repository"] = repository;
+        context.Configuration["agentPlugins:default:ref"] = "main";
         var client = context.Clients.Single(client => client.Id == clientId);
         var path = client.GetIntegrationConfigPath(AgentConfigurationScope.Project, context.Project);
         const string original = """
@@ -359,8 +398,8 @@ public class AgentPluginSourceTests(ITestOutputHelper output)
     public async Task Configure_AllSourcesDisabledCreatesNoFiles()
     {
         using var context = new AgentConfigurationTestContext(output);
-        context.Configuration["agentPluginSources:default:enabled"] = "false";
-        context.Configuration["agentPluginSources:team:enabled"] = "false";
+        context.Configuration["agentPlugins:default:enabled"] = "false";
+        context.Configuration["agentPlugins:team:enabled"] = "false";
 
         var results = await context.ConfigureIntegrationAsync(AgentConfigurationScope.Project, context.Clients).DefaultTimeout();
 
@@ -382,8 +421,8 @@ public class AgentPluginSourceTests(ITestOutputHelper output)
     public async Task Configure_MatchesExistingGitSourcesUsingHostCaseRules(string repository, string existingRepository, bool matches)
     {
         using var context = new AgentConfigurationTestContext(output);
-        context.Configuration["agentPluginSources:default:repository"] = repository;
-        context.Configuration["agentPluginSources:default:ref"] = "main";
+        context.Configuration["agentPlugins:default:repository"] = repository;
+        context.Configuration["agentPlugins:default:ref"] = "main";
         var client = context.Copilot;
         var path = client.GetIntegrationConfigPath(AgentConfigurationScope.Project, context.Project);
         var original = $$"""
@@ -408,10 +447,10 @@ public class AgentPluginSourceTests(ITestOutputHelper output)
         using var context = new AgentConfigurationTestContext(output);
         context.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
         {
-            ["agentPluginSources:default:repository"] = "example/replacement",
-            ["agentPluginSources:default:marketplace"] = "replacement",
-            ["agentPluginSources:default:plugins:0"] = "custom",
-            ["agentPluginSources:team:repository"] = "example/team"
+            ["agentPlugins:default:repository"] = "example/replacement",
+            ["agentPlugins:default:marketplace"] = "replacement",
+            ["agentPlugins:default:plugins:0"] = "custom",
+            ["agentPlugins:team:repository"] = "example/team"
         });
         await AgentConfigurationTestContext.WriteAsync(
             context.OpenCode.GetIntegrationConfigPath(AgentConfigurationScope.Project, context.Project), """{"skills":[]}""");

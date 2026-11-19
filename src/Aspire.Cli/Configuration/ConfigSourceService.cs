@@ -393,18 +393,38 @@ internal sealed class ConfigSourceService(
         {
             var supplied = snapshot.Configuration
                 .Where(property => property.Key.Equals(setting, StringComparison.OrdinalIgnoreCase)).ToArray();
+            var replaced = setting == AgentPluginSource.SectionName
+                ? new[] { AgentPluginSource.SectionName, AgentPluginSource.LegacySectionName }
+                : [setting];
+            if (supplied.Length == 0 && setting == AgentPluginSource.SectionName &&
+                ConvertLegacySkillSources(snapshot.Configuration) is { } converted)
+            {
+                // Sources published for released CLIs only have "skillSources". Apply them in
+                // the current format so the local file doesn't keep the outdated key.
+                logger.LogWarning(
+                    "The configuration source uses the outdated '{LegacySetting}' setting. It was applied as '{Setting}'.",
+                    AgentPluginSource.LegacySectionName, AgentPluginSource.SectionName);
+                interaction.DisplayMessage(KnownEmojis.PoliceCarLight,
+                    string.Format(CultureInfo.CurrentCulture, ConfigSourceStrings.OutdatedSetting,
+                        AgentPluginSource.LegacySectionName, AgentPluginSource.SectionName),
+                    consoleOverride: ConsoleOutput.Error);
+                supplied = [new(AgentPluginSource.SectionName, converted)];
+            }
             if (supplied.Length == 0)
             {
                 continue;
             }
 
             // Replace all case-equivalent local sections, preserving every source section
-            // that IConfiguration combines (for example {"AGENTPLUGINSOURCES":{...},"agentPluginSources":{...}}).
+            // that IConfiguration combines (for example {"AGENTPLUGINS":{...},"agentPlugins":{...}}).
+            // A supplied agentPlugins section also replaces the local legacy "skillSources"
+            // section, which earlier materializations of this source wrote and would otherwise
+            // keep stale sources registered.
             // Keep the original position so an unchanged section does not reorder the file
             // and make an otherwise identical refresh rewrite the file.
             var insertionIndex = configuration.Count;
             foreach (var key in configuration.Select(property => property.Key)
-                .Where(key => key.Equals(setting, StringComparison.OrdinalIgnoreCase)).ToArray())
+                .Where(key => replaced.Any(name => key.Equals(name, StringComparison.OrdinalIgnoreCase))).ToArray())
             {
                 insertionIndex = Math.Min(insertionIndex, configuration.IndexOf(key));
                 configuration.Remove(key);
@@ -905,6 +925,48 @@ internal sealed class ConfigSourceService(
 
     private static string GetKey(JsonObject configuration, string key)
         => configuration.Select(p => p.Key).FirstOrDefault(p => p.Equals(key, StringComparison.OrdinalIgnoreCase)) ?? key;
+
+    // Converts a source's legacy section to the agentPlugins format, for example:
+    //   {"skillSources":{"team":{"repository":"org/skills","openCodeV2Catalog":"https://example.com/v2/"}}}
+    // becomes {"team":{"repository":"org/skills"}}. OpenCode catalogs are no longer configurable,
+    // so their properties are dropped. When case-equivalent sections or source names repeat,
+    // the last definition of a source wins.
+    private static JsonObject? ConvertLegacySkillSources(JsonObject configuration)
+    {
+        var sections = configuration
+            .Where(property => property.Key.Equals(AgentPluginSource.LegacySectionName, StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        if (sections.Length == 0)
+        {
+            return null;
+        }
+
+        var converted = new JsonObject();
+        foreach (var (_, value) in sections)
+        {
+            if (value is not JsonObject section)
+            {
+                throw new ConfigSourceException(ConfigSourceStrings.InvalidConfiguration);
+            }
+            foreach (var (name, definition) in section)
+            {
+                var source = definition?.DeepClone();
+                if (source is JsonObject properties)
+                {
+                    foreach (var key in properties.Select(property => property.Key)
+                        .Where(key => key.Equals("openCodeV1Catalog", StringComparison.OrdinalIgnoreCase) ||
+                            key.Equals("openCodeV2Catalog", StringComparison.OrdinalIgnoreCase)).ToArray())
+                    {
+                        properties.Remove(key);
+                    }
+                }
+                converted.Remove(GetKey(converted, name));
+                converted[name] = source;
+            }
+        }
+
+        return converted;
+    }
 
     private readonly record struct ConfigSourceIdentity(string Repository, string Path, string? Ref);
 }

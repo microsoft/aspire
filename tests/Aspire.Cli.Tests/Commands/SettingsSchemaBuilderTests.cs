@@ -22,7 +22,7 @@ public class SettingsSchemaBuilderTests
         })
         {
             foreach (var source in schema.Properties.Where(property =>
-                property.Name is "integrationSources" or "agentPluginSources" or "templateSources"))
+                property.Name is "integrationSources" or "agentPlugins" or "templateSources"))
             {
                 Assert.EndsWith(SourceNameValidator.Description, source.Description, StringComparison.Ordinal);
             }
@@ -49,7 +49,7 @@ public class SettingsSchemaBuilderTests
         var schema = SettingsSchemaBuilder.BuildConfigFileSchema(excludeLocalOnly: false);
 
         Assert.Equal(
-            ["agentPluginSources", "appHost", "certificates", "channel", "configSource", "containerTunnel", "docs", "features",
+            ["agentPlugins", "appHost", "certificates", "channel", "configSource", "containerTunnel", "docs", "features",
                 "integrationSources", "packages", "portAllocation", "profiles", "sdk", "templateSources"],
             schema.Properties.Select(property => property.Name));
         var configSource = Assert.Single(schema.Properties, property => property.Name == "configSource");
@@ -90,12 +90,12 @@ public class SettingsSchemaBuilderTests
             SettingsSchemaBuilder.BuildConfigFileSchema(excludeLocalOnly: global)
         })
         {
-            var agentPluginSources = Assert.Single(schema.Properties, property => property.Name == "agentPluginSources");
-            Assert.Equal("object", agentPluginSources.AdditionalPropertiesType);
+            var agentPlugins = Assert.Single(schema.Properties, property => property.Name == "agentPlugins");
+            Assert.Equal("object", agentPlugins.AdditionalPropertiesType);
             Assert.Equal(
                 ["enabled", "repository", "marketplace", "plugins", "ref"],
-                agentPluginSources.SubProperties!.Select(property => property.Name));
-            Assert.Equal("array", Assert.Single(agentPluginSources.SubProperties!, property => property.Name == "plugins").Type);
+                agentPlugins.SubProperties!.Select(property => property.Name));
+            Assert.Equal("array", Assert.Single(agentPlugins.SubProperties!, property => property.Name == "plugins").Type);
         }
     }
 

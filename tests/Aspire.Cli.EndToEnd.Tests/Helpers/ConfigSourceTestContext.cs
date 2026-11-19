@@ -187,7 +187,7 @@ internal sealed class ConfigSourceTestContext
         {
             var configuration = await ReadConfigurationAsync();
             Assert.True(configuration["configSource"]!["optOut"]!.GetValue<bool>());
-            Assert.Null(configuration["agentPluginSources"]);
+            Assert.Null(configuration["agentPlugins"]);
             Assert.Equal("""{"custom":"keep"}""", configuration["docs"]!.ToJsonString());
             await AssertSourceNotAcquiredAsync();
         }
@@ -282,7 +282,7 @@ internal sealed class ConfigSourceTestContext
         foreach (var repository in new[] { "microsoft/aspire-skills", "https://github.com/microsoft/aspire-skills.git" })
         {
             await _auto.RunCommandAsync(
-                $"aspire config set agentPluginSources.default.repository {repository}", _counter);
+                $"aspire config set agentPlugins.default.repository {repository}", _counter);
             await _auto.RunCommandAsync(command, _counter);
             foreach (var (path, expected) in settings)
             {
@@ -365,7 +365,7 @@ internal sealed class ConfigSourceTestContext
     public async Task AssertConfigurationSourceAdoptedAsync(JsonObject original)
     {
         var actual = await AssertSourceAppliedAsync("original");
-        original["agentPluginSources"] = actual["agentPluginSources"]!.DeepClone();
+        original["agentPlugins"] = actual["agentPlugins"]!.DeepClone();
         original["integrationSources"] = actual["integrationSources"]!.DeepClone();
         original["configSource"] = actual["configSource"]!.DeepClone();
         // Plain update also synchronizes SDK metadata with the AppHost's selected package version.
@@ -380,7 +380,7 @@ internal sealed class ConfigSourceTestContext
         var actual = await ReadConfigurationAsync();
         var version = await ReadSourceVersionAsync();
         AssertSourceValues(actual, "updated", version);
-        original["agentPluginSources"] = actual["agentPluginSources"]!.DeepClone();
+        original["agentPlugins"] = actual["agentPlugins"]!.DeepClone();
         original["configSource"]!["appliedVersion"] = version;
         Assert.Equal(original.ToJsonString(), actual.ToJsonString());
     }
@@ -437,7 +437,7 @@ internal sealed class ConfigSourceTestContext
         var directory = Directory.CreateDirectory(Path.Combine(_root, "configuration source", "teams"));
         await File.WriteAllTextAsync(Path.Combine(directory.FullName, "platform.json"), $$"""
             {
-              "agentPluginSources": {
+              "agentPlugins": {
                 "default": {},
                 "platform": {
                   "repository": "example/platform-skills",
@@ -488,7 +488,7 @@ internal sealed class ConfigSourceTestContext
               }
             }
             """);
-        Assert.True(JsonNode.DeepEquals(expectedSources, config["agentPluginSources"]));
+        Assert.True(JsonNode.DeepEquals(expectedSources, config["agentPlugins"]));
         var expectedIntegrationSources = JsonNode.Parse($$"""
             {
               "default": { "enabled": false },

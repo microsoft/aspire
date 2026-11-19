@@ -251,12 +251,12 @@ Only explicitly allowlisted top-level settings may be copied. Each supplied sect
 
 | Setting | Purpose |
 |---|---|
-| `agentPluginSources` | Named agent plugin sources and all their settings |
+| `agentPlugins` | Named agent plugin sources and all their settings |
 | `integrationSources` | Named NuGet integration feeds and allowed package patterns |
 
-Use the same root-only normalization for local settings and source files before matching the allowlist, and match top-level names case-insensitively like other CLI settings. Root-level flat colon-separated keys merge into existing nested sections regardless of casing. Normalize source files before configuration-provider validation; genuine duplicate nested leaves remain validation errors. Nested colon keys remain literal, including profile names, environment-variable names, and custom agent plugin source keys such as `{"agentPluginSources":{"team":{"custom:key":"..."}}}`. These keys are copied unchanged when their top-level section is allowed. There is no source-specific normalization.
+Use the same root-only normalization for local settings and source files before matching the allowlist, and match top-level names case-insensitively like other CLI settings. Root-level flat colon-separated keys merge into existing nested sections regardless of casing. Normalize source files before configuration-provider validation; genuine duplicate nested leaves remain validation errors. Nested colon keys remain literal, including profile names, environment-variable names, and custom agent plugin source keys such as `{"agentPlugins":{"team":{"custom:key":"..."}}}`. These keys are copied unchanged when their top-level section is allowed. There is no source-specific normalization.
 
-Replace every local case-equivalent section when an allowed top-level setting is supplied. Preserve all source sections, including disjoint `AGENTPLUGINSOURCES` and `agentPluginSources` objects that `IConfiguration` combines. Do not filter or merge individual nested properties. Validate the complete resulting configuration before writing it. Other top-level settings remain excluded unless explicitly added to the allowlist.
+Replace every local case-equivalent section when an allowed top-level setting is supplied. Preserve all source sections, including disjoint `AGENTPLUGINS` and `agentPlugins` objects that `IConfiguration` combines. Do not filter or merge individual nested properties. Validate the complete resulting configuration before writing it. Other top-level settings remain excluded unless explicitly added to the allowlist.
 
 In particular, do not copy `docs`, `$schema`, `configSource`, AppHost identity or paths, SDK/channel selection, language, package references, launch profiles, or arbitrary feature/content settings. Documentation settings remain configurable locally but are not imported from a configuration source. The CLI creates and maintains its own source binding; the remote file cannot supply or replace it. The proposed content schema does not implicitly extend this allowlist.
 
@@ -278,7 +278,7 @@ For example, after applying a source that supplies named agent plugin sources:
     "ref": "main",
     "appliedVersion": "<source-file-version>"
   },
-  "agentPluginSources": {
+  "agentPlugins": {
     "platform": {
       "repository": "https://git.acme.example/platform-skills",
       "ref": "main"
@@ -329,16 +329,16 @@ Missing `configSource.repository` or `configSource.path` must not prevent genera
 Configuration keys use dots (or colons) for object properties and bracketed indices for arrays:
 
 ```shell
-aspire config set "agentPluginSources.team.plugins[0]" deployment
-aspire config get "agentPluginSources.team.plugins[0]"
-aspire config delete "agentPluginSources.team.plugins[0]"
+aspire config set "agentPlugins.team.plugins[0]" deployment
+aspire config get "agentPlugins.team.plugins[0]"
+aspire config delete "agentPlugins.team.plugins[0]"
 ```
 
 Quote bracketed keys to prevent shell glob expansion. Brackets are reserved for non-negative integer indices, including nested arrays such as `matrix[0][1]`.
 
 Setting an existing index replaces only that element. An index equal to the array length appends an element; larger indices and negative indices are rejected without changing the file. If the array property is missing or null, `[0]` creates it. Explicit bracket syntax never replaces an existing object or scalar with an array.
 
-Numeric dot or colon segments can also address an existing array, so `agentPluginSources.team.plugins.0` edits element zero when `plugins` is already an array. Otherwise numeric segments remain object property names: creating `custom.0` creates an object with a `"0"` property. Use brackets when creating an array rather than relying on numeric property names.
+Numeric dot or colon segments can also address an existing array, so `agentPlugins.team.plugins.0` edits element zero when `plugins` is already an array. Otherwise numeric segments remain object property names: creating `custom.0` creates an object with a `"0"` property. Use brackets when creating an array rather than relying on numeric property names.
 
 Deleting an array element shifts subsequent elements down by one index. Deleting the final element leaves an empty array, and deleting a property within an array element preserves the element even if it becomes an empty object. `aspire config list` displays individual array entries using bracketed indices, including `null` for null array elements, while empty arrays and objects remain visible.
 
@@ -504,7 +504,7 @@ Never save inherited template sources into the user's global configuration or th
 
 Skills and integrations are acquired according to the application's saved configuration and normal CLI precedence. Templates use built-in choices and named sources from global configuration and the explicit environment-selected runtime overlay. Content acquisition is separate from fetching or materializing a configuration source, and must not treat previously retained tracking copies as runtime configuration providers. Runtime template inheritance uses its separately acquired snapshot as described above.
 
-Keys in `integrationSources`, `templateSources`, and `agentPluginSources` must be 1-64 ASCII letters, digits, dots, hyphens, or underscores, starting with a letter or digit (`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`). Names merge case-insensitively. Colons, whitespace, and other characters are not allowed. Dots remain path separators in `aspire config` edit commands, so edit dotted source keys directly in the JSON file or use the template source management commands. These restrictions apply to source keys, not NuGet package patterns, Git repository names, or explicit agent marketplace/plugin identifiers. This is an Aspire naming policy, not a NuGet package-source length limit.
+Keys in `integrationSources`, `templateSources`, and `agentPlugins` must be 1-64 ASCII letters, digits, dots, hyphens, or underscores, starting with a letter or digit (`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`). Names merge case-insensitively. Colons, whitespace, and other characters are not allowed. Dots remain path separators in `aspire config` edit commands, so edit dotted source keys directly in the JSON file or use the template source management commands. These restrictions apply to source keys, not NuGet package patterns, Git repository names, or explicit agent marketplace/plugin identifiers. This is an Aspire naming policy, not a NuGet package-source length limit.
 
 ### Named agent plugin sources
 
@@ -512,7 +512,7 @@ Keys in `integrationSources`, `templateSources`, and `agentPluginSources` must b
 
 ```json
 {
-  "agentPluginSources": {
+  "agentPlugins": {
     "aspire1p": {
       "repository": "https://git.example.com/platform/skills.git",
       "marketplace": "aspire1p",
@@ -524,6 +524,8 @@ Keys in `integrationSources`, `templateSources`, and `agentPluginSources` must b
 ```
 
 Sources and their fields merge by name across configuration layers, case-insensitively. Agent initialization reads fresh global settings and the selected app's nearest local settings file; it does not retain local settings from a different launch directory. Additional sources do not replace the built-in `default` source, which registers `aspire@aspire-skills` from `microsoft/aspire-skills` and, for OpenCode, the official Aspire skills catalog. Override its fields to change that source, or set `"default": { "enabled": false }` to omit it. Setting `enabled` to false does not remove previously installed registrations.
+
+Earlier CLI releases named this setting `skillSources`. Existing `skillSources` entries are still read with the same fields, except that their `openCodeV1Catalog` and `openCodeV2Catalog` properties are ignored. A source name defined in `agentPlugins`, in any configuration layer, replaces the entire `skillSources` entry with the same name; fields from the two settings are never merged into one source. Saving configuration preserves `skillSources`, including when legacy `.aspire/settings.json` files migrate to `aspire.config.json`.
 
 `aspire init` recommends `aspireify` only after successful or already-current registration of an enabled official Aspire plugin, or of the official OpenCode catalog when the `default` source is enabled. Disabled sources and arbitrary plugins do not trigger this guidance.
 
@@ -537,7 +539,7 @@ Before skill selection, when additional enabled sources apply to the selected cl
 
 Successful registration is summarized as **Configured sources in {files}**, listing configuration file paths with their agent names in parentheses, for example `.github/copilot/settings.json (GitHub Copilot)`. Multiple files are separated by commas. Repository URLs are not repeated in this summary.
 
-The allowlist copies the entire supplied `agentPluginSources` section, including arbitrary nested properties, replacing the existing local section. If `agentPluginSources` is omitted, the local section remains untouched. Sources still merge by name across runtime configuration layers such as global and local settings. Refreshing `configSource` updates configuration only, not agent registrations. Run `aspire agent init` to register newly configured sources. `--skills none` and suppressed agent initialization do not register remote sources. Aspire does not acquire or install bundled Aspire skill files.
+The allowlist copies the entire supplied `agentPlugins` section, including arbitrary nested properties, replacing the existing local section and any local `skillSources` section. If `agentPlugins` is omitted, the local sections remain untouched, unless the source supplies the outdated `skillSources` setting instead. In that case, the CLI applies the source's `skillSources` as the local `agentPlugins` section without `openCodeV1Catalog` or `openCodeV2Catalog` properties, logs a warning, and displays **The configuration source uses the outdated 'skillSources' setting, which was applied as 'agentPlugins'. Ask the configuration source maintainers to rename 'skillSources' to 'agentPlugins'.** on stderr. A source that supplies both settings uses only `agentPlugins`. Sources still merge by name across runtime configuration layers such as global and local settings. Refreshing `configSource` updates configuration only, not agent registrations. Run `aspire agent init` to register newly configured sources. `--skills none` and suppressed agent initialization do not register remote sources. Aspire does not acquire or install bundled Aspire skill files.
 
 | Content | Acquisition today | Possible configuration customizations |
 |---|---|---|
@@ -600,7 +602,7 @@ stays disabled. Ambient feed selections leave existing NuGet mappings unchanged.
 Polyglot adds retain their exact-package source override. Explicit
 `--source`, pinned-channel preferences, and non-interactive selection remain unchanged.
 
-Sources and their fields merge case-insensitively across global and selected-app settings. As with `agentPluginSources`, `configSource` can supply the entire `integrationSources` section. Materialization replaces a supplied section in full and preserves an omitted section. Refreshing configuration does not add packages or remove previously persisted NuGet mappings.
+Sources and their fields merge case-insensitively across global and selected-app settings. As with `agentPlugins`, `configSource` can supply the entire `integrationSources` section. Materialization replaces a supplied section in full and preserves an omitted section. Refreshing configuration does not add packages or remove previously persisted NuGet mappings.
 
 When adding an integration from a new feed, the NuGet package-source key is `aspire-integration-<name>` (for example, `aspire-integration-team`). This prefix identifies CLI-created integration aliases separately from SDK/channel aliases. If the feed already has a NuGet alias, that alias is retained, including unprefixed aliases and previously generated `aspire-integration-add` aliases, so credentials and other source settings remain attached. Existing user-owned mappings are left unchanged when NuGet's effective mapping precedence already routes the selected package exclusively to that feed, including through inherited mappings or multiple aliases for the same feed. Otherwise, an exact package mapping can be appended to a local alias while preserving its existing patterns and credentials. Explicitly selecting the same package from a different configured feed replaces its previous local exact integration mapping, while retaining the previous feed and all unrelated patterns. Extending or replacing an inherited mapping, including deleting a local entry that would expose inherited policy, requires a manual configuration change rather than silently shadowing or modifying that policy. Disabled sources and channel-source ownership checks remain enforced. When a new alias is required, a generated key reserved by another feed or its settings is an error, not permission to overwrite the feed or silently generate a suffixed key.
 

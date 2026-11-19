@@ -50,9 +50,9 @@ public class SourceNameValidatorTests
         Assert.Equal(valid, SourceNameValidator.IsValid(name));
         using var configuration = new ConfigurationManager();
         configuration["integrationSources:default:enabled"] = "false";
-        configuration["agentPluginSources:default:enabled"] = "false";
+        configuration["agentPlugins:default:enabled"] = "false";
         configuration[$"integrationSources:{name}:enabled"] = "false";
-        configuration[$"agentPluginSources:{name}:enabled"] = "false";
+        configuration[$"agentPlugins:{name}:enabled"] = "false";
         if (valid)
         {
             TemplateSourceConfiguration.ValidateName(name);

@@ -79,7 +79,13 @@ internal sealed class AspireJsonConfiguration
 
     [JsonPropertyName(AgentPluginSource.SectionName)]
     [Description("Named agent plugin sources, merged across configuration layers. The built-in default source remains enabled unless explicitly disabled. " + SourceNameValidator.Description)]
-    public Dictionary<string, AgentPluginSource>? AgentPluginSources { get; set; }
+    public Dictionary<string, AgentPluginSource>? AgentPlugins { get; set; }
+
+    // Released CLIs wrote agent plugin sources under "skillSources". Keep it as raw JSON so
+    // typed load/save cycles and migration to aspire.config.json don't drop existing sources.
+    [JsonPropertyName(AgentPluginSource.LegacySectionName)]
+    [HiddenFromConfigurationSchema]
+    public Dictionary<string, JsonElement>? LegacySkillSources { get; set; }
 
     [JsonPropertyName(IntegrationSourceConfiguration.SectionName)]
     [Description("Named NuGet integration sources and allowed package patterns, merged across configuration layers. " + SourceNameValidator.Description)]

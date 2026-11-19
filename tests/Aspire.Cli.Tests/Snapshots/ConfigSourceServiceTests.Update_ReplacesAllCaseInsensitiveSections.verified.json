@@ -4,12 +4,12 @@
     "path": "teams/platform.json",
     "appliedVersion": "version-2"
   },
-  "AGENTPLUGINSOURCES": {
+  "AGENTPLUGINS": {
     "first": {
       "repository": "example/updated"
     }
   },
-  "agentPluginSources": {
+  "agentPlugins": {
     "second": {
       "repository": "example/second",
       "ref": null,

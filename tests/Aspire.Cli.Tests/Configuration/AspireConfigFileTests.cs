@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Aspire.Cli.Agents.AspireSkills;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Tests.Utils;
@@ -19,9 +20,23 @@ public class AspireConfigFileTests(ITestOutputHelper outputHelper)
             ["team"] = new() { Repository = "example/team" }
         };
 
-        var config = AspireConfigFile.FromLegacy(new AspireJsonConfiguration { AgentPluginSources = sources }, profiles: null);
+        var config = AspireConfigFile.FromLegacy(new AspireJsonConfiguration { AgentPlugins = sources }, profiles: null);
 
-        Assert.Same(sources, config.AgentPluginSources);
+        Assert.Same(sources, config.AgentPlugins);
+    }
+
+    [Fact]
+    public void FromLegacy_PreservesLegacySkillSources()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        const string skillSources = """{"team":{"repository":"example/team","openCodeV2Catalog":"https://example.com/v2/"}}""";
+        var settings = JsonSerializer.Deserialize($$"""{"skillSources":{{skillSources}}}""",
+            JsonSourceGenerationContext.Default.AspireJsonConfiguration);
+
+        AspireConfigFile.FromLegacy(settings, profiles: null).Save(workspace.WorkspaceRoot.FullName);
+
+        var saved = JsonNode.Parse(File.ReadAllText(Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName)))!;
+        Assert.Equal(skillSources, saved["skillSources"]!.ToJsonString());
     }
 
     [Fact]
@@ -97,7 +112,7 @@ public class AspireConfigFileTests(ITestOutputHelper outputHelper)
         var globalSettingsFile = new FileInfo(Path.Combine(workspace.Path, "globalsettings.json"));
         await File.WriteAllTextAsync(globalSettingsFile.FullName, """
             {
-              "agentPluginSources": {
+              "agentPlugins": {
                 "team": {
                   "repository": "example/global",
                   "plugins": ["deployment", "operations"]
@@ -108,7 +123,7 @@ public class AspireConfigFileTests(ITestOutputHelper outputHelper)
         var plugins = explicitPlugins ? """, "plugins": ["local", "release"]""" : string.Empty;
         await File.WriteAllTextAsync(path, $$"""
             {
-              "agentPluginSources": {
+              "agentPlugins": {
                 "default": { "enabled": false },
                 "team": { "repository": "example/local"{{plugins}} }
               }

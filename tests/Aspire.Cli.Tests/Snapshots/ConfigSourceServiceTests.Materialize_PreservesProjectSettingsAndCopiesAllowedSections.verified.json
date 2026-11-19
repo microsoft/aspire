@@ -15,7 +15,7 @@
     "custom": "local"
   },
   "custom": "local",
-  "agentPluginSources": {
+  "agentPlugins": {
     "team": {
       "repository": "example/team",
       "custom": "copied"

@@ -379,7 +379,7 @@ public class ConfigSourceServiceGitTests(ITestOutputHelper outputHelper) : IDisp
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var custom = new string('x', 70 * 1024) + "\u65e5\u672c\u8a9e";
         await CreateRepositoryAsync(workspace, path, """
-            {"AGENTPLUGINSOURCES":{"first":{"repository":"example/first"},"SECOND":{"custom":"preserved"}},"agentPluginSources:second:repository":"example/second",
+            {"AGENTPLUGINS":{"first":{"repository":"example/first"},"SECOND":{"custom":"preserved"}},"agentPlugins:second:repository":"example/second",
             """ + "\"features\":{\"test\":true},\"custom\":\"" + custom + "\"}");
         var cache = workspace.CreateDirectory("cache");
         var client = CreateClient(interactive
@@ -395,10 +395,10 @@ public class ConfigSourceServiceGitTests(ITestOutputHelper outputHelper) : IDisp
         Assert.Equal((await RunGitOutputAsync(workspace.Path, ["rev-parse", $"HEAD:{path}"])).Trim(), version);
         Assert.True(configuration["features"]!["test"]!.GetValue<bool>());
         Assert.Equal(custom, configuration["custom"]!.GetValue<string>());
-        Assert.Equal("example/first", configuration["AGENTPLUGINSOURCES"]!["first"]!["repository"]!.GetValue<string>());
-        Assert.Equal("example/second", configuration["AGENTPLUGINSOURCES"]!["SECOND"]!["repository"]!.GetValue<string>());
-        Assert.Equal("preserved", configuration["AGENTPLUGINSOURCES"]!["SECOND"]!["custom"]!.GetValue<string>());
-        Assert.Equal(["AGENTPLUGINSOURCES", "features", "custom"], configuration.Select(property => property.Key));
+        Assert.Equal("example/first", configuration["AGENTPLUGINS"]!["first"]!["repository"]!.GetValue<string>());
+        Assert.Equal("example/second", configuration["AGENTPLUGINS"]!["SECOND"]!["repository"]!.GetValue<string>());
+        Assert.Equal("preserved", configuration["AGENTPLUGINS"]!["SECOND"]!["custom"]!.GetValue<string>());
+        Assert.Equal(["AGENTPLUGINS", "features", "custom"], configuration.Select(property => property.Key));
         Assert.False(File.Exists(Path.Combine(cache.FullName, path)));
     }
 
@@ -407,7 +407,7 @@ public class ConfigSourceServiceGitTests(ITestOutputHelper outputHelper) : IDisp
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         const string path = "teams/platform.json";
-        await CreateRepositoryAsync(workspace, path, """{"agentPluginSources":{"team":{"repository":"example/team"}}}""");
+        await CreateRepositoryAsync(workspace, path, """{"agentPlugins":{"team":{"repository":"example/team"}}}""");
         var repository = workspace.CreateDirectory("local repository");
         await RunGitOutputAsync(workspace.Path, ["clone", "--", workspace.Path, repository.FullName]);
         var source = new ConfigSource { Repository = repository.FullName, Path = path };
@@ -418,7 +418,7 @@ public class ConfigSourceServiceGitTests(ITestOutputHelper outputHelper) : IDisp
         await service.MaterializeAsync(source, project, TestContext.Current.CancellationToken);
 
         var config = AspireConfigFile.Load(project.FullName)!;
-        Assert.Equal("example/team", Assert.Single(config.AgentPluginSources!).Value.Repository);
+        Assert.Equal("example/team", Assert.Single(config.AgentPlugins!).Value.Repository);
         Assert.Equal(repository.FullName, config.ConfigSource!.Repository);
         Assert.Equal(path, config.ConfigSource.Path);
         Assert.Equal((await RunGitOutputAsync(repository.FullName, ["rev-parse", $"HEAD:{path}"])).Trim(),
@@ -426,14 +426,14 @@ public class ConfigSourceServiceGitTests(ITestOutputHelper outputHelper) : IDisp
     }
 
     [Theory]
-    [InlineData("""{"AGENTPLUGINSOURCES":{"first":{"repository":"example/first"}},"agentPluginSources":{"second":{"repository":"example/second"}}}""")]
-    [InlineData("""{"agentPluginSources":{"second":{"repository":"example/second"}},"AGENTPLUGINSOURCES":{"first":{"repository":"example/first"}}}""")]
-    [InlineData("""{"agentPluginSources":{"first":{"repository":"example/first"},"SECOND":{"custom":"copied"},"second":{"repository":"example/second"}}}""")]
-    [InlineData("""{"AGENTPLUGINSOURCES":null,"agentPluginSources":{"first":{"repository":"example/first"},"second":{"repository":"example/second"}}}""")]
-    [InlineData("""{"agentPluginSources":{"first":{"repository":"example/first"},"second":{"repository":"example/second"}},"agentPluginSources:first:repository":"example/flat-first","agentPluginSources:second:repository":"example/flat-second"}""")]
-    [InlineData("""{"agentPluginSources:first:repository":"example/first","agentPluginSources:second":{"repository":"example/second","custom:key":"preserved"}}""")]
-    [InlineData("""{"AGENTPLUGINSOURCES":{"first":{"repository":null},"SECOND":{"REPOSITORY":null}},"agentPluginSources:second:repository":"example/second","agentPluginSources:first:repository":"example/first"}""")]
-    [InlineData("""{"agentPluginSources:first:repository":"example/first","AGENTPLUGINSOURCES:FIRST:REPOSITORY":"example/flat-first","agentPluginSources:second:repository":"example/second"}""")]
+    [InlineData("""{"AGENTPLUGINS":{"first":{"repository":"example/first"}},"agentPlugins":{"second":{"repository":"example/second"}}}""")]
+    [InlineData("""{"agentPlugins":{"second":{"repository":"example/second"}},"AGENTPLUGINS":{"first":{"repository":"example/first"}}}""")]
+    [InlineData("""{"agentPlugins":{"first":{"repository":"example/first"},"SECOND":{"custom":"copied"},"second":{"repository":"example/second"}}}""")]
+    [InlineData("""{"AGENTPLUGINS":null,"agentPlugins":{"first":{"repository":"example/first"},"second":{"repository":"example/second"}}}""")]
+    [InlineData("""{"agentPlugins":{"first":{"repository":"example/first"},"second":{"repository":"example/second"}},"agentPlugins:first:repository":"example/flat-first","agentPlugins:second:repository":"example/flat-second"}""")]
+    [InlineData("""{"agentPlugins:first:repository":"example/first","agentPlugins:second":{"repository":"example/second","custom:key":"preserved"}}""")]
+    [InlineData("""{"AGENTPLUGINS":{"first":{"repository":null},"SECOND":{"REPOSITORY":null}},"agentPlugins:second:repository":"example/second","agentPlugins:first:repository":"example/first"}""")]
+    [InlineData("""{"agentPlugins:first:repository":"example/first","AGENTPLUGINS:FIRST:REPOSITORY":"example/flat-first","agentPlugins:second:repository":"example/second"}""")]
     public async Task Materialize_ReadsAgentPluginSourcesAcrossCaseInsensitiveSections(string content)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -465,7 +465,7 @@ public class ConfigSourceServiceGitTests(ITestOutputHelper outputHelper) : IDisp
                 }
               },
               "custom": { "literal:key": "preserved" },
-              "agentPluginSources": { "team": { "repository": "example/team", "custom:key": "preserved" } }
+              "agentPlugins": { "team": { "repository": "example/team", "custom:key": "preserved" } }
             }
             """;
         await CreateRepositoryAsync(workspace, AspireConfigFile.FileName, content);
@@ -479,7 +479,7 @@ public class ConfigSourceServiceGitTests(ITestOutputHelper outputHelper) : IDisp
         Assert.Equal(new Dictionary<string, bool> { ["feature:name"] = true }, config.Features);
         Assert.Equal(new Dictionary<string, string> { ["Logging:LogLevel:Default"] = "Debug" },
             Assert.Single(config.Profiles!).Value.EnvironmentVariables);
-        Assert.Equal("example/team", Assert.Single(config.AgentPluginSources!).Value.Repository);
+        Assert.Equal("example/team", Assert.Single(config.AgentPlugins!).Value.Repository);
         await Verify(configuration.ToJsonString(), "json");
     }
 
@@ -490,10 +490,10 @@ public class ConfigSourceServiceGitTests(ITestOutputHelper outputHelper) : IDisp
     [InlineData("""{"features":{"test":"not-a-boolean"}}""")]
     [InlineData("""{"features:test":"not-a-boolean"}""")]
     [InlineData("""{"features":{"test":true},"features":{"test":false}}""")]
-    [InlineData("""{"AGENTPLUGINSOURCES":{"first":{"repository":"example/first"}},"agentPluginSources":{"FIRST":{"repository":"example/second"}}}""")]
-    [InlineData("""{"agentPluginSources":{"FIRST":{"repository":"example/first"},"first":{"REPOSITORY":"example/second"}}}""")]
-    [InlineData("""{"agentPluginSources":{"first":{"repository":"example/first"}},"AGENTPLUGINSOURCES":{"FIRST":{"REPOSITORY":"example/second"}},"agentPluginSources:first:repository":"example/flat"}""")]
-    [InlineData("""{"agentPluginSources":{"first:repository":"example/first"},"AGENTPLUGINSOURCES":{"FIRST:REPOSITORY":"example/second"}}""")]
+    [InlineData("""{"AGENTPLUGINS":{"first":{"repository":"example/first"}},"agentPlugins":{"FIRST":{"repository":"example/second"}}}""")]
+    [InlineData("""{"agentPlugins":{"FIRST":{"repository":"example/first"},"first":{"REPOSITORY":"example/second"}}}""")]
+    [InlineData("""{"agentPlugins":{"first":{"repository":"example/first"}},"AGENTPLUGINS":{"FIRST":{"REPOSITORY":"example/second"}},"agentPlugins:first:repository":"example/flat"}""")]
+    [InlineData("""{"agentPlugins":{"first:repository":"example/first"},"AGENTPLUGINS":{"FIRST:REPOSITORY":"example/second"}}""")]
     [InlineData("""{"features":{"feature:name":true,"feature":{"name":false}}}""")]
     [InlineData("""{"configSource:repository":"https://example.com/nested"}""")]
     [InlineData("""{"configSource":{"repository":"https://example.com/nested","path":"config.json"}}""")]

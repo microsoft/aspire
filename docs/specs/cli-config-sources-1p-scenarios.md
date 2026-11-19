@@ -69,7 +69,7 @@ For this scenario, suppose the repository initially supplies:
 
 ```json
 {
-  "agentPluginSources": {
+  "agentPlugins": {
     "platform": {
       "repository": "https://git.example/platform-skills"
     }
@@ -100,7 +100,7 @@ The relevant excerpt from the project's file is:
     "path": "aspire.config.json",
     "appliedVersion": "<initial-source-file-version>"
   },
-  "agentPluginSources": {
+  "agentPlugins": {
     "platform": {
       "repository": "https://git.example/platform-skills"
     }
@@ -110,7 +110,7 @@ The relevant excerpt from the project's file is:
 
 This is an excerpt, not a replacement for the generated file. Maya keeps its AppHost, SDK, package, and other project-owned settings.
 
-Only [allowlisted top-level settings](cli-config-sources.md#materialize-an-allowlist-into-the-app-configuration) are copied, not the entire source JSON. `agentPluginSources` and `integrationSources` are allowed, and each is copied in full when supplied. Other source values, including `docs`, AppHost paths, SDK/channel selection, packages, and arbitrary feature settings, are not imported.
+Only [allowlisted top-level settings](cli-config-sources.md#materialize-an-allowlist-into-the-app-configuration) are copied, not the entire source JSON. `agentPlugins` and `integrationSources` are allowed, and each is copied in full when supplied. Other source values, including `docs`, AppHost paths, SDK/channel selection, packages, and arbitrary feature settings, are not imported.
 
 Maya commits the resulting app file with the application. It contains neither Git credentials nor an absolute tracking path, so another machine can use the saved values immediately.
 
@@ -141,7 +141,7 @@ Leo maintains the organization's configuration repository. He expands its config
 
 ```json
 {
-  "agentPluginSources": {
+  "agentPlugins": {
     "platform": {
       "repository": "https://git.example/platform-skills"
     },
@@ -159,7 +159,7 @@ Maya explicitly applies the update as described in scenario 5. Both named source
 
 ```powershell
 Set-Location .\Inventory
-aspire config set agentPluginSources.inventory.ref preview
+aspire config set agentPlugins.inventory.ref preview
 ```
 
 Her project file now contains all the agent plugin sources, with her edit to the inventory source's ref, in addition to its other project settings:
@@ -171,7 +171,7 @@ Her project file now contains all the agent plugin sources, with her edit to the
     "path": "aspire.config.json",
     "appliedVersion": "<expanded-source-file-version>"
   },
-  "agentPluginSources": {
+  "agentPlugins": {
     "platform": {
       "repository": "https://git.example/platform-skills"
     },
@@ -185,13 +185,13 @@ Her project file now contains all the agent plugin sources, with her edit to the
 
 There is no extra source-defaults merge at command execution. The normal CLI configuration system reads these saved app values alongside its usual sources, such as global settings and explicit command options. The named sources are copied settings in this file, not values inherited from the user-directory configuration-source copy.
 
-Maya's edit takes effect for subsequent agent initialization. It is not a protected override against a future explicit configuration-source update: if that update supplies `agentPluginSources`, it replaces the entire local section. Entire top-level sections omitted by the source and settings outside the allowlist are preserved.
+Maya's edit takes effect for subsequent agent initialization. It is not a protected override against a future explicit configuration-source update: if that update supplies `agentPlugins`, it replaces the entire local section. Entire top-level sections omitted by the source and settings outside the allowlist are preserved.
 
 Maya can inspect these effective values and use them:
 
 ```powershell
-aspire config get agentPluginSources.platform.repository
-aspire config get agentPluginSources.inventory.ref
+aspire config get agentPlugins.platform.repository
+aspire config get agentPlugins.inventory.ref
 aspire agent init --skills aspire
 ```
 
@@ -245,7 +245,7 @@ aspire update --config-source
 
 This fetches and validates the source regardless of the last check time. It merges supplied allowlisted values into Inventory's `aspire.config.json`, records the newly applied version in that same file, and updates the fetched tracking copy and fetch time in Aspire home.
 
-If Leo's source supplies `agentPluginSources`, this explicit operation replaces the entire local section, including Maya's team-specific edit. Other app settings, including local documentation settings, are not imported or overwritten. If `agentPluginSources` is omitted, its existing value is left unchanged.
+If Leo's source supplies `agentPlugins`, this explicit operation replaces the entire local section, including Maya's team-specific edit. Other app settings, including local documentation settings, are not imported or overwritten. If `agentPlugins` is omitted, its existing value is left unchanged.
 
 The command does not update the CLI, SDK, or packages, change the source repository/path/ref, regenerate AppHost or application code, or reinstall skills. Updating the app's configuration file is intentional.
 
