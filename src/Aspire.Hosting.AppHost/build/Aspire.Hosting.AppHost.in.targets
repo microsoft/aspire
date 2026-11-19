@@ -499,7 +499,7 @@ namespace Projects%3B
   <!-- Determines if the resolved CLI version is sufficient for the run hook delegation. -->
   <Target Name="_AspireCheckCliVersion"
           DependsOnTargets="_ResolveAspireCliInvocation"
-          Condition="'$(IsAspireHost)' == 'true' and '$(AspireUseCliBundle)' == 'true' and '$(_AspireCliRunHookSuppressed)' != 'true'">
+          Condition="'$(IsAspireHost)' == 'true' and '$(AspireUseCliBundle)' == 'true' and '$(_AspireCliRunHookSuppressed)' != 'true' and '$(IsTestingPlatformApplication)' != 'true'">
     <PropertyGroup>
       <!-- Probe the exact executable selected above so the version check and the eventual launch
            cannot resolve different commands. This matters for DNX because dotnet run can prefer
@@ -622,7 +622,7 @@ namespace Projects%3B
   <Target Name="_AspireComputeRunArguments"
           BeforeTargets="ComputeRunArguments"
           DependsOnTargets="_ValidateAspireCliDnxInvocationMode;_AspireCheckCliVersion"
-          Condition="'$(IsAspireHost)' == 'true' and '$(AspireUseCliBundle)' == 'true' and '$(_AspireCliRunHookSuppressed)' != 'true'">
+          Condition="'$(IsAspireHost)' == 'true' and '$(AspireUseCliBundle)' == 'true' and '$(_AspireCliRunHookSuppressed)' != 'true' and '$(IsTestingPlatformApplication)' != 'true'">
     <ItemGroup Condition="'$(_AspireCliVersionSupportsRunHook)' == 'true' and '$(FileBasedProgram)' == 'true'">
       <_AspireFileBasedAppHostPath Include="%(RuntimeHostConfigurationOption.Value)"
                                    Condition="'%(RuntimeHostConfigurationOption.Identity)' == 'EntryPointFilePath'" />
@@ -670,7 +670,7 @@ namespace Projects%3B
 
   <Target Name="_ValidateAspireCliDnxInvocationMode"
           DependsOnTargets="_ResolveAspireCliInvocation"
-          Condition="'$(IsAspireHost)' == 'true' and '$(AspireUseCliBundle)' == 'true' and '$(_AspireCliInvocationModeRequestsDnx)' == 'true' and '$(AspireCliPath)' == ''">
+          Condition="'$(IsAspireHost)' == 'true' and '$(AspireUseCliBundle)' == 'true' and '$(_AspireCliInvocationModeRequestsDnx)' == 'true' and '$(AspireCliPath)' == '' and '$(IsTestingPlatformApplication)' != 'true'">
     <Error Code="ASPIRE011"
            Condition="'$(_AspireResolvedDnxPath)' == ''"
            Text="$(MSBuildProjectName) is configured with AspireCliInvocationMode=$(_AspireCliInvocationMode), but the dnx command could not be found on PATH. Install or use the .NET SDK 10.0 or later, set AspireCliInvocationMode=Path to use the global aspire command, or set AspireCliPath to an explicit Aspire CLI executable." />

@@ -776,6 +776,26 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
         AssertUsesDotNetRun(properties, project);
     }
 
+    [Fact]
+    public async Task ComputeRunArgumentsDoesNotUseAspireCliForMtpTestApplications()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var fakeCliDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "fake-cli"));
+        await CreateFakeAspireCliAsync(fakeCliDirectory.FullName);
+        var project = await CreateRunHookProjectAsync(workspace.Path, aspireUseCliBundle: true,
+            """
+              <PropertyGroup>
+                <IsTestingPlatformApplication>true</IsTestingPlatformApplication>
+              </PropertyGroup>
+            """);
+
+        var properties = await GetComputeRunArgumentsPropertiesAsync(
+            project,
+            environment: CreatePathEnvironment(fakeCliDirectory.FullName));
+
+        AssertUsesDotNetRun(properties, project);
+    }
+
     [Theory]
     [InlineData("C#", false, null, "error ASPIRE013")]
     [InlineData("C#", false, "ASPIRE010", "error ASPIRE013")]
