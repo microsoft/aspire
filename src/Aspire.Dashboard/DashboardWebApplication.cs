@@ -177,7 +177,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         // does not exist.
         var dashboardAssemblyName = typeof(DashboardWebApplication).Assembly.GetName().Name;
         var isDefaultDashboardDevHost = builder.Environment.IsDevelopment() &&
-            string.Equals(builder.Environment.ApplicationName, dashboardAssemblyName, StringComparison.OrdinalIgnoreCase);
+            string.Equals(builder.Environment.ApplicationName, dashboardAssemblyName, StringComparison.Ordinal);
         if (!isDefaultDashboardDevHost && string.IsNullOrEmpty(builder.Configuration[WebHostDefaults.StaticWebAssetsKey]))
         {
             var runtimeManifestPath = ResolveStaticAssetsManifestPath(builder.Environment.ContentRootPath, AppContext.BaseDirectory, "runtime");
