@@ -40,6 +40,32 @@ test("Needs attention serializes a strict ten-card prefix and the complete dedup
   }
 });
 
+test("priority label refreshes reorder the full Needs attention queue before its ten-card split", async () => {
+  const nodes = Array.from({ length: 12 }, (_, index) => {
+    const node = prNode(index + 1, isoAgo(hourMs));
+    node.createdAt = isoAgo((15 - index) * dayMs);
+    return node;
+  });
+  mockPullRequests(nodes.toReversed());
+  for (const { labels, expected } of [
+    { labels: [[], []], expected: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] },
+    { labels: [[], ["FiXeS-CI"]], expected: [12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] },
+    { labels: [["urgent-review"], ["fixes-ci", "urgent-review"]], expected: [11, 12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10] },
+    { labels: [["urgent-review"], []], expected: [11, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12] },
+    { labels: [[], []], expected: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] },
+  ]) {
+    nodes[10].labels.nodes = labels[0].map((name) => ({ name }));
+    nodes[11].labels.nodes = labels[1].map((name) => ({ name }));
+    const { attention, errors } = await loadReview();
+    assert.deepEqual(errors, []);
+    assert.deepEqual(attention.focus.map((item) => item.pr.number), expected.slice(0, 10));
+    assert.deepEqual(attention.focusRemainder.map((item) => item.pr.number), expected.slice(10));
+    assert.deepEqual([...attention.focus, ...attention.focusRemainder].map((item) => item.queuePosition),
+      [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+    assert.equal(attention.focusTotal, 12);
+  }
+});
+
 test("review debt stays eligible in the remainder without spilling into the top ten or losing non-debt PRs", async () => {
   const nodes = Array.from({ length: 16 }, (_, index) => {
     const node = prNode(index + 1, isoAgo(index < 13 ? 20 * dayMs : hourMs));

@@ -764,6 +764,13 @@ function prKey(pr) {
   return `${prHost(pr)}\n${pr.repository.toLowerCase()}#${pr.number}`;
 }
 
+function hasFocusPriorityLabel(pr) {
+  return pr.labels.some((label) => {
+    const name = label.toLowerCase();
+    return name === "fixes-ci" || name === "urgent-review";
+  });
+}
+
 function compareFirstReadiness(a, b) {
   const timeOrder = Date.parse(a.firstReadyForReviewAt) - Date.parse(b.firstReadyForReviewAt);
   if (timeOrder) return timeOrder;
@@ -816,7 +823,8 @@ export function computeFocusItems(buckets) {
     .filter((i) => !isCommunityPullRequest(i.pullRequest))
     .filter((i) => !isChecksFailing(i.pullRequest))
     .filter((i) => i.pullRequest.firstReadyForReviewAt !== null)
-    .sort((a, b) => compareFirstReadiness(a.pullRequest, b.pullRequest));
+    .sort((a, b) => Number(hasFocusPriorityLabel(b.pullRequest)) - Number(hasFocusPriorityLabel(a.pullRequest)) ||
+      compareFirstReadiness(a.pullRequest, b.pullRequest));
 }
 
 export function computeCommunityItems(prs) {
