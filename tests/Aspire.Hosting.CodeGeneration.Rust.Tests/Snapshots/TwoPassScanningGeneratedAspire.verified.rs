@@ -14391,22 +14391,19 @@ impl ParameterResource {
     }
 
     /// Marks the parameter resource as optional.
-    pub fn with_optional(&self) -> Result<ParameterResource, Box<dyn std::error::Error>> {
+    pub fn as_optional(&self) -> Result<ParameterResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
-        let result = self.client.invoke_capability("Aspire.Hosting/withOptional", args)?;
+        let result = self.client.invoke_capability("Aspire.Hosting/asOptional", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ParameterResource::new(handle, self.client.clone()))
     }
 
-    /// Sets whether the parameter resource requires a value.
-    pub fn with_required(&self, required: Option<bool>) -> Result<ParameterResource, Box<dyn std::error::Error>> {
+    /// Marks the parameter resource as required.
+    pub fn as_required(&self) -> Result<ParameterResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
-        if let Some(ref v) = required {
-            args.insert("required".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
-        }
-        let result = self.client.invoke_capability("Aspire.Hosting/withRequired", args)?;
+        let result = self.client.invoke_capability("Aspire.Hosting/asRequired", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ParameterResource::new(handle, self.client.clone()))
     }

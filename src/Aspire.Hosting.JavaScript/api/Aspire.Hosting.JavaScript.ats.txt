@@ -21,10 +21,16 @@ Aspire.Hosting.JavaScript/addJavaScriptApp(name: string, appDirectory: string, r
 Aspire.Hosting.JavaScript/addNextJsApp(name: string, appDirectory: string, runScriptName?: string) -> Aspire.Hosting.JavaScript/Aspire.Hosting.JavaScript.NextJsAppResource
 Aspire.Hosting.JavaScript/addNodeApp(name: string, appDirectory: string, scriptPath: string) -> Aspire.Hosting.JavaScript/Aspire.Hosting.JavaScript.NodeAppResource
 Aspire.Hosting.JavaScript/addViteApp(name: string, appDirectory: string, runScriptName?: string) -> Aspire.Hosting.JavaScript/Aspire.Hosting.JavaScript.ViteAppResource
+Aspire.Hosting.JavaScript/BunAppResource.resourceTypeDisplayName(context: Aspire.Hosting.JavaScript/Aspire.Hosting.JavaScript.BunAppResource) -> string
+Aspire.Hosting.JavaScript/DenoAppResource.resourceTypeDisplayName(context: Aspire.Hosting.JavaScript/Aspire.Hosting.JavaScript.DenoAppResource) -> string
 Aspire.Hosting.JavaScript/disableBuildValidation() -> Aspire.Hosting.JavaScript/Aspire.Hosting.JavaScript.NextJsAppResource
+Aspire.Hosting.JavaScript/JavaScriptAppResource.resourceTypeDisplayName(context: Aspire.Hosting.JavaScript/Aspire.Hosting.JavaScript.JavaScriptAppResource) -> string
+Aspire.Hosting.JavaScript/NextJsAppResource.resourceTypeDisplayName(context: Aspire.Hosting.JavaScript/Aspire.Hosting.JavaScript.NextJsAppResource) -> string
+Aspire.Hosting.JavaScript/NodeAppResource.resourceTypeDisplayName(context: Aspire.Hosting.JavaScript/Aspire.Hosting.JavaScript.NodeAppResource) -> string
 Aspire.Hosting.JavaScript/publishAsNodeServer(entryPoint: string, outputPath?: string) -> Aspire.Hosting.JavaScript/Aspire.Hosting.JavaScript.JavaScriptAppResource
 Aspire.Hosting.JavaScript/publishAsPackageScript(scriptName?: string, runScriptArguments?: string) -> Aspire.Hosting.JavaScript/Aspire.Hosting.JavaScript.JavaScriptAppResource
 Aspire.Hosting.JavaScript/publishAsStaticWebsite(apiPath?: string, apiTarget?: Aspire.Hosting/Aspire.Hosting.IResourceWithServiceDiscovery, outputPath?: string, stripPrefix?: boolean, targetEndpointName?: string) -> Aspire.Hosting.JavaScript/Aspire.Hosting.JavaScript.JavaScriptAppResource
+Aspire.Hosting.JavaScript/ViteAppResource.resourceTypeDisplayName(context: Aspire.Hosting.JavaScript/Aspire.Hosting.JavaScript.ViteAppResource) -> string
 Aspire.Hosting.JavaScript/withBrowserDebugger(browser?: string) -> Aspire.Hosting.JavaScript/Aspire.Hosting.JavaScript.JavaScriptAppResource
 Aspire.Hosting.JavaScript/withBuildScript(scriptName: string, args?: string[]) -> Aspire.Hosting.JavaScript/Aspire.Hosting.JavaScript.JavaScriptAppResource
 Aspire.Hosting.JavaScript/withBun(install?: boolean, installArgs?: string[]) -> Aspire.Hosting.JavaScript/Aspire.Hosting.JavaScript.JavaScriptAppResource

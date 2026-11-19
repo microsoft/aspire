@@ -18,6 +18,11 @@ A locally built CLI bakes a `local` identity and an unstamped informational vers
 it never synthesizes a staging channel and never derives a darc feed. The two diagnostic
 overrides below let you simulate the staging path locally.
 
+If `aspire update --self --channel staging` cannot resolve staging from a daily,
+local, or per-PR CLI, its error output explains the restriction and recovery options:
+install a staging or stable CLI, or select a specific staging feed with
+`aspire config set -g overrideStagingFeed <feed-url>`. No log inspection is required.
+
 ## The two diagnostic overrides
 
 Both are read by `PackagingService` only (their blast radius is limited to staging

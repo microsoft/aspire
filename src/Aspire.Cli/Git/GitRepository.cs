@@ -136,6 +136,11 @@ internal sealed class GitRepository(CliExecutionContext executionContext, IEnvir
 
     private async Task<ProcessTextOutput> RunGitAsync(ProcessStartInfo startInfo, ProfilingTelemetry.ActivityScope activity, CancellationToken cancellationToken)
     {
+        // Git can block on Windows if it inherits the MCP stdin pipe while the server is reading it.
+        // https://github.com/microsoft/aspire/issues/21877
+        using var standardInput = File.OpenNullHandle();
+        startInfo.StandardInputHandle = standardInput;
+
         // RunAndCaptureTextAsync drains stdout and stderr concurrently, and kills git when
         // cancellationToken fires so Ctrl+C doesn't leave `git ls-files` walking a large repo.
         var result = await Process.RunAndCaptureTextAsync(startInfo, cancellationToken).ConfigureAwait(false);

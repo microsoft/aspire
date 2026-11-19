@@ -105,7 +105,7 @@ Read more about this configuration source
 
 Only use sources you trust. Content from these sources can run code on your machine.
 
-Use configuration from this source? [Y/n]:
+Create app using configuration from this source? [Y/n]:
 ```
 
 The explanation precedes the source details, which use an aligned two-column
@@ -114,6 +114,12 @@ AppHost and dashboard summaries. When a README URL is available,
 **Read more about this configuration source** is a Spectre.Console hyperlink.
 Terminals without hyperlink support show the label and URL as plain text.
 The standard yes/no confirmation defaults to **Yes** when Enter is pressed.
+The confirmation describes the current command's action: `aspire new` asks
+**Create app using configuration from this source?**, `aspire init` asks
+**Initialize Aspire using configuration from this source?**, `aspire update`
+asks **Update app to use configuration from this source?**, and
+`aspire template source list` asks
+**Include template sources from this configuration source?**
 
 The source trust warning appears at most once per CLI command, shared across
 configuration, template, integration, and skill sources. Source explanations,
@@ -351,7 +357,7 @@ Directory cleanup failures are logged at debug level without displaying a UI war
 | `aspire new` / `aspire init` initially creating source-bound app configuration | After consent, fetch, validate, and materialize allowed values; save the binding, applied version, and tracking copy |
 | `aspire update --config-source` | Fetch and explicitly apply allowed values to the nearest local configuration with a saved binding, regardless of check age |
 | Other commands scoped to an existing source-bound app, including re-running initialization on an already-bound app | Check for updates when due; never apply source values or rewrite the fetched tracking copy |
-| Runtime template discovery in `aspire new` | With an explicit `ASPIRE_INIT_SOURCE_URL` and no decline during creation consent, acquire the source and publish its tracking snapshot; use only `templateSources` at runtime without saving inherited settings |
+| Runtime template discovery in `aspire new` | After creation consent accepts an environment-selected or employee-detected source, reuse its acquired snapshot; use only `templateSources` at runtime without saving inherited settings |
 | `aspire template source list` | After shared consent (or explicit `--use-config-source` opt-in for JSON), acquire the selected source and publish its tracking snapshot; overlay only `templateSources`, without materializing project files or saving inherited settings |
 | Commands scoped to an app without a `configSource` in the nearest local configuration, excluding the runtime template operations above | No source check or acquisition, regardless of global bindings |
 | Other global commands not scoped to an app, help, and completion | No source check or acquisition |
@@ -396,12 +402,13 @@ aspire update --config-source --apphost MyApp.AppHost.csproj
 
 This is a configuration-update mode of `aspire update`, separate from its package-update workflow:
 
-- Resolve the project using the existing project-selection behavior, including `--apphost`, and process the saved binding in its nearest local settings file. Ignore global bindings and do not select a source from environment variables or employee detection. If the local configuration has no saved source, report that there is no configuration source to update and exit successfully without Git acquisition.
+- Resolve the project using the existing project-selection behavior, including `--apphost`, and process the saved binding in its nearest local settings file. Ignore global bindings and do not select a source from environment variables or employee detection. If the local configuration has no saved source or has opted out, report that there is no configuration source to update and exit successfully without Git acquisition.
 - When `--apphost` names a directory, discover and select an AppHost within that directory before considering a configuration-only fallback in the requested directory. If discovery finds no AppHost, use the nearest local settings file from that fallback directory; discovery ambiguity or unsupported-project errors must not silently select another binding.
+- Before acquisition, display the saved source's repository, non-default source-file path, optional ref, and declaring local settings file using the same source-details layout as creation. Skip the introductory explanation of configuration sources.
 - Acquire the saved branch's current commit, the saved exact commit, or the repository's current default branch when the binding has no ref, even when a recent check found no update. Validate it, merge only supplied allowlisted values into the declaring configuration file, and save its applied version with those values, preserving unrelated settings.
 - On acquisition, validation, or write failure, stop and exit nonzero without changing the app configuration or its applied version.
 - Publish the fetched source JSON and fetch metadata in Aspire home as tracking data. Record a successful fetch/check time even if the selected file's version is unchanged. If tracking publication fails, report it explicitly; do not use shared tracking as proof that an app was updated.
-- Successful application does not display a completion summary with the repository, resolved commit, or settings-file path. Git acquisition notices, source-trust warnings, and errors remain visible. Supplied allowlisted values can replace local edits.
+- On successful application, report that configuration was updated to the latest version from its source, or that it is already up to date when no settings changed. Replacing local edits counts as an update even if the source version is unchanged. Do not include the repository, resolved commit, or settings-file path in this result message. Git acquisition notices, source-trust warnings, and errors remain visible.
 - Do not update the CLI, SDK, or packages, change the binding's repository, path, or ref, regenerate AppHost source or application code, or reinstall content. The app configuration file and its applied-version stamp are intentionally updated. Reject combinations with `--self`, `--migrate`, or channel/package-source overrides. Plain `aspire update` retains its existing package-update behavior and performs an advisory source check for saved bindings; unbound projects can explicitly adopt a source as described above.
 - Follow `aspire update`'s existing non-interactive confirmation contract: automation uses `aspire update --config-source --yes --non-interactive`. The saved binding supplies source consent; this command does not establish a new binding or prompt to enable one.
 
@@ -452,7 +459,7 @@ Keep no-source, declined-source materialization, unrelated global-command, help,
 
 ## Runtime template sources
 
-When `ASPIRE_INIT_SOURCE_URL` is explicitly set, template discovery/search in interactive `aspire new` also reads the remote file's `templateSources` section, unless the developer declined that source during creation consent. An interactive decline or `--use-config-source false` disables its runtime template inheritance for the rest of the command, not just project-file materialization. Discovery does not repeat the consent prompt. Employee detection alone does not enable runtime template discovery inheritance. Optional `ASPIRE_INIT_SOURCE_PATH` and `ASPIRE_INIT_SOURCE_REF` use the same validation, branch/commit selection, Git authentication, timeout, and immutable snapshot cache as configuration acquisition. Search and opted-in listing reuse a snapshot within the invocation; later invocations acquire an accepted source again rather than silently falling back to stale cached configuration.
+After the developer accepts a configuration source in `aspire new`, template discovery/search reads that source's `templateSources` section, whether the source was selected by `ASPIRE_INIT_SOURCE_URL` or Microsoft employee detection. An interactive decline or `--use-config-source false` disables its runtime template inheritance for the rest of the command, not just project-file materialization. Discovery does not repeat the consent prompt and reuses the accepted source's identity and acquired snapshot. Outside creation, runtime discovery can use an explicitly set `ASPIRE_INIT_SOURCE_URL`; employee detection without consent does not enable inheritance. Optional `ASPIRE_INIT_SOURCE_PATH` and `ASPIRE_INIT_SOURCE_REF` use the same validation, branch/commit selection, Git authentication, timeout, and immutable snapshot cache as configuration acquisition. Search and opted-in listing reuse a snapshot within the invocation; later invocations acquire an accepted source again rather than silently falling back to stale cached configuration.
 
 `aspire template source list` uses the same candidate selection and consent prompt as `aspire new`, including the detected employee candidate when no explicit URL is set. Accepting includes the selected source's template definitions; declining lists only explicit global definitions. In a non-interactive host, an available candidate requires `--use-config-source` or `--use-config-source false`, just as for `aspire new`.
 
@@ -495,7 +502,7 @@ Never save inherited template sources into the user's global configuration or th
 
 ## Phase 2: Acquire content from configuration
 
-Skills and integrations are acquired according to the application's saved configuration and normal CLI precedence. Templates use built-in choices and named sources from global configuration and the explicit environment-selected runtime overlay. Content acquisition is separate from fetching or materializing a configuration source, and must not treat previously retained tracking copies as runtime configuration providers. Runtime template inheritance uses its separately acquired snapshot as described above.
+Skills and integrations are acquired according to the application's saved configuration and normal CLI precedence. Templates use built-in choices and named sources from global configuration and the runtime overlay selected by creation consent or an explicit environment source. Content acquisition is separate from fetching or materializing a configuration source, and must not treat previously retained tracking copies as runtime configuration providers. Runtime template inheritance uses the invocation's acquired snapshot as described above.
 
 Keys in `integrationSources`, `templateSources`, and `skillSources` must be 1-64 ASCII letters, digits, dots, hyphens, or underscores, starting with a letter or digit (`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`). Names merge case-insensitively. Colons, whitespace, and other characters are not allowed. Dots remain path separators in `aspire config` edit commands, so edit dotted source keys directly in the JSON file or use the template source management commands. These restrictions apply to source keys, not NuGet package patterns, Git repository names, or explicit agent marketplace/plugin identifiers. This is an Aspire naming policy, not a NuGet package-source length limit.
 
@@ -528,7 +535,7 @@ Each additional source requires a GitHub `owner/repository` or Git repository ad
 
 Existing matching registrations and agent-side pins are retained. GitHub shorthand and the equivalent HTTPS repository URL match an existing native GitHub registration, including URLs with a `.git` suffix. HTTPS and SSH URL schemes and hostnames match case-insensitively; non-GitHub repository paths and SSH usernames remain case-sensitive. Explicitly disabled plugins, mismatched marketplace repositories, and existing marketplace policies are conflicts rather than permission to overwrite user settings. Each target file is updated atomically, so a conflict in any source leaves that target unchanged.
 
-Before skill selection, when additional enabled sources apply to the selected clients, the CLI displays **One or more skill sources are configured. A skill source lets an organization share skills to customize your development experience.** Aligned source-detail blocks identify those sources using **Name**. The `default` source's details are omitted without changing its registration. Selected plugin clients see **Git source**, an explicit **Git ref**, and **Plugins**. **Marketplace** is displayed only when it differs from the source name, compared case-insensitively like source and marketplace identifiers. OpenCode clients see configured V1/V2 catalog URLs. Disabled sources and catalogs unused by the selected clients are omitted. The shared source-trust warning follows the details on stderr, even if configuration or template onboarding already displayed it. Default-only registration does not display source onboarding.
+Before interactive skill selection, or before registration when `--skills aspire` is supplied, the CLI displays **One or more skill sources are configured. A skill source lets an organization share skills to customize your development experience.** when enabled sources apply to the selected clients. Aligned source-detail blocks identify every applicable source using **Name**, including the built-in `default` source and any overrides to it. Selected plugin clients see **Git source**, an explicit **Git ref**, and **Plugins**. **Marketplace** is displayed only when it differs from the source name, compared case-insensitively like source and marketplace identifiers. OpenCode clients see configured V1/V2 catalog URLs. Disabled sources and catalogs unused by the selected clients are omitted. The shared source-trust warning follows the details on stderr, at most once per command invocation, including when chained from configuration or template onboarding. Explicitly selecting only unrelated skills, `--skills none`, or no agents skips this source notice.
 
 Successful registration is summarized as **Configured sources in {files}**, listing configuration file paths with their agent names in parentheses, for example `.github/copilot/settings.json (GitHub Copilot)`. Multiple files are separated by commas. Repository and catalog URLs are not repeated in this summary.
 

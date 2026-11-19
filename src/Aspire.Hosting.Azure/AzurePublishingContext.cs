@@ -322,9 +322,9 @@ public sealed class AzurePublishingContext(
             IResourceWithConnectionString cs => Eval(cs.ConnectionStringExpression),
             ReferenceExpression { IsConditional: true } re => EvalConditionalExpr(re),
             ReferenceExpression re => EvalExpr(re),
-#pragma warning disable ASPIREAZURE003 // IBicepOutputReferenceProvider is experimental.
+#pragma warning disable ASPIREAZURE005 // IBicepOutputReferenceProvider is experimental.
             IBicepOutputReferenceProvider p when p.GetOutputReference() is { } b => Eval(b),
-#pragma warning restore ASPIREAZURE003
+#pragma warning restore ASPIREAZURE005
             string s => s,
             _ => ""
         };

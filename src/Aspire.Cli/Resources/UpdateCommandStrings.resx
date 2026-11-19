@@ -55,7 +55,7 @@
     <value>Failed to discover NuGet.config files.</value>
   </data>
   <data name="ChannelUpdateRequiresAmbientNuGetConfigurationFormat" xml:space="preserve">
-    <value>Cannot apply channel '{0}' for '{1}' because MSBuild overrides NuGet configuration: {2}. Remove these overrides to enable explicit channel updates. Updates without an explicit channel remain supported.</value>
+    <value>Cannot apply channel '{0}' for '{1}' because MSBuild overrides NuGet configuration: {2}. Remove these overrides to enable channel updates. Updates without a command-line or configured channel remain supported.</value>
   </data>
   <data name="ChannelFeedAlreadyConfiguredFormat" xml:space="preserve">
     <value>Cannot modify '{0}' because channel source '{1}' is disabled, or the source or its package mappings are inherited or user-owned. Update the NuGet configuration manually instead.</value>
@@ -187,7 +187,8 @@
     <value>Restoring packages...</value>
   </data>
   <data name="FailedToRestoreAfterUpdateFormat" xml:space="preserve">
-    <value>Failed to restore packages for project {0} after update.</value>
+    <value>Validation restore for {0} channel update failed for project {1}. The update was not applied. Review the restore output for details.</value>
+    <comment>{0} = Channel name. {1} = AppHost file path.</comment>
   </data>
   <data name="FailedToRegenerateSdkAfterUpdateFormat" xml:space="preserve">
     <value>Update failed regenerating the SDK code for project {0}. Configuration changes were not persisted.</value>
@@ -214,8 +215,44 @@
   <data name="NuGetConfigDirOptionDescription" xml:space="preserve">
     <value>Directory to create or update the NuGet.config file in</value>
   </data>
+  <data name="DryRunOptionDescription" xml:space="preserve">
+    <value>Validate an explicit .NET AppHost channel update using temporary NuGet caches, without proposing or applying changes.</value>
+  </data>
+  <data name="DryRunRequiresChannel" xml:space="preserve">
+    <value>--dry-run requires an explicit --channel or --quality other than default, and cannot be combined with --self or --migrate.</value>
+  </data>
+  <data name="DryRunRequiresDotNet" xml:space="preserve">
+    <value>--dry-run is supported only for .NET AppHosts.</value>
+  </data>
+  <data name="DryRunSuccessful" xml:space="preserve">
+    <value>Channel update validation succeeded. Original files have been restored; no update was applied.</value>
+  </data>
+  <data name="DryRunValidating" xml:space="preserve">
+    <value>Validating the channel update...</value>
+  </data>
+  <data name="DryRunExistingBackupsFormat" xml:space="preserve">
+    <value>Backups from an earlier dry run already exist. Preserve them for recovery if needed before replacing them:
+{0}</value>
+  </data>
+  <data name="DryRunReplaceBackupsPrompt" xml:space="preserve">
+    <value>Replace the existing backups with the current file contents? This discards the previous recovery copies.</value>
+  </data>
+  <data name="DryRunBackupsNotReplaced" xml:space="preserve">
+    <value>Dry run cancelled without replacing existing backups. Recover the originals from the listed backup files or move them aside before retrying.</value>
+  </data>
+  <data name="DryRunBackupRecoveryFormat" xml:space="preserve">
+    <value>Could not restore '{0}'. Its recovery backup was preserved at '{1}'. Restore the backup manually before retrying.</value>
+  </data>
   <data name="NoChannelFoundMatching" xml:space="preserve">
     <value>No channel found matching '{0}'. Valid options are: {1}.</value>
+  </data>
+  <data name="ConfiguredChannelNotFoundFormat" xml:space="preserve">
+    <value>Cannot use channel '{0}' from Aspire configuration. {1}</value>
+    <comment>{0} = configured channel name. {1} = reason the channel could not be resolved.</comment>
+  </data>
+  <data name="UsingConfiguredChannelFormat" xml:space="preserve">
+    <value>Using channel '{0}' from Aspire configuration. Pass --channel to override.</value>
+    <comment>{0} = configured channel name.</comment>
   </data>
   <data name="PendingMigrationsHeader" xml:space="preserve">
     <value>This project has pending migrations:</value>

@@ -226,23 +226,29 @@ public static class ParameterResourceBuilderExtensions
     /// The manifest publisher does not currently support optional parameters and throws a <see cref="DistributedApplicationException"/>.
     /// </remarks>
     [AspireExport]
-    public static IResourceBuilder<ParameterResource> WithOptional(this IResourceBuilder<ParameterResource> builder)
-    {
-        return builder.WithRequired(required: false);
-    }
-
-    /// <summary>
-    /// Sets whether the parameter resource requires a value.
-    /// </summary>
-    /// <param name="builder">Resource builder for the parameter.</param>
-    /// <param name="required">A value indicating whether the parameter must have a value before it can be resolved.</param>
-    /// <returns>The configured resource builder.</returns>
-    [AspireExport]
-    public static IResourceBuilder<ParameterResource> WithRequired(this IResourceBuilder<ParameterResource> builder, bool required = true)
+    public static IResourceBuilder<ParameterResource> AsOptional(this IResourceBuilder<ParameterResource> builder)
     {
         ArgumentNullException.ThrowIfNull(builder);
 
-        builder.Resource.Required = required;
+        builder.Resource.Required = false;
+
+        return builder;
+    }
+
+    /// <summary>
+    /// Marks the parameter resource as required.
+    /// </summary>
+    /// <param name="builder">Resource builder for the parameter.</param>
+    /// <returns>The configured resource builder.</returns>
+    /// <remarks>
+    /// Parameters are required by default. Use this method to make a parameter required again after it was marked with <see cref="AsOptional(IResourceBuilder{ParameterResource})"/>.
+    /// </remarks>
+    [AspireExport]
+    public static IResourceBuilder<ParameterResource> AsRequired(this IResourceBuilder<ParameterResource> builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        builder.Resource.Required = true;
 
         return builder;
     }

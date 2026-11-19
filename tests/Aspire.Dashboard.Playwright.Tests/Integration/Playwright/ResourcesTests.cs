@@ -23,6 +23,65 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
 
     [Fact]
     [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task Tooltips_TruncateLongPlainTextAndPreserveRichContent()
+    {
+        await RunTestAsync(async page =>
+        {
+            await page.SetViewportSizeAsync(1440, 1200);
+            await page.GotoAsync("/resources");
+            await Assertions.Expect(page.Locator("aspire-tooltip-provider")).ToHaveCountAsync(1);
+            await page.EvaluateAsync("""
+                () => {
+                    const anchor = document.createElement("button");
+                    anchor.id = "tooltip-test-anchor";
+                    anchor.textContent = "Tooltip anchor";
+                    anchor.style.cssText = "position: fixed; top: 50%; left: 50%;";
+                    document.body.appendChild(anchor);
+                }
+                """);
+            var anchor = page.Locator("#tooltip-test-anchor");
+            var tooltip = page.Locator("aspire-tooltip-provider fluent-tooltip[aria-hidden='false']");
+                var maxLength = 1024;
+            var wordCount = (maxLength - 1) / 5;
+            var cases = new (string Text, string Expected)[]
+            {
+                ("First line.\nSecond line.", "First line.\nSecond line."),
+                (new string('x', maxLength), new string('x', maxLength)),
+                (new string('x', maxLength + 1), new string('x', maxLength - 1) + "\u2026"),
+                (string.Concat(Enumerable.Repeat("word ", wordCount + 10)), string.Join(" ", Enumerable.Repeat("word", wordCount)) + "\u2026"),
+                ("short words " + new string('x', maxLength), "short words\u2026"),
+                ("cafe\u0301 " + new string('x', maxLength), "cafe\u0301\u2026"),
+                ("   " + new string('x', maxLength), new string('x', maxLength - 4) + "\u2026"),
+                (new string('x', maxLength - 2) + "\U00010400tail", new string('x', maxLength - 2) + "\u2026")
+            };
+            foreach (var (text, expected) in cases)
+            {
+                await anchor.EvaluateAsync("(anchor, text) => anchor.setAttribute('data-tooltip', text)", text);
+                await anchor.HoverAsync();
+                await Assertions.Expect(tooltip).ToBeVisibleAsync();
+                await Assertions.Expect(tooltip).ToHaveJSPropertyAsync("textContent", expected);
+                await Assertions.Expect(anchor).ToHaveAttributeAsync("data-tooltip", text);
+            }
+
+            var richText = string.Concat(Enumerable.Repeat("rich text ", maxLength / 10 + 10));
+            await anchor.EvaluateAsync("""
+                (anchor, text) => {
+                    const source = document.createElement("div");
+                    source.id = "tooltip-test-content";
+                    source.hidden = true;
+                    const strong = document.createElement("strong");
+                    strong.textContent = text;
+                    source.appendChild(strong);
+                    document.body.appendChild(source);
+                    anchor.setAttribute("data-tooltip-content", source.id);
+                }
+                """, richText);
+            await Assertions.Expect(tooltip.Locator("strong")).ToHaveJSPropertyAsync("textContent", richText);
+        });
+    }
+
+    [Fact]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
     public async Task ResourcePane_GroupOrderSupportsDragKeyboardAndReload()
     {
         await RunTestAsync(async page =>

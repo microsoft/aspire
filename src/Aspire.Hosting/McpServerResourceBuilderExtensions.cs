@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
 
 namespace Aspire.Hosting;
@@ -18,13 +17,20 @@ public static class McpServerResourceBuilderExtensions
     /// </summary>
     /// <typeparam name="T">The resource type.</typeparam>
     /// <param name="builder">The resource builder.</param>
-    /// <param name="path">An optional path to append to the endpoint URL when forming the MCP server address. Defaults to <c>"/mcp"</c>.</param>
-    /// <param name="endpointName">An optional name of the endpoint that hosts the MCP server. If not specified, defaults to the first HTTPS or HTTP endpoint.</param>
+    /// <param name="path">An optional path to append to the endpoint URL when forming the MCP server address. Defaults to <c>"/mcp"</c>.
+    /// A leading slash is added if missing. A null or empty value uses the endpoint URL without an additional path.</param>
+    /// <param name="endpointName">An optional name of the endpoint that hosts the MCP server. If not specified, selects the endpoint
+    /// named <c>https</c>, falling back to the endpoint named <c>http</c>. Names are matched case-insensitively;
+    /// endpoints with other names must be selected explicitly, regardless of their URI scheme.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining additional configuration.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// This method adds an <see cref="McpServerEndpointAnnotation"/> to the resource, enabling the Aspire tooling
     /// to discover and proxy the MCP server exposed by the resource.
+    /// It does not create an endpoint, start an MCP server, or configure its transport or authentication.
+    /// The resource must already expose an MCP server at the selected endpoint and path.
+    /// Endpoint selection and URL resolution occur when tooling consumes the annotation, not when this method is called.
+    /// A missing selected endpoint causes resolution to throw a <see cref="DistributedApplicationException"/>.
     /// </remarks>
     /// <example>
     /// Mark a resource as hosting an MCP server using the default endpoint:
@@ -38,7 +44,6 @@ public static class McpServerResourceBuilderExtensions
     ///     .WithMcpServer("/sse", endpointName: "https");
     /// </code>
     /// </example>
-    [Experimental("ASPIREMCP001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExport]
     public static IResourceBuilder<T> WithMcpServer<T>(
         this IResourceBuilder<T> builder,

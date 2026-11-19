@@ -21,6 +21,7 @@ internal interface IAppHostServerProjectFactory
     Task<IAppHostServerProject> CreateAsync(string appPath, CancellationToken cancellationToken = default);
     Task<IAppHostServerProject> CreateAsync(string appPath, FileInfo appHostFile, CancellationToken cancellationToken);
     Task<IAppHostServerProject> CreateAsync(string appPath, string? restoreRootConfigDirectory, CancellationToken cancellationToken);
+    Task<IAppHostServerProject> CreateForSdkCommandsAsync(string appPath, string? restoreRootConfigDirectory, CancellationToken cancellationToken);
 }
 
 /// <summary>
@@ -53,6 +54,7 @@ internal sealed class AppHostServerProjectFactory(
             appPath,
             restoreRootConfigDirectory: null,
             workloadId: AppHostWorkloadId.Create(appPath),
+            temporary: false,
             cancellationToken: cancellationToken);
 
     public Task<IAppHostServerProject> CreateAsync(
@@ -66,6 +68,7 @@ internal sealed class AppHostServerProjectFactory(
             appPath,
             restoreRootConfigDirectory: null,
             workloadId: AppHostWorkloadId.Create(appHostFile),
+            temporary: false,
             cancellationToken: cancellationToken);
     }
 
@@ -74,12 +77,17 @@ internal sealed class AppHostServerProjectFactory(
             appPath,
             restoreRootConfigDirectory,
             AppHostWorkloadId.Create(appPath),
+            temporary: false,
             cancellationToken).ConfigureAwait(false);
+
+    public Task<IAppHostServerProject> CreateForSdkCommandsAsync(string appPath, string? restoreRootConfigDirectory, CancellationToken cancellationToken)
+        => CreateAsync(appPath, restoreRootConfigDirectory, AppHostWorkloadId.Create(appPath), temporary: true, cancellationToken);
 
     private async Task<IAppHostServerProject> CreateAsync(
         string appPath,
         string? restoreRootConfigDirectory,
         string workloadId,
+        bool temporary,
         CancellationToken cancellationToken)
     {
         if (IsNativeServerEnabled(appPath))
@@ -103,6 +111,9 @@ internal sealed class AppHostServerProjectFactory(
                 processExecutionFactory,
                 environment,
                 loggerFactory.CreateLogger<DotNetBasedAppHostServerProject>(),
+                // SDK commands do not reuse these server builds. Put the build files in
+                // the temporary folder so they are deleted when the command finishes.
+                projectModelPath: temporary ? Path.Combine(appPath, "server") : null,
                 logFilePath: executionContext.LogFilePath,
                 restoreRootConfigDirectory: restoreRootConfigDirectory);
         }

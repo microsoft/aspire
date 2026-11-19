@@ -11,7 +11,7 @@
     --resource-row-line-height: var(--lineHeightBase300);
     --resource-secondary-font-size: var(--aspire-font-size-secondary);
     --resource-secondary-line-height: 18px;
-    /* The full canvas's action rail from 960px: two lifecycle commands and the menu, 3 x 28px + 2 x 4px gaps. The
+    /* The full canvas's action rail from 960px: two highlighted commands and the menu, 3 x 28px + 2 x 4px gaps. The
        expand toggle leads the row instead, and the URLs column replaces an open-URL button. */
     --resource-row-actions-width: 92px;
     /* The full canvas's Started column: a clock, the verb and a short age, up to "Stopped 23h ago". */
@@ -53,9 +53,7 @@
        minimums made the row wider than the pane at 540-584px, 720-730px and 960-998px, which pushed the actions out
        of view. */
     --resource-row-identity-extra: calc(var(--resource-row-meta-type-width) + 26px);
-    --resource-row-font-size: var(--aspire-font-size-secondary);
     --resource-row-line-height: var(--lineHeightBase200);
-    --resource-secondary-font-size: var(--aspire-font-size-caption);
     --resource-secondary-line-height: 16px;
     --resource-insight-height: 24px;
     --resource-insight-icon-size: 12px;
@@ -68,14 +66,14 @@
 /* Persistent types, such as "RabbitMQ (persistent)", are wider than the others, so every row's type column widens
    together and the columns stay aligned. 100cqw is the width of the resource-pane container. The full canvas keeps
    64px: its fixed tracks would otherwise have to give up endpoint width at the narrower breakpoints.
-   On touch screens the 112px action rail is always showing, so names come first: the column stays at 64px at the
+   On touch screens the action rail is always showing, so names come first: the column stays at 64px at the
    default 420px pane width and only widens with the room a wider pane adds, reaching 128px at 484px. */
 .resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact:has(.resource-row-type-persistent) {
     --resource-row-meta-type-width: clamp(64px, calc(100cqw - 356px), 128px);
 }
 
-/* Where rows can be hovered, a row at rest narrows the action rail to 20px (see "Compact sidebar rows show their
-   actions only while the row is hovered" below), which
+/* Where rows can be hovered, a row at rest hides the action rail (see "Sidebar rows show their actions only while
+   the row is hovered" below), which
    leaves room for the full 128px column while still keeping about 180px for names at the default pane width. */
 @media (hover: hover) {
     .resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact:has(.resource-row-type-persistent) {
@@ -133,7 +131,7 @@
     margin: 6px 0 0;
     position-try-fallbacks: flip-inline;
     box-sizing: border-box;
-    width: min(var(--resource-pane-expanded-width, 290px), calc(100vw - 24px));
+    width: min(330px, calc(100vw - 24px));
     max-width: none;
     height: max-content;
     max-height: stretch;
@@ -974,9 +972,8 @@
     margin-bottom: 9px;
 }
 
-/* The row has no actions, so its link spans the actions rail the other rows reserve. Otherwise its counts would stop
-   short of the end and, in compact rows, jump toward the name on hover, when the rail widens for actions. */
-.resource-row.resource-row-all > .resource-row-link {
+/* These rows have no actions, so their links span the actions rail other rows reserve, including on hover. */
+.resource-row:is(.resource-row-all, .resource-row-kind-telemetry) > .resource-row-link {
     grid-column: 1 / -1;
 }
 
@@ -1360,12 +1357,24 @@
 }
 
 .resource-footer-page-status {
-    flex: 0 0 auto;
+    flex: 0 1 auto;
     min-width: 0;
+    max-width: 100%;
     margin-left: auto;
+    overflow: hidden;
     color: var(--colorNeutralForeground2);
     font-size: var(--aspire-font-size-secondary);
     white-space: nowrap;
+}
+
+.resource-footer-page-status ::deep .items-footer {
+    min-height: 0;
+    column-gap: var(--aspire-space-3);
+}
+
+.resource-footer-page-status ::deep .result-count {
+    flex: 0 0 auto;
+    padding-inline-start: 0;
 }
 
 .resource-header {
@@ -2187,8 +2196,8 @@
 
 @container resource-pane (min-width: 420px) {
     .resource-row.resource-row-table {
-        /* Identity and lifecycle actions take priority over secondary metadata. */
-        --resource-row-tracks: [identity] minmax(0, 1fr) [status] var(--resource-row-status-width) [endpoint source insights actions] 98px [end];
+        /* Identity and actions take priority over secondary metadata. */
+        --resource-row-tracks: [identity] minmax(0, 1fr) [status] var(--resource-row-status-width) [endpoint source insights actions] 76px [end];
         --resource-row-actions-column: actions;
         display: grid;
         grid-template-columns: var(--resource-row-tracks);
@@ -2253,7 +2262,7 @@
 
 @container resource-pane (min-width: 540px) {
     .resource-row.resource-row-table {
-        --resource-row-tracks: [identity] minmax(160px, 1.5fr) [status] var(--resource-row-status-width) [endpoint] minmax(96px, 1fr) [source insights actions] 98px [end];
+        --resource-row-tracks: [identity] minmax(160px, 1.5fr) [status] var(--resource-row-status-width) [endpoint] minmax(96px, 1fr) [source insights actions] 76px [end];
     }
 
     .resource-row-endpoints {
@@ -2380,10 +2389,6 @@
     }
 }
 
-.resource-row-actions ::deep .resource-row-wide-command {
-    display: none;
-}
-
 @container resource-pane (min-width: 420px) {
     /* Fixed action slots reserve a missing endpoint just like missing metadata.
        Narrower panes retain lifecycle commands in the existing overflow menu. */
@@ -2432,8 +2437,7 @@
         column-gap: var(--spacingHorizontalM);
     }
 
-    /* The toggle, two lifecycle commands, the primary endpoint and the menu. The URLs column lists the URLs, and
-       console logs, the terminal and JSON are in the menu. */
+    /* Shared row slots are overridden by the sidebar and full-page layouts below. */
     .resource-row.resource-row-table .resource-row-actions {
         grid-template-columns: 20px repeat(4, 28px);
         gap: var(--aspire-space-1);
@@ -2496,14 +2500,41 @@
     }
 }
 
-/* A sidebar row has two fixed text bands and a reserved action rail. Missing
-   endpoints/commands leave their slots empty instead of changing identity width.
+/* Sidebar rails reserve only the buttons present. Each endpoint or command adds its target and a 2px gap before
+   the menu. Keep the width explicit so error badges stay stationary when the rail is hidden on hover-capable devices.
    Full-canvas metadata has a separate track layout above, never sidebar breakpoints. */
 .resources-layout:not(.pane-full-canvas) .resource-row {
+    --resource-row-action-size: 28px;
+    --resource-row-endpoint-width: 0px;
+    --resource-row-command-width: 0px;
+    --resource-row-actions-width: calc(var(--resource-row-action-size) + var(--resource-row-endpoint-width) + var(--resource-row-command-width));
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 112px;
+    grid-template-columns: minmax(0, 1fr) var(--resource-row-actions-width);
     column-gap: var(--aspire-space-1);
     padding-inline-end: 12px;
+}
+
+.resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-row {
+    padding-inline-end: 6px;
+}
+
+.resources-layout:not(.pane-full-canvas) .resource-row:not(:has(> .resource-row-actions)) {
+    grid-template-columns: minmax(0, 1fr);
+    column-gap: 0;
+}
+
+.resources-layout:not(.pane-full-canvas) .resource-row:has(.resource-row-primary-endpoint) {
+    --resource-row-endpoint-width: calc(var(--resource-row-action-size) + 2px);
+}
+
+.resources-layout:not(.pane-full-canvas) .resource-row:has(.resource-row-command-slot-0) {
+    --resource-row-command-width: calc(var(--resource-row-action-size) + 2px);
+}
+
+/* Four 22px targets and their 2px gaps fit within the sidebar while keeping target centers 24px apart. */
+.resources-layout:not(.pane-full-canvas) .resource-row:has(.resource-row-command-slot-1) {
+    --resource-row-action-size: 22px;
+    --resource-row-command-width: 48px;
 }
 
 /* The error link shares the identity track with the row link instead of taking the action rail's slot. The row
@@ -2538,6 +2569,15 @@
     grid-template-rows: repeat(2, var(--resource-row-line-height));
     align-items: center;
     gap: 0;
+}
+
+/* The "All" row keeps its name and counts on one line in every density. This must match the specificity of the
+   two-row grid above and come after it. */
+.resources-layout:not(.pane-full-canvas) .resource-row-all .resource-row-text {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: var(--aspire-space-2);
 }
 
 .resources-layout:not(.pane-full-canvas) .resource-row-title {
@@ -2610,59 +2650,39 @@
 }
 
 .resources-layout:not(.pane-full-canvas) .resource-row-actions {
-    display: grid;
-    grid-template-columns: 20px repeat(3, 28px);
-    justify-content: end;
+    display: flex;
+    justify-content: flex-end;
     align-items: center;
-    column-gap: 2px;
-    width: 112px;
-    min-width: 112px;
-    max-width: 112px;
+    gap: 2px;
+    width: var(--resource-row-actions-width);
+    min-width: var(--resource-row-actions-width);
+    max-width: var(--resource-row-actions-width);
     margin: 0;
     overflow: visible;
 }
 
-.resources-layout:not(.pane-full-canvas) .resource-row-actions > .resource-row-toggle,
 .resources-layout:not(.pane-full-canvas) .resource-row-actions > .resource-row-toggle-spacer {
-    grid-column: 1;
-    grid-row: 1;
-    margin: 0;
+    display: none;
 }
 
 .resources-layout:not(.pane-full-canvas) .resource-row-actions > .resource-row-primary-endpoint {
     display: inline-flex;
-    grid-column: 2;
-    grid-row: 1;
 }
 
 .resources-layout:not(.pane-full-canvas) .resource-row-actions ::deep .resource-row-command-slot-0 {
     display: inline-flex;
-    grid-column: 3;
-    grid-row: 1;
 }
 
 .resources-layout:not(.pane-full-canvas) .resource-row-actions ::deep .aspire-menu-button {
     display: inline-flex;
-    grid-column: 4;
-    grid-row: 1;
 }
 
 .resources-layout:not(.pane-full-canvas) .resource-row-actions ::deep .resource-row-action {
     --aspire-control-height: 28px;
-    width: 28px;
+    width: var(--resource-row-action-size);
     min-width: 0;
     height: 28px;
     padding: 0;
-}
-
-/* Preserve both author-highlighted custom commands within the same protected rail.
-   Their 22px targets plus 2px separation keep neighboring target centers 24px apart. */
-.resources-layout:not(.pane-full-canvas) .resource-row-actions:has(.resource-row-command-slot-1) {
-    grid-template-columns: 16px repeat(4, 22px);
-}
-
-.resources-layout:not(.pane-full-canvas) .resource-row-actions:has(.resource-row-command-slot-1) ::deep .resource-row-action {
-    width: 22px;
 }
 
 .resources-layout:not(.pane-full-canvas) .resource-row-actions ::deep .resource-row-action::part(control) {
@@ -2673,12 +2693,6 @@
 
 .resources-layout:not(.pane-full-canvas) .resource-row-actions ::deep .resource-row-command-slot-1 {
     display: inline-flex;
-    grid-column: 4;
-    grid-row: 1;
-}
-
-.resources-layout:not(.pane-full-canvas) .resource-row-actions:has(.resource-row-command-slot-1) ::deep .aspire-menu-button {
-    grid-column: 5;
 }
 
 /* Compact density overrides. The sidebar rules above and the full-canvas rules below lay a row's text out in two
@@ -2700,8 +2714,8 @@
     min-width: 0;
 }
 
-/* Telemetry-only rows and the "All" row have no type/state columns. Their secondary label (the kind, or the counts)
-   moves to the end of the line, and the name gives way first when space runs out. */
+/* Rows without type/state columns keep the title inline. The "All" row's counts
+   move to the end of the line, and the name gives way first when space runs out. */
 .resource-pane-list.density-compact .resource-row-title {
     flex: 0 1 auto;
     width: auto;
@@ -2720,52 +2734,6 @@
     display: none;
 }
 
-/* A compact sidebar row puts the expand toggle after its actions, on screen and in tab order (see
-   RenderResourceActions). Where rows can be hovered, the toggle is the only control in the rail at rest; the actions
-   then appear before it rather than pushing it 92px toward the name, where a pointer heading for the toggle would
-   land on another action. -2 / -1 is the rail's last track, whether the rail has one track (at rest) or several.
-   The toggle needs ::deep because FluentButton renders it, so it doesn't carry this component's scope attribute;
-   the spacer is a plain span rendered here. */
-.resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-row-actions {
-    grid-template-columns: repeat(3, 28px) 20px;
-}
-
-.resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-row-actions ::deep .resource-row-toggle,
-.resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-row-actions > .resource-row-toggle-spacer {
-    grid-column: -2 / -1;
-}
-
-.resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-row-actions > .resource-row-primary-endpoint {
-    grid-column: 1;
-}
-
-.resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-row-actions ::deep .resource-row-command-slot-0 {
-    grid-column: 2;
-}
-
-.resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-row-actions ::deep .aspire-menu-button {
-    grid-column: 3;
-}
-
-/* With two highlighted commands, four 22px slots and the 20px toggle need 116px, 4px more than the rail. The rail
-   grows into the 4px gap before it rather than taking the width from the name track, so neither the name nor the
-   error badge moves. The 22px slots keep the 24px spacing between targets (see the sidebar rule above). */
-.resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-row-actions:has(.resource-row-command-slot-1) {
-    grid-template-columns: repeat(4, 22px) 20px;
-    width: 116px;
-    min-width: 116px;
-    max-width: 116px;
-    margin-inline-start: -4px;
-}
-
-.resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-row-actions:has(.resource-row-command-slot-1) ::deep .resource-row-command-slot-1 {
-    grid-column: 3;
-}
-
-.resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-row-actions:has(.resource-row-command-slot-1) ::deep .aspire-menu-button {
-    grid-column: 4;
-}
-
 /* The error badge is overlaid on the row link (see .resource-row-error-link). In a compact row it goes over its
    spacer, just before the type and state columns, instead of over the columns at the end of the link:
    8px link end padding + type column + 8px gap + 10px state column + 8px gap. */
@@ -2779,48 +2747,47 @@
     }
 }
 
-/* Compact sidebar rows show their actions only while the row is hovered or focused, or while one of its menus is
-   open, and then in place of the type and state columns. The rest of the time the action rail narrows to the
-   expand toggle (or the spacer that keeps the columns aligned), so the name gets the rail's room. The swap keeps the
-   name's width about the same: the 92px the rail gains is about the 90px the columns give up.
+/* Sidebar rows show their actions only while the row is hovered or has keyboard-visible focus, or while one of its
+   menus is open. The rest of the time the action rail is hidden, so the content gets its room. Compact rows swap
+   their type and state columns for the actions.
    An open menu is matched by aria-haspopup as well as aria-expanded: a parent's expand toggle also sets
    aria-expanded="true", and that must not keep its actions showing. Only the attribute's presence is tested
    because Fluent's menu changes the button's aria-haspopup from "menu" to "true" while the menu is open.
+   Mouse selection leaves the row link focused, so :focus-within would keep the actions visible after the pointer leaves.
+   Keep hidden actions tabbable so moving focus from the row link to an action reveals the rail without losing focus.
    Touch screens can't hover, so (hover: hover) leaves their actions always visible. The expanded list (the full
    canvas) is excluded and keeps its fixed, always-visible action slots. */
 @media (hover: hover) {
-    .resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-row:not(:hover, :focus-within, :has(.resource-row-actions [aria-haspopup][aria-expanded="true"])) {
-        grid-template-columns: minmax(0, 1fr) 20px;
+    .resources-layout:not(.pane-full-canvas) .resource-pane-list .resource-row:not(:hover, :has(:focus-visible), :has(.resource-row-actions [aria-haspopup][aria-expanded="true"])) {
+        grid-template-columns: minmax(0, 1fr);
+        column-gap: 0;
     }
 
-    .resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-row:not(:hover, :focus-within, :has(.resource-row-actions [aria-haspopup][aria-expanded="true"])) .resource-row-actions {
-        grid-template-columns: 20px;
-        width: 20px;
-        min-width: 20px;
-        max-width: 20px;
-        margin-inline-start: 0;
+    .resources-layout:not(.pane-full-canvas) .resource-pane-list .resource-row:not(:hover, :has(:focus-visible), :has(.resource-row-actions [aria-haspopup][aria-expanded="true"])) .resource-row-actions {
+        position: absolute;
+        inset-inline-end: 0;
+        opacity: 0;
+        pointer-events: none;
     }
 
-    /* Every action has .resource-row-action. The menus also have a wrapper that occupies a grid slot. */
-    .resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-row:not(:hover, :focus-within, :has(.resource-row-actions [aria-haspopup][aria-expanded="true"])) .resource-row-actions ::deep .resource-row-action,
-    .resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-row:not(:hover, :focus-within, :has(.resource-row-actions [aria-haspopup][aria-expanded="true"])) .resource-row-actions ::deep .aspire-menu-button {
+    /* Keep comfortable rows' error badges under the pointer when the rail and 4px gap reappear.
+       The wider link at rest reserves the same room before its 8px end padding. */
+    .resources-layout:not(.pane-full-canvas) .resource-pane-list:not(.density-compact) .resource-row:not(:hover, :has(:focus-visible), :has(.resource-row-actions [aria-haspopup][aria-expanded="true"])) .resource-row-error-link {
+        margin-inline-end: calc(var(--resource-row-actions-width) + 12px);
+    }
+
+    .resources-layout:not(.pane-full-canvas) .resource-pane-list:not(.density-compact) .resource-row:not(:hover, :has(:focus-visible), :has(.resource-row-actions [aria-haspopup][aria-expanded="true"])) .error-badge-spacer {
+        margin-inline-end: calc(var(--resource-row-actions-width) + 4px);
+    }
+
+    .resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-row:is(:hover, :has(:focus-visible), :has(.resource-row-actions [aria-haspopup][aria-expanded="true"])) .resource-row-meta {
         display: none;
     }
 
-    .resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-row:is(:hover, :focus-within, :has(.resource-row-actions [aria-haspopup][aria-expanded="true"])) .resource-row-meta {
-        display: none;
-    }
-
-    /* The error badge keeps one place whether the columns or the actions show, so it never moves, least of all out
-       from under a pointer that is on it. Its margin is measured from the end of the name track, which is 92px
-       wider at rest than while the actions show (the 112px rail narrows to 20px). At rest the badge must clear the
-       type and state columns: the type column + 34px (see above). While the actions show it must clear the link's
-       8px end padding, which is 8px + 92px = 100px from the end of the wider, at-rest track. The badge takes
-       whichever is further from the end in both states, so with wide persistent type columns a gap is left before
-       the actions. The spacer, which stops the name before the badge, moves with it: at rest it sits before the
-       columns, and while the actions show only the link's 8px end padding follows it. */
-    .resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact {
-        --resource-row-error-offset: max(calc(var(--resource-row-meta-type-width) + 34px), 100px);
+    /* Keep compact error badges in one place, clearing either the type/state columns or the rail, its 4px gap and
+       the link's 8px end padding, whichever needs more room. The hidden spacer reserves the same position. */
+    .resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-row {
+        --resource-row-error-offset: max(calc(var(--resource-row-meta-type-width) + 34px), calc(var(--resource-row-actions-width) + 12px));
     }
 
     .resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-row-error-link {
@@ -2831,12 +2798,21 @@
         margin-inline-end: calc(var(--resource-row-error-offset) - var(--resource-row-meta-type-width) - 34px);
     }
 
-    .resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-row:is(:hover, :focus-within, :has(.resource-row-actions [aria-haspopup][aria-expanded="true"])) .resource-row-error-link {
-        margin-inline-end: calc(var(--resource-row-error-offset) - 92px);
+    .resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-row:is(:hover, :has(:focus-visible), :has(.resource-row-actions [aria-haspopup][aria-expanded="true"])) .resource-row-error-link {
+        margin-inline-end: calc(var(--resource-row-error-offset) - var(--resource-row-actions-width) - 4px);
     }
 
-    .resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-row:is(:hover, :focus-within, :has(.resource-row-actions [aria-haspopup][aria-expanded="true"])) .error-badge-spacer {
-        margin-inline-end: calc(var(--resource-row-error-offset) - 100px);
+    .resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-row:is(:hover, :has(:focus-visible), :has(.resource-row-actions [aria-haspopup][aria-expanded="true"])) .error-badge-spacer {
+        margin-inline-end: calc(var(--resource-row-error-offset) - var(--resource-row-actions-width) - 12px);
+    }
+
+    /* At rest the rows' actions are hidden and their state dots form a column at the end of the list, so the group
+       header's chevron is centered over that column instead of floating just past it. The compact row link ends 6px
+       before the row and has 8px of end padding, so the 10px dot's center is 19px from the end; the header ends at the
+       same line, and the 20px chevron needs 9px after it to center there. The count badge before it moves with it.
+       Touch screens keep the actions showing, so they have no dot column there and the chevron keeps its place. */
+    .resources-layout:not(.pane-full-canvas) .resource-pane-list.density-compact .resource-tag-header > .resource-row-toggle {
+        margin-inline-end: 9px;
     }
 }
 
@@ -2944,6 +2920,12 @@
 }
 
 @container resource-pane (min-width: 1600px) {
+    /* Grow the type and identity columns together on wide canvases, without taking room from resource names.
+       Keep the narrower breakpoints' width budget unchanged, especially when the activity column is visible. */
+    .pane-full-canvas .resource-pane-list.density-compact {
+        --resource-row-meta-type-width: clamp(120px, calc(100cqw - 1480px), 240px);
+    }
+
     .resource-row.resource-row-table {
         --resource-row-tracks: [identity] calc(320px + var(--resource-row-identity-extra, 0px)) [status] var(--resource-row-status-width) [source] minmax(220px, 1fr) [endpoint] minmax(240px, 1fr) [insights] var(--resource-insight-width) [actions] var(--resource-row-actions-width) [end];
         column-gap: var(--spacingHorizontalL);
@@ -2956,28 +2938,19 @@
     }
 }
 
-/* The full-page list's action slots: two lifecycle commands, then the menu. Its rows have no toggle slot (the toggle
-   leads the row) and no open-URL slot (the URLs column has the links). These outrank the shared slot rules above. */
+/* Reserve room for two highlighted commands and the menu, but pack the available actions against the
+   trailing edge so resources and parameters with fewer actions have no empty slots between their buttons. */
 @container resource-pane (min-width: 420px) {
     .pane-full-canvas .resource-row.resource-row-table .resource-row-actions {
-        grid-template-columns: repeat(3, 24px);
-    }
-
-    .pane-full-canvas .resource-row-actions ::deep .resource-row-command-slot-0 {
-        grid-column: 1;
-    }
-
-    .pane-full-canvas .resource-row-actions ::deep .resource-row-command-slot-1 {
-        grid-column: 2;
-    }
-
-    .pane-full-canvas .resource-row-actions ::deep .aspire-menu-button {
-        grid-column: 3;
+        display: flex;
+        justify-content: flex-end;
+        justify-self: end;
+        width: 76px;
     }
 }
 
 @container resource-pane (min-width: 720px) {
     .pane-full-canvas .resource-row.resource-row-table .resource-row-actions {
-        grid-template-columns: repeat(3, 28px);
+        width: var(--resource-row-actions-width);
     }
 }

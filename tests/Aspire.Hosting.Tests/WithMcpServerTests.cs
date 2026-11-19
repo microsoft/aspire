@@ -1,8 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREMCP001
-
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -42,12 +40,16 @@ public class WithMcpServerTests
         using var appBuilder = TestDistributedApplicationBuilder.Create();
 
         appBuilder.AddContainer("app", "image")
+            .WithEndpoint("http", e =>
+            {
+                e.UriScheme = "http";
+                e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 8080);
+            })
             .WithEndpoint("https", e =>
             {
                 e.UriScheme = "https";
                 e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 8443);
             })
-            .WithHttpEndpoint(name: "http")
             .WithMcpServer();
 
         using var app = await appBuilder.BuildAsync();
@@ -112,8 +114,13 @@ public class WithMcpServerTests
         Assert.Equal("http://localhost:8080/mcp", resolvedUri!.ToString());
     }
 
-    [Fact]
-    public async Task WithMcpServer_ResolvesCustomPath()
+    [Theory]
+    [InlineData("/sse", "http://localhost:8080/sse")]
+    [InlineData("custom/path", "http://localhost:8080/custom/path")]
+    [InlineData("", "http://localhost:8080/")]
+    [InlineData("/", "http://localhost:8080/")]
+    [InlineData("/mcp/", "http://localhost:8080/mcp/")]
+    public async Task WithMcpServer_ResolvesCustomPath(string path, string expectedUrl)
     {
         using var appBuilder = TestDistributedApplicationBuilder.Create();
 
@@ -123,7 +130,7 @@ public class WithMcpServerTests
                 e.UriScheme = "http";
                 e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 8080);
             })
-            .WithMcpServer("/sse", endpointName: "http");
+            .WithMcpServer(path, endpointName: "http");
 
         using var app = await appBuilder.BuildAsync();
 
@@ -134,7 +141,51 @@ public class WithMcpServerTests
         var resolvedUri = await mcpAnnotation.EndpointUrlResolver(resource, CancellationToken.None);
 
         Assert.NotNull(resolvedUri);
-        Assert.Equal("http://localhost:8080/sse", resolvedUri!.ToString());
+        Assert.Equal(expectedUrl, resolvedUri!.ToString());
+    }
+
+    [Theory]
+    [InlineData("management")]
+    [InlineData("MANAGEMENT")]
+    public async Task WithMcpServer_ResolvesExplicitlyNamedEndpoint(string endpointName)
+    {
+        using var appBuilder = TestDistributedApplicationBuilder.Create();
+
+        var container = appBuilder.AddContainer("app", "image")
+            .WithHttpEndpoint(name: "https")
+            .WithEndpoint("management", e =>
+            {
+                e.UriScheme = "http";
+                e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 8080);
+            })
+            .WithMcpServer(endpointName: endpointName);
+
+        var annotation = Assert.Single(container.Resource.Annotations.OfType<McpServerEndpointAnnotation>());
+        var resolvedUri = await annotation.EndpointUrlResolver(container.Resource, CancellationToken.None);
+
+        Assert.Equal(new Uri("http://localhost:8080/mcp"), resolvedUri);
+    }
+
+    [Theory]
+    [InlineData(null, "Could not create MCP server for resource 'app' as no endpoint was found matching one of the specified names: https, http")]
+    [InlineData("missing", "Could not create MCP server for resource 'app' as no endpoint was found with name 'missing'.")]
+    public async Task WithMcpServer_ThrowsWhenSelectedEndpointDoesNotExist(string? endpointName, string expectedMessage)
+    {
+        using var appBuilder = TestDistributedApplicationBuilder.Create();
+
+        var container = appBuilder.AddContainer("app", "image")
+            .WithEndpoint("management", e =>
+            {
+                e.UriScheme = "https";
+                e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 8443);
+            })
+            .WithMcpServer(endpointName: endpointName);
+
+        var annotation = Assert.Single(container.Resource.Annotations.OfType<McpServerEndpointAnnotation>());
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(
+            () => annotation.EndpointUrlResolver(container.Resource, CancellationToken.None));
+
+        Assert.Equal(expectedMessage, exception.Message);
     }
 
     [Fact]

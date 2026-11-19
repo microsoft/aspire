@@ -711,12 +711,15 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
     private List<RelationshipGraphNode> GetGraphNodes(IEnumerable<RelatedResource> relatedResources, bool incoming) =>
         relatedResources
             .Where(r => r.IsIncoming == incoming)
-            .Select(r =>
-            {
-                var name = GetResourceName(r.Resource);
-                return new RelationshipGraphNode(name, r.Type, DashboardUrls.ResourceOverviewUrl(name));
-            })
+            .Select(r => GetGraphNode(r.Resource, r.Type, isCenter: false))
             .ToList();
+
+    private RelationshipGraphNode GetGraphNode(ResourceViewModel resource, string type, bool isCenter)
+    {
+        var name = GetResourceName(resource);
+        return new RelationshipGraphNode(name, type, isCenter ? null : DashboardUrls.ResourceOverviewUrl(name),
+            IsReplica: ResourcesLayout?.IsReplica(resource) == true);
+    }
 
     private Task ExecuteResourceCommandAsync(ResourceViewModel resource, CommandViewModel command)
         => DashboardCommandExecutor.ExecuteAsync(resource, command, GetResourceName);
