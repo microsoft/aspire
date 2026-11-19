@@ -1,0 +1,124 @@
+{
+  "run_id": 44563250177,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/44563250177",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-19T17:16:45Z",
+  "verdict": "flaky-test",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 22408,
+    "title": "Update OpenTelemetry packages to 1.21.0",
+    "author": "eerhardt",
+    "state": "closed",
+    "head_branch": "eerhardt-update-opentelemetry-versions",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/22408",
+    "merged_at": "2026-11-19T16:11:20Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "d6892bf7a98b3c988e4d7bdd5539625686c0b05a",
+    "failed_sha": "755acf48c5c08ae0937150f3fb5641cfcb5d662c",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "79127e0afa9cb87a5ba21abf5531441a33486a39",
+        "message": "Redact restore diagnostics and clarify update validation failures (#22208) ## Description `aspire update` now captures native restore diagnostics following #22355, but those diagnostics can contain credential-bearing feed URLs that are persisted in the CLI log. This follow-up applies the existing NuGet redactor before stdout or stderr is buffered or logged, while preserving useful diagnostics for troubleshooting validation failures. The redactor uses known sources from candidate and referenced-p",
+        "html_url": "https://github.com/microsoft/aspire/commit/79127e0afa9cb87a5ba21abf5531441a33486a39",
+        "pull_request": {
+          "number": 22208,
+          "title": "Redact restore diagnostics and clarify update validation failures",
+          "url": "https://github.com/microsoft/aspire/pull/22208",
+          "merged_at": "2026-11-18T18:38:59Z"
+        }
+      },
+      {
+        "sha": "6835cb71f8f83d784d7a7ff21888bf0e07da6701",
+        "message": "[automated] Fix flaky extension E2E tree context menu opening (#22345) ## Description Fixes the flaky Windows `tree-actions` extension E2E failure where `routes view, copy, endpoint, log, and resource commands through tree handlers` fails with: ``` NoSuchElementError: no such element: Unable to locate element: {\"method\":\"css selector\",\"selector\":\".monaco-menu\"} ``` **Root cause.** ExTester's `ElementWithContextMenu.openContextMenu()` (`@redhat-developer/page-objects` 1.20.0) only waits for the m",
+        "html_url": "https://github.com/microsoft/aspire/commit/6835cb71f8f83d784d7a7ff21888bf0e07da6701",
+        "pull_request": {
+          "number": 22345,
+          "title": "[automated] Fix flaky extension E2E tree context menu opening",
+          "url": "https://github.com/microsoft/aspire/pull/22345",
+          "merged_at": "2026-11-18T23:54:01Z"
+        }
+      },
+      {
+        "sha": "4ad3cfe685bcf47d79c8d16d64fc4be6363280dd",
+        "message": "Fix dashboard tooltips over non-localhost HTTP (#22414) ## Description Dashboard tooltips can fail over plain HTTP on a non-localhost hostname or IP address because browsers only expose `crypto.randomUUID()` in secure contexts. HTML targets without an existing ID fail to open a tooltip, and SVG targets fail when setting up the positioning anchor. Generate both identifiers from a shared, document-local sequence instead. Preserve existing element IDs and skip any generated DOM ID that is already i",
+        "html_url": "https://github.com/microsoft/aspire/commit/4ad3cfe685bcf47d79c8d16d64fc4be6363280dd",
+        "pull_request": {
+          "number": 22414,
+          "title": "Fix dashboard tooltips over non-localhost HTTP",
+          "url": "https://github.com/microsoft/aspire/pull/22414",
+          "merged_at": "2026-11-19T15:31:12Z"
+        }
+      },
+      {
+        "sha": "e33e9e883d17c95467cac13219ae12e923c08c80",
+        "message": "Surface staging channel guidance during CLI self-update (#22351) ## Description Running `aspire update --self --channel staging` from a daily CLI currently reports only \"Unsupported channel 'staging'\". The explanation and recovery options are available in logs, but users should not need to inspect logs to understand the failure. Self-update now surfaces the existing localized staging-channel explanation, including the running CLI identity and guidance to install a staging/stable CLI or configure",
+        "html_url": "https://github.com/microsoft/aspire/commit/e33e9e883d17c95467cac13219ae12e923c08c80",
+        "pull_request": {
+          "number": 22351,
+          "title": "Surface staging channel guidance during CLI self-update",
+          "url": "https://github.com/microsoft/aspire/pull/22351",
+          "merged_at": "2026-11-19T15:35:58Z"
+        }
+      },
+      {
+        "sha": "755acf48c5c08ae0937150f3fb5641cfcb5d662c",
+        "message": "Update OpenTelemetry packages to 1.21.0 (#22408) ## Description Updates the OpenTelemetry .NET packages to the latest releases so Aspire's service defaults, templates, and client integrations pick up the latest upstream fixes and features. - `OpenTelemetry.*` packages: 1.18.0 → 1.21.0 (`eng/Versions.props` and `Directory.Packages.props`) - `OpenTelemetry.Instrumentation.GrpcNetClient`: 1.18.0-beta.1 → 1.21.0-beta.1 (mirrored to the internal feeds via `dotnet-migrate-package` run 3140107) - `Azur",
+        "html_url": "https://github.com/microsoft/aspire/commit/755acf48c5c08ae0937150f3fb5641cfcb5d662c",
+        "pull_request": {
+          "number": 22408,
+          "title": "Update OpenTelemetry packages to 1.21.0",
+          "url": "https://github.com/microsoft/aspire/pull/22408",
+          "merged_at": "2026-11-19T16:11:20Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, browser-debugger)",
+      "id": 135727013947,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/44563250177/job/135727013947",
+      "classification": "transient-infra",
+      "reason": "Blazor browser-debugger before-all hook timed out waiting for resource to reach Running while resources stayed NotStarted; JSON-RPC connections were forcibly closed; no test body failed.",
+      "failed_steps": [
+        "Run extension E2E tests"
+      ]
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, cli-path-rejection)",
+      "id": 135727014100,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/44563250177/job/135727014100",
+      "classification": "flaky-test",
+      "reason": "Selenium stale element reference in a UI notification action, a timing race unrelated to changed code.",
+      "failed_steps": [
+        "Run extension E2E tests"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Configured CLI path rejection E2E warns and opens the setting when the configured path is invalid",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, cli-path-rejection)",
+      "error": "stale element reference: stale element not found in the current frame\n  (Session info: chrome=148.0.7778.280)",
+      "stack_trace": "StaleElementReferenceError: stale element reference: stale element not found in the current frame\n  (Session info: chrome=148.0.7778.280)\n    at Object.throwDecodedError (node_modules\\selenium-webdriver\\lib\\error.js:523:15)\n    at parseHttpResponse (node_modules\\selenium-webdriver\\lib\\http.js:526:13)\n    at Executor.execute (node_modules\\selenium-webdriver\\lib\\http.js:458:28)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async Driver.execute (node_modules\\selenium-webdriver\\lib\\webdriver.js:745:17)\n    at async toWireValue (node_modules\\selenium-webdriver\\lib\\webdriver.js:149:15)\n    at async D:\\a\\aspire\\aspire\\extension\\node_modules\\selenium-webdriver\\lib\\webdriver.js:195:16\n    at async forEachKey (node_modules\\selenium-webdriver\\lib\\webdriver.js:189:9)\n    at async convertKeys (node_modules\\selenium-webdriver\\lib\\webdriver.js:194:3)\n    at async Driver.execute (node_modules\\selenium-webdriver\\lib\\webdriver.js:743:22)\n    at async StandaloneNotification.takeAction (node_modules\\@redhat-developer\\page-objects\\out\\components\\workbench\\Notification.js:119:9)\n    at async Context.<anonymous> (out\\test-e2e\\test-e2e\\cliPathRejectionNotification.e2e.test.js:93:9)",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "StaleElementReferenceError while clicking notification action; intermittent UI timing race.",
+      "job_id": 135727014100,
+      "result_file": "00001.json",
+      "result_format": "mocha"
+    }
+  ],
+  "causes": [
+    "extension-e2e-windows-blazor-resource-start-timeout",
+    "extension-e2e-cli-path-rejection-stale-element"
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "id": "extension-e2e-windows-blazor-resource-start-timeout",
+  "type": "infra-failure",
+  "title": "VS Code extension E2E (Windows) Blazor browser-debugger hook times out waiting for resource to reach Running",
+  "error_pattern": "Aspire Blazor browser debugger E2E \"before all\" hook: Timed out after 577261ms waiting for resource 'standalone' state Running.",
+  "occurrences": [
+    {
+      "run_id": 44563250177,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/44563250177",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, browser-debugger)",
+      "observed_at": "2026-11-19T17:16:45Z",
+      "pr_number": 0
+    }
+  ]
+}
