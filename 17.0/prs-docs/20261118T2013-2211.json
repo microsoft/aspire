@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "Unrelated to the milestone: aspire.dev StaticHost site resilience fix",
+  "mergedAt": "2026-11-18T20:13:07Z",
+  "number": 2211,
+  "runDate": "2026-11-19T00:06:11Z",
+  "status": "excluded",
+  "title": "Keep StaticHost running when Redis times out"
+}
