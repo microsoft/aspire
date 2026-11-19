@@ -11,6 +11,27 @@
       "job": "Tests / No-package tests (regular, Aspire.Hosting.Testing.Tests, Hosting.Testing, Hosting.Testing, tests/... / Hosting.Testing (windows-latest)",
       "pr_number": 0,
       "observed_at": "2026-11-03T00:32:26Z"
+    },
+    {
+      "run_id": 44596000489,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/44596000489",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.Testing.Tests, Hosting.Testing, Hosting.Testing, tests/... / Hosting.Testing (windows-latest)",
+      "observed_at": "2026-11-19T19:50:08Z",
+      "pr_number": 0,
+      "tests": [
+        {
+          "name": "Aspire.Hosting.Testing.Tests.DashboardTestingBuilderTests.DashboardTestingPreservesInteractivityAfterAppHostStart(creationSurface: Type)",
+          "job_id": 135815520666,
+          "job": "Tests / No-package tests (regular, Aspire.Hosting.Testing.Tests, Hosting.Testing, Hosting.Testing, tests/... / Hosting.Testing (windows-latest)",
+          "error": "System.TimeoutException : The operation at /_/tests/Aspire.Hosting.Testing.Tests/DashboardTestingBuilderTests.cs:129 timed out after reaching the limit of 60000ms.",
+          "stack_trace": "   at Microsoft.AspNetCore.InternalTesting.AsyncTestHelpers.TimeoutAfter(Task task, TimeSpan timeout, String filePath, Int32 lineNumber) in /_/tests/Shared/AsyncTestHelpers.cs:line 201\n   at Aspire.Hosting.Testing.Tests.DashboardTestingBuilderTests.DashboardTestingPreservesInteractivityAfterAppHostStart(CreationSurface creationSurface) in /_/tests/Aspire.Hosting.Testing.Tests/DashboardTestingBuilderTests.cs:line 129\n   at Aspire.Hosting.Testing.Tests.DashboardTestingBuilderTests.DashboardTestingPreservesInteractivityAfterAppHostStart(CreationSurface creationSurface) in /_/tests/Aspire.Hosting.Testing.Tests/DashboardTestingBuilderTests.cs:line 132\n   at Aspire.Hosting.Testing.Tests.DashboardTestingBuilderTests.DashboardTestingPreservesInteractivityAfterAppHostStart(CreationSurface creationSurface) in /_/tests/Aspire.Hosting.Testing.Tests/DashboardTestingBuilderTests.cs:line 132\n--- End of stack trace from previous location ---",
+          "standard_output": "",
+          "standard_error": "",
+          "result_file": "00001.trx",
+          "result_format": "trx",
+          "execution_id": "cd865087-7635-44f5-9068-bcfbe9e33a4f"
+        }
+      ]
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/21705"

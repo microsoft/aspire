@@ -1,0 +1,48 @@
+{
+  "run_id": 44596000489,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/44596000489",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-19T19:50:08Z",
+  "verdict": "flaky-test",
+  "pr": null,
+  "triggering_merge_pr": null,
+  "main_context": {
+    "last_successful_main_sha": "d6892bf7a98b3c988e4d7bdd5539625686c0b05a",
+    "failed_sha": "316c1e5eada23f8bf5bd56354c5f3c872c0ac4c2",
+    "candidate_merge_history_state": "incomplete",
+    "candidate_merges": null
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / No-package tests (regular, Aspire.Hosting.Testing.Tests, Hosting.Testing, Hosting.Testing, tests/... / Hosting.Testing (windows-latest)",
+      "id": 135815520666,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/44596000489/job/135815520666",
+      "classification": "flaky-test",
+      "reason": "Single test timed out at 60s with DCP host start TaskCanceledException on Windows; matches prior recorded flaky mechanism.",
+      "failed_steps": [
+        "Run tests (Windows)"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Hosting.Testing.Tests.DashboardTestingBuilderTests.DashboardTestingPreservesInteractivityAfterAppHostStart(creationSurface: Type)",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.Testing.Tests, Hosting.Testing, Hosting.Testing, tests/... / Hosting.Testing (windows-latest)",
+      "error": "System.TimeoutException : The operation at /_/tests/Aspire.Hosting.Testing.Tests/DashboardTestingBuilderTests.cs:129 timed out after reaching the limit of 60000ms.",
+      "stack_trace": "   at Microsoft.AspNetCore.InternalTesting.AsyncTestHelpers.TimeoutAfter(Task task, TimeSpan timeout, String filePath, Int32 lineNumber) in /_/tests/Shared/AsyncTestHelpers.cs:line 201\n   at Aspire.Hosting.Testing.Tests.DashboardTestingBuilderTests.DashboardTestingPreservesInteractivityAfterAppHostStart(CreationSurface creationSurface) in /_/tests/Aspire.Hosting.Testing.Tests/DashboardTestingBuilderTests.cs:line 129\n   at Aspire.Hosting.Testing.Tests.DashboardTestingBuilderTests.DashboardTestingPreservesInteractivityAfterAppHostStart(CreationSurface creationSurface) in /_/tests/Aspire.Hosting.Testing.Tests/DashboardTestingBuilderTests.cs:line 132\n   at Aspire.Hosting.Testing.Tests.DashboardTestingBuilderTests.DashboardTestingPreservesInteractivityAfterAppHostStart(CreationSurface creationSurface) in /_/tests/Aspire.Hosting.Testing.Tests/DashboardTestingBuilderTests.cs:line 132\n--- End of stack trace from previous location ---",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "flaky",
+      "reason": "Same timeout and Hosting failed to start diagnostic recurring intermittently.",
+      "job_id": 135815520666,
+      "execution_id": "cd865087-7635-44f5-9068-bcfbe9e33a4f",
+      "result_file": "00001.trx",
+      "result_format": "trx"
+    }
+  ],
+  "causes": [
+    "hosting-testing-dashboardtestingbuildertests-interactivity-timeout-windows"
+  ]
+}
