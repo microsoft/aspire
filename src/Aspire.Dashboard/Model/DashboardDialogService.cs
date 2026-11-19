@@ -21,6 +21,7 @@ public sealed class DashboardDialogService(
     DimensionManager dimensionManager)
 {
     private readonly AsyncLock _confirmationLock = new();
+    private int _confirmationGeneration;
 
     private string CloseButtonText => dialogsLoc[nameof(Dialogs.DialogCloseButtonText)];
 
@@ -105,8 +106,19 @@ public sealed class DashboardDialogService(
     public async Task<DialogResult> ShowConfirmationAsync(string message)
     {
         // Commands can run concurrently, but their confirmation dialogs must not stack.
+        var generation = Volatile.Read(ref _confirmationGeneration);
         using var confirmation = await _confirmationLock.LockAsync().ConfigureAwait(true);
+        if (generation != Volatile.Read(ref _confirmationGeneration))
+        {
+            return DialogResult.Cancel();
+        }
+
         return await dialogService.ShowConfirmationAsync(message).ConfigureAwait(false);
+    }
+
+    internal void CancelPendingConfirmations()
+    {
+        Interlocked.Increment(ref _confirmationGeneration);
     }
 
     /// <summary>

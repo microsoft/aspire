@@ -4,6 +4,7 @@
 using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Configuration;
+using Aspire.Dashboard.Model;
 using Bunit;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
@@ -70,21 +71,40 @@ public class DashboardDialogProviderTests : DashboardTestContext
     }
 
     [Fact]
-    public async Task Navigation_CancelsConfirmation()
+    public async Task Navigation_CancelsOpenAndQueuedConfirmations()
     {
         FluentUISetupHelpers.SetupDialogInfrastructure(this);
         var cut = Render<DashboardDialogProvider>();
-        var service = Services.GetRequiredService<IDialogService>();
-        Task<DialogResult> result = null!;
-        await cut.InvokeAsync(() => { result = service.ShowConfirmationAsync("Confirm navigation test"); });
+        var service = Services.GetRequiredService<DashboardDialogService>();
+        Task<DialogResult>[] confirmations = [];
+        await cut.InvokeAsync(() =>
+        {
+            confirmations =
+            [
+                service.ShowConfirmationAsync("First confirmation"),
+                service.ShowConfirmationAsync("Second confirmation"),
+                service.ShowConfirmationAsync("Third confirmation")
+            ];
+        });
         var dialog = cut.FindComponent<FluentDialog>().Instance;
         await RaiseOpeningAsync(cut, dialog.Id!);
+        Assert.All(confirmations, confirmation => Assert.False(confirmation.IsCompleted));
 
         await cut.InvokeAsync(() => Services.GetRequiredService<NavigationManager>().NavigateTo("/traces"));
 
-        cut.WaitForAssertion(() => Assert.True(result.IsCompletedSuccessfully));
-        Assert.True((await result).Cancelled);
-        Assert.Empty(cut.FindComponents<FluentDialog>());
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Empty(cut.FindComponents<FluentDialog>());
+            Assert.All(confirmations, confirmation => Assert.True(confirmation.IsCompletedSuccessfully));
+        });
+        Assert.All(await Task.WhenAll(confirmations), result => Assert.True(result.Cancelled));
+
+        Task<DialogResult> newConfirmation = null!;
+        await cut.InvokeAsync(() => { newConfirmation = service.ShowConfirmationAsync("Confirmation after navigation"); });
+        var newDialog = cut.FindComponent<FluentDialog>().Instance;
+        await RaiseOpeningAsync(cut, newDialog.Id!);
+        await cut.InvokeAsync(() => newDialog.Instance!.CloseAsync(DialogResult.Ok(true)));
+        Assert.False((await newConfirmation).Cancelled);
     }
 
     [Fact]

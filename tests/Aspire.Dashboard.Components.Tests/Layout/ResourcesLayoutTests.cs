@@ -18,6 +18,7 @@ using Google.Protobuf.WellKnownTypes;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Sections;
 using Microsoft.AspNetCore.Components.Web;
+using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.JSInterop;
@@ -1662,6 +1663,45 @@ public class ResourcesLayoutTests : DashboardTestContext
         await cut.InvokeAsync(openCommand.OnClick!);
 
         Assert.Equal(["api"], executed);
+    }
+
+    [Fact]
+    public async Task TagActions_RowCommandIsReenabledOnCompletionWithoutResourceUpdates()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var response = new TaskCompletionSource<ResourceCommandResponseViewModel>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var command = new CommandViewModel("refresh", CommandViewModelState.Enabled, "Refresh", "",
+            confirmationMessage: "", argumentInputs: [], isHighlighted: true, iconName: "", iconVariant: IconVariant.Regular);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("api", commands: [command])],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>,
+            executeResourceCommand: (_, _, _, _, _) => response.Task));
+        var storage = Assert.IsType<TestLocalStorage>(Services.GetRequiredService<ILocalStorage>());
+        storage.OnGetUnprotectedAsync = key => key == BrowserStorageKeys.ResourcePaneGrouping ? (true, "Tags") : (false, null);
+        Services.GetRequiredService<ResourceTagStore>().AddTag("api", "Backend");
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.ConsoleLogsUrl("api"));
+        Render<FluentToastProvider>();
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
+        const string rowAction = "[data-resource-name='api'] .resource-row-actions fluent-button[aria-label='Refresh api']";
+        cut.WaitForAssertion(() => Assert.False(cut.Find(rowAction).HasAttribute("disabled")));
+
+        var trigger = cut.Find(".resource-tag-action");
+        await trigger.ClickAsync(new MouseEventArgs());
+        var menu = cut.FindComponents<AspireMenu>().Single(m => m.Instance.Anchor == trigger.Id);
+        var action = Assert.Single(menu.Instance.Items, item => !item.IsHeader);
+        Task execution = null!;
+        await cut.InvokeAsync(() => { execution = action.OnClick!(); });
+        try
+        {
+            cut.WaitForAssertion(() => Assert.True(cut.Find(rowAction).HasAttribute("disabled")));
+        }
+        finally
+        {
+            response.SetResult(new ResourceCommandResponseViewModel { Kind = ResourceCommandResponseKind.Succeeded });
+        }
+
+        await execution.DefaultTimeout();
+        cut.WaitForAssertion(() => Assert.False(cut.Find(rowAction).HasAttribute("disabled")));
     }
 
     [Fact]

@@ -1971,7 +1971,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         ResourceMenuBuilder.CreateTagGroupMenuItems(tagName, $"resource-pane-tag-menu-header-{Guid.NewGuid():N}",
             () => GetTagGroups().Find(group => StringComparer.OrdinalIgnoreCase.Equals(group.Value, tagName))?.Resources ?? [],
             (resource, command) => DashboardCommandExecutor.IsExecuting(resource.Name, command.Name),
-            ExecuteResourceCommandAsync);
+            (resource, command) => EventCallback.Factory.Create(this, () => ExecuteResourceCommandAsync(resource, command)).InvokeAsync());
 
     private List<MenuButtonItem> GetResourceMenuItems(ResourceViewModel resource)
     {
