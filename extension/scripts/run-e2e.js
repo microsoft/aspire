@@ -1661,12 +1661,15 @@ function generateBrowserDebuggerProjects() {
 }
 
 function runDotnetForFixture(args) {
-  const traceBuild = process.platform === 'win32' && enableBrowserDebuggerE2E && args[0] === 'build';
+  const traceBuild = process.env.ASPIRE_EXTENSION_E2E_TRACE_FIXTURE_BUILD === 'true'
+    && process.platform === 'win32' && enableBrowserDebuggerE2E && args[0] === 'build';
+  const buildLog = traceBuild ? path.join(shortRunRoot, 'fixture-build-msbuild.log') : null;
   const buildStarted = traceBuild ? performance.now() : 0;
   if (traceBuild) {
     // Keep spawnSync and its deadline intact so the runner's process samples can be
     // correlated with the failure without changing the output-pipe behavior.
     console.log(`[fixture build] started=${new Date().toISOString()} parentPid=${process.pid} node=${process.version}`);
+    args = [...args, '-fl', `-flp:LogFile=${buildLog};Verbosity=detailed;Encoding=UTF-8`];
   }
   const result = spawnSync('dotnet', args, {
     cwd: workspaceRoot,
@@ -1678,6 +1681,17 @@ function runDotnetForFixture(args) {
 
   if (traceBuild) {
     console.log(`[fixture build] returned=${new Date().toISOString()} elapsedMs=${Math.round(performance.now() - buildStarted)} childPid=${result.pid} status=${result.status} signal=${result.signal} error=${result.error?.code ?? 'none'} stdoutBytes=${Buffer.byteLength(result.stdout ?? '')} stderrBytes=${Buffer.byteLength(result.stderr ?? '')}`);
+    // Publish only milestones, not the raw logger output (which may include build inputs).
+    // Example: `1>Target "CoreCompile" in file "..."` (node prefix is optional).
+    try {
+      const log = fs.readFileSync(buildLog, 'utf8');
+      const milestones = [...log.matchAll(/^[ \t]*(?:\d+(?::\d+)?>)?[ \t]*(Target|Done building target) "([A-Za-z0-9_.-]+)"(?=[: \r\n])/gm)];
+      const tail = milestones.slice(-16).map(([, event, target]) => `${event}:${target}`);
+      console.log(`[fixture build] MSBuild milestones=${tail.join(', ') || '(none recorded)'}`);
+      console.log(`[fixture build] MSBuild summary=${/^Build (succeeded|FAILED)\./m.exec(log)?.[1] ?? 'not recorded'}`);
+    } catch (error) {
+      console.warn(`[fixture build] MSBuild milestone capture unavailable: ${error.code ?? error.name}`);
+    }
   }
 
   if (result.error) {

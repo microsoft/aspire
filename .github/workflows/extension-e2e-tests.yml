@@ -134,6 +134,373 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          - name: Linux
+            shardName: command-palette
+            spec: out/test-e2e/test-e2e/commandPalette.e2e.test.js
+            runner: ubuntu-latest
+            rid: linux-x64
+            archivePattern: aspire-cli-linux-x64*.tar.gz
+            cliBinary: aspire
+            useXvfb: true
+          - name: Windows
+            shardName: command-palette
+            spec: out/test-e2e/test-e2e/commandPalette.e2e.test.js
+            runner: windows-latest
+            rid: win-x64
+            archivePattern: aspire-cli-win-x64*.zip
+            cliBinary: aspire.exe
+            useXvfb: false
+          - name: Linux
+            shardName: settings-files
+            spec: out/test-e2e/test-e2e/settingsFiles.e2e.test.js
+            runner: ubuntu-latest
+            rid: linux-x64
+            archivePattern: aspire-cli-linux-x64*.tar.gz
+            cliBinary: aspire
+            useXvfb: true
+          - name: Windows
+            shardName: settings-files
+            spec: out/test-e2e/test-e2e/settingsFiles.e2e.test.js
+            runner: windows-latest
+            rid: win-x64
+            archivePattern: aspire-cli-win-x64*.zip
+            cliBinary: aspire.exe
+            useXvfb: false
+          - name: Linux
+            shardName: discovery-configuration
+            spec: out/test-e2e/test-e2e/discoveryConfiguration.e2e.test.js
+            runner: ubuntu-latest
+            rid: linux-x64
+            archivePattern: aspire-cli-linux-x64*.tar.gz
+            cliBinary: aspire
+            useXvfb: true
+          - name: Windows
+            shardName: discovery-configuration
+            advisoryIssue: https://github.com/microsoft/aspire/issues/19282
+            spec: out/test-e2e/test-e2e/discoveryConfiguration.e2e.test.js
+            runner: windows-latest
+            rid: win-x64
+            archivePattern: aspire-cli-win-x64*.zip
+            cliBinary: aspire.exe
+            useXvfb: false
+          - name: Linux
+            shardName: dynamic-debug-configuration
+            spec: out/test-e2e/test-e2e/dynamicDebugConfiguration.e2e.test.js
+            runner: ubuntu-latest
+            rid: linux-x64
+            archivePattern: aspire-cli-linux-x64*.tar.gz
+            cliBinary: aspire
+            useXvfb: true
+          - name: Windows
+            shardName: dynamic-debug-configuration
+            spec: out/test-e2e/test-e2e/dynamicDebugConfiguration.e2e.test.js
+            runner: windows-latest
+            rid: win-x64
+            archivePattern: aspire-cli-win-x64*.zip
+            cliBinary: aspire.exe
+            useXvfb: false
+          - name: Linux
+            shardName: apphost-tree
+            advisoryIssue: https://github.com/microsoft/aspire/issues/19282
+            spec: out/test-e2e/test-e2e/appHostTree.e2e.test.js
+            runner: ubuntu-latest
+            rid: linux-x64
+            archivePattern: aspire-cli-linux-x64*.tar.gz
+            cliBinary: aspire
+            useXvfb: true
+          - name: Windows
+            shardName: apphost-tree
+            spec: out/test-e2e/test-e2e/appHostTree.e2e.test.js
+            runner: windows-latest
+            rid: win-x64
+            archivePattern: aspire-cli-win-x64*.zip
+            cliBinary: aspire.exe
+            useXvfb: false
+          - name: Linux
+            shardName: apphost-lifecycle-tools
+            spec: out/test-e2e/test-e2e/appHostLifecycleTools.e2e.test.js
+            runner: ubuntu-latest
+            rid: linux-x64
+            archivePattern: aspire-cli-linux-x64*.tar.gz
+            cliBinary: aspire
+            useXvfb: true
+          - name: Windows
+            shardName: apphost-lifecycle-tools
+            spec: out/test-e2e/test-e2e/appHostLifecycleTools.e2e.test.js
+            runner: windows-latest
+            rid: win-x64
+            archivePattern: aspire-cli-win-x64*.zip
+            cliBinary: aspire.exe
+            useXvfb: false
+          - name: Linux
+            shardName: tree-actions
+            spec: out/test-e2e/test-e2e/treeActions.e2e.test.js
+            runner: ubuntu-latest
+            rid: linux-x64
+            archivePattern: aspire-cli-linux-x64*.tar.gz
+            cliBinary: aspire
+            useXvfb: true
+          - name: Windows
+            shardName: tree-actions
+            spec: out/test-e2e/test-e2e/treeActions.e2e.test.js
+            runner: windows-latest
+            rid: win-x64
+            archivePattern: aspire-cli-win-x64*.zip
+            cliBinary: aspire.exe
+            useXvfb: false
+          - name: Linux
+            shardName: debug-dashboard
+            spec: out/test-e2e/test-e2e/debugDashboard.e2e.test.js
+            runner: ubuntu-latest
+            rid: linux-x64
+            archivePattern: aspire-cli-linux-x64*.tar.gz
+            cliBinary: aspire
+            useXvfb: true
+          - name: Windows
+            shardName: debug-dashboard
+            advisoryIssue: https://github.com/microsoft/aspire/issues/19282
+            spec: out/test-e2e/test-e2e/debugDashboard.e2e.test.js
+            runner: windows-latest
+            rid: win-x64
+            archivePattern: aspire-cli-win-x64*.zip
+            cliBinary: aspire.exe
+            useXvfb: false
+          - name: Windows
+            shardName: winui-debug
+            spec: out/test-e2e/test-e2e/winUiDebug.e2e.test.js
+            runner: windows-latest
+            rid: win-x64
+            archivePattern: aspire-cli-win-x64*.zip
+            cliBinary: aspire.exe
+            useXvfb: false
+            installWinUI: true
+          - name: Linux
+            shardName: diagnostic-logs
+            spec: out/test-e2e/test-e2e/diagnosticLogs.e2e.test.js
+            runner: ubuntu-latest
+            rid: linux-x64
+            archivePattern: aspire-cli-linux-x64*.tar.gz
+            cliBinary: aspire
+            useXvfb: true
+          - name: Windows
+            shardName: diagnostic-logs
+            spec: out/test-e2e/test-e2e/diagnosticLogs.e2e.test.js
+            runner: windows-latest
+            rid: win-x64
+            archivePattern: aspire-cli-win-x64*.zip
+            cliBinary: aspire.exe
+            useXvfb: false
+          - name: Linux
+            shardName: debug-startup-timeout
+            spec: out/test-e2e/test-e2e/debugStartupTimeout.e2e.test.js
+            runner: ubuntu-latest
+            rid: linux-x64
+            archivePattern: aspire-cli-linux-x64*.tar.gz
+            cliBinary: aspire
+            useXvfb: true
+            unsetCliStartTimeout: true
+          - name: Windows
+            shardName: debug-startup-timeout
+            spec: out/test-e2e/test-e2e/debugStartupTimeout.e2e.test.js
+            runner: windows-latest
+            rid: win-x64
+            archivePattern: aspire-cli-win-x64*.zip
+            cliBinary: aspire.exe
+            useXvfb: false
+            unsetCliStartTimeout: true
+          - name: Linux
+            shardName: zero-to-running
+            spec: out/test-e2e/test-e2e/zeroToRunning.e2e.test.js
+            runner: ubuntu-latest
+            rid: linux-x64
+            archivePattern: aspire-cli-linux-x64*.tar.gz
+            cliBinary: aspire
+            useXvfb: true
+          - name: Windows
+            shardName: zero-to-running
+            spec: out/test-e2e/test-e2e/zeroToRunning.e2e.test.js
+            runner: windows-latest
+            rid: win-x64
+            archivePattern: aspire-cli-win-x64*.zip
+            cliBinary: aspire.exe
+            useXvfb: false
+          - name: Linux
+            shardName: package-surface
+            spec: out/test-e2e/test-e2e/packageSurface.e2e.test.js
+            runner: ubuntu-latest
+            rid: linux-x64
+            archivePattern: aspire-cli-linux-x64*.tar.gz
+            cliBinary: aspire
+            useXvfb: true
+          - name: Windows
+            shardName: package-surface
+            spec: out/test-e2e/test-e2e/packageSurface.e2e.test.js
+            runner: windows-latest
+            rid: win-x64
+            archivePattern: aspire-cli-win-x64*.zip
+            cliBinary: aspire.exe
+            useXvfb: false
+          - name: Linux
+            shardName: resource-debug-tools
+            spec: out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js
+            runner: ubuntu-latest
+            rid: linux-x64
+            archivePattern: aspire-cli-linux-x64*.tar.gz
+            cliBinary: aspire
+            useXvfb: true
+            installResourceDebug: true
+          - name: Linux
+            shardName: java-apphost
+            spec: out/test-e2e/test-e2e/javaAppHost.e2e.test.js
+            runner: ubuntu-latest
+            rid: linux-x64
+            archivePattern: aspire-cli-linux-x64*.tar.gz
+            cliBinary: aspire
+            useXvfb: true
+            installJava: true
+            timeoutMinutes: 110
+          - name: Linux
+            shardName: java-apphost-debug-startup-timeout
+            spec: out/test-e2e/test-e2e/javaAppHostDebugStartupTimeout.e2e.test.js
+            runner: ubuntu-latest
+            rid: linux-x64
+            archivePattern: aspire-cli-linux-x64*.tar.gz
+            cliBinary: aspire
+            useXvfb: true
+            installJava: true
+            timeoutMinutes: 110
+            unsetCliStartTimeout: true
+          - name: Linux
+            shardName: java-codelens
+            spec: out/test-e2e/test-e2e/javaCodeLens.e2e.test.js
+            runner: ubuntu-latest
+            rid: linux-x64
+            archivePattern: aspire-cli-linux-x64*.tar.gz
+            cliBinary: aspire
+            useXvfb: true
+            installJava: true
+          - name: Linux
+            shardName: java-starter-project-model
+            spec: out/test-e2e/test-e2e/javaStarterProjectModel.e2e.test.js
+            runner: ubuntu-latest
+            rid: linux-x64
+            archivePattern: aspire-cli-linux-x64*.tar.gz
+            cliBinary: aspire
+            useXvfb: true
+            installJava: true
+            timeoutMinutes: 110
+          - name: Linux
+            shardName: workspace-target-proof
+            spec: out/test-e2e/test-e2e/workspaceTargetProof.e2e.test.js
+            runner: ubuntu-latest
+            rid: linux-x64
+            archivePattern: aspire-cli-linux-x64*.tar.gz
+            cliBinary: aspire
+            useXvfb: true
+          - name: Linux
+            shardName: cli-path-resolution
+            spec: out/test-e2e/test-e2e/cliPathResolution.e2e.test.js
+            runner: ubuntu-latest
+            rid: linux-x64
+            archivePattern: aspire-cli-linux-x64*.tar.gz
+            cliBinary: aspire
+            useXvfb: true
+          - name: Linux
+            shardName: cli-path-rejection
+            spec: out/test-e2e/test-e2e/{cliPathRejectionNotification,usefulnessSurvey}.e2e.test.js
+            runner: ubuntu-latest
+            rid: linux-x64
+            archivePattern: aspire-cli-linux-x64*.tar.gz
+            cliBinary: aspire
+            useXvfb: true
+          - name: Windows
+            shardName: resource-debug-tools
+            spec: out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js
+            runner: windows-latest
+            rid: win-x64
+            archivePattern: aspire-cli-win-x64*.zip
+            cliBinary: aspire.exe
+            useXvfb: false
+            installResourceDebug: true
+          - name: Windows
+            shardName: resource-debug-tools-negative
+            spec: out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js
+            runner: windows-latest
+            rid: win-x64
+            archivePattern: aspire-cli-win-x64*.zip
+            cliBinary: aspire.exe
+            useXvfb: false
+          - name: Windows
+            shardName: cli-path-rejection
+            spec: out/test-e2e/test-e2e/{cliPathRejectionNotification,usefulnessSurvey}.e2e.test.js
+            runner: windows-latest
+            rid: win-x64
+            archivePattern: aspire-cli-win-x64*.zip
+            cliBinary: aspire.exe
+            useXvfb: false
+          - name: Linux
+            shardName: edge-cases
+            spec: out/test-e2e/test-e2e/edgeCases.e2e.test.js
+            runner: ubuntu-latest
+            rid: linux-x64
+            archivePattern: aspire-cli-linux-x64*.tar.gz
+            cliBinary: aspire
+            useXvfb: true
+          - name: Windows
+            shardName: edge-cases
+            spec: out/test-e2e/test-e2e/edgeCases.e2e.test.js
+            runner: windows-latest
+            rid: win-x64
+            archivePattern: aspire-cli-win-x64*.zip
+            cliBinary: aspire.exe
+            useXvfb: false
+          - name: Linux
+            shardName: launch-profiles
+            spec: out/test-e2e/test-e2e/launchProfiles.e2e.test.js
+            runner: ubuntu-latest
+            rid: linux-x64
+            archivePattern: aspire-cli-linux-x64*.tar.gz
+            cliBinary: aspire
+            useXvfb: true
+            installDeno: true
+          - name: Windows
+            shardName: launch-profiles
+            spec: out/test-e2e/test-e2e/launchProfiles.e2e.test.js
+            runner: windows-latest
+            rid: win-x64
+            archivePattern: aspire-cli-win-x64*.zip
+            cliBinary: aspire.exe
+            useXvfb: false
+            installDeno: true
+          - name: Linux
+            shardName: coordinated-build
+            spec: out/test-e2e/test-e2e/coordinatedBuild.e2e.test.js
+            runner: ubuntu-latest
+            rid: linux-x64
+            archivePattern: aspire-cli-linux-x64*.tar.gz
+            cliBinary: aspire
+            useXvfb: true
+            installDotnetDebugger: true
+          - name: Windows
+            shardName: coordinated-build
+            spec: out/test-e2e/test-e2e/coordinatedBuild.e2e.test.js
+            runner: windows-latest
+            rid: win-x64
+            archivePattern: aspire-cli-win-x64*.zip
+            cliBinary: aspire.exe
+            useXvfb: false
+            installDotnetDebugger: true
+          - name: Linux
+            shardName: browser-debugger
+            advisoryIssue: https://github.com/microsoft/aspire/issues/20184
+            spec: out/test-e2e/test-e2e/browserDebugger.e2e.test.js
+            runner: ubuntu-latest
+            rid: linux-x64
+            archivePattern: aspire-cli-linux-x64*.tar.gz
+            cliBinary: aspire
+            useXvfb: true
+            browser: chrome
+            installDotnetDebugger: true
           - name: Windows
             shardName: browser-debugger
             spec: out/test-e2e/test-e2e/browserDebugger.e2e.test.js
@@ -144,6 +511,37 @@ jobs:
             useXvfb: false
             browser: msedge
             installDotnetDebugger: true
+          - name: Linux
+            shardName: azure-functions
+            advisoryIssue: https://github.com/microsoft/aspire/issues/19639
+            spec: out/test-e2e/test-e2e/azureFunctions.e2e.test.js
+            runner: ubuntu-latest
+            rid: linux-x64
+            archivePattern: aspire-cli-linux-x64*.tar.gz
+            cliBinary: aspire
+            useXvfb: true
+            installAzureFunctions: true
+          - name: Linux
+            shardName: azure-functions-node
+            spec: out/test-e2e/test-e2e/azureFunctionsNode.e2e.test.js
+            runner: ubuntu-latest
+            rid: linux-x64
+            archivePattern: aspire-cli-linux-x64*.tar.gz
+            cliBinary: aspire
+            useXvfb: true
+            # The Node worker attaches through pwa-node directly. Installing vscode-azurefunctions
+            # would also register its Function Host Exceptions Debugger in the AppHost session.
+            installDotnetDebugger: true
+            installAzureFunctionsCoreTools: true
+          - name: Linux
+            shardName: deno-debugger
+            spec: out/test-e2e/test-e2e/denoDebugger.e2e.test.js
+            runner: ubuntu-latest
+            rid: linux-x64
+            archivePattern: aspire-cli-linux-x64*.tar.gz
+            cliBinary: aspire
+            useXvfb: true
+            installDeno: true
     defaults:
       run:
         shell: pwsh
@@ -748,8 +1146,11 @@ jobs:
         run: '"ASPIRE_CONTAINER_RUNTIME=docker" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append'
 
       - name: Run extension E2E tests
+        # Scope the fixture probe to its draft PR without changing matrix discovery.
+        if: ${{ github.event_name != 'pull_request' || github.head_ref != 'ci-health/22426-r1-main-diagnostic' || (matrix.rid == 'win-x64' && matrix.shardName == 'browser-debugger') }}
         working-directory: extension
         env:
+          ASPIRE_EXTENSION_E2E_TRACE_FIXTURE_BUILD: ${{ github.event_name == 'pull_request' && github.head_ref == 'ci-health/22426-r1-main-diagnostic' && matrix.rid == 'win-x64' && matrix.shardName == 'browser-debugger' }}
           ASPIRE_EXTENSION_E2E_VSIX: ${{ github.workspace }}/extension/out/aspire-extension.vsix
           ASPIRE_EXTENSION_E2E_SHARD: ${{ matrix.shardName }}
           ASPIRE_EXTENSION_E2E_SPEC: ${{ matrix.spec }}
