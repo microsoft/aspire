@@ -1661,6 +1661,13 @@ function generateBrowserDebuggerProjects() {
 }
 
 function runDotnetForFixture(args) {
+  const traceBuild = process.platform === 'win32' && enableBrowserDebuggerE2E && args[0] === 'build';
+  const buildStarted = traceBuild ? performance.now() : 0;
+  if (traceBuild) {
+    // Keep spawnSync and its deadline intact so the runner's process samples can be
+    // correlated with the failure without changing the output-pipe behavior.
+    console.log(`[fixture build] started=${new Date().toISOString()} parentPid=${process.pid} node=${process.version}`);
+  }
   const result = spawnSync('dotnet', args, {
     cwd: workspaceRoot,
     env: getAspireCliEnvironment(),
@@ -1668,6 +1675,10 @@ function runDotnetForFixture(args) {
     encoding: 'utf8',
     timeout: 300000,
   });
+
+  if (traceBuild) {
+    console.log(`[fixture build] returned=${new Date().toISOString()} elapsedMs=${Math.round(performance.now() - buildStarted)} childPid=${result.pid} status=${result.status} signal=${result.signal} error=${result.error?.code ?? 'none'} stdoutBytes=${Buffer.byteLength(result.stdout ?? '')} stderrBytes=${Buffer.byteLength(result.stderr ?? '')}`);
+  }
 
   if (result.error) {
     throw new Error(`Unable to run 'dotnet ${args.join(' ')}': ${result.error.message}\nstdout:\n${result.stdout ?? ''}\nstderr:\n${result.stderr ?? ''}`);
