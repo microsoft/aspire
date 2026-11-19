@@ -1432,7 +1432,7 @@ public class ResourcesLayoutTests : DashboardTestContext
         var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
 
         cut.WaitForAssertion(() => Assert.Equal(
-            ["tab-Overview", "tab-Console", "tab-StructuredLogs", "tab-Traces", "tab-Metrics"],
+            ["resource-tab-home", "tab-Overview", "tab-Console", "tab-StructuredLogs", "tab-Traces", "tab-Metrics"],
             cut.FindComponents<FluentTab>().Where(t => t.Instance.Visible && t.Instance.Id != "resource-tab-none").Select(t => t.Instance.Id)));
     }
 
@@ -1478,7 +1478,7 @@ public class ResourcesLayoutTests : DashboardTestContext
 
         // "resource-tab-none" is the tab that's active while no view is shown selected. It's never displayed.
         cut.WaitForAssertion(() => Assert.Equal(
-            ["tab-Overview", "tab-Console", "tab-StructuredLogs", "tab-Traces", "tab-Metrics"],
+            ["resource-tab-home", "tab-Overview", "tab-Console", "tab-StructuredLogs", "tab-Traces", "tab-Metrics"],
             cut.FindComponents<FluentTab>().Where(t => t.Instance.Visible && t.Instance.Id != "resource-tab-none").Select(t => t.Instance.Id)));
         Assert.Equal("tab-Console", cut.FindComponent<FluentTabs>().Instance.ActiveTabId);
         // The resources send no telemetry, so their telemetry tabs are flagged unavailable but stay enabled.
@@ -2425,10 +2425,10 @@ public class ResourcesLayoutTests : DashboardTestContext
     }
 
     [Theory]
-    // The root URL is the home page, the table of every resource, wherever there's a full-page list to show.
+    // The root URL is the home page, the table of every resource, at every width.
     [InlineData(true, true, "/", "")]
-    // A narrow layout has no full-page list, so it opens on the overview of all resources.
-    [InlineData(true, false, "/", "resources")]
+    // Narrowing the window must not move the user off home (it shows the list as the open drawer instead).
+    [InlineData(true, false, "/", "")]
     // Without a resource service there are no resources to list.
     [InlineData(false, true, "/", "structuredlogs")]
     // Links created by older tools.
@@ -2452,9 +2452,9 @@ public class ResourcesLayoutTests : DashboardTestContext
     }
 
     [Theory]
-    [InlineData(true, true)]
-    [InlineData(false, false)]
-    public void HomeNavigation_OpensFullResourceListOnDesktop(bool isDesktop, bool expectFullCanvas)
+    [InlineData(true)]
+    [InlineData(false)]
+    public void HomeNavigation_OpensFullResourceList(bool isDesktop)
     {
         var viewport = new ViewportInformation(IsDesktop: isDesktop, IsUltraLowHeight: false, IsUltraLowWidth: false);
         var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
@@ -2471,7 +2471,8 @@ public class ResourcesLayoutTests : DashboardTestContext
         navigation.NavigateTo(DashboardUrls.HomeUrl());
         cut.Render();
 
-        Assert.Equal(expectFullCanvas, cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
+        Assert.Equal(isDesktop, cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
+        Assert.Equal(!isDesktop, cut.Find(".resources-layout").ClassList.Contains("drawer-open"));
         Assert.Equal("http://localhost/", navigation.Uri);
     }
 

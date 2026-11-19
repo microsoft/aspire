@@ -3,7 +3,6 @@
 
 using System.Text.RegularExpressions;
 using Aspire.Dashboard.Tests.Integration.Playwright.Infrastructure;
-using Aspire.Dashboard.Utils;
 using Aspire.TestUtilities;
 using Microsoft.Playwright;
 using Xunit;
@@ -62,30 +61,27 @@ public sealed class ResourcePaneFullCanvasTests(ResourceTagPaneTests.TaggedResou
     [InlineData(390, 844)]
     [InlineData(768, 1024)]
     [OuterloopTest("Resource-intensive Playwright browser test")]
-    public async Task FullCanvas_ResizeToMobileExitsAndDoesNotReenter(int width, int height)
+    public async Task FullCanvas_ResizeToMobileOpensTheDrawerAndWideningRestoresTheTable(int width, int height)
     {
         await RunTestAsync(async page =>
         {
-            await page.AddInitScriptAsync($"localStorage.setItem('{BrowserStorageKeys.ResourcePaneWidth}', '507')");
             await page.SetViewportSizeAsync(1440, 900);
             await page.EmulateMediaAsync(new() { ReducedMotion = ReducedMotion.Reduce });
             await page.GotoAsync("/resources/tag-a");
             await ResourcePaneNavigation.GoHomeAsync(page);
             await page.SetViewportSizeAsync(width, height);
-            // A narrow layout has no full-page table, so home gives way to the overview of all resources.
-            await Assertions.Expect(page).ToHaveURLAsync(new Regex("/resources$"));
-            await Assertions.Expect(page.Locator(".pane-full-canvas,.pane-selection-reveal,.pane-motion-enabled")).ToHaveCountAsync(0);
-            await Assertions.Expect(page.Locator(".resource-content")).ToBeVisibleAsync();
-            await Assertions.Expect(page.Locator(".resource-content")).Not.ToHaveAttributeAsync("inert", "");
-            await Assertions.Expect(page.Locator(".resource-pane")).Not.ToBeVisibleAsync();
-            await page.Locator(".resource-picker").ClickAsync();
-            await Assertions.Expect(page.Locator(".resource-row-all .resource-row-link")).ToHaveAttributeAsync("aria-current", "page");
-            await page.GetByRole(AriaRole.Button, new() { Name = Resources.Layout.ResourcePaneClose, Exact = true }).ClickAsync();
-            await Assertions.Expect(page.Locator(".resource-content")).ToBeVisibleAsync();
-            await page.SetViewportSizeAsync(1440, 900);
-            await Assertions.Expect(page.Locator(".resource-pane-resizer")).ToHaveAttributeAsync("aria-valuenow", "507");
+            // A narrow layout has no room for the table, so home stays at "/" and shows the list as the open drawer.
+            await Assertions.Expect(page.Locator(".resources-layout.drawer-open")).ToBeVisibleAsync();
+            await Assertions.Expect(page).ToHaveURLAsync(ResourcePaneNavigation.HomeUrl);
             await Assertions.Expect(page.Locator(".pane-full-canvas")).ToHaveCountAsync(0);
-            await Assertions.Expect(page).ToHaveURLAsync(new Regex("/resources$"));
+            await Assertions.Expect(page.Locator(".resource-pane")).ToBeVisibleAsync();
+            await Assertions.Expect(page.Locator(".resource-row-all .resource-row-link")).ToHaveAttributeAsync("aria-current", "page");
+            await Assertions.Expect(page.GetByRole(AriaRole.Button, new() { Name = Resources.Layout.ResourcePaneClose, Exact = true })).ToHaveCountAsync(0);
+            await Assertions.Expect(page.Locator("#resource-tab-home")).ToHaveAttributeAsync("aria-selected", "true");
+            await page.SetViewportSizeAsync(1440, 900);
+            await Assertions.Expect(page.Locator(".pane-full-canvas")).ToBeVisibleAsync();
+            await Assertions.Expect(page.Locator(".drawer-open")).ToHaveCountAsync(0);
+            await Assertions.Expect(page).ToHaveURLAsync(ResourcePaneNavigation.HomeUrl);
             await Assertions.Expect(page.Locator("#blazor-error-ui")).Not.ToBeVisibleAsync();
         });
     }

@@ -519,7 +519,7 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
     // The logo and the app name open the dashboard's home, the table of every resource. Home has no selection, and
     // going there is a fresh start, so the stored selection is cleared: the overview doesn't restore it afterwards.
     // The links keep "/" as their address, so opening them in a new tab shows the same view.
-    private async Task GoToAllResourcesAsync()
+    internal async Task GoToAllResourcesAsync()
     {
         if (!DashboardClient.IsEnabled)
         {

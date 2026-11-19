@@ -257,7 +257,9 @@ export function registerTabOverflow(registrationId, dotNetRef) {
     // happens when a navigation lands just after focus moved, for example the brand's navigation home. Focus moves
     // to the same tab in the new strip instead.
     const onTabFocus = event => {
-        const tab = event.target instanceof Element ? event.target.closest('.resources-tab-header fluent-tab[id^="tab-"]') : null;
+        const tab = event.target instanceof Element
+            ? event.target.closest('.resources-tab-header fluent-tab[id^="tab-"], .resources-tab-header fluent-tab#resource-tab-home')
+            : null;
         state.focusedTab = tab;
     };
     document.addEventListener("focusin", onTabFocus);
@@ -917,13 +919,14 @@ export function registerResourceContextMenu(layoutElement, dotNetRef) {
         }
     };
 
-    // While the resource list fills the page, no tab is shown selected, and choosing the current tab opens its content.
-    // The tab list can't report that choice (see OpenTabFromFullCanvasAsync), so a click, Enter or Space on a tab is
-    // passed on. The tabs are in the page header, outside the layout, so this listens on the document.
+    // While home shows the resource list (data-list-home), no resource tab is selected, and choosing the current tab
+    // opens its content. The tab list can't report that choice (see OpenTabFromFullCanvasAsync), so a click, Enter or
+    // Space on a tab is passed on. On a wide layout the tabs are in the page header, outside the layout, so this listens
+    // on the document.
     // Also while home is loading (data-home-pending), when choosing the current tab is lost the same way: the layout
     // holds it until home has loaded.
     const onTabActivate = event => {
-        if (!(layoutElement.classList.contains('pane-full-canvas') || layoutElement.dataset.homePending === 'true') ||
+        if (!(layoutElement.dataset.listHome === 'true' || layoutElement.dataset.homePending === 'true') ||
             (event.type === 'keydown' && (event.isComposing || (event.key !== 'Enter' && event.key !== ' ')))) {
             return;
         }

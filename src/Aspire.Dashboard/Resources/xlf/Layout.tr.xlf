@@ -642,6 +642,11 @@
         <target state="new">now</target>
         <note>Short relative start time shown in a resource row, for a resource started less than a minute ago</note>
       </trans-unit>
+      <trans-unit id="ResourceTabHome">
+        <source>Home</source>
+        <target state="new">Home</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ResourceTabOverview">
         <source>Overview</source>
         <target state="new">Overview</target>
