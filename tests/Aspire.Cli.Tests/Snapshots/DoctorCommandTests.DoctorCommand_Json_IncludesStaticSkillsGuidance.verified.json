@@ -1,6 +1,6 @@
 ﻿{
       "category": "environment",
-      "name": "aspire-agent-plugin-sources",
+      "name": "aspire-agent-plugins",
       "status": "warning",
       "message": "Found static copies of Aspire skills.",
       "fix": "Run 'aspire agent init' to configure agent plugin sources and remove these copies.",

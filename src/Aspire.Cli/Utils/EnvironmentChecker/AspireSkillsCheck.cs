@@ -17,7 +17,7 @@ internal sealed class AspireSkillsCheck(
     IGitRepository gitRepository,
     CliExecutionContext executionContext) : IEnvironmentCheck
 {
-    internal const string CheckName = "aspire-agent-plugin-sources";
+    internal const string CheckName = "aspire-agent-plugins";
 
     public int Order => 103;
 
