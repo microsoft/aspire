@@ -766,8 +766,12 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
                 <IsTestingPlatformApplication>true</IsTestingPlatformApplication>
               </PropertyGroup>
             """);
+        var fakeCliDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "fake-cli"));
+        var aspireCliPath = await CreateFakeAspireCliAsync(fakeCliDirectory.FullName);
 
-        var properties = await GetComputeRunArgumentsPropertiesAsync(project);
+        var properties = await GetComputeRunArgumentsPropertiesAsync(
+            project,
+            [$"-p:AspireCliPath={aspireCliPath}", "-p:_AspireSuppressCliRunHook=false", $"-p:{SuppressCliRunHookEnvironmentVariable}=false"]);
 
         AssertUsesDotNetRun(properties, project);
     }
