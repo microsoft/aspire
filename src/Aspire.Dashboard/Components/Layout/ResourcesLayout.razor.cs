@@ -1587,6 +1587,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     {
         var resources = _resourceByName.Values.ToList();
         var tagsByResource = TagStore.GetTagsByResource(resources);
+        ColorGenerator.TagInstance.ResolveAll(tagsByResource.Values.SelectMany(tags => tags));
         var filterKeys = TagStore.GetAllTags(resources).ToHashSet(StringComparer.OrdinalIgnoreCase);
         if (resources.Any(r => !tagsByResource.ContainsKey(r.DisplayName)))
         {
@@ -1965,6 +1966,12 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
     private bool IsCommandDisabled(ResourceViewModel resource, CommandViewModel command) =>
         DashboardClient.IsReadOnly || command.State == CommandViewModelState.Disabled || DashboardCommandExecutor.IsExecuting(resource.Name, command.Name);
+
+    private List<MenuButtonItem> GetTagGroupMenuItems(string tagName) =>
+        ResourceMenuBuilder.CreateTagGroupMenuItems(tagName, $"resource-pane-tag-menu-header-{Guid.NewGuid():N}",
+            () => GetTagGroups().Find(group => StringComparer.OrdinalIgnoreCase.Equals(group.Value, tagName))?.Resources ?? [],
+            (resource, command) => DashboardCommandExecutor.IsExecuting(resource.Name, command.Name),
+            ExecuteResourceCommandAsync);
 
     private List<MenuButtonItem> GetResourceMenuItems(ResourceViewModel resource)
     {
@@ -2660,6 +2667,20 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         groupResourceNames.Count > 1 &&
         groupResourceNames.Count == _selectedResourceNames.Count &&
         groupResourceNames.All(IsSelected);
+
+    internal Task SelectTagGroupAsync(string tagName, MouseEventArgs e) => InvokeAsync(async () =>
+    {
+        var group = GetTagGroups().FirstOrDefault(group => string.Equals(group.Value, tagName, StringComparison.OrdinalIgnoreCase));
+        if (group is null)
+        {
+            Logger.LogDebug("Tag group '{TagName}' is no longer available for selection.", tagName);
+            return;
+        }
+
+        // Resolve membership through the pane so parameters and replicas outside the graph are selected too.
+        await OnResourceGroupClick(e, group.Resources.Select(GetResourceName).ToList());
+        StateHasChanged();
+    });
 
     private async Task OnResourceGroupClick(MouseEventArgs e, List<string> groupResourceNames)
     {

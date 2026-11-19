@@ -516,6 +516,46 @@ public partial class ResourcesTests : DashboardTestContext
     }
 
     [Fact]
+    public async Task ResourceGraph_Tags_MergesAndUpdatesMembershipsForReplicas()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var tagProperty = KnownProperties.Resource.TraitPrefix + KnownResourceTraits.Tag;
+        var resources = new[] { "api-1", "api-2" }.Select(name => ModelTestHelpers.CreateResource(name, displayName: "api", properties: new()
+        {
+            [tagProperty] = new(tagProperty, ProtobufValue.ForList(ProtobufValue.ForString("Backend"), ProtobufValue.ForString("API")), false, null, 0, null, false)
+        })).ToList();
+        var client = new TestDashboardClient(isEnabled: true, initialResources: resources, resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>);
+        ResourceSetupHelpers.SetupResourcesPage(this, viewport, client);
+        var store = Services.GetRequiredService<ResourceTagStore>();
+        await store.EnsureLoadedAsync();
+        store.AddTag("api", "backend");
+        store.AddTag("api", "Personal");
+
+        var module = JSInterop.SetupModule("/js/app-resourcegraph.js");
+        module.SetupVoid("initializeResourcesGraph", _ => true).SetVoidResult();
+        var updates = module.SetupVoid("updateResourcesGraph", _ => true);
+        updates.SetVoidResult();
+        module.SetupVoid("updateResourcesGraphSelected", _ => true).SetVoidResult();
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.GraphUrl());
+        var cut = Render<Components.Pages.Resources>(builder => builder.AddCascadingValue(viewport));
+
+        void AssertTags(params string[] expected)
+        {
+            var mapped = Assert.IsType<List<ResourceDto>>(updates.Invocations.Last().Arguments[0]);
+            Assert.Equal(["api-1", "api-2"], mapped.Select(resource => resource.Name));
+            Assert.All(mapped, resource => Assert.Equal(
+                expected.Select(tag => new ResourceTagDto(tag, ColorGenerator.TagInstance.GetColorVariableByKey(tag))),
+                resource.Tags));
+        }
+
+        cut.WaitForAssertion(() => AssertTags("Backend", "API", "Personal"));
+        await cut.InvokeAsync(() => store.AddTag("api", "Shared"));
+        cut.WaitForAssertion(() => AssertTags("Backend", "API", "Personal", "Shared"));
+        await cut.InvokeAsync(() => store.RemoveTag("api", "Personal"));
+        cut.WaitForAssertion(() => AssertTags("Backend", "API", "Shared"));
+    }
+
+    [Fact]
     public async Task ResourceGraph_UpdatesWaitForInitializationAndHandleCircuitDisconnect()
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);

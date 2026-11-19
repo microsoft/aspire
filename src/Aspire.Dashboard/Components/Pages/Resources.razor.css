@@ -1,4 +1,4 @@
-﻿/* Parameters and graph are full-width views. Keep content off the window edge. */
+/* Parameters and graph are full-width views. Keep content off the window edge. */
 .page-content-container {
     padding-inline: 12px;
 }
@@ -233,7 +233,7 @@
 }
 
 ::deep .resource-node {
-    stroke: var(--aspire-page-background);
+    stroke: transparent;
     fill: var(--aspire-page-background);
 }
 
@@ -300,9 +300,7 @@
     fill: var(--aspire-page-background);
 }
 
-/* Context menu affordance (cog) shown on the lower-right of a node. Hidden until the node is
-   hovered so it doesn't clutter the graph, and non-interactive while hidden (pointer-events: none)
-   so the invisible element can't intercept clicks. */
+/* Keep the cog visually hidden until needed. Its background circle still detects direct hover. */
 ::deep .resource-menu-cog {
     opacity: 0;
     pointer-events: none;
@@ -310,7 +308,7 @@
     transition: opacity 0.15s ease-in-out;
 }
 
-::deep .resource-group-hover .resource-menu-cog,
+::deep .resource-scale:hover .resource-menu-cog,
 ::deep .resource-menu-cog:focus,
 ::deep .resource-menu-cog[aria-expanded="true"] {
     opacity: 1;

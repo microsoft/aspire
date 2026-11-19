@@ -6,6 +6,59 @@
     src: url("../fonts/geist/Geist-Variable.woff2") format("woff2");
 }
 
+.resource-tag-fill,
+.resource-tag-boundary {
+    fill: var(--tag-color);
+    fill-opacity: 0.05;
+}
+
+.resource-tag-fill-hover {
+    fill-opacity: 0.07;
+}
+
+.resource-tag-boundary {
+    stroke: var(--tag-color);
+    stroke-opacity: 0.7;
+    stroke-width: 1.5;
+    stroke-dasharray: 6 4;
+    vector-effect: non-scaling-stroke;
+}
+
+.resource-node-tag-tint {
+    fill: var(--resource-node-tag-tint, none);
+    pointer-events: none;
+}
+
+.resource-group-selected .resource-node-tag-tint,
+.resource-group-hidden:not(.resource-group-hover, .resource-group-highlight) .resource-node-tag-tint {
+    fill: none;
+}
+
+.resource-tag-label {
+    fill: var(--colorNeutralForeground1);
+    font-size: var(--aspire-font-size-large);
+    font-weight: var(--aspire-font-weight-semibold);
+    stroke: var(--aspire-page-background);
+    stroke-width: 5px;
+    stroke-linejoin: round;
+    paint-order: stroke;
+    cursor: pointer;
+}
+
+/* Let the pointer reveal either cog directly, without activating the tag cog's hover bridge early. */
+.resource-menu-cog-background {
+    pointer-events: auto;
+}
+
+.resource-tag-controls:hover > .resource-tag-menu-cog {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.resource-tag-controls:hover > .resource-tag-menu-bridge {
+    pointer-events: auto;
+}
+
 @font-face {
     font-family: "Geist Mono";
     font-style: normal;

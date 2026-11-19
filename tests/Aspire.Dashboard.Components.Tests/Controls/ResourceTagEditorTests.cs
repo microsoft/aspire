@@ -11,7 +11,9 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
+using Microsoft.FluentUI.AspNetCore.Components;
 using Xunit;
+using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
 namespace Aspire.Dashboard.Components.Tests.Controls;
 
@@ -93,6 +95,9 @@ public class ResourceTagEditorTests : DashboardTestContext
         var cut = RenderEditor("api");
 
         Assert.Equal(["backend", "core"], cut.FindAll(".tag-chip-name").Select(e => e.TextContent));
+        Assert.Equal(new[] { "backend", "core" }.Select(ColorGenerator.TagInstance.GetColorVariableByKey),
+            cut.FindComponents<FluentIcon<Icons.Filled.Size16.Tag>>()
+                .Select(icon => icon.Instance.CustomColor));
     }
 
     [Fact]

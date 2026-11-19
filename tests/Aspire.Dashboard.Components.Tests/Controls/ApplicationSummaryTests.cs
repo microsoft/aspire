@@ -8,6 +8,7 @@ using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
+using Aspire.Dashboard.Model.ResourceGraph;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Tests;
@@ -206,14 +207,43 @@ public class ApplicationSummaryTests : DashboardTestContext
     {
         var module = JSInterop.SetupModule("/js/app-resourcegraph.js");
         module.Mode = JSRuntimeMode.Loose;
-        var cut = RenderSummary();
+        var cut = RenderSummary(resources:
+        [
+            ModelTestHelpers.CreateResource("worker", resourceType: KnownResourceTypes.Project, state: KnownResourceState.FailedToStart),
+            ModelTestHelpers.CreateResource("api", resourceType: KnownResourceTypes.Project, state: KnownResourceState.Running),
+            ModelTestHelpers.CreateResource("z-cache", resourceType: KnownResourceTypes.Container, state: KnownResourceState.Running)
+        ]);
 
         await cut.InvokeAsync(() => Services.GetRequiredService<DashboardViewPreferences>().SetGroupOverviewAsync(GroupOverview.Graph));
 
         cut.WaitForAssertion(() => Assert.False(cut.Find(".home-resource-graph-layout").HasAttribute("hidden")));
         Assert.Empty(cut.FindAll(".home-hero"));
         Assert.Single(module.Invocations, invocation => invocation.Identifier == "initializeResourcesGraph");
-        Assert.Contains(module.Invocations, invocation => invocation.Identifier == "updateResourcesGraph");
+        cut.WaitForAssertion(() =>
+        {
+            var update = module.Invocations.Last(invocation => invocation.Identifier == "updateResourcesGraph");
+            var resources = Assert.IsType<List<ResourceDto>>(update.Arguments[0]);
+            Assert.Equal(["z-cache", "api", "worker"], resources.Select(resource => resource.Name));
+        });
+    }
+
+    [Fact]
+    public async Task Render_GraphSelectionChanges_UpdateResourcesImmediately()
+    {
+        var module = JSInterop.SetupModule("/js/app-resourcegraph.js");
+        module.Mode = JSRuntimeMode.Loose;
+        var cut = RenderSummary();
+        await cut.InvokeAsync(() => Services.GetRequiredService<DashboardViewPreferences>().SetGroupOverviewAsync(GroupOverview.Graph));
+        cut.WaitForAssertion(() => Assert.Contains(module.Invocations, invocation => invocation.Identifier == "updateResourcesGraph"));
+
+        List<ResourceDto> GetGraphResources() =>
+            Assert.IsType<List<ResourceDto>>(module.Invocations.Last(invocation => invocation.Identifier == "updateResourcesGraph").Arguments[0]);
+
+        await cut.InvokeAsync(() => cut.Render(builder => builder.Add(p => p.ResourceNames, ["api"])));
+        cut.WaitForAssertion(() => Assert.Equal(["api"], GetGraphResources().Select(resource => resource.Name)));
+
+        await cut.InvokeAsync(() => cut.Render(builder => builder.Add(p => p.ResourceNames, null)));
+        cut.WaitForAssertion(() => Assert.Equal(["api", "broken"], GetGraphResources().Select(resource => resource.Name).Order(StringComparer.Ordinal)));
     }
 
     [Fact]

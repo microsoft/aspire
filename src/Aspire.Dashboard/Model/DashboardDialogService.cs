@@ -4,6 +4,7 @@
 using System.Diagnostics.CodeAnalysis;
 using Aspire.Dashboard.Components.Dialogs;
 using Aspire.Dashboard.Resources;
+using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
 using Microsoft.FluentUI.AspNetCore.Components;
@@ -19,6 +20,8 @@ public sealed class DashboardDialogService(
     IStringLocalizer<Dialogs> dialogsLoc,
     DimensionManager dimensionManager)
 {
+    private readonly AsyncLock _confirmationLock = new();
+
     private string CloseButtonText => dialogsLoc[nameof(Dialogs.DialogCloseButtonText)];
 
     /// <summary>
@@ -101,6 +104,8 @@ public sealed class DashboardDialogService(
     /// <returns>The dialog result.</returns>
     public async Task<DialogResult> ShowConfirmationAsync(string message)
     {
+        // Commands can run concurrently, but their confirmation dialogs must not stack.
+        using var confirmation = await _confirmationLock.LockAsync().ConfigureAwait(true);
         return await dialogService.ShowConfirmationAsync(message).ConfigureAwait(false);
     }
 

@@ -146,6 +146,7 @@
                     {
                         var groupName = GetGroupName(group.Value);
                         var isGroupCollapsed = IsGroupCollapsed(group);
+                        var actionTag = _grouping == ResourcePaneGrouping.Tags ? group.Value : null;
                         var countText = string.Format(CultureInfo.CurrentCulture, group.Resources.Count == 1 ? Loc[nameof(Dashboard.Resources.Layout.ResourcePaneCountSingular)] : Loc[nameof(Dashboard.Resources.Layout.ResourcePaneCountPlural)], group.Resources.Count);
 
                         <div class="resource-tag-group @(_grouping == ResourcePaneGrouping.Tags && group.Value is null ? "untagged" : string.Empty)"
@@ -179,15 +180,30 @@
                                         }
                                         else if (group.Value is { } tag)
                                         {
-                                            <FluentIcon Value="@(new Icons.Filled.Size16.Tag())" Width="16px" Color="Color.Custom" CustomColor="@ColorGenerator.Instance.GetColorVariableByKey(tag)" />
+                                            <FluentIcon Value="@(new Icons.Filled.Size16.Tag())" Width="16px" Color="Color.Custom" CustomColor="@ColorGenerator.TagInstance.GetColorVariableByKey(tag)" />
                                         }
                                         else
                                         {
                                             <FluentIcon Value="@(new Icons.Regular.Size16.Tag())" Width="16px" Color="Color.Custom" CustomColor="var(--colorNeutralForeground3)" />
                                         }
                                         <span class="resource-tag-name"><FluentHighlighter HighlightedText="@_filter.TextFilter" Text="@groupName" /></span>
-                                        <span class="resource-tag-count" aria-hidden="true">@group.Resources.Count</span>
+                                        @if (actionTag is null)
+                                        {
+                                            <span class="resource-tag-count" aria-hidden="true">@group.Resources.Count</span>
+                                        }
                                     </a>
+                                    @if (actionTag is not null)
+                                    {
+                                        <div class="resource-tag-actions">
+                                            <span class="resource-tag-count" aria-hidden="true">@group.Resources.Count</span>
+                                            <AspireMenuButton ButtonAppearance="ButtonAppearance.Transparent"
+                                                              ButtonClass="resource-tag-action"
+                                                              Icon="@(new Icons.Regular.Size16.MoreHorizontal())"
+                                                              ItemsProvider="@(() => GetTagGroupMenuItems(actionTag))"
+                                                              RefreshItemsWhileOpen="false"
+                                                              Title="@ResourcesLoc[nameof(Dashboard.Resources.Resources.ResourcesGraphTagActionsButton), actionTag]" />
+                                        </div>
+                                    }
                                     <button type="button"
                                             class="resource-row-toggle @(isGroupCollapsed ? "collapsed" : string.Empty)"
                                             aria-expanded="@((!isGroupCollapsed).ToString().ToLowerInvariant())"

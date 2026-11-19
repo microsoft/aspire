@@ -13,6 +13,7 @@ using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Web;
 using Microsoft.Extensions.Localization;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.JSInterop;
@@ -100,6 +101,9 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
     public required DashboardViewPreferences ViewPreferences { get; init; }
 
     [Inject]
+    public required ResourceTagStore TagStore { get; init; }
+
+    [Inject]
     public required NavigationManager NavigationManager { get; init; }
 
     [Inject]
@@ -116,6 +120,9 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
 
     [CascadingParameter]
     public required ViewportInformation ViewportInformation { get; init; }
+
+    [CascadingParameter]
+    public ResourcesLayout? ResourceLayout { get; set; }
 
     private ITelemetryRepository TelemetryRepository => DataSource.TelemetryRepository;
     private IReadOnlyList<IconToggleOption<GroupOverview>> OverviewOptions =>
@@ -144,6 +151,8 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
     {
         ViewPreferences.Changed += OnViewPreferencesChanged;
         await ViewPreferences.EnsureLoadedAsync();
+        TagStore.Changed += OnTagsChanged;
+        await TagStore.EnsureLoadedAsync();
 
         if (!DashboardClient.IsEnabled)
         {
@@ -205,13 +214,14 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
             var graphIcons = new GraphIconsDto(
                 new GraphMenuIconDto(
                     Path: ResourceGraphMapper.GetIconPathData(new Icons.Regular.Size16.Settings()),
-                    LabelFormat: Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphResourceActionsButton)].Value),
+                    LabelFormat: Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphResourceActionsButton)].Value,
+                    TagLabelFormat: Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphTagActionsButton)].Value),
                 new GraphHiddenIconDto(
                     Path: ResourceGraphMapper.GetIconPathData(new Icons.Regular.Size16.EyeOff()),
                     Tooltip: ColumnsLoc[nameof(Dashboard.Resources.Columns.HiddenResourceIconTooltip)].Value),
                 ResourceGraphMapper.GetGameStrings(Loc));
 
-            await _jsModule.InvokeVoidAsync("initializeResourcesGraph", _resourcesInteropReference, graphIcons);
+            await _jsModule.InvokeVoidAsync("initializeResourcesGraph", _resourcesInteropReference, graphIcons, ResourceLayout is not null);
             _graphInitialized = true;
             await UpdateResourceGraphResourcesAsync();
         }
@@ -229,7 +239,7 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
         }
     }
 
-    protected override void OnParametersSet()
+    protected override async Task OnParametersSetAsync()
     {
         // The overview passes the current selection. When it changes, the telemetry shown is for other resources.
         if (_scopedResourceNames is null != ResourceNames is null ||
@@ -241,6 +251,7 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
             {
                 _telemetry = null;
                 QueueTelemetryRefresh();
+                await UpdateResourceGraphResourcesAsync();
             }
         }
     }
@@ -648,6 +659,25 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
         StateHasChanged();
     }
 
+    private async Task<bool> ShowTagGroupContextMenuAsync(string tagName, int clientX, int clientY)
+    {
+        var items = ResourceMenuBuilder.CreateTagGroupMenuItems(tagName, ResourceContextMenuHeaderId,
+            () => ResourceGraphMapper.GetTagMembers(GetResources(), tagName, TagStore),
+            (resource, command) => DashboardCommandExecutor.IsExecuting(resource.Name, command.Name),
+            ExecuteCommandAsync);
+        if (_contextMenu is not { } contextMenu || items.Count == 0)
+        {
+            Logger.LogDebug("The graph menu for tag '{TagName}' is no longer available.", tagName);
+            return false;
+        }
+
+        _contextMenuItems.Clear();
+        _contextMenuItems.AddRange(items);
+        await contextMenu.OpenAsync(clientX, clientY);
+        StateHasChanged();
+        return true;
+    }
+
     private async Task ContextMenuOpenChangedAsync(bool open)
     {
         _contextMenuOpen = open;
@@ -659,10 +689,12 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
         await InvokeAsync(StateHasChanged);
     }
 
+    private IEnumerable<ResourceViewModel> GetResourcesInScope() =>
+        _resourceByName.Values.Where(r => !r.IsParameter && !r.IsResourceHidden(showHiddenResources: false) && IsInScope(r));
+
     private List<ResourceViewModel> GetResources()
     {
-        return _resourceByName.Values
-            .Where(r => !r.IsParameter && !r.IsResourceHidden(showHiddenResources: false) && IsInScope(r))
+        return GetResourcesInScope()
             .OrderBy(r => NeedsAttention(r) ? 0 : 1)
             .ThenBy(r => r.ResourceType)
             .ThenBy(r => r, ResourceViewModelNameComparer.Instance)
@@ -692,9 +724,11 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
 
     private List<ResourceDto> GetResourceGraphResources()
     {
-        var resources = GetResources();
+        var resources = ResourceGraphMapper.OrderResources(GetResourcesInScope());
+        var tagsByResource = TagStore.GetTagsByResource(resources);
         return resources
-            .Select(resource => ResourceGraphMapper.MapResource(resource, resources, _resourceByName, ColumnsLoc, showHiddenResources: false, IconResolver))
+            .Select(resource => ResourceGraphMapper.MapResource(resource, resources, _resourceByName, ColumnsLoc, showHiddenResources: false, IconResolver,
+                tagsByResource.GetValueOrDefault(resource.DisplayName) ?? []))
             .ToList();
     }
 
@@ -841,6 +875,8 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
 
     private string GetLogResourceName(OtlpResource resource) => OtlpHelpers.GetResourceName(resource, TelemetryRepository.GetResources());
 
+    private void OnTagsChanged() => _ = InvokeAsync(UpdateResourceGraphResourcesAsync);
+
     // The settings panel changes what the overview shows while it's displayed.
     private void OnViewPreferencesChanged() => _ = InvokeAsync(async () =>
     {
@@ -879,6 +915,7 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
     {
         _isDisposing = true;
         ViewPreferences.Changed -= OnViewPreferencesChanged;
+        TagStore.Changed -= OnTagsChanged;
         _cts.Cancel();
         _logsSubscription?.Dispose();
         _tracesSubscription?.Dispose();
@@ -899,8 +936,16 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
         public Task SelectResource(string id) => summary.SelectResourceAsync(id);
 
         [JSInvokable]
+        public Task SelectTagGroup(string tagName, MouseEventArgs e) =>
+            (summary.ResourceLayout ?? throw new InvalidOperationException("Tag selection requires a resources layout.")).SelectTagGroupAsync(tagName, e);
+
+        [JSInvokable]
         public Task ResourceContextMenu(string id, int clientX, int clientY, string? _) =>
             summary.ShowContextMenuAsync(id, clientX, clientY);
+
+        [JSInvokable]
+        public Task<bool> TagGroupContextMenu(string tagName, int clientX, int clientY) =>
+            summary.ShowTagGroupContextMenuAsync(tagName, clientX, clientY);
 
         [JSInvokable]
         public Task<bool?> ExecuteGraphGameCommand(string id, string commandName) =>

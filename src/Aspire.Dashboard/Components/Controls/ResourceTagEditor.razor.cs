@@ -201,8 +201,11 @@ public sealed partial class ResourceTagEditor : ComponentBase, IDisposable
 
     private bool IsAppHostTag(string tag) => AppHostTags.Contains(tag, StringComparer.OrdinalIgnoreCase);
 
-    private void UpdateTags() =>
+    private void UpdateTags()
+    {
+        ColorGenerator.TagInstance.ResolveAll(AvailableTags.Concat(AppHostTags).Concat(TagStore.GetAllTags()));
         _tags = AppHostTags.Concat(TagStore.GetTags(ResourceName)).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+    }
 
     public void Dispose()
     {
