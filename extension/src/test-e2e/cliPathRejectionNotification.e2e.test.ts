@@ -84,7 +84,18 @@ suite('Configured CLI path rejection E2E', function () {
             message.includes(invalidCliPath),
             `The rejection notification did not name the configured path. Message: ${message}`);
 
-        await notification.takeAction(openSettingActionText);
+        try {
+            await notification.takeAction(openSettingActionText);
+        }
+        catch (error) {
+            const driver = VSBrowser.instance.driver;
+            const context = await driver.executeScript(`return {
+                topLevel: window === window.top,
+                notificationToasts: document.querySelectorAll('.notification-toast').length
+            };`).catch(probeError => ({ probeError: String(probeError) }));
+            console.error('CLI path rejection notification action context:', context);
+            throw error;
+        }
         // The Settings editor renders as a webview-backed tab; assert on the visible workbench text
         // so the check does not depend on how the tab title is localized.
         const settingsText = await waitForWorkbenchText('aspireCliExecutablePath', 60_000);
