@@ -50,7 +50,7 @@ public class SettingsSchemaBuilderTests
 
         Assert.Equal(
             ["agentPlugins", "appHost", "certificates", "channel", "configSource", "containerTunnel", "docs", "features",
-                "integrationSources", "packages", "portAllocation", "profiles", "sdk", "templateSources"],
+                "integrationSources", "packages", "portAllocation", "profiles", "sdk", "skillSources", "templateSources"],
             schema.Properties.Select(property => property.Name));
         var configSource = Assert.Single(schema.Properties, property => property.Name == "configSource");
         Assert.NotNull(configSource.SubProperties);
@@ -96,6 +96,26 @@ public class SettingsSchemaBuilderTests
                 ["enabled", "repository", "marketplace", "plugins", "ref"],
                 agentPlugins.SubProperties!.Select(property => property.Name));
             Assert.Equal("array", Assert.Single(agentPlugins.SubProperties!, property => property.Name == "plugins").Type);
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void BuildSchema_AdvertisesLegacySkillSourcesAsDeprecated(bool global)
+    {
+        foreach (var schema in new[]
+        {
+            SettingsSchemaBuilder.BuildSchema(excludeLocalOnly: global),
+            SettingsSchemaBuilder.BuildConfigFileSchema(excludeLocalOnly: global)
+        })
+        {
+            var legacy = Assert.Single(schema.Properties, property => property.Name == "skillSources");
+            Assert.Equal("object", legacy.Type);
+            Assert.False(legacy.Required);
+            Assert.Equal("skillSources is deprecated. Rename it to agentPlugins.", legacy.DeprecationMessage);
+            Assert.Null(legacy.SubProperties);
+            Assert.Null(legacy.AdditionalPropertiesType);
         }
     }
 

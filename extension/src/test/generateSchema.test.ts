@@ -2,8 +2,9 @@ import * as assert from 'assert';
 import * as fs from 'fs';
 import * as path from 'path';
 import { runInNewContext } from 'vm';
+import type { PropertyInfo } from '../types/configInfo';
 
-function generateSchemas(packageValueType: string, pluginSections: string[] = []): Map<string, string> {
+function generateSchemas(packageValueType: string, legacyProperty?: PropertyInfo): Map<string, string> {
     const scriptDirectory = path.resolve(__dirname, '../../scripts');
     const output = new Map<string, string>();
     const features = { Name: 'features', Type: 'object', Description: '', Required: false };
@@ -18,9 +19,7 @@ function generateSchemas(packageValueType: string, pluginSections: string[] = []
             ]
         } : {})
     };
-    const sharedProperties = [features, ...pluginSections.map(name => ({
-        Name: name, Type: 'object', Description: 'Plugin sources from CLI metadata', Required: false
-    }))];
+    const sharedProperties = legacyProperty ? [features, legacyProperty] : [features];
     const configInfo = {
         AvailableFeatures: [{
             Name: 'experimentalHostingIntegrations',
@@ -87,27 +86,22 @@ suite('Settings schema generation', () => {
         assert.deepStrictEqual(schema.properties.packages.additionalProperties, { type: 'string' });
     });
 
-    test('All settings schemas allow legacy plugin sources alongside agentPlugins', () => {
-        const schemas = generateSchemas('object', ['agentPlugins']);
+    test('All settings schemas honor deprecation metadata without requiring a replacement property', () => {
+        const deprecationMessage = 'Use agentPlugins instead.';
+        const schemas = generateSchemas('object', {
+            name: 'skillSources', type: 'object', description: 'Legacy plugin sources', required: false, deprecationMessage
+        });
         assert.strictEqual(schemas.size, 3);
         for (const content of schemas.values()) {
             const schema = JSON.parse(content);
             assert.strictEqual(schema.additionalProperties, false);
-            assert.strictEqual(schema.properties.agentPlugins.type, 'object');
-            const legacy = schema.properties.skillSources;
-            assert.strictEqual(legacy.type, 'object');
-            assert.match(legacy.deprecationMessage, /agentPlugins/);
-            assert.strictEqual(legacy.properties, undefined);
-            assert.strictEqual(legacy.additionalProperties, undefined);
-        }
-    });
-
-    test('Existing skillSources metadata takes precedence over the schema fallback', () => {
-        const schemas = generateSchemas('object', ['agentPlugins', 'skillSources']);
-        for (const content of schemas.values()) {
-            const schema = JSON.parse(content);
-            assert.strictEqual(schema.properties.skillSources.description, 'Plugin sources from CLI metadata');
-            assert.strictEqual(schema.properties.skillSources.deprecationMessage, undefined);
+            assert.deepStrictEqual(schema.properties.skillSources, {
+                description: 'Legacy plugin sources',
+                deprecationMessage,
+                type: 'object',
+                additionalProperties: true
+            });
+            assert.strictEqual(schema.properties.features.deprecationMessage, undefined);
         }
     });
 });

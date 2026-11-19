@@ -356,7 +356,8 @@
     "skillSources": {
       "description": "Deprecated. Use agentPlugins instead. Legacy OpenCode catalog properties are ignored.",
       "deprecationMessage": "skillSources is deprecated. Rename it to agentPlugins.",
-      "type": "object"
+      "type": "object",
+      "additionalProperties": true
     },
     "$schema": {
       "type": "string",
