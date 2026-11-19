@@ -15,8 +15,6 @@ public partial class PauseWarning : ComponentBase, IAsyncDisposable
 {
     private static readonly TimeSpan s_refreshInterval = TimeSpan.FromSeconds(30);
 
-    // The tooltip provider's generated IDs require a secure browser context.
-    private readonly string _id = $"pause-warning-{Guid.NewGuid():N}";
     private readonly CancellationTokenSource _disposeCts = new();
     // Copied from the CTS so the refresh loop can keep reading it after DisposeAsync disposes the CTS.
     private readonly CancellationToken _disposeToken;
@@ -42,40 +40,22 @@ public partial class PauseWarning : ComponentBase, IAsyncDisposable
     [Inject]
     public required BrowserTimeProvider TimeProvider { get; init; }
 
-    private string RelativeAge => FormatPauseAge(PausedAt, TimeProvider.GetUtcNow(), LayoutLoc);
+    private string RelativeAge => DashboardUIHelpers.FormatTimeAgo(
+        TimeProvider.GetUtcNow() - ToUtcOffset(PausedAt),
+        LayoutLoc,
+        useShortFormat: false,
+        lessThanMinuteText: LayoutLoc[nameof(LayoutResources.ResourceStartedAgeNow)]);
     private string PauseWarningText => string.Format(
         CultureInfo.CurrentCulture,
         Loc[nameof(ControlsResources.PauseWarningText)],
         CaptureType);
     private string AbsoluteTime => FormatHelpers.FormatTooltipDateTime(TimeProvider, PausedAt);
     private string AbsoluteTooltip => $"{PauseWarningText} {AbsoluteTime}";
-    private string AccessibleLabel => $"{PauseWarningText} {RelativeAge} ({AbsoluteTime})";
 
     protected override void OnInitialized()
     {
         // Relative age must advance while capture stays paused; pages do not re-render on their own.
         _refreshTask = RefreshAgePeriodicallyAsync(_disposeToken);
-    }
-
-    // Buckets mirror FormatRunAge, but the first minute uses Layout.ResourceStartedAgeNow ("now")
-    // because the pause pill should read as an immediate state, not a recording age.
-    internal static string FormatPauseAge(DateTime pausedAtUtc, DateTimeOffset utcNow, IStringLocalizer<LayoutResources> loc)
-    {
-        var age = utcNow - ToUtcOffset(pausedAtUtc);
-        if (age < TimeSpan.Zero)
-        {
-            age = TimeSpan.Zero;
-        }
-
-        return age switch
-        {
-            { TotalMinutes: < 1 } => loc[nameof(LayoutResources.ResourceStartedAgeNow)],
-            { TotalMinutes: < 2 } => loc[nameof(LayoutResources.DashboardRunSelectMinuteAgo)],
-            { TotalHours: < 1 } => loc[nameof(LayoutResources.DashboardRunSelectMinutesAgo), (int)age.TotalMinutes],
-            { TotalDays: < 1 } => loc[nameof(LayoutResources.DashboardRunSelectHoursAgo), (int)age.TotalHours],
-            { TotalDays: < 2 } => loc[nameof(LayoutResources.DashboardRunSelectDayAgo)],
-            _ => loc[nameof(LayoutResources.DashboardRunSelectDaysAgo), (int)age.TotalDays]
-        };
     }
 
     private async Task RefreshAgePeriodicallyAsync(CancellationToken cancellationToken)

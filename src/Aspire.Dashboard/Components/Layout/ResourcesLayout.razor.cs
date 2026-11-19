@@ -1866,26 +1866,15 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private string GetRowTimeDescription((string Label, DateTime Time) rowTime, string tooltip) => $"{GetRowTimeText(rowTime)} ({tooltip})";
 
     // What a row shows: the verb, so a stopped resource doesn't read as running, and a short age ("Started 7m ago").
-    private string GetRowTimeText((string Label, DateTime Time) rowTime) => $"{rowTime.Label} {GetShortAge(rowTime.Time)}";
-
-    // The short age ("7m ago"), which every row repeats; the tooltip and accessible label add the exact time (see
-    // GetRowTimeTooltip and GetRowTimeDescription).
-    private string GetShortAge(DateTime time)
+    private string GetRowTimeText((string Label, DateTime Time) rowTime)
     {
-        // Clamp so a time slightly in the future (clock skew between processes) reads as "now".
-        var age = TimeProvider.GetUtcNow() - new DateTimeOffset(time);
-        if (age < TimeSpan.Zero)
-        {
-            age = TimeSpan.Zero;
-        }
+        var age = DashboardUIHelpers.FormatTimeAgo(
+            TimeProvider.GetUtcNow() - new DateTimeOffset(rowTime.Time),
+            Loc,
+            useShortFormat: true,
+            lessThanMinuteText: Loc[nameof(Resources.Layout.ResourceStartedAgeNow)]);
 
-        return age switch
-        {
-            { TotalMinutes: < 1 } => Loc[nameof(Dashboard.Resources.Layout.ResourceStartedAgeNow)],
-            { TotalHours: < 1 } => Loc[nameof(Dashboard.Resources.Layout.ResourceStartedAgeMinutes), (int)age.TotalMinutes],
-            { TotalDays: < 1 } => Loc[nameof(Dashboard.Resources.Layout.ResourceStartedAgeHours), (int)age.TotalHours],
-            _ => Loc[nameof(Dashboard.Resources.Layout.ResourceStartedAgeDays), (int)age.TotalDays]
-        };
+        return $"{rowTime.Label} {age}";
     }
 
     // Relative ages remain current even when the resource itself has no updates.

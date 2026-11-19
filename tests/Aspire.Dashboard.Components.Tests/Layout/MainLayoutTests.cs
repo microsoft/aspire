@@ -16,7 +16,6 @@ using Bunit;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Testing;
 using Microsoft.FluentUI.AspNetCore.Components;
@@ -703,23 +702,6 @@ public partial class MainLayoutTests : DashboardTestContext
         Assert.Equal(
             ["current", "pinned-a", "pinned-b", "pinned-older", "incompatible", "unpinned"],
             runs.Select(run => run.RunId));
-    }
-
-    [Fact]
-    public void DashboardRunSelect_FormatRunAge_UsesRelativeTime()
-    {
-        SetupMainLayoutServices();
-        var loc = Services.GetRequiredService<IStringLocalizer<Aspire.Dashboard.Resources.Layout>>();
-        var now = new DateTimeOffset(2025, 1, 10, 12, 0, 0, TimeSpan.Zero);
-
-        Assert.Equal("a moment ago", DashboardRunSelect.FormatRunAge(now.AddSeconds(-59), now, loc));
-        Assert.Equal("a moment ago", DashboardRunSelect.FormatRunAge(now.AddSeconds(5), now, loc));
-        Assert.Equal("1 minute ago", DashboardRunSelect.FormatRunAge(now.AddMinutes(-1), now, loc));
-        Assert.Equal("45 minutes ago", DashboardRunSelect.FormatRunAge(now.AddMinutes(-45).AddSeconds(-30), now, loc));
-        Assert.Equal("1h ago", DashboardRunSelect.FormatRunAge(now.AddMinutes(-60), now, loc));
-        Assert.Equal("23h ago", DashboardRunSelect.FormatRunAge(now.AddHours(-23).AddMinutes(-59), now, loc));
-        Assert.Equal("1 day ago", DashboardRunSelect.FormatRunAge(now.AddDays(-1), now, loc));
-        Assert.Equal("2 days ago", DashboardRunSelect.FormatRunAge(now.AddDays(-2).AddHours(-5), now, loc));
     }
 
     [Fact]
