@@ -114,6 +114,12 @@ public class DashboardTestingBuilderTests
     public async Task DashboardTestingPreservesInteractivityAfterAppHostStart(CreationSurface creationSurface)
     {
         await using var builder = await CreateDashboardBuilderAsync(creationSurface, []);
+        if (builder.Configuration["Aspire:Test:DcpLogBasePath"] is { Length: > 0 } dcpLogBasePath)
+        {
+            builder.Configuration["DcpPublisher:DiagnosticsLogFolder"] = Path.Combine(dcpLogBasePath, creationSurface.ToString());
+            builder.Configuration["DcpPublisher:DiagnosticsLogLevel"] = "debug";
+        }
+
         builder.Configuration[InteractivityEnabled] = "true";
         builder.Resources.Clear();
 
