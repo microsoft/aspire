@@ -643,12 +643,15 @@ public sealed class DashboardWebApplication : IAsyncDisposable
             await next(context).ConfigureAwait(false);
         });
 
-        _app.MapStaticAssets(ResolveStaticAssetsManifestPath(_app.Environment));
+        var staticAssetsManifestPath = ResolveStaticAssetsManifestPath(_app.Environment.ContentRootPath, AppContext.BaseDirectory);
+        _app.MapStaticAssets(staticAssetsManifestPath);
 
-        _app.MapRazorComponents<App>().AddInteractiveServerRenderMode(options =>
-        {
-            options.DisableWebSocketCompression = dashboardOptions.Frontend.DisableWebSocketCompression;
-        });
+        _app.MapRazorComponents<App>()
+            .AddInteractiveServerRenderMode(options =>
+            {
+                options.DisableWebSocketCompression = dashboardOptions.Frontend.DisableWebSocketCompression;
+            })
+            .WithStaticAssets(staticAssetsManifestPath);
 
         // Terminal WebSocket proxy
         _app.MapTerminalWebSocket();
@@ -666,19 +669,19 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         _app.MapDashboardHealthChecks();
     }
 
-    private static string? ResolveStaticAssetsManifestPath(IWebHostEnvironment environment)
+    internal static string? ResolveStaticAssetsManifestPath(string contentRootPath, string baseDirectory)
     {
-        var manifestFileName = $"{environment.ApplicationName}.staticwebassets.endpoints.json";
-        var baseDirectoryPath = Path.Combine(AppContext.BaseDirectory, manifestFileName);
+        var manifestFileName = $"{typeof(DashboardWebApplication).Assembly.GetName().Name}.staticwebassets.endpoints.json";
+        var baseDirectoryPath = Path.Combine(baseDirectory, manifestFileName);
         if (File.Exists(baseDirectoryPath))
         {
             return baseDirectoryPath;
         }
 
-        var contentRootPath = Path.Combine(environment.ContentRootPath, manifestFileName);
-        if (File.Exists(contentRootPath))
+        var contentRootManifestPath = Path.Combine(contentRootPath, manifestFileName);
+        if (File.Exists(contentRootManifestPath))
         {
-            return contentRootPath;
+            return contentRootManifestPath;
         }
 
         return null;

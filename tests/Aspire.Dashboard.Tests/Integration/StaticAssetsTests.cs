@@ -8,8 +8,12 @@ using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Utils;
 using Aspire.Hosting;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Configuration.EnvironmentVariables;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.JSInterop;
 using Xunit;
@@ -129,6 +133,90 @@ public partial class StaticAssetsTests(ITestOutputHelper testOutputHelper)
         await resolver.GetThemeSettingsAsync(CancellationToken.None).DefaultTimeout();
 
         Assert.Equal("/js/app-theme.js", jsRuntime.ImportedModulePath);
+    }
+
+    [Fact]
+    public async Task Dashboard_WithCustomApplicationName_PreservesHostNameAndResolvesFingerprintedAssets()
+    {
+        const string customApplicationName = "CustomDashboardHost";
+        var loggerFactory = IntegrationTestHelpers.CreateLoggerFactory(testOutputHelper);
+        var config = new ConfigurationManager()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [KnownConfigNames.DashboardTelemetryOptOut] = "true",
+                [DashboardConfigNames.DashboardFrontendUrlName.ConfigKey] = "http://127.0.0.1:0",
+                [DashboardConfigNames.DashboardOtlpGrpcUrlName.ConfigKey] = "http://127.0.0.1:0",
+                [DashboardConfigNames.DashboardOtlpHttpUrlName.ConfigKey] = "http://127.0.0.1:0",
+                [DashboardConfigNames.DashboardOtlpAuthModeName.ConfigKey] = nameof(OtlpAuthMode.Unsecured),
+                [DashboardConfigNames.DashboardFrontendAuthModeName.ConfigKey] = nameof(FrontendAuthMode.Unsecured),
+                [DashboardConfigNames.DashboardApiEnabledName.ConfigKey] = "true",
+                [DashboardConfigNames.DashboardApiAuthModeName.ConfigKey] = nameof(ApiAuthMode.Unsecured)
+            })
+            .Build();
+
+        await using var app = new DashboardWebApplication(
+            preConfigureBuilder: builder =>
+            {
+                var sources = ((IConfigurationBuilder)builder.Configuration).Sources;
+                foreach (var item in sources.ToList())
+                {
+                    if (item is EnvironmentVariablesConfigurationSource)
+                    {
+                        sources.Remove(item);
+                    }
+                }
+                builder.Configuration.AddConfiguration(config);
+                builder.Services.AddSingleton(loggerFactory);
+            },
+            options: new WebApplicationOptions { ApplicationName = customApplicationName });
+
+        await app.StartAsync().DefaultTimeout();
+
+        var environment = app.Services.GetRequiredService<IWebHostEnvironment>();
+        Assert.Equal(customApplicationName, environment.ApplicationName);
+
+        using var client = new HttpClient { BaseAddress = new Uri($"http://{app.FrontendSingleEndPointAccessor().EndPoint}") };
+        var html = await client.GetStringAsync(DashboardUrls.StructuredLogsBasePath).DefaultTimeout();
+
+        _ = ExtractRequiredFingerprintedAsset(html, BlazorWebScriptRegex());
+        var expectedThemeScriptPath = $"/{ExtractRequiredFingerprintedAsset(html, AppThemeScriptRegex())}";
+        _ = ExtractRequiredFingerprintedAsset(html, LayoutCssRegex());
+
+        var endpointDataSource = app.Services.GetRequiredService<EndpointDataSource>();
+        var jsRuntime = new RecordingThemeJsRuntime();
+        await using var resolver = new BrowserThemeResolver(jsRuntime, endpointDataSource);
+
+        await resolver.GetThemeSettingsAsync(CancellationToken.None).DefaultTimeout();
+        Assert.Equal(expectedThemeScriptPath, jsRuntime.ImportedModulePath);
+    }
+
+    [Fact]
+    public void ResolveStaticAssetsManifestPath_FallsBackToContentRoot_WhenNotInBaseDirectory()
+    {
+        var tempRoot = Directory.CreateTempSubdirectory("aspire-static-assets-manifest-");
+        try
+        {
+            var baseDir = Path.Combine(tempRoot.FullName, "base");
+            var contentRoot = Path.Combine(tempRoot.FullName, "content");
+            Directory.CreateDirectory(baseDir);
+            Directory.CreateDirectory(contentRoot);
+
+            Assert.Null(DashboardWebApplication.ResolveStaticAssetsManifestPath(contentRoot, baseDir));
+
+            var contentManifestPath = Path.Combine(contentRoot, "Aspire.Dashboard.staticwebassets.endpoints.json");
+            File.WriteAllText(contentManifestPath, "{}");
+
+            Assert.Equal(contentManifestPath, DashboardWebApplication.ResolveStaticAssetsManifestPath(contentRoot, baseDir));
+
+            var baseManifestPath = Path.Combine(baseDir, "Aspire.Dashboard.staticwebassets.endpoints.json");
+            File.WriteAllText(baseManifestPath, "{}");
+
+            Assert.Equal(baseManifestPath, DashboardWebApplication.ResolveStaticAssetsManifestPath(contentRoot, baseDir));
+        }
+        finally
+        {
+            tempRoot.Delete(recursive: true);
+        }
     }
 
     private static string ExtractRequiredFingerprintedAsset(string html, Regex regex)

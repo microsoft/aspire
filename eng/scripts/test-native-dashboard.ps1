@@ -28,6 +28,7 @@ try {
         -RedirectStandardError $stderrPath `
         -PassThru
 
+    $isReady = $false
     $deadline = [DateTime]::UtcNow.AddMinutes(1)
     while ([DateTime]::UtcNow -lt $deadline) {
         if ($dashboardProcess.HasExited) {
@@ -48,8 +49,8 @@ try {
                 $assetResponse = Invoke-WebRequest -Uri "$dashboardUrl/_framework/blazor.web.js" -TimeoutSec 5 -UseBasicParsing
                 if ($assetResponse.StatusCode -eq 200 -and
                     $assetResponse.RawContentLength -gt 0) {
-                    Write-Host "Native AOT Dashboard smoke test passed at $dashboardUrl."
-                    return
+                    $isReady = $true
+                    break
                 }
             }
         }
@@ -60,7 +61,55 @@ try {
         [System.Threading.Thread]::Sleep(500)
     }
 
-    throw 'Timed out waiting for the Native AOT Dashboard HTTP endpoints.'
+    if (-not $isReady) {
+        throw 'Timed out waiting for the Native AOT Dashboard HTTP endpoints.'
+    }
+
+    $html = (Invoke-WebRequest -Uri "$dashboardUrl/structuredlogs" -TimeoutSec 5 -UseBasicParsing).Content
+    if ($html -notmatch 'src="(?<FingerprintedPath>_framework/blazor\.web\.[a-z0-9]+\.js)"') {
+        throw 'Rendered Dashboard HTML did not reference a fingerprinted blazor.web.js asset.'
+    }
+
+    $fingerprintedPath = $Matches.FingerprintedPath
+    $handler = [System.Net.Http.HttpClientHandler]::new()
+    $handler.AutomaticDecompression = [System.Net.DecompressionMethods]::None
+    try {
+        $httpClient = [System.Net.Http.HttpClient]::new($handler)
+        try {
+            $request = [System.Net.Http.HttpRequestMessage]::new([System.Net.Http.HttpMethod]::Get, "$dashboardUrl/$fingerprintedPath")
+            $request.Headers.AcceptEncoding.ParseAdd('br')
+            $response = $httpClient.SendAsync($request).GetAwaiter().GetResult()
+            if ($response.StatusCode -ne [System.Net.HttpStatusCode]::OK) {
+                throw "Expected 200 OK for '$fingerprintedPath', got $([int]$response.StatusCode)."
+            }
+
+            $cacheControl = "$($response.Headers.CacheControl)"
+            if ($cacheControl -notmatch 'max-age=31536000' -or $cacheControl -notmatch 'immutable') {
+                throw "Expected immutable 1-year Cache-Control for '$fingerprintedPath', got '$cacheControl'."
+            }
+
+            $contentEncoding = "$($response.Content.Headers.ContentEncoding)"
+            if ($contentEncoding -ne 'br') {
+                throw "Expected Content-Encoding 'br' for '$fingerprintedPath', got '$contentEncoding'."
+            }
+
+            $actualBytes = $response.Content.ReadAsByteArrayAsync().GetAwaiter().GetResult()
+            $packagedBrPath = Join-Path (Split-Path -Parent $DashboardPath) 'wwwroot/_framework/blazor.web.js.br'
+            $expectedBytes = [System.IO.File]::ReadAllBytes($packagedBrPath)
+            if (-not [System.Linq.Enumerable]::SequenceEqual($expectedBytes, $actualBytes)) {
+                throw "Precompressed Brotli response for '$fingerprintedPath' did not match '$packagedBrPath'."
+            }
+        }
+        finally {
+            $httpClient.Dispose()
+        }
+    }
+    finally {
+        $handler.Dispose()
+    }
+
+    Write-Host "Native AOT Dashboard smoke test passed at $dashboardUrl."
+    return
 }
 catch {
     $failure = $_
