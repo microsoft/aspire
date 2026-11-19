@@ -135,8 +135,10 @@ public partial class StaticAssetsTests(ITestOutputHelper testOutputHelper)
         Assert.Equal("/js/app-theme.js", jsRuntime.ImportedModulePath);
     }
 
-    [Fact]
-    public async Task Dashboard_WithCustomApplicationName_PreservesHostNameAndResolvesFingerprintedAssets()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Dashboard_WithCustomApplicationName_PreservesHostNameAndServesFingerprintedAssets(bool useCommandLineArg)
     {
         const string customApplicationName = "CustomDashboardHost";
         var loggerFactory = IntegrationTestHelpers.CreateLoggerFactory(testOutputHelper);
@@ -154,6 +156,10 @@ public partial class StaticAssetsTests(ITestOutputHelper testOutputHelper)
             })
             .Build();
 
+        var options = useCommandLineArg
+            ? new WebApplicationOptions { Args = ["--applicationName", customApplicationName] }
+            : new WebApplicationOptions { ApplicationName = customApplicationName };
+
         await using var app = new DashboardWebApplication(
             preConfigureBuilder: builder =>
             {
@@ -168,7 +174,7 @@ public partial class StaticAssetsTests(ITestOutputHelper testOutputHelper)
                 builder.Configuration.AddConfiguration(config);
                 builder.Services.AddSingleton(loggerFactory);
             },
-            options: new WebApplicationOptions { ApplicationName = customApplicationName });
+            options: options);
 
         await app.StartAsync().DefaultTimeout();
 
@@ -178,16 +184,25 @@ public partial class StaticAssetsTests(ITestOutputHelper testOutputHelper)
         using var client = new HttpClient { BaseAddress = new Uri($"http://{app.FrontendSingleEndPointAccessor().EndPoint}") };
         var html = await client.GetStringAsync(DashboardUrls.StructuredLogsBasePath).DefaultTimeout();
 
-        _ = ExtractRequiredFingerprintedAsset(html, BlazorWebScriptRegex());
-        var expectedThemeScriptPath = $"/{ExtractRequiredFingerprintedAsset(html, AppThemeScriptRegex())}";
-        _ = ExtractRequiredFingerprintedAsset(html, LayoutCssRegex());
+        var blazorScriptPath = ExtractRequiredFingerprintedAsset(html, BlazorWebScriptRegex());
+        var themeScriptPath = ExtractRequiredFingerprintedAsset(html, AppThemeScriptRegex());
+        var layoutCssPath = ExtractRequiredFingerprintedAsset(html, LayoutCssRegex());
+        var scopedStylesPath = ExtractRequiredFingerprintedAsset(html, ScopedStylesCssRegex());
+
+        foreach (var assetPath in new[] { blazorScriptPath, themeScriptPath, layoutCssPath, scopedStylesPath })
+        {
+            using var response = await client.GetAsync($"/{assetPath}").DefaultTimeout();
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            var content = await response.Content.ReadAsByteArrayAsync().DefaultTimeout();
+            Assert.NotEmpty(content);
+        }
 
         var endpointDataSource = app.Services.GetRequiredService<EndpointDataSource>();
         var jsRuntime = new RecordingThemeJsRuntime();
         await using var resolver = new BrowserThemeResolver(jsRuntime, endpointDataSource);
 
         await resolver.GetThemeSettingsAsync(CancellationToken.None).DefaultTimeout();
-        Assert.Equal(expectedThemeScriptPath, jsRuntime.ImportedModulePath);
+        Assert.Equal($"/{themeScriptPath}", jsRuntime.ImportedModulePath);
     }
 
     [Fact]
@@ -237,6 +252,9 @@ public partial class StaticAssetsTests(ITestOutputHelper testOutputHelper)
 
     [GeneratedRegex(@"href=""(?<path>css/layout\.[a-z0-9]+\.css)""")]
     private static partial Regex LayoutCssRegex();
+
+    [GeneratedRegex(@"href=""(?<path>Aspire\.Dashboard\.[a-z0-9]+\.styles\.css)""")]
+    private static partial Regex ScopedStylesCssRegex();
 
     private sealed class RecordingThemeJsRuntime : IJSRuntime
     {
