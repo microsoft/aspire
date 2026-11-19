@@ -11,6 +11,26 @@ namespace Aspire.Hosting.Tests;
 public class ComputeEnvironmentValidationTests
 {
     [Theory]
+    [InlineData(EndpointProperty.Url)]
+    [InlineData(EndpointProperty.Host)]
+    [InlineData(EndpointProperty.HostAndPort)]
+    public void DefaultComputeEnvironmentExplainsMissingHostAddressSupport(EndpointProperty property)
+    {
+        IComputeEnvironmentResource environment = new UnsupportedComputeEnvironmentResource("aks");
+        var endpoint = CreateEndpointReference("http", port: null, targetPort: 5000);
+
+#pragma warning disable ASPIRECOMPUTE002
+        var error = Assert.Throws<NotSupportedException>(() =>
+            environment.GetEndpointPropertyExpression(endpoint.Property(property)));
+#pragma warning restore ASPIRECOMPUTE002
+
+        Assert.Equal(
+            "Compute environment 'aks' cannot resolve the deployed host address for endpoint 'http' on resource 'api' because it does not implement deployed host-address resolution. " +
+            "Use a compute environment that supports deployed endpoint resolution or supply an explicit backend URL.",
+            error.Message);
+    }
+
+    [Theory]
     [InlineData("http", EndpointProperty.BrowserOrigins)]
     [InlineData("tcp", EndpointProperty.BrowserOrigins)]
     [InlineData("http", EndpointProperty.PrimaryBrowserOrigin)]
@@ -122,6 +142,10 @@ public class ComputeEnvironmentValidationTests
         resource.Annotations.Add(endpoint);
 
         return new EndpointReference(resource, endpoint);
+    }
+
+    private sealed class UnsupportedComputeEnvironmentResource(string name) : Resource(name), IComputeEnvironmentResource
+    {
     }
 
     private sealed class TestComputeEnvironmentResource(string name) : Resource(name), IComputeEnvironmentResource
