@@ -18,6 +18,7 @@ internal sealed class AgentPluginSource
     // Released CLIs configured agent plugin sources under "skillSources". Existing settings
     // and configuration sources still use it, so it continues to be read. Its
     // openCodeV1Catalog/openCodeV2Catalog properties are ignored.
+    // TODO: Remove the legacy alias after the migration window. https://github.com/microsoft/aspire/issues/22412
     internal const string LegacySectionName = "skillSources";
     internal const string DefaultName = "default";
     private string _name = DefaultName;
@@ -69,7 +70,61 @@ internal sealed class AgentPluginSource
         return Resolve(effective);
     }
 
-    internal static IReadOnlyList<AgentPluginSource> Resolve(IConfiguration configuration)
+    internal static IReadOnlyList<AgentPluginSource> Resolve(IConfigurationRoot configuration)
+    {
+        using var effective = new ConfigurationManager();
+        var sourceSections = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var provider in configuration.Providers)
+        {
+            // Resolve aliases inside each layer so a project override or inherited field
+            // behaves the same regardless of which spelling either layer uses.
+            var layer = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+            if (provider.TryGet(SectionName, out var currentValue))
+            {
+                layer[SectionName] = currentValue;
+            }
+            if (provider.TryGet(LegacySectionName, out var legacyValue))
+            {
+                layer[LegacySectionName] = legacyValue;
+            }
+
+            var currentNames = provider.GetChildKeys([], SectionName).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            foreach (var name in currentNames)
+            {
+                CopySource(name, SectionName);
+            }
+            foreach (var name in provider.GetChildKeys([], LegacySectionName).Except(currentNames, StringComparer.OrdinalIgnoreCase))
+            {
+                CopySource(name, LegacySectionName);
+            }
+            if (layer.Count > 0)
+            {
+                effective.AddInMemoryCollection(layer);
+            }
+
+            void CopySource(string name, string sectionName)
+            {
+                CopySection(provider, $"{sectionName}:{name}", $"{SectionName}:{name}", layer);
+                sourceSections[name] = sectionName;
+            }
+        }
+
+        return ResolveSources(effective, sourceSections);
+    }
+
+    private static void CopySection(IConfigurationProvider provider, string sourcePath, string targetPath, Dictionary<string, string?> layer)
+    {
+        if (provider.TryGet(sourcePath, out var value))
+        {
+            layer[targetPath] = value;
+        }
+        foreach (var child in provider.GetChildKeys([], sourcePath).Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            CopySection(provider, $"{sourcePath}:{child}", $"{targetPath}:{child}", layer);
+        }
+    }
+
+    private static IReadOnlyList<AgentPluginSource> ResolveSources(IConfiguration configuration, Dictionary<string, string> sourceSections)
     {
         var section = configuration.GetSection(SectionName);
         if (section.Value is not null)
@@ -82,23 +137,14 @@ internal sealed class AgentPluginSource
             throw AspireSkillsRemoteConfiguration.ExistingConfiguration(LegacySectionName);
         }
 
-        // A source name defined in agentPlugins replaces the whole legacy skillSources entry
-        // with the same name, rather than merging properties, so the two formats never mix
-        // within one source. Use child keys rather than Exists(), which is false for {}.
-        var currentNames = section.GetChildren().Select(child => child.Key).ToArray();
-        var currentNameSet = currentNames.ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var legacyNames = legacySection.GetChildren().Select(child => child.Key).ToArray();
-        var names = new[] { DefaultName }.Concat(currentNames).Concat(legacyNames)
+        var names = new[] { DefaultName }.Concat(section.GetChildren().Select(child => child.Key))
             .Distinct(StringComparer.OrdinalIgnoreCase);
         var sources = new List<AgentPluginSource>();
         var marketplaces = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var name in names)
         {
-            var sectionName = currentNameSet.Contains(name) || !legacyNames.Contains(name, StringComparer.OrdinalIgnoreCase)
-                ? SectionName
-                : LegacySectionName;
-            var settings = configuration.GetSection(sectionName).GetSection(name);
-            var path = $"{sectionName}.{name}";
+            var settings = section.GetSection(name);
+            var path = $"{sourceSections.GetValueOrDefault(name, SectionName)}.{name}";
             SourceNameValidator.Validate(name, path);
             if (settings.Value is not null)
             {
