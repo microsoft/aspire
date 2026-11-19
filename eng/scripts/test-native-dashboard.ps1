@@ -83,8 +83,9 @@ try {
                 throw "Expected 200 OK for '$fingerprintedPath', got $([int]$response.StatusCode)."
             }
 
-            $cacheControl = "$($response.Headers.CacheControl)"
-            if ($cacheControl -notmatch 'max-age=31536000' -or $cacheControl -notmatch 'immutable') {
+            $cacheControl = $response.Headers.CacheControl
+            $hasImmutable = $null -ne $cacheControl -and @($cacheControl.Extensions | Where-Object { $_.Name -ieq 'immutable' }).Count -gt 0
+            if ($null -eq $cacheControl -or $cacheControl.MaxAge -ne [TimeSpan]::FromDays(365) -or -not $hasImmutable) {
                 throw "Expected immutable 1-year Cache-Control for '$fingerprintedPath', got '$cacheControl'."
             }
 

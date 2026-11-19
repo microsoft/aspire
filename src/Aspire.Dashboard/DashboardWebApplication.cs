@@ -34,6 +34,7 @@ using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authorization.Policy;
 using Microsoft.AspNetCore.Cors.Infrastructure;
+using Microsoft.AspNetCore.Hosting.StaticWebAssets;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.HttpsPolicy;
 using Microsoft.AspNetCore.Server.Kestrel;
@@ -167,28 +168,32 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         // The issue doesn't appear to impact .NET 8, but setting this value ensures the dashbaord is always run with a consistent MaxItemCount value.
         AppContext.SetData("Microsoft.AspNetCore.Components.Web.Virtualization.Virtualize.MaxItemCount", 10_000);
 
-        // Ensure ApplicationName defaults to the dashboard assembly name so static web assets
-        // manifests (Aspire.Dashboard.staticwebassets.*.json) resolve even when hosted in tests.
-        var builderOptions = options ?? new WebApplicationOptions();
-        if (string.IsNullOrEmpty(builderOptions.ApplicationName))
+        var builder = options is not null ? WebApplication.CreateBuilder(options) : WebApplication.CreateBuilder();
+
+        // WebApplication.CreateBuilder already enables static web assets in the Development environment
+        // using Environment.ApplicationName. The dashboard also needs its runtime static web assets
+        // manifest in non-Development environments and when hosted under a different ApplicationName
+        // (e.g. in tests or custom hosts). This is a no-op when published because the runtime manifest
+        // does not exist.
+        var dashboardAssemblyName = typeof(DashboardWebApplication).Assembly.GetName().Name;
+        var isDefaultDashboardDevHost = builder.Environment.IsDevelopment() &&
+            string.Equals(builder.Environment.ApplicationName, dashboardAssemblyName, StringComparison.OrdinalIgnoreCase);
+        if (!isDefaultDashboardDevHost && string.IsNullOrEmpty(builder.Configuration[WebHostDefaults.StaticWebAssetsKey]))
         {
-            builderOptions = new WebApplicationOptions
+            var runtimeManifestPath = ResolveStaticAssetsManifestPath(builder.Environment.ContentRootPath, AppContext.BaseDirectory, "runtime");
+            if (runtimeManifestPath is not null)
             {
-                Args = builderOptions.Args,
-                EnvironmentName = builderOptions.EnvironmentName,
-                ApplicationName = typeof(DashboardWebApplication).Assembly.GetName().Name,
-                ContentRootPath = builderOptions.ContentRootPath,
-                WebRootPath = builderOptions.WebRootPath
-            };
+                var staticWebAssetsConfig = new ConfigurationBuilder()
+                    .AddInMemoryCollection([new KeyValuePair<string, string?>(WebHostDefaults.StaticWebAssetsKey, runtimeManifestPath)])
+                    .Build();
+                StaticWebAssetsLoader.UseStaticWebAssets(builder.Environment, staticWebAssetsConfig);
+            }
+            else if (!builder.Environment.IsDevelopment())
+            {
+                builder.WebHost.UseStaticWebAssets();
+            }
         }
-
-        var builder = WebApplication.CreateBuilder(builderOptions);
-
-        // WebApplication.CreateBuilder already enables static web assets in the Development environment.
-        // The dashboard also needs them in other environments when running from source (e.g. to serve
-        // _content/ files from NuGet packages like FluentUI). The call is a no-op when published
-        // because the static web assets manifest doesn't exist.
-        if (!builder.Environment.IsDevelopment())
+        else if (!builder.Environment.IsDevelopment())
         {
             builder.WebHost.UseStaticWebAssets();
         }
@@ -669,9 +674,9 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         _app.MapDashboardHealthChecks();
     }
 
-    internal static string? ResolveStaticAssetsManifestPath(string contentRootPath, string baseDirectory)
+    internal static string? ResolveStaticAssetsManifestPath(string contentRootPath, string baseDirectory, string manifestKind = "endpoints")
     {
-        var manifestFileName = $"{typeof(DashboardWebApplication).Assembly.GetName().Name}.staticwebassets.endpoints.json";
+        var manifestFileName = $"{typeof(DashboardWebApplication).Assembly.GetName().Name}.staticwebassets.{manifestKind}.json";
         var baseDirectoryPath = Path.Combine(baseDirectory, manifestFileName);
         if (File.Exists(baseDirectoryPath))
         {
