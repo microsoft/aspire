@@ -167,7 +167,22 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         // The issue doesn't appear to impact .NET 8, but setting this value ensures the dashbaord is always run with a consistent MaxItemCount value.
         AppContext.SetData("Microsoft.AspNetCore.Components.Web.Virtualization.Virtualize.MaxItemCount", 10_000);
 
-        var builder = options is not null ? WebApplication.CreateBuilder(options) : WebApplication.CreateBuilder();
+        // Ensure ApplicationName defaults to the dashboard assembly name so static web assets
+        // manifests (Aspire.Dashboard.staticwebassets.*.json) resolve even when hosted in tests.
+        var builderOptions = options ?? new WebApplicationOptions();
+        if (string.IsNullOrEmpty(builderOptions.ApplicationName))
+        {
+            builderOptions = new WebApplicationOptions
+            {
+                Args = builderOptions.Args,
+                EnvironmentName = builderOptions.EnvironmentName,
+                ApplicationName = typeof(DashboardWebApplication).Assembly.GetName().Name,
+                ContentRootPath = builderOptions.ContentRootPath,
+                WebRootPath = builderOptions.WebRootPath
+            };
+        }
+
+        var builder = WebApplication.CreateBuilder(builderOptions);
 
         // WebApplication.CreateBuilder already enables static web assets in the Development environment.
         // The dashboard also needs them in other environments when running from source (e.g. to serve
@@ -206,7 +221,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         builder.Logging.AddFilter("Microsoft.AspNetCore.Cors", LogLevel.Warning);
         builder.Logging.AddFilter("Microsoft.AspNetCore.Hosting.Diagnostics", LogLevel.Warning);
         builder.Logging.AddFilter("Microsoft.AspNetCore.Routing.EndpointMiddleware", LogLevel.Warning);
-        builder.Logging.AddFilter("Microsoft.AspNetCore.StaticFiles.StaticFileMiddleware", LogLevel.Warning);
+        builder.Logging.AddFilter("Microsoft.AspNetCore.StaticAssets", LogLevel.Warning);
 #endif
 
         // Allow for a user specified JSON config file on disk. Throw an error if the specified file doesn't exist.
@@ -604,21 +619,6 @@ public sealed class DashboardWebApplication : IAsyncDisposable
             _app.UseHttpsRedirection();
         }
 
-        _app.UseStaticFiles(new StaticFileOptions()
-        {
-            OnPrepareResponse = context =>
-            {
-                // If Cache-Control isn't already set to something, set it to 'no-cache' so that the
-                // ETag and Last-Modified headers will be respected by the browser.
-                // This may be able to be removed if https://github.com/dotnet/aspnetcore/issues/44153
-                // is fixed to make this the default
-                if (context.Context.Response.Headers.CacheControl.Count == 0)
-                {
-                    context.Context.Response.Headers.CacheControl = "no-cache";
-                }
-            }
-        });
-
         _app.UseAuthorization();
 
         _app.UseMiddleware<BrowserSecurityHeadersMiddleware>();
@@ -643,6 +643,8 @@ public sealed class DashboardWebApplication : IAsyncDisposable
             await next(context).ConfigureAwait(false);
         });
 
+        _app.MapStaticAssets(ResolveStaticAssetsManifestPath(_app.Environment));
+
         _app.MapRazorComponents<App>().AddInteractiveServerRenderMode(options =>
         {
             options.DisableWebSocketCompression = dashboardOptions.Frontend.DisableWebSocketCompression;
@@ -662,6 +664,24 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         _app.MapTelemetryApi(dashboardOptions);
         _app.MapDashboardApi(dashboardOptions);
         _app.MapDashboardHealthChecks();
+    }
+
+    private static string? ResolveStaticAssetsManifestPath(IWebHostEnvironment environment)
+    {
+        var manifestFileName = $"{environment.ApplicationName}.staticwebassets.endpoints.json";
+        var baseDirectoryPath = Path.Combine(AppContext.BaseDirectory, manifestFileName);
+        if (File.Exists(baseDirectoryPath))
+        {
+            return baseDirectoryPath;
+        }
+
+        var contentRootPath = Path.Combine(environment.ContentRootPath, manifestFileName);
+        if (File.Exists(contentRootPath))
+        {
+            return contentRootPath;
+        }
+
+        return null;
     }
 
     private void PrintSummary(ResolvedEndpointInfo? frontendEndpointInfo)
