@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { runInNewContext } from 'vm';
 
-function generateSchemas(packageValueType: string): Map<string, string> {
+function generateSchemas(packageValueType: string, pluginSections: string[] = []): Map<string, string> {
     const scriptDirectory = path.resolve(__dirname, '../../scripts');
     const output = new Map<string, string>();
     const features = { Name: 'features', Type: 'object', Description: '', Required: false };
@@ -18,15 +18,18 @@ function generateSchemas(packageValueType: string): Map<string, string> {
             ]
         } : {})
     };
+    const sharedProperties = [features, ...pluginSections.map(name => ({
+        Name: name, Type: 'object', Description: 'Plugin sources from CLI metadata', Required: false
+    }))];
     const configInfo = {
         AvailableFeatures: [{
             Name: 'experimentalHostingIntegrations',
             Description: 'Enable external hosting integrations',
             DefaultValue: false
         }],
-        LocalSettingsSchema: { Properties: [features] },
-        GlobalSettingsSchema: { Properties: [features] },
-        ConfigFileSchema: { Properties: [features, packages] }
+        LocalSettingsSchema: { Properties: sharedProperties },
+        GlobalSettingsSchema: { Properties: sharedProperties },
+        ConfigFileSchema: { Properties: [...sharedProperties, packages] }
     };
     runInNewContext(fs.readFileSync(path.join(scriptDirectory, 'generate-schema.js'), 'utf8'), {
         __dirname: scriptDirectory,
@@ -82,5 +85,29 @@ suite('Settings schema generation', () => {
         const schemas = generateSchemas('string');
         const schema = JSON.parse(schemas.get('aspire-config.schema.json')!);
         assert.deepStrictEqual(schema.properties.packages.additionalProperties, { type: 'string' });
+    });
+
+    test('All settings schemas allow legacy plugin sources alongside agentPlugins', () => {
+        const schemas = generateSchemas('object', ['agentPlugins']);
+        assert.strictEqual(schemas.size, 3);
+        for (const content of schemas.values()) {
+            const schema = JSON.parse(content);
+            assert.strictEqual(schema.additionalProperties, false);
+            assert.strictEqual(schema.properties.agentPlugins.type, 'object');
+            const legacy = schema.properties.skillSources;
+            assert.strictEqual(legacy.type, 'object');
+            assert.match(legacy.deprecationMessage, /agentPlugins/);
+            assert.strictEqual(legacy.properties, undefined);
+            assert.strictEqual(legacy.additionalProperties, undefined);
+        }
+    });
+
+    test('Existing skillSources metadata takes precedence over the schema fallback', () => {
+        const schemas = generateSchemas('object', ['agentPlugins', 'skillSources']);
+        for (const content of schemas.values()) {
+            const schema = JSON.parse(content);
+            assert.strictEqual(schema.properties.skillSources.description, 'Plugin sources from CLI metadata');
+            assert.strictEqual(schema.properties.skillSources.deprecationMessage, undefined);
+        }
     });
 });
