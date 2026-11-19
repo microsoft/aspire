@@ -388,24 +388,9 @@ public class EndpointReferenceExpression(EndpointReference endpointReference, En
     /// <param name="context">The context to use when resolving the endpoint property.</param>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/>.</param>
     /// <returns>A <see cref="string"/> containing the selected <see cref="EndpointProperty"/> value.</returns>
-    /// <remarks>
-    /// In publish mode, endpoint properties are resolved through the resource's compute environment when one is assigned,
-    /// rather than waiting for a local endpoint allocation.
-    /// </remarks>
     /// <exception cref="InvalidOperationException">Throws when the selected <see cref="EndpointProperty"/> enumeration is not known.</exception>
     public async ValueTask<string?> GetValueAsync(ValueProviderContext context, CancellationToken cancellationToken = default)
     {
-        if (context.ExecutionContext?.IsPublishMode == true &&
-            (Endpoint.Resource.GetComputeEnvironment() ?? Endpoint.Resource.GetDeploymentTargetAnnotation()?.ComputeEnvironment) is { } computeEnvironment)
-        {
-            // Publish mode never allocates local endpoints. Resolve the deployed expression so
-            // provisioning failures propagate instead of leaving consumers waiting for allocation.
-#pragma warning disable ASPIRECOMPUTE002
-            var expression = computeEnvironment.GetEndpointPropertyExpression(this);
-#pragma warning restore ASPIRECOMPUTE002
-            return await expression.GetValueAsync(context, cancellationToken).ConfigureAwait(false);
-        }
-
         // If the EndpointReference was for a specific network context, then use that. Otherwise, use the network context from the ValueProviderContext.
         // This allows the EndpointReference to be resolved in the context of the caller's network if it was not explicitly set.
         var networkContext = Endpoint.ContextNetworkID ?? context.GetNetworkIdentifier();

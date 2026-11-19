@@ -3,6 +3,8 @@
 
 #pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
+using System.Globalization;
+using System.Text;
 using System.Text.Json.Nodes;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
@@ -42,6 +44,8 @@ public static class AzureWebPubSubExtensions
         ArgumentException.ThrowIfNullOrEmpty(name);
 
         builder.AddAzureProvisioning();
+
+        var isPublishMode = builder.ExecutionContext.IsPublishMode;
 
         var configureInfrastructure = (AzureResourceInfrastructure infrastructure) =>
         {
@@ -137,7 +141,9 @@ public static class AzureWebPubSubExtensions
                         // otherwise add parameter to the construct
                         var parameter = new ProvisioningParameter($"{hubName}_url_{i}", typeof(string));
                         infrastructure.Add(parameter);
-                        resource.Parameters[parameter.BicepIdentifier] = urlExpression;
+                        resource.Parameters[parameter.BicepIdentifier] = isPublishMode
+                            ? ResolveDeployedEndpoints(urlExpression)
+                            : urlExpression;
                         urlParameter = parameter;
                     }
 
@@ -369,6 +375,106 @@ public static class AzureWebPubSubExtensions
         string[]? systemEvents = null)
     {
         return AddEventHandler(builder, urlExpression, userEventPattern, systemEvents, authSettings: null);
+    }
+
+    // In publish mode an endpoint reference to a compute resource is only resolved by its
+    // compute environment's publisher, so evaluating it here would wait for a local endpoint
+    // allocation that never happens and deployment would hang. Substitute the address the compute
+    // environment predicts for the deployed resource (for Azure Container Apps
+    // "https://<app>.<environment domain>"), the same expression API Management uses for compute
+    // backends. That expression only depends on the compute environment's outputs, so this module
+    // does not take a dependency on the app, which itself depends on this module's outputs.
+    private static ReferenceExpression ResolveDeployedEndpoints(ReferenceExpression expression)
+    {
+        if (expression.IsConditional)
+        {
+            return ReferenceExpression.CreateConditional(
+                expression.Condition!,
+                expression.MatchValue!,
+                ResolveDeployedEndpoints(expression.WhenTrue!),
+                ResolveDeployedEndpoints(expression.WhenFalse!));
+        }
+
+        var changed = false;
+        var valueProviders = new object[expression.ValueProviders.Count];
+        for (var i = 0; i < valueProviders.Length; i++)
+        {
+            var original = expression.ValueProviders[i];
+            var resolved = ResolveDeployedEndpoint(original);
+            changed |= !ReferenceEquals(original, resolved);
+            valueProviders[i] = resolved;
+        }
+
+        if (!changed)
+        {
+            return expression;
+        }
+
+        // Format is a composite format string with indexed placeholders and doubled literal braces:
+        //   "{0}/api/{{event}}"  =>  value provider 0, then the literal "/api/{event}"
+        // Placeholders never carry alignment or format specifiers; those live in StringFormats.
+        var builder = new ReferenceExpressionBuilder();
+        var format = expression.Format;
+        var literal = new StringBuilder();
+        for (var i = 0; i < format.Length; i++)
+        {
+            var c = format[i];
+            if ((c is '{' or '}') && i + 1 < format.Length && format[i + 1] == c)
+            {
+                literal.Append(c);
+                i++;
+            }
+            else if (c == '{')
+            {
+                var end = format.IndexOf('}', i);
+                var index = int.Parse(format.AsSpan(i + 1, end - i - 1), CultureInfo.InvariantCulture);
+                if (literal.Length > 0)
+                {
+                    builder.AppendLiteral(literal.ToString());
+                    literal.Clear();
+                }
+                builder.AppendValueProvider(valueProviders[index], expression.StringFormats[index]);
+                i = end;
+            }
+            else
+            {
+                literal.Append(c);
+            }
+        }
+
+        if (literal.Length > 0)
+        {
+            builder.AppendLiteral(literal.ToString());
+        }
+
+        return builder.Build();
+    }
+
+    private static object ResolveDeployedEndpoint(IValueProvider valueProvider)
+    {
+        var endpointProperty = valueProvider switch
+        {
+            EndpointReference endpoint => endpoint.Property(EndpointProperty.Url),
+            EndpointReferenceExpression endpointExpression => endpointExpression,
+            _ => null
+        };
+
+        if (endpointProperty is not null)
+        {
+            // Resources without a compute environment keep their original reference.
+            if (!ComputeEnvironmentEndpointResolver.TryGetEffectiveComputeEnvironment(endpointProperty.Endpoint.Resource, out var computeEnvironment))
+            {
+                return valueProvider;
+            }
+
+#pragma warning disable ASPIRECOMPUTE002 // Experimental: compute environment endpoint expression
+            return computeEnvironment.GetEndpointPropertyExpression(endpointProperty);
+#pragma warning restore ASPIRECOMPUTE002
+        }
+
+        return valueProvider is ReferenceExpression nested
+            ? ResolveDeployedEndpoints(nested)
+            : valueProvider;
     }
 
     private static WebPubSubEventHandler GetWebPubSubEventHandler(BicepValue<string> urlValue, string userEventPattern, string[]? systemEvents, UpstreamAuthSettings? authSettings)

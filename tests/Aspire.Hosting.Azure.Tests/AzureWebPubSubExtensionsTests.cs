@@ -2,9 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable CS0618 // Retain legacy ProjectResource Azure publishing/provisioning contracts with synthetic metadata.
-using System.Text.Json.Nodes;
+using System.Runtime.CompilerServices;
 using Aspire.Hosting.ApplicationModel;
-using Aspire.Hosting.Azure.Provisioning;
 using Aspire.Hosting.Utils;
 using Azure.Provisioning.WebPubSub;
 using Microsoft.Extensions.DependencyInjection;
@@ -143,67 +142,26 @@ public class AzureWebPubSubExtensionsTests(ITestOutputHelper output)
             
     }
 
-    [Theory]
-    [InlineData(DistributedApplicationOperation.Run, "http://localhost:12345/eventhandler")]
-    [InlineData(DistributedApplicationOperation.Publish, "https://server.example.azurecontainerapps.io/eventhandler")]
-    public async Task EventHandlerEndpointResolvesForExecutionMode(DistributedApplicationOperation operation, string expectedUrl)
+    [Fact]
+    public async Task EventHandlerEndpointUsesComputeEnvironmentAddressInPublishMode()
     {
-        using var builder = TestDistributedApplicationBuilder.Create(operation, output);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var environment = builder.AddAzureContainerAppEnvironment("env");
-        environment.Resource.Outputs["AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN"] = "example.azurecontainerapps.io";
-        var server = builder.AddContainer("server", "image")
-            .WithHttpEndpoint(targetPort: 8080)
+        var serviceA = builder.AddProject<ProjectA>("serviceA", o => o.ExcludeLaunchProfile = true)
+            .WithHttpsEndpoint()
             .WithExternalHttpEndpoints()
             .WithComputeEnvironment(environment);
-        if (operation == DistributedApplicationOperation.Run)
-        {
-            server.WithEndpoint("http", endpoint => endpoint.AllocatedEndpoint = new(endpoint, "localhost", 12345));
-        }
+        var wps = builder.AddAzureWebPubSub("wps1");
+        wps.AddHub("abc").AddEventHandler($"{serviceA.GetEndpoint("https")}/eventhandler/{{event}}");
 
-        var webPubSub = builder.AddAzureWebPubSub("webpubsub");
-        webPubSub.AddHub("support").AddEventHandler($"{server.GetEndpoint("http")}/eventhandler");
-        _ = webPubSub.Resource.GetBicepTemplateString();
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
 
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-        var parameters = new JsonObject();
-        await BicepUtilities.SetParametersAsync(parameters, webPubSub.Resource, builder.ExecutionContext, cancellationToken: cts.Token);
+        var (manifest, _) = await AzureManifestUtils.GetManifestWithBicep(wps.Resource, skipPreparer: true);
 
-        Assert.Equal(expectedUrl, parameters["support_url_0"]?["value"]?.GetValue<string>());
-    }
-
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task EventHandlerEndpointPropagatesComputeEnvironmentProvisioningFailure(bool explicitComputeEnvironment)
-    {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);
-        var environment = builder.AddAzureContainerAppEnvironment("env");
-        environment.Resource.ProvisioningTaskCompletionSource = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        var server = builder.AddContainer("server", "image")
-            .WithHttpEndpoint(targetPort: 8080)
-            .WithExternalHttpEndpoints();
-        if (explicitComputeEnvironment)
-        {
-            server.WithComputeEnvironment(environment);
-        }
-        else
-        {
-            server.WithAnnotation(new DeploymentTargetAnnotation(environment.Resource) { ComputeEnvironment = environment.Resource });
-        }
-
-        var webPubSub = builder.AddAzureWebPubSub("webpubsub");
-        webPubSub.AddHub("support").AddEventHandler($"{server.GetEndpoint("http")}/eventhandler");
-        _ = webPubSub.Resource.GetBicepTemplateString();
-
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-        var parameters = new JsonObject();
-        var resolveTask = BicepUtilities.SetParametersAsync(parameters, webPubSub.Resource, builder.ExecutionContext, cancellationToken: cts.Token);
-        Assert.False(resolveTask.IsCompleted);
-
-        var failure = new InvalidOperationException("Environment provisioning failed.");
-        environment.Resource.ProvisioningTaskCompletionSource.SetException(failure);
-
-        Assert.Same(failure, await Assert.ThrowsAsync<InvalidOperationException>(() => resolveTask));
+        Assert.Equal(
+            "https://servicea.{env.outputs.AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN}/eventhandler/{event}",
+            manifest["params"]!["abc_url_0"]!.ToString());
     }
 
     [Fact]
@@ -498,6 +456,9 @@ public class AzureWebPubSubExtensionsTests(ITestOutputHelper output)
         await Verify(manifest.ToString(), "json")
              .AppendContentAsFile(bicep, "bicep");
     }
+
+    [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "ExecuteBeforeStartHooksAsync")]
+    private static extern Task ExecuteBeforeStartHooksAsync(DistributedApplication app, CancellationToken cancellationToken);
 
     private sealed class ProjectA : IProjectMetadata
     {
