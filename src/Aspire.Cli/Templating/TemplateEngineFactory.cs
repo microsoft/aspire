@@ -60,7 +60,7 @@ internal sealed partial class TemplateEngineFactory(
             : await GetRepositoryTemplateAsync(source.Repository, source.Path, source.RepositoryRef, cancellationToken);
         if (_discoveredTemplates.TryGetValue(fullPath, out var cached))
         {
-            logger.LogDebug("Reusing {TemplateCount} discovered templates from the configured source.", cached.Length);
+            logger.LogDebug("Reusing {TemplateCount} discovered templates from {TemplatePath}.", cached.Length, fullPath);
             return cached;
         }
 
@@ -87,13 +87,14 @@ internal sealed partial class TemplateEngineFactory(
 
     private async Task<ITemplate[]> DiscoverTemplatesAsync(string fullPath, CancellationToken cancellationToken)
     {
-        logger.LogDebug("Discovering templates from a configured source.");
         if (!Directory.Exists(fullPath))
         {
-            logger.LogDebug("Template discovery directory does not exist.");
+            logger.LogDebug("Template discovery directory {TemplatePath} does not exist.", fullPath);
             throw new TemplateDiscoveryException(CliExitCodes.InvalidCommand,
                 string.Format(CultureInfo.CurrentCulture, NewCommandStrings.TemplateDirectoryNotFound, fullPath));
         }
+
+        logger.LogDebug("Discovering templates in {TemplatePath}.", fullPath);
 
         // Register concrete built-ins instead of loading engine extensions dynamically, which
         // Native AOT cannot support. A virtual hive keeps these templates out of dotnet new's state.
@@ -111,7 +112,7 @@ internal sealed partial class TemplateEngineFactory(
         var failures = installed.Where(result => !result.Success).ToArray();
         if (failures.Length > 0)
         {
-            logger.LogDebug("Template source installation failed; {FailureCount} install results failed.", failures.Length);
+            logger.LogDebug("Template source installation failed for {TemplatePath}; {FailureCount} install results failed.", fullPath, failures.Length);
             throw new TemplateDiscoveryException(CliExitCodes.FailedToInstallTemplates,
                 string.Format(CultureInfo.CurrentCulture, NewCommandStrings.LocalTemplateLoadFailed,
                     string.Join(", ", failures.Select(result => result.Error))));
@@ -133,7 +134,7 @@ internal sealed partial class TemplateEngineFactory(
         cancellationToken.ThrowIfCancellationRequested();
         if (templates.Length == 0)
         {
-            logger.LogDebug("No templates were discovered in the configured source.");
+            logger.LogDebug("No templates were discovered in {TemplatePath}.", fullPath);
             throw new TemplateDiscoveryException(CliExitCodes.InvalidCommand,
                 string.Format(CultureInfo.CurrentCulture, NewCommandStrings.NoLocalTemplatesFound, fullPath));
         }
@@ -173,7 +174,7 @@ internal sealed partial class TemplateEngineFactory(
             DirectoryHelper.CreateWithOwnerOnlyPermissions(cacheRoot);
             if (Directory.Exists(cacheDirectory))
             {
-                logger.LogDebug("Reusing cached repository template checkout.");
+                logger.LogDebug("Reusing cached repository template checkout at {CacheDirectory}.", cacheDirectory);
                 return GetRepositoryTemplatePath(cacheDirectory, relativePath);
             }
 
@@ -196,11 +197,11 @@ internal sealed partial class TemplateEngineFactory(
                 // Publish only complete checkouts. Concurrent invocations can safely use the winner;
                 // the losing temporary checkout is removed by its lease owner on disposal.
                 checkout.MoveTo(cacheDirectory);
-                logger.LogDebug("Published repository template checkout.");
+                logger.LogDebug("Published repository template checkout at {CacheDirectory}.", cacheDirectory);
             }
             catch (IOException) when (Directory.Exists(cacheDirectory))
             {
-                logger.LogDebug("Repository template checkout was already cached.");
+                logger.LogDebug("Repository template checkout was already cached at {CacheDirectory}.", cacheDirectory);
             }
 
             return GetRepositoryTemplatePath(cacheDirectory, relativePath);

@@ -71,45 +71,6 @@ public class TemplateEngineFactoryGitCheckoutTests(ITestOutputHelper outputHelpe
     }
 
     [Fact]
-    public async Task LocalTemplate_DebugLogsDoNotIncludeConfiguredPath()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var templatePath = Path.Combine(workspace.Path, "private templates");
-        var configuration = Directory.CreateDirectory(Path.Combine(templatePath, ".template.config"));
-        await File.WriteAllTextAsync(Path.Combine(configuration.FullName, "template.json"),
-            """{ "identity": "Aspire.Local.Logging", "name": "Logging template", "shortName": "logging-template" }""");
-        var logger = new FakeLogger<TemplateEngineFactory>();
-        var services = CreateServices(workspace);
-        services.AddSingleton<ILogger<TemplateEngineFactory>>(logger);
-        using var provider = services.BuildServiceProvider();
-
-        Assert.Single(await GetFactory(provider).GetTemplatesAsync(
-            new TemplateSource(templatePath, null, null), TestContext.Current.CancellationToken));
-
-        var messages = string.Join(Environment.NewLine, logger.Collector.GetSnapshot().Select(entry => entry.Message));
-        Assert.False(messages.Contains(templatePath, StringComparison.OrdinalIgnoreCase));
-        Assert.Contains("Discovered 1 templates in the configured source.", messages, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public async Task RepositoryTemplate_DebugLogsDoNotIncludeCheckoutPath()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        var (repository, commit) = await CreateRepositoryAsync(workspace, "content", [1, 2, 3]);
-        var logger = new FakeLogger<TemplateEngineFactory>();
-        var services = CreateServices(workspace);
-        services.AddSingleton<ILogger<TemplateEngineFactory>>(logger);
-        using var provider = services.BuildServiceProvider();
-
-        Assert.Single(await GetFactory(provider).GetTemplatesAsync(
-            new TemplateSource(".", repository.FullName, commit), TestContext.Current.CancellationToken));
-
-        var messages = string.Join(Environment.NewLine, logger.Collector.GetSnapshot().Select(entry => entry.Message));
-        Assert.False(messages.Contains(workspace.Path, StringComparison.OrdinalIgnoreCase));
-        Assert.Contains("Published repository template checkout.", messages, StringComparison.Ordinal);
-    }
-
-    [Fact]
     public async Task RepositoryTemplate_PrefersBranchAndPeelsExplicitAnnotatedTag()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
