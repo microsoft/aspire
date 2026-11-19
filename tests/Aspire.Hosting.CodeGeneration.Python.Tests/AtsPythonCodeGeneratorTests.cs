@@ -669,26 +669,18 @@ public class AtsPythonCodeGeneratorTests
             client.invoke_capability = invoke_capability
             builder = aspire_app.DistributedApplicationBuilder(client, {})
 
-            for value in (False, True):
-                invocations.clear()
-                builder.add_parameter("api-key", required=value)
-                assert [call[0] for call in invocations] == [
-                    "Aspire.Hosting/addParameter",
-                    "Aspire.Hosting/withRequired",
-                ], invocations
-                assert invocations[1][1]["required"] is value, invocations
-
-            for options in ({}, {"required": None}, {"optional": None}, {"optional": False}):
+            for options in ({}, {"as_required": None}, {"as_required": False}, {"as_optional": None}, {"as_optional": False}):
                 invocations.clear()
                 builder.add_parameter("api-key", **options)
                 assert [call[0] for call in invocations] == ["Aspire.Hosting/addParameter"], invocations
 
-            invocations.clear()
-            builder.add_parameter("api-key", optional=True)
-            assert [call[0] for call in invocations] == [
-                "Aspire.Hosting/addParameter",
-                "Aspire.Hosting/withOptional",
-            ], invocations
+            for option, capability in (("as_optional", "Aspire.Hosting/asOptional"), ("as_required", "Aspire.Hosting/asRequired")):
+                invocations.clear()
+                builder.add_parameter("api-key", **{option: True})
+                assert [call[0] for call in invocations] == [
+                    "Aspire.Hosting/addParameter",
+                    capability,
+                ], invocations
 
             invocations.clear()
             builder.add_parameter("api-key", description="")

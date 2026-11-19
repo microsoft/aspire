@@ -9,6 +9,10 @@
       "isVisible": false
     },
     {
+      "id": "HostIdentifier",
+      "isVisible": false
+    },
+    {
       "id": "LocalhostTld",
       "isVisible": true,
       "persistenceScope": "shared",

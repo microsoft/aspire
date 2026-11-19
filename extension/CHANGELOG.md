@@ -1,5 +1,20 @@
 # Aspire VS Code Extension Changelog
 
+## v1.26.0
+
+<!-- aspire-ext-changelog-done from=363db70eac9ade5a43ae35ed7890d3d6ba165ba6 to=f67e764c2de5c325abefe6271c2e5395a36ea984 base=1.25.0 -->
+
+### Features
+
+- Add **Open resource source** to resource context menus in Workspace and Global AppHosts when source information is available ([#20463](https://github.com/microsoft/aspire/pull/20463)).
+- Add JSON completion and validation for options that enable automatic isolation in linked worktrees and stable port allocation in isolated mode ([#21013](https://github.com/microsoft/aspire/pull/21013)).
+
+### Fixes
+
+- Allow the Aspire resource-debugging chat tool to attach by resource display name ([#21416](https://github.com/microsoft/aspire/pull/21416)).
+- Reduce background resource monitoring when the Aspire view and AppHost editors are hidden and no run or debug session needs updates ([#21890](https://github.com/microsoft/aspire/pull/21890)).
+- Prevent slow CLI startup from causing valid Aspire CLI installations to be reported as invalid ([#21912](https://github.com/microsoft/aspire/pull/21912)).
+
 ## v1.25.0
 
 <!-- aspire-ext-changelog-done from=92a66a541b19c5b6347d551ab76053177b7b1217 to=52afb3acb7ad2af5529804361e9b8ffcd1b9d3d3 base=1.24.0 -->

@@ -3,7 +3,6 @@
 
 #pragma warning disable ASPIREPROJECTS001
 
-using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Text;
 using Aspire.Hosting.ApplicationModel;
@@ -553,7 +552,6 @@ public class AzureAppServiceEnvironmentResource :
 #pragma warning restore CS0618 // Type or member is obsolete
 
     /// <inheritdoc/>
-    [Experimental("ASPIRECOMPUTE002", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public ReferenceExpression GetHostAddressExpression(EndpointReference endpointReference)
     {
         var resource = endpointReference.Resource;
@@ -561,7 +559,6 @@ public class AzureAppServiceEnvironmentResource :
     }
 
     /// <inheritdoc/>
-    [Experimental("ASPIRECOMPUTE002", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public ReferenceExpression GetEndpointPropertyExpression(EndpointReferenceExpression endpointReferenceExpression)
     {
         ArgumentNullException.ThrowIfNull(endpointReferenceExpression);

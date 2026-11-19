@@ -56,6 +56,8 @@ namespace Aspire.Hosting.ApplicationModel
 
         public EndpointReference PrimaryEndpoint { get { throw null; } }
 
+        public override string ResourceTypeDisplayName { get { throw null; } }
+
         public ReferenceExpression UriExpression { get { throw null; } }
 
         System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties() { throw null; }

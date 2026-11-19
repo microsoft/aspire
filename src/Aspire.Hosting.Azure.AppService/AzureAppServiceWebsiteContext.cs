@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIRECONNECTIONSTRINGS001
 #pragma warning disable ASPIREAZURE003
 
 using System.Globalization;
@@ -238,10 +237,12 @@ internal sealed class AzureAppServiceWebsiteContext(
             return (AllocateParameter(output, secretType: secretType), secretType);
         }
 
+#pragma warning disable ASPIREAZURE005 // IBicepOutputReferenceProvider is experimental.
         if (value is IBicepOutputReferenceProvider outputProvider && outputProvider.GetOutputReference() is { } providedOutput)
         {
             return ProcessValue(providedOutput, secretType, parent, isSlot);
         }
+#pragma warning restore ASPIREAZURE005
 
         if (value is IAzureKeyVaultSecretReference vaultSecretReference)
         {

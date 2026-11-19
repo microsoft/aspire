@@ -1,3 +1,18 @@
+// These identifiers are document-local. A counter also works on HTTP, where crypto.randomUUID is unavailable.
+let tooltipAnchorSequence = 0;
+
+function nextTooltipIdentifier(prefix) {
+    return `${prefix}${++tooltipAnchorSequence}`;
+}
+
+function nextTooltipAnchorId() {
+    let id;
+    do {
+        id = nextTooltipIdentifier("tooltip-anchor-");
+    } while (document.getElementById(id));
+    return id;
+}
+
 // Share one on-demand Fluent tooltip across anchors. Creating a Blazor tooltip per
 // log entry or grid cell would add thousands of components to high-throughput telemetry views.
 class AspireTooltipProvider extends HTMLElement {
@@ -123,7 +138,7 @@ class AspireTooltipProvider extends HTMLElement {
                 return;
             }
 
-            target.anchor.id ||= `tooltip-anchor-${crypto.randomUUID()}`;
+            target.anchor.id ||= nextTooltipAnchorId();
             const tooltip = document.createElement("fluent-tooltip");
             tooltip.setAttribute("anchor", target.anchor.id);
             const bounds = target.anchor.getBoundingClientRect();
@@ -157,7 +172,7 @@ class AspireTooltipProvider extends HTMLElement {
                 anchor.className = "dashboard-tooltip-anchor";
                 anchor.setAttribute("aria-hidden", "true");
                 anchor.style.cssText = `position: fixed; pointer-events: none; left: ${bounds.left}px; top: ${bounds.top}px; width: ${bounds.width}px; height: ${bounds.height}px;`;
-                anchor.style.anchorName = `--tooltip-position-${crypto.randomUUID()}`;
+                anchor.style.anchorName = nextTooltipIdentifier("--tooltip-position-");
                 this.#positioningAnchor = anchor;
                 this.appendChild(anchor);
                 tooltip.style.positionAnchor = anchor.style.anchorName;

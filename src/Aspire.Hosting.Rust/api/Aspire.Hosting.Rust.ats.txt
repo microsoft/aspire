@@ -6,6 +6,7 @@ Aspire.Hosting.Rust/Aspire.Hosting.Rust.RustAppResource [ExposeProperties]
 
 # Capabilities
 Aspire.Hosting.Rust/addRustApp(name: string, appDirectory: string) -> Aspire.Hosting.Rust/Aspire.Hosting.Rust.RustAppResource
+Aspire.Hosting.Rust/RustAppResource.resourceTypeDisplayName(context: Aspire.Hosting.Rust/Aspire.Hosting.Rust.RustAppResource) -> string
 Aspire.Hosting.Rust/withCargoArgs(args: string[]) -> Aspire.Hosting.Rust/Aspire.Hosting.Rust.RustAppResource
 Aspire.Hosting.Rust/withCargoBinTarget(binName: string) -> Aspire.Hosting.Rust/Aspire.Hosting.Rust.RustAppResource
 Aspire.Hosting.Rust/withCargoExample(exampleName: string) -> Aspire.Hosting.Rust/Aspire.Hosting.Rust.RustAppResource

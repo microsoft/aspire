@@ -267,39 +267,20 @@
                                                             @foreach (var item in context.SpanLogs)
                                                             {
                                                                 var buttonId = $"{context.Span.SpanId}-{item.LogEntry.InternalId}";
-                                                                var tooltipId = $"{buttonId}-tooltip";
-                                                                var eventName = item.LogEntry.EventName ?? StructuredLogsLoc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsEntryDetails)];
                                                                 var isSelected = SelectedData?.LogEntryViewModel?.LogEntry.InternalId == item.LogEntry.InternalId;
                                                                 var buttonColor = item.LogEntry.IsError ? "var(--error)" : spanColor;
 
                                                                 <button id="@buttonId"
                                                                         aria-label="@StructuredLogsLoc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsEntryDetails)]"
-                                                                        data-tooltip-content="@tooltipId"
+                                                                        data-tooltip-content="@SpanLogPreview.ElementId"
                                                                         class="@($"span-log-entry-button {(isSelected ? "span-log-entry-selected" : null)} {(item.LogEntry.IsError ? "span-log-entry-error" : null)}")"
                                                                         data-span-color="@spanColor"
                                                                         style="@($"left: {@item.LeftOffset.ToString("F2", CultureInfo.InvariantCulture)}%; --button-color: {buttonColor};")"
+                                                                        @onmouseenter="@ShowLogPreview(item.LogEntry)"
+                                                                        @onfocus="@ShowLogPreview(item.LogEntry)"
                                                                         @onclick="@(() => ToggleSpanLogsAsync(item.LogEntry))"
                                                                         @onclick:stopPropagation="true">
                                                                 </button>
-                                                                <div id="@tooltipId" class="log-tooltip" hidden>
-                                                                    <div class="log-tooltip-title-container">
-                                                                        <span class="log-tooltip-title">@eventName</span> <span class="log-tooltip-subtitle">@item.LogEntry.ScopeName</span><br />
-                                                                    </div>
-                                                                    <table class="log-tooltip-table">
-                                                                        <tr>
-                                                                            <td class="label-column">@StructuredLogsLoc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsLevelColumnHeader)]</td>
-                                                                            <td>@item.LogEntry.Severity</td>
-                                                                        </tr>
-                                                                        <tr>
-                                                                            <td class="label-column">@StructuredLogsLoc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsTimestampColumnHeader)]</td>
-                                                                            <td>@FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, item.LogEntry.TimeStamp, MillisecondsDisplay.Truncated)</td>
-                                                                        </tr>
-                                                                        <tr>
-                                                                            <td class="label-column">@StructuredLogsLoc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsMessageColumnHeader)]</td>
-                                                                            <td>@FormatHelpers.TruncateText(item.LogEntry.Message, maxLength: 150)</td>
-                                                                        </tr>
-                                                                    </table>
-                                                                </div>
                                                             }
                                                         </div>
                                                         <div class="span-bar" style="grid-column: 2; background: @spanColor;"></div>
@@ -366,6 +347,8 @@
             @string.Format(Loc[nameof(Dashboard.Resources.TraceDetail.TraceDetailTraceNotFound)], TraceId)
         </div>
     }
+    @* The one preview every log marker's tooltip shows (see SpanLogPreview). *@
+    <SpanLogPreview @ref="_logPreview" />
 </div>
 
 @code {

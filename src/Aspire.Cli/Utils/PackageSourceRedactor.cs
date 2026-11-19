@@ -4,8 +4,11 @@
 namespace Aspire.Cli.Utils;
 
 /// <summary>
-/// Helpers for rendering NuGet package sources in user-visible output without leaking credentials.
+/// Helpers for best-effort redaction of credentials in NuGet package source output.
 /// </summary>
+/// <remarks>
+/// Redaction is best effort to reduce sensitive data in output, not a security guarantee.
+/// </remarks>
 internal static class PackageSourceRedactor
 {
     private const string UnparseableHttpSentinel = "<unparseable http source>";
