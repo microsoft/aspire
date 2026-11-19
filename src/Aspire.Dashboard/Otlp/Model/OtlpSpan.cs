@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using Aspire.Dashboard.Extensions;
+using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.Otlp;
 using Grpc.Core;
 
@@ -186,10 +187,8 @@ public class OtlpSpan
                     }
                     return summary;
                 }
-                else if (!string.IsNullOrEmpty(OtlpHelpers.GetValue(span.Attributes, "db.system")))
+                else if (TextVisualizerFormatHelpers.GetDatabaseSystem(span.Attributes) is { } dbSystem)
                 {
-                    var dbSystem = OtlpHelpers.GetValue(span.Attributes, "db.system");
-
                     return $"DATA {dbSystem} {span.Name}";
                 }
                 else if (!string.IsNullOrEmpty(OtlpHelpers.GetValue(span.Attributes, "rpc.system")))

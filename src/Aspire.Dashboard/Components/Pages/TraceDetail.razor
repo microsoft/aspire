@@ -190,7 +190,7 @@
                                                         <span class="uninstrumented-peer">
                                                             @{
                                                                 Icon icon;
-                                                                if (context.Span.Attributes.HasKey("db.system"))
+                                                                if (context.Span.Attributes.HasKey("db.system.name") || context.Span.Attributes.HasKey("db.system"))
                                                                 {
                                                                     icon = new Icons.Filled.Size16.Database();
                                                                 }

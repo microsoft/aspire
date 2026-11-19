@@ -163,6 +163,48 @@ public class OtlpSpanTests
                     KeyValuePair.Create("http.status_code", "200")
                 }
             },
+            new object[]
+            {
+                "DATA mysql SELECT",
+                "SELECT",
+                OtlpSpanKind.Client,
+                new KeyValuePair<string, string>[]
+                {
+                    KeyValuePair.Create("db.system.name", "mysql")
+                }
+            },
+            new object[]
+            {
+                "DATA mysql SELECT",
+                "SELECT",
+                OtlpSpanKind.Client,
+                new KeyValuePair<string, string>[]
+                {
+                    KeyValuePair.Create("db.system", "mysql")
+                }
+            },
+            new object[]
+            {
+                "DATA mysql SELECT",
+                "SELECT",
+                OtlpSpanKind.Client,
+                new KeyValuePair<string, string>[]
+                {
+                    KeyValuePair.Create("db.system.name", "mysql"),
+                    KeyValuePair.Create("db.system", "other")
+                }
+            },
+            new object[]
+            {
+                "DATA mysql SELECT",
+                "SELECT",
+                OtlpSpanKind.Client,
+                new KeyValuePair<string, string>[]
+                {
+                    KeyValuePair.Create("db.system.name", ""),
+                    KeyValuePair.Create("db.system", "mysql")
+                }
+            },
         };
 
     [Theory]
