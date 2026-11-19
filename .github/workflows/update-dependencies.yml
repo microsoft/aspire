@@ -71,7 +71,7 @@ jobs:
       - name: Restore version properties
         run: |
           git show HEAD:Directory.Packages.props > "$RUNNER_TEMP/Directory.Packages.props"
-          node .github/workflows/update-dependencies-version-properties.js "$RUNNER_TEMP/Directory.Packages.props"
+          ./dotnet.sh run .github/workflows/update-dependencies-version-properties.cs -- "$RUNNER_TEMP/Directory.Packages.props"
 
       - name: Generate GitHub App Token
         id: app-token
