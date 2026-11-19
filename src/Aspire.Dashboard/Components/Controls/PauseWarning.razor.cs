@@ -47,7 +47,7 @@ public partial class PauseWarning : ComponentBase, IAsyncDisposable
         CultureInfo.CurrentCulture,
         Loc[nameof(ControlsResources.PauseWarningText)],
         CaptureType);
-    private string AbsoluteTime => FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, PausedAt);
+    private string AbsoluteTime => FormatHelpers.FormatTooltipDateTime(TimeProvider, PausedAt);
     private string AbsoluteTooltip => $"{PauseWarningText} {AbsoluteTime}";
     private string AccessibleLabel => $"{PauseWarningText} {RelativeAge} ({AbsoluteTime})";
 
