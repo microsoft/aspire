@@ -1,0 +1,15 @@
+{
+  "id": "vscode-e2e-prereq-vsix-download-connection-closed",
+  "type": "infra-failure",
+  "title": "VS Code extension E2E prerequisite pinned VSIX download fails with connection forcibly closed",
+  "error_pattern": "Unable to read data from the transport connection: An existing connection was forcibly closed by the remote host.",
+  "occurrences": [
+    {
+      "run_id": 44587423459,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/44587423459",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, browser-debugger)",
+      "observed_at": "2026-11-19T18:54:45Z",
+      "pr_number": 0
+    }
+  ]
+}

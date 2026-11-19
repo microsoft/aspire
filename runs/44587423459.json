@@ -1,0 +1,33 @@
+{
+  "run_id": 44587423459,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/44587423459",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-19T18:54:45Z",
+  "verdict": "transient-infra",
+  "pr": null,
+  "triggering_merge_pr": null,
+  "main_context": {
+    "last_successful_main_sha": "d6892bf7a98b3c988e4d7bdd5539625686c0b05a",
+    "failed_sha": "9d4c783c2c98b683398cb1f57a06146e836d3d01",
+    "candidate_merge_history_state": "incomplete",
+    "candidate_merges": null
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, browser-debugger)",
+      "id": 135792215407,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/44587423459/job/135792215407",
+      "classification": "transient-infra",
+      "reason": "Pinned VSIX download in .NET debugger E2E prerequisites failed with a forcibly closed connection; tests were skipped.",
+      "failed_steps": [
+        ".NET debugger E2E prerequisites"
+      ]
+    }
+  ],
+  "failed_tests": [],
+  "causes": [
+    "vscode-e2e-prereq-vsix-download-connection-closed"
+  ]
+}
