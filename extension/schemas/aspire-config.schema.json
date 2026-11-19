@@ -526,11 +526,6 @@
       },
       "additionalProperties": false
     },
-    "skillSources": {
-      "description": "Deprecated. Use agentPlugins instead. Sources are still read when agentPlugins does not define a source with the same name. OpenCode catalog properties are ignored.",
-      "deprecationMessage": "skillSources is deprecated. Rename it to agentPlugins.",
-      "type": "object"
-    },
     "templateSources": {
       "description": "Named template sources from global or accepted init-source configuration. Each source specifies an absolute local path or a Git repository with optional ref, path, and displayName. Source names must be 1-64 ASCII letters, digits, dots, hyphens, or underscores, starting with a letter or digit.",
       "type": "object",
@@ -556,6 +551,11 @@
         },
         "additionalProperties": false
       }
+    },
+    "skillSources": {
+      "description": "Deprecated. Use agentPlugins instead. Legacy OpenCode catalog properties are ignored.",
+      "deprecationMessage": "skillSources is deprecated. Rename it to agentPlugins.",
+      "type": "object"
     },
     "$schema": {
       "type": "string",

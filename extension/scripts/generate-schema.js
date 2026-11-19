@@ -95,6 +95,16 @@ function generateJsonSchema(configInfo, settingsSchema, options) {
         }
     }
 
+    // The CLI still reads skillSources but omits it from config info metadata.
+    // TODO: Remove this alias when CLI support is removed. https://github.com/microsoft/aspire/issues/22412
+    if (Object.hasOwn(properties, 'agentPlugins') && !Object.hasOwn(properties, 'skillSources')) {
+        properties.skillSources = {
+            description: 'Deprecated. Use agentPlugins instead. Legacy OpenCode catalog properties are ignored.',
+            deprecationMessage: 'skillSources is deprecated. Rename it to agentPlugins.',
+            type: 'object'
+        };
+    }
+
     // Allow $schema property so users can reference the schema in their files
     properties['$schema'] = {
         type: 'string',

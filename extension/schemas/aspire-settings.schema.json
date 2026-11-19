@@ -354,7 +354,7 @@
       "type": "string"
     },
     "skillSources": {
-      "description": "Deprecated. Use agentPlugins instead. Sources are still read when agentPlugins does not define a source with the same name. OpenCode catalog properties are ignored.",
+      "description": "Deprecated. Use agentPlugins instead. Legacy OpenCode catalog properties are ignored.",
       "deprecationMessage": "skillSources is deprecated. Rename it to agentPlugins.",
       "type": "object"
     },

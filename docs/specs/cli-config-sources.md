@@ -549,6 +549,8 @@ Sources and their fields merge by name across configuration layers, case-insensi
 
 Earlier CLI releases named this setting `skillSources`. Existing `skillSources` entries are still read with the same fields, except that their `openCodeV1Catalog` and `openCodeV2Catalog` properties are ignored. Within one configuration layer, such as a single settings file, an `agentPlugins` entry replaces the entire `skillSources` entry with the same name. Across layers, sources and their fields merge regardless of which key each layer uses. For example, a project can disable a global source or inherit its repository under either key. Resolving the alias does not rewrite files. Saving configuration preserves `skillSources`, including when legacy `.aspire/settings.json` files migrate to `aspire.config.json`.
 
+The VS Code settings schemas accept `skillSources` as a deprecated alias and recommend `agentPlugins`.
+
 `aspire init` recommends `aspireify` only after successful or already-current registration of an enabled official Aspire plugin, or of the official OpenCode catalog when the `default` source is enabled. Disabled sources and arbitrary plugins do not trigger this guidance.
 
 Standalone agent initialization honors the configured AppHost or discovers one from the working directory using SDK-independent file inspection, prompting when multiple AppHosts are available. It does not require a usable .NET SDK or run MSBuild to find the AppHost's saved settings. It reads the selected AppHost's configuration independently of the agent workspace destination, without fetching or checking the configuration source. When there is no AppHost, it uses the working directory's nearest local settings file.
