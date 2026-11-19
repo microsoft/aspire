@@ -3,6 +3,7 @@
 
 using System.ComponentModel;
 using System.Globalization;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Git;
@@ -55,6 +56,10 @@ internal sealed class SkillSource
     [JsonPropertyName("openCodeV2Catalog")]
     [Description("HTTPS skills catalog URL for OpenCode V2. Omit for sources without an OpenCode catalog.")]
     public string? OpenCodeV2Catalog { get; init; }
+
+    // Unmodeled settings must survive typed load/save cycles of aspire.config.json.
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? ExtensionData { get; set; }
 
     internal string GetName() => _name;
 
