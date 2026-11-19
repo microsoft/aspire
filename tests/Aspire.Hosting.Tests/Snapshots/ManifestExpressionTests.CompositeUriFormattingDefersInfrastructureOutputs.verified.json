@@ -1,0 +1,24 @@
+﻿{
+  "resources": {
+    "infra": {
+      "type": "azure.bicep.v0",
+      "path": "infra.module.bicep"
+    },
+    "backend": {
+      "type": "container.v0",
+      "image": "image:latest",
+      "env": {
+        "ENCODED": "{value-1e202794e72fbdf6-uri-encoded.connectionString}"
+      }
+    },
+    "value-1e202794e72fbdf6-uri-encoded": {
+      "type": "value.v0",
+      "connectionString": "https%3A%2F%2F{value-2772f026c4b55d5c-uri-encoded.value}%2Fsignin-oidc"
+    },
+    "value-2772f026c4b55d5c-uri-encoded": {
+      "type": "annotated.string",
+      "value": "{infra.outputs.host}",
+      "filter": "uri"
+    }
+  }
+}

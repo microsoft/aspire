@@ -172,7 +172,8 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
 
     /// <summary>
     /// Tests that aspire agent init with a .vscode folder shows client, skill, and scope selection
-    /// prompts, and that accepting the defaults registers the remote Aspire plugin.
+    /// prompts, and that accepting the defaults registers the remote Aspire plugin and removes copied
+    /// Aspire skills.
     /// </summary>
     [Fact]
     public async Task AgentInitCommand_DefaultSelection_RegistersRemotePlugin()
@@ -203,14 +204,6 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         Directory.CreateDirectory(Path.GetDirectoryName(localSkillPath)!);
         const string localSkillContent = "My customized Aspire instructions.";
         await File.WriteAllTextAsync(localSkillPath, localSkillContent);
-        string[] expectedWarnings =
-        [
-            "Skill sources:",
-            "https://github.com/microsoft/aspire-skills",
-            "Only use sources you trust.",
-            "Local Aspire skill files may override plugin skills:",
-            ".agents/skills/aspire/SKILL.md"
-        ];
 
         // Accept agents before choosing independent assets and project scope.
         await auto.TypeAsync("aspire agent init");
@@ -225,27 +218,22 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("Which skills and tools do you want to configure?", timeout: TimeSpan.FromSeconds(30));
         await auto.WaitUntilTextAsync("aspire — Agent assets from configured skill sources", timeout: TimeSpan.FromSeconds(30));
-        var skillsScreen = auto.CreateSnapshot().GetScreenText();
-        foreach (var warning in expectedWarnings)
-        {
-            Assert.Contains(warning, skillsScreen);
-            Assert.True(skillsScreen.IndexOf(warning, StringComparison.Ordinal) <
-                skillsScreen.IndexOf("Which skills and tools do you want to configure?", StringComparison.Ordinal));
-        }
         await auto.EnterAsync();
         await auto.WaitUntilAsync(
             s => s.ContainsText("Configure the Aspire MCP server for selected agent environments?"),
             timeout: TimeSpan.FromSeconds(30), description: "MCP server confirmation prompt");
-        var mcpScreen = auto.CreateSnapshot().GetScreenText();
-        foreach (var warning in expectedWarnings)
-        {
-            Assert.Contains(warning, mcpScreen);
-        }
         // MCP configuration is strictly opt-in and defaults to No, so accepting the default
         // here leaves MCP unconfigured.
         await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("Installation scope", timeout: TimeSpan.FromSeconds(30));
+        await auto.WaitUntilTextAsync("Where should skills and tools be installed?", timeout: TimeSpan.FromSeconds(30));
         await auto.EnterAsync();
+        // Deleting copied skills is opt-in and the prompt defaults to No, so answer it explicitly.
+        // The [y/N] prompt accepts a single key, so a trailing Enter would reach bash as a blank
+        // command and desync the sequence counter.
+        await auto.WaitUntilTextAsync("Delete this copied skill folder?", timeout: TimeSpan.FromSeconds(30));
+        await auto.WaitAsync(500);
+        await auto.TypeAsync("y");
+        await auto.WaitUntilTextAsync("Deleted 1 copied skill folder", timeout: TimeSpan.FromSeconds(30));
         await auto.WaitUntilTextAsync("configuration complete", timeout: TimeSpan.FromSeconds(30));
         await auto.WaitForSuccessPromptAsync(counter);
 
@@ -255,9 +243,7 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         await auto.RunCommandAsync(
             """jq -e '.enabledPlugins["aspire@aspire-skills"] == true and .extraKnownMarketplaces["aspire-skills"].source.repo == "microsoft/aspire-skills"' "$ASPIRE_E2E_WORKSPACE/.github/copilot/settings.json" """,
             counter);
-        Assert.Equal(localSkillContent, await File.ReadAllTextAsync(localSkillPath));
-        Assert.Equal([localSkillPath], Directory.GetFiles(
-            Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills"), "*", SearchOption.AllDirectories));
+        Assert.False(Directory.Exists(Path.GetDirectoryName(localSkillPath)));
 
         // Verify MCP was not configured, since it was never selected in the prompt above.
         var vscodeMcpConfigPath = Path.Combine(vscodePath, "mcp.json");
@@ -347,10 +333,8 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
             timeout: TimeSpan.FromSeconds(30), description: "agent selection prompt");
         await auto.EnterAsync();
 
-        await auto.WaitUntilTextAsync("Installation scope", timeout: TimeSpan.FromSeconds(30));
+        await auto.WaitUntilTextAsync("Where should skills and tools be installed?", timeout: TimeSpan.FromSeconds(30));
         var scopeScreen = auto.CreateSnapshot().GetScreenText();
-        Assert.Contains("Only use sources you trust.", scopeScreen);
-        Assert.Contains("https://github.com/microsoft/aspire-skills", scopeScreen);
         Assert.DoesNotContain("Install Aspire MCP server", scopeScreen);
         Assert.DoesNotContain("Which source do you want to use for Aspire?", scopeScreen);
         await auto.EnterAsync();
@@ -395,18 +379,22 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         var mcpConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, "StarterApp", ".mcp.json");
         const string originalMcpConfig = """{"mcpServers":{"custom":{"command":"custom"}}}""";
 
-        // Explicit client, skill, and scope choices leave no additional asset-selection prompt.
+        // Explicit client and skill choices leave only the scope prompt.
         await auto.AspireNewAcceptingAgentInitAsync(
             "StarterApp",
-            extraArguments: "--agents claude --scope project --skills aspire",
+            extraArguments: "--agents claude --skills aspire",
             beforeAcceptingAgentInit: () => File.WriteAllTextAsync(mcpConfigPath, originalMcpConfig));
+
+        await auto.WaitUntilTextAsync("Where should skills and tools be installed?", timeout: TimeSpan.FromSeconds(30));
+        var scopeScreen = auto.CreateSnapshot().GetScreenText();
+        Assert.Contains("This project (In your workspace, ready to commit with your project)", scopeScreen);
+        Assert.Contains("Global (In your home directory, available across all projects)", scopeScreen);
+        await auto.EnterAsync();
 
         // aspire new never registers --mcp, so it goes straight to configuration after
         // registration — no MCP prompt is shown, and Claude's project MCP file is untouched.
         await auto.WaitUntilTextAsync("configuration complete", timeout: TimeSpan.FromSeconds(30));
         var completionScreen = auto.CreateSnapshot().GetScreenText();
-        Assert.Contains("Only use sources you trust.", completionScreen);
-        Assert.Contains("https://github.com/microsoft/aspire-skills", completionScreen);
         Assert.DoesNotContain("Which source do you want to use for Aspire?", completionScreen);
         Assert.DoesNotContain("Configure the Aspire MCP server", completionScreen);
         await auto.WaitForSuccessPromptAsync(counter);
@@ -500,21 +488,41 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
               }
             }
             """;
-        // Opt-out suppresses emission, but global setup still registers the CLI hook.
-        var expectedClaudeGlobalSettings = JsonNode.Parse(expectedPluginSettings)!;
-        expectedClaudeGlobalSettings["hooks"] = JsonNode.Parse($$"""
+        // Opt-out suppresses emission, but setup at either scope still registers the user-level CLI hook.
+        var hookExecutable = JsonSerializer.Serialize(executablePath);
+        var expectedHooks = JsonNode.Parse($$"""
             {
               "PostToolUse": [{
-                "matcher": "*",
+                "matcher": "^Skill$",
                 "hooks": [{
                   "type": "command",
-                  "command": {{JsonSerializer.Serialize(executablePath)}},
+                  "command": {{hookExecutable}},
                   "args": ["agent", "telemetry", "--hook"],
                   "timeout": 30
                 }]
+              }, {
+                "matcher": "^(?:aspire-.+|mcp__aspire__.+|mcp_aspire_.+)$",
+                "hooks": [{
+                  "type": "command",
+                  "command": {{hookExecutable}},
+                  "args": ["agent", "telemetry", "--hook"],
+                  "timeout": 30
+                }]
+              }, {
+                "matcher": "^Read$",
+                "hooks": [{
+                  "type": "command",
+                  "command": {{hookExecutable}},
+                  "args": ["agent", "telemetry", "--hook"],
+                  "timeout": 30,
+                  "if": "Read(//**/skills/aspire*/**)"
+                }]
               }]
             }
-            """);
+            """)!;
+        var expectedClaudeGlobalSettings = JsonNode.Parse(expectedPluginSettings)!;
+        expectedClaudeGlobalSettings["hooks"] = expectedHooks.DeepClone();
+        var expectedClaudeUserSettingsAfterProjectSetup = new JsonObject { ["hooks"] = expectedHooks.DeepClone() };
         const string openCodeSettings = """
             {"theme":"dark","mcp":{"custom":{"type":"remote","url":"https://example.test/mcp"}},"skills":{"paths":["./team-skills"],"urls":["https://example.test/skills/"]}}
             """;
@@ -562,6 +570,18 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
             foreach (var (path, bytes) in configured)
             {
                 Assert.Equal(bytes, await File.ReadAllBytesAsync(path, TestContext.Current.CancellationToken));
+            }
+
+            if (scope == "project")
+            {
+                // Project setup writes the hooks to user-level configuration, which the container creates
+                // owner-only as root, so inspect it in the container and then remove it so the host can
+                // seed the global scope.
+                await auto.RunCommandAsync(
+                    $"jq -e --argjson expected {AspireCliShellCommandHelpers.QuoteBashArg(expectedClaudeUserSettingsAfterProjectSetup.ToJsonString())} " +
+                    """'. == $expected' "$HOME/.claude/settings.json" && test -f "$HOME/.copilot/hooks/aspire-telemetry.json" """,
+                    counter);
+                await auto.RunCommandAsync("""rm -rf "$HOME/.claude" "$HOME/.copilot" """, counter);
             }
         }
     }

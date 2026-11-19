@@ -248,6 +248,29 @@ public class ProjectResourceTests(ITestOutputHelper outputHelper)
         Assert.Equal(expectedOtlpExporter, config.ContainsKey(KnownOtelConfigNames.ExporterOtlpEndpoint));
     }
 
+    [Fact]
+    public async Task AddProjectWithResourceAttributesKeepsServiceInstanceId()
+    {
+        var appBuilder = CreateBuilder(operation: DistributedApplicationOperation.Run);
+
+        // AddProject registers the OTLP exporter callback before any call made here, so this value is applied
+        // after the one that carries service.instance.id. The dashboard needs that id to match the telemetry of
+        // each replica to its resource.
+        appBuilder.AddProject<TestProject>("api", launchProfileName: null)
+            .WithReplicas(2)
+            .WithEnvironment("OTEL_RESOURCE_ATTRIBUTES", "deployment.environment=dev");
+        using var app = appBuilder.Build();
+
+        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var resource = Assert.Single(appModel.GetProjectResources());
+
+        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance).DefaultTimeout();
+
+        Assert.Equal(
+            "deployment.environment=dev,service.instance.id={{- index .Annotations \"otel-service-instance-id\" -}}",
+            config["OTEL_RESOURCE_ATTRIBUTES"]);
+    }
+
     [Theory]
     [InlineData("true", false)]
     [InlineData("1", false)]
@@ -1039,9 +1062,12 @@ public class ProjectResourceTests(ITestOutputHelper outputHelper)
             Assert.NotNull(obsolete);
             Assert.False(obsolete.IsError);
             Assert.Equal(
-                method.IsPublic
-                    ? "Use AddDotnetProject from the Aspire.Hosting.Dotnet package instead."
-                    : "Use addDotnetProject from the Aspire.Hosting.Dotnet package instead.",
+                (method.IsPublic, method.IsGenericMethodDefinition) switch
+                {
+                    (true, true) => "Use AddDotnetProject(name, path) from the Aspire.Hosting.Dotnet package instead. There is no generic AddDotnetProject<TProject>; pass the project path instead of the TProject type.",
+                    (true, false) => "Use AddDotnetProject(name, path) from the Aspire.Hosting.Dotnet package instead.",
+                    _ => "Use addDotnetProject(name, path) from the Aspire.Hosting.Dotnet package instead."
+                },
                 obsolete.Message);
             Assert.Null(method.GetCustomAttribute<ExperimentalAttribute>());
             Assert.Equal(typeof(IResourceBuilder<ProjectResource>), method.ReturnType);
@@ -1065,8 +1091,8 @@ public class ProjectResourceTests(ITestOutputHelper outputHelper)
             Assert.False(obsolete.IsError);
             Assert.Equal(
                 method.IsPublic
-                    ? "Use AddDotnetProject from the Aspire.Hosting.Dotnet package instead."
-                    : "Use addDotnetProject from the Aspire.Hosting.Dotnet package instead.",
+                    ? "Use AddDotnetProject(name, path) from the Aspire.Hosting.Dotnet package instead."
+                    : "Use addDotnetProject(name, path) from the Aspire.Hosting.Dotnet package instead.",
                 obsolete.Message);
             Assert.Null(method.GetCustomAttribute<ExperimentalAttribute>());
         });

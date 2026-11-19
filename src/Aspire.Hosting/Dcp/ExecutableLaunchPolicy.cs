@@ -6,7 +6,6 @@
 
 using System.Diagnostics;
 using Aspire.Hosting.ApplicationModel;
-using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Configuration;
 
 namespace Aspire.Hosting.Dcp;
@@ -17,15 +16,8 @@ internal sealed class ExecutableLaunchPolicy(IConfiguration configuration)
 
     public ExecutableLaunchDecision Decide(IResource resource)
     {
-        if (resource.HasAnnotationOfType<ForceProcessExecutionAnnotation>() || resource.HasPersistentLifetime())
-        {
-            return new(
-                ExecutableLaunchMechanism.Process,
-                ExecutableLaunchMode.NoDebug,
-                projectLaunchMode: GetProjectLaunchMode());
-        }
-
-        var supportsDebugging = resource.SupportsDebugging(_configuration, out var debugSupport);
+        var debugSupportDecision = resource.GetEffectiveDebugSupportDecision(_configuration);
+        var effectiveDebugSupport = debugSupportDecision.EffectiveAnnotation;
 
         if (resource is ProjectResource)
         {
@@ -34,10 +26,10 @@ internal sealed class ExecutableLaunchPolicy(IConfiguration configuration)
                 // A project launch override is a complete Process invocation. A supported custom debug producer
                 // may still contribute optional launch metadata, matching the existing MAUI behavior, but its
                 // success does not determine whether the Process invocation can run.
-                var metadataProducer = supportsDebugging &&
-                    debugSupport is not null &&
-                    !KnownLaunchConfigurationTypes.IsProject(debugSupport.LaunchConfigurationType)
-                        ? debugSupport
+                var metadataProducer =
+                    debugSupportDecision.SupportedDeclaredAnnotation is { } supportedDeclaredAnnotation &&
+                    !KnownLaunchConfigurationTypes.IsProject(supportedDeclaredAnnotation.LaunchConfigurationType)
+                        ? supportedDeclaredAnnotation
                         : null;
                 return new(
                     ExecutableLaunchMechanism.Process,
@@ -46,80 +38,45 @@ internal sealed class ExecutableLaunchPolicy(IConfiguration configuration)
                     projectLaunchMode: GetProjectLaunchMode());
             }
 
-            if (supportsDebugging && debugSupport is not null)
+            if (effectiveDebugSupport is not null)
             {
-                return new(
-                    ExecutableLaunchMechanism.Ide,
-                    GetLaunchMode(debugSupport.LaunchConfigurationType),
-                    debugSupport,
-                    projectLaunchMode: GetProjectLaunchMode());
-            }
+                if (debugSupportDecision.UsesCompatibilityProjectLaunch)
+                {
+                    return new(
+                        ExecutableLaunchMechanism.Ide,
+                        GetLaunchMode(effectiveDebugSupport.LaunchConfigurationType),
+                        useCompatibilityProjectLaunchConfiguration: true,
+                        materializeLaunchProfileArguments: debugSupportDecision.UsesAzureFunctionsProjectCompatibility,
+                        projectLaunchMode: GetProjectLaunchMode());
+                }
 
-            if (ShouldUseCompatibilityProjectLaunch(resource, debugSupport))
-            {
+                var declaredProducer = debugSupportDecision.SupportedDeclaredAnnotation ??
+                    throw new InvalidOperationException(
+                        $"Resource '{resource.Name}' selected declared debug support without an active declared producer.");
+
                 return new(
                     ExecutableLaunchMechanism.Ide,
-                    GetLaunchMode(KnownLaunchConfigurationTypes.Project),
-                    useCompatibilityProjectLaunchConfiguration: true,
+                    GetLaunchMode(declaredProducer.LaunchConfigurationType),
+                    declaredProducer,
                     projectLaunchMode: GetProjectLaunchMode());
             }
         }
-        else if (supportsDebugging && debugSupport is not null)
+        else if (effectiveDebugSupport is not null)
         {
+            var declaredProducer = debugSupportDecision.SupportedDeclaredAnnotation ??
+                throw new InvalidOperationException(
+                    $"Resource '{resource.Name}' selected declared debug support without an active declared producer.");
+
             return new(
                 ExecutableLaunchMechanism.Ide,
-                GetLaunchMode(debugSupport.LaunchConfigurationType),
-                debugSupport);
+                GetLaunchMode(declaredProducer.LaunchConfigurationType),
+                declaredProducer);
         }
 
         return new(
             ExecutableLaunchMechanism.Process,
             ExecutableLaunchMode.NoDebug,
             projectLaunchMode: GetProjectLaunchMode());
-    }
-
-    private bool ShouldUseCompatibilityProjectLaunch(
-        IResource resource,
-        SupportsDebuggingAnnotation? debugSupport)
-    {
-        if (string.IsNullOrEmpty(_configuration[DcpExecutor.DebugSessionPortVar]))
-        {
-            return false;
-        }
-
-        // Capability-less Visual Studio sessions can only launch projects loaded in the solution, so bare .cs files
-        // stay on the Process path. An IDE that explicitly advertises "project" can launch the same .cs project
-        // configuration through this compatibility path even when the resource has no SupportsDebuggingAnnotation.
-        if (resource.TryGetProjectMetadata(out var projectMetadata) &&
-            projectMetadata.IsFileBasedApp &&
-            !HasExplicitProjectLaunchCapability())
-        {
-            return false;
-        }
-
-        if (resource.TryGetLastAnnotation<ExecutableAnnotation>(out _) &&
-            debugSupport?.LaunchConfigurationType is not null and not KnownLaunchConfigurationTypes.Project)
-        {
-            return false;
-        }
-
-        if (debugSupport is not null && !string.IsNullOrEmpty(_configuration[KnownConfigNames.DebugSessionInfo]))
-        {
-            return false;
-        }
-
-        // A directly added legacy ProjectResource may not declare a launch configuration type at all. Preserve its
-        // historical Visual Studio-compatible behavior and treat it as a project launch whenever a debug session is
-        // active. Project v2 resources declare their capability explicitly and do not use this compatibility path.
-        return true;
-    }
-
-    private bool HasExplicitProjectLaunchCapability()
-    {
-        return DebugSessionInfoParser.TryGetSupportedLaunchConfigurations(
-            _configuration[KnownConfigNames.DebugSessionInfo],
-            out var supportedLaunchConfigurations)
-            && supportedLaunchConfigurations?.Contains(KnownLaunchConfigurationTypes.Project) is true;
     }
 
     private string GetLaunchMode(string? launchConfigurationType)

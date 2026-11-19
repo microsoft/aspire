@@ -54,6 +54,17 @@ public interface IPageWithSessionAndUrlState<TViewModel, TSerializableViewModel>
 public static class PageExtensions
 {
     /// <summary>
+    /// The history entry state attached to the automatic redirect that restores saved page state,
+    /// for example <c>/traces</c> to <c>/traces?type=server</c>.
+    /// </summary>
+    /// <remarks>
+    /// Blazor reports the redirect and browser back/forward navigation the same way, so the resources
+    /// layout reads this marker to tell them apart. Only the restoration may keep content the user just
+    /// closed hidden; going back to a previous detail URL must show that content again.
+    /// </remarks>
+    internal const string RestoredPageStateHistoryEntryState = "aspire-restored-page-state";
+
+    /// <summary>
     /// Called after a change in the view model that will affect the url associated with new page state
     /// to navigate to the new url and save new state in localstorage.
     /// <param name="page"></param>
@@ -131,7 +142,11 @@ public static class PageExtensions
                     // The previous experience's pages share the page state and URL builders with the new pages, so their
                     // URLs are prefixed here. Relying on the legacy layout's rewrite instead would add a history entry,
                     // and going back would land on "/legacy/{BasePath}", which restores and redirects again.
-                    page.NavigationManager.NavigateTo(isLegacy ? ToLegacyUrl(newUrl) : newUrl, new NavigationOptions { ReplaceHistoryEntry = true });
+                    page.NavigationManager.NavigateTo(isLegacy ? ToLegacyUrl(newUrl) : newUrl, new NavigationOptions
+                    {
+                        ReplaceHistoryEntry = true,
+                        HistoryEntryState = RestoredPageStateHistoryEntryState
+                    });
                     return true;
                 }
             }

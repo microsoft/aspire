@@ -174,7 +174,6 @@ internal sealed class DoctorCommand : BaseCommand
 
         _ansiConsole.Write(new Padder(grid, new Padding(2, 0)));
 
-        // Secondary grid: details, fix suggestions, and links (indented further than message)
         var hasDetails = !string.IsNullOrEmpty(result.Details);
         var hasFix = !string.IsNullOrEmpty(result.Fix);
         var hasLink = !string.IsNullOrEmpty(result.Link);

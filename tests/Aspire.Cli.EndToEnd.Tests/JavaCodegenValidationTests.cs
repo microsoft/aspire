@@ -32,10 +32,7 @@ public sealed class JavaCodegenValidationTests(ITestOutputHelper output)
         await auto.TypeAsync("aspire init");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("Which language would you like to use?", timeout: TimeSpan.FromSeconds(30));
-        await auto.DownAsync();
-        await auto.DownAsync();
-        await auto.WaitUntilTextAsync("> Java", timeout: TimeSpan.FromSeconds(5));
-        await auto.EnterAsync();
+        await auto.SelectAppHostLanguageAsync("Java");
         await auto.WaitUntilTextAsync("Created AppHost.java", timeout: TimeSpan.FromMinutes(2));
         await auto.DeclineAgentInitPromptAsync(counter);
 
@@ -55,11 +52,6 @@ public sealed class JavaCodegenValidationTests(ITestOutputHelper output)
             throw new InvalidOperationException($".aspire/modules directory was not created at {modulesDir}");
         }
 
-        // The second integration is added only after `.aspire/modules` is already populated. A
-        // restore that treats a non-empty modules directory as up to date would leave the stale
-        // SDK in place and still report success, so the SqlServer assertions below are what
-        // actually prove the refresh. Adding both integrations before the first restore would
-        // generate everything in one pass and never exercise that path.
         var codegenHashPath = Path.Combine(modulesDir, ".codegen-hash");
         var initialCodegenHash = File.Exists(codegenHashPath) ? File.ReadAllText(codegenHashPath) : null;
 
@@ -69,10 +61,17 @@ public sealed class JavaCodegenValidationTests(ITestOutputHelper output)
             throw new InvalidOperationException("Baseline SDK already exposes addSqlServer; test cannot verify refresh behavior after adding Aspire.Hosting.SqlServer.");
         }
 
+        // Add regenerates the SDK too. Restore the entire baseline in the container so only
+        // aspire restore can produce the new exports, source list, and codegen hash.
+        await auto.RunCommandAsync("cp -a .aspire/modules ~/java-sdk-baseline", counter);
         await auto.TypeAsync("aspire add Aspire.Hosting.SqlServer");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("The package Aspire.Hosting.", timeout: TimeSpan.FromMinutes(2));
         await auto.WaitForSuccessPromptAsync(counter);
+
+        await auto.RunCommandAsync("rm -rf .aspire/modules && cp -a ~/java-sdk-baseline .aspire/modules", counter);
+        Assert.Equal(initialCodegenHash, File.ReadAllText(codegenHashPath));
+        Assert.False(File.ReadAllText(builderPath).Contains("addSqlServer", StringComparison.Ordinal));
 
         await auto.TypeAsync("aspire restore");
         await auto.EnterAsync();

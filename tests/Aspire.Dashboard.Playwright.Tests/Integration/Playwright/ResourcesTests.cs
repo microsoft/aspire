@@ -23,6 +23,65 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
 
     [Fact]
     [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task Tooltips_TruncateLongPlainTextAndPreserveRichContent()
+    {
+        await RunTestAsync(async page =>
+        {
+            await page.SetViewportSizeAsync(1440, 1200);
+            await page.GotoAsync("/resources");
+            await Assertions.Expect(page.Locator("aspire-tooltip-provider")).ToHaveCountAsync(1);
+            await page.EvaluateAsync("""
+                () => {
+                    const anchor = document.createElement("button");
+                    anchor.id = "tooltip-test-anchor";
+                    anchor.textContent = "Tooltip anchor";
+                    anchor.style.cssText = "position: fixed; top: 50%; left: 50%;";
+                    document.body.appendChild(anchor);
+                }
+                """);
+            var anchor = page.Locator("#tooltip-test-anchor");
+            var tooltip = page.Locator("aspire-tooltip-provider fluent-tooltip[aria-hidden='false']");
+                var maxLength = 1024;
+            var wordCount = (maxLength - 1) / 5;
+            var cases = new (string Text, string Expected)[]
+            {
+                ("First line.\nSecond line.", "First line.\nSecond line."),
+                (new string('x', maxLength), new string('x', maxLength)),
+                (new string('x', maxLength + 1), new string('x', maxLength - 1) + "\u2026"),
+                (string.Concat(Enumerable.Repeat("word ", wordCount + 10)), string.Join(" ", Enumerable.Repeat("word", wordCount)) + "\u2026"),
+                ("short words " + new string('x', maxLength), "short words\u2026"),
+                ("cafe\u0301 " + new string('x', maxLength), "cafe\u0301\u2026"),
+                ("   " + new string('x', maxLength), new string('x', maxLength - 4) + "\u2026"),
+                (new string('x', maxLength - 2) + "\U00010400tail", new string('x', maxLength - 2) + "\u2026")
+            };
+            foreach (var (text, expected) in cases)
+            {
+                await anchor.EvaluateAsync("(anchor, text) => anchor.setAttribute('data-tooltip', text)", text);
+                await anchor.HoverAsync();
+                await Assertions.Expect(tooltip).ToBeVisibleAsync();
+                await Assertions.Expect(tooltip).ToHaveJSPropertyAsync("textContent", expected);
+                await Assertions.Expect(anchor).ToHaveAttributeAsync("data-tooltip", text);
+            }
+
+            var richText = string.Concat(Enumerable.Repeat("rich text ", maxLength / 10 + 10));
+            await anchor.EvaluateAsync("""
+                (anchor, text) => {
+                    const source = document.createElement("div");
+                    source.id = "tooltip-test-content";
+                    source.hidden = true;
+                    const strong = document.createElement("strong");
+                    strong.textContent = text;
+                    source.appendChild(strong);
+                    document.body.appendChild(source);
+                    anchor.setAttribute("data-tooltip-content", source.id);
+                }
+                """, richText);
+            await Assertions.Expect(tooltip.Locator("strong")).ToHaveJSPropertyAsync("textContent", richText);
+        });
+    }
+
+    [Fact]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
     public async Task ResourcePane_GroupOrderSupportsDragKeyboardAndReload()
     {
         await RunTestAsync(async page =>
@@ -210,6 +269,7 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
         await RunTestAsync(async page =>
         {
             await PlaywrightFixture.GoToHomeAndWaitForDataGridLoad(page).DefaultTimeout();
+            await ResourcePaneNavigation.OpenAllResourcesOverviewAsync(page);
 
             var navigationCount = await page.EvaluateAsync<int>("() => performance.getEntriesByType('navigation').length");
 
@@ -218,7 +278,7 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
             await graphButton.ClickAsync();
             await Assertions.Expect(graphButton).ToHaveAttributeAsync("aria-pressed", "true");
 
-            var graphContainer = page.GetByRole(AriaRole.Region, new() { Name = Dashboard.Resources.ControlsStrings.ChartContainerGraphAccessibleLabel });
+            var graphContainer = page.GetByRole(AriaRole.Region, new() { Name = Dashboard.Resources.ControlsStrings.OverviewGraphAccessibleLabel });
             await Assertions.Expect(graphContainer).ToBeVisibleAsync();
 
             var graphWidth = await graphContainer.EvaluateAsync<double>("element => element.getBoundingClientRect().width");
@@ -237,6 +297,7 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
         await RunTestAsync(async page =>
         {
             await PlaywrightFixture.GoToHomeAndWaitForDataGridLoad(page).DefaultTimeout();
+            await ResourcePaneNavigation.OpenAllResourcesOverviewAsync(page);
             await page.GetByRole(AriaRole.Group, new() { Name = Dashboard.Resources.Resources.LayoutLabel, Exact = true })
                 .GetByRole(AriaRole.Button, new() { Name = Dashboard.Resources.Layout.NavMenuGraphTab, Exact = true })
                 .ClickAsync();
@@ -378,11 +439,110 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
 
     [Fact]
     [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task ResourceGraphGame_IsKeyboardAccessibleAndReleasesGraphOnExit()
+    {
+        await RunTestAsync(async page =>
+        {
+            await PlaywrightFixture.GoToHomeAndWaitForDataGridLoad(page).DefaultTimeout();
+            await ResourcePaneNavigation.OpenAllResourcesOverviewAsync(page);
+            await page.GetByRole(AriaRole.Group, new() { Name = Dashboard.Resources.Resources.LayoutLabel, Exact = true })
+                .GetByRole(AriaRole.Button, new() { Name = Dashboard.Resources.Layout.NavMenuGraphTab, Exact = true })
+                .ClickAsync();
+
+            var node = page.Locator(".resource-group[resource-name='TestResource']");
+            await Assertions.Expect(node).ToBeVisibleAsync();
+
+            var graphContainer = page.GetByRole(AriaRole.Region, new() { Name = Dashboard.Resources.ControlsStrings.OverviewGraphAccessibleLabel });
+            var game = page.GetByRole(AriaRole.Application, new() { Name = Dashboard.Resources.Resources.ResourceGraphGameInstructions, Exact = true });
+            var cog = node.GetByRole(AriaRole.Button, new()
+            {
+                Name = string.Format(Dashboard.Resources.Resources.ResourcesGraphResourceActionsButton, "TestResource"),
+                Exact = true
+            });
+
+            // The visible way in: the button is hidden with the rest of the graph, and comes back on exit.
+            var play = graphContainer.GetByRole(AriaRole.Button, new() { Name = Dashboard.Resources.Resources.ResourceGraphGamePlay, Exact = true });
+            await play.ClickAsync();
+            await Assertions.Expect(game).ToBeVisibleAsync();
+            await Assertions.Expect(game).ToBeFocusedAsync();
+            await Assertions.Expect(play).ToBeHiddenAsync();
+            await page.Keyboard.PressAsync("Escape");
+            await Assertions.Expect(game).ToHaveCountAsync(0);
+            await Assertions.Expect(play).ToBeVisibleAsync();
+            Assert.True(await page.EvaluateAsync<bool>("() => document.activeElement?.closest('.graph-game') != null"));
+
+            await graphContainer.FocusAsync();
+            await page.Keyboard.PressAsync("o");
+            await Assertions.Expect(game).ToBeVisibleAsync();
+            await Assertions.Expect(game).ToBeFocusedAsync();
+
+            // The graph behind the game can't be reached by keyboard or assistive technology.
+            await Assertions.Expect(cog).ToHaveCountAsync(0);
+            await page.Keyboard.PressAsync("Shift+Tab");
+            Assert.True(await page.EvaluateAsync<bool>("() => document.activeElement?.closest('.resource-graph') == null"));
+            await game.FocusAsync();
+
+            await page.WaitForTimeoutAsync(1500);
+
+            // Hard core is off until it's picked, and picking it says what it does.
+            var normal = game.GetByRole(AriaRole.Button, new() { Name = Dashboard.Resources.Resources.ResourceGraphGameModeNormal, Exact = true });
+            var hardCore = game.GetByRole(AriaRole.Button, new() { Name = Dashboard.Resources.Resources.ResourceGraphGameModeHardCore, Exact = true });
+            await Assertions.Expect(normal).ToHaveAttributeAsync("aria-pressed", "true");
+            await Assertions.Expect(game.GetByText(Dashboard.Resources.Resources.ResourceGraphGameHardCoreWarning)).ToHaveCountAsync(0);
+            await hardCore.ClickAsync();
+            await Assertions.Expect(hardCore).ToHaveAttributeAsync("aria-pressed", "true");
+            await Assertions.Expect(game.GetByText(Dashboard.Resources.Resources.ResourceGraphGameHardCoreWarning)).ToBeVisibleAsync();
+            await Assertions.Expect(game).ToBeFocusedAsync();
+            await page.Keyboard.PressAsync("h");
+            await Assertions.Expect(normal).ToHaveAttributeAsync("aria-pressed", "true");
+
+            // Enter starts the game from the title screen, and doesn't leave it. The modes can't be changed during play.
+            await page.Keyboard.PressAsync("Enter");
+            await Assertions.Expect(hardCore).ToBeHiddenAsync();
+
+            var sound = game.GetByRole(AriaRole.Button, new() { Name = Dashboard.Resources.Resources.ResourceGraphGameSoundOn, Exact = true });
+            await page.Keyboard.PressAsync("Tab");
+            await Assertions.Expect(sound).ToBeFocusedAsync();
+            await page.Keyboard.PressAsync("Enter");
+            await Assertions.Expect(game.GetByRole(AriaRole.Button, new() { Name = Dashboard.Resources.Resources.ResourceGraphGameSoundOff, Exact = true })).ToBeVisibleAsync();
+            // Sound gives focus back to the game, so that Space keeps firing.
+            await Assertions.Expect(game).ToBeFocusedAsync();
+
+            await page.Keyboard.PressAsync("Tab");
+            await page.Keyboard.PressAsync("Tab");
+            await Assertions.Expect(game.GetByRole(AriaRole.Button, new() { Name = Dashboard.Resources.Resources.ResourceGraphGameExitLabel, Exact = true })).ToBeFocusedAsync();
+            await page.Keyboard.PressAsync("Space");
+
+            await Assertions.Expect(game).ToHaveCountAsync(0);
+            await Assertions.Expect(graphContainer).ToBeFocusedAsync();
+            await Assertions.Expect(cog).ToHaveCountAsync(1);
+            await Assertions.Expect(node).ToBeVisibleAsync();
+
+            // Leaving the page while playing also closes the game, and it can be started again after coming back.
+            await page.Keyboard.PressAsync("o");
+            await Assertions.Expect(game).ToBeVisibleAsync();
+            await page.GetByRole(AriaRole.Tab, new() { Name = Dashboard.Resources.Layout.NavMenuConsoleLogsTab, Exact = true }).ClickAsync();
+            await Assertions.Expect(game).ToHaveCountAsync(0);
+            await Assertions.Expect(page.Locator("#resource-graph-game-style")).ToHaveCountAsync(0);
+
+            await page.GetByRole(AriaRole.Tab, new() { Name = Dashboard.Resources.Layout.ResourceTabOverview, Exact = true }).ClickAsync();
+            await Assertions.Expect(node).ToBeVisibleAsync();
+            await graphContainer.FocusAsync();
+            await page.Keyboard.PressAsync("o");
+            await Assertions.Expect(game).ToBeVisibleAsync();
+            await page.Keyboard.PressAsync("Escape");
+            await Assertions.Expect(game).ToHaveCountAsync(0);
+        });
+    }
+
+    [Fact]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
     public async Task GraphNode_RightClickOpensMenuAtCursorWithoutOverlay()
     {
         await RunTestAsync(async page =>
         {
             await PlaywrightFixture.GoToHomeAndWaitForDataGridLoad(page).DefaultTimeout();
+            await ResourcePaneNavigation.OpenAllResourcesOverviewAsync(page);
             await page.GetByRole(AriaRole.Group, new() { Name = Dashboard.Resources.Resources.LayoutLabel, Exact = true })
                 .GetByRole(AriaRole.Button, new() { Name = Dashboard.Resources.Layout.NavMenuGraphTab, Exact = true })
                 .ClickAsync();

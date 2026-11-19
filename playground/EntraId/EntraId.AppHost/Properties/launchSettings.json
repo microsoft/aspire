@@ -5,26 +5,26 @@
       "commandName": "Project",
       "dotnetRunMessages": true,
       "launchBrowser": true,
-      "applicationUrl": "https://localhost:17251;http://localhost:15251",
+      "applicationUrl": "https://EntraId.dev.localhost:17251;http://EntraId.dev.localhost:15251",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
         "DOTNET_ENVIRONMENT": "Development",
-        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "https://localhost:21251",
-        "ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL": "https://localhost:21252",
-        "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "https://localhost:22251"
+        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "https://EntraId.dev.localhost:21251",
+        "ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL": "https://EntraId.dev.localhost:21252",
+        "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "https://EntraId.dev.localhost:22251"
       }
     },
     "http": {
       "commandName": "Project",
       "dotnetRunMessages": true,
       "launchBrowser": true,
-      "applicationUrl": "http://localhost:15251",
+      "applicationUrl": "http://EntraId.dev.localhost:15251",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
         "DOTNET_ENVIRONMENT": "Development",
-        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "http://localhost:19251",
-        "ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL": "http://localhost:19252",
-        "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "http://localhost:20251",
+        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "http://EntraId.dev.localhost:19251",
+        "ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL": "http://EntraId.dev.localhost:19252",
+        "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "http://EntraId.dev.localhost:20251",
         "ASPIRE_ALLOW_UNSECURED_TRANSPORT": "true"
       }
     },
@@ -32,7 +32,7 @@
       "commandName": "Project",
       "dotnetRunMessages": true,
       "commandLineArgs": "--publisher manifest --output-path aspire-manifest.json",
-      "applicationUrl": "http://localhost:15251",
+      "applicationUrl": "http://EntraId.dev.localhost:15251",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
         "DOTNET_ENVIRONMENT": "Development"

@@ -79,6 +79,12 @@ export async function createSelfSignedCertAsync(commonName: string = 'localhost'
   };
 }
 
+export function certificateBase64ToPem(certBase64: string): string {
+  // `certBase64` is the base64-encoded DER certificate; X509Certificate#toString() re-encodes it as
+  // PEM, which is the format Node's TLS `ca` option expects.
+  return new X509Certificate(Buffer.from(certBase64, 'base64')).toString();
+}
+
 export function generateToken(): string {
     // 32 bytes is used to provide sufficient entropy for security (2^256 possibilities)
     const key = randomBytes(32);

@@ -25,6 +25,7 @@ partial class Resource
             {
                 Name = ValidateNotNull(Name),
                 ResourceType = resourceType,
+                ResourceTypeDisplayName = string.IsNullOrWhiteSpace(ResourceTypeDisplayName) ? resourceType : ResourceTypeDisplayName,
                 DisplayName = ValidateNotNull(DisplayName),
                 Uid = ValidateNotNull(Uid),
                 ReplicaIndex = replicaIndex,

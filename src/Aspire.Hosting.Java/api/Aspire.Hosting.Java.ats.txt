@@ -11,6 +11,8 @@ Aspire.Hosting.Java/addJavaAppWithJar(name: string, appDirectory: string, jarPat
 Aspire.Hosting.Java/addJavaContainer(name: string, image: string, tag?: string) -> Aspire.Hosting.Java/Aspire.Hosting.Java.JavaContainerResource
 Aspire.Hosting.Java/addQuarkusApp(name: string, appDirectory: string) -> Aspire.Hosting.Java/Aspire.Hosting.Java.JavaAppResource
 Aspire.Hosting.Java/addSpringBootApp(name: string, appDirectory: string) -> Aspire.Hosting.Java/Aspire.Hosting.Java.JavaAppResource
+Aspire.Hosting.Java/JavaAppResource.resourceTypeDisplayName(context: Aspire.Hosting.Java/Aspire.Hosting.Java.JavaAppResource) -> string
+Aspire.Hosting.Java/JavaContainerResource.resourceTypeDisplayName(context: Aspire.Hosting.Java/Aspire.Hosting.Java.JavaContainerResource) -> string
 Aspire.Hosting.Java/withGradleBuild(args: string[]) -> Aspire.Hosting.Java/Aspire.Hosting.Java.JavaAppResource
 Aspire.Hosting.Java/withGradleTask(task: string, args: string[]) -> Aspire.Hosting.Java/Aspire.Hosting.Java.JavaAppResource
 Aspire.Hosting.Java/withJarArtifact(jarPath: string) -> Aspire.Hosting.Java/Aspire.Hosting.Java.JavaAppResource

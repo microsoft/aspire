@@ -21,9 +21,8 @@ public class AppHostConfigurationProjectorTests
         {
             OnGetConfigurationFromDirectory = (key, directory) =>
             {
-                Assert.Equal(AspireConfigContainerTunnel.BaseImageConfigPath, key);
                 Assert.Equal(appHostDirectory, directory);
-                return ConfiguredImage;
+                return key == AspireConfigContainerTunnel.BaseImageConfigPath ? ConfiguredImage : null;
             }
         };
         var environmentVariables = new Dictionary<string, string>();
@@ -40,7 +39,7 @@ public class AppHostConfigurationProjectorTests
         const string launchImage = "example.com/aspire-tunnel:launch";
         var configurationService = new TestConfigurationService
         {
-            OnGetConfiguration = _ => ConfiguredImage
+            OnGetConfiguration = key => key == AspireConfigContainerTunnel.BaseImageConfigPath ? ConfiguredImage : null
         };
         var environmentVariables = new Dictionary<string, string>
         {
@@ -59,7 +58,7 @@ public class AppHostConfigurationProjectorTests
         const string ambientImage = "example.com/aspire-tunnel:ambient";
         var configurationService = new TestConfigurationService
         {
-            OnGetConfiguration = _ => ConfiguredImage
+            OnGetConfiguration = key => key == AspireConfigContainerTunnel.BaseImageConfigPath ? ConfiguredImage : null
         };
         var environment = new TestEnvironment(new Dictionary<string, string?>
         {
@@ -71,6 +70,26 @@ public class AppHostConfigurationProjectorTests
         await projector.ApplyEnvironmentVariablesAsync(environmentVariables, new DirectoryInfo("/app"));
 
         Assert.False(environmentVariables.ContainsKey(KnownConfigNames.ContainerTunnelBaseImage));
+    }
+
+    [Fact]
+    public async Task ApplyEnvironmentVariablesAsync_ProjectsIsolatedPortPersistence()
+    {
+        var appHostDirectory = new DirectoryInfo("/app");
+        var configurationService = new TestConfigurationService
+        {
+            OnGetConfigurationFromDirectory = (key, directory) =>
+            {
+                Assert.Equal(appHostDirectory, directory);
+                return key == AspireConfigPortAllocation.PersistInIsolatedModeConfigPath ? "true" : null;
+            }
+        };
+        var environmentVariables = new Dictionary<string, string>();
+        var projector = new AppHostConfigurationProjector(configurationService, new TestEnvironment());
+
+        await projector.ApplyEnvironmentVariablesAsync(environmentVariables, appHostDirectory);
+
+        Assert.Equal("true", environmentVariables[KnownConfigNames.PersistPortsInIsolatedMode]);
     }
 
     [Fact]

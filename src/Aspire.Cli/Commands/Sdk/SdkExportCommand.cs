@@ -179,13 +179,14 @@ internal sealed class SdkExportCommand : BaseCommand
         IReadOnlyList<IntegrationReference> integrations,
         CancellationToken cancellationToken)
     {
-        var tempDirectory = Directory.CreateTempSubdirectory("aspire-sdk-export-");
+        var tempDirectory = CliPathHelper.CreateSdkWorkingDirectory(ExecutionContext.AspireHomeDirectory);
         var tempDirectoryPath = tempDirectory.FullName;
 
         try
         {
-            var appHostServerProject = await _appHostServerProjectFactory.CreateAsync(
+            var appHostServerProject = await _appHostServerProjectFactory.CreateForSdkCommandsAsync(
                 tempDirectoryPath,
+                restoreRootConfigDirectory: null,
                 cancellationToken);
 
             var prepareResult = await appHostServerProject.PrepareAsync(
@@ -256,10 +257,7 @@ internal sealed class SdkExportCommand : BaseCommand
         {
             try
             {
-                if (Directory.Exists(tempDirectoryPath))
-                {
-                    Directory.Delete(tempDirectoryPath, recursive: true);
-                }
+                await FileDeleteHelper.DeleteDirectoryWithRetryAsync(tempDirectoryPath, TimeProvider.System, CancellationToken.None).ConfigureAwait(false);
             }
             catch (Exception ex)
             {

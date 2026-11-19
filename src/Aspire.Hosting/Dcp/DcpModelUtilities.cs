@@ -46,6 +46,48 @@ internal static class DcpModelUtilities
     }
 
     /// <summary>
+    /// Determines whether an endpoint definition has a fixed public port DCP should reserve or pre-exclude.
+    /// </summary>
+    /// <remarks>
+    /// Proxied endpoints with randomized ports deliberately do not report a fixed port so DCP can allocate
+    /// the public port instead of reserving the configured value. Port 0 also requests dynamic allocation.
+    /// Container endpoint definitions keep the public host port separate from the target container port, so
+    /// only an explicitly specified public port counts as fixed. Executable endpoint definitions use the same
+    /// port value for the process and public endpoint, so the effective public port can come from either value.
+    /// </remarks>
+    internal static bool TryGetEffectiveFixedPublicPort(IResource resource, EndpointAnnotation endpoint, bool randomizePorts, out int publicPort)
+    {
+        var effectivePublicPort = EndpointAnnotation.NormalizePort(resource.IsContainer() ? endpoint.SpecifiedPort : endpoint.Port);
+
+        if (randomizePorts && endpoint.IsProxied && effectivePublicPort is not null)
+        {
+            publicPort = default;
+            return false;
+        }
+
+        if (effectivePublicPort is int fixedPublicPort)
+        {
+            publicPort = fixedPublicPort;
+            return true;
+        }
+
+        publicPort = default;
+        return false;
+    }
+
+    internal static bool NeedsGeneratedPublicPort(IResource resource, EndpointAnnotation endpoint, bool randomizePorts)
+    {
+        if (TryGetEffectiveFixedPublicPort(resource, endpoint, randomizePorts, out _))
+        {
+            return false;
+        }
+
+        // DCP can allocate proxied service ports for any resource. Proxyless allocation is limited to
+        // resources DCP launches as workloads; integration-owned endpoints publish their own addresses.
+        return endpoint.IsProxied || resource is IComputeResource || resource.IsContainer();
+    }
+
+    /// <summary>
     /// Examines the Aspire resource annotations and adds equivalent ServiceProducerAnnotations to the corresponding DCP resource.
     /// </summary>
     internal static void AddServicesProducedInfo<TDcpResource>(

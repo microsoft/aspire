@@ -382,8 +382,14 @@ The legacy file continues to work — this is a non-blocking warning.</value>
     <comment>{0} is the full path to the legacy apphost.ts file.</comment>
   </data>
   <data name="PendingMigrationFix" xml:space="preserve">
-    <value>Run 'aspire update --migrate' to apply the recommended migration.
-The current layout continues to work — this is a non-blocking warning.</value>
+    <value>Run 'aspire update --migrate' to apply the recommended migration.</value>
+  </data>
+  <data name="AspireSkillsMessage" xml:space="preserve">
+    <value>Found static copies of Aspire skills.</value>
+  </data>
+  <data name="AspireSkillsFix" xml:space="preserve">
+    <value>Run 'aspire agent init' to configure skill sources and remove these copies.</value>
+    <comment>'aspire agent init' is a command and is not localizable.</comment>
   </data>
   <data name="ContainerRuntimeExplicitSelectionSuffix" xml:space="preserve">
     <value> ← explicitly selected</value>

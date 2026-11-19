@@ -56,6 +56,9 @@ const myService = await builder.addNodeApp("myService", "../my-service", "server
                        .withReference(chat);
 ```
 
+Browser-origin endpoint properties for hosted agents use the deployed project's public authority.
+The origin excludes the project's `/api/projects/<name>` and agent navigation paths; it is emitted as a deployment output rather than derived from local endpoint allocation.
+
 ## Foundry Local usage
 
 To let Aspire start Foundry Local and download or load models with the Foundry CLI installed on the AppHost machine:

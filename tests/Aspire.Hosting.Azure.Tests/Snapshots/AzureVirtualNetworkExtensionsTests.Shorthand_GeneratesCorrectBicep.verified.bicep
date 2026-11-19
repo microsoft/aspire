@@ -18,6 +18,14 @@ resource myvnet 'Microsoft.Network/virtualNetworks@2025-05-01' = {
   }
 }
 
+resource internal_apps 'Microsoft.Network/virtualNetworks/subnets@2025-05-01' = {
+  name: 'internal-apps'
+  properties: {
+    addressPrefix: '10.0.2.0/24'
+  }
+  parent: myvnet
+}
+
 resource web 'Microsoft.Network/virtualNetworks/subnets@2025-05-01' = {
   name: 'web'
   properties: {
@@ -27,7 +35,12 @@ resource web 'Microsoft.Network/virtualNetworks/subnets@2025-05-01' = {
     }
   }
   parent: myvnet
+  dependsOn: [
+    internal_apps
+  ]
 }
+
+output internal_apps_Id string = internal_apps.id
 
 output web_Id string = web.id
 

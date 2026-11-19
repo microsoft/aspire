@@ -18,7 +18,7 @@ fluent-accordion-item:not([expanded]) > .accordion-marker[slot="marker-expanded"
     width: 28px;
     height: 28px;
     content: "";
-    border-radius: 6px;
+    border-radius: var(--aspire-radius-small);
     background-color: var(--accordion-marker-background);
 }
 

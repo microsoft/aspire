@@ -111,7 +111,7 @@ public sealed class GoAppHostToolingCheckTests(ITestOutputHelper outputHelper)
             workspace,
             configuredAppHost,
             commandResolver: _ => null,
-            languageDiscovery: CreateLanguageDiscovery(goEnabled: true));
+            languageDiscovery: CreateLanguageDiscovery());
 
         var results = await check.CheckAsync().DefaultTimeout();
 
@@ -127,7 +127,7 @@ public sealed class GoAppHostToolingCheckTests(ITestOutputHelper outputHelper)
             workspace,
             appHostFile: null,
             commandResolver: _ => null,
-            languageDiscovery: CreateLanguageDiscovery(goEnabled: true));
+            languageDiscovery: CreateLanguageDiscovery());
 
         var result = Assert.Single(await check.CheckAsync().DefaultTimeout());
 
@@ -135,22 +135,6 @@ public sealed class GoAppHostToolingCheckTests(ITestOutputHelper outputHelper)
         Assert.Equal(GoAppHostToolingCheck.GoCommandCheckName, result.Name);
         Assert.NotNull(result.Metadata);
         Assert.Equal(appHostFile.FullName, result.Metadata["appHostPath"]?.GetValue<string>());
-    }
-
-    [Fact]
-    public async Task CheckAsync_Skips_WhenGoFeatureIsDisabled()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        CreateGoAppHostBesideCSharpProject(workspace);
-        var check = CreateCheck(
-            workspace,
-            appHostFile: null,
-            commandResolver: _ => null,
-            languageDiscovery: CreateLanguageDiscovery(goEnabled: false));
-
-        var results = await check.CheckAsync().DefaultTimeout();
-
-        Assert.Empty(results);
     }
 
     [Fact]
@@ -538,11 +522,13 @@ public sealed class GoAppHostToolingCheckTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData("AtsGoCodeGenerator.cs")]
-    [InlineData("GoLanguageSupport.cs")]
+    [InlineData("Aspire.Hosting.CodeGeneration.Go/AtsGoCodeGenerator.cs")]
+    [InlineData("Aspire.Hosting.CodeGeneration.Go/GoLanguageSupport.cs")]
+    [InlineData("Aspire.Cli/Templating/Templates/go-starter/go.mod")]
+    [InlineData("Aspire.Cli/Templating/Templates/go-starter/api/go.mod")]
     public void MinimumGoVersion_MatchesGoModTemplate(string sourceFileName)
     {
-        var sourcePath = Path.Combine(GetRepoRoot(), "src", "Aspire.Hosting.CodeGeneration.Go", sourceFileName);
+        var sourcePath = Path.Combine(GetRepoRoot(), "src", sourceFileName.Replace('/', Path.DirectorySeparatorChar));
         Assert.True(File.Exists(sourcePath), $"Expected the Go code generation source at {sourcePath}");
 
         // Both generators emit a go.mod whose directive sits on its own line: `go 1.26`.
@@ -550,6 +536,16 @@ public sealed class GoAppHostToolingCheckTests(ITestOutputHelper outputHelper)
 
         Assert.True(directive.Success, $"Expected a 'go <major>.<minor>' directive in the go.mod template of {sourceFileName}.");
         Assert.Equal(GoAppHostToolingCheck.MinimumGoVersion.ToString(), directive.Groups[1].Value);
+    }
+
+    [Fact]
+    public void MinimumGoVersion_MatchesHostingDefault()
+    {
+        var sourceDirectory = Path.Combine(GetRepoRoot(), "src");
+        var detector = File.ReadAllText(Path.Combine(sourceDirectory, "Aspire.Hosting.Go", "GoVersionDetector.cs"));
+        var defaultVersion = Regex.Match(detector, """DefaultGoVersion = "(\d+\.\d+)";""");
+        Assert.True(defaultVersion.Success);
+        Assert.Equal(GoAppHostToolingCheck.MinimumGoVersion.ToString(), defaultVersion.Groups[1].Value);
     }
 
     private static FileInfo CreateGoAppHost(TemporaryWorkspace workspace)
@@ -567,8 +563,8 @@ public sealed class GoAppHostToolingCheckTests(ITestOutputHelper outputHelper)
         return CreateGoAppHost(workspace);
     }
 
-    private static DefaultLanguageDiscovery CreateLanguageDiscovery(bool goEnabled) =>
-        new(new TestFeatures().SetFeature(KnownFeatures.ExperimentalPolyglotGo, goEnabled));
+    private static DefaultLanguageDiscovery CreateLanguageDiscovery() =>
+        new(new TestFeatures());
 
     private static GoAppHostToolingCheck CreateCheck(
         TemporaryWorkspace workspace,
@@ -636,7 +632,7 @@ public sealed class GoAppHostToolingCheckTests(ITestOutputHelper outputHelper)
     private static void AssertToolchainDownloadAllowed(EnvironmentCheckResult result)
     {
         AssertVersionResult(result, EnvironmentCheckStatus.Warning);
-        Assert.Equal("Go 1.24.1 is installed. Go downloads the Go 1.26 toolchain the first time the AppHost runs, which needs network access.", result.Details);
+        Assert.Equal("Go 1.24.1 is installed. Go uses a newer toolchain from PATH or downloads the Go 1.26 toolchain the first time the AppHost runs. Downloading requires network access.", result.Details);
         Assert.Equal("Install Go 1.26 or later to avoid the download, then rerun 'aspire doctor'.", result.Fix);
     }
 

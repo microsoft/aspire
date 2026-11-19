@@ -13,6 +13,7 @@ using Aspire.Cli.Caching;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.NuGet;
 using Aspire.Cli.Processes;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
@@ -41,17 +42,19 @@ internal interface IDotNetCliRunner
     Task<int> BuildAsync(FileInfo projectFilePath, bool noRestore, IDictionary<string, string>? env, ProcessInvocationOptions options, CancellationToken cancellationToken);
     Task<int> AddPackageAsync(FileInfo projectFilePath, string packageName, string packageVersion, string? nugetSource, bool noRestore, ProcessInvocationOptions options, CancellationToken cancellationToken);
     Task<int> AddProjectToSolutionAsync(FileInfo solutionFile, FileInfo projectFile, ProcessInvocationOptions options, CancellationToken cancellationToken);
-    Task<DotNetPackageSearchResult> SearchPackagesAsync(DirectoryInfo workingDirectory, string query, bool exactMatch, bool prerelease, int take, int skip, FileInfo? nugetConfigFile, bool useCache, ProcessInvocationOptions options, CancellationToken cancellationToken);
+    Task<DotNetPackageSearchResult> SearchPackagesAsync(DirectoryInfo workingDirectory, string query, bool exactMatch, bool prerelease, int take, int skip, FileInfo? nugetConfigFile, bool useCache, ProcessInvocationOptions options, INuGetClient nuGetClient, CancellationToken cancellationToken);
     Task<(int ExitCode, string[] ConfigPaths)> GetNuGetConfigPathsAsync(DirectoryInfo workingDirectory, ProcessInvocationOptions options, CancellationToken cancellationToken);
     Task<(int ExitCode, IReadOnlyList<FileInfo> Projects)> GetSolutionProjectsAsync(FileInfo solutionFile, ProcessInvocationOptions options, CancellationToken cancellationToken);
     Task<int> AddProjectReferenceAsync(FileInfo projectFile, FileInfo referencedProject, ProcessInvocationOptions options, CancellationToken cancellationToken);
     Task<int> InitUserSecretsAsync(FileInfo projectFile, ProcessInvocationOptions options, CancellationToken cancellationToken);
 }
 
+// Packages carry feed locations; SDK source names are resolved before returning.
 internal sealed record DotNetPackageSearchResult(
     int ExitCode,
     NuGetPackage[]? Packages,
-    IReadOnlyList<string> FailedSources);
+    IReadOnlyList<string> FailedSources,
+    bool HasFullSourcePage);
 
 internal sealed class ProcessInvocationOptions
 {
@@ -59,6 +62,11 @@ internal sealed class ProcessInvocationOptions
     public Action<string>? StandardErrorCallback { get; set; }
 
     public bool NoLaunchProfile { get; set; }
+
+    /// <summary>
+    /// Disables automatic MSBuild response files for CLI-generated projects without changing user project builds.
+    /// </summary>
+    public bool NoAutoResponse { get; set; }
 
     /// <summary>
     /// Suppresses implicit restore during single-file project property and target queries.
@@ -74,6 +82,8 @@ internal sealed class ProcessInvocationOptions
     /// Imports invocation-scoped NuGet restore targets for candidate graph validation.
     /// </summary>
     public FileInfo? NuGetRestoreTargetsFile { get; set; }
+
+    public DirectoryInfo? IsolatedRestorePackagesDirectory { get; set; }
 
     public string? LaunchProfile { get; set; }
     public bool StartDebugSession { get; set; }
@@ -179,9 +189,11 @@ internal sealed class ProcessInvocationOptions
         StandardOutputCallback = StandardOutputCallback,
         StandardErrorCallback = StandardErrorCallback,
         NoLaunchProfile = NoLaunchProfile,
+        NoAutoResponse = NoAutoResponse,
         NoRestore = NoRestore,
         ExcludeRestorePackageImports = ExcludeRestorePackageImports,
         NuGetRestoreTargetsFile = NuGetRestoreTargetsFile,
+        IsolatedRestorePackagesDirectory = IsolatedRestorePackagesDirectory,
         LaunchProfile = LaunchProfile,
         StartDebugSession = StartDebugSession,
         Debug = Debug,
@@ -1256,6 +1268,15 @@ internal sealed class DotNetCliRunner(
         using var activity = telemetry.StartDiagnosticActivity();
 
         string[] cliArgs = ["restore", projectFilePath.FullName];
+        if (options.IsolatedRestorePackagesDirectory is { } packagesDirectory)
+        {
+            cliArgs = [.. cliArgs, "--packages", packagesDirectory.FullName, "--no-http-cache", "--force"];
+        }
+        if (options.NoAutoResponse)
+        {
+            cliArgs = [.. cliArgs, "-noAutoResponse"];
+        }
+
         if (options.NuGetRestoreTargetsFile is { } restoreTargets)
         {
             cliArgs = [.. cliArgs, $"-property:NuGetRestoreTargets={MSBuildEscaping.Escape(restoreTargets.FullName)}"];
@@ -1281,6 +1302,10 @@ internal sealed class DotNetCliRunner(
         var noRestoreSwitch = noRestore ? "--no-restore" : string.Empty;
         string[] cliArgs = ["build", noRestoreSwitch, projectFilePath.FullName];
         cliArgs = [.. cliArgs.Where(arg => !string.IsNullOrWhiteSpace(arg))];
+        if (options.NoAutoResponse)
+        {
+            cliArgs = [.. cliArgs, "-noAutoResponse"];
+        }
 
         // File-based AppHosts derive their RunCommand during build. Persist suppression into that
         // generated command so the later dotnet run --no-build cannot recursively invoke Aspire CLI.
@@ -1452,12 +1477,13 @@ internal sealed class DotNetCliRunner(
         return result;
     }
 
-    public async Task<DotNetPackageSearchResult> SearchPackagesAsync(DirectoryInfo workingDirectory, string query, bool exactMatch, bool prerelease, int take, int skip, FileInfo? nugetConfigFile, bool useCache, ProcessInvocationOptions options, CancellationToken cancellationToken)
+    public async Task<DotNetPackageSearchResult> SearchPackagesAsync(DirectoryInfo workingDirectory, string query, bool exactMatch, bool prerelease, int take, int skip, FileInfo? nugetConfigFile, bool useCache, ProcessInvocationOptions options, INuGetClient nuGetClient, CancellationToken cancellationToken)
     {
         using var activity = telemetry.StartDiagnosticActivity();
 
         string? rawKey = null;
         var cacheEnabled = useCache;
+        var pageSize = exactMatch ? 0 : take;
         if (useCache)
         {
             try
@@ -1485,11 +1511,7 @@ internal sealed class DotNetCliRunner(
                 {
                     try
                     {
-                        var foundPackages = PackageUpdateHelpers.ParsePackageSearchResults(cached, out var failedSources, packageId: null);
-                        return new(
-                            0,
-                            foundPackages.ToArray(),
-                            failedSources.Select(PackageSourceRedactor.RedactForDisplay).ToArray());
+                        return ReadPackageSearchResults(cached, workingDirectory, nugetConfigFile, pageSize, nuGetClient);
                     }
                     catch (JsonException ex)
                     {
@@ -1605,19 +1627,19 @@ internal sealed class DotNetCliRunner(
                 stderr,
                 stdout);
 
-            return new(result, null, []);
+            return new(result, null, [], HasFullSourcePage: false);
         }
         else
         {
             if (stdout is null)
             {
                 logger.LogError("Failed to read stdout from the process. This should never happen.");
-                return new(CliExitCodes.FailedToAddPackage, null, []);
+                return new(CliExitCodes.FailedToAddPackage, null, [], HasFullSourcePage: false);
             }
 
             try
             {
-                var foundPackages = PackageUpdateHelpers.ParsePackageSearchResults(stdout, out var failedSources, packageId: null);
+                var searchResults = ReadPackageSearchResults(stdout, workingDirectory, nugetConfigFile, pageSize, nuGetClient);
 
                 // Attempt to persist the raw stdout JSON for future lookups when cache enabled
                 if (cacheEnabled && rawKey is not null)
@@ -1625,18 +1647,33 @@ internal sealed class DotNetCliRunner(
                     await _diskCache.SetAsync(rawKey, stdout, cancellationToken).ConfigureAwait(false);
                 }
 
-                return new(
-                    result,
-                    foundPackages.ToArray(),
-                    failedSources.Select(PackageSourceRedactor.RedactForDisplay).ToArray());
+                return searchResults;
             }
             catch (JsonException ex)
             {
                 logger.LogError($"Failed to read JSON returned by the package search. {ex.Message}");
-                return new(CliExitCodes.FailedToAddPackage, null, []);
+                return new(CliExitCodes.FailedToAddPackage, null, [], HasFullSourcePage: false);
             }
 
         }
+    }
+
+    private static DotNetPackageSearchResult ReadPackageSearchResults(
+        string output, DirectoryInfo workingDirectory, FileInfo? nugetConfigFile, int pageSize, INuGetClient nuGetClient)
+    {
+        var packages = PackageUpdateHelpers.ParsePackageSearchResults(output, out var failedSources, packageId: null);
+        // The SDK pages each alias separately, even when aliases share a location.
+        // Determine page completeness before resolving aliases into locations.
+        var hasFullSourcePage = pageSize > 0 && packages.GroupBy(package => package.Source)
+            .Any(page => page.Count() >= pageSize);
+        var resolvedPackages = nuGetClient.ResolveSdkPackageSearchSourceNames(
+            packages, nugetConfigFile?.FullName, workingDirectory.FullName);
+
+        return new(
+            CliExitCodes.Success,
+            resolvedPackages.ToArray(),
+            failedSources.Select(PackageSourceRedactor.RedactForDisplay).ToArray(),
+            hasFullSourcePage);
     }
 
     public async Task<(int ExitCode, string[] ConfigPaths)> GetNuGetConfigPathsAsync(DirectoryInfo workingDirectory, ProcessInvocationOptions options, CancellationToken cancellationToken)

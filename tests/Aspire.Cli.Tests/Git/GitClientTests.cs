@@ -121,13 +121,13 @@ public class GitClientTests(ITestOutputHelper outputHelper)
         Assert.Collection(commands.Commands,
             command =>
             {
-                Assert.Equal(["init", "--bare", "--", repository.Directory.FullName], command.Arguments);
+                Assert.Equal(["init", "--quiet", "--bare", "--", repository.Directory.FullName], command.Arguments);
                 Assert.Equal(workspace.Path, command.WorkingDirectory.FullName);
                 Assert.Equal(GitCommandMode.Interactive, command.Mode);
             },
             command =>
             {
-                Assert.Equal([$"--git-dir={repository.Directory.FullName}", "fetch", "--depth", "1", "--no-tags", "--", "repository with spaces", "refs/heads/main"], command.Arguments);
+                Assert.Equal([$"--git-dir={repository.Directory.FullName}", "fetch", "--quiet", "--depth", "1", "--no-tags", "--", "repository with spaces", "refs/heads/main"], command.Arguments);
                 Assert.Equal(repository.Directory.FullName, command.WorkingDirectory.FullName);
                 Assert.Equal(GitCommandMode.Unattended, command.Mode);
             },

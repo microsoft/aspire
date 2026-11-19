@@ -27,6 +27,16 @@
         <target state="translated">Aspire</target>
         <note />
       </trans-unit>
+      <trans-unit id="AspireSkillsFix">
+        <source>Run 'aspire agent init' to configure skill sources and remove these copies.</source>
+        <target state="new">Run 'aspire agent init' to configure skill sources and remove these copies.</target>
+        <note>'aspire agent init' is a command and is not localizable.</note>
+      </trans-unit>
+      <trans-unit id="AspireSkillsMessage">
+        <source>Found static copies of Aspire skills.</source>
+        <target state="new">Found static copies of Aspire skills.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ChannelSuffixFormat">
         <source> (channel: {0})</source>
         <target state="translated"> (kanal: {0})</target>
@@ -570,9 +580,8 @@ Eski dosya çalışmaya devam eder, bu engelleyici olmayan bir uyarıdır.</targ
         <note>{0} is the operating system display name and version, for example "Windows 10.0.22631", "macOS 26.0", or "Linux Ubuntu 24.04".</note>
       </trans-unit>
       <trans-unit id="PendingMigrationFix">
-        <source>Run 'aspire update --migrate' to apply the recommended migration.
-The current layout continues to work — this is a non-blocking warning.</source>
-        <target state="translated">'aspire update --migrate' komutunu çalıştırarak önerilen geçişi uygulayın.
+        <source>Run 'aspire update --migrate' to apply the recommended migration.</source>
+        <target state="needs-review-translation">'aspire update --migrate' komutunu çalıştırarak önerilen geçişi uygulayın.
 Mevcut düzen çalışmaya devam eder, bu engelleyici olmayan bir uyarıdır.</target>
         <note />
       </trans-unit>

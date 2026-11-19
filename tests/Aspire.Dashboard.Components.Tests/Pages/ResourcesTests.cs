@@ -42,14 +42,52 @@ namespace Aspire.Dashboard.Components.Tests.Pages;
 [UseCulture("en-US")]
 public partial class ResourcesTests : DashboardTestContext
 {
-    [Theory]
-    [InlineData("Persistent", "Container (persistent)")]
-    [InlineData("Session", "Container")]
-    [InlineData(null, "Container")]
-    public void Resources_TypeColumnIncludesPersistentLifetime(string? lifetime, string expectedType)
+    [Fact]
+    public void Resources_DisplaysFriendlyTypeName()
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
-        var resource = ModelTestHelpers.CreateResource("cache", properties: lifetime is null ? [] : new()
+        var resource = ModelTestHelpers.CreateResource(
+            resourceName: "cache-123",
+            displayName: "cache",
+            resourceType: "Container",
+            resourceTypeDisplayName: "Redis",
+            state: KnownResourceState.Running);
+        var dashboardClient = new TestDashboardClient(
+            isEnabled: true,
+            initialResources: [resource],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>);
+        var sessionStorage = new TestSessionStorage
+        {
+            OnGetAsync = key => key == BrowserStorageKeys.ResourcesShowResourceTypes ? (true, true) : (false, null)
+        };
+        ResourceSetupHelpers.SetupResourcesPage(this, viewport, dashboardClient, sessionStorage: sessionStorage);
+        JSInterop.SetupVoid("Microsoft.FluentUI.Blazor.Utilities.Attributes.observeAttributeChange", _ => true).SetVoidResult();
+        JSInterop.SetupVoid("Microsoft.FluentUI.Blazor.Components.TextInput.attachImmediateEvent", _ => true).SetVoidResult();
+        JSInterop.SetupVoid("focusElement", _ => true).SetVoidResult();
+
+        var cut = Render<Components.Pages.Resources>(builder => builder.AddCascadingValue(viewport));
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Contains(cut.FindAll("td"), cell => cell.TextContent.Contains("cache", StringComparison.Ordinal));
+            Assert.Contains(cut.FindAll("td"), cell => cell.TextContent.Contains("Redis", StringComparison.Ordinal));
+        });
+        Assert.Equal("cache-123", resource.Name);
+        Assert.Equal("cache", resource.DisplayName);
+        Assert.Equal("Container", resource.ResourceType);
+    }
+
+    [Theory]
+    [InlineData("Persistent", null, "Container (persistent)")]
+    [InlineData("Session", null, "Container")]
+    [InlineData(null, null, "Container")]
+    [InlineData("Persistent", "Redis", "Redis (persistent)")]
+    [InlineData("Session", "Redis", "Redis")]
+    [InlineData(null, "Redis", "Redis")]
+    public void Resources_TypeColumnIncludesPersistentLifetime(string? lifetime, string? resourceTypeDisplayName, string expectedType)
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var resource = ModelTestHelpers.CreateResource("cache", resourceTypeDisplayName: resourceTypeDisplayName, properties: lifetime is null ? [] : new()
         {
             [KnownProperties.Container.Lifetime] = new(KnownProperties.Container.Lifetime, ProtobufValue.ForString(lifetime), false, null, 0, null, false)
         });

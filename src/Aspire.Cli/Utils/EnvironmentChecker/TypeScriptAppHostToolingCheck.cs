@@ -168,15 +168,26 @@ internal sealed class TypeScriptAppHostToolingCheck : IEnvironmentCheck
         ];
     }
 
-    // Delegates to the shared resolver so the doctor tooling check and `aspire update --migrate` stay in
-    // lockstep on how the TypeScript AppHost entry point is located.
-    private Task<FileInfo?> ResolveTypeScriptAppHostAsync(CancellationToken cancellationToken)
-        => LegacyTypeScriptAppHost.ResolveTypeScriptAppHostAsync(
+    private async Task<FileInfo?> ResolveTypeScriptAppHostAsync(CancellationToken cancellationToken)
+    {
+        // Doctor must inspect the selected AppHost, not an unrelated TypeScript file beside it.
+        // The migration resolver intentionally also discovers legacy files, so leave that fallback intact.
+        var configuredAppHost = await _projectLocator.GetAppHostFromSettingsAsync(cancellationToken);
+        if (configuredAppHost is not null)
+        {
+            return _languageDiscovery.GetLanguageByFile(configuredAppHost)?.LanguageId.Value
+                .Equals(KnownLanguageId.TypeScript, StringComparison.OrdinalIgnoreCase) == true
+                ? configuredAppHost
+                : null;
+        }
+
+        return await LegacyTypeScriptAppHost.ResolveTypeScriptAppHostAsync(
             _projectLocator,
             _languageDiscovery,
             _executionContext.WorkingDirectory,
             _logger,
             cancellationToken);
+    }
 
     internal static string GetMissingCommandCheckName(string command) => $"typescript-apphost-{command}";
 

@@ -1,0 +1,32 @@
+﻿{
+  "resources": {
+    "backend": {
+      "type": "container.v0",
+      "image": "image:latest",
+      "env": {
+        "TLS": "{value-b08c77b13693cee3-1.connectionString}"
+      },
+      "bindings": {
+        "http": {
+          "scheme": "http",
+          "protocol": "tcp",
+          "transport": "http",
+          "targetPort": 8080
+        }
+      }
+    },
+    "value-b08c77b13693cee3": {
+      "type": "parameter.v0",
+      "value": "{value-b08c77b13693cee3.inputs.value}",
+      "inputs": {
+        "value": {
+          "type": "string"
+        }
+      }
+    },
+    "value-b08c77b13693cee3-1": {
+      "type": "value.v0",
+      "connectionString": "False"
+    }
+  }
+}

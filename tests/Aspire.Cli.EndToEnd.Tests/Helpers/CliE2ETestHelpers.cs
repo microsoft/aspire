@@ -2,6 +2,9 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using System.Formats.Tar;
+using System.Globalization;
+using System.IO.Compression;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -57,6 +60,32 @@ internal static class CliE2ETestHelpers
         return !string.IsNullOrWhiteSpace(version)
             ? version
             : throw new InvalidOperationException("Could not find an explicit AppHost package or retained SDK version.");
+    }
+
+    /// <summary>
+    /// Mirrors the compatibility check in <c>CliTemplateFactory.GetCSharpAppHostDirectives</c>: current
+    /// AppHost sources rely on SDK defaults, except that every 17.0.0 prerelease (PR builds aren't
+    /// ordered by package version, so "is this before 17.0" can't be determined from the version alone)
+    /// keeps emitting the explicit <c>#:property AspireUseCliBundle=true</c> compatibility directive.
+    /// Returns that directive line (with a leading newline), or an empty string when it is not expected.
+    /// </summary>
+    internal static string GetExpectedCliBundleCompatibilityDirective(string version)
+    {
+        // Versions look like "17.0.0" or "17.0.0-pr.20867.gabcdef01" (build metadata may follow a '+').
+        var match = Regex.Match(version, @"^(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)(?<prerelease>-[^+]+)?");
+        if (!match.Success)
+        {
+            throw new InvalidOperationException($"Could not parse AppHost version '{version}'.");
+        }
+
+        var major = int.Parse(match.Groups["major"].Value, CultureInfo.InvariantCulture);
+        var minor = int.Parse(match.Groups["minor"].Value, CultureInfo.InvariantCulture);
+        var patch = int.Parse(match.Groups["patch"].Value, CultureInfo.InvariantCulture);
+        var isPrerelease = match.Groups["prerelease"].Success;
+
+        return major < 17 || (major == 17 && minor == 0 && patch == 0 && isPrerelease)
+            ? "\n#:property AspireUseCliBundle=true"
+            : string.Empty;
     }
 
     /// <summary>
@@ -1155,6 +1184,35 @@ internal static class CliE2ETestHelpers
         }
 
         return bestRaw;
+    }
+
+    internal static string? TryGetStableAspireVersionFromArchive(string archivePath)
+    {
+        using var archive = File.OpenRead(archivePath);
+        using var gzip = new GZipStream(archive, CompressionMode.Decompress);
+        using var tar = new TarReader(gzip);
+
+        // Local-hive entries look like "hives/local/packages/Aspire.Hosting.17.0.99.nupkg".
+        // Some tar writers prefix entries with "./"; prerelease packages must not enable this lane.
+        var stablePackageRegex = new Regex(@"^(?:\./)?hives/local/packages/Aspire\.Hosting\.(?<version>\d+\.\d+\.\d+)\.nupkg$", RegexOptions.IgnoreCase);
+        Version? bestVersion = null;
+        while (tar.GetNextEntry() is { } entry)
+        {
+            if (entry.EntryType is not (TarEntryType.RegularFile or TarEntryType.V7RegularFile))
+            {
+                continue;
+            }
+
+            var match = stablePackageRegex.Match(entry.Name);
+            if (match.Success &&
+                Version.TryParse(match.Groups["version"].Value, out var version) &&
+                (bestVersion is null || version > bestVersion))
+            {
+                bestVersion = version;
+            }
+        }
+
+        return bestVersion?.ToString();
     }
 
     internal static void WriteLocalChannelSettings(string projectRoot, string sdkVersion)

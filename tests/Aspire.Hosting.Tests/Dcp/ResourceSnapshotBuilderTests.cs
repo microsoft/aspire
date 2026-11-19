@@ -113,15 +113,23 @@ public class ResourceSnapshotBuilderTests
     }
 
     [Theory]
-    [InlineData(KnownLaunchConfigurationTypes.Project, null)]
-    [InlineData(KnownLaunchConfigurationTypes.Project, "Release")]
-    [InlineData(KnownLaunchConfigurationTypes.ProjectWithExternalBuild, "Release")]
-    public void ProjectSnapshotIncludesIdeDotNetLaunchMetadata(string launchConfigurationType, string? configuration)
+    [InlineData(KnownLaunchConfigurationTypes.Project, null, true)]
+    [InlineData(KnownLaunchConfigurationTypes.Project, "Release", true)]
+    [InlineData(KnownLaunchConfigurationTypes.ProjectWithExternalBuild, "Release", true)]
+    [InlineData(KnownLaunchConfigurationTypes.Project, null, false)]
+    [InlineData(KnownLaunchConfigurationTypes.Project, "Release", false)]
+    public void ProjectSnapshotIncludesIdeDotNetLaunchMetadata(
+        string launchConfigurationType,
+        string? configuration,
+        bool addProjectDefaults)
     {
         var builder = DistributedApplication.CreateBuilder();
         var project = builder.AddResource(new ProjectResource("project"));
         project.Resource.Annotations.Add(new TestProjectMetadata());
-        project.WithProjectDefaults(new ProjectResourceOptions { ExcludeLaunchProfile = true });
+        if (addProjectDefaults)
+        {
+            project.WithProjectDefaults(new ProjectResourceOptions { ExcludeLaunchProfile = true });
+        }
 
         var executable = Executable.Create("project", "dotnet");
         executable.Annotate(DcpCustomResource.ResourceNameAnnotation, project.Resource.Name);
@@ -138,7 +146,7 @@ public class ResourceSnapshotBuilderTests
         });
         executable.Status = new ExecutableStatus
         {
-            EffectiveArgs = ["--configuration", "private-application-argument"],
+            EffectiveArgs = ["run", "--configuration", "private-application-argument", "--framework", "private-framework"],
             ProcessId = 1234
         };
 
@@ -156,7 +164,62 @@ public class ResourceSnapshotBuilderTests
         {
             Assert.Empty(snapshot.Properties.Where(property => property.Name == KnownProperties.Project.Configuration));
         }
+        Assert.Empty(snapshot.Properties.Where(property => property.Name == KnownProperties.Project.TargetFramework));
         Assert.False(GetProperty(snapshot, KnownProperties.Project.LaunchCommand).IsSensitive);
+        Assert.True(GetProperty(snapshot, KnownProperties.Executable.Args).IsSensitive);
+    }
+
+    [Theory]
+    [InlineData(KnownLaunchConfigurationTypes.Project)]
+    [InlineData("azure-functions")]
+    public void IdeProjectSnapshotWithCustomLaunchTypeFailsClosedAndIgnoresApplicationArgs(string dcpLaunchConfigurationType)
+    {
+        var project = new ProjectResource("functions");
+        project.Annotations.Add(new TestProjectMetadata());
+        project.Annotations.Add(SupportsDebuggingAnnotation.Create<object>(
+            project.Name,
+            "azure-functions",
+            static _ => Task.FromResult<object>(new ExecutableLaunchConfiguration("azure-functions"))));
+
+        var executable = Executable.Create("functions", "dotnet");
+        executable.Annotate(DcpCustomResource.ResourceNameAnnotation, project.Name);
+        executable.Spec.ExecutionType = ExecutionType.IDE;
+        executable.SetAnnotationAsObjectList(Executable.LaunchConfigurationsAnnotation, new object[]
+        {
+            dcpLaunchConfigurationType == KnownLaunchConfigurationTypes.Project
+                ? new ProjectLaunchConfiguration
+                {
+                    Type = KnownLaunchConfigurationTypes.Project,
+                    ProjectPath = "/app/functions.csproj",
+                    Mode = ExecutableLaunchMode.NoDebug,
+                    BuildConfiguration = "Release"
+                }
+                : new ExecutableLaunchConfiguration(dcpLaunchConfigurationType)
+                {
+                    Mode = ExecutableLaunchMode.NoDebug
+                }
+        });
+        executable.Status = new ExecutableStatus
+        {
+            EffectiveArgs = ["run", "--configuration", "private-application-argument", "--framework", "private-framework"],
+            ProcessId = 1234
+        };
+
+        var snapshot = CreateSnapshotBuilder(new Dictionary<string, IResource>
+        {
+            [project.Name] = project
+        }).ToSnapshot(executable, CreatePreviousSnapshot());
+
+        Assert.Equal("azure-functions", GetProperty(snapshot, KnownProperties.Resource.LaunchConfigurationType).Value);
+        Assert.Collection(
+            snapshot.Properties.Where(property => property.Name is KnownProperties.Project.LaunchCommand
+                or KnownProperties.Project.Configuration or KnownProperties.Project.TargetFramework),
+            property =>
+            {
+                Assert.Equal(KnownProperties.Project.LaunchCommand, property.Name);
+                Assert.Null(property.Value);
+                Assert.False(property.IsSensitive);
+            });
         Assert.True(GetProperty(snapshot, KnownProperties.Executable.Args).IsSensitive);
     }
 
@@ -590,7 +653,7 @@ public class ResourceSnapshotBuilderTests
     }
 
     [Fact]
-    public void ExecutableSnapshotPublishesLaunchConfigurationTypeOnlyWhenInstallingDebuggerCanEnableDebugging()
+    public void ExecutableSnapshotPublishesSourcePathIndependentlyOfDebuggerEligibility()
     {
         const string propertyName = "resource.launchConfigurationType";
         var resource = new TestDotnetProjectResource("python");
@@ -609,11 +672,13 @@ public class ResourceSnapshotBuilderTests
         var snapshot = snapshotBuilder.ToSnapshot(executable, CreatePreviousSnapshot());
 
         Assert.Equal("python", GetProperty(snapshot, propertyName).Value);
+        Assert.Equal(resource.WorkingDirectory, GetProperty(snapshot, KnownProperties.Resource.SourcePath).Value);
 
         resource.Annotations.Add(new ForceProcessExecutionAnnotation());
         snapshot = snapshotBuilder.ToSnapshot(executable, snapshot);
 
         Assert.Empty(snapshot.Properties.Where(property => property.Name == propertyName));
+        Assert.Equal(resource.WorkingDirectory, GetProperty(snapshot, KnownProperties.Resource.SourcePath).Value);
 
         resource.Annotations.Remove(resource.Annotations.OfType<ForceProcessExecutionAnnotation>().Single());
         resource.Annotations.Add(new ContainerLifetimeAnnotation
@@ -622,6 +687,7 @@ public class ResourceSnapshotBuilderTests
         });
         snapshot = snapshotBuilder.ToSnapshot(executable, snapshot);
         Assert.Empty(snapshot.Properties.Where(property => property.Name == propertyName));
+        Assert.Equal(resource.WorkingDirectory, GetProperty(snapshot, KnownProperties.Resource.SourcePath).Value);
     }
 
     [Fact]

@@ -194,6 +194,9 @@
   <data name="ResourcesDetailsDisplayNameProperty" xml:space="preserve">
     <value>Display name</value>
   </data>
+  <data name="ResourcesDetailsResourceTypeDisplayNameProperty" xml:space="preserve">
+    <value>Type display name</value>
+  </data>
   <data name="ResourcesDetailsExecutableArgumentsProperty" xml:space="preserve">
     <value>Executable arguments</value>
   </data>
@@ -323,6 +326,46 @@
   <data name="ResourcesGraphExportMermaidDescription" xml:space="preserve">
     <value>Mermaid is a text-based format for defining diagrams. [Learn more about Mermaid](https://aka.ms/aspire/about-mermaid).</value>
     <comment>Markdown description displayed above the Mermaid source in the resource graph export dialog. Preserve the Markdown link syntax and documentation URL.</comment>
+  </data>
+  <data name="ResourceGraphGameExit" xml:space="preserve">
+    <value>Exit</value>
+    <comment>Text of the button that leaves the Aspire Outage game in the resource graph.</comment>
+  </data>
+  <data name="ResourceGraphGameExitLabel" xml:space="preserve">
+    <value>Exit Aspire Outage and return to the graph</value>
+    <comment>Accessible label of the button that leaves the Aspire Outage game in the resource graph.</comment>
+  </data>
+  <data name="ResourceGraphGameHardCoreStopped" xml:space="preserve">
+    <value>Resources still stopped: {0}</value>
+    <comment>Shown on the game over screen of Aspire Outage after hard core mode stopped real resources. {0} is the number of resources.</comment>
+  </data>
+  <data name="ResourceGraphGameHardCoreWarning" xml:space="preserve">
+    <value>Destroying an enemy really stops its resource. Stopped resources restart when you clear the wave, and stay stopped if you lose or exit.</value>
+    <comment>Warning shown when the hard core mode of the Aspire Outage game is selected.</comment>
+  </data>
+  <data name="ResourceGraphGameInstructions" xml:space="preserve">
+    <value>Aspire Outage. Arrow keys or A and D to move, Space to fire, P to pause, M to mute, H to switch between normal and hard core mode on the start screen, Escape to return to the graph.</value>
+    <comment>Accessible description of the Aspire Outage game in the resource graph. Aspire Outage is the name of the game. The key names refer to keyboard keys.</comment>
+  </data>
+  <data name="ResourceGraphGameModeHardCore" xml:space="preserve">
+    <value>Hard core</value>
+    <comment>Game mode of Aspire Outage in which destroying an enemy really stops the matching resource.</comment>
+  </data>
+  <data name="ResourceGraphGameModeNormal" xml:space="preserve">
+    <value>Normal</value>
+    <comment>Default game mode of Aspire Outage, which has no effect on resources.</comment>
+  </data>
+  <data name="ResourceGraphGamePlay" xml:space="preserve">
+    <value>Play Aspire Outage</value>
+    <comment>Tooltip and accessible name of the resource graph button that launches the game. Aspire Outage is the name of the game.</comment>
+  </data>
+  <data name="ResourceGraphGameSoundOff" xml:space="preserve">
+    <value>Sound: off</value>
+    <comment>Text of the button that toggles the sound of the Aspire Outage game, when the sound is off.</comment>
+  </data>
+  <data name="ResourceGraphGameSoundOn" xml:space="preserve">
+    <value>Sound: on</value>
+    <comment>Text of the button that toggles the sound of the Aspire Outage game, when the sound is on.</comment>
   </data>
   <data name="ResourcesGraphResourceActionsButton" xml:space="preserve">
     <value>Resource actions for {0}</value>
@@ -513,6 +556,10 @@
   <data name="ResourceOverviewInternalEndpoint" xml:space="preserve">
     <value>Internal</value>
   </data>
+  <data name="ResourceOverviewEndpointAlsoAt" xml:space="preserve">
+    <value>{0}, also at {1}</value>
+    <comment>Tooltip of an endpoint's address on the resource overview. {0} is the address, {1} is the same endpoint's other address, such as its localhost address</comment>
+  </data>
   <data name="ResourceOverviewCountOfTotal" xml:space="preserve">
     <value>{0} of {1}</value>
   </data>
@@ -549,8 +596,17 @@
   <data name="HomePendingLabel" xml:space="preserve">
     <value>Pending</value>
   </data>
-  <data name="HomeInactiveLabel" xml:space="preserve">
-    <value>Inactive</value>
+  <data name="HomeFinishedLabel" xml:space="preserve">
+    <value>Finished</value>
+    <comment>Legend label on the overview's health bar for resources that finished or exited without an error</comment>
+  </data>
+  <data name="HomeNotStartedLabel" xml:space="preserve">
+    <value>Not started</value>
+    <comment>Legend label on the overview's health bar for resources that haven't been started</comment>
+  </data>
+  <data name="HomeUnknownLabel" xml:space="preserve">
+    <value>Unknown</value>
+    <comment>Legend label on the overview's health bar for resources whose state the dashboard can't tell</comment>
   </data>
   <data name="HomeTelemetryLandmark" xml:space="preserve">
     <value>Telemetry</value>
@@ -617,9 +673,6 @@
     <value>p95</value>
     <comment>Abbreviation for the 95th percentile.</comment>
   </data>
-  <data name="HomeNoRecentRequests" xml:space="preserve">
-    <value>No requests in the last 15 minutes</value>
-  </data>
   <data name="HomeEndpointTooltip" xml:space="preserve">
     <value>{0}: {1} ({2} requests)</value>
     <comment>{0} is the resource name, {1} is the endpoint label, and {2} is the request count.</comment>
@@ -644,9 +697,6 @@
   </data>
   <data name="HomeErrorHotspotsHint" xml:space="preserve">
     <value>failed requests + error logs</value>
-  </data>
-  <data name="HomeNoRecentActivityErrors" xml:space="preserve">
-    <value>No errors in the last 15 minutes</value>
   </data>
   <data name="HomeFailedRequestCount" xml:space="preserve">
     <value>{0} failed requests</value>
@@ -678,9 +728,9 @@
     <value>Dashboard tags</value>
     <comment>Name of the property listing the tags a resource declares in the AppHost.</comment>
   </data>
-  <data name="ResourceTraitDashboardPosition" xml:space="preserve">
-    <value>Dashboard position</value>
-    <comment>Name of the property holding the default position a resource declares in the AppHost.</comment>
+  <data name="ResourceDisplayOrder" xml:space="preserve">
+    <value>Display order</value>
+    <comment>Name of the property holding the default display order a resource declares in the AppHost.</comment>
   </data>
   <data name="ResourceTagsCreate" xml:space="preserve">
     <value>Create tag "{0}"</value>
@@ -723,5 +773,14 @@
   </data>
   <data name="MissingParametersSetValues" xml:space="preserve">
     <value>Set parameter values</value>
+  </data>
+  <data name="HomeActivityHistoricalTitle" xml:space="preserve">
+    <value>Activity</value>
+  </data>
+  <data name="HomeActivityHistoricalCaption" xml:space="preserve">
+    <value>Incoming requests · last 15 min of this run</value>
+  </data>
+  <data name="HomeActivityNoRecordedRequests" xml:space="preserve">
+    <value>No requests were recorded in this run.</value>
   </data>
 </root>

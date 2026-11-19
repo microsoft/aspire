@@ -8,4 +8,4 @@ metadata:
     app.kubernetes.io/component: "second"
     app.kubernetes.io/instance: "{{ .Release.Name }}"
 data:
-  URL: "http://{{ .Values.config.second.shared_host }}/second"
+  URL: {{ tpl "http://{{ .Values.config.second.shared_host }}/second" . | quote }}

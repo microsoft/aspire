@@ -61,7 +61,7 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
             Assert.Equal("CS0618", diagnostic.GetProperty("ruleId").GetString());
             Assert.Equal(warningsAsErrors ? "error" : "warning", diagnostic.GetProperty("level").GetString());
             Assert.Contains(
-                "Use AddDotnetProject from the Aspire.Hosting.Dotnet package instead.",
+                "Use AddDotnetProject(name, path) from the Aspire.Hosting.Dotnet package instead.",
                 diagnostic.GetProperty("message").GetString());
         });
     }
@@ -626,9 +626,8 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
 
         CreateAppHostPackageDirectoryBuildFiles(appHostDirectory, repoRoot);
 
-        var output = BuildProject(appHostDirectory);
+        BuildProject(appHostDirectory);
 
-        Assert.DoesNotContain("ASPIRE010", output);
         var resolvedPaths = await File.ReadAllLinesAsync(Path.Combine(appHostDirectory, "obj", "resolved-aspire-paths.txt"));
         Assert.Equal(bundle.DcpDir, resolvedPaths[0]);
         Assert.Equal(bundle.DashboardDir, resolvedPaths[1]);

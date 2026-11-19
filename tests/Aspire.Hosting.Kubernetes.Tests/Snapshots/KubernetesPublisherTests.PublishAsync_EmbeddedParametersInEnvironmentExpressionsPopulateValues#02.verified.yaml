@@ -8,5 +8,5 @@ metadata:
     app.kubernetes.io/component: "myapp"
     app.kubernetes.io/instance: "{{ .Release.Name }}"
 stringData:
-  SECRET_URL: "http://{{ .Values.config.myapp.host }}/test?token={{ .Values.secrets.myapp.token }}"
+  SECRET_URL: {{ tpl "http://{{ .Values.config.myapp.host }}/test?token={{ .Values.secrets.myapp.token }}" . | quote }}
 type: "Opaque"

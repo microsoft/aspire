@@ -17,7 +17,7 @@ func main() {
 	customKey := builder.AddParameter("milvus-key", &aspire.AddParameterOptions{Secret: aspire.BoolPtr(true)})
 	milvus2 := builder.AddMilvus("milvus2", &aspire.AddMilvusOptions{ApiKey: &customKey})
 
-	builder.AddMilvus("milvus3", &aspire.AddMilvusOptions{GrpcPort: aspire.Float64Ptr(19531)})
+	builder.AddMilvus("milvus3", &aspire.AddMilvusOptions{GrpcPort: aspire.IntPtr(19531)})
 
 	db := milvus.AddDatabase("mydb")
 	if err = db.Err(); err != nil {
@@ -32,7 +32,7 @@ func main() {
 
 	builder.AddMilvus("milvus-attu-cfg").WithAttu(&aspire.WithAttuOptions{
 		ConfigureContainer: func(container aspire.AttuResource) {
-			container.WithHttpEndpoint(&aspire.WithHttpEndpointOptions{Port: aspire.Float64Ptr(3001)})
+			container.WithHttpEndpoint(&aspire.WithHttpEndpointOptions{Port: aspire.IntPtr(3001)})
 		},
 	})
 

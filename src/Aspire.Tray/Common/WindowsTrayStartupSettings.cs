@@ -19,7 +19,7 @@ internal sealed class WindowsTrayStartupSettings(
     {
         get
         {
-            var reason = TrayStartupEntry.GetUnavailableReason(options, nativeFrontend, windows: true);
+            var reason = TrayStartupEntry.GetUnavailableReason(options, nativeFrontend, windows: true, linux: false);
             if (reason is not null)
             {
                 return reason;

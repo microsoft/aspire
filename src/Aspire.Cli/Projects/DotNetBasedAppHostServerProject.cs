@@ -153,6 +153,9 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         projectFile.AddProperty("TargetFramework", TargetFramework);
         projectFile.AddProperty("AssemblyName", AssemblyName);
         projectFile.AddProperty("OutDir", BuildFolder);
+        // Integrations can copy C# sources (for example Blazor's file-based Gateway.cs) into the output.
+        // They are build artifacts, not AppHost server sources, and must stay out of subsequent builds.
+        projectFile.AddProperty("DefaultItemExcludes", $"$(DefaultItemExcludes);{BuildFolder}/**");
         projectFile.AddProperty("UserSecretsId", _userSecretsId);
         projectFile.AddProperty("IsAspireHost", "true");
         projectFile.AddProperty("IsPublishable", "false");
@@ -276,7 +279,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         var channelSources = new List<string>();
         var channels = await _packagingService.GetChannelsAsync(cancellationToken, configuredChannelName);
         var matchedChannels = !string.IsNullOrEmpty(configuredChannelName)
-            ? channels.Where(c => string.Equals(c.Name, configuredChannelName, StringComparison.OrdinalIgnoreCase))
+            ? channels.Where(c => string.Equals(c.Name, configuredChannelName, StringComparisons.ChannelName))
             : channels.Where(c => c.Type == PackageChannelType.Explicit);
 
         foreach (var ch in matchedChannels)
@@ -496,6 +499,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
 
         var options = new ProcessInvocationOptions
         {
+            NoAutoResponse = true,
             StandardOutputCallback = outputCollector.AppendOutput,
             StandardErrorCallback = outputCollector.AppendError
         };

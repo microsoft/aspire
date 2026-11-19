@@ -2,10 +2,13 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using System.Net;
 using System.Reflection;
 using System.Text;
 using Aspire.Cli.Acquisition;
 using Aspire.Cli.Configuration;
+using Aspire.Cli.Documentation.ApiDocs;
+using Aspire.Cli.Documentation.Docs;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.Telemetry;
 using Aspire.Cli.Tests.TestServices;
@@ -22,6 +25,26 @@ namespace Aspire.Cli.Tests;
 
 public class ProgramTests(ITestOutputHelper outputHelper)
 {
+    [Theory]
+    [InlineData(nameof(IDocsFetcher))]
+    [InlineData(nameof(IApiDocsFetcher))]
+    public void DocumentationClients_EnableResponseDecompression(string clientName)
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        Program.AddDocumentationServices(services);
+        using var provider = services.BuildServiceProvider();
+
+        var handler = provider.GetRequiredService<IHttpMessageHandlerFactory>().CreateHandler(clientName);
+        while (handler is DelegatingHandler delegatingHandler)
+        {
+            handler = delegatingHandler.InnerHandler!;
+        }
+
+        var socketsHandler = Assert.IsType<SocketsHttpHandler>(handler);
+        Assert.Equal(DecompressionMethods.All, socketsHandler.AutomaticDecompression);
+    }
+
     [Theory]
     [InlineData("script")]
     [InlineData("winget")]

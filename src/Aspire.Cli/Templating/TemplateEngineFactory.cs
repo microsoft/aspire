@@ -36,7 +36,6 @@ internal sealed partial class TemplateEngineFactory(
     INuGetClient nuGetClient,
     ILogger<TemplateEngineFactory> logger) : ITemplateFactory, IDisposable
 {
-    private static readonly TimeSpan s_gitOperationTimeout = TimeSpan.FromMinutes(2);
     private readonly List<IDisposable> _resources = [];
     private readonly Dictionary<string, ITemplate[]> _discoveredTemplates = new(StringComparer.Ordinal);
     private bool _disposed;
@@ -147,9 +146,15 @@ internal sealed partial class TemplateEngineFactory(
         interactionService.DisplaySourceTrustWarning(executionContext);
         try
         {
-            var sha = await interactionService.ShowStatusAsync(NewCommandStrings.ResolvingTemplateRepository,
-                () => WithGitTimeoutAsync(
-                    token => git.ResolveReferenceAsync(repository, reference, executionContext.WorkingDirectory, GitCommandMode.Captured, token), cancellationToken));
+            // Ref resolution can authenticate even when its commit is already cached.
+            // Keep Git outside animated status so authentication prompts remain visible.
+            var resolveRemoteRef = reference is null || !GitClient.IsCommitSha(reference);
+            if (resolveRemoteRef)
+            {
+                interactionService.DisplayTemplateGitFetchNotice(repository, templatePath, reference, hostEnvironment.SupportsInteractiveInput);
+            }
+            var sha = await WithGitTimeoutAsync(
+                token => git.ResolveReferenceAsync(repository, reference, executionContext.WorkingDirectory, GitCommandMode.Captured, token), cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             // Different paths and refs at the same commit share the complete repository snapshot.
             // NUL separates the repository address and SHA without ambiguous delimiters.
@@ -162,13 +167,13 @@ internal sealed partial class TemplateEngineFactory(
                 return GetRepositoryTemplatePath(cacheDirectory, relativePath);
             }
 
+            if (!resolveRemoteRef)
+            {
+                interactionService.DisplayTemplateGitFetchNotice(repository, templatePath, reference, hostEnvironment.SupportsInteractiveInput);
+            }
             using var checkout = TemporaryCacheDirectory.Create(cacheRoot, "repo", DeleteCheckout, DeleteLease);
             var repositoryRoot = new DirectoryInfo(Path.Combine(checkout.FullName, "repository"));
-            await interactionService.ShowStatusAsync(NewCommandStrings.CloningTemplateRepository, async () =>
-            {
-                await CheckoutRepositoryAsync(repository, repositoryRoot, sha, cancellationToken);
-                return true;
-            });
+            await CheckoutRepositoryAsync(repository, repositoryRoot, sha, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
 
             // Root templates must not copy Git history/configuration into generated projects.
@@ -238,7 +243,7 @@ internal sealed partial class TemplateEngineFactory(
     private async Task<T> WithGitTimeoutAsync<T>(Func<CancellationToken, Task<T>> operation, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        using var deadline = new CancellationTokenSource(s_gitOperationTimeout, timeProvider);
+        using var deadline = new CancellationTokenSource(GitClient.OperationTimeout, timeProvider);
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token);
         try
         {
@@ -390,7 +395,9 @@ internal sealed partial class TemplateEngineFactory(
         try
         {
             var evaluatedDefaults = promptDefaults.Evaluate(settings, name, cancellationToken);
-            var promptState = (hostEnvironment.SupportsInteractiveInput || computedParameters.Count > 0) && template.ParameterDefinitions.Any(parameter =>
+            // Disabled parameters must be skipped before injecting well-known values even without
+            // prompts: a full SDK version is not a valid value for a major/minor-only choice.
+            var promptState = template.ParameterDefinitions.Any(parameter =>
                 !string.IsNullOrEmpty(parameter.Precedence.IsEnabledCondition) || !string.IsNullOrEmpty(parameter.Precedence.IsRequiredCondition))
                 ? new TemplateParameterPromptState(settings, template, name, logger, computedParameters)
                 : null;

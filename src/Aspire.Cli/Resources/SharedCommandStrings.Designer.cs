@@ -106,11 +106,47 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Fetching {0} from {1} using Git....
+        /// </summary>
+        internal static string FetchingSource {
+            get {
+                return ResourceManager.GetString("FetchingSource", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Fetching {0} from {1} using Git. Git may prompt you to authenticate..
+        /// </summary>
+        internal static string FetchingSourceWithAuthentication {
+            get {
+                return ResourceManager.GetString("FetchingSourceWithAuthentication", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Output format for detached AppHost results.
         /// </summary>
         internal static string FormatOptionDescription {
             get {
                 return ResourceManager.GetString("FormatOptionDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to configuration source.
+        /// </summary>
+        internal static string GitFetchConfigurationSource {
+            get {
+                return ResourceManager.GetString("GitFetchConfigurationSource", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to templates.
+        /// </summary>
+        internal static string GitFetchTemplates {
+            get {
+                return ResourceManager.GetString("GitFetchTemplates", resourceCulture);
             }
         }
         
@@ -293,7 +329,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("NuGetSearchSourceFailedWarning", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to The environment to use for the operation. The default is &apos;Production&apos;..
         /// </summary>
@@ -390,6 +426,105 @@ namespace Aspire.Cli.Resources {
         internal static string SelectAppHost {
             get {
                 return ResourceManager.GetString("SelectAppHost", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Package feed.
+        /// </summary>
+        internal static string SourceFeed {
+            get {
+                return ResourceManager.GetString("SourceFeed", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Git path.
+        /// </summary>
+        internal static string SourceGitPath {
+            get {
+                return ResourceManager.GetString("SourceGitPath", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Git source.
+        /// </summary>
+        internal static string SourceGitRepository {
+            get {
+                return ResourceManager.GetString("SourceGitRepository", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Marketplace.
+        /// </summary>
+        internal static string SourceMarketplace {
+            get {
+                return ResourceManager.GetString("SourceMarketplace", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Name.
+        /// </summary>
+        internal static string SourceName {
+            get {
+                return ResourceManager.GetString("SourceName", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to OpenCode V1 catalog.
+        /// </summary>
+        internal static string SourceOpenCodeV1Catalog {
+            get {
+                return ResourceManager.GetString("SourceOpenCodeV1Catalog", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to OpenCode V2 catalog.
+        /// </summary>
+        internal static string SourceOpenCodeV2Catalog {
+            get {
+                return ResourceManager.GetString("SourceOpenCodeV2Catalog", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Path.
+        /// </summary>
+        internal static string SourcePath {
+            get {
+                return ResourceManager.GetString("SourcePath", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Package patterns.
+        /// </summary>
+        internal static string SourcePatterns {
+            get {
+                return ResourceManager.GetString("SourcePatterns", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Plugins.
+        /// </summary>
+        internal static string SourcePlugins {
+            get {
+                return ResourceManager.GetString("SourcePlugins", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Git ref.
+        /// </summary>
+        internal static string SourceRef {
+            get {
+                return ResourceManager.GetString("SourceRef", resourceCulture);
             }
         }
         

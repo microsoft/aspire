@@ -243,6 +243,7 @@ export const nodeLabel = 'Node.js';
 // vscode.extensions, so we cannot tell missing from disabled until the action runs.
 export const debuggerSetupAction = vscode.l10n.t({ message: 'Set Up', comment: 'Button label; "Set Up" is an imperative verb.' });
 export const debuggerSetupNotification = (debuggerName: string) => vscode.l10n.t('Set up {0} debugging support to debug resources in this app.', debuggerName);
+export const appHostDebuggerSetupRequired = (debuggerName: string) => vscode.l10n.t('Set up {0} debugging support before debugging this AppHost. You can run it without debugging instead.', debuggerName);
 export const debuggerExtensionDisabled = (debuggerName: string) => vscode.l10n.t('One or more extensions required for {0} debugging did not become available. They may be disabled or require a window reload. Open the Extensions view to continue setup.', debuggerName);
 export const debuggerInstalledRestartAppHost = (debuggerName: string) => vscode.l10n.t('The extensions required for {0} debugging are installed. Restart the AppHost to enable debugging.', debuggerName);
 export const openExtensionsLabel = vscode.l10n.t('Open Extensions');
@@ -300,6 +301,9 @@ export const selectPipelineStep = vscode.l10n.t('Select a pipeline step to execu
 export const noPipelineStepsFound = vscode.l10n.t('No pipeline steps were found.');
 export const appHostSourceNotFound = vscode.l10n.t('Could not determine the AppHost source file to open.');
 export const appHostSourceOpenFailed = (path: string) => vscode.l10n.t('Failed to open AppHost source file: {0}', path);
+export const resourceSourceNotFound = vscode.l10n.t('Could not determine the resource source to open.');
+export const resourceSourceOpenFailed = (sourcePath: string) => vscode.l10n.t('Failed to open resource source: {0}', sourcePath);
+export const resourceSourceOutsideWorkspace = (sourcePath: string) => vscode.l10n.t('Resource source is outside the current workspace: {0}. Add its folder to the workspace to reveal it in Explorer.', sourcePath);
 export const logFilePathInvalid = vscode.l10n.t('Could not determine the AppHost log file to open.');
 export const logFileOpenFailed = (path: string, error: string) => vscode.l10n.t('Failed to open AppHost log file {0}: {1}', path, error);
 export const logFileLabel = vscode.l10n.t('AppHost logs');

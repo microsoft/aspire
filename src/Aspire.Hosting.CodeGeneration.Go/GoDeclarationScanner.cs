@@ -479,7 +479,10 @@ internal static class GoDeclarationScanner
         {
             "var" => rest.StartsWith('(') || IsExported(rest),
             "const" => IsExported(rest),
-            "type" => rest.StartsWith('(') || (IsExported(rest) && CutBody(line).EndsWith(" interface", StringComparison.Ordinal)),
+            "type" => rest.StartsWith('(')
+                || (IsExported(rest)
+                    && CutBody(line).EndsWith(" interface", StringComparison.Ordinal)
+                    && !line.TrimEnd().EndsWith("interface{}", StringComparison.Ordinal)),
             "func" => IsExported(rest.StartsWith('(') ? rest[(rest.IndexOf(')') + 1)..].TrimStart() : rest)
                 && TrimTrailingComment(line).TrimEnd() is [.., '(' or ','],
             _ => false
@@ -490,11 +493,11 @@ internal static class GoDeclarationScanner
     // generator's naming can produce non-ASCII ones. A first letter outside the BMP is not recognized.
     private static bool IsExported(string name) => name.Length > 0 && char.IsUpper(name[0]);
 
-    // The first " {" ends a header: a one-line body follows it, and gofmt never puts a space before the
-    // brace of the empty `struct{}` and `interface{}` types.
+    // The first opening brace ends a type header. gofmt removes the space before the brace for
+    // one-line interface bodies, for example `type Application interface{ handleReference }`.
     private static string CutBody(string header)
     {
-        var brace = header.IndexOf(" {", StringComparison.Ordinal);
+        var brace = header.IndexOf('{');
         return (brace >= 0 ? header[..brace] : header).TrimEnd();
     }
 

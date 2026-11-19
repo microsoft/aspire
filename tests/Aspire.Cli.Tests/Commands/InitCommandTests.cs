@@ -249,6 +249,11 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
             {
                 FindSolutionFileAsyncCallback = (_, _) => throw new InvalidOperationException("File-based initialization must not discover solutions.")
             };
+            // Pin the identity version to a stable, non-prerelease 17.0.0 so the snapshot doesn't
+            // depend on whether the CLI assembly reports a "17.0.0-pr.*" identity, which would emit
+            // the compatibility "#:property AspireUseCliBundle=true" directive. The prerelease case
+            // is covered separately by the version-dependent theories.
+            options.CliExecutionContextFactory = _ => workspace.CreateExecutionContext(identityVersion: "17.0.0");
         });
         using var serviceProvider = services.BuildServiceProvider();
         var initCommand = serviceProvider.GetRequiredService<InitCommand>();
@@ -670,6 +675,77 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal("typescript/nodejs", appHost["language"]!.GetValue<string>());
     }
 
+    [Fact]
+    public async Task InitCommand_WhenGoLanguageSpecified_ScaffoldsGoAppHostWithoutFeatureFlags()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        string? scaffoldedLanguageId = null;
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.LanguageServiceFactory = sp => ActivatorUtilities.CreateInstance<LanguageService>(sp);
+            options.ScaffoldingServiceFactory = _ => new TestScaffoldingService
+            {
+                ScaffoldAsyncCallback = (context, _) =>
+                {
+                    scaffoldedLanguageId = context.Language.LanguageId.Value;
+                    return Task.FromResult(true);
+                }
+            };
+        });
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        var parseResult = initCommand.Parse("init --language go --suppress-agent-init");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal(KnownLanguageId.Go, scaffoldedLanguageId);
+    }
+
+    [Fact]
+    public async Task InitCommand_WhenPromptingForLanguage_OffersGoWithoutFeatureFlags()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        string[]? offeredLanguages = null;
+        string? scaffoldedLanguageId = null;
+
+        var interactionService = new TestInteractionService
+        {
+            PromptForSelectionCallback = (_, choices, _, _) =>
+            {
+                var languages = choices.Cast<LanguageInfo>().ToArray();
+                offeredLanguages = languages.Select(language => language.DisplayName).ToArray();
+                return languages.Single(language => language.LanguageId.Value == KnownLanguageId.Go);
+            }
+        };
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.LanguageServiceFactory = sp => ActivatorUtilities.CreateInstance<LanguageService>(sp);
+            options.ScaffoldingServiceFactory = _ => new TestScaffoldingService
+            {
+                ScaffoldAsyncCallback = (context, _) =>
+                {
+                    scaffoldedLanguageId = context.Language.LanguageId.Value;
+                    return Task.FromResult(true);
+                }
+            };
+        });
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        var parseResult = initCommand.Parse("init --suppress-agent-init");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.NotNull(offeredLanguages);
+        Assert.Equal([KnownLanguageId.CSharpDisplayName, "TypeScript (Node.js)", KnownLanguageId.GoDisplayName], offeredLanguages);
+        Assert.Equal(KnownLanguageId.Go, scaffoldedLanguageId);
+    }
+
     [Theory]
     [InlineData("")]
     [InlineData(" --file-based false")]
@@ -747,6 +823,56 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         Assert.False(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.mts")));
         Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "aspire-apphost", "apphost.mts")));
         Assert.Contains(interactionService.DisplayedMessages, m => m.Message == "Created aspire-apphost/apphost.mts");
+    }
+
+    [Fact]
+    public async Task InitCommand_WhenRootGoModuleExists_PreservesModuleAndWorkspace()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        const string moduleContent = "module existing\n\ngo 1.26\n";
+        const string workspaceContent = "go 1.26\n\nuse .\n";
+        const string sourceContent = "package main\n\nfunc main() {}\n";
+        File.WriteAllText(Path.Combine(workspace.Path, "go.mod"), moduleContent);
+        File.WriteAllText(Path.Combine(workspace.Path, "go.work"), workspaceContent);
+        File.WriteAllText(Path.Combine(workspace.Path, "main.go"), sourceContent);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.LanguageServiceFactory = sp => new TestLanguageService
+            {
+                DefaultProject = sp.GetRequiredService<IAppHostProjectFactory>().GetProject(
+                    DefaultLanguageDiscovery.AllLanguages.Single(language => language.LanguageId.Value == KnownLanguageId.Go))
+            };
+        });
+        services.AddSingleton<IAppHostServerProjectFactory>(_ => new TestAppHostServerProjectFactory
+        {
+            CreateAsyncCallback = (path, _) =>
+                Task.FromResult<IAppHostServerProject>(new FakeSucceedingAppHostServerProject(path))
+        });
+        services.AddSingleton<IAppHostServerSessionFactory>(FakeAppHostServerSessionFactory.CreateForScaffolding(
+            new Dictionary<string, string>
+            {
+                ["apphost.go"] = "package main\n",
+                ["go.mod"] = "module apphost\n\ngo 1.26\n",
+                [".gitignore"] = ".aspire/\n"
+            }));
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var command = serviceProvider.GetRequiredService<RootCommand>();
+        var exitCode = await command.Parse("init --language go --non-interactive --suppress-agent-init")
+            .InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal(moduleContent, File.ReadAllText(Path.Combine(workspace.Path, "go.mod")));
+        Assert.Equal(workspaceContent, File.ReadAllText(Path.Combine(workspace.Path, "go.work")));
+        Assert.Equal(sourceContent, File.ReadAllText(Path.Combine(workspace.Path, "main.go")));
+        Assert.Equal("module apphost\n\ngo 1.26\n", File.ReadAllText(Path.Combine(workspace.Path, "aspire-apphost", "go.mod")));
+        Assert.Equal(
+            $"go {Aspire.Cli.Utils.EnvironmentChecker.GoAppHostToolingCheck.MinimumGoVersion}\n\nuse .\n",
+            File.ReadAllText(Path.Combine(workspace.Path, "aspire-apphost", "go.work")));
+        var config = AspireConfigFile.Load(workspace.Path);
+        Assert.Equal("aspire-apphost/apphost.go", config?.AppHost?.Path);
+        Assert.Equal(KnownLanguageId.Go, config?.AppHost?.Language);
     }
 
     [Fact]
@@ -994,12 +1120,40 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         Assert.False(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".mcp.json")));
     }
 
-    [Fact]
-    public async Task InitCommand_WhenNoSolutionExists_SingleFileSkeletonPinsPackageVersions()
+    [Theory]
+    [InlineData("", false)]
+    [InlineData(" --remove-skill-copies", true)]
+    [InlineData(" --remove-skill-copies=false", false)]
+    public async Task InitCommand_NonInteractive_RemovesSkillCopiesOnlyWhenRequested(string option, bool removed)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var skillDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", CommonAgentApplicators.AspireSkillName);
+        Directory.CreateDirectory(skillDirectory);
+        await File.WriteAllTextAsync(Path.Combine(skillDirectory, "SKILL.md"), "My customized Aspire instructions.");
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var serviceProvider = services.BuildServiceProvider();
+        var command = serviceProvider.GetRequiredService<RootCommand>();
+
+        var parseResult = command.Parse($"init --non-interactive --agents copilot --scope project --skills aspire{option}");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal(!removed, Directory.Exists(skillDirectory));
+    }
+
+    [Theory]
+    [InlineData("13.6.1", false, true)]
+    [InlineData("17.0.0-preview.1.26479.11", true, true)]
+    [InlineData("17.1.0-preview.1.26556.5", true, false)]
+    public async Task InitCommand_WhenNoSolutionExists_SingleFileSkeletonUsesVersionCompatibleDirectives(string version, bool packageOnly, bool explicitBundle)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ => workspace.CreateExecutionContext(identityVersion: version);
+        });
         using var serviceProvider = services.BuildServiceProvider();
         var initCommand = serviceProvider.GetRequiredService<InitCommand>();
 
@@ -1010,12 +1164,27 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
 
         var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs");
         var appHostContent = await File.ReadAllTextAsync(appHostPath);
+        var directives = packageOnly
+            ? $"""
+                #:package Aspire.Hosting.AppHost@{version}
+                #:package Aspire.Hosting.Dotnet@{version}
+                """
+            : $"#:sdk Aspire.AppHost.Sdk@{version}";
+        if (explicitBundle)
+        {
+            directives += "\n#:property AspireUseCliBundle=true";
+        }
 
-        var firstLine = appHostContent.Split('\n')[0].TrimEnd('\r');
-        var version = serviceProvider.GetRequiredService<CliExecutionContext>().IdentitySdkVersion;
-        Assert.Equal($"#:package Aspire.Hosting.AppHost@{version}", firstLine);
-        Assert.Contains($"#:package Aspire.Hosting.Dotnet@{version}", appHostContent);
-        Assert.Contains("#:property AspireUseCliBundle=true", appHostContent);
+        var expected = $$"""
+            {{directives}}
+
+            var builder = DistributedApplication.CreateBuilder(args);
+
+            // The aspireify skill will wire up your projects here.
+
+            builder.Build().Run();
+            """;
+        Assert.Equal(expected.ReplaceLineEndings("\n"), appHostContent.ReplaceLineEndings("\n").TrimEnd('\n'));
     }
 
     [Fact]

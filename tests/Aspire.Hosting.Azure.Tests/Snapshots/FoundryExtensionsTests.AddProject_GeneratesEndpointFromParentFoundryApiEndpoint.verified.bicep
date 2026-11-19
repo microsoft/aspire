@@ -71,6 +71,8 @@ output name string = '${foundry_outputs_name}/project'
 
 output endpoint string = project.properties.endpoints['AI Foundry API']
 
+output endpointOrigin string = join(take(split(project.properties.endpoints['AI Foundry API'], '/'), 3), '/')
+
 output principalId string = project.identity.principalId
 
 output APPLICATION_INSIGHTS_CONNECTION_STRING string = project_ai.properties.ConnectionString

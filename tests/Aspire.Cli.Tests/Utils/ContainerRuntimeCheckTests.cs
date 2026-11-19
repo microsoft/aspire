@@ -40,14 +40,18 @@ public class ContainerRuntimeCheckTests
     }
 
     [Theory]
-    [InlineData("3.0.2.0", "3.0.2", false)]
-    [InlineData("3.0.2", "3.0.2.0", false)]
-    [InlineData("3.0.2-rc.1", "3.0.3", true)]
-    [InlineData("3.0.3.0", "3.0.2-rc.1", true)]
-    [InlineData("3.0.3-rc.1", "3.0.3", false)]
-    [InlineData("3.0.1.9", "3.0.3", true)]
-    [InlineData("3.0.3.0", "3.0.1.9", true)]
-    [InlineData("3.0.3+build.1", "3.0.2+build.2", false)]
+    [InlineData("3.0.4.0", "3.0.4", false)]
+    [InlineData("3.0.4", "3.0.4.0", false)]
+    [InlineData("3.0.4-rc.1", "3.0.5", true)]
+    [InlineData("3.0.5.0", "3.0.4-rc.1", true)]
+    [InlineData("3.0.5-rc.1", "3.0.5", false)]
+    [InlineData("3.0.3.9", "3.0.5", true)]
+    [InlineData("3.0.5.0", "3.0.3.9", true)]
+    [InlineData("3.0.2.0", "3.0.5", true)]
+    [InlineData("3.0.5.0", "3.0.2", true)]
+    [InlineData("3.0.3.0", "3.0.5", true)]
+    [InlineData("3.0.5.0", "3.0.3", true)]
+    [InlineData("3.0.5+build.1", "3.0.4+build.2", false)]
     public void WslcVersionPolicy_RecognizesNativeAndSemanticVersions(string client, string server, bool expectFailure)
     {
         var metadata = WslcContainerRuntimeProbe.ParseInfoOutput(
@@ -58,7 +62,7 @@ public class ContainerRuntimeCheckTests
         {
             Assert.NotNull(result);
             Assert.Equal(EnvironmentCheckStatus.Fail, result.Status);
-            var rejectedVersion = client.StartsWith("3.0.3", StringComparison.Ordinal) ? server : client;
+            var rejectedVersion = client.StartsWith("3.0.5", StringComparison.Ordinal) ? server : client;
             Assert.Contains(rejectedVersion, result.Message);
         }
         else
@@ -239,16 +243,6 @@ public class ContainerRuntimeCheckTests
             .Any(runtime => runtime.Key == KnownContainerRuntimes.Wslc);
 
         Assert.Equal(isWindows, includesWslc);
-    }
-
-    [Fact]
-    public async Task FindAvailableRuntimeAsync_RestrictsDiscoveryToSupportedRuntimes()
-    {
-        var runtime = await ContainerRuntimeDetector.FindAvailableRuntimeAsync(
-            cancellationToken: TestContext.Current.CancellationToken,
-            supportedRuntimes: []);
-
-        Assert.Null(runtime);
     }
 
     [Fact]

@@ -117,12 +117,7 @@ public class PRScriptToolModeTests(ITestOutputHelper testOutput)
                 exit 1
                 """;
 
-        await File.WriteAllTextAsync(dotnetScriptPath, scriptContent);
-
-        if (!isWindows)
-        {
-            FileHelper.MakeExecutable(dotnetScriptPath);
-        }
+        await FileHelper.WriteExecutableFileAsync(dotnetScriptPath, scriptContent);
 
         testOutput.WriteLine($"Created mock dotnet script at: {dotnetScriptPath}");
         return mockBinDir;

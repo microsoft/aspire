@@ -14,7 +14,7 @@
 
 .button-container-right {
     display: flex;
-    gap: 8px;
+    gap: var(--aspire-space-2);
     margin-left: auto;
 }
 

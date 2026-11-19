@@ -179,7 +179,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
     private readonly EnumerableGridSort<ResourceGridViewModel> _nameSort = EnumerableGridSort<ResourceGridViewModel>.ByAscending(item => item.Resource, ResourceViewModelNameComparer.Instance);
     private readonly EnumerableGridSort<ResourceGridViewModel> _stateSort = EnumerableGridSort<ResourceGridViewModel>.ByAscending(item => item.Resource.State).ThenAscending(item => item.Resource, ResourceViewModelNameComparer.Instance);
     private readonly EnumerableGridSort<ResourceGridViewModel> _startTimeSort = EnumerableGridSort<ResourceGridViewModel>.ByDescending(item => item.Resource.StartTimeStamp).ThenAscending(item => item.Resource, ResourceViewModelNameComparer.Instance);
-    private readonly EnumerableGridSort<ResourceGridViewModel> _typeSort = EnumerableGridSort<ResourceGridViewModel>.ByAscending(item => item.Resource.ResourceType).ThenAscending(item => item.Resource, ResourceViewModelNameComparer.Instance);
+    private readonly EnumerableGridSort<ResourceGridViewModel> _typeSort = EnumerableGridSort<ResourceGridViewModel>.ByAscending(item => item.Resource.ResourceTypeDisplayName).ThenAscending(item => item.Resource, ResourceViewModelNameComparer.Instance);
 
     protected override async Task OnInitializedAsync()
     {
@@ -402,7 +402,8 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
                             LabelFormat: Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphResourceActionsButton)].Value),
                         new GraphHiddenIconDto(
                             Path: ResourceGraphMapper.GetIconPathData(new Icons.Regular.Size16.EyeOff()),
-                            Tooltip: ColumnsLoc[nameof(Columns.HiddenResourceIconTooltip)].Value));
+                            Tooltip: ColumnsLoc[nameof(Columns.HiddenResourceIconTooltip)].Value),
+                        ResourceGraphMapper.GetGameStrings(Loc));
 
                     await _jsModule.InvokeVoidAsync("initializeResourcesGraph", _resourcesInteropReference, graphIcons);
                     _graphInitialized = true;
@@ -502,6 +503,12 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
                 });
             }
         }
+
+        [JSInvokable]
+        public Task<bool?> ExecuteGraphGameCommand(string id, string commandName) =>
+            resources._resourceByName.TryGetValue(id, out var resource)
+                ? resources.DashboardCommandExecutor.ExecuteGraphGameCommandAsync(resource, commandName, resources.GetResourceName)
+                : Task.FromResult<bool?>(null);
     }
 
     internal IEnumerable<ResourceViewModel> GetFilteredResources()
