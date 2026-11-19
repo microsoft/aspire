@@ -162,6 +162,9 @@ internal sealed partial record PackageVersion(string Id, string Version, string 
     [GeneratedRegex(@"\bVersion=""([^""]*)""")]
     private static partial Regex VersionAttribute();
 
+    // Matches a Version attribute value that is exactly one MSBuild property reference and captures
+    // the property name: "$(OpenTelemetryInstrumentationHttpVersion)" -> OpenTelemetryInstrumentationHttpVersion.
+    // Literal versions ("1.21.0") and expressions ("$(A)-$(B)") don't match, so they are left alone.
     [GeneratedRegex(@"^\$\(([A-Za-z_][A-Za-z0-9_.-]*)\)$")]
     private static partial Regex PropertyReference();
 }
