@@ -126,7 +126,8 @@ internal sealed class AspireConfigFile
     // typed load/save cycles and legacy settings.json migration don't drop existing sources.
     // TODO: Stop preserving the legacy key once support is removed. https://github.com/microsoft/aspire/issues/22412
     [JsonPropertyName(AgentPluginSource.LegacySectionName)]
-    [HiddenFromConfigurationSchema]
+    [Description("Deprecated. Use agentPlugins instead. Legacy OpenCode catalog properties are ignored.")]
+    [ConfigurationDeprecation("skillSources is deprecated. Rename it to agentPlugins.")]
     public Dictionary<string, JsonElement>? LegacySkillSources { get; set; }
 
     [JsonPropertyName(IntegrationSourceConfiguration.SectionName)]

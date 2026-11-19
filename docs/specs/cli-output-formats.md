@@ -750,6 +750,8 @@ The `aspire-agent-plugins` check reports a `warning` when static Aspire skill co
 }
 ```
 
+Schema property entries include `name`, `type`, `description`, and `required`. Depending on the property, they can also include `subProperties`, `additionalPropertiesType`, or a `deprecationMessage` that recommends a replacement. For example, all three schemas advertise `skillSources` as deprecated in favor of `agentPlugins`.
+
 The `isolated-launch.v1` capability indicates that `aspire run` accepts the `--isolated` option.
 
 The `agent-mcp.v1` capability indicates that `aspire agent mcp` is supported. Tooling gates automatic MCP server registration on this capability being advertised explicitly: a CLI that omits it — including one old enough not to emit `capabilities` at all — is never handed the command.

@@ -4,6 +4,7 @@
 using System.ComponentModel;
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using Aspire.Cli.Configuration;
 
@@ -118,6 +119,7 @@ internal static class SettingsSchemaBuilder
             }
 
             var description = prop.GetCustomAttribute<DescriptionAttribute>()?.Description ?? string.Empty;
+            var deprecationMessage = prop.GetCustomAttribute<ConfigurationDeprecationAttribute>()?.Message;
 
             var propertyType = Nullable.GetUnderlyingType(prop.PropertyType) ?? prop.PropertyType;
             var jsonType = GetJsonType(propertyType);
@@ -151,7 +153,8 @@ internal static class SettingsSchemaBuilder
                         {
                             additionalPropertiesType = "boolean";
                         }
-                        else
+                        // JsonElement represents arbitrary JSON, not an object with the CLR type's properties.
+                        else if (valueType != typeof(JsonElement))
                         {
                             var valueJsonType = GetJsonType(valueType);
                             if (valueJsonType == "object" && !typeof(System.Collections.IDictionary).IsAssignableFrom(valueType))
@@ -168,7 +171,7 @@ internal static class SettingsSchemaBuilder
                 }
             }
 
-            properties.Add(new PropertyInfo(jsonPropertyName, jsonType, description, required, subProperties, additionalPropertiesType));
+            properties.Add(new PropertyInfo(jsonPropertyName, jsonType, description, required, deprecationMessage, subProperties, additionalPropertiesType));
         }
 
         return properties;

@@ -33,6 +33,7 @@ type RawPropertyInfo = Partial<PropertyInfo> & {
     Required?: unknown;
     SubProperties?: unknown;
     AdditionalPropertiesType?: unknown;
+    DeprecationMessage?: unknown;
 };
 
 type RawSettingsSchema = Partial<SettingsSchema> & {
@@ -1036,6 +1037,7 @@ function normalizePropertyInfo(value: unknown): PropertyInfo {
     const property = readObject<RawPropertyInfo>(value, 'properties[]');
     const subProperties = property.subProperties ?? property.SubProperties;
     const additionalPropertiesType = property.additionalPropertiesType ?? property.AdditionalPropertiesType;
+    const deprecationMessage = property.deprecationMessage ?? property.DeprecationMessage;
 
     return {
         name: readString(property.name ?? property.Name, 'properties[].name'),
@@ -1044,6 +1046,7 @@ function normalizePropertyInfo(value: unknown): PropertyInfo {
         required: readBoolean(property.required ?? property.Required, 'properties[].required'),
         subProperties: subProperties === undefined ? undefined : readArray(subProperties, 'properties[].subProperties').map(normalizePropertyInfo),
         additionalPropertiesType: additionalPropertiesType === undefined ? undefined : readString(additionalPropertiesType, 'properties[].additionalPropertiesType'),
+        ...(deprecationMessage === undefined ? {} : { deprecationMessage: readString(deprecationMessage, 'properties[].deprecationMessage') }),
     };
 }
 

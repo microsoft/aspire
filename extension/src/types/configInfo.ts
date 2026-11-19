@@ -20,6 +20,7 @@ export interface PropertyInfo {
     required: boolean;
     subProperties?: PropertyInfo[];
     additionalPropertiesType?: string;
+    deprecationMessage?: string;
 }
 
 export interface SettingsSchema {
