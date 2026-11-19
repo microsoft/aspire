@@ -1213,6 +1213,15 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Home.
+        /// </summary>
+        public static string ResourceTabHome {
+            get {
+                return ResourceManager.GetString("ResourceTabHome", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Overview.
         /// </summary>
         public static string ResourceTabOverview {
@@ -1227,15 +1236,6 @@ namespace Aspire.Dashboard.Resources {
         public static string ResourceTabsLandmark {
             get {
                 return ResourceManager.GetString("ResourceTabsLandmark", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Home.
-        /// </summary>
-        public static string ResourceTabHome {
-            get {
-                return ResourceManager.GetString("ResourceTabHome", resourceCulture);
             }
         }
         
