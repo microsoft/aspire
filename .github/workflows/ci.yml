@@ -211,6 +211,10 @@ jobs:
     needs: [actionlint, prepare_for_ci, tests, stabilization_check]
 
     steps:
+      - name: Block merging the diagnostic PR
+        if: github.event_name == 'pull_request' && github.head_ref == 'ci-health/22430-r1-main-diagnostic'
+        run: exit 1
+
       - name: Fail if any of the dependent jobs failed
         # Build and test jobs may be skipped, but handwritten workflow lint remains required.
         if: >-

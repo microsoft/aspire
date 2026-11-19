@@ -1145,6 +1145,32 @@ jobs:
         shell: pwsh
         run: '"ASPIRE_CONTAINER_RUNTIME=docker" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append'
 
+      - name: Compare Windows WebAssembly task host modes
+        if: runner.os == 'Windows' && matrix.shardName == 'browser-debugger'
+        working-directory: ${{ runner.temp }}
+        env:
+          MSBUILDTERMINALLOGGER: "false"
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $false
+          $fixture = Join-Path $PWD 'cif-22430'
+          dotnet --info
+          dotnet new blazorwasm --name StandaloneClient --output $fixture --framework net11.0 --no-https --no-restore
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet restore $fixture
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          foreach ($mode in @('-mt', '-mt:false')) {
+            $log = Join-Path $fixture 'probe.log'
+            Write-Host "dotnet build StandaloneClient.csproj --no-restore --no-incremental --disable-build-servers $mode"
+            dotnet build (Join-Path $fixture 'StandaloneClient.csproj') --no-restore --no-incremental --disable-build-servers $mode "-flp:logfile=$log;verbosity=diagnostic" -v:quiet
+            $buildExit = $LASTEXITCODE
+            Write-Host "Mode $mode exited with $buildExit"
+            foreach ($signature in @('ReadWasmProps', 'MSB4060', 'JsonToItemsTaskFactory', 'TaskHost')) {
+              $matchesFound = @(Select-String -Path $log -Pattern $signature -SimpleMatch)
+              Write-Host "$signature diagnostic matches: $($matchesFound.Count)"
+            }
+          }
+          exit 0
+
       - name: Run extension E2E tests
         working-directory: extension
         env:
