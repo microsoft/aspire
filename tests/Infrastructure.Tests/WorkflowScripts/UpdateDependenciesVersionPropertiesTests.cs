@@ -13,6 +13,9 @@ public sealed class UpdateDependenciesVersionPropertiesTests : IDisposable
 {
     private const string OriginalPackagesProps = """
         <Project>
+          <PropertyGroup>
+            <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+          </PropertyGroup>
           <ItemGroup>
             <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="$(OpenTelemetryExtensionsHostingVersion)" />
             <PackageVersion Include="OpenTelemetry.Instrumentation.Http" Version="$(OpenTelemetryInstrumentationHttpVersion)" />
@@ -82,8 +85,37 @@ public sealed class UpdateDependenciesVersionPropertiesTests : IDisposable
             ReadWorkspaceFile("eng", "Versions.props"));
         Assert.Equal(
             [
-                "Moved OpenTelemetry.Extensions.Hosting 1.21.0 into $(OpenTelemetryExtensionsHostingVersion) in eng/Versions.props.",
-                "Moved OpenTelemetry.Instrumentation.Http 1.21.0 into $(OpenTelemetryInstrumentationHttpVersion) in eng/Versions.props.",
+                "Updated $(OpenTelemetryExtensionsHostingVersion) to 1.21.0 in eng/Versions.props.",
+                "Updated $(OpenTelemetryInstrumentationHttpVersion) to 1.21.0 in eng/Versions.props.",
+            ],
+            OutputLines(result));
+    }
+
+    [Fact]
+    public async Task MovesAddedOverridingPropertiesIntoVersionsProps()
+    {
+        // The shape dotnet-outdated 4.9.0 produces: overriding properties added to the
+        // PropertyGroup, and the .NET 10 pin repointed to the .NET 11 property.
+        var newLine = OriginalPackagesProps.Contains("\r\n") ? "\r\n" : "\n";
+        var updatedPackagesProps = OriginalPackagesProps
+            .Replace(
+                "<ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>",
+                "<ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>" + newLine +
+                "    <OpenTelemetryExtensionsHostingVersion>1.21.0</OpenTelemetryExtensionsHostingVersion>" + newLine +
+                "    <SystemTextJsonVersion>11.0.1</SystemTextJsonVersion>")
+            .Replace("$(SystemTextJsonNet10Version)", "$(SystemTextJsonVersion)");
+
+        var result = await RunAsync(OriginalPackagesProps, updatedPackagesProps);
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Equal(OriginalPackagesProps, ReadWorkspaceFile("Directory.Packages.props"));
+        Assert.Equal(
+            VersionsProps.Replace("<OpenTelemetryExtensionsHostingVersion>1.18.0<", "<OpenTelemetryExtensionsHostingVersion>1.21.0<"),
+            ReadWorkspaceFile("eng", "Versions.props"));
+        Assert.Equal(
+            [
+                "Updated $(OpenTelemetryExtensionsHostingVersion) to 1.21.0 in eng/Versions.props.",
+                "::warning::Kept $(SystemTextJsonVersion) unchanged instead of updating it to 11.0.1: the property is used outside the external dependencies ItemGroup.",
             ],
             OutputLines(result));
     }
@@ -94,7 +126,8 @@ public sealed class UpdateDependenciesVersionPropertiesTests : IDisposable
         var updatedPackagesProps = OriginalPackagesProps
             .Replace("$(MicrosoftDotNetBuildTasksArchivesVersion)", "11.0.0-beta.2")
             .Replace("$(MicrosoftSignedWixVersion)", "6.0.0")
-            .Replace("$(SystemTextJsonNet10Version)", "11.0.0");
+            .Replace("$(SystemTextJsonNet10Version)", "11.0.0")
+            .Replace("$(SystemTextJsonVersion)", "11.0.1");
 
         var result = await RunAsync(OriginalPackagesProps, updatedPackagesProps);
 
@@ -103,9 +136,10 @@ public sealed class UpdateDependenciesVersionPropertiesTests : IDisposable
         Assert.Equal(VersionsProps, ReadWorkspaceFile("eng", "Versions.props"));
         Assert.Equal(
             [
-                "::warning::Kept $(MicrosoftDotNetBuildTasksArchivesVersion) unchanged instead of updating Microsoft.DotNet.Build.Tasks.Archives to 11.0.0-beta.2: the package is managed by Darc in eng/Version.Details.xml.",
-                "::warning::Kept $(MicrosoftSignedWixVersion) unchanged instead of updating Microsoft.Signed.Wix to 6.0.0: the property is not defined in eng/Versions.props.",
-                "::warning::Kept $(SystemTextJsonNet10Version) unchanged instead of updating System.Text.Json to 11.0.0: the package is outside the external dependencies ItemGroup.",
+                "::warning::Kept $(MicrosoftDotNetBuildTasksArchivesVersion) unchanged instead of updating it to 11.0.0-beta.2: Microsoft.DotNet.Build.Tasks.Archives is managed by Darc in eng/Version.Details.xml.",
+                "::warning::Kept $(MicrosoftSignedWixVersion) unchanged instead of updating it to 6.0.0: the property is not defined in eng/Versions.props.",
+                "::warning::Kept $(SystemTextJsonNet10Version) unchanged instead of updating it to 11.0.0: the property is used outside the external dependencies ItemGroup.",
+                "::warning::Kept $(SystemTextJsonVersion) unchanged instead of updating it to 11.0.1: the property is used outside the external dependencies ItemGroup.",
             ],
             OutputLines(result));
     }
@@ -125,12 +159,10 @@ public sealed class UpdateDependenciesVersionPropertiesTests : IDisposable
         Assert.Equal(VersionsProps, ReadWorkspaceFile("eng", "Versions.props"));
         Assert.Equal(
             [
-                "::warning::Kept $(OpenTelemetryExtensionsHostingVersion) unchanged instead of updating OpenTelemetry.Extensions.Hosting to 1.21.0: packages sharing the property resolved to different versions (1.20.0, 1.21.0).",
-                "::warning::Kept $(OpenTelemetryExtensionsHostingVersion) unchanged instead of updating OpenTelemetry.Instrumentation.Http to 1.20.0: packages sharing the property resolved to different versions (1.20.0, 1.21.0).",
+                "::warning::Kept $(OpenTelemetryExtensionsHostingVersion) unchanged instead of updating it to 1.20.0, 1.21.0: packages sharing the property resolved to different versions.",
             ],
             OutputLines(result));
     }
-
     private async Task<ProcessResult> RunAsync(string originalPackagesProps, string updatedPackagesProps)
     {
         var originalPath = Path.Combine(_workspace.Path, "original.props");

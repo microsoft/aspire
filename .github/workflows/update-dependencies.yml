@@ -47,8 +47,10 @@ jobs:
       - name: Rewrite nuget.config
         run: ./dotnet.sh new nugetconfig --force
 
+      # Pinned because update-dependencies-version-properties.cs depends on the
+      # shape of the changes dotnet-outdated makes. Check that app when updating.
       - name: Install dotnet-outdated
-        run: ./dotnet.sh tool install --global dotnet-outdated-tool
+        run: ./dotnet.sh tool install --global dotnet-outdated-tool --version 4.9.0
 
       - name: Update packages
         continue-on-error: true
@@ -65,13 +67,18 @@ jobs:
           rm nuget.config
           git checkout -- .
 
-      # dotnet-outdated replaces $(...Version) references with literal versions.
-      # Put the references back and move the new versions into eng/Versions.props,
-      # where other files (such as the project templates) read them.
+      # dotnet-outdated records new versions in Directory.Packages.props, bypassing
+      # the $(...Version) properties in eng/Versions.props that other files (such
+      # as the project templates) read. Move them into eng/Versions.props.
+      #
+      # The previous step staged dotnet-outdated's edits, so stage the final files
+      # too. Otherwise, when every update is rejected, the stale index makes the
+      # create-pull-request action try to commit with no remaining changes.
       - name: Restore version properties
         run: |
           git show HEAD:Directory.Packages.props > "$RUNNER_TEMP/Directory.Packages.props"
           ./dotnet.sh run .github/workflows/update-dependencies-version-properties.cs -- "$RUNNER_TEMP/Directory.Packages.props"
+          git add Directory.Packages.props eng/Versions.props
 
       - name: Generate GitHub App Token
         id: app-token
