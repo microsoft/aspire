@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREPIPELINES003
+#pragma warning disable ASPIREAZURE003
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Pipelines;
@@ -12,7 +13,7 @@ namespace Aspire.Hosting.Azure;
 /// <summary>
 /// Represents an Azure App Service Web Site resource.
 /// </summary>
-public class AzureAppServiceWebSiteResource : AzureProvisioningResource
+public class AzureAppServiceWebSiteResource : AzureProvisioningResource, IAzureDeployedEndpointUrlProvider
 {
     /// <inheritdoc/>
     public override string ResourceTypeDisplayName => "Azure App Service";
@@ -127,6 +128,14 @@ public class AzureAppServiceWebSiteResource : AzureProvisioningResource
         slotHostName += $"-{deploymentSlot}";
 
         return TruncateToMaxLength(slotHostName, MaxHostPrefixLengthWithSlot);
+    }
+
+    /// <inheritdoc/>
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE003", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public BicepOutputReference GetDeployedEndpointUrl(EndpointReference endpointReference)
+    {
+        ArgumentNullException.ThrowIfNull(endpointReference);
+        return new BicepOutputReference(AzureDeployedEndpointUrlAnnotation.GetOutputName(endpointReference.EndpointName), this);
     }
 
     private static string TruncateToMaxLength(string value, int maxLength)

@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIRECONNECTIONSTRINGS001
+#pragma warning disable ASPIREAZURE003
 
 using System.Globalization;
 using System.Runtime.CompilerServices;
@@ -237,12 +238,10 @@ internal sealed class AzureAppServiceWebsiteContext(
             return (AllocateParameter(output, secretType: secretType), secretType);
         }
 
-#pragma warning disable ASPIREAZURE003 // IBicepOutputReferenceProvider is experimental.
         if (value is IBicepOutputReferenceProvider outputProvider && outputProvider.GetOutputReference() is { } providedOutput)
         {
             return ProcessValue(providedOutput, secretType, parent, isSlot);
         }
-#pragma warning restore ASPIREAZURE003
 
         if (value is IAzureKeyVaultSecretReference vaultSecretReference)
         {
@@ -811,6 +810,30 @@ internal sealed class AzureAppServiceWebsiteContext(
         AddStickySlotSettings(deploymentSlot is null ? (WebSite)webSite : parentWebSite, stickyConfigNames);
 
         AddWebSiteOutputs(infra, (WebSite)webSite);
+        AddDeployedEndpointUrlOutputs(infra, webSite is WebSiteSlot slotSite ? slotSite.DefaultHostName : ((WebSite)webSite).DefaultHostName);
+    }
+
+    // Emits the host name Azure actually assigns to the site (or slot) that serves the app so other
+    // modules can depend on the deployed site instead of predicting its host name.
+    private void AddDeployedEndpointUrlOutputs(AzureResourceInfrastructure infra, BicepValue<string> defaultHostName)
+    {
+        if (!resource.TryGetAnnotationsOfType<AzureDeployedEndpointUrlAnnotation>(out var requests))
+        {
+            return;
+        }
+
+        foreach (var endpointName in requests.Select(r => r.EndpointName).Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            if (!_endpointMapping.TryGetValue(endpointName, out var mapping))
+            {
+                throw new InvalidOperationException($"Resource '{resource.Name}' does not have an endpoint named '{endpointName}'.");
+            }
+
+            infra.Add(new ProvisioningOutput(AzureDeployedEndpointUrlAnnotation.GetOutputName(endpointName), typeof(string))
+            {
+                Value = BicepFunction.Interpolate($"{mapping.Scheme}://{defaultHostName}")
+            });
+        }
     }
 
     // Front Door Private Link can only target a production site, never a slot, so these outputs always describe the
@@ -900,6 +923,7 @@ internal sealed class AzureAppServiceWebsiteContext(
         AddWebSiteNetworkConfig(infra, webSite);
         AddStickySlotSettings(webSite, stickyConfigNames);
         AddWebSiteOutputs(infra, webSite);
+        AddDeployedEndpointUrlOutputs(infra, webSiteSlot.DefaultHostName);
     }
 
     private static void AddWebSiteNetworkConfig(AzureResourceInfrastructure infra, WebSite webSite)

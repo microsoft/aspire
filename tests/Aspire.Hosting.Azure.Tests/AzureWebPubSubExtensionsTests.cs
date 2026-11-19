@@ -143,7 +143,7 @@ public class AzureWebPubSubExtensionsTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public async Task EventHandlerEndpointUsesComputeEnvironmentAddressInPublishMode()
+    public async Task EventHandlerEndpointHubIsProvisionedAfterComputeInPublishMode()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var environment = builder.AddAzureContainerAppEnvironment("env");
@@ -152,16 +152,29 @@ public class AzureWebPubSubExtensionsTests(ITestOutputHelper output)
             .WithExternalHttpEndpoints()
             .WithComputeEnvironment(environment);
         var wps = builder.AddAzureWebPubSub("wps1");
-        wps.AddHub("abc").AddEventHandler($"{serviceA.GetEndpoint("https")}/eventhandler/{{event}}");
+        var hub = wps.AddHub("abc").AddEventHandler($"{serviceA.GetEndpoint("https")}/eventhandler/{{event}}");
+        wps.AddHub("literal").AddEventHandler($"https://example.com/eventhandler/{{event}}");
+        serviceA.WithReference(hub);
 
         using var app = builder.Build();
         await ExecuteBeforeStartHooksAsync(app, default);
 
-        var (manifest, _) = await AzureManifestUtils.GetManifestWithBicep(wps.Resource, skipPreparer: true);
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var handlers = Assert.Single(model.Resources.OfType<AzureProvisioningResource>(), r => r.Name == "abc-handlers");
+        var containerApp = (AzureProvisioningResource)serviceA.Resource.GetDeploymentTargetAnnotation()!.DeploymentTarget;
 
-        Assert.Equal(
-            "https://servicea.{env.outputs.AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN}/eventhandler/{event}",
-            manifest["params"]!["abc_url_0"]!.ToString());
+        var (wpsManifest, wpsBicep) = await AzureManifestUtils.GetManifestWithBicep(wps.Resource, skipPreparer: true);
+        var (handlersManifest, handlersBicep) = await AzureManifestUtils.GetManifestWithBicep(handlers, skipPreparer: true);
+        var (_, containerAppBicep) = await AzureManifestUtils.GetManifestWithBicep(containerApp, skipPreparer: true);
+
+        // The app's deployed URL, not a prediction, and a dependency on both the service and the app.
+        Assert.Equal("{wps1.outputs.name}", handlersManifest["params"]!["wps1_outputs_name"]!.ToString());
+        Assert.Equal("{serviceA-containerapp.outputs.https_url}/eventhandler/{event}", handlersManifest["params"]!["abc_url_0"]!.ToString());
+        Assert.Equal([containerApp, wps.Resource], handlers.GetAzureReferences().OrderBy(r => r.Name, StringComparer.Ordinal));
+
+        await Verify(wpsBicep, "bicep")
+            .AppendContentAsFile(handlersBicep, "bicep")
+            .AppendContentAsFile(containerAppBicep, "bicep");
     }
 
     [Fact]

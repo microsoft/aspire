@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREPIPELINES003
+#pragma warning disable ASPIREAZURE003
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Pipelines;
@@ -12,7 +13,7 @@ namespace Aspire.Hosting.Azure.AppContainers;
 /// <summary>
 /// Represents an Azure Container App resource.
 /// </summary>
-public class AzureContainerAppResource : AzureProvisioningResource
+public class AzureContainerAppResource : AzureProvisioningResource, IAzureDeployedEndpointUrlProvider
 {
     /// <inheritdoc/>
     public override string ResourceTypeDisplayName => "Azure Container App";
@@ -105,4 +106,12 @@ public class AzureContainerAppResource : AzureProvisioningResource
     /// Gets the target resource that this Azure Container App is being created for.
     /// </summary>
     public IResource TargetResource { get; }
+
+    /// <inheritdoc/>
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE003", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public BicepOutputReference GetDeployedEndpointUrl(EndpointReference endpointReference)
+    {
+        ArgumentNullException.ThrowIfNull(endpointReference);
+        return new BicepOutputReference(AzureDeployedEndpointUrlAnnotation.GetOutputName(endpointReference.EndpointName), this);
+    }
 }
