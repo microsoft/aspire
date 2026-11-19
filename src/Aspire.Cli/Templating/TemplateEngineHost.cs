@@ -1,14 +1,15 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Microsoft.Extensions.Logging;
 using Microsoft.TemplateEngine.Abstractions;
 using Microsoft.TemplateEngine.Abstractions.PhysicalFileSystem;
 using Microsoft.TemplateEngine.Utils;
 
 namespace Aspire.Cli.Templating;
 
-internal sealed class TemplateEngineHost(IReadOnlyList<(Type InterfaceType, IIdentifiedComponent Instance)> components)
-    : Microsoft.TemplateEngine.Edge.DefaultTemplateEngineHost("aspirecli", "1.0.0", builtIns: components, fallbackHostTemplateConfigNames: ["dotnetcli"]), ITemplateEngineHost
+internal sealed class TemplateEngineHost(IReadOnlyList<(Type InterfaceType, IIdentifiedComponent Instance)> components, ILoggerFactory loggerFactory)
+    : Microsoft.TemplateEngine.Edge.DefaultTemplateEngineHost("aspirecli", "1.0.0", builtIns: components, fallbackHostTemplateConfigNames: ["dotnetcli"], loggerFactory: loggerFactory), ITemplateEngineHost
 {
     // Filter the source view rather than copying or modifying a user's checkout.
     // A .git entry can be a directory or a worktree/submodule pointer file.
