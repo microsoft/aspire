@@ -331,6 +331,15 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to The configuration source uses the outdated &apos;{0}&apos; setting, which was applied as &apos;{1}&apos;. Ask the configuration source maintainers to rename &apos;{0}&apos; to &apos;{1}&apos;..
+        /// </summary>
+        internal static string OutdatedSetting {
+            get {
+                return ResourceManager.GetString("OutdatedSetting", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Read more about this configuration source.
         /// </summary>
         internal static string ReadmeLink {

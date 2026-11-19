@@ -5,7 +5,7 @@
   "title": "Aspire Local Settings",
   "description": "Aspire CLI local configuration file (.aspire/settings.json)",
   "properties": {
-    "agentPluginSources": {
+    "agentPlugins": {
       "description": "Named agent plugin sources, merged across configuration layers. The built-in default source remains enabled unless explicitly disabled. Source names must be 1-64 ASCII letters, digits, dots, hyphens, or underscores, starting with a letter or digit.",
       "type": "object",
       "additionalProperties": {
@@ -352,6 +352,11 @@
     "sdkVersion": {
       "description": "The Aspire SDK version used for this polyglot AppHost project. Determines the version of Aspire.Hosting packages to use.",
       "type": "string"
+    },
+    "skillSources": {
+      "description": "Deprecated. Use agentPlugins instead. Sources are still read when agentPlugins does not define a source with the same name. OpenCode catalog properties are ignored.",
+      "deprecationMessage": "skillSources is deprecated. Rename it to agentPlugins.",
+      "type": "object"
     },
     "$schema": {
       "type": "string",

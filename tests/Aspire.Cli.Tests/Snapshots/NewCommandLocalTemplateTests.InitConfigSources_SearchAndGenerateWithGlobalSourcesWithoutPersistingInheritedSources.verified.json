@@ -1,5 +1,5 @@
 ﻿{
-  "agentPluginSources": {
+  "agentPlugins": {
     "team": {
       "repository": "example/team",
       "plugins": [

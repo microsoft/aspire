@@ -1,6 +1,6 @@
 ﻿{
   "channel": "daily",
-  "agentPluginSources": {
+  "agentPlugins": {
     "default": {
       "enabled": false
     },

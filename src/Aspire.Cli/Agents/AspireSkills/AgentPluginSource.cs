@@ -13,7 +13,12 @@ namespace Aspire.Cli.Agents.AspireSkills;
 
 internal sealed class AgentPluginSource
 {
-    internal const string SectionName = "agentPluginSources";
+    internal const string SectionName = "agentPlugins";
+
+    // Released CLIs configured agent plugin sources under "skillSources". Existing settings
+    // and configuration sources still use it, so it continues to be read. Its
+    // openCodeV1Catalog/openCodeV2Catalog properties are ignored.
+    internal const string LegacySectionName = "skillSources";
     internal const string DefaultName = "default";
     private string _name = DefaultName;
 
@@ -73,18 +78,33 @@ internal sealed class AgentPluginSource
         {
             throw AspireSkillsRemoteConfiguration.ExistingConfiguration(SectionName);
         }
+        var legacySection = configuration.GetSection(LegacySectionName);
+        if (legacySection.Value is not null)
+        {
+            throw AspireSkillsRemoteConfiguration.ExistingConfiguration(LegacySectionName);
+        }
 
-        var names = new[] { DefaultName }.Concat(section.GetChildren().Select(child => child.Key))
+        // A source name defined in agentPlugins replaces the whole legacy skillSources entry
+        // with the same name, rather than merging properties, so the two formats never mix
+        // within one source. Use child keys rather than Exists(), which is false for {}.
+        var currentNames = section.GetChildren().Select(child => child.Key).ToArray();
+        var currentNameSet = currentNames.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var legacyNames = legacySection.GetChildren().Select(child => child.Key).ToArray();
+        var names = new[] { DefaultName }.Concat(currentNames).Concat(legacyNames)
             .Distinct(StringComparer.OrdinalIgnoreCase);
         var sources = new List<AgentPluginSource>();
         var marketplaces = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var name in names)
         {
-            var settings = section.GetSection(name);
-            SourceNameValidator.Validate(name, $"{SectionName}.{name}");
+            var sectionName = currentNameSet.Contains(name) || !legacyNames.Contains(name, StringComparer.OrdinalIgnoreCase)
+                ? SectionName
+                : LegacySectionName;
+            var settings = configuration.GetSection(sectionName).GetSection(name);
+            var path = $"{sectionName}.{name}";
+            SourceNameValidator.Validate(name, path);
             if (settings.Value is not null)
             {
-                throw AspireSkillsRemoteConfiguration.ExistingConfiguration($"{SectionName}.{name}");
+                throw AspireSkillsRemoteConfiguration.ExistingConfiguration(path);
             }
             if (settings.GetBool("enabled") is false)
             {
@@ -102,7 +122,7 @@ internal sealed class AgentPluginSource
                 pluginEntries.Where((child, index) =>
                     child.Key != index.ToString(CultureInfo.InvariantCulture) || child.GetChildren().Any()).Any())
             {
-                throw AspireSkillsRemoteConfiguration.ExistingConfiguration($"{SectionName}.{name}.plugins");
+                throw AspireSkillsRemoteConfiguration.ExistingConfiguration($"{path}.plugins");
             }
             var source = new AgentPluginSource
             {
@@ -114,15 +134,15 @@ internal sealed class AgentPluginSource
             };
             if (!IsIdentifier(source.Marketplace) || !marketplaces.Add(source.Marketplace))
             {
-                throw AspireSkillsRemoteConfiguration.ExistingConfiguration($"{SectionName}.{name}.marketplace");
+                throw AspireSkillsRemoteConfiguration.ExistingConfiguration($"{path}.marketplace");
             }
             if (string.IsNullOrWhiteSpace(source.Repository))
             {
-                throw AspireSkillsRemoteConfiguration.ExistingConfiguration($"{SectionName}.{name}.repository");
+                throw AspireSkillsRemoteConfiguration.ExistingConfiguration($"{path}.repository");
             }
             if (!GitHelpers.IsValidRepository(source.GetRepositoryUrl()) || !GitHelpers.IsValidRef(source.Ref))
             {
-                throw AspireSkillsRemoteConfiguration.ExistingConfiguration($"{SectionName}.{name}.repository/ref");
+                throw AspireSkillsRemoteConfiguration.ExistingConfiguration($"{path}.repository/ref");
             }
             sources.Add(source);
         }

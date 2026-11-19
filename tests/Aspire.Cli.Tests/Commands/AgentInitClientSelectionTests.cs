@@ -537,7 +537,7 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var homeDirectory = workspace.CreateDirectory("fake-home");
         await File.WriteAllTextAsync(Path.Combine(workspace.WorkspaceRoot.FullName, "aspire.config.json"),
-            """{"agentPluginSources":{"default":{"repository":""}}}""");
+            """{"agentPlugins":{"default":{"repository":""}}}""");
         var skillsPrompted = false;
         var interaction = new TestInteractionService
         {
@@ -1378,11 +1378,11 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
     [Theory]
     [InlineData("aspire", false, null, true)]
     [InlineData("aspire", false, "{}", true)]
-    [InlineData("aspire", false, """{"agentPluginSources":{}}""", true)]
-    [InlineData("aspire", false, """{"agentPluginSources":{"contoso":{"repository":"contoso/skills"}}}""", true)]
-    [InlineData("aspire", false, """{"agentPluginSources":{"default":{"enabled":false},"contoso":{"repository":"contoso/skills"}}}""", false)]
-    [InlineData("aspire", false, """{"agentPluginSources":{"default":{"plugins":["other"]}}}""", false)]
-    [InlineData("aspire", true, """{"agentPluginSources":{"default":{"enabled":false},"contoso":{"repository":"contoso/skills"}}}""", true)]
+    [InlineData("aspire", false, """{"agentPlugins":{}}""", true)]
+    [InlineData("aspire", false, """{"agentPlugins":{"contoso":{"repository":"contoso/skills"}}}""", true)]
+    [InlineData("aspire", false, """{"agentPlugins":{"default":{"enabled":false},"contoso":{"repository":"contoso/skills"}}}""", false)]
+    [InlineData("aspire", false, """{"agentPlugins":{"default":{"plugins":["other"]}}}""", false)]
+    [InlineData("aspire", true, """{"agentPlugins":{"default":{"enabled":false},"contoso":{"repository":"contoso/skills"}}}""", true)]
     [InlineData("none", true, null, true)]
     [InlineData("playwright-cli", false, null, false)]
     public async Task AgentInit_Hooks_RequireAspireSkillsPluginOrMcp(string skills, bool mcp, string? config, bool expectHooks)
