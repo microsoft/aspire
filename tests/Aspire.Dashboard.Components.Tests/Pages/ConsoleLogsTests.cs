@@ -1050,7 +1050,7 @@ public partial class ConsoleLogsTests : DashboardTestContext
             var activePause = pauseManager.ConsoleLogPauseIntervals[^1];
             var pauseWarning = cut.FindComponent<PauseWarning>();
             Assert.Equal(activePause.Start, pauseWarning.Instance.PausedAt);
-            Assert.Contains("now", pauseWarning.Markup, StringComparison.Ordinal);
+            Assert.Equal("Console logs capture paused now", pauseWarning.Find(".pause-warning-message").TextContent.Trim());
             Assert.Single(cut.Find("footer").QuerySelectorAll(".pause-warning"));
         });
 

@@ -14,6 +14,6 @@
 
     @if (PausedAt is { } pausedAt)
     {
-        <PauseWarning PausedAt="@pausedAt" />
+        <PauseWarning PausedAt="@pausedAt" CaptureType="@GetPauseCaptureType()" />
     }
 </div>

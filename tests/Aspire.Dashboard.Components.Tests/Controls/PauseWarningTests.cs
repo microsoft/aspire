@@ -4,7 +4,6 @@
 using Aspire.Dashboard.Components.Controls;
 using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Model;
-using Aspire.Dashboard.Utils;
 using Bunit;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Localization;
@@ -36,29 +35,39 @@ public class PauseWarningTests : DashboardTestContext
     }
 
     [Fact]
-    public void Render_ShowsRelativeAgeAndAbsoluteTooltip()
+    public void Render_ShowsRelativeAgeAndAbsoluteTimeInTooltip()
     {
         // Fake timers so the 30s age refresh does not schedule real wall-clock callbacks in unit tests.
         var timeProvider = new TestTimeProvider { Timers = new FakeTimeProvider() };
         Services.AddLocalization();
         Services.AddFluentUIComponents();
         Services.AddSingleton<BrowserTimeProvider>(timeProvider);
-
         var pausedAt = timeProvider.GetUtcNow().UtcDateTime.AddMinutes(-5);
 
         var cut = Render<PauseWarning>(builder =>
         {
             builder.Add(p => p.PausedAt, pausedAt);
+            builder.Add(p => p.CaptureType, "Structured logs");
         });
 
-        var expectedTooltip = FormatHelpers.FormatTooltipDateTime(timeProvider, pausedAt);
         var root = cut.Find(".pause-warning");
 
         Assert.Equal("status", root.GetAttribute("role"));
+        Assert.Equal("Structured logs capture paused 5 minutes ago", cut.Find(".pause-warning-message").TextContent.Trim());
+        Assert.Equal("Structured logs capture paused", cut.Find(".pause-warning-title").TextContent.Trim());
         Assert.Equal("0", root.GetAttribute("tabindex"));
-        Assert.Contains("Capture paused", cut.Markup, StringComparison.Ordinal);
-        Assert.Contains("5 minutes ago", cut.Markup, StringComparison.Ordinal);
-        Assert.Equal(expectedTooltip, root.GetAttribute("data-tooltip"));
-        Assert.Equal($"Capture paused 5 minutes ago ({expectedTooltip})", root.GetAttribute("aria-label"));
+        Assert.Equal("Structured logs capture paused 12:54:59 AM", root.GetAttribute("data-tooltip"));
+        Assert.Equal("above", root.GetAttribute("data-tooltip-positioning"));
+        Assert.Equal("Structured logs capture paused 5 minutes ago (12:54:59 AM)", root.GetAttribute("aria-label"));
+
+        var id = root.GetAttribute("id");
+        Assert.False(string.IsNullOrEmpty(id));
+
+        var another = Render<PauseWarning>(builder =>
+        {
+            builder.Add(p => p.PausedAt, pausedAt);
+            builder.Add(p => p.CaptureType, "Structured logs");
+        });
+        Assert.NotEqual(id, another.Find(".pause-warning").GetAttribute("id"));
     }
 }

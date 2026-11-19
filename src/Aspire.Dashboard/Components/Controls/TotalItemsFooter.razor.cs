@@ -37,6 +37,12 @@ public partial class TotalItemsFooter
     [Parameter]
     public DateTime? PausedAt { get; set; }
 
+    [Parameter]
+    public string? PauseCaptureType { get; set; }
+
+    private string GetPauseCaptureType() =>
+        PauseCaptureType ?? throw new InvalidOperationException($"{nameof(PauseCaptureType)} must be set when {nameof(PausedAt)} is set.");
+
     /// <summary>
     /// Called when data grid data is refreshed. This sets the count explicitly and forces the control to re-render.
     /// </summary>

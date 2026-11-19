@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
@@ -14,6 +15,8 @@ public partial class PauseWarning : ComponentBase, IAsyncDisposable
 {
     private static readonly TimeSpan s_refreshInterval = TimeSpan.FromSeconds(30);
 
+    // The tooltip provider's generated IDs require a secure browser context.
+    private readonly string _id = $"pause-warning-{Guid.NewGuid():N}";
     private readonly CancellationTokenSource _disposeCts = new();
     // Copied from the CTS so the refresh loop can keep reading it after DisposeAsync disposes the CTS.
     private readonly CancellationToken _disposeToken;
@@ -27,6 +30,9 @@ public partial class PauseWarning : ComponentBase, IAsyncDisposable
     [Parameter, EditorRequired]
     public required DateTime PausedAt { get; set; }
 
+    [Parameter, EditorRequired]
+    public required string CaptureType { get; set; }
+
     [Inject]
     public required IStringLocalizer<ControlsResources> Loc { get; init; }
 
@@ -36,12 +42,14 @@ public partial class PauseWarning : ComponentBase, IAsyncDisposable
     [Inject]
     public required BrowserTimeProvider TimeProvider { get; init; }
 
-    private string PauseTitle => Loc[nameof(ControlsResources.PauseWarningTitle)];
     private string RelativeAge => FormatPauseAge(PausedAt, TimeProvider.GetUtcNow(), LayoutLoc);
-    private string AbsoluteTooltip => FormatHelpers.FormatTooltipDateTime(TimeProvider, PausedAt);
-    // role=status + aria-label expose absolute time to screen readers; tabindex=0 lets keyboard
-    // focus open the absolute data-tooltip (app-tooltips.js listens for focusin).
-    private string AccessibleLabel => $"{PauseTitle} {RelativeAge} ({AbsoluteTooltip})";
+    private string PauseWarningText => string.Format(
+        CultureInfo.CurrentCulture,
+        Loc[nameof(ControlsResources.PauseWarningText)],
+        CaptureType);
+    private string AbsoluteTime => FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, PausedAt);
+    private string AbsoluteTooltip => $"{PauseWarningText} {AbsoluteTime}";
+    private string AccessibleLabel => $"{PauseWarningText} {RelativeAge} ({AbsoluteTime})";
 
     protected override void OnInitialized()
     {

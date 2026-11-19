@@ -88,6 +88,9 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
     public required IStringLocalizer<Dashboard.Resources.StructuredLogs> StructuredLogsLoc { get; init; }
 
     [Inject]
+    public required IStringLocalizer<Dashboard.Resources.Traces> TracesLoc { get; init; }
+
+    [Inject]
     public required PauseManager PauseManager { get; init; }
 
     [Inject]

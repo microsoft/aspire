@@ -1088,7 +1088,7 @@ public partial class MetricsTests : DashboardTestContext
             Assert.True(pauseManager.AreMetricsPaused(out var pausedAt));
             var pauseWarning = cut.FindComponent<PauseWarning>();
             Assert.Equal(pausedAt.Value, pauseWarning.Instance.PausedAt);
-            Assert.Contains("now", pauseWarning.Markup, StringComparison.Ordinal);
+            Assert.Equal("Metrics capture paused now", pauseWarning.Find(".pause-warning-message").TextContent.Trim());
             Assert.Single(cut.Find("footer").QuerySelectorAll(".pause-warning"));
         });
 

@@ -177,6 +177,11 @@
         <target state="new">Delete value</target>
         <note />
       </trans-unit>
+      <trans-unit id="PauseWarningText">
+        <source>{0} capture paused</source>
+        <target state="new">{0} capture paused</target>
+        <note>{0} is the type of captured data.</note>
+      </trans-unit>
       <trans-unit id="ResourcesContainerGraphAccessibleLabel">
         <source>Graph. For an accessible view please navigate to the Resources tab</source>
         <target state="translated">Graph. Erişilebilir bir görünüm için lütfen Kaynaklar sekmesine gidin</target>
@@ -425,11 +430,6 @@
       <trans-unit id="PauseButtonTitle">
         <source>Pause incoming data</source>
         <target state="translated">Gelen verileri duraklat</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="PauseWarningTitle">
-        <source>Capture paused</source>
-        <target state="translated">Yakalama duraklatıldı</target>
         <note />
       </trans-unit>
       <trans-unit id="PlotlyChartCount">

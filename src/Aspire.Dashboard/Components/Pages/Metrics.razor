@@ -204,7 +204,7 @@
         @if (PausedAt is { } pausedAt)
         {
             <div class="items-footer">
-                <PauseWarning PausedAt="@pausedAt" />
+                <PauseWarning PausedAt="@pausedAt" CaptureType="@Loc[nameof(Dashboard.Resources.Metrics.MetricsHeader)]" />
             </div>
         }
     </text>;

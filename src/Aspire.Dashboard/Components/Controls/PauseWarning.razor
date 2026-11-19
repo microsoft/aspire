@@ -1,6 +1,7 @@
 ﻿@namespace Aspire.Dashboard.Components.Controls
 
 <div class="pause-warning"
+     id="@_id"
      role="status"
      tabindex="0"
      data-tooltip="@AbsoluteTooltip"
@@ -11,7 +12,6 @@
     </div>
 
     <div class="pause-warning-message">
-        <span class="pause-warning-title">@PauseTitle</span>
-        @RelativeAge
+        <span class="pause-warning-title">@PauseWarningText</span> @RelativeAge
     </div>
 </div>

@@ -754,11 +754,11 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Capture paused.
+        ///   Looks up a localized string similar to {0} capture paused.
         /// </summary>
-        public static string PauseWarningTitle {
+        public static string PauseWarningText {
             get {
-                return ResourceManager.GetString("PauseWarningTitle", resourceCulture);
+                return ResourceManager.GetString("PauseWarningText", resourceCulture);
             }
         }
         

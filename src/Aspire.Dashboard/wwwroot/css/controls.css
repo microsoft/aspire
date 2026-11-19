@@ -685,7 +685,6 @@ fluent-popover-b::part(dialog)::-webkit-scrollbar-corner {
 
 .pause-warning-title {
     font-weight: var(--aspire-font-weight-semibold);
-    padding-inline-end: 4px;
 }
 
 html,
