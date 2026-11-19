@@ -47,7 +47,7 @@ stamped `stable`.
 
 - `winget` / `brew` / `dotnet-tool` → `binaryDir` (flat: bundle extracts beside the binary).
 - `script` / `pr` / `localhive` → `Path.GetDirectoryName(binaryDir)` (bin layout: bundle extracts as a sibling of `bin/`).
-- `nix` → default Aspire home (`ASPIRE_HOME` when set, otherwise `$HOME/.aspire`) because package outputs live under the read-only Nix store.
+- `nix` → no runtime extraction. The Nix derivation expands the payload and patches its dynamically linked binaries at package build time. Layout discovery uses the packaged `bundle/` directory beside the CLI, without writing extraction locks or version leases into the read-only store.
 - missing, unreadable, malformed, or unknown `source` sidecar → default Aspire home (`ASPIRE_HOME` when set, otherwise `$HOME/.aspire`).
 
 `CliPathHelper.GetAspireHomeDirectory` maps sidecar-owned portable installs to
@@ -88,7 +88,7 @@ Two mechanical checks guard the contract:
 
 ## Reader-side invariants (runtime)
 
-`BundleService.ComputeDefaultExtractDir` is the single point of truth for layout selection. It performs no path-shape detection: layout is a pure function of the sidecar `source` value (or the fallback when the sidecar is absent, unreadable, malformed, or has an unknown `source`). Unknown `source` values and known read-only package routes such as `nix` fall back to the default Aspire home so unrecognized installs do not try to write next to the CLI binary. Coverage lives in `tests/Aspire.Cli.Tests/Bundles/BundleServiceCrossRouteExtractionTests.cs` as a theory over (source × prefix-shape) rows, including the cross-route case where a `brew` sidecar lands under a script-style prefix.
+`BundleService.ComputeDefaultExtractDir` is the single point of truth for extraction selection. It performs no path-shape detection: layout is a pure function of the sidecar `source` value (or the fallback when the sidecar is absent, unreadable, malformed, or has an unknown `source`). Unknown `source` values fall back to the default Aspire home so unrecognized installs do not try to write next to the CLI binary. Nix returns no extraction directory because re-extraction would replace patched binaries with unpatched ones; its immutable package-owned layout does not need runtime cleanup leases. Coverage lives in `tests/Aspire.Cli.Tests/Bundles/BundleServiceCrossRouteExtractionTests.cs` as a theory over (source × prefix-shape) rows, including the cross-route case where a `brew` sidecar lands under a script-style prefix.
 
 `CliPathHelper.GetAspireHomeDirectory` is the single point of truth for Aspire-home selection. It reads the same sidecar but only changes home for Aspire-owned portable routes (`script`, `pr`, and `localhive`); package-manager routes use the user-profile home because their install roots are package-manager-owned. Coverage lives in `tests/Aspire.Cli.Tests/Utils/CliPathHelperTests.cs`.
 
