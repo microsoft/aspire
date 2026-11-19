@@ -151,7 +151,7 @@ internal sealed partial record PackageVersion(string Id, string Version, string 
     }
 
     public static string? ReadPropertyReference(string version) =>
-        PropertyReference().Match(version) is { Success: true } match ? match.Groups[1].Value : null;
+        SinglePropertyReference().Match(version) is { Success: true } match ? match.Groups[1].Value : null;
 
     [GeneratedRegex(@"<PackageVersion\b[^>]*>")]
     private static partial Regex PackageVersionElement();
@@ -166,5 +166,5 @@ internal sealed partial record PackageVersion(string Id, string Version, string 
     // the property name: "$(OpenTelemetryInstrumentationHttpVersion)" -> OpenTelemetryInstrumentationHttpVersion.
     // Literal versions ("1.21.0") and expressions ("$(A)-$(B)") don't match, so they are left alone.
     [GeneratedRegex(@"^\$\(([A-Za-z_][A-Za-z0-9_.-]*)\)$")]
-    private static partial Regex PropertyReference();
+    private static partial Regex SinglePropertyReference();
 }
