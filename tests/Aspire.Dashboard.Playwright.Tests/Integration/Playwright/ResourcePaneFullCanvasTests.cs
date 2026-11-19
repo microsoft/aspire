@@ -87,6 +87,43 @@ public sealed class ResourcePaneFullCanvasTests(ResourceTagPaneTests.TaggedResou
     }
 
     [Theory]
+    [InlineData(390, 844)]
+    [InlineData(768, 1024)]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task NarrowHomeTab_GoesHomeAndOverviewOpensTheOverview(int width, int height)
+    {
+        await RunTestAsync(async page =>
+        {
+            await page.SetViewportSizeAsync(width, height);
+            await page.EmulateMediaAsync(new() { ReducedMotion = ReducedMotion.Reduce });
+            await page.GotoAsync("/resources/tag-a");
+            var layout = page.Locator(".resources-layout");
+            var home = page.Locator("#resource-tab-home");
+            var overview = page.Locator("#tab-Overview");
+            await Assertions.Expect(home).ToHaveAttributeAsync("aria-selected", "false");
+
+            await home.ClickAsync();
+            await Assertions.Expect(page).ToHaveURLAsync(ResourcePaneNavigation.HomeUrl);
+            await Assertions.Expect(layout).ToHaveClassAsync(new Regex("drawer-open"));
+            await Assertions.Expect(page.Locator("#resource-tab-home")).ToHaveAttributeAsync("aria-selected", "true");
+            await Assertions.Expect(page.Locator("#tab-Overview")).ToHaveAttributeAsync("aria-selected", "false");
+
+            await overview.ClickAsync();
+            await Assertions.Expect(page).ToHaveURLAsync(new Regex("/resources$"));
+            await Assertions.Expect(layout).Not.ToHaveClassAsync(new Regex("drawer-open"));
+            await Assertions.Expect(page.Locator("#tab-Overview")).ToHaveAttributeAsync("aria-selected", "true");
+
+            // The strip is re-created at home, and keyboard focus moves to its Home tab.
+            await home.FocusAsync();
+            await page.Keyboard.PressAsync("Enter");
+            await Assertions.Expect(page).ToHaveURLAsync(ResourcePaneNavigation.HomeUrl);
+            await Assertions.Expect(layout).ToHaveClassAsync(new Regex("drawer-open"));
+            await Assertions.Expect(page.Locator("#resource-tab-home")).ToBeFocusedAsync();
+            await Assertions.Expect(page.Locator("#blazor-error-ui")).Not.ToBeVisibleAsync();
+        });
+    }
+
+    [Theory]
     [InlineData(769, 1024)]
     [InlineData(1440, 900)]
     [OuterloopTest("Resource-intensive Playwright browser test")]
