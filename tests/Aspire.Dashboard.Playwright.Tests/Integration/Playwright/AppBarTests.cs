@@ -78,7 +78,7 @@ public class AppBarTests : PlaywrightTestsBase<DashboardServerFixture>
                 header => {
                     const bounds = header.getBoundingClientRect();
                     const rect = selector => header.querySelector(selector).getBoundingClientRect();
-                    const brand = rect('.brand-logo-container > a.logo');
+                    const brand = rect('.brand-logo-container > .logo');
                     const application = rect('.application-name');
                     const actions = [...header.querySelectorAll('.header-button')]
                         .map(element => element.getBoundingClientRect());
