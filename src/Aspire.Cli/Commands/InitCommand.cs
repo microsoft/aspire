@@ -267,7 +267,7 @@ internal sealed class InitCommand : BaseCommand
             .Where(result => result.Status is AgentConfigurationStatus.Configured or AgentConfigurationStatus.Unchanged)
             .SelectMany(result => result.Clients.Where(client =>
                 result.Configuration is { } configuration &&
-                HasAspireifyRegistration(client, configuration, agentInitResult.SkillSources)))
+                HasAspireifyRegistration(client, configuration, agentInitResult.AgentPluginSources)))
             .ToArray();
         var commands = new List<string>();
 
@@ -285,16 +285,14 @@ internal sealed class InitCommand : BaseCommand
     }
 
     // No-op registrations and custom plugins do not prove Aspireify is available.
-    // OpenCode must contain an official catalog belonging to an enabled source,
-    // not just an old registration or an unused V1/V2 catalog setting.
-    private static bool HasAspireifyRegistration(IAgentClient client, JsonObject configuration, IReadOnlyList<SkillSource> sources)
+    // OpenCode must contain the official catalog while the default source is enabled,
+    // not just an old registration.
+    private static bool HasAspireifyRegistration(IAgentClient client, JsonObject configuration, IReadOnlyList<AgentPluginSource> sources)
     {
         if (client.Id == OpenCodeAgentClient.ClientId)
         {
-            return AspireSkillsRemoteConfiguration.ReadOpenCodeSkills(configuration)?
-                .Select(AspireSkillsRemoteConfiguration.String)
-                .Any(catalog => AspireSkillsRemoteConfiguration.IsOpenCodeCatalog(catalog, SkillSource.BuiltIn) &&
-                    sources.Any(source => AspireSkillsRemoteConfiguration.IsOpenCodeCatalog(catalog, source))) is true;
+            return sources.Any(static source => source.IsDefault) &&
+                AspireSkillsRemoteConfiguration.HasOpenCodeCatalog(configuration);
         }
 
         return sources.Any(source => (source.Plugins ?? ["aspire"]).Contains("aspire", StringComparer.Ordinal) &&

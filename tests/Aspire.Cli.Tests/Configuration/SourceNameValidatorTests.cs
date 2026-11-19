@@ -50,21 +50,21 @@ public class SourceNameValidatorTests
         Assert.Equal(valid, SourceNameValidator.IsValid(name));
         using var configuration = new ConfigurationManager();
         configuration["integrationSources:default:enabled"] = "false";
-        configuration["skillSources:default:enabled"] = "false";
+        configuration["agentPlugins:default:enabled"] = "false";
         configuration[$"integrationSources:{name}:enabled"] = "false";
-        configuration[$"skillSources:{name}:enabled"] = "false";
+        configuration[$"agentPlugins:{name}:enabled"] = "false";
         if (valid)
         {
             TemplateSourceConfiguration.ValidateName(name);
             Assert.Empty(IntegrationSourceConfiguration.Resolve(configuration, new DirectoryInfo(Environment.CurrentDirectory)));
-            Assert.Empty(SkillSource.Resolve(configuration));
+            Assert.Empty(AgentPluginSource.Resolve(configuration));
         }
         else
         {
             Assert.Throws<TemplateSourceConfigurationException>(() => TemplateSourceConfiguration.ValidateName(name));
             Assert.Throws<InvalidOperationException>(() =>
                 IntegrationSourceConfiguration.Resolve(configuration, new DirectoryInfo(Environment.CurrentDirectory)));
-            Assert.Throws<InvalidOperationException>(() => SkillSource.Resolve(configuration));
+            Assert.Throws<InvalidOperationException>(() => AgentPluginSource.Resolve(configuration));
         }
     }
 }

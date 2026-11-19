@@ -18,7 +18,7 @@ internal sealed class AgentConfiguration
 
     public static async Task<IReadOnlyList<AgentTargetResult>> ApplyRemoteAsync(
         IEnumerable<IAgentClient> clients, DirectoryInfo workspaceRoot, AgentConfigurationScope scope,
-        IReadOnlyList<SkillSource> sources, CancellationToken cancellationToken)
+        IReadOnlyList<AgentPluginSource> sources, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var results = new List<AgentTargetResult>();

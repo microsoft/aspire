@@ -2,8 +2,9 @@ import * as assert from 'assert';
 import * as fs from 'fs';
 import * as path from 'path';
 import { runInNewContext } from 'vm';
+import type { PropertyInfo } from '../types/configInfo';
 
-function generateSchemas(packageValueType: string): Map<string, string> {
+function generateSchemas(packageValueType: string, legacyProperty?: PropertyInfo): Map<string, string> {
     const scriptDirectory = path.resolve(__dirname, '../../scripts');
     const output = new Map<string, string>();
     const features = { Name: 'features', Type: 'object', Description: '', Required: false };
@@ -18,15 +19,16 @@ function generateSchemas(packageValueType: string): Map<string, string> {
             ]
         } : {})
     };
+    const sharedProperties = legacyProperty ? [features, legacyProperty] : [features];
     const configInfo = {
         AvailableFeatures: [{
             Name: 'experimentalHostingIntegrations',
             Description: 'Enable external hosting integrations',
             DefaultValue: false
         }],
-        LocalSettingsSchema: { Properties: [features] },
-        GlobalSettingsSchema: { Properties: [features] },
-        ConfigFileSchema: { Properties: [features, packages] }
+        LocalSettingsSchema: { Properties: sharedProperties },
+        GlobalSettingsSchema: { Properties: sharedProperties },
+        ConfigFileSchema: { Properties: [...sharedProperties, packages] }
     };
     runInNewContext(fs.readFileSync(path.join(scriptDirectory, 'generate-schema.js'), 'utf8'), {
         __dirname: scriptDirectory,
@@ -82,5 +84,24 @@ suite('Settings schema generation', () => {
         const schemas = generateSchemas('string');
         const schema = JSON.parse(schemas.get('aspire-config.schema.json')!);
         assert.deepStrictEqual(schema.properties.packages.additionalProperties, { type: 'string' });
+    });
+
+    test('All settings schemas honor deprecation metadata without requiring a replacement property', () => {
+        const deprecationMessage = 'Use agentPlugins instead.';
+        const schemas = generateSchemas('object', {
+            name: 'skillSources', type: 'object', description: 'Legacy plugin sources', required: false, deprecationMessage
+        });
+        assert.strictEqual(schemas.size, 3);
+        for (const content of schemas.values()) {
+            const schema = JSON.parse(content);
+            assert.strictEqual(schema.additionalProperties, false);
+            assert.deepStrictEqual(schema.properties.skillSources, {
+                description: 'Legacy plugin sources',
+                deprecationMessage,
+                type: 'object',
+                additionalProperties: true
+            });
+            assert.strictEqual(schema.properties.features.deprecationMessage, undefined);
+        }
     });
 });

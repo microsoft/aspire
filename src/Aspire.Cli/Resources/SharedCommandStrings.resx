@@ -279,12 +279,6 @@
   <data name="SourcePlugins" xml:space="preserve">
     <value>Plugins</value>
   </data>
-  <data name="SourceOpenCodeV1Catalog" xml:space="preserve">
-    <value>OpenCode V1 catalog</value>
-  </data>
-  <data name="SourceOpenCodeV2Catalog" xml:space="preserve">
-    <value>OpenCode V2 catalog</value>
-  </data>
   <data name="NuGetSearchLimitWarning" xml:space="preserve">
     <value>NuGet search results may be incomplete because the limit of {0} packages per feed was reached. Use narrower integration source patterns.</value>
     <comment>{0} is the maximum number of packages searched per feed.</comment>

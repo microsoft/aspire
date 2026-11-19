@@ -46,6 +46,7 @@ internal sealed record SettingsSchema(List<PropertyInfo> Properties);
 /// <param name="Type">The property type (e.g., "string", "boolean", "object", "array").</param>
 /// <param name="Description">A description of what the property does.</param>
 /// <param name="Required">Whether the property is required.</param>
+/// <param name="DeprecationMessage">For deprecated properties, guidance on what to use instead.</param>
 /// <param name="SubProperties">For object-typed properties with a known shape, the nested property definitions.</param>
 /// <param name="AdditionalPropertiesType">For dictionary-typed properties, the JSON type of the values (e.g., "string").</param>
 internal sealed record PropertyInfo(
@@ -53,5 +54,6 @@ internal sealed record PropertyInfo(
     string Type,
     string Description,
     bool Required,
+    string? DeprecationMessage,
     List<PropertyInfo>? SubProperties = null,
     string? AdditionalPropertiesType = null);

@@ -5,6 +5,48 @@
   "title": "Aspire Global Settings",
   "description": "Aspire CLI global configuration file (~/.aspire/settings.json)",
   "properties": {
+    "agentPlugins": {
+      "description": "Named agent plugin sources, merged across configuration layers. The built-in default source remains enabled unless explicitly disabled. Source names must be 1-64 ASCII letters, digits, dots, hyphens, or underscores, starting with a letter or digit.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "description": "Whether to register this source. Defaults to true. Set default.enabled to false to omit the built-in Aspire source.",
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "string",
+                "enum": [
+                  "true",
+                  "false"
+                ]
+              }
+            ]
+          },
+          "repository": {
+            "description": "GitHub owner/repository or an HTTPS/SSH Git repository URL containing the agent marketplace.",
+            "type": "string"
+          },
+          "marketplace": {
+            "description": "Agent marketplace identifier. Defaults to the source name, or aspire-skills for the default source.",
+            "type": "string"
+          },
+          "plugins": {
+            "description": "Plugin names within the marketplace. Defaults to [\"aspire\"].",
+            "type": "array",
+            "items": {}
+          },
+          "ref": {
+            "description": "Optional marketplace Git ref. Existing agent-side pins are preserved.",
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
     "channel": {
       "description": "The Aspire channel to use for package resolution (e.g., \"stable\", \"preview\", \"staging\"). Used by aspire add to determine which NuGet feed to use.",
       "type": "string"
@@ -209,7 +251,7 @@
       "additionalProperties": false
     },
     "integrationSources": {
-      "description": "Named NuGet integration sources and allowed package patterns, merged across configuration layers.",
+      "description": "Named NuGet integration sources and allowed package patterns, merged across configuration layers. Source names must be 1-64 ASCII letters, digits, dots, hyphens, or underscores, starting with a letter or digit.",
       "type": "object",
       "additionalProperties": {
         "type": "object",
@@ -280,54 +322,10 @@
       "type": "string"
     },
     "skillSources": {
-      "description": "Named agent skill sources, merged across configuration layers. The built-in default source remains enabled unless explicitly disabled.",
+      "description": "Deprecated. Use agentPlugins instead. Legacy OpenCode catalog properties are ignored.",
+      "deprecationMessage": "skillSources is deprecated. Rename it to agentPlugins.",
       "type": "object",
-      "additionalProperties": {
-        "type": "object",
-        "properties": {
-          "enabled": {
-            "description": "Whether to register this source. Defaults to true. Set default.enabled to false to omit the built-in Aspire source.",
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "string",
-                "enum": [
-                  "true",
-                  "false"
-                ]
-              }
-            ]
-          },
-          "repository": {
-            "description": "GitHub owner/repository or an HTTPS/SSH Git repository URL containing the agent marketplace.",
-            "type": "string"
-          },
-          "marketplace": {
-            "description": "Agent marketplace identifier. Defaults to the source name, or aspire-skills for the default source.",
-            "type": "string"
-          },
-          "plugins": {
-            "description": "Plugin names within the marketplace. Defaults to [\"aspire\"].",
-            "type": "array",
-            "items": {}
-          },
-          "ref": {
-            "description": "Optional marketplace Git ref. Existing agent-side pins are preserved.",
-            "type": "string"
-          },
-          "openCodeV1Catalog": {
-            "description": "HTTPS skills catalog URL for OpenCode V1. Omit for sources without an OpenCode catalog.",
-            "type": "string"
-          },
-          "openCodeV2Catalog": {
-            "description": "HTTPS skills catalog URL for OpenCode V2. Omit for sources without an OpenCode catalog.",
-            "type": "string"
-          }
-        },
-        "additionalProperties": false
-      }
+      "additionalProperties": true
     },
     "$schema": {
       "type": "string",

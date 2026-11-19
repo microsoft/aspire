@@ -199,7 +199,7 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         // Create .vscode folder so the scanner detects VS Code environment
         Directory.CreateDirectory(vscodePath);
         var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, "aspire.config.json");
-        await File.WriteAllTextAsync(configPath, """{"skillSources":{"default":{}}}""");
+        await File.WriteAllTextAsync(configPath, """{"agentPlugins":{"default":{}}}""");
         var localSkillPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", "aspire", "SKILL.md");
         Directory.CreateDirectory(Path.GetDirectoryName(localSkillPath)!);
         const string localSkillContent = "My customized Aspire instructions.";
@@ -217,7 +217,7 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
             timeout: TimeSpan.FromSeconds(30), description: "agent selection prompt");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("Which skills and tools do you want to configure?", timeout: TimeSpan.FromSeconds(30));
-        await auto.WaitUntilTextAsync("aspire — Agent assets from configured skill sources", timeout: TimeSpan.FromSeconds(30));
+        await auto.WaitUntilTextAsync("aspire — Agent plugins from configured agent plugin sources", timeout: TimeSpan.FromSeconds(30));
         await auto.EnterAsync();
         await auto.WaitUntilAsync(
             s => s.ContainsText("Configure the Aspire MCP server for selected agent environments?"),
@@ -427,7 +427,7 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         await auto.InstallAspireCliAsync(strategy, counter);
         await File.WriteAllTextAsync(
             Path.Combine(workspace.WorkspaceRoot.FullName, "aspire.config.json"),
-            JsonSerializer.Serialize(new { skillSources = new { @default = new { repository } } }),
+            JsonSerializer.Serialize(new { agentPlugins = new { @default = new { repository } } }),
             TestContext.Current.CancellationToken);
         await auto.RunCommandAsync("cd \"$ASPIRE_E2E_WORKSPACE\"", counter);
         await auto.RunCommandAsync(

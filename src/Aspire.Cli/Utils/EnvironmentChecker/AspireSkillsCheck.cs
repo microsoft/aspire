@@ -11,13 +11,13 @@ using Aspire.Cli.Resources;
 namespace Aspire.Cli.Utils.EnvironmentChecker;
 
 /// <summary>
-/// Warns about static Aspire skills that can shadow configured skill sources.
+/// Warns about static Aspire skills that can shadow configured agent plugin sources.
 /// </summary>
 internal sealed class AspireSkillsCheck(
     IGitRepository gitRepository,
     CliExecutionContext executionContext) : IEnvironmentCheck
 {
-    internal const string CheckName = "aspire-skill-sources";
+    internal const string CheckName = "aspire-agent-plugins";
 
     public int Order => 103;
 

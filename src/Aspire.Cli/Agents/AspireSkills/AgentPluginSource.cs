@@ -11,21 +11,23 @@ using Microsoft.Extensions.Configuration;
 
 namespace Aspire.Cli.Agents.AspireSkills;
 
-internal sealed class SkillSource
+internal sealed class AgentPluginSource
 {
-    internal const string SectionName = "skillSources";
+    internal const string SectionName = "agentPlugins";
+
+    // Released CLIs configured agent plugin sources under "skillSources". Existing settings
+    // and configuration sources still use it, so it continues to be read. Its
+    // openCodeV1Catalog/openCodeV2Catalog properties are ignored.
+    // TODO: Remove the legacy alias after the migration window. https://github.com/microsoft/aspire/issues/22412
+    internal const string LegacySectionName = "skillSources";
     internal const string DefaultName = "default";
-    internal const string DefaultV1Catalog = "https://raw.githubusercontent.com/microsoft/aspire-skills/main/opencode/v1/";
-    internal const string DefaultV2Catalog = "https://raw.githubusercontent.com/microsoft/aspire-skills/main/opencode/v2/";
     private string _name = DefaultName;
 
-    internal static SkillSource BuiltIn { get; } = new()
+    internal static AgentPluginSource BuiltIn { get; } = new()
     {
         Repository = AspireSkillsRemoteConfiguration.Repository,
         Marketplace = AspireSkillsRemoteConfiguration.MarketplaceName,
-        Plugins = ["aspire"],
-        OpenCodeV1Catalog = DefaultV1Catalog,
-        OpenCodeV2Catalog = DefaultV2Catalog
+        Plugins = ["aspire"]
     };
 
     [JsonPropertyName("enabled")]
@@ -48,22 +50,16 @@ internal sealed class SkillSource
     [Description("Optional marketplace Git ref. Existing agent-side pins are preserved.")]
     public string? Ref { get; init; }
 
-    [JsonPropertyName("openCodeV1Catalog")]
-    [Description("HTTPS skills catalog URL for OpenCode V1. Omit for sources without an OpenCode catalog.")]
-    public string? OpenCodeV1Catalog { get; init; }
-
-    [JsonPropertyName("openCodeV2Catalog")]
-    [Description("HTTPS skills catalog URL for OpenCode V2. Omit for sources without an OpenCode catalog.")]
-    public string? OpenCodeV2Catalog { get; init; }
-
     internal string GetName() => _name;
+
+    internal bool IsDefault => _name.Equals(DefaultName, StringComparison.OrdinalIgnoreCase);
 
     internal IEnumerable<string> GetPluginNames() => (Plugins ?? ["aspire"]).Select(plugin => $"{plugin}@{Marketplace}");
 
     internal string GetRepositoryUrl() => IsGitHubRepository(Repository!)
         ? $"https://github.com/{Repository}" : Repository!;
 
-    internal static IReadOnlyList<SkillSource> Resolve(DirectoryInfo configurationDirectory, FileInfo globalSettingsFile)
+    internal static IReadOnlyList<AgentPluginSource> Resolve(DirectoryInfo configurationDirectory, FileInfo globalSettingsFile)
     {
         // Chained new/init runs before startup configuration can see newly generated or
         // materialized settings. Read the selected app's current file, not the invoking directory.
@@ -74,25 +70,85 @@ internal sealed class SkillSource
         return Resolve(effective);
     }
 
-    internal static IReadOnlyList<SkillSource> Resolve(IConfiguration configuration)
+    internal static IReadOnlyList<AgentPluginSource> Resolve(IConfigurationRoot configuration)
+    {
+        using var effective = new ConfigurationManager();
+        var sourceSections = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var provider in configuration.Providers)
+        {
+            // Resolve aliases inside each layer so a project override or inherited field
+            // behaves the same regardless of which spelling either layer uses.
+            var layer = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+            if (provider.TryGet(SectionName, out var currentValue))
+            {
+                layer[SectionName] = currentValue;
+            }
+            if (provider.TryGet(LegacySectionName, out var legacyValue))
+            {
+                layer[LegacySectionName] = legacyValue;
+            }
+
+            var currentNames = provider.GetChildKeys([], SectionName).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            foreach (var name in currentNames)
+            {
+                CopySource(name, SectionName);
+            }
+            foreach (var name in provider.GetChildKeys([], LegacySectionName).Except(currentNames, StringComparer.OrdinalIgnoreCase))
+            {
+                CopySource(name, LegacySectionName);
+            }
+            if (layer.Count > 0)
+            {
+                effective.AddInMemoryCollection(layer);
+            }
+
+            void CopySource(string name, string sectionName)
+            {
+                CopySection(provider, $"{sectionName}:{name}", $"{SectionName}:{name}", layer);
+                sourceSections[name] = sectionName;
+            }
+        }
+
+        return ResolveSources(effective, sourceSections);
+    }
+
+    private static void CopySection(IConfigurationProvider provider, string sourcePath, string targetPath, Dictionary<string, string?> layer)
+    {
+        if (provider.TryGet(sourcePath, out var value))
+        {
+            layer[targetPath] = value;
+        }
+        foreach (var child in provider.GetChildKeys([], sourcePath).Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            CopySection(provider, $"{sourcePath}:{child}", $"{targetPath}:{child}", layer);
+        }
+    }
+
+    private static IReadOnlyList<AgentPluginSource> ResolveSources(IConfiguration configuration, Dictionary<string, string> sourceSections)
     {
         var section = configuration.GetSection(SectionName);
         if (section.Value is not null)
         {
             throw AspireSkillsRemoteConfiguration.ExistingConfiguration(SectionName);
         }
+        var legacySection = configuration.GetSection(LegacySectionName);
+        if (legacySection.Value is not null)
+        {
+            throw AspireSkillsRemoteConfiguration.ExistingConfiguration(LegacySectionName);
+        }
 
         var names = new[] { DefaultName }.Concat(section.GetChildren().Select(child => child.Key))
             .Distinct(StringComparer.OrdinalIgnoreCase);
-        var sources = new List<SkillSource>();
+        var sources = new List<AgentPluginSource>();
         var marketplaces = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var name in names)
         {
             var settings = section.GetSection(name);
-            SourceNameValidator.Validate(name, $"{SectionName}.{name}");
+            var path = $"{sourceSections.GetValueOrDefault(name, SectionName)}.{name}";
+            SourceNameValidator.Validate(name, path);
             if (settings.Value is not null)
             {
-                throw AspireSkillsRemoteConfiguration.ExistingConfiguration($"{SectionName}.{name}");
+                throw AspireSkillsRemoteConfiguration.ExistingConfiguration(path);
             }
             if (settings.GetBool("enabled") is false)
             {
@@ -110,38 +166,27 @@ internal sealed class SkillSource
                 pluginEntries.Where((child, index) =>
                     child.Key != index.ToString(CultureInfo.InvariantCulture) || child.GetChildren().Any()).Any())
             {
-                throw AspireSkillsRemoteConfiguration.ExistingConfiguration($"{SectionName}.{name}.plugins");
+                throw AspireSkillsRemoteConfiguration.ExistingConfiguration($"{path}.plugins");
             }
-            var source = new SkillSource
+            var source = new AgentPluginSource
             {
                 _name = name,
                 Repository = settings["repository"] ?? (isDefault ? BuiltIn.Repository : null),
                 Marketplace = settings["marketplace"] ?? (isDefault ? AspireSkillsRemoteConfiguration.MarketplaceName : name),
                 Plugins = plugins,
-                Ref = settings["ref"],
-                OpenCodeV1Catalog = settings["openCodeV1Catalog"] ?? (isDefault ? BuiltIn.OpenCodeV1Catalog : null),
-                OpenCodeV2Catalog = settings["openCodeV2Catalog"] ?? (isDefault ? BuiltIn.OpenCodeV2Catalog : null)
+                Ref = settings["ref"]
             };
             if (!IsIdentifier(source.Marketplace) || !marketplaces.Add(source.Marketplace))
             {
-                throw AspireSkillsRemoteConfiguration.ExistingConfiguration($"{SectionName}.{name}.marketplace");
+                throw AspireSkillsRemoteConfiguration.ExistingConfiguration($"{path}.marketplace");
             }
             if (string.IsNullOrWhiteSpace(source.Repository))
             {
-                throw AspireSkillsRemoteConfiguration.ExistingConfiguration($"{SectionName}.{name}.repository");
+                throw AspireSkillsRemoteConfiguration.ExistingConfiguration($"{path}.repository");
             }
             if (!GitHelpers.IsValidRepository(source.GetRepositoryUrl()) || !GitHelpers.IsValidRef(source.Ref))
             {
-                throw AspireSkillsRemoteConfiguration.ExistingConfiguration($"{SectionName}.{name}.repository/ref");
-            }
-            foreach (var catalog in new[] { source.OpenCodeV1Catalog, source.OpenCodeV2Catalog })
-            {
-                if (catalog is not null &&
-                    (!Uri.TryCreate(catalog, UriKind.Absolute, out var uri) || uri.Scheme != Uri.UriSchemeHttps ||
-                     uri.UserInfo.Length != 0 || uri.Fragment.Length != 0))
-                {
-                    throw AspireSkillsRemoteConfiguration.ExistingConfiguration($"{SectionName}.{name}.openCodeCatalog");
-                }
+                throw AspireSkillsRemoteConfiguration.ExistingConfiguration($"{path}.repository/ref");
             }
             sources.Add(source);
         }

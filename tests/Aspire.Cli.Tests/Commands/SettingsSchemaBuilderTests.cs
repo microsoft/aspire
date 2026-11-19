@@ -22,7 +22,7 @@ public class SettingsSchemaBuilderTests
         })
         {
             foreach (var source in schema.Properties.Where(property =>
-                property.Name is "integrationSources" or "skillSources" or "templateSources"))
+                property.Name is "integrationSources" or "agentPlugins" or "templateSources"))
             {
                 Assert.EndsWith(SourceNameValidator.Description, source.Description, StringComparison.Ordinal);
             }
@@ -49,7 +49,7 @@ public class SettingsSchemaBuilderTests
         var schema = SettingsSchemaBuilder.BuildConfigFileSchema(excludeLocalOnly: false);
 
         Assert.Equal(
-            ["appHost", "certificates", "channel", "configSource", "containerTunnel", "docs", "features",
+            ["agentPlugins", "appHost", "certificates", "channel", "configSource", "containerTunnel", "docs", "features",
                 "integrationSources", "packages", "portAllocation", "profiles", "sdk", "skillSources", "templateSources"],
             schema.Properties.Select(property => property.Name));
         var configSource = Assert.Single(schema.Properties, property => property.Name == "configSource");
@@ -82,7 +82,7 @@ public class SettingsSchemaBuilderTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public void BuildSchema_IncludesNamedSkillSources(bool global)
+    public void BuildSchema_IncludesNamedAgentPluginSources(bool global)
     {
         foreach (var schema in new[]
         {
@@ -90,12 +90,32 @@ public class SettingsSchemaBuilderTests
             SettingsSchemaBuilder.BuildConfigFileSchema(excludeLocalOnly: global)
         })
         {
-            var skillSources = Assert.Single(schema.Properties, property => property.Name == "skillSources");
-            Assert.Equal("object", skillSources.AdditionalPropertiesType);
+            var agentPlugins = Assert.Single(schema.Properties, property => property.Name == "agentPlugins");
+            Assert.Equal("object", agentPlugins.AdditionalPropertiesType);
             Assert.Equal(
-                ["enabled", "repository", "marketplace", "plugins", "ref", "openCodeV1Catalog", "openCodeV2Catalog"],
-                skillSources.SubProperties!.Select(property => property.Name));
-            Assert.Equal("array", Assert.Single(skillSources.SubProperties!, property => property.Name == "plugins").Type);
+                ["enabled", "repository", "marketplace", "plugins", "ref"],
+                agentPlugins.SubProperties!.Select(property => property.Name));
+            Assert.Equal("array", Assert.Single(agentPlugins.SubProperties!, property => property.Name == "plugins").Type);
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void BuildSchema_AdvertisesLegacySkillSourcesAsDeprecated(bool global)
+    {
+        foreach (var schema in new[]
+        {
+            SettingsSchemaBuilder.BuildSchema(excludeLocalOnly: global),
+            SettingsSchemaBuilder.BuildConfigFileSchema(excludeLocalOnly: global)
+        })
+        {
+            var legacy = Assert.Single(schema.Properties, property => property.Name == "skillSources");
+            Assert.Equal("object", legacy.Type);
+            Assert.False(legacy.Required);
+            Assert.Equal("skillSources is deprecated. Rename it to agentPlugins.", legacy.DeprecationMessage);
+            Assert.Null(legacy.SubProperties);
+            Assert.Null(legacy.AdditionalPropertiesType);
         }
     }
 

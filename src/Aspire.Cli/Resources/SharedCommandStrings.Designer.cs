@@ -475,24 +475,6 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to OpenCode V1 catalog.
-        /// </summary>
-        internal static string SourceOpenCodeV1Catalog {
-            get {
-                return ResourceManager.GetString("SourceOpenCodeV1Catalog", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to OpenCode V2 catalog.
-        /// </summary>
-        internal static string SourceOpenCodeV2Catalog {
-            get {
-                return ResourceManager.GetString("SourceOpenCodeV2Catalog", resourceCulture);
-            }
-        }
-        
-        /// <summary>
         ///   Looks up a localized string similar to Path.
         /// </summary>
         internal static string SourcePath {

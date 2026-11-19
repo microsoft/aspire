@@ -187,7 +187,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         Assert.True(Directory.Exists(Path.Combine(workspace.Path, "Test.AppHost")));
         Assert.True(AspireSkillsRemoteConfiguration.HasPluginRegistration(
             [Path.Combine(workspace.Path, ".github", "copilot", "settings.json")],
-            [new SkillSource { Plugins = ["aspire"], Marketplace = "aspire-skills" }]));
+            [new AgentPluginSource { Plugins = ["aspire"], Marketplace = "aspire-skills" }]));
         Assert.False(Directory.Exists(Path.Combine(workspace.Path, ".agents", "skills")));
         Assert.False(File.Exists(Path.Combine(workspace.Path, AspireConfigFile.FileName)));
         var git = Assert.IsType<TestConfigSourceRepository>(provider.GetRequiredService<IGitClient>());
@@ -977,34 +977,25 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
     [Theory]
     [InlineData("{}", "claude", null, true, true)]
     [InlineData("{}", "opencode", null, true, true)]
-    [InlineData("""{"skillSources":{"default":{"enabled":false}}}""", "claude", null, false, false)]
-    [InlineData("""{"skillSources":{"default":{"enabled":false}}}""", "opencode", null, false, false)]
-    [InlineData("""{"skillSources":{"default":{"enabled":false},"team":{"repository":"example/team","plugins":["deployment"]}}}""", "claude", null, true, false)]
-    [InlineData("""{"skillSources":{"default":{"repository":"example/team"}}}""", "claude", null, true, false)]
-    [InlineData("""{"skillSources":{"default":{"plugins":["deployment"]}}}""", "claude", null, true, false)]
-    [InlineData("""{"skillSources":{"default":{"enabled":false},"team":{"repository":"microsoft/aspire-skills"}}}""", "claude", null, true, true)]
-    [InlineData("""{"skillSources":{"default":{"enabled":false},"team":{"repository":"example/team"}}}""", "opencode", null, false, false)]
-    [InlineData("""{"skillSources":{"default":{"repository":"https://github.com/Microsoft/Aspire-Skills.git/"}}}""", "claude", null, true, true)]
-    [InlineData("""{"skillSources":{"default":{"repository":"ssh://git@github.com/microsoft/aspire-skills.git"}}}""", "claude", null, true, true)]
-    [InlineData("""{"skillSources":{"default":{"repository":"ssh://git@GITHUB.COM/Microsoft/Aspire-Skills.git/"}}}""", "claude", null, true, true)]
-    [InlineData("""{"skillSources":{"default":{"repository":"git@github.com:microsoft/aspire-skills.git"}}}""", "claude", null, true, true)]
-    [InlineData("""{"skillSources":{"default":{"repository":"ssh://git@github.com/example/aspire-skills.git"}}}""", "claude", null, true, false)]
-    [InlineData("""{"skillSources":{"default":{"repository":"ssh://git@github.com.example/microsoft/aspire-skills.git"}}}""", "claude", null, true, false)]
-    [InlineData("""{"skillSources":{"default":{"repository":"git@github.com:example/aspire-skills.git"}}}""", "claude", null, true, false)]
-    [InlineData("""{"skillSources":{"default":{"repository":"ssh://git@github.com/microsoft/aspire-skills.git"}}}""", "claude", """{"enabledPlugins":{"aspire@aspire-skills":true},"extraKnownMarketplaces":{"aspire-skills":{"source":{"source":"git","url":"ssh://git@github.com/microsoft/aspire-skills.git","ref":"release"}}}}""", true, true)]
+    [InlineData("""{"agentPlugins":{"default":{"enabled":false}}}""", "claude", null, false, false)]
+    [InlineData("""{"agentPlugins":{"default":{"enabled":false}}}""", "opencode", null, false, false)]
+    [InlineData("""{"agentPlugins":{"default":{"enabled":false},"team":{"repository":"example/team","plugins":["deployment"]}}}""", "claude", null, true, false)]
+    [InlineData("""{"agentPlugins":{"default":{"repository":"example/team"}}}""", "claude", null, true, false)]
+    [InlineData("""{"agentPlugins":{"default":{"plugins":["deployment"]}}}""", "claude", null, true, false)]
+    [InlineData("""{"agentPlugins":{"default":{"enabled":false},"team":{"repository":"microsoft/aspire-skills"}}}""", "claude", null, true, true)]
+    [InlineData("""{"agentPlugins":{"default":{"enabled":false},"team":{"repository":"example/team"}}}""", "opencode", null, false, false)]
+    [InlineData("""{"agentPlugins":{"default":{"repository":"https://github.com/Microsoft/Aspire-Skills.git/"}}}""", "claude", null, true, true)]
+    [InlineData("""{"agentPlugins":{"default":{"repository":"ssh://git@github.com/microsoft/aspire-skills.git"}}}""", "claude", null, true, true)]
+    [InlineData("""{"agentPlugins":{"default":{"repository":"ssh://git@GITHUB.COM/Microsoft/Aspire-Skills.git/"}}}""", "claude", null, true, true)]
+    [InlineData("""{"agentPlugins":{"default":{"repository":"git@github.com:microsoft/aspire-skills.git"}}}""", "claude", null, true, true)]
+    [InlineData("""{"agentPlugins":{"default":{"repository":"ssh://git@github.com/example/aspire-skills.git"}}}""", "claude", null, true, false)]
+    [InlineData("""{"agentPlugins":{"default":{"repository":"ssh://git@github.com.example/microsoft/aspire-skills.git"}}}""", "claude", null, true, false)]
+    [InlineData("""{"agentPlugins":{"default":{"repository":"git@github.com:example/aspire-skills.git"}}}""", "claude", null, true, false)]
+    [InlineData("""{"agentPlugins":{"default":{"repository":"ssh://git@github.com/microsoft/aspire-skills.git"}}}""", "claude", """{"enabledPlugins":{"aspire@aspire-skills":true},"extraKnownMarketplaces":{"aspire-skills":{"source":{"source":"git","url":"ssh://git@github.com/microsoft/aspire-skills.git","ref":"release"}}}}""", true, true)]
     [InlineData("{}", "claude", """{"enabledPlugins":{"aspire@aspire-skills":true},"extraKnownMarketplaces":{"aspire-skills":{"source":{"source":"github","repo":"microsoft/aspire-skills","ref":"release"}}}}""", true, true)]
     [InlineData("{}", "opencode", """{"skills":{"urls":["https://raw.githubusercontent.com/microsoft/aspire-skills/v0.0.3/opencode/v1/"]}}""", true, true)]
-    [InlineData("""{"skillSources":{"default":{"enabled":false}}}""", "claude", """{"enabledPlugins":{"aspire@aspire-skills":true}}""", true, false)]
-    [InlineData("""{"skillSources":{"default":{"enabled":false}}}""", "opencode", """{"skills":{"urls":["https://raw.githubusercontent.com/microsoft/aspire-skills/main/opencode/v1/"]}}""", true, false)]
-    [InlineData("""{"skillSources":{"default":{"enabled":false},"team":{"repository":"example/team","openCodeV1Catalog":"https://raw.githubusercontent.com/microsoft/aspire-skills/main/opencode/v1/","openCodeV2Catalog":"https://example.com/v2/"}}}""", "opencode", null, true, true)]
-    [InlineData("""{"skillSources":{"default":{"enabled":false},"team":{"repository":"example/team","openCodeV1Catalog":"https://example.com/v1/","openCodeV2Catalog":"https://raw.githubusercontent.com/microsoft/aspire-skills/main/opencode/v2/"}}}""", "opencode", null, true, false)]
-    [InlineData("""{"skillSources":{"default":{"enabled":false},"team":{"repository":"example/team","openCodeV1Catalog":"https://raw.githubusercontent.com/microsoft/aspire-skills/main/opencode/v1/","openCodeV2Catalog":"https://example.com/v2/"}}}""", "opencode", """{"skills":[]}""", true, false)]
-    [InlineData("""{"skillSources":{"default":{"enabled":false},"team":{"repository":"example/team","openCodeV1Catalog":"https://example.com/v1/","openCodeV2Catalog":"https://raw.githubusercontent.com/microsoft/aspire-skills/main/opencode/v2/"}}}""", "opencode", """{"skills":[]}""", true, true)]
-    [InlineData("""{"skillSources":{"default":{"enabled":false},"team":{"repository":"example/team","openCodeV1Catalog":"https://example.com/v1/","openCodeV2Catalog":"https://example.com/v2/"}}}""", "opencode", null, true, false)]
-    [InlineData("""{"skillSources":{"default":{"enabled":false},"team":{"repository":"example/team","openCodeV1Catalog":"https://example.com/v1/","openCodeV2Catalog":"https://example.com/v2/"}}}""", "opencode", """{"skills":[]}""", true, false)]
-    [InlineData("""{"skillSources":{"default":{"enabled":false},"team":{"repository":"example/team","openCodeV1Catalog":"https://example.com/v1/","openCodeV2Catalog":"https://raw.githubusercontent.com/microsoft/aspire-skills/main/opencode/v2/"}}}""", "opencode", """{"skills":{"urls":["https://raw.githubusercontent.com/microsoft/aspire-skills/main/opencode/v1/"]}}""", true, false)]
-    [InlineData("""{"skillSources":{"default":{"enabled":false},"team":{"repository":"example/team","openCodeV1Catalog":"https://raw.githubusercontent.com/microsoft/aspire-skills/main/opencode/v1/","openCodeV2Catalog":"https://example.com/v2/"}}}""", "opencode", """{"skills":["https://raw.githubusercontent.com/microsoft/aspire-skills/main/opencode/v2/"]}""", true, false)]
-    [InlineData("""{"skillSources":{"default":{"enabled":false},"team":{"repository":"example/team","openCodeV1Catalog":"https://example.com/v1/","openCodeV2Catalog":"https://raw.githubusercontent.com/microsoft/aspire-skills/main/opencode/v2/"}}}""", "opencode", """{"skills":{"urls":["https://raw.githubusercontent.com/microsoft/aspire-skills/main/opencode/v2/"]}}""", true, true)]
+    [InlineData("""{"agentPlugins":{"default":{"enabled":false}}}""", "claude", """{"enabledPlugins":{"aspire@aspire-skills":true}}""", true, false)]
+    [InlineData("""{"agentPlugins":{"default":{"enabled":false}}}""", "opencode", """{"skills":{"urls":["https://raw.githubusercontent.com/microsoft/aspire-skills/main/opencode/v1/"]}}""", true, false)]
     public async Task InitCommand_OnlyRecommendsAspireifyForApplicableOfficialSources(
         string settings, string clientId, string? nativeConfiguration, bool hasNativeConfiguration, bool recommendsAspireify)
     {
@@ -1109,7 +1100,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         var selectedPath = client.GetIntegrationConfigPath(selectedScope, workspace.WorkspaceRoot);
         var unselectedPath = client.GetIntegrationConfigPath(unselectedScope, workspace.WorkspaceRoot);
         Assert.True(AspireSkillsRemoteConfiguration.HasPluginRegistration(
-            [selectedPath], [SkillSource.BuiltIn]));
+            [selectedPath], [AgentPluginSource.BuiltIn]));
         Assert.False(File.Exists(unselectedPath));
         Assert.False(Directory.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills")));
         Assert.False(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".mcp.json")));
