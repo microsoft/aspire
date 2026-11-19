@@ -558,8 +558,9 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, exitCode);
         var client = provider.GetServices<IAgentClient>().Single(client =>
             string.Equals(client.Id, "copilot", StringComparisons.AgentClientId));
+        var configuration = Assert.IsAssignableFrom<IConfigurationRoot>(provider.GetRequiredService<IConfiguration>());
         Assert.True(client.HasIntegrationRegistration(
-            workspace.WorkspaceRoot, AgentConfigurationScope.Project, AgentPluginSource.Resolve(provider.GetRequiredService<IConfiguration>())));
+            workspace.WorkspaceRoot, AgentConfigurationScope.Project, AgentPluginSource.Resolve(configuration)));
     }
 
     [Fact]

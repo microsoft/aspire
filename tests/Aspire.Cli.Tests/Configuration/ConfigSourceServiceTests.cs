@@ -1445,16 +1445,62 @@ public class ConfigSourceServiceTests(ITestOutputHelper outputHelper)
             record.Level == LogLevel.Warning && record.Message.Contains("'skillSources'", StringComparison.Ordinal));
     }
 
-    [Fact]
-    public async Task Update_PrefersSourceAgentPluginsOverLegacySkillSources()
+    [Theory]
+    [InlineData("42")]
+    [InlineData("[42]")]
+    public async Task Update_RejectsMalformedLegacyPluginTypesBeforePublishing(string plugins)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var git = new TestConfigSourceRepository
+        {
+            ReadConfiguration = (_, _) => Task.FromResult(("version-1", JsonNode.Parse("""
+                {"skillSources":{"team":{"plugins":["deployment"]}}}
+                """)!.AsObject()))
+        };
+        var interaction = new TestInteractionService();
+        using var service = TestConfigSourceServices.Create(workspace.CreateExecutionContext(), git: git, interaction: interaction);
+        await service.MaterializeAsync(s_source, workspace.WorkspaceRoot, cancellationToken);
+        var path = Path.Combine(workspace.Path, AspireConfigFile.FileName);
+        var original = await File.ReadAllBytesAsync(path, cancellationToken);
+        var cache = service.GetCacheDirectory(s_source);
+        var pointer = Path.Combine(cache, "current");
+        var previousPointer = await File.ReadAllTextAsync(pointer, cancellationToken);
+        git.ReadConfiguration = (_, _) => Task.FromResult(("version-2", JsonNode.Parse($$"""
+            {
+              "skillSources": {
+                "team": { "plugins": {{plugins}} }
+              }
+            }
+            """)!.AsObject()));
+        interaction.DisplayedMessages.Clear();
+
+        var error = await Assert.ThrowsAsync<ConfigSourceException>(() =>
+            service.CheckProjectAsync(workspace.WorkspaceRoot, force: true, cancellationToken));
+
+        Assert.Equal(ConfigSourceStrings.InvalidConfiguration, error.Message);
+        Assert.Equal(original, await File.ReadAllBytesAsync(path, cancellationToken));
+        Assert.Equal(previousPointer, await File.ReadAllTextAsync(pointer, cancellationToken));
+        Assert.Equal(Path.Combine(cache, previousPointer), Assert.Single(Directory.GetDirectories(cache)));
+        Assert.Collection(interaction.DisplayedMessages,
+            message => Assert.StartsWith("[blue]", message.Message));
+    }
+
+    [Theory]
+    [InlineData("""{"legacy":{"plugins":42}}""")]
+    [InlineData("42")]
+    public async Task Update_PrefersSourceAgentPluginsOverLegacySkillSources(string legacy)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         await TestConfigSourceServices.SaveBindingAsync(s_appliedSource, workspace.WorkspaceRoot, CancellationToken.None);
         var path = Path.Combine(workspace.Path, AspireConfigFile.FileName);
         var git = new TestConfigSourceRepository
         {
-            ReadConfiguration = (_, _) => Task.FromResult(("version-2", JsonNode.Parse("""
-                {"agentPlugins":{"team":{"repository":"example/team"}},"skillSources":{"legacy":{"repository":"example/legacy"}}}
+            ReadConfiguration = (_, _) => Task.FromResult(("version-2", JsonNode.Parse($$"""
+                {
+                  "agentPlugins": { "team": { "repository": "example/team" } },
+                  "skillSources": {{legacy}}
+                }
                 """)!.AsObject()))
         };
         var interaction = new TestInteractionService();

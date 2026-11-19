@@ -118,31 +118,72 @@ public class AgentPluginSourceTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public void Resolve_ReadsLegacySkillSourcesUnlessAgentPluginsDefinesSource()
+    public void Resolve_PrefersAgentPluginsForTheSameSourceInOneLayer()
     {
         using var configuration = new ConfigurationManager();
         configuration.AddJsonStream(new MemoryStream(Encoding.UTF8.GetBytes("""
-            {"skillSources":{"default":{"enabled":false},"legacy":{"repository":"example/legacy","openCodeV1Catalog":"https://example.com/v1/","openCodeV2Catalog":"https://example.com/v2/"},"team":{"repository":"example/old","plugins":["old"]}}}
-            """)));
-        configuration.AddJsonStream(new MemoryStream(Encoding.UTF8.GetBytes("""
-            {"agentPlugins":{"TEAM":{"repository":"example/team"}}}
+            {
+              "skillSources": {
+                "default": { "enabled": false },
+                "legacy": { "repository": "example/legacy", "openCodeV1Catalog": "ignored", "openCodeV2Catalog": "ignored" },
+                "team": { "repository": "example/old", "plugins": ["old"] }
+              },
+              "agentPlugins": {
+                "TEAM": { "repository": "example/team" }
+              }
+            }
             """)));
 
         var sources = AgentPluginSource.Resolve(configuration);
 
-        Assert.Collection(sources,
+        Assert.Collection(sources.OrderBy(source => source.GetName(), StringComparer.OrdinalIgnoreCase),
+            source =>
+            {
+                Assert.Equal("example/legacy", source.Repository);
+                Assert.Equal(["aspire@legacy"], source.GetPluginNames());
+            },
             source =>
             {
                 Assert.Equal("TEAM", source.GetName());
                 Assert.Equal("example/team", source.Repository);
                 Assert.Equal(["aspire@TEAM"], source.GetPluginNames());
-            },
-            source =>
-            {
-                Assert.Equal("legacy", source.GetName());
-                Assert.Equal("example/legacy", source.Repository);
-                Assert.Equal(["aspire@legacy"], source.GetPluginNames());
             });
+    }
+
+    [Fact]
+    public async Task Resolve_LegacyProjectSettingsOverrideCurrentGlobalSettings()
+    {
+        using var context = new AgentConfigurationTestContext(output);
+        var globalSettingsFile = new FileInfo(Path.Combine(context.Home.FullName, "aspire.config.json"));
+        await AgentConfigurationTestContext.WriteAsync(globalSettingsFile.FullName, """
+            {"agentPlugins":{"disabled":{"repository":"example/disabled"},"team":{"repository":"example/team","ref":"global"}}}
+            """);
+        await AgentConfigurationTestContext.WriteAsync(Path.Combine(context.Project.FullName, "aspire.config.json"), """
+            {"skillSources":{"default":{"enabled":false},"DISABLED":{"enabled":false},"TEAM":{"ref":"project"}}}
+            """);
+
+        var source = Assert.Single(AgentPluginSource.Resolve(context.Project, globalSettingsFile));
+
+        Assert.Equal("example/team", source.Repository);
+        Assert.Equal("project", source.Ref);
+    }
+
+    [Fact]
+    public async Task Resolve_CurrentProjectSettingsInheritLegacyGlobalSettings()
+    {
+        using var context = new AgentConfigurationTestContext(output);
+        var globalSettingsFile = new FileInfo(Path.Combine(context.Home.FullName, "aspire.config.json"));
+        await AgentConfigurationTestContext.WriteAsync(globalSettingsFile.FullName, """
+            {"skillSources":{"team":{"repository":"example/team","plugins":["global","aspire"]}}}
+            """);
+        await AgentConfigurationTestContext.WriteAsync(Path.Combine(context.Project.FullName, "aspire.config.json"), """
+            {"agentPlugins":{"default":{"enabled":false},"team":{"plugins":["deployment"]}}}
+            """);
+
+        var source = Assert.Single(AgentPluginSource.Resolve(context.Project, globalSettingsFile));
+
+        Assert.Equal("example/team", source.Repository);
+        Assert.Equal(["deployment@team", "aspire@team"], source.GetPluginNames());
     }
 
     [Fact]

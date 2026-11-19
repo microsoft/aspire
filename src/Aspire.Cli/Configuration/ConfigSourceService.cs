@@ -459,6 +459,8 @@ internal sealed class ConfigSourceService(
         {
             var supplied = snapshot.Configuration
                 .Where(property => property.Key.Equals(setting, StringComparison.OrdinalIgnoreCase)).ToArray();
+            // TODO: Remove legacy-key replacement, conversion, and warnings after the migration window.
+            // https://github.com/microsoft/aspire/issues/22412
             var replaced = setting == AgentPluginSource.SectionName
                 ? new[] { AgentPluginSource.SectionName, AgentPluginSource.LegacySectionName }
                 : [setting];
@@ -885,7 +887,26 @@ internal sealed class ConfigSourceService(
                 using var parsed = new ConfigurationManager();
                 using var stream = new MemoryStream(Encoding.UTF8.GetBytes(configuration.ToJsonString()));
                 parsed.AddJsonStream(stream);
-                _ = configuration.Deserialize(JsonSourceGenerationContext.Default.AspireConfigFile);
+
+                var legacyKeys = configuration.Select(property => property.Key)
+                    .Where(key => key.Equals(AgentPluginSource.LegacySectionName, StringComparison.OrdinalIgnoreCase)).ToArray();
+                var validationConfiguration = configuration;
+                if (legacyKeys.Length > 0)
+                {
+                    // Validate the section that would be applied without rewriting the cached
+                    // source or losing the legacy key needed for the warning at apply time.
+                    validationConfiguration = (JsonObject)configuration.DeepClone();
+                    if (!configuration.Any(property => property.Key.Equals(AgentPluginSource.SectionName, StringComparison.OrdinalIgnoreCase)) &&
+                        ConvertLegacySkillSources(configuration) is { } converted)
+                    {
+                        validationConfiguration[AgentPluginSource.SectionName] = converted;
+                    }
+                    foreach (var key in legacyKeys)
+                    {
+                        validationConfiguration.Remove(key);
+                    }
+                }
+                _ = validationConfiguration.Deserialize(JsonSourceGenerationContext.Default.AspireConfigFile);
                 return (commit, version, configuration);
             }
             catch (Exception ex) when (ex is JsonException or FormatException or ArgumentException)

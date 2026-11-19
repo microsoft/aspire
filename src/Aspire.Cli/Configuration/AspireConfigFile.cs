@@ -125,6 +125,7 @@ internal sealed class AspireConfigFile
 
     // Released CLIs wrote agent plugin sources under "skillSources". Keep it as raw JSON so
     // typed load/save cycles and legacy settings.json migration don't drop existing sources.
+    // TODO: Stop preserving the legacy key once support is removed. https://github.com/microsoft/aspire/issues/22412
     [JsonPropertyName(AgentPluginSource.LegacySectionName)]
     [HiddenFromConfigurationSchema]
     public Dictionary<string, JsonElement>? LegacySkillSources { get; set; }
