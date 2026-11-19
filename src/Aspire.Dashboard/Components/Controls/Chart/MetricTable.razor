@@ -17,7 +17,7 @@
 
 <div id="metric-table-container" class="metric-table-container">
     @* ItemKey is to preserve row focus by associating rows with their associated time *@
-    <FluentDataGrid Class="aspire-spaced-grid"
+    <DisposalSafeFluentDataGrid Class="aspire-spaced-grid"
         ItemsProvider="@EnumerableGridItemsProvider.Create(() => _metricsView)"
         ItemSize="46"
         Virtualize="true"
@@ -113,7 +113,7 @@
                 @Loc[nameof(ControlsStrings.Loading)]
             }
         </EmptyContent>
-    </FluentDataGrid>
+    </DisposalSafeFluentDataGrid>
 </div>
 
 <FluentStack Orientation="Orientation.Vertical">

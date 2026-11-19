@@ -4,6 +4,7 @@
     "language": "go"
   },
   "packages": {
-    "Aspire.Hosting.Blazor": ""
+    "Aspire.Hosting.Blazor": "",
+    "Aspire.Hosting.Dotnet": ""
   }
 }

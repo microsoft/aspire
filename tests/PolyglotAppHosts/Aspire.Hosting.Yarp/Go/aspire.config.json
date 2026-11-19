@@ -4,6 +4,7 @@
     "language": "go"
   },
   "packages": {
-    "Aspire.Hosting.Yarp": ""
+    "Aspire.Hosting.Yarp": "",
+    "Aspire.Hosting.Dotnet": ""
   }
 }

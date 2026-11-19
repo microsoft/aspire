@@ -23,7 +23,7 @@ jobs:
       fail-fast: false
       matrix:
         # Add active release branches here; do not run against historical releases automatically.
-        target_branch: ${{ fromJSON(github.event_name == 'workflow_dispatch' && format('[{0}]', toJSON(inputs.target_branch)) || '["main","release/13.6"]') }}
+        target_branch: ${{ fromJSON(github.event_name == 'workflow_dispatch' && format('[{0}]', toJSON(inputs.target_branch)) || '["main","release/17.0"]') }}
     steps:
       - name: Validate target branch
         env:
@@ -68,6 +68,7 @@ jobs:
                       | grep -v 'Aspire.Hosting.Integration.Analyzers' \
                       | grep -v 'Aspire.Hosting.CodeGeneration' \
                       | grep -v 'Aspire.Hosting.RemoteHost' \
+                      | grep -v 'Aspire.Hosting.Native.Server' \
                       | while read -r file; do
                           # Walk up from the file to find the directory containing a .csproj
                           dir=$(dirname "$file")

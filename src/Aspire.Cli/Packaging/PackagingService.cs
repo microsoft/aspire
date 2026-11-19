@@ -285,7 +285,7 @@ internal class PackagingService : IPackagingService
 
     internal static DirectoryInfo? TryResolvePrInstallPackagesDirectory(string? processPath, string identityChannel)
     {
-        if (!identityChannel.StartsWith("pr-", StringComparison.OrdinalIgnoreCase) ||
+        if (!identityChannel.StartsWith("pr-", StringComparisons.ChannelName) ||
             string.IsNullOrEmpty(processPath))
         {
             return null;

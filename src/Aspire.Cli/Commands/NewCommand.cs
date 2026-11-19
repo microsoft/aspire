@@ -112,6 +112,7 @@ internal sealed class NewCommand : BaseCommand
         Options.Add(_agentInitCommand.AgentsOption);
         Options.Add(AgentInitCommand.s_scopeOption);
         Options.Add(AgentInitCommand.s_skillsOption);
+        Options.Add(AgentInitCommand.s_removeSkillCopiesOption);
 
         // Customize description based on whether staging channel is enabled
         var isStagingEnabled = KnownFeatures.IsStagingChannelEnabled(services.Features, configuration)
@@ -353,7 +354,10 @@ internal sealed class NewCommand : BaseCommand
         var templatesForPrompt = GetTemplatesForPrompt(availableTemplates, parseResult);
         var configuredTemplatesAllowed = !new[] { s_sourceOption, s_versionOption, _channelOption, _languageOption }
             .Any(option => parseResult.GetResult(option) is { Implicit: false });
-        if (!configuredTemplatesAllowed || (await _configuredTemplateSources.GetSourcesAsync(cancellationToken)).Count == 0)
+        var configuredSources = configuredTemplatesAllowed
+            ? await _configuredTemplateSources.GetSourcesAsync(cancellationToken)
+            : [];
+        if (configuredSources.Count == 0)
         {
             if (templatesForPrompt.Length == 0)
             {
@@ -361,6 +365,11 @@ internal sealed class NewCommand : BaseCommand
                 return (null, false);
             }
 
+            var packageSource = parseResult.GetValue(s_sourceOption);
+            if (packageSource is not null && !PackageSourceIdentity.Comparer.Equals(packageSource, PackageSources.NuGetOrg))
+            {
+                InteractionService.DisplaySourceTrustWarning(ExecutionContext);
+            }
             return (await _prompter.PromptForTemplateAsync(templatesForPrompt, cancellationToken), false);
         }
 
@@ -370,7 +379,7 @@ internal sealed class NewCommand : BaseCommand
         var builtInGroup = new SelectionChoiceGroup("builtin", NewCommandStrings.BuiltInTemplates);
         foreach (var template in templatesForPrompt)
         {
-            choices.Add(new(GetUniqueTemplateLabel(template.Description, labels), template, false, builtInGroup));
+            choices.Add(new(ConsoleHelpers.GetUniqueSelectionLabel(template.Description, labels), template, false, builtInGroup));
         }
         AddConfiguredTemplateChoices(choices, labels, configuredTemplates);
         if (choices.Count == 0)
@@ -379,9 +388,10 @@ internal sealed class NewCommand : BaseCommand
             return (null, false);
         }
 
+        var showGroups = choices.Select(choice => choice.Group.Id).Distinct().Skip(1).Any();
         var selection = await InteractionService.PromptForSelectionAsync(
             NewCommandStrings.SelectAProjectTemplate, choices, choice => choice.Label.EscapeMarkup(),
-            choice => choice.Group, choice => FormatTemplateDisplayLabel(choice.Template).EscapeMarkup(),
+            choice => showGroups ? choice.Group : null, choice => FormatTemplateDisplayLabel(choice.Template).EscapeMarkup(),
             cancellationToken: cancellationToken);
         return (selection.Template, selection.IsConfigured);
     }
@@ -391,31 +401,26 @@ internal sealed class NewCommand : BaseCommand
     {
         foreach (var result in templates)
         {
-            var label = GetUniqueTemplateLabel(
+            var label = ConsoleHelpers.GetUniqueSelectionLabel(
                 $"{result.Template.Description} ({result.Template.Name}) - {result.SourceName}", labels);
             choices.Add(new(label, result.Template, true,
-                new SelectionChoiceGroup($"source:{result.SourceName}", result.SourceDisplayName ?? result.SourceName)));
+                CreateTemplateSourceGroup(result)));
         }
+    }
+
+    internal static SelectionChoiceGroup CreateTemplateSourceGroup(ConfiguredTemplate template)
+    {
+        var name = template.SourceDisplayName ?? template.SourceName;
+        return new($"source:{template.SourceName}", name)
+        {
+            Style = new Style(Color.Green)
+        };
     }
 
     internal static string FormatTemplateDisplayLabel(ITemplate template) =>
         string.IsNullOrWhiteSpace(template.SearchDescription)
             ? template.Description
             : $"{template.Description} ({template.SearchDescription})";
-
-    private static string GetUniqueTemplateLabel(string baseLabel, HashSet<string> labels)
-    {
-        var label = baseLabel;
-        var suffix = 2;
-        // Extension pickers use formatted labels as dictionary keys, so even distinct
-        // template identities with the same names must have unique display labels.
-        while (!labels.Add(label))
-        {
-            label = string.Create(CultureInfo.InvariantCulture, $"{baseLabel} [{suffix++}]");
-        }
-
-        return label;
-    }
 
     private sealed class ResolveTemplateVersionResult
     {
@@ -582,7 +587,7 @@ internal sealed class NewCommand : BaseCommand
 
         // Obtain consent and acquire the source before creating project files so acquisition
         // failures or missing non-interactive consent do not leave a partial project.
-        var configSource = await ConfigSources.ResolveAndAcquireConfigSourceAsync(parseResult, cancellationToken);
+        var configSource = await ConfigSources.ResolveAndAcquireConfigSourceAsync(parseResult, ConfigSourceStrings.NewUseSourcePrompt, cancellationToken);
         var templatePath = parseResult.GetValue(s_templatePathOption);
         var templateRepository = parseResult.GetValue(s_templateRepositoryOption);
         var templateRepositoryRef = parseResult.GetValue(s_templateRepositoryRefOption);
@@ -622,7 +627,10 @@ internal sealed class NewCommand : BaseCommand
                     missingDirectory));
                 return CommandResult.Failure(CliExitCodes.InvalidCommand);
             }
-            InteractionService.DisplaySourceTrustWarning(ExecutionContext);
+            if (!PackageSourceIdentity.Comparer.Equals(source, PackageSources.NuGetOrg))
+            {
+                InteractionService.DisplaySourceTrustWarning(ExecutionContext);
+            }
         }
 
         // Resolve which templates are actually available at runtime (performs
@@ -724,6 +732,7 @@ internal sealed class NewCommand : BaseCommand
     {
         try
         {
+            InteractionService.DisplayTemplateSources([(source.Repository ?? source.Path, source)], ExecutionContext);
             var templates = (await _templateProvider.GetTemplatesAsync(source, cancellationToken)).ToArray();
             if (templates.Length == 0)
             {
@@ -810,6 +819,7 @@ internal sealed class NewCommand : BaseCommand
             PromptBinding.Create(parseResult, _agentInitCommand.AgentsOption),
             PromptBinding.Create(parseResult, AgentInitCommand.s_skillsOption, CommonAgentApplicators.AspireSkillName),
             PromptBinding.Create(parseResult, AgentInitCommand.s_scopeOption, AgentConfigurationScope.Project),
+            PromptBinding.CreateBoolConfirm(parseResult, AgentInitCommand.s_removeSkillCopiesOption, defaultValue: false),
             cancellationToken);
 
         if (templateResult.OutputPath is not null && ExtensionHelper.IsExtensionHost(InteractionService, out var extensionInteractionService, out _))

@@ -7,6 +7,7 @@ using System.Collections.Concurrent;
 using System.Text;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Git;
+using Aspire.Cli.Interaction;
 using Aspire.Cli.Utils;
 using Aspire.Shared.Telemetry;
 using Aspire.Cli.Tests.Utils;
@@ -28,7 +29,7 @@ internal static class TestConfigSourceServices
 
     public static ConfigSourceService Create(CliExecutionContext context, IGitClient? git = null,
         TimeProvider? clock = null, IEnvironment? environment = null, TestConfigSourceDetector? detector = null,
-        TestInteractionService? interaction = null, bool interactive = false)
+        IInteractionService? interaction = null, bool interactive = false)
     {
         return new ConfigSourceService(context, environment ?? new TestEnvironment(), detector ?? new TestConfigSourceDetector(),
             git ?? new TestConfigSourceRepository(), clock ?? TimeProvider.System, interaction ?? new TestInteractionService(),
@@ -83,6 +84,8 @@ internal sealed class TestConfigSourceDetector : IInternalMicrosoftDetector
 
 internal sealed class TestConfigSourceRepository : IGitClient
 {
+    public IGitClient WithStandardErrorHandler(Action<string> standardErrorHandler) => this;
+
     private readonly ConcurrentDictionary<string, RepositoryState> _repositories = new();
     private int _calls;
     private int _checkCalls;

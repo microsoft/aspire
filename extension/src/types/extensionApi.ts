@@ -235,6 +235,7 @@ export type AspireExtensionE2EControlCommand =
     | { name: 'startDebugging'; configurationName: string }
     | { name: 'stopDebugging' }
     | { name: 'closeAllEditors' }
+    | { name: 'clearAllNotifications' }
     | { name: 'getRegisteredAspireCommands' }
     | { name: 'getRegisteredLanguageModelTools' }
     | { name: 'prepareLanguageModelToolInvocation'; toolName: string; input: Record<string, unknown> }

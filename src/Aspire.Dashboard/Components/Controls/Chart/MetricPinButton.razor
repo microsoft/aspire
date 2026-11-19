@@ -34,6 +34,13 @@
     [Parameter, EditorRequired]
     public required OtlpInstrumentKey InstrumentKey { get; set; }
 
+    /// <summary>
+    /// Gets or sets the names of the resources the pin applies to: those of the current selection. The button shows
+    /// the instrument pinned when any of them has it pinned, and unpinning it unpins it for all of them.
+    /// </summary>
+    [Parameter, EditorRequired]
+    public required IReadOnlyList<string> ResourceNames { get; set; }
+
     [Parameter]
     public string? Class { get; set; }
 
@@ -52,20 +59,20 @@
 
     protected override void OnParametersSet()
     {
-        _isPinned = PinStore.IsPinned(InstrumentKey);
+        _isPinned = PinStore.IsPinned(InstrumentKey, ResourceNames);
     }
 
     private void TogglePinned()
     {
-        PinStore.SetPinned(InstrumentKey, !_isPinned);
-        _isPinned = PinStore.IsPinned(InstrumentKey);
+        PinStore.SetPinned(InstrumentKey, ResourceNames, !_isPinned);
+        _isPinned = PinStore.IsPinned(InstrumentKey, ResourceNames);
     }
 
     private void OnPinsChanged()
     {
         _ = InvokeAsync(() =>
         {
-            _isPinned = PinStore.IsPinned(InstrumentKey);
+            _isPinned = PinStore.IsPinned(InstrumentKey, ResourceNames);
             StateHasChanged();
         });
     }

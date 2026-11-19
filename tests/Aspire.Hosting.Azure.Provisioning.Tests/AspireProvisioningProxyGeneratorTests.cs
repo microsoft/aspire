@@ -11,6 +11,24 @@ namespace Aspire.Hosting.Azure.Provisioning.Tests;
 public class AspireProvisioningProxyGeneratorTests
 {
     [Fact]
+    public void ObsoleteSdkMembersRetainCompilableExports()
+    {
+        var source = SupportedSource
+            .Replace("public int Count {", "[System.Obsolete(\"Use the replacement property.\")] public int Count {", StringComparison.Ordinal)
+            .Replace("public void Reset()", "[System.Obsolete(\"Use the replacement method.\")] public void Reset()", StringComparison.Ordinal);
+        var result = ProvisioningGeneratorTest.Run(source);
+
+        Assert.Empty(result.GeneratorDiagnostics);
+        Assert.Empty(result.Compilation.GetDiagnostics());
+
+        var resourceProxy = result.Compilation.GetTypeByMetadataName(
+            "ProvisioningGeneratorTests.Generated.SampleResourceProxy");
+        Assert.NotNull(resourceProxy);
+        Assert.Contains("Count", GetExportedMembers<IPropertySymbol>(resourceProxy));
+        Assert.Contains("Reset", GetExportedMembers<IMethodSymbol>(resourceProxy));
+    }
+
+    [Fact]
     public void SupportedPropertyAndMethodShapesGenerateCompilableExports()
     {
         var result = ProvisioningGeneratorTest.Run(SupportedSource);

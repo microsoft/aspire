@@ -1,0 +1,7 @@
+﻿[?25lSelect a version of Aspire.Hosting.Redis:
+
+> 2.0.0
+  1.0.0
+
+(Type to search)
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[?25hSelect a version of Aspire.Hosting.Redis: 2.0.0

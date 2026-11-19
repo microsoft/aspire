@@ -77,17 +77,18 @@ internal sealed class DcpHost
 
     internal async Task EnsureDcpContainerRuntimeAsync(CancellationToken cancellationToken)
     {
+        // If we don't have any resources that need a container then we only need to validate the DCP
+        // installation. Probing the container runtime could fail startup when its CLI is unresponsive.
+        if (!_applicationModel.Resources.Any(c => c.IsContainer()))
+        {
+            await _dependencyCheckService.GetDcpVersionAsync(cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
         // Ensure DCP is installed and has all required dependencies
         var dcpInfo = await _dependencyCheckService.GetDcpInfoAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
 
         if (dcpInfo is null)
-        {
-            return;
-        }
-
-        // If we don't have any resources that need a container then we
-        // don't need to check for a healthy container runtime.
-        if (!_applicationModel.Resources.Any(c => c.IsContainer()))
         {
             return;
         }

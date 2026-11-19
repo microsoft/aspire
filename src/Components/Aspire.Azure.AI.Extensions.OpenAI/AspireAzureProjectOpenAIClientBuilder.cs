@@ -14,9 +14,10 @@ namespace Aspire.Azure.AI.Extensions.OpenAI;
 /// <param name="connectionName">The project connection-string name.</param>
 /// <param name="serviceKey">The service key, or <see langword="null"/> for an unkeyed client.</param>
 /// <param name="disableTracing">Whether tracing is disabled.</param>
+/// <param name="disableMetrics">Whether metrics are disabled.</param>
 /// <param name="enableSensitiveTelemetryData">Whether telemetry may capture message content.</param>
-public class AspireAzureProjectOpenAIClientBuilder(IHostApplicationBuilder hostBuilder, string connectionName, string? serviceKey, bool disableTracing, bool enableSensitiveTelemetryData)
-    : AspireOpenAIClientBuilder(hostBuilder, connectionName, serviceKey, disableTracing, enableSensitiveTelemetryData)
+public class AspireAzureProjectOpenAIClientBuilder(IHostApplicationBuilder hostBuilder, string connectionName, string? serviceKey, bool disableTracing, bool disableMetrics, bool enableSensitiveTelemetryData)
+    : AspireOpenAIClientBuilder(hostBuilder, connectionName, serviceKey, disableTracing, disableMetrics, enableSensitiveTelemetryData)
 {
     /// <inheritdoc/>
     public override string ConfigurationSectionName => ServiceKey is null

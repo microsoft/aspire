@@ -20,7 +20,7 @@ func main() {
 	customPassword := builder.AddParameter("oracle-password", &aspire.AddParameterOptions{Secret: aspire.BoolPtr(true)})
 	oracle2 := builder.AddOracle("oracledb2", &aspire.AddOracleOptions{
 		Password: &customPassword,
-		Port:     aspire.Float64Ptr(1522),
+		Port:     aspire.IntPtr(1522),
 	})
 	if err = oracle2.Err(); err != nil {
 		log.Fatal(aspire.FormatError(err))

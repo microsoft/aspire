@@ -53,8 +53,14 @@ suite('Blazor WASM debug relay', () => {
         let release: () => void = () => { throw new Error('No pending bridge opening.'); };
         let resolveOpening!: () => void;
         const opening = new Promise<void>(resolve => { resolveOpening = resolve; });
+        const socketErrors: Error[] = [];
+        let upgradeClosed!: Promise<void>;
         server.on('upgrade', (request, socket, head) => {
             requests.push(request);
+            // The relay aborts unusable openings by destroying its socket, which Windows can
+            // surface here as ECONNRESET before 'close'. events.once would reject on that error.
+            socket.on('error', error => socketErrors.push(error));
+            upgradeClosed = new Promise<void>(resolve => socket.once('close', () => resolve()));
             const upgrade = () => accept(request, socket as net.Socket, head);
             release = upgrade;
             if (!holdUpgrade) {
@@ -85,6 +91,13 @@ suite('Blazor WASM debug relay', () => {
             requests, received, opening,
             connections: upgrades.clients,
             release: () => release(),
+            /** Resolves when the upgrade socket closes, asserting any error was the relay's connection reset. */
+            closed: async () => {
+                await upgradeClosed;
+                for (const error of socketErrors) {
+                    assert.strictEqual((error as NodeJS.ErrnoException).code, 'ECONNRESET', error.stack);
+                }
+            },
         };
     }
 
@@ -221,7 +234,7 @@ suite('Blazor WASM debug relay', () => {
         client.send('start');
         await upstream.opening;
         const clientClosed = once(client, 'close');
-        const requestClosed = once(upstream.requests[0].socket, 'close');
+        const requestClosed = upstream.closed();
         guard.dispose();
         guard.dispose();
         await Promise.all([clientClosed, requestClosed]);
@@ -257,7 +270,7 @@ suite('Blazor WASM debug relay', () => {
             client.send('start');
             await upstream.opening;
             const clientClosed = once(client, 'close');
-            const upstreamClosed = once(upstream.requests[0].socket, 'close');
+            const upstreamClosed = upstream.closed();
             // An incomplete upgrade can remain active on the wire without ever becoming usable.
             upstream.requests[0].socket.write('HTTP/1.1 101 Switching Protocols\r\n');
             await clock.tickAsync((timeout ?? 10000) - 1001);

@@ -156,9 +156,7 @@ public class WithReferenceTests : WithReferenceTests<ProjectResource>
         var reference = new ConnectionStringReference(resource, optional);
         var provider = (IValueProvider)reference;
 
-#pragma warning disable ASPIRECONNECTIONSTRINGS001
         Assert.Null(reference.EnvironmentVariableNames);
-#pragma warning restore ASPIRECONNECTIONSTRINGS001
         Assert.Same(resource, reference.Resource);
         Assert.Same(resource, Assert.Single(((IValueWithReferences)reference).References));
         Assert.Equal(optional, reference.Optional);

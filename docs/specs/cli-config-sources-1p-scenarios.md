@@ -47,14 +47,10 @@ aspire new aspire-starter --name Inventory --output .\Inventory
 Assume employee detection succeeds and none of the initialization-source environment variables are set. Before generating the app, Aspire proposes:
 
 ```text
-Configuration source: https://msft.ghe.com/coreai/aspire-1p-init
-Configuration file: aspire.config.json
-Configuration ref: default branch
-Source origin: Microsoft employee default
+   Configuration source:  https://msft.ghe.com/coreai/aspire-1p-init
+          Source origin:  Microsoft employee default
 
-Use configuration from this source?
-  Yes
-  No, use standard Aspire configuration
+Create app using configuration from this source? [Y/n]:
 ```
 
 Detection only chooses a candidate. Maya's **Yes** is the project's consent to use it.

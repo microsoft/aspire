@@ -86,7 +86,7 @@ if grep -q "builder.Build()" apphost.go; then
         print "\t}"
         print ""
         print "\t// Add Redis cache resource"
-        print "\tredis := builder.AddRedis(\"cache\", &aspire.AddRedisOptions{Port: aspire.Float64Ptr(0)}).WithImageRegistry(\"netaspireci.azurecr.io\")"
+        print "\tredis := builder.AddRedis(\"cache\", &aspire.AddRedisOptions{Port: aspire.IntPtr(0)}).WithImageRegistry(\"netaspireci.azurecr.io\")"
         print "\tif err := redis.Err(); err != nil {"
         print "\t\tlog.Fatalf(\"Failed to set up Redis: %v\", err)"
         print "\t}"

@@ -30,7 +30,7 @@ public sealed class ResourceTagStoreTests
         var store = CreateStore();
         store.AddTag("api", "backend");
         store.AddTag("api", "Personal");
-        var name = KnownProperties.Resource.TraitPrefix + KnownResourceTraits.DashboardTag;
+        var name = KnownProperties.Resource.TraitPrefix + KnownResourceTraits.Tag;
         var resource = ModelTestHelpers.CreateResource("api", properties: new()
         {
             [name] = new(name, Value.ForList(Value.ForString("Backend"), Value.ForString("API")), false, null, 0, null, false)

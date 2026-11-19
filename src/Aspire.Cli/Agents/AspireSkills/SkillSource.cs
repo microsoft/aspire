@@ -17,6 +17,7 @@ internal sealed class SkillSource
     internal const string DefaultName = "default";
     internal const string DefaultV1Catalog = "https://raw.githubusercontent.com/microsoft/aspire-skills/main/opencode/v1/";
     internal const string DefaultV2Catalog = "https://raw.githubusercontent.com/microsoft/aspire-skills/main/opencode/v2/";
+    private string _name = DefaultName;
 
     internal static SkillSource BuiltIn { get; } = new()
     {
@@ -54,6 +55,8 @@ internal sealed class SkillSource
     [JsonPropertyName("openCodeV2Catalog")]
     [Description("HTTPS skills catalog URL for OpenCode V2. Omit for sources without an OpenCode catalog.")]
     public string? OpenCodeV2Catalog { get; init; }
+
+    internal string GetName() => _name;
 
     internal IEnumerable<string> GetPluginNames() => (Plugins ?? ["aspire"]).Select(plugin => $"{plugin}@{Marketplace}");
 
@@ -111,6 +114,7 @@ internal sealed class SkillSource
             }
             var source = new SkillSource
             {
+                _name = name,
                 Repository = settings["repository"] ?? (isDefault ? BuiltIn.Repository : null),
                 Marketplace = settings["marketplace"] ?? (isDefault ? AspireSkillsRemoteConfiguration.MarketplaceName : name),
                 Plugins = plugins,

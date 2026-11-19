@@ -123,7 +123,9 @@
               "kind": "field",
               "name": "KeysChangedThreshold",
               "declaration": "KeysChangedThreshold *float64 \u0060json:\u0022keysChangedThreshold,omitempty\u0022\u0060",
-              "jsonName": "keysChangedThreshold"
+              "jsonName": "keysChangedThreshold",
+              "type": "*float64",
+              "optional": true
             }
           ]
         },
@@ -140,7 +142,9 @@
               "kind": "constant",
               "name": "RedisKindValkey",
               "declaration": "RedisKindValkey RedisKind = \u0022valkey\u0022",
-              "value": "valkey"
+              "value": "valkey",
+              "type": "RedisKind",
+              "optional": false
             }
           ]
         },

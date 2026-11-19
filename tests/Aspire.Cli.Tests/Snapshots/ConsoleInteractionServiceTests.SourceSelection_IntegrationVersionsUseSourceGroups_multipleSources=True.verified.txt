@@ -1,0 +1,10 @@
+﻿🚨 Only use sources you trust. Content from these sources can run code on your machine.
+[?25lSelect a version of Aspire.Hosting.Redis:
+
+[1m  [0m[1mdaily[0m
+  > 2.0.0
+[1m  nuget.org[0m
+    1.0.0
+
+(Type to search)
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[?25hSelect a version of Aspire.Hosting.Redis: 2.0.0

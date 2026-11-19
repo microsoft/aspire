@@ -144,13 +144,17 @@ internal class MauiBuildQueueEventSubscriber(
                 logger,
                 @event.Services.GetRequiredService<IHostApplicationLifetime>().ApplicationStopping);
         }
-        catch (OperationCanceledException) when (resourceCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException ex) when (resourceCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
         {
             // The per-resource CTS was cancelled by CancelResource (user clicked stop).
-            // Re-throw so DCP does not proceed to create/start the executable.
+            // Throw so DCP does not proceed to create/start the executable.
             // The stop command handler sets the final "Exited" state.
             logger.LogInformation("Build cancelled for resource '{ResourceName}'.", resource.Name);
-            throw;
+
+            // Depending on where cancellation was observed (e.g. SemaphoreSlim.WaitAsync with an
+            // already-cancelled token vs. while waiting), the caught exception may be a
+            // TaskCanceledException. Surface a consistent OperationCanceledException for the resource token.
+            throw new OperationCanceledException($"Build cancelled for resource '{resource.Name}'.", ex, resourceCts.Token);
         }
         finally
         {

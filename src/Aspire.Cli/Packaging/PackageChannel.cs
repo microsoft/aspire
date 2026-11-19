@@ -335,7 +335,7 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
 
         var packages = packageResults
             .SelectMany(result => result.Packages)
-            .DistinctBy(p => $"{p.Id}-{p.Version}", StringComparer.OrdinalIgnoreCase);
+            .DistinctBy(p => (Id: p.Id.ToUpperInvariant(), Version: p.Version.ToUpperInvariant(), Source: PackageSourceIdentity.Normalize(p.Source)));
 
         // When doing a `dotnet package search` the results may include stable packages even when searching for
         // prerelease packages. This filters out this noise.

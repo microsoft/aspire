@@ -86,10 +86,13 @@ public partial class ParameterOverview : ComponentBase
         DeleteCommand = Resource.Commands.FirstOrDefault(command =>
             string.Equals(command.Name, CommandViewModel.DeleteParameterCommand, StringComparisons.CommandName) &&
             command.State != CommandViewModelState.Hidden);
+        // The command's inputs are resource metadata shared with every other tab showing this resource, and the view
+        // models write the user's draft to the input they wrap. Each editor gets its own copy, on every update, so
+        // another tab can't overwrite this editor's value.
         var valueInput = SetCommand?.ArgumentInputs.FirstOrDefault(input =>
-            !string.Equals(input.Name, SaveToUserSecretsName, StringComparisons.InteractionInputName));
+            !string.Equals(input.Name, SaveToUserSecretsName, StringComparisons.InteractionInputName))?.Clone();
         var saveInput = SetCommand?.ArgumentInputs.FirstOrDefault(input =>
-            string.Equals(input.Name, SaveToUserSecretsName, StringComparisons.InteractionInputName));
+            string.Equals(input.Name, SaveToUserSecretsName, StringComparisons.InteractionInputName))?.Clone();
 
         if (Resource.Properties.TryGetValue(KnownProperties.Parameter.Value, out var property))
         {

@@ -13,9 +13,10 @@ namespace Aspire.Dashboard.Model;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Pins are keyed by meter and instrument name, not by resource. Pinning <c>http.server.request.duration</c>
-/// once pins it for every service that reports it, which matches how the same instrument is compared across
-/// services, and keeps pins valid when resources are renamed or replicas get new instance names.
+/// An instrument is pinned for a resource (see <see cref="MetricPin"/>). Pinning applies to the resources of the current
+/// selection: pinning <c>http.server.request.duration</c> while two services are selected pins it for both, and
+/// unpinning it unpins it for both. Pins are keyed by resource name rather than by replica, so a resource's replicas
+/// share them and they stay valid when replicas get new instance names.
 /// </para>
 /// <para>
 /// Pins describe the application rather than a single run, so they're kept in the browser's local storage under a key
@@ -26,7 +27,7 @@ namespace Aspire.Dashboard.Model;
 /// </remarks>
 public sealed class MetricPinStore
 {
-    private readonly LocalStorageSetting<List<OtlpInstrumentKey>> _setting;
+    private readonly LocalStorageSetting<List<MetricPin>> _setting;
 
     public MetricPinStore(ILocalStorage localStorage, LocalStorageLocks locks, TimeProvider timeProvider, IOptions<DashboardOptions> options, ILogger<MetricPinStore> logger)
     {
@@ -45,51 +46,74 @@ public sealed class MetricPinStore
     public Task EnsureLoadedAsync() => _setting.EnsureLoadedAsync();
 
     /// <summary>
-    /// Gets the pinned instruments in the order they were pinned.
+    /// Gets the pins in the order they were made.
     /// </summary>
-    public IReadOnlyList<OtlpInstrumentKey> GetPins() => _setting.Read(pins => pins.ToArray());
+    public IReadOnlyList<MetricPin> GetPins() => _setting.Read(pins => pins.ToArray());
 
     /// <summary>
-    /// Gets the pinned instruments among <paramref name="instruments"/>, in the order they were pinned.
-    /// Pins for instruments that aren't in the list, such as ones only another resource reports, are skipped.
+    /// Gets the instruments among <paramref name="instruments"/> that are pinned for the resource reporting them, in the
+    /// order they were pinned. A resource's replicas report the same instrument, and each of them is pinned with it.
     /// </summary>
     public List<OtlpInstrumentSummary> GetPinnedInstruments(IEnumerable<OtlpInstrumentSummary> instruments)
     {
-        // The same instrument can come from several resources, and each of them is pinned along with it.
-        var instrumentsByKey = instruments.ToLookup(i => i.GetKey());
-        return [.. GetPins().SelectMany(key => instrumentsByKey[key])];
+        var candidates = instruments.ToList();
+        return [.. GetPins().SelectMany(pin => candidates.Where(pin.Matches))];
     }
-
-    public bool IsPinned(OtlpInstrumentKey key) => _setting.Read(pins => pins.Contains(key));
 
     /// <summary>
-    /// Pins or unpins an instrument. Pinning an instrument again lists it last.
+    /// Gets whether <paramref name="instrument"/> is pinned for the resource reporting it.
     /// </summary>
-    public void SetPinned(OtlpInstrumentKey key, bool pinned)
+    public bool IsPinned(OtlpInstrumentSummary instrument) => _setting.Read(pins => pins.Any(pin => pin.Matches(instrument)));
+
+    /// <summary>
+    /// Gets whether <paramref name="key"/> is pinned for any of <paramref name="resourceNames"/>, such as the resources
+    /// of the current selection.
+    /// </summary>
+    public bool IsPinned(OtlpInstrumentKey key, IReadOnlyCollection<string> resourceNames) =>
+        _setting.Read(pins => pins.Any(pin => resourceNames.Any(name => pin.Matches(name, key))));
+
+    /// <summary>
+    /// Pins or unpins an instrument for each of <paramref name="resourceNames"/>. Pinning an instrument again for a
+    /// resource lists it last.
+    /// </summary>
+    public void SetPinned(OtlpInstrumentKey key, IReadOnlyCollection<string> resourceNames, bool pinned)
     {
-        _setting.Update(pins => pinned ? AddPin(pins, key) : pins.Remove(key));
+        _setting.Update(pins =>
+        {
+            var changed = false;
+            foreach (var name in resourceNames)
+            {
+                changed |= pinned
+                    ? AddPin(pins, new MetricPin(name, key.MeterName, key.InstrumentName))
+                    : pins.RemoveAll(pin => pin.Matches(name, key)) > 0;
+            }
+
+            return changed;
+        });
     }
 
-    private static bool AddPin(List<OtlpInstrumentKey> pins, OtlpInstrumentKey key)
+    private static bool AddPin(List<MetricPin> pins, MetricPin pin)
     {
-        if (pins.Contains(key))
+        if (pins.Any(existing => existing.Matches(pin.ResourceName, pin.GetInstrumentKey())))
         {
             return false;
         }
 
-        pins.Add(key);
+        pins.Add(pin);
         return true;
     }
 
-    // Stored pins can be edited in the browser, so drop incomplete and repeated ones.
-    private static List<OtlpInstrumentKey> NormalizePins(List<OtlpInstrumentKey>? stored)
+    // Stored pins can be edited in the browser, so drop incomplete and repeated ones. Pins saved before they were
+    // scoped to resources, such as [{"meterName":"System.Runtime","instrumentName":"dotnet.gc.heap.total_allocated"}],
+    // have no resource name and are dropped too: they can't be attributed to the resources they were meant for.
+    private static List<MetricPin> NormalizePins(List<MetricPin>? stored)
     {
-        var pins = new List<OtlpInstrumentKey>();
-        foreach (var key in stored ?? [])
+        var pins = new List<MetricPin>();
+        foreach (var pin in stored ?? [])
         {
-            if (!string.IsNullOrEmpty(key.MeterName) && !string.IsNullOrEmpty(key.InstrumentName))
+            if (!string.IsNullOrEmpty(pin.ResourceName) && !string.IsNullOrEmpty(pin.MeterName) && !string.IsNullOrEmpty(pin.InstrumentName))
             {
-                AddPin(pins, key);
+                AddPin(pins, pin);
             }
         }
 

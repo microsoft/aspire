@@ -13,7 +13,9 @@ else if (Item.IsHeader)
     <div id="@Item.Id" class="aspire-menu-header" role="presentation">
         @if (Item.Icon is not null)
         {
-            <FluentIcon Value="@Item.Icon" Width="16px" Class="aspire-menu-header-icon" Color="Color.Primary" />
+            @* The header's own grey, like the resource filter's header: a label isn't a control, so it doesn't take
+               the brand color. *@
+            <FluentIcon Value="@Item.Icon" Width="16px" Class="aspire-menu-header-icon" Color="Color.Custom" CustomColor="currentColor" />
         }
         <span class="aspire-menu-header-text" data-tooltip="@ItemTooltip">@Item.Text</span>
     </div>

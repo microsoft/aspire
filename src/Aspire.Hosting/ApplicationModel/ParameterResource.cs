@@ -93,16 +93,18 @@ public class ParameterResource : Resource, IExpressionValue
     public bool Secret { get; }
 
     /// <summary>
-    /// Gets or sets a value indicating whether this parameter must have a value before it can be resolved.
+    /// Gets a value indicating whether this parameter must have a value before it can be resolved.
     /// </summary>
     /// <remarks>
+    /// Use <see cref="ParameterResourceBuilderExtensions.AsRequired(IResourceBuilder{ParameterResource})"/> or
+    /// <see cref="ParameterResourceBuilderExtensions.AsOptional(IResourceBuilder{ParameterResource})"/> to change this value.
     /// Optional parameters that do not have values resolve to <see langword="null"/> from <see cref="GetValueAsync(CancellationToken)"/>.
     /// The obsolete <see cref="Value"/> property returns an empty string for unset optional parameters because its signature is non-nullable.
     /// </remarks>
     public bool Required
     {
         get => _required;
-        set
+        internal set
         {
             ParameterResourceValueChangedEventArgs? eventArgs = null;
 

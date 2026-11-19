@@ -11,7 +11,6 @@ using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.Interaction;
 using Aspire.Dashboard.Model.ResourceGraph;
 using Aspire.Dashboard.Otlp.Http;
-using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Utils;
 using Microsoft.FluentUI.AspNetCore.Components;
 
@@ -39,7 +38,7 @@ namespace Aspire.Dashboard.Serialization;
 [JsonSerializable(typeof(List<string>))]
 [JsonSerializable(typeof(Dictionary<string, List<string>>))]
 [JsonSerializable(typeof(ResourceOrderSettings))]
-[JsonSerializable(typeof(List<OtlpInstrumentKey>))]
+[JsonSerializable(typeof(List<MetricPin>))]
 [JsonSerializable(typeof(List<FileReferenceViewModel>))]
 [JsonSerializable(typeof(StatusResponse))]
 [JsonSerializable(typeof(ValidateTokenRequest))]

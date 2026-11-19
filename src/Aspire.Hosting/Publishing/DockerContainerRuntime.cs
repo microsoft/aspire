@@ -64,17 +64,17 @@ internal sealed class DockerContainerRuntime : ContainerRuntimeBase<DockerContai
 
         try
         {
-            var arguments = $"buildx build --file \"{dockerfilePath}\" --tag \"{imageName}\"";
+            var arguments = new List<string> { "buildx", "build", "--file", dockerfilePath, "--tag", imageName };
 
             if (!string.IsNullOrEmpty(selectedBuilderName))
             {
-                arguments += $" --builder \"{selectedBuilderName}\"";
+                arguments.AddRange(["--builder", selectedBuilderName]);
             }
 
             // Add platform support if specified
             if (options?.TargetPlatform is not null)
             {
-                arguments += $" --platform \"{options.TargetPlatform.Value.ToRuntimePlatformString()}\"";
+                arguments.AddRange(["--platform", options.TargetPlatform.Value.ToRuntimePlatformString()]);
             }
 
             // Add output format support if specified
@@ -95,19 +95,19 @@ internal sealed class DockerContainerRuntime : ContainerRuntimeBase<DockerContai
                     outputType += $",dest={archivePath}";
                 }
 
-                arguments += $" --output \"{outputType}\"";
+                arguments.AddRange(["--output", outputType]);
             }
 
             // Add build arguments if specified
-            arguments += BuildArgumentsString(buildArguments);
+            arguments.AddRange(BuildArguments(buildArguments));
 
             // Add build secrets if specified
-            arguments += BuildSecretsString(buildSecrets);
+            arguments.AddRange(BuildSecrets(buildSecrets, useCsv: true));
 
             // Add stage if specified
-            arguments += BuildStageString(stage);
+            arguments.AddRange(BuildStage(stage));
 
-            arguments += $" \"{contextPath}\"";
+            arguments.Add(contextPath);
 
             // Prepare environment variables for build secrets
             var environmentVariables = new Dictionary<string, string>();
@@ -179,7 +179,7 @@ internal sealed class DockerContainerRuntime : ContainerRuntimeBase<DockerContai
         }
 
         // Normalize the context path to handle trailing slashes and relative paths
-        var normalizedContextPath = Path.GetFullPath(contextPath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var normalizedContextPath = Path.TrimEndingDirectorySeparator(Path.GetFullPath(contextPath));
 
         await RunDockerBuildAsync(
             normalizedContextPath,

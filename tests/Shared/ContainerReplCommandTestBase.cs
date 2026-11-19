@@ -5,6 +5,7 @@ using Aspire.Hosting;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
+using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -160,10 +161,7 @@ public abstract class ContainerReplCommandTestBase
             await app.StartAsync(startup.Token);
         }
 
-        using (var readiness = new CancellationTokenSource(TimeSpan.FromMinutes(1)))
-        {
-            await app.ResourceNotifications.WaitForResourceHealthyAsync(resource.Name, readiness.Token);
-        }
+        await WaitForReplResourceHealthyAsync(app, resource.Name, TimeProvider.System);
 
         using var cancellation = new CancellationTokenSource(TimeSpan.FromMinutes(1));
         await using var terminal = await TerminalCommandTestHelpers.ExecuteTerminalCommandAsync(app, resource, "repl", cancellation.Token);
@@ -186,5 +184,14 @@ public abstract class ContainerReplCommandTestBase
         {
             throw new TimeoutException($"REPL did not produce the expected output. Terminal screen:{Environment.NewLine}{terminal.GetScreenText()}", exception);
         }
+    }
+
+    protected static async Task WaitForReplResourceHealthyAsync(DistributedApplication app, string resourceName, TimeProvider timeProvider)
+    {
+        // StartAsync returns before DCP pulls the container image, so this wait also has to cover a
+        // cold image pull. A cold postgres pull alone took ~55s in CI, which exhausted the previous
+        // 1-minute budget before the container could become healthy.
+        using var readiness = new CancellationTokenSource(TestConstants.ExtraLongTimeoutTimeSpan, timeProvider);
+        await app.ResourceNotifications.WaitForResourceHealthyAsync(resourceName, readiness.Token);
     }
 }

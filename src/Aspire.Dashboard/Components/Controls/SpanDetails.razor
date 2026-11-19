@@ -96,7 +96,7 @@
             <AspirePropertyDetailsAccordionItem Header="@Loc[nameof(ControlsStrings.SpanDetailsLinksHeader)]"
                                                 Count="@FilteredSpanLinks.Count()"
                                                 Expanded="@_isSpanLinksExpanded">
-                <FluentDataGrid
+                <DisposalSafeFluentDataGrid
                                 HeaderCellAsButtonWithMenu="true"
                                 ResizeType="DataGridResizeType.Discrete"
                                 ResizableColumns="true"
@@ -115,12 +115,12 @@
                             @OtlpHelpers.ToShortenedId(context.SpanId)
                         </FluentButton>
                     </AspireTemplateColumn>
-                </FluentDataGrid>
+                </DisposalSafeFluentDataGrid>
             </AspirePropertyDetailsAccordionItem>
             <AspirePropertyDetailsAccordionItem Header="@Loc[nameof(ControlsStrings.SpanDetailsBacklinksHeader)]"
                                                 Count="@FilteredSpanBacklinks.Count()"
                                                 Expanded="@_isSpanBacklinksExpanded">
-                <FluentDataGrid
+                <DisposalSafeFluentDataGrid
                                 HeaderCellAsButtonWithMenu="true"
                                 ResizeType="DataGridResizeType.Discrete"
                                 ResizableColumns="true"
@@ -139,7 +139,7 @@
                             @OtlpHelpers.ToShortenedId(context.SpanId)
                         </FluentButton>
                     </AspireTemplateColumn>
-                </FluentDataGrid>
+                </DisposalSafeFluentDataGrid>
             </AspirePropertyDetailsAccordionItem>
         </FluentAccordion>
     </div>

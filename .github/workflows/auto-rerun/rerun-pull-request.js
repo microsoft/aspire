@@ -56,6 +56,9 @@ const ignoredFailureStepPatterns = [
     /^Run nuget dependent tests\b/i,
     /^Build test project$/i,
     /^Build and archive test project$/i,
+    /^Build native bundle and CLI packages$/i,
+    // Keep previous step names for reruns of older workflow revisions.
+    /^Build bundle payload archive$/i,
     /^Build RID-specific packages\b/i,
     /^Build Python validation image$/i,
     /^Build with packages$/i,

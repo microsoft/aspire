@@ -3,12 +3,12 @@
   <file datatype="xml" source-language="en" target-language="ja" original="../TrayCommandStrings.resx">
     <body>
       <trans-unit id="BundleRequired">
-        <source>The experimental Aspire tray requires a leased, versioned CLI bundle. No usable bundle was found. Install an Aspire bundle that includes the tray companion for your desktop.</source>
+        <source>The Aspire tray requires a leased, versioned CLI bundle. No usable bundle was found. Install an Aspire bundle that includes the tray companion for your desktop.</source>
         <target state="needs-review-translation">試験的な Aspire トレイには、リース済みでバージョン管理された CLI バンドルが必要です。使用可能なバンドルが見つかりませんでした。トレイ コンパニオンを含む Windows または macOS 用の Aspire バンドルをインストールします。</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>Manage the desktop tray companion (Experimental)</source>
+        <source>Manage the desktop tray companion (Preview)</source>
         <target state="needs-review-translation">Windows または macOS のトレイ コンパニオンを管理する (試験段階)</target>
         <note />
       </trans-unit>
@@ -23,8 +23,8 @@
         <note>{0} is the start or stop subcommand name.</note>
       </trans-unit>
       <trans-unit id="NativeCliRequired">
-        <source>Starting the experimental tray requires an installed native Aspire CLI executable. Managed development builds and 'dotnet aspire.dll' are not supported.</source>
-        <target state="translated">試験段階のトレイを起動するには、ネイティブの Aspire CLI 実行可能ファイルがインストールされている必要があります。マネージド開発ビルドと 'dotnet aspire.dll' はサポートされていません。</target>
+        <source>Starting the tray requires an installed native Aspire CLI executable. Managed development builds and 'dotnet aspire.dll' are not supported.</source>
+        <target state="needs-review-translation">試験段階のトレイを起動するには、ネイティブの Aspire CLI 実行可能ファイルがインストールされている必要があります。マネージド開発ビルドと 'dotnet aspire.dll' はサポートされていません。</target>
         <note />
       </trans-unit>
       <trans-unit id="NoTrayHost">
@@ -43,8 +43,8 @@
         <note />
       </trans-unit>
       <trans-unit id="StartDescription">
-        <source>Start or restore the tray icon (Experimental)</source>
-        <target state="translated">トレイ アイコンを起動または復元する (実験段階)</target>
+        <source>Start or restore the tray icon (Preview)</source>
+        <target state="needs-review-translation">トレイ アイコンを起動または復元する (実験段階)</target>
         <note />
       </trans-unit>
       <trans-unit id="Started">
@@ -53,8 +53,8 @@
         <note />
       </trans-unit>
       <trans-unit id="StopDescription">
-        <source>Stop the tray without stopping AppHosts (Experimental)</source>
-        <target state="translated">AppHosts を停止せずにトレイを停止する (試験段階)</target>
+        <source>Stop the tray without stopping AppHosts (Preview)</source>
+        <target state="needs-review-translation">AppHosts を停止せずにトレイを停止する (試験段階)</target>
         <note />
       </trans-unit>
       <trans-unit id="Stopped">
@@ -63,7 +63,7 @@
         <note />
       </trans-unit>
       <trans-unit id="UnsupportedPlatform">
-        <source>The experimental Aspire tray supports Windows, macOS, and glibc Linux x64/ARM64 installations. Linux requires a graphical desktop with StatusNotifierItem support, GTK 3, and an AppIndicator library.</source>
+        <source>The Aspire tray supports Windows, macOS, and glibc Linux x64/ARM64 installations. Linux requires a graphical desktop with StatusNotifierItem support, GTK 3, and an AppIndicator library.</source>
         <target state="needs-review-translation">試験段階の Aspire トレイでは、Windows および macOS x64/ARM64 のインストールがサポートされています。Linux はサポートされていません。</target>
         <note />
       </trans-unit>
