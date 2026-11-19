@@ -33,6 +33,8 @@ public class DashboardInteractionsTests : PlaywrightTestsBase<DashboardInteracti
             await GoToResourcesAndWaitAsync(page);
             await page.EvaluateAsync("""
                 tagName => {
+                    // Simulate non-localhost HTTP, where randomUUID is not exposed.
+                    Object.defineProperty(crypto, 'randomUUID', { value: undefined });
                     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
                     svg.id = 'svg-tooltip-graph';
                     svg.style.cssText = 'position:fixed;left:600px;top:250px;width:200px;height:80px;z-index:1000;';
@@ -54,7 +56,7 @@ public class DashboardInteractionsTests : PlaywrightTestsBase<DashboardInteracti
                     svg.appendChild(group);
                     document.body.appendChild(svg);
                     const button = document.createElement('button');
-                    button.id = 'html-tooltip-probe';
+                    button.dataset.testid = 'html-tooltip-probe';
                     button.textContent = 'HTML control';
                     button.setAttribute('data-tooltip', 'HTML control');
                     button.style.cssText = 'position:fixed;left:900px;top:250px;z-index:1000;';
@@ -123,10 +125,11 @@ public class DashboardInteractionsTests : PlaywrightTestsBase<DashboardInteracti
             await Assertions.Expect(tooltip).ToHaveCountAsync(0);
             await Assertions.Expect(positioningAnchor).ToHaveCountAsync(0);
 
-            var button = page.Locator("#html-tooltip-probe");
+            var button = page.GetByTestId("html-tooltip-probe");
             await button.HoverAsync();
             await Assertions.Expect(tooltip).ToHaveTextAsync("HTML control");
             await AssertPositionedAboveAsync(button);
+            await Assertions.Expect(button).ToHaveAttributeAsync("aria-describedby", (await tooltip.GetAttributeAsync("id"))!);
             await Assertions.Expect(positioningAnchor).ToHaveCountAsync(0);
             await page.Locator("#svg-tooltip-graph").EvaluateAsync("svg => svg.setAttribute('viewBox', '0 0 200 80')");
             await Assertions.Expect(tooltip).ToHaveTextAsync("HTML control");
