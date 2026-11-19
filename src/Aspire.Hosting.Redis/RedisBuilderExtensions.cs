@@ -112,6 +112,8 @@ public static class RedisBuilderExtensions
             {
                 var additionalArgs = new List<string>
                 {
+                    // Replace the shell so Redis receives SIGTERM and saves its final snapshot on shutdown.
+                    "exec",
                     "redis-server"
                 };
 
