@@ -35,8 +35,9 @@
     min-height: 0;
 }
 
-/* Keep the cards and terminal mounted so minimizing restores their state without reconnecting. */
-.terminal-focused > .overview-grid > :not(.overview-terminal-card) {
+/* Keep the cards and terminal mounted so minimizing restores their state without reconnecting. Cards rendered by
+   child components don't have this component's scope attribute, so the card selector is under ::deep. */
+.terminal-focused > .overview-grid ::deep > :not(.overview-terminal-card) {
     display: none;
 }
 

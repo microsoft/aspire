@@ -42,12 +42,26 @@ public sealed class TerminalTests(TerminalTests.TerminalDashboardServerFixture f
             var connectionCount = connection.ConnectionCount;
             var overview = page.Locator(".resource-overview");
             var documentation = page.Locator(".overview-terminal-card a.overview-card-action");
+            // The telemetry cards are rendered by child components outside the page's CSS scope. Show the empty ones so
+            // there's a child component card that the expanded terminal must hide.
+            await page.GetByRole(AriaRole.Button, new() { Name = "Show all panels", Exact = true }).ClickAsync();
+            var metricsCard = page.Locator(".overview-grid > :has(#overview-metrics-title)");
+            var visibleOtherCards = page.Locator(".overview-grid > :not(.overview-terminal-card):visible");
 
             foreach (var focused in new[] { true, false })
             {
                 await Assertions.Expect(overview).ToHaveClassAsync(focused
                     ? new Regex("terminal-focused")
                     : new Regex("^(?!.*terminal-focused)"));
+                if (focused)
+                {
+                    await Assertions.Expect(metricsCard).ToBeHiddenAsync();
+                    await Assertions.Expect(visibleOtherCards).ToHaveCountAsync(0);
+                }
+                else
+                {
+                    await Assertions.Expect(metricsCard).ToBeVisibleAsync();
+                }
                 await Assertions.Expect(documentation).ToHaveAttributeAsync("href", "https://aka.ms/aspire/dashboard-terminal");
                 await Assertions.Expect(documentation).ToHaveAttributeAsync("aria-label", "More information");
                 foreach (var keyboard in new[] { false, true })
