@@ -53,7 +53,7 @@ const GRAPHQL = "https://api.github.com/graphql";
 // GraphQL helper.
 // ---------------------------------------------------------------------------
 
-async function gql(token, query, variables, graphqlUrl = GRAPHQL) {
+async function gql(token, query, variables, graphqlUrl = GRAPHQL, { allowPartialData = false } = {}) {
   const res = await fetch(graphqlUrl, {
     method: "POST",
     headers: {
@@ -67,9 +67,10 @@ async function gql(token, query, variables, graphqlUrl = GRAPHQL) {
     throw new Error(`GitHub API ${res.status} ${res.statusText}`);
   }
   const json = await res.json();
-  if (json.errors?.length) {
-    throw new Error(json.errors.map((e) => e.message).join("; "));
+  if (allowPartialData) {
+    return { data: json.data, errors: json.errors ?? [] };
   }
+  if (json.errors?.length) throw new Error(json.errors.map((e) => e.message).join("; "));
   return json.data;
 }
 
@@ -114,7 +115,7 @@ query($owner:String!, $name:String!, $after:String, $includeReadiness:Boolean!) 
         }
         additions deletions changedFiles
         milestone { title }
-        labels(first:15) { nodes { name } }
+        labels(first:15) { pageInfo { hasNextPage endCursor } nodes { name } }
         assignees(first:10) { nodes { login } }
         reviewRequests(first:20) { nodes { requestedReviewer { __typename ... on User { login } } } }
         reviews(first:60) { nodes { state author { login } submittedAt } }
@@ -144,6 +145,18 @@ query($owner:String!, $name:String!, $number:Int!, $after:String!) {
   }
 }`;
 
+const PR_LABELS_QUERY = `
+query($owner:String!, $name:String!, $number:Int!, $after:String!) {
+  repository(owner:$owner, name:$name) {
+    pullRequest(number:$number) {
+      labels(first:100, after:$after) {
+        pageInfo { hasNextPage endCursor }
+        nodes { name }
+      }
+    }
+  }
+}`;
+
 const ISSUE_QUERY = `
 query($owner:String!, $name:String!, $after:String) {
   repository(owner:$owner, name:$name) {
@@ -166,6 +179,104 @@ query($owner:String!, $name:String!, $after:String) {
 function splitRepo(repo) {
   const [owner, ...rest] = repo.split("/");
   return { owner, name: rest.join("/") };
+}
+
+function getVerifiedLabelNodes(connection) {
+  return Array.isArray(connection?.nodes)
+    ? connection.nodes
+      .filter((label) => typeof label?.name === "string" && label.name)
+      .map((label) => ({ name: label.name }))
+    : [];
+}
+
+function getErrorMessage(error) {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function mergeErrors(...messages) {
+  const errors = [...new Set(messages.filter(Boolean))];
+  return errors.length ? errors.join("; ") : null;
+}
+
+function mergePullRequestSnapshots(existing, incoming, mode) {
+  const completeness = (pr) => Number(!pr.labelsUnavailable) + Number(!pr.firstReadinessError);
+  const completeLabels = !existing.labelsUnavailable ? existing : !incoming.labelsUnavailable ? incoming : null;
+  const completeReadiness = !existing.firstReadinessError ? existing : !incoming.firstReadinessError ? incoming : null;
+  const preferredSnapshot = mode === "review" && completeReadiness
+    ? completeReadiness
+    : completeness(incoming) > completeness(existing) ? incoming : existing;
+  const labels = completeLabels
+    ? completeLabels.labels
+    : [...new Set([...existing.labels, ...incoming.labels])];
+
+  return {
+    ...preferredSnapshot,
+    labels,
+    labelsUnavailable: completeLabels === null,
+    labelsError: completeLabels ? null : mergeErrors(existing.labelsError, incoming.labelsError),
+    firstReadyForReviewAt: completeReadiness?.firstReadyForReviewAt ?? null,
+    firstReadinessError: completeReadiness ? null : mergeErrors(existing.firstReadinessError, incoming.firstReadinessError),
+  };
+}
+
+// GraphQL field errors can preserve sibling data. Only tolerate paths scoped to one PR's
+// labels, e.g. ["repository", "pullRequests", "nodes", 0, "labels", "pageInfo"].
+function getPullRequestLabelErrors(errors, nodes) {
+  const errorsByNode = new Map();
+  for (const error of errors) {
+    const path = error?.path;
+    const index = path?.[3];
+    if (!Array.isArray(path) || path[0] !== "repository" || path[1] !== "pullRequests" ||
+        path[2] !== "nodes" || !Number.isInteger(index) || index < 0 || index >= nodes.length ||
+        path[4] !== "labels") {
+      throw new Error(errors.map((item) => item?.message ?? "Unknown GraphQL error").join("; "));
+    }
+    const message = error.message ?? "Unknown GraphQL error";
+    errorsByNode.set(index, [...(errorsByNode.get(index) ?? []), message].join("; "));
+  }
+  return errorsByNode;
+}
+
+async function loadPullRequestLabels(account, owner, name, node) {
+  let connection = node.labels;
+  const labels = [];
+  const cursors = new Set();
+  for (let page = 0; ; page++) {
+    if (!Array.isArray(connection?.nodes) || typeof connection.pageInfo?.hasNextPage !== "boolean" ||
+        connection.nodes.some((label) => typeof label?.name !== "string" || !label.name)) {
+      return {
+        labels: { nodes: [...labels, ...getVerifiedLabelNodes(connection)] },
+        error: `Missing or malformed pull-request labels for #${node.number}`,
+      };
+    }
+    labels.push(...connection.nodes);
+    if (!connection.pageInfo.hasNextPage) return { labels: { nodes: labels }, error: null };
+    const after = connection.pageInfo.endCursor;
+    if (typeof after !== "string" || !after || cursors.has(after) || page + 1 >= MAX_PAGES) {
+      return { labels: { nodes: labels }, error: `Incomplete pull-request labels for #${node.number}` };
+    }
+    cursors.add(after);
+    let response;
+    try {
+      response = await gql(
+        account.token,
+        PR_LABELS_QUERY,
+        { owner, name, number: node.number, after },
+        account.graphql,
+        { allowPartialData: true },
+      );
+    } catch (error) {
+      return { labels: { nodes: labels }, error: getErrorMessage(error) };
+    }
+    connection = response.data?.repository?.pullRequest?.labels;
+    if (response.errors.length) {
+      labels.push(...getVerifiedLabelNodes(connection));
+      return {
+        labels: { nodes: labels },
+        error: response.errors.map((error) => error?.message ?? "Unknown GraphQL error").join("; "),
+      };
+    }
+  }
 }
 
 async function loadFirstReadyForReviewAt(account, owner, name, node) {
@@ -557,6 +668,7 @@ function reviewReady(pr) {
 // or a needs-author-action label) never surface in the team's shared review queue.
 function awaitingReview(pr) {
   return (
+    !pr.labelsUnavailable &&
     reviewReady(pr) &&
     !pr.isMine &&
     pr.review.state !== "approved" &&
@@ -785,11 +897,38 @@ export async function loadDashboard({ accounts, mode, release, prefs, dismissed,
             } else {
               let after = null;
               for (let page = 0; page < MAX_PAGES; page++) {
-                const data = await gql(acct.token, PR_QUERY, { owner, name, after, includeReadiness: mode === "review" }, acct.graphql);
+                const { data, errors: graphqlErrors = [] } = await gql(
+                  acct.token,
+                  PR_QUERY,
+                  { owner, name, after, includeReadiness: mode === "review" },
+                  acct.graphql,
+                  { allowPartialData: true },
+                );
+                const conn = data?.repository?.pullRequests;
+                const nodes = conn?.nodes ?? [];
+                const initialLabelErrors = getPullRequestLabelErrors(graphqlErrors, nodes);
+                if (!data) {
+                  throw new Error("Missing GitHub GraphQL response data");
+                }
                 const repoPrivate = !!data.repository?.isPrivate;
-                const conn = data.repository?.pullRequests;
-                for (const node of conn?.nodes ?? []) {
-                  const pr = normalizePr(repo, node, viewers, repoPrivate);
+                for (const [nodeIndex, node] of nodes.entries()) {
+                  // Priority labels may follow the list query's first 15 labels.
+                  // Keep the PR for views that do not need labels, but exclude it from attention
+                  // ranking if the complete label connection cannot be loaded.
+                  let labelResult = {
+                    labels: { nodes: getVerifiedLabelNodes(node.labels) },
+                    error: initialLabelErrors.get(nodeIndex) ?? null,
+                  };
+                  if (labelResult.error === null) {
+                    try {
+                      labelResult = await loadPullRequestLabels(acct, owner, name, node);
+                    } catch (error) {
+                      labelResult.error = getErrorMessage(error);
+                    }
+                  }
+                  const pr = normalizePr(repo, { ...node, labels: labelResult.labels }, viewers, repoPrivate);
+                  pr.labelsUnavailable = labelResult.error !== null;
+                  pr.labelsError = labelResult.error;
                   if (mode === "review") {
                     try {
                       pr.firstReadyForReviewAt = await loadFirstReadyForReviewAt(acct, owner, name, node);
@@ -798,9 +937,7 @@ export async function loadDashboard({ accounts, mode, release, prefs, dismissed,
                     }
                   }
                   const existing = prById.get(pr.url);
-                  if (!existing || (existing.firstReadinessError && !pr.firstReadinessError)) {
-                    prById.set(pr.url, pr);
-                  }
+                  prById.set(pr.url, existing ? mergePullRequestSnapshots(existing, pr, mode) : pr);
                 }
                 if (!conn?.pageInfo?.hasNextPage) break;
                 after = conn.pageInfo.endCursor;
@@ -829,6 +966,9 @@ export async function loadDashboard({ accounts, mode, release, prefs, dismissed,
     // host — a success on a different host must not mask this host's failure.
     const errors = [...new Set(errorsRaw.filter((e) => !okRepos.has(hostRepoKey(e.host, e.repo))).map((e) => e.message))];
     for (const pr of allPrs) {
+      if (pr.labelsUnavailable) {
+        errors.push(`${pr.repository}#${pr.number}: labels unavailable; excluded from Needs attention. ${pr.labelsError}`);
+      }
       if (pr.firstReadinessError) {
         errors.push(`${pr.repository}#${pr.number}: first readiness unavailable; omitted from Needs attention. ${pr.firstReadinessError}`);
       }
@@ -847,9 +987,15 @@ export async function loadDashboard({ accounts, mode, release, prefs, dismissed,
     if (mode === "review") {
       const login = usable[0].login;
       const viewerLogins = usable.map((a) => a.login);
-      const buckets = createAttentionBuckets(allPrs, login);
+      const attentionPrs = allPrs.filter((pr) => !pr.labelsUnavailable);
+      const focusExclusionPrs = allPrs.filter((pr) => !pr.labelsUnavailable || pr.isMine);
+      const personalActionPrs = allPrs.filter((pr) => !pr.labelsUnavailable ||
+        (pr.isMine && (isChecksFailing(pr) || pr.review.state === "changes_requested" ||
+          pr.review.state === "approved" || pr.review.unresolvedThreadCount > 0 ||
+          shouldHideFromSharedPullRequestLists(pr))));
+      const buckets = createAttentionBuckets(attentionPrs, login);
       const focusAll = computeFocusItems(buckets);
-      const focusExclusions = computeFocusExclusionItems(allPrs, buckets, focusAll, login);
+      const focusExclusions = computeFocusExclusionItems(focusExclusionPrs, buckets, focusAll, login);
       // Every review-mode card carries a reviewDebt flag (aged past the focus limit without an
       // approving review) so the canvas can offer Address review / Discuss review even when the
       // "review debt" pill is truncated off the displayed signals. Derive it from the shared
@@ -863,7 +1009,7 @@ export async function loadDashboard({ accounts, mode, release, prefs, dismissed,
         return card(f.pullRequest, f.reason, { bucketLabel: f.bucketLabel, bucketTone: f.bucketTone, queuePosition: index + 1 });
       });
       attention = {
-        forMe: createForMeItems(allPrs, viewerLogins).map((f) => {
+        forMe: createForMeItems(personalActionPrs, viewerLogins).map((f) => {
           // Personal pick leads with its own call-to-action; the engine's action pill is
           // dropped (includeAction:false) so we don't double up, then state signals follow.
           const c = card(f.pullRequest, f.reason);
@@ -899,8 +1045,8 @@ export async function loadDashboard({ accounts, mode, release, prefs, dismissed,
           tone: b.tone,
           items: b.items.map((i) => card(i.pullRequest, i.reason)),
         })),
-        community: computeCommunityItems(allPrs).map((c) => card(c.pullRequest, "Community")),
-        developerCounts: createDeveloperPullRequestCounts(allPrs),
+        community: computeCommunityItems(attentionPrs).map((c) => card(c.pullRequest, "Community")),
+        developerCounts: createDeveloperPullRequestCounts(attentionPrs),
       };
     }
 
