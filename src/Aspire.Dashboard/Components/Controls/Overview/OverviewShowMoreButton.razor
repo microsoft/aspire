@@ -1,0 +1,15 @@
+@if (Total - PreviewCount is > 0 and var hidden)
+{
+    <button type="button" class="overview-show-more" aria-expanded="@(Expanded ? "true" : "false")" @onclick="@OnClick">
+        @if (Expanded)
+        {
+            <FluentIcon Value="@(new Icons.Regular.Size16.ChevronUp())" Color="Color.Custom" CustomColor="currentColor" />
+            @Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewShowLess)]
+        }
+        else
+        {
+            <FluentIcon Value="@(new Icons.Regular.Size16.MoreHorizontal())" Color="Color.Custom" CustomColor="currentColor" />
+            @string.Format(CultureInfo.CurrentCulture, Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewShowMore)], hidden)
+        }
+    </button>
+}

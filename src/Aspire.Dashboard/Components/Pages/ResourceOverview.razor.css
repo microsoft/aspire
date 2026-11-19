@@ -13,7 +13,7 @@
     padding: 0;
 }
 
-.overview-message {
+::deep .overview-message {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -46,13 +46,13 @@
     min-height: 0;
 }
 
-.overview-grid {
+::deep .overview-grid {
     display: grid;
     grid-template-columns: repeat(12, minmax(0, 1fr));
     gap: var(--aspire-space-3);
 }
 
-.overview-card {
+::deep .overview-card {
     display: flex;
     flex-direction: column;
     min-width: 0;
@@ -62,7 +62,7 @@
     background: var(--aspire-control-background);
 }
 
-.overview-card[hidden] {
+::deep .overview-card[hidden] {
     display: none;
 }
 
@@ -73,53 +73,53 @@
 }
 
 /* Spans are computed per card from its content (see OverviewCardLayout) and passed in as custom properties. */
-.overview-grid > .overview-card {
+::deep .overview-grid > .overview-card {
     grid-column: span var(--overview-span, 12);
 }
 
 /* Grid rows size to their tallest content and stretch the other cards to match. Keep the tags picker unclipped. */
-.overview-grid > .overview-card:not(.overview-tags-card) {
+::deep .overview-grid > .overview-card:not(.overview-tags-card) {
     overflow: hidden;
 }
 
-.overview-grid > .overview-terminal-card {
+::deep .overview-grid > .overview-terminal-card {
     min-height: var(--overview-card-height, 300px);
 }
 
 /* Child-component roots lack this component's scope attribute, so anchor it on the card. */
-.overview-grid > .overview-card:not(.overview-tags-card) ::deep > :not(.overview-card-header) {
+::deep .overview-grid > .overview-card:not(.overview-tags-card) > :not(.overview-card-header) {
     flex-shrink: 1;
     min-height: 0;
     overflow: auto;
 }
 
 /* Cap the scrollable content, not the card, so different card limits don't leave uneven row bottoms. */
-.overview-grid > .overview-card:not(.overview-tags-card):not(.overview-terminal-card) ::deep > :not(.overview-card-header) {
+::deep .overview-grid > .overview-card:not(.overview-tags-card):not(.overview-terminal-card) > :not(.overview-card-header) {
     max-height: var(--overview-card-height, none);
 }
 
-.overview-card-empty .overview-empty {
+::deep .overview-card-empty .overview-empty {
     flex: 1 1 auto;
 }
 
 @container (max-width: 1100px) {
-    .overview-grid > .overview-card {
+    ::deep .overview-grid > .overview-card {
         grid-column: span var(--overview-span-md, 12);
     }
 }
 
 @container (max-width: 760px) {
-    .overview-grid > .overview-card {
+    ::deep .overview-grid > .overview-card {
         grid-column: span 12;
     }
 }
 
 /* Tags fit on one line next to the card title, so the card stays short. */
-.overview-parameter-tags {
+::deep .overview-parameter-tags {
     margin-bottom: 14px;
 }
 
-.overview-tags-card {
+::deep .overview-tags-card {
     flex-direction: row;
     flex-wrap: wrap;
     align-items: center;
@@ -127,18 +127,18 @@
     padding-block: 10px;
 }
 
-.overview-tags-card .overview-card-header {
+::deep .overview-tags-card .overview-card-header {
     margin-bottom: 0;
 }
 
-.overview-card-header {
+::deep .overview-card-header {
     display: flex;
     align-items: center;
     gap: var(--aspire-space-2);
     margin-bottom: 10px;
 }
 
-.overview-card-header h2 {
+::deep .overview-card-header h2 {
     margin: 0;
     font-size: var(--aspire-font-size-body);
     font-weight: var(--aspire-font-weight-semibold);
@@ -146,7 +146,7 @@
     line-height: 20px;
 }
 
-.overview-card-count {
+::deep .overview-card-count {
     padding: 0 6px;
     border-radius: var(--aspire-radius-medium);
     background: var(--colorNeutralBackground3);
@@ -155,25 +155,25 @@
     font-weight: var(--aspire-font-weight-semibold);
 }
 
-.overview-card-link {
+::deep .overview-card-link {
     margin-inline-start: auto;
     color: var(--colorBrandForegroundLink);
     font-size: var(--aspire-font-size-body);
     text-decoration: none;
 }
 
-.overview-card-link:hover {
+::deep .overview-card-link:hover {
     text-decoration: underline;
 }
 
 /* Card actions get a visible button surface so they read as buttons rather than decorative icons.
    They stay short enough that the header remains as tall as its title. */
-.overview-card-header ::deep .overview-card-action {
+::deep .overview-card-header .overview-card-action {
     --aspire-control-height: 26px;
     margin-block: -3px;
 }
 
-.overview-card-header ::deep .overview-card-action::part(control) {
+::deep .overview-card-header .overview-card-action::part(control) {
     width: 26px;
     min-width: 26px;
     height: 26px;
@@ -183,7 +183,7 @@
     background: var(--colorNeutralBackground1);
 }
 
-.overview-card-header a.overview-card-action {
+::deep .overview-card-header a.overview-card-action {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -191,12 +191,12 @@
     text-decoration: none;
 }
 
-.overview-card-header ::deep .overview-card-action:hover::part(control) {
+::deep .overview-card-header .overview-card-action:hover::part(control) {
     border-color: var(--colorNeutralStroke1Hover);
     background: var(--colorNeutralBackground1Hover);
 }
 
-.overview-card-actions {
+::deep .overview-card-actions {
     display: flex;
     align-items: center;
     gap: var(--aspire-space-1);
@@ -204,12 +204,12 @@
 }
 
 /* Keep the header as tall as its title so the filter doesn't add space above the card content. */
-.overview-card-actions ::deep .overview-card-filter {
+::deep .overview-card-actions .overview-card-filter {
     width: 160px;
     margin-block: -6px;
 }
 
-.overview-show-more {
+::deep .overview-show-more {
     display: flex;
     align-items: center;
     gap: var(--aspire-space-1);
@@ -225,17 +225,17 @@
     cursor: pointer;
 }
 
-.overview-show-more:hover {
+::deep .overview-show-more:hover {
     text-decoration: underline;
 }
 
-.overview-show-more:focus-visible {
+::deep .overview-show-more:focus-visible {
     outline: 2px solid var(--colorStrokeFocus2);
     outline-offset: 2px;
     border-radius: var(--aspire-radius-small);
 }
 
-.overview-badge {
+::deep .overview-badge {
     flex: 0 0 auto;
     padding: 0 6px;
     border-radius: var(--aspire-radius-medium);
@@ -244,32 +244,32 @@
     font-size: var(--aspire-font-size-caption);
 }
 
-.overview-badge.overview-volume-type {
+::deep .overview-badge.overview-volume-type {
     display: inline-flex;
     align-items: center;
     gap: var(--aspire-space-1);
 }
 
-.overview-muted {
+::deep .overview-muted {
     color: var(--colorNeutralForeground2);
 }
 
 /* Match the density of the other card lists, and align the first column with the card header. */
-.overview-card ::deep .overview-property-grid td {
+::deep .overview-card .overview-property-grid td {
     font-size: var(--aspire-font-size-body);
 }
 
-.overview-card ::deep .overview-property-grid td:first-child {
+::deep .overview-card .overview-property-grid td:first-child {
     padding-inline-start: 0;
 }
 
 /* Remove the default cell padding on the value column so its mask/visualizer buttons
    align with the card header's rightmost action button instead of sitting inset from it. */
-.overview-card ::deep .overview-property-grid td:last-child {
+::deep .overview-card .overview-property-grid td:last-child {
     padding-inline-end: 0;
 }
 
-.overview-console-paused {
+::deep .overview-console-paused {
     display: flex;
     align-items: center;
     gap: var(--aspire-space-1);
@@ -278,7 +278,7 @@
     font-size: var(--aspire-font-size-secondary);
 }
 
-.overview-empty {
+::deep .overview-empty {
     display: flex;
     align-items: center;
     flex: 1 1 auto;
@@ -287,7 +287,7 @@
     font-size: var(--aspire-font-size-body);
 }
 
-.overview-properties {
+::deep .overview-properties {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr);
     gap: var(--aspire-space-1) var(--aspire-space-3);
@@ -297,12 +297,12 @@
 
 /* Labels are regular weight in the secondary grey, so the values beside them are what stands out. Fluent's reboot
    stylesheet makes <dt> bold. */
-.overview-properties dt {
+::deep .overview-properties dt {
     color: var(--colorNeutralForeground3);
     font-weight: var(--aspire-font-weight-regular);
 }
 
-.overview-properties dd {
+::deep .overview-properties dd {
     min-width: 0;
     margin: 0;
     overflow: hidden;
@@ -310,37 +310,37 @@
     white-space: nowrap;
 }
 
-.overview-mono {
+::deep .overview-mono {
     font-family: var(--aspire-font-mono);
     font-size: var(--aspire-font-size-secondary);
 }
 
-.overview-error-text {
+::deep .overview-error-text {
     color: var(--error);
     font-weight: var(--aspire-font-weight-semibold);
 }
 
-.overview-state {
+::deep .overview-state {
     display: inline-flex;
     align-items: center;
     gap: var(--aspire-space-1);
 }
 
 /* Status colors don't reach text contrast on every theme, so only the icon carries the state color. */
-.overview-state.state-success ::deep svg {
+::deep .overview-state.state-success svg {
     color: var(--success);
 }
 
-.overview-state.state-error ::deep svg {
+::deep .overview-state.state-error svg {
     color: var(--error);
 }
 
-.overview-state.state-warning ::deep svg,
-.overview-state.state-pending ::deep svg {
+::deep .overview-state.state-warning svg,
+::deep .overview-state.state-pending svg {
     color: var(--warning);
 }
 
-.overview-list {
+::deep .overview-list {
     display: flex;
     flex-direction: column;
     margin: 0;
@@ -348,7 +348,7 @@
     list-style: none;
 }
 
-.overview-list li {
+::deep .overview-list li {
     display: flex;
     align-items: center;
     gap: var(--aspire-space-2);
@@ -358,11 +358,11 @@
     font-size: var(--aspire-font-size-body);
 }
 
-.overview-list li:first-child {
+::deep .overview-list li:first-child {
     border-top: 0;
 }
 
-.overview-list-label {
+::deep .overview-list-label {
     flex: 0 0 auto;
     max-width: 40%;
     overflow: hidden;
@@ -372,12 +372,12 @@
 }
 
 /* Sized and bordered like .overview-card-action so these read as buttons rather than bare icons. */
-.overview-list ::deep .overview-volume-action {
+::deep .overview-list .overview-volume-action {
     --aspire-control-height: 20px;
     flex: 0 0 auto;
 }
 
-.overview-list ::deep .overview-volume-action::part(control) {
+::deep .overview-list .overview-volume-action::part(control) {
     width: 20px;
     min-width: 20px;
     height: 20px;
@@ -387,12 +387,12 @@
     background: var(--colorNeutralBackground1);
 }
 
-.overview-list ::deep .overview-volume-action:hover::part(control) {
+::deep .overview-list .overview-volume-action:hover::part(control) {
     border-color: var(--colorNeutralStroke1Hover);
     background: var(--colorNeutralBackground1Hover);
 }
 
-.overview-list-value {
+::deep .overview-list-value {
     flex: 1 1 auto;
     min-width: 0;
     overflow: hidden;
@@ -401,28 +401,28 @@
     white-space: nowrap;
 }
 
-a.overview-list-value {
+::deep a.overview-list-value {
     color: var(--colorBrandForegroundLink);
     text-decoration: none;
 }
 
-a.overview-list-value:hover {
+::deep a.overview-list-value:hover {
     text-decoration: underline;
 }
 
-.overview-list-time {
+::deep .overview-list-time {
     flex: 0 0 auto;
     color: var(--colorNeutralForeground2);
     font-variant-numeric: tabular-nums;
 }
 
-.overview-endpoints {
+::deep .overview-endpoints {
     display: grid;
     grid-template-columns: fit-content(30%) minmax(0, 1fr);
     gap: var(--aspire-space-1) var(--aspire-space-3);
 }
 
-.overview-list .overview-endpoint {
+::deep .overview-list .overview-endpoint {
     display: grid;
     grid-column: 1 / -1;
     grid-template-columns: subgrid;
@@ -433,20 +433,20 @@ a.overview-list-value:hover {
     border-top: 0;
 }
 
-.overview-endpoint .overview-list-label {
+::deep .overview-endpoint .overview-list-label {
     min-width: 0;
     max-width: none;
     color: var(--colorNeutralForeground3);
 }
 
-.overview-endpoint-value {
+::deep .overview-endpoint-value {
     display: flex;
     align-items: flex-start;
     gap: var(--aspire-space-2);
     min-width: 0;
 }
 
-.overview-endpoint-addresses {
+::deep .overview-endpoint-addresses {
     display: flex;
     flex: 1 1 auto;
     flex-direction: column;
@@ -454,46 +454,46 @@ a.overview-list-value:hover {
     min-width: 0;
 }
 
-.overview-endpoint-address {
+::deep .overview-endpoint-address {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
-.overview-endpoint-name {
+::deep .overview-endpoint-name {
     color: var(--colorNeutralForeground1);
     overflow-wrap: anywhere;
 }
 
-a.overview-endpoint-address,
-a.overview-endpoint-name,
-.overview-endpoint a.overview-list-label {
+::deep a.overview-endpoint-address,
+::deep a.overview-endpoint-name,
+::deep .overview-endpoint a.overview-list-label {
     color: var(--colorBrandForegroundLink);
     text-decoration: none;
 }
 
-a.overview-endpoint-address:hover,
-a.overview-endpoint-name:hover,
-.overview-endpoint a.overview-list-label:hover {
+::deep a.overview-endpoint-address:hover,
+::deep a.overview-endpoint-name:hover,
+::deep .overview-endpoint a.overview-list-label:hover {
     text-decoration: underline;
 }
 
-.overview-level {
+::deep .overview-level {
     flex: 0 0 auto;
     min-width: 58px;
     font-size: var(--aspire-font-size-secondary);
     font-weight: var(--aspire-font-weight-semibold);
 }
 
-.overview-level.error {
+::deep .overview-level.error {
     color: var(--error);
 }
 
-.overview-level.warning {
+::deep .overview-level.warning {
     color: var(--warning);
 }
 
-.overview-dot {
+::deep .overview-dot {
     display: inline-block;
     flex: 0 0 8px;
     width: 8px;
@@ -503,45 +503,45 @@ a.overview-endpoint-name:hover,
     background: var(--success);
 }
 
-.overview-stats {
+::deep .overview-stats {
     display: flex;
     gap: 22px;
     margin-bottom: 8px;
 }
 
-.overview-stat {
+::deep .overview-stat {
     display: flex;
     flex-direction: column;
     color: var(--colorNeutralForeground1);
     text-decoration: none;
 }
 
-a.overview-stat:hover .overview-stat-label {
+::deep a.overview-stat:hover .overview-stat-label {
     text-decoration: underline;
 }
 
-.overview-stat-value {
+::deep .overview-stat-value {
     font-family: var(--aspire-font-display);
     font-size: var(--aspire-font-size-title);
     line-height: 1.15;
     font-variant-numeric: tabular-nums;
 }
 
-.overview-stat-label {
+::deep .overview-stat-label {
     color: var(--colorNeutralForeground2);
     font-size: var(--aspire-font-size-secondary);
 }
 
-.overview-stat.warning .overview-stat-value {
+::deep .overview-stat.warning .overview-stat-value {
     color: var(--warning);
 }
 
-.overview-stat.error .overview-stat-value {
+::deep .overview-stat.error .overview-stat-value {
     color: var(--error);
 }
 
 /* The console output fills the card so it lines up with taller cards in the same row. */
-.overview-console {
+::deep .overview-console {
     flex: 1 1 auto;
     overflow: hidden;
     padding: 8px 10px;
@@ -553,7 +553,7 @@ a.overview-stat:hover .overview-stat-label {
     line-height: 1.6;
 }
 
-.overview-terminal {
+::deep .overview-terminal {
     /* A terminal's canvas must not determine its row height; it fills the row's stable minimum viewport. */
     flex: 1 1 0;
     min-height: 0;
@@ -561,41 +561,41 @@ a.overview-stat:hover .overview-stat-label {
     background: var(--terminal-background, var(--colorNeutralBackground1));
 }
 
-.overview-terminal ::deep .terminal-view,
-.overview-terminal ::deep .terminal-frame {
+::deep .overview-terminal .terminal-view,
+::deep .overview-terminal .terminal-frame {
     height: 100%;
 }
 
-.overview-terminal ::deep .terminal-footer {
+::deep .overview-terminal .terminal-footer {
     min-height: 36px;
     padding: 3px 8px;
 }
 
-.overview-terminal ::deep .terminal-focus-hint {
+::deep .overview-terminal .terminal-focus-hint {
     font-size: var(--aspire-font-size-secondary);
 }
 
-.overview-console-line {
+::deep .overview-console-line {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
-.overview-console-line.error {
+::deep .overview-console-line.error {
     color: #ff8a8a;
 }
 
-.overview-console-time {
+::deep .overview-console-time {
     margin-inline-end: 8px;
     color: #8a8a8a;
 }
 
-.overview-relationships-card ::deep .relationship-graph {
+::deep .overview-relationships-card .relationship-graph {
     flex: 0 1 auto;
 }
 
 /* Metric instruments are compact tiles that flow into as many columns as the card width allows. */
-.overview-metrics-empty {
+::deep .overview-metrics-empty {
     flex-wrap: wrap;
     gap: var(--aspire-space-1) var(--aspire-space-2);
 }
@@ -638,13 +638,13 @@ a.overview-stat:hover .overview-stat-label {
     font-size: var(--aspire-font-size-body);
 }
 
-.overview-selection-groups {
+::deep .overview-selection-groups {
     display: flex;
     flex-direction: column;
     gap: var(--aspire-space-5);
 }
 
-.overview-selection-group-title {
+::deep .overview-selection-group-title {
     display: flex;
     align-items: center;
     gap: var(--aspire-space-2);
@@ -658,31 +658,31 @@ a.overview-stat:hover .overview-stat-label {
 }
 
 /* Every card has the same three rows (title, meta, footer), so cards in a row stay the same height. */
-.overview-selection-grid {
+::deep .overview-selection-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
     gap: var(--aspire-space-3);
 }
 
-.overview-selection-item {
+::deep .overview-selection-item {
     display: flex;
     min-width: 0;
 }
 
-.overview-selection-card {
+::deep .overview-selection-card {
     flex: 1 1 auto;
     gap: var(--aspire-space-1);
     padding: 12px 14px;
 }
 
-.overview-selection-card-header {
+::deep .overview-selection-card-header {
     display: flex;
     align-items: center;
     gap: var(--aspire-space-2);
     min-width: 0;
 }
 
-.overview-selection-card-title {
+::deep .overview-selection-card-title {
     flex: 1 1 auto;
     min-width: 0;
     overflow: hidden;
@@ -694,11 +694,11 @@ a.overview-stat:hover .overview-stat-label {
     white-space: nowrap;
 }
 
-a.overview-selection-card-title:hover {
+::deep a.overview-selection-card-title:hover {
     text-decoration: underline;
 }
 
-.overview-selection-meta {
+::deep .overview-selection-meta {
     display: flex;
     flex-wrap: wrap;
     gap: var(--aspire-space-1) var(--aspire-space-3);
@@ -708,7 +708,7 @@ a.overview-selection-card-title:hover {
     font-size: var(--aspire-font-size-secondary);
 }
 
-.overview-selection-footer {
+::deep .overview-selection-footer {
     display: flex;
     align-items: center;
     gap: var(--aspire-space-2);
@@ -718,7 +718,7 @@ a.overview-selection-card-title:hover {
     border-top: 1px solid var(--colorNeutralStroke3);
 }
 
-.overview-selection-url {
+::deep .overview-selection-url {
     display: flex;
     flex: 1 1 auto;
     align-items: center;
@@ -727,30 +727,30 @@ a.overview-selection-card-title:hover {
     font-size: var(--aspire-font-size-body);
 }
 
-.overview-selection-url > a,
-.overview-selection-url > span:first-child {
+::deep .overview-selection-url > a,
+::deep .overview-selection-url > span:first-child {
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
-.overview-selection-url > a {
+::deep .overview-selection-url > a {
     color: var(--colorBrandForegroundLink);
     text-decoration: none;
 }
 
-.overview-selection-url > a:hover {
+::deep .overview-selection-url > a:hover {
     text-decoration: underline;
 }
 
-.overview-selection-actions {
+::deep .overview-selection-actions {
     display: flex;
     flex: 0 0 auto;
     gap: var(--aspire-space-1);
 }
 
-.overview-selection-action {
+::deep .overview-selection-action {
     position: relative;
     display: inline-flex;
     align-items: center;
@@ -763,17 +763,17 @@ a.overview-selection-card-title:hover {
     color: var(--colorBrandForeground1);
 }
 
-.overview-selection-action:hover {
+::deep .overview-selection-action:hover {
     border-color: var(--colorNeutralStroke1Hover);
     background: var(--colorNeutralBackground1Hover);
 }
 
-.overview-selection-action:focus-visible {
+::deep .overview-selection-action:focus-visible {
     outline: 2px solid var(--colorStrokeFocus2);
     outline-offset: 1px;
 }
 
-.overview-selection-errors {
+::deep .overview-selection-errors {
     position: absolute;
     top: -6px;
     right: -6px;
@@ -794,6 +794,6 @@ a.overview-selection-card-title:hover {
     }
 }
 
-.overview-status-actions {
+::deep .overview-status-actions {
     margin-inline-start: auto;
 }

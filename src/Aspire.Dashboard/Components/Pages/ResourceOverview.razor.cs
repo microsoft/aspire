@@ -3,11 +3,10 @@
 
 using System.Globalization;
 using Aspire.Dashboard.Components.Controls;
+using Aspire.Dashboard.Components.Controls.Overview;
 using Aspire.Dashboard.Components.CustomIcons;
 using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Model;
-using Aspire.Dashboard.Model.Otlp;
-using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Utils;
 using Aspire.Shared.ConsoleLogs;
@@ -20,15 +19,12 @@ namespace Aspire.Dashboard.Components.Pages;
 /// <summary>
 /// Summarizes the selected resource: its status, endpoints and relationships, a preview of recent console output and
 /// telemetry, and the complete resource details. Each summary links to the tab that shows the full data.
-/// When several resources are selected, it displays a summary card for each of them instead.
+/// A selected telemetry source, which isn't part of the app model, is summarized from its telemetry instead.
+/// When several or no resources are selected, it displays a summary of all of them.
 /// </summary>
 public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
 {
     private const int ConsolePreviewLineCount = 10;
-    private const int RecentItemCount = 5;
-    private const int MetricsPreviewCount = 8;
-    // Matches the metrics page's default duration, so a tile's sparkline looks like the card it opens.
-    private static readonly TimeSpan s_metricsPreviewDuration = TimeSpan.FromMinutes(5);
 
     // Telemetry can arrive many times per second. Coalesce updates so the overview queries the repository at most
     // a couple of times per second.
@@ -129,6 +125,20 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
 
     private ResourceViewModel? Resource => ResourcesLayout?.SelectedResource;
 
+    // A selected resource that sends telemetry without being part of the app model, such as a browser app. Every
+    // resource of a dashboard without an app host is one.
+    private ResourcesLayout.TelemetryOnlyResource? TelemetrySource => Resource is null ? ResourcesLayout?.SelectedTelemetryOnlyResource : null;
+
+    /// <summary>
+    /// Gets the resources the summary of several or all resources covers, or <see langword="null"/> for every resource.
+    /// </summary>
+    private IReadOnlyList<string>? GetSummaryResourceNames() =>
+        ResourcesLayout is { IsMultiSelection: true } layout ? layout.SelectedResourceNames : null;
+
+    // Without an app host, every resource is a telemetry source, so the summary is of telemetry sources rather than of
+    // the app model.
+    private bool IsTelemetrySourceSummary => !DashboardClient.IsEnabled;
+
     private bool IsTerminalFocused => ResourcesLayout?.CurrentTab == ResourceTab.Terminal &&
         Resource is { } resource && CanShowTerminal(resource);
 
@@ -226,25 +236,28 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
 
     /// <summary>
     /// Starts console log and telemetry subscriptions for the selected resource, replacing subscriptions for a
-    /// previously selected resource. The page instance is reused when navigating between resources.
+    /// previously selected resource. The page instance is reused when navigating between resources. A telemetry source
+    /// only has telemetry subscriptions.
     /// </summary>
     private void EnsureSubscriptions()
     {
         var resource = Resource;
-        var otlpResource = resource is not null ? TelemetryRepository.GetResourceByCompositeName(resource.Name) : null;
+        var telemetrySource = TelemetrySource;
+        var selectedName = resource?.Name ?? telemetrySource?.Name;
+        var otlpResource = resource is not null ? TelemetryRepository.GetResourceByCompositeName(resource.Name) : telemetrySource?.Resource;
 
-        if (string.Equals(_subscribedResourceName, resource?.Name, StringComparisons.ResourceName) &&
+        if (string.Equals(_subscribedResourceName, selectedName, StringComparisons.ResourceName) &&
             Equals(_telemetryKey, otlpResource?.ResourceKey))
         {
             return;
         }
 
-        var resourceChanged = !string.Equals(_subscribedResourceName, resource?.Name, StringComparisons.ResourceName);
-        _subscribedResourceName = resource?.Name;
+        var resourceChanged = !string.Equals(_subscribedResourceName, selectedName, StringComparisons.ResourceName);
+        _subscribedResourceName = selectedName;
 
         if (resourceChanged)
         {
-            StartConsoleSubscription(resource?.Name);
+            StartConsoleSubscription(selectedName);
         }
 
         _logsSubscription?.Dispose();
@@ -293,7 +306,7 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
                     return;
                 }
 
-                var telemetry = await LoadTelemetryAsync(key, cancellationToken).ConfigureAwait(false);
+                var telemetry = await OverviewTelemetry.LoadAsync(TelemetryRepository, key, cancellationToken).ConfigureAwait(false);
                 await InvokeAsync(() =>
                 {
                     // Ignore results for a resource that is no longer selected.
@@ -317,72 +330,6 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
         }, CancellationToken.None);
     }
 
-    private async Task<OverviewTelemetry> LoadTelemetryAsync(ResourceKey key, CancellationToken cancellationToken)
-    {
-        var repository = TelemetryRepository;
-
-        var allLogs = await repository.GetLogSummariesAsync(CreateLogsContext(key, [], 0, 0), cancellationToken).ConfigureAwait(false);
-        List<TelemetryFilter> errorFilters = [new FieldTelemetryFilter { Field = nameof(OtlpLogEntry.Severity), Condition = FilterCondition.GreaterThanOrEqual, Value = nameof(LogLevel.Error) }];
-        List<TelemetryFilter> warningFilters = [new FieldTelemetryFilter { Field = nameof(OtlpLogEntry.Severity), Condition = FilterCondition.Equals, Value = nameof(LogLevel.Warning) }];
-        List<TelemetryFilter> attentionFilters = [new FieldTelemetryFilter { Field = nameof(OtlpLogEntry.Severity), Condition = FilterCondition.GreaterThanOrEqual, Value = nameof(LogLevel.Warning) }];
-
-        var errorLogs = await repository.GetLogSummariesAsync(CreateLogsContext(key, errorFilters, 0, 0), cancellationToken).ConfigureAwait(false);
-        var warningLogs = await repository.GetLogSummariesAsync(CreateLogsContext(key, warningFilters, 0, 0), cancellationToken).ConfigureAwait(false);
-
-        // Results are ordered oldest first, so read the last page to get the most recent entries.
-        var attentionCount = errorLogs.TotalItemCount + warningLogs.TotalItemCount;
-        var recentAttentionLogs = attentionCount > 0
-            ? (await repository.GetLogSummariesAsync(CreateLogsContext(key, attentionFilters, Math.Max(0, attentionCount - RecentItemCount), RecentItemCount), cancellationToken).ConfigureAwait(false)).Items
-            : [];
-
-        // A healthy resource has no warnings or errors to highlight, so show its latest logs instead of an empty card.
-        var recentLogs = attentionCount == 0 && allLogs.TotalItemCount > 0
-            ? (await repository.GetLogSummariesAsync(CreateLogsContext(key, [], Math.Max(0, allLogs.TotalItemCount - RecentItemCount), RecentItemCount), cancellationToken).ConfigureAwait(false)).Items
-            : [];
-
-        var allTraces = await repository.GetTraceSummariesAsync(CreateTracesRequest(key, [], 0, 0), cancellationToken).ConfigureAwait(false);
-        List<TelemetryFilter> failedTraceFilters = [new FieldTelemetryFilter { Field = KnownTraceFields.StatusField, Condition = FilterCondition.Equals, Value = nameof(OtlpSpanStatusCode.Error) }];
-        var failedTraces = await repository.GetTraceSummariesAsync(CreateTracesRequest(key, failedTraceFilters, 0, 0), cancellationToken).ConfigureAwait(false);
-        var traceCount = allTraces.PagedResult.TotalItemCount;
-        var recentTraces = traceCount > 0
-            ? (await repository.GetTraceSummariesAsync(CreateTracesRequest(key, [], Math.Max(0, traceCount - RecentItemCount), RecentItemCount), cancellationToken).ConfigureAwait(false)).PagedResult.Items
-            : [];
-
-        var instruments = repository.GetInstrumentSummaries(key)
-            .OrderBy(i => i.Parent.Name, StringComparer.Ordinal)
-            .ThenBy(i => i.Name, StringComparer.Ordinal)
-            .ToList();
-
-        return new OverviewTelemetry
-        {
-            LogCount = allLogs.TotalItemCount,
-            ErrorLogCount = errorLogs.TotalItemCount,
-            WarningLogCount = warningLogs.TotalItemCount,
-            RecentAttentionLogs = recentAttentionLogs.AsEnumerable().Reverse().ToList(),
-            RecentLogs = recentLogs.AsEnumerable().Reverse().ToList(),
-            TraceCount = traceCount,
-            FailedTraceCount = failedTraces.PagedResult.TotalItemCount,
-            RecentTraces = recentTraces.AsEnumerable().Reverse().ToList(),
-            Instruments = instruments
-        };
-
-        static GetLogsContext CreateLogsContext(ResourceKey key, List<TelemetryFilter> filters, int startIndex, int count) => new()
-        {
-            ResourceKeys = [key],
-            StartIndex = startIndex,
-            Count = count,
-            Filters = filters
-        };
-
-        static GetTracesRequest CreateTracesRequest(ResourceKey key, List<TelemetryFilter> filters, int startIndex, int count) => new()
-        {
-            ResourceKeys = [key],
-            StartIndex = startIndex,
-            Count = count,
-            Filters = filters
-        };
-    }
-
     /// <summary>
     /// Replaces the console log subscription and clears the preview. Called when the selected resource changes, and
     /// when console log filters change so removed lines disappear from the preview.
@@ -404,7 +351,13 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
         if (resourceName is not null)
         {
             _resourceCts = new CancellationTokenSource();
-            _ = SubscribeConsoleLogsAsync(resourceName, _resourceCts.Token);
+
+            // Telemetry sources aren't part of the app model, so they have no console logs. Without an app host there's
+            // no service to subscribe to either: every resource is a telemetry source.
+            if (Resource is not null)
+            {
+                _ = SubscribeConsoleLogsAsync(resourceName, _resourceCts.Token);
+            }
         }
     }
 
@@ -767,106 +720,4 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
     }
 
     private sealed record RelatedResource(ResourceViewModel Resource, string Type, bool IsIncoming);
-
-    private sealed class OverviewTelemetry
-    {
-        public required int LogCount { get; init; }
-        public required int ErrorLogCount { get; init; }
-        public required int WarningLogCount { get; init; }
-        public required List<LogSummary> RecentAttentionLogs { get; init; }
-        public required List<LogSummary> RecentLogs { get; init; }
-        public required int TraceCount { get; init; }
-        public required int FailedTraceCount { get; init; }
-        public required List<TraceSummary> RecentTraces { get; init; }
-        public required List<OtlpInstrumentSummary> Instruments { get; init; }
-    }
-
-    internal enum OverviewCard
-    {
-        Status,
-        Endpoints,
-        Relationships,
-        Console,
-        Logs,
-        Traces,
-        Metrics,
-        Properties,
-        Environment,
-        Volumes,
-        Health
-    }
-
-    /// <summary>
-    /// Packs cards into rows of a 12 column grid in page order. Each card requests a span based on its content, and the
-    /// spare columns at the end of a row are shared between that row's cards so rows never have trailing gaps.
-    /// Medium widths use a separate two-per-row packing where wide cards take the full row.
-    /// </summary>
-    internal sealed class OverviewCardLayout
-    {
-        private const int Columns = 12;
-
-        private readonly Dictionary<OverviewCard, int> _spans;
-        private readonly Dictionary<OverviewCard, int> _mediumSpans;
-
-        private OverviewCardLayout(Dictionary<OverviewCard, int> spans, Dictionary<OverviewCard, int> mediumSpans)
-        {
-            _spans = spans;
-            _mediumSpans = mediumSpans;
-        }
-
-        public static OverviewCardLayout Create(IReadOnlyList<(OverviewCard Card, int Span)> cards)
-        {
-            return new OverviewCardLayout(
-                Pack(cards),
-                Pack(cards.Select(c => (c.Card, c.Span >= 7 ? Columns : Columns / 2)).ToList()));
-        }
-
-        public string Style(OverviewCard card)
-        {
-            return string.Create(CultureInfo.InvariantCulture, $"--overview-span: {_spans.GetValueOrDefault(card, Columns)}; --overview-span-md: {_mediumSpans.GetValueOrDefault(card, Columns)}; --overview-card-height: {GetHeight(card)}px;");
-        }
-
-        // Bound scrollable content while allowing each grid row to fit its tallest card.
-        // Terminals use the console limit as their minimum interactive viewport instead.
-        private static int GetHeight(OverviewCard card) => card switch
-        {
-            OverviewCard.Status or OverviewCard.Endpoints or OverviewCard.Metrics => 260,
-            OverviewCard.Console or OverviewCard.Logs => 300,
-            OverviewCard.Traces or OverviewCard.Relationships => 300,
-            OverviewCard.Properties or OverviewCard.Environment => 340,
-            _ => 240
-        };
-
-        private static Dictionary<OverviewCard, int> Pack(IReadOnlyList<(OverviewCard Card, int Span)> cards)
-        {
-            var result = new Dictionary<OverviewCard, int>();
-            var row = new List<(OverviewCard Card, int Span)>();
-            var used = 0;
-
-            foreach (var (card, requested) in cards)
-            {
-                var span = Math.Clamp(requested, 1, Columns);
-                if (used + span > Columns)
-                {
-                    CompleteRow();
-                }
-                row.Add((card, span));
-                used += span;
-            }
-            CompleteRow();
-
-            return result;
-
-            void CompleteRow()
-            {
-                var spare = Columns - used;
-                for (var i = 0; i < row.Count; i++)
-                {
-                    result[row[i].Card] = row[i].Span + (spare / row.Count) + (i < spare % row.Count ? 1 : 0);
-                }
-                row.Clear();
-                used = 0;
-            }
-        }
-    }
 }

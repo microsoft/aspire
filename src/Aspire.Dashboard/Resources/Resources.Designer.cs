@@ -59,33 +59,6 @@ namespace Aspire.Dashboard.Resources {
                 resourceCulture = value;
             }
         }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Incoming requests · last 15 min of this run.
-        /// </summary>
-        public static string HomeActivityHistoricalCaption {
-            get {
-                return ResourceManager.GetString("HomeActivityHistoricalCaption", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Activity.
-        /// </summary>
-        public static string HomeActivityHistoricalTitle {
-            get {
-                return ResourceManager.GetString("HomeActivityHistoricalTitle", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to No requests were recorded in this run..
-        /// </summary>
-        public static string HomeActivityNoRecordedRequests {
-            get {
-                return ResourceManager.GetString("HomeActivityNoRecordedRequests", resourceCulture);
-            }
-        }
         
         /// <summary>
         ///   Looks up a localized string similar to Graph.
@@ -142,11 +115,38 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Incoming requests · last 15 min of this run.
+        /// </summary>
+        public static string HomeActivityHistoricalCaption {
+            get {
+                return ResourceManager.GetString("HomeActivityHistoricalCaption", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Activity.
+        /// </summary>
+        public static string HomeActivityHistoricalTitle {
+            get {
+                return ResourceManager.GetString("HomeActivityHistoricalTitle", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Loading activity….
         /// </summary>
         public static string HomeActivityLoading {
             get {
                 return ResourceManager.GetString("HomeActivityLoading", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to No requests were recorded in this run..
+        /// </summary>
+        public static string HomeActivityNoRecordedRequests {
+            get {
+                return ResourceManager.GetString("HomeActivityNoRecordedRequests", resourceCulture);
             }
         }
         
@@ -390,6 +390,15 @@ namespace Aspire.Dashboard.Resources {
         public static string HomeNoRecentErrors {
             get {
                 return ResourceManager.GetString("HomeNoRecentErrors", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to No telemetry.
+        /// </summary>
+        public static string HomeNoTelemetry {
+            get {
+                return ResourceManager.GetString("HomeNoTelemetry", resourceCulture);
             }
         }
         
@@ -831,6 +840,15 @@ namespace Aspire.Dashboard.Resources {
         public static string ResourceDetailsViewConsoleLogs {
             get {
                 return ResourceManager.GetString("ResourceDetailsViewConsoleLogs", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Display order.
+        /// </summary>
+        public static string ResourceDisplayOrder {
+            get {
+                return ResourceManager.GetString("ResourceDisplayOrder", resourceCulture);
             }
         }
         
@@ -1382,15 +1400,6 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ResourcePersistentType", resourceCulture);
             }
         }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Display order.
-        /// </summary>
-        public static string ResourceDisplayOrder {
-            get {
-                return ResourceManager.GetString("ResourceDisplayOrder", resourceCulture);
-            }
-        }
         
         /// <summary>
         ///   Looks up a localized string similar to Actions.
@@ -1860,13 +1869,57 @@ namespace Aspire.Dashboard.Resources {
             }
         }
         
-        
         /// <summary>
         ///   Looks up a localized string similar to Dashboard tags.
         /// </summary>
         public static string ResourceTraitDashboardTags {
             get {
                 return ResourceManager.GetString("ResourceTraitDashboardTags", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Resource attributes.
+        /// </summary>
+        public static string TelemetrySourceOverviewAttributesTitle {
+            get {
+                return ResourceManager.GetString("TelemetrySourceOverviewAttributesTitle", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Instance ID.
+        /// </summary>
+        public static string TelemetrySourceOverviewInstanceId {
+            get {
+                return ResourceManager.GetString("TelemetrySourceOverviewInstanceId", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to No resource attributes.
+        /// </summary>
+        public static string TelemetrySourceOverviewNoAttributes {
+            get {
+                return ResourceManager.GetString("TelemetrySourceOverviewNoAttributes", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Service name.
+        /// </summary>
+        public static string TelemetrySourceOverviewServiceName {
+            get {
+                return ResourceManager.GetString("TelemetrySourceOverviewServiceName", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Telemetry source.
+        /// </summary>
+        public static string TelemetrySourceOverviewType {
+            get {
+                return ResourceManager.GetString("TelemetrySourceOverviewType", resourceCulture);
             }
         }
         

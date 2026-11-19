@@ -12,28 +12,28 @@ public sealed class TargetLocationInterceptorTests
     public void InterceptTargetLocation_RelativeRoot_Redirect()
     {
         Assert.True(TargetLocationInterceptor.InterceptTargetLocation("http://localhost", "/", out var newTargetLocation));
-        Assert.Equal(TargetLocationInterceptor.StructuredLogsPath, newTargetLocation);
+        Assert.Equal(TargetLocationInterceptor.OverviewPath, newTargetLocation);
     }
 
     [Fact]
     public void InterceptTargetLocation_Absolute_Redirect()
     {
         Assert.True(TargetLocationInterceptor.InterceptTargetLocation("http://localhost", "http://localhost/", out var newTargetLocation));
-        Assert.Equal(TargetLocationInterceptor.StructuredLogsPath, newTargetLocation);
+        Assert.Equal(TargetLocationInterceptor.OverviewPath, newTargetLocation);
     }
 
     [Fact]
     public void InterceptTargetLocation_Absolute_WithoutTrailingSlash_Redirect()
     {
         Assert.True(TargetLocationInterceptor.InterceptTargetLocation("http://localhost", "http://localhost", out var newTargetLocation));
-        Assert.Equal(TargetLocationInterceptor.StructuredLogsPath, newTargetLocation);
+        Assert.Equal(TargetLocationInterceptor.OverviewPath, newTargetLocation);
     }
 
     [Fact]
     public void InterceptTargetLocation_AbsoluteDifferentCase_Redirect()
     {
         Assert.True(TargetLocationInterceptor.InterceptTargetLocation("http://LOCALHOST", "http://localhost/", out var newTargetLocation));
-        Assert.Equal(TargetLocationInterceptor.StructuredLogsPath, newTargetLocation);
+        Assert.Equal(TargetLocationInterceptor.OverviewPath, newTargetLocation);
     }
 
     [Fact]
@@ -56,9 +56,9 @@ public sealed class TargetLocationInterceptorTests
 
     [Theory]
     [InlineData("/", true)]
-    [InlineData("/resources", true)]
-    [InlineData("/resources/frontend", true)]
-    [InlineData("/RESOURCES/frontend", true)]
+    [InlineData("/resources", false)]
+    [InlineData("/resources/frontend", false)]
+    [InlineData("/RESOURCES/frontend", false)]
     [InlineData("/parameters", true)]
     [InlineData("/graph", true)]
     [InlineData("/graph/other", false)]
@@ -70,10 +70,13 @@ public sealed class TargetLocationInterceptorTests
         Assert.Equal(expected, TargetLocationInterceptor.IsResourceServicePath(path));
     }
 
-    // The previous experience keeps main's behavior, where only the resources root needs the resource service.
+    // App model pages go to the overview, which summarizes the telemetry sources without a resource service. The previous
+    // experience keeps main's behavior, where only the resources root needs the resource service.
     [Theory]
-    [InlineData("/", "/structuredlogs")]
-    [InlineData("/resources/frontend", "/structuredlogs")]
+    [InlineData("/", "/resources")]
+    [InlineData("/parameters", "/resources")]
+    [InlineData("/graph", "/resources")]
+    [InlineData("/resources/frontend", null)]
     [InlineData("/legacy", "/legacy/structuredlogs")]
     [InlineData("/legacy/", "/legacy/structuredlogs")]
     [InlineData("/LEGACY", "/legacy/structuredlogs")]

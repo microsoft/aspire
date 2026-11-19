@@ -2166,7 +2166,7 @@ public class ResourcesLayoutTests : DashboardTestContext
         // The docked list beside the overview of all resources. The default URL, "/", is the full-page table.
         Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.ResourceListUrl());
         var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
-        cut.WaitForAssertion(() => Assert.Equal(["api", "parameter", "browser"], GetRowNames()));
+        cut.WaitForAssertion(() => Assert.Equal(["api", "browser", "parameter"], GetRowNames()));
         Assert.Equal(["api", "browser"], cut.Instance.GetSelectionTelemetryKeys(null)!.Select(key => key.Name));
 
         // Telemetry sources aren't a resource type, so their option comes after the types, with its own count.
@@ -2190,7 +2190,7 @@ public class ResourcesLayoutTests : DashboardTestContext
 
         // Reset shows everything again, telemetry sources included.
         cut.Find(".resource-filter-reset").Click();
-        cut.WaitForAssertion(() => Assert.Equal(["api", "parameter", "browser"], GetRowNames()));
+        cut.WaitForAssertion(() => Assert.Equal(["api", "browser", "parameter"], GetRowNames()));
         Assert.Equal(["api", "browser"], cut.Instance.GetSelectionTelemetryKeys(null)!.Select(key => key.Name));
 
         IEnumerable<string> GetRowNames() => cut.FindAll(".resource-row:not(.resource-row-all) .resource-row-name").Select(name => name.TextContent.Trim());
@@ -2429,8 +2429,8 @@ public class ResourcesLayoutTests : DashboardTestContext
     [InlineData(true, true, "/", "")]
     // A narrow layout has no full-page list, so it opens on the overview of all resources.
     [InlineData(true, false, "/", "resources")]
-    // Without a resource service there are no resources to list.
-    [InlineData(false, true, "/", "structuredlogs")]
+    // Without a resource service there are no resources to list, so it opens on the overview of the telemetry sources.
+    [InlineData(false, true, "/", "resources")]
     // Links created by older tools.
     [InlineData(true, true, "/?resource=api", "resources/api")]
     [InlineData(true, true, "/?view=Graph", "graph")]

@@ -1,0 +1,73 @@
+@if (HasContent)
+{
+    <section class="overview-card" style="@Layout.Style(OverviewCard.Logs)" aria-labelledby="overview-logs-title">
+        <div class="overview-card-header">
+            <span class="card-header-icon" aria-hidden="true">
+                <FluentIcon Value="@(new Icons.Regular.Size16.SlideTextSparkle())" Width="16px" Color="Color.Custom" CustomColor="currentColor" />
+            </span>
+            <h2 id="overview-logs-title">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewLogsTitle)]</h2>
+            <a class="overview-card-link" href="@DashboardUrls.StructuredLogsUrl(ResourceName)">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewViewAll)]</a>
+        </div>
+        @if (!IsLoaded)
+        {
+            <OverviewListSkeleton StatCount="3" RowCount="3" />
+        }
+        else if (Telemetry is { } telemetry)
+        {
+            <div class="overview-stats">
+                <a class="overview-stat" href="@DashboardUrls.StructuredLogsUrl(ResourceName)">
+                    <span class="overview-stat-value">@telemetry.LogCount.ToString("N0", CultureInfo.CurrentCulture)</span>
+                    <span class="overview-stat-label">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewTotal)]</span>
+                </a>
+                <a class="overview-stat @(telemetry.WarningLogCount > 0 ? "warning" : string.Empty)" href="@DashboardUrls.StructuredLogsUrl(ResourceName, logLevel: "warning")">
+                    <span class="overview-stat-value">@telemetry.WarningLogCount.ToString("N0", CultureInfo.CurrentCulture)</span>
+                    <span class="overview-stat-label">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewWarnings)]</span>
+                </a>
+                <a class="overview-stat @(telemetry.ErrorLogCount > 0 ? "error" : string.Empty)" href="@DashboardUrls.StructuredLogsUrl(ResourceName, logLevel: "error")">
+                    <span class="overview-stat-value">@telemetry.ErrorLogCount.ToString("N0", CultureInfo.CurrentCulture)</span>
+                    <span class="overview-stat-label">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewErrors)]</span>
+                </a>
+            </div>
+            @if (telemetry.RecentAttentionLogs.Count > 0)
+            {
+                <ul class="overview-list">
+                    @foreach (var log in telemetry.RecentAttentionLogs)
+                    {
+                        <li @key="log.InternalId">
+                            <span class="overview-level @(log.IsError ? "error" : "warning")">@log.Severity</span>
+                            <a class="overview-list-value" href="@DashboardUrls.StructuredLogsUrl(ResourceName, logEntryId: log.InternalId)" data-tooltip="@log.Message">@log.Message</a>
+                            <span class="overview-list-time">@FormatHelpers.FormatTime(TimeProvider, log.TimeStamp)</span>
+                        </li>
+                    }
+                </ul>
+            }
+            else if (telemetry.RecentLogs.Count > 0)
+            {
+                <ul class="overview-list">
+                    @foreach (var log in telemetry.RecentLogs)
+                    {
+                        <li @key="log.InternalId">
+                            <span class="overview-level">@log.Severity</span>
+                            <a class="overview-list-value" href="@DashboardUrls.StructuredLogsUrl(ResourceName, logEntryId: log.InternalId)" data-tooltip="@log.Message">@log.Message</a>
+                            <span class="overview-list-time">@FormatHelpers.FormatTime(TimeProvider, log.TimeStamp)</span>
+                        </li>
+                    }
+                </ul>
+            }
+            else
+            {
+                <div class="overview-empty">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewNoAttentionLogs)]</div>
+            }
+        }
+    </section>
+}
+else
+{
+    <OverviewEmptyCard Card="OverviewCard.Logs"
+                       Layout="@Layout"
+                       TitleId="overview-logs-title"
+                       Icon="@(new Icons.Regular.Size16.SlideTextSparkle())"
+                       Title="@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewLogsTitle)]"
+                       Message="@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewNoTelemetry)]"
+                       Hidden="@HideEmptyPanels" />
+}

@@ -17,8 +17,9 @@ namespace Aspire.Dashboard.Components.Pages;
 /// <para>
 /// Some requests for the root URL are for another page, and are redirected to it:
 /// links created by older tools, such as <c>/?resource=api</c> or <c>/?view=Graph</c>; a dashboard without a
-/// resource service, which has no resources to list; and narrow layouts, where the list is a drawer over a page
-/// rather than a page of its own, so they open on the overview of all resources.
+/// resource service, which has no resources to list and opens on the overview of its telemetry sources; and narrow
+/// layouts, where the list is a drawer over a page rather than a page of its own, so they open on the overview of all
+/// resources.
 /// </para>
 /// </remarks>
 public sealed partial class Home : ComponentBase
@@ -45,9 +46,7 @@ public sealed partial class Home : ComponentBase
     protected override void OnParametersSet()
     {
         var url = TryGetLegacyRedirectUrl(LegacyResourceName, LegacyViewKind)
-            ?? (!DashboardClient.IsEnabled ? DashboardUrls.StructuredLogsUrl()
-                : !ViewportInformation.IsDesktop ? DashboardUrls.ResourceListUrl()
-                : null);
+            ?? (!DashboardClient.IsEnabled || !ViewportInformation.IsDesktop ? DashboardUrls.ResourceListUrl() : null);
 
         // The layout re-renders this page while the redirect is in flight. Ask for it once.
         if (url is null || string.Equals(url, _redirectedTo, StringComparison.Ordinal))

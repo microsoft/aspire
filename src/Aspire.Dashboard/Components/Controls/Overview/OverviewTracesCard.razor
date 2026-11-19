@@ -1,0 +1,63 @@
+@if (HasContent)
+{
+    <section class="overview-card" style="@Layout.Style(OverviewCard.Traces)" aria-labelledby="overview-traces-title">
+        <div class="overview-card-header">
+            <span class="card-header-icon" aria-hidden="true">
+                <FluentIcon Value="@(new Icons.Regular.Size16.GanttChart())" Width="16px" Color="Color.Custom" CustomColor="currentColor" />
+            </span>
+            <h2 id="overview-traces-title">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewTracesTitle)]</h2>
+            <a class="overview-card-link" href="@DashboardUrls.TracesUrl(ResourceName)">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewViewAll)]</a>
+        </div>
+        @if (!IsLoaded)
+        {
+            <OverviewListSkeleton StatCount="2" RowCount="3" />
+        }
+        else if (Telemetry is { } telemetry)
+        {
+            <div class="overview-stats">
+                <a class="overview-stat" href="@DashboardUrls.TracesUrl(ResourceName)">
+                    <span class="overview-stat-value">@telemetry.TraceCount.ToString("N0", CultureInfo.CurrentCulture)</span>
+                    <span class="overview-stat-label">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewTotal)]</span>
+                </a>
+                <div class="overview-stat @(telemetry.FailedTraceCount > 0 ? "error" : string.Empty)">
+                    <span class="overview-stat-value">@telemetry.FailedTraceCount.ToString("N0", CultureInfo.CurrentCulture)</span>
+                    <span class="overview-stat-label">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewFailed)]</span>
+                </div>
+            </div>
+            @if (telemetry.RecentTraces.Count > 0)
+            {
+                <ul class="overview-list">
+                    @foreach (var trace in telemetry.RecentTraces)
+                    {
+                        <li @key="trace.TraceId">
+                            @if (trace.HasError)
+                            {
+                                <FluentIcon Value="@(new Icons.Filled.Size12.ErrorCircle())" Color="Color.Error" data-tooltip="@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewFailed)]" aria-label="@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewFailed)]" />
+                            }
+                            else
+                            {
+                                <span class="overview-dot"></span>
+                            }
+                            <a class="overview-list-value" href="@(ResourcesLayout?.GetTraceDetailUrl(trace.TraceId) ?? DashboardUrls.TraceDetailUrl(trace.TraceId))" data-tooltip="@trace.FullName">@trace.FullName</a>
+                            <span class="overview-list-time">@DurationFormatter.FormatDuration(trace.Duration, CultureInfo.CurrentCulture)</span>
+                        </li>
+                    }
+                </ul>
+            }
+            else
+            {
+                <div class="overview-empty">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewNoTraces)]</div>
+            }
+        }
+    </section>
+}
+else
+{
+    <OverviewEmptyCard Card="OverviewCard.Traces"
+                       Layout="@Layout"
+                       TitleId="overview-traces-title"
+                       Icon="@(new Icons.Regular.Size16.GanttChart())"
+                       Title="@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewTracesTitle)]"
+                       Message="@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewNoTelemetry)]"
+                       Hidden="@HideEmptyPanels" />
+}
