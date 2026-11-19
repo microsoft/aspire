@@ -366,6 +366,15 @@ jobs:
             }
             Remove-Item $iterOutput -ErrorAction SilentlyContinue
 
+            # Report only lifecycle markers, not raw DCP logs, before the next iteration removes them.
+            foreach ($surface in @('Generic', 'Type')) {
+              $logDir = Join-Path $env:ASPIRE__TEST__DCPLOGBASEPATH $surface
+              $logs = @(Get-ChildItem -LiteralPath $logDir -Recurse -File -Filter '*.log' -ErrorAction SilentlyContinue)
+              $sqliteBusy = @($logs | Select-String -Pattern 'SQLITE_BUSY|database is locked|could not enable SQLite WAL mode').Count
+              $controllerActivity = @($logs | Select-String -Pattern 'run-controllers|controller manager').Count
+              Write-Host "DCP $surface`: logs=$($logs.Count) SQLiteLockMatches=$sqliteBusy ControllerActivityMatches=$controllerActivity"
+            }
+
             if ($result -eq 0) {
               Write-Host "✅ Iteration ${i}: PASS"
               $pass++
