@@ -1,0 +1,5 @@
+.launch-group-value {
+    cursor: help;
+    text-decoration: underline dotted;
+    text-underline-offset: 0.15em;
+}

@@ -30,6 +30,15 @@ public class AtsGoCodeGeneratorTests
     }
 
     [Fact]
+    public void GeneratedCode_IncludesOptionalLaunchGroupReference()
+    {
+        var source = _generator.GenerateDistributedApplication(CreateContextFromBothAssemblies())["aspire.go"];
+
+        Assert.Contains("func (s *executableResource) WithOptionalLaunchGroupReference(dependency ", source);
+        Assert.Contains("Aspire.Hosting/withOptionalLaunchGroupReference", source);
+    }
+
+    [Fact]
     public async Task GenerateDistributedApplication_WithTestTypes_GeneratesCorrectOutput()
     {
         // Arrange

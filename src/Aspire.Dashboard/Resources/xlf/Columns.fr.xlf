@@ -44,6 +44,16 @@ Pour plus d'informations, consultez https://aka.ms/aspire/container-runtime-unhe
         <target state="translated">{0} n’a pas pu démarrer.</target>
         <note>{0} is a resource type</note>
       </trans-unit>
+      <trans-unit id="StateColumnResourceNotInLaunchGroup">
+        <source>Not in active launch group '{0}'</source>
+        <target state="new">Not in active launch group '{0}'</target>
+        <note>{0} is the AppHost's selected launch-group name.</note>
+      </trans-unit>
+      <trans-unit id="StateColumnResourceNotInLaunchGroupDeferred">
+        <source>Not in active launch group '{0}', deferred build</source>
+        <target state="new">Not in active launch group '{0}', deferred build</target>
+        <note>{0} is the AppHost's selected launch-group name. The resource's project will be built when manually started.</note>
+      </trans-unit>
       <trans-unit id="StateColumnResourceNotStarted">
         <source>Resource is not configured to start automatically.</source>
         <target state="translated">La ressource n'est pas configurée pour démarrer automatiquement.</target>

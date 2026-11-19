@@ -20,6 +20,9 @@ public partial class SelectResourceOptions<TValue>
     [Parameter]
     public string? Id { get; set; }
 
+    [Parameter]
+    public Func<TValue, string>? GetLabel { get; set; }
+
     private async Task OnAllValuesCheckedChangedInternalAsync(bool? newAreAllVisible)
     {
         SetCheckState(newAreAllVisible, Values);

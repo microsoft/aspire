@@ -4,6 +4,7 @@
 using System.Diagnostics;
 using System.Text;
 using System.Text.Json.Nodes;
+using Aspire.Dashboard.Model;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.CodeGeneration.Python;
 using Aspire.Hosting.RemoteHost.Ats;
@@ -15,6 +16,125 @@ namespace Aspire.Hosting.RemoteHost.Tests;
 
 public class CapabilityDispatcherTests
 {
+    [Fact]
+    public async Task Invoke_OptionalLaunchGroupReference_PreservesResourceBuilderTypes()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var dependent = builder.AddExecutable("frontend", "unused", ".");
+        var dependency = builder.AddContainer("backend", "unused");
+        await using var handles = new HandleRegistry();
+        var dispatcher = new CapabilityDispatcher(handles, CreateTestMarshaller(handles), [typeof(DistributedApplication).Assembly]);
+        var dependentHandle = handles.Register(dependent, AtsTypeMapping.DeriveTypeId(dependent.Resource.GetType()));
+        var dependencyHandle = handles.Register(dependency, AtsTypeMapping.DeriveTypeId(dependency.Resource.GetType()));
+
+        var result = await dispatcher.InvokeAsync("Aspire.Hosting/withOptionalLaunchGroupReference", new JsonObject
+        {
+            ["builder"] = new JsonObject { ["$handle"] = dependentHandle },
+            ["dependency"] = new JsonObject { ["$handle"] = dependencyHandle }
+        });
+
+        Assert.NotNull(result);
+        Assert.True(handles.TryGet(result["$handle"]!.GetValue<string>(), out var returnedBuilder, out _));
+        Assert.Same(dependent, returnedBuilder);
+        var reference = Assert.Single(dependent.Resource.Annotations.OfType<ResourceRelationshipAnnotation>());
+        Assert.Same(dependency.Resource, reference.Resource);
+        Assert.Equal(KnownRelationshipTypes.Reference, reference.Type);
+        var optional = Assert.Single(dependent.Resource.Annotations.OfType<OptionalLaunchGroupDependencyAnnotation>());
+        Assert.Same(dependency.Resource, optional.Resource);
+        Assert.Empty(dependent.Resource.Annotations.OfType<WaitAnnotation>());
+    }
+
+    [Fact]
+    [RequiresTools(["python3"])]
+    [SkipOnPlatform(TestPlatforms.Windows, "Uses the Unix Python executable.")]
+    public async Task Invoke_OptionalLaunchGroupReference_FromGeneratedPython()
+    {
+        var hostingAssembly = typeof(DistributedApplication).Assembly;
+        var context = AtsCapabilityScanner.ScanAssemblies([hostingAssembly]).ToAtsContext();
+        var module = new AtsPythonCodeGenerator().GenerateDistributedApplication(context)["aspire_app.py"];
+        var builder = DistributedApplication.CreateBuilder();
+        var dependent = builder.AddExecutable("frontend", "unused", ".");
+        var dependency = builder.AddContainer("backend", "unused");
+        await using var handles = new HandleRegistry();
+        var dependentHandle = handles.Register(dependent, AtsTypeMapping.DeriveTypeId(dependent.Resource.GetType()));
+        var dependencyHandle = handles.Register(dependency, AtsTypeMapping.DeriveTypeId(dependency.Resource.GetType()));
+        var dispatcher = new CapabilityDispatcher(handles, CreateTestMarshaller(handles), [hostingAssembly]);
+        using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(1));
+        using var process = new Process
+        {
+            StartInfo = new ProcessStartInfo("python3")
+            {
+                RedirectStandardInput = true,
+                StandardInputEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                ArgumentList =
+                {
+                    "-c",
+                    """
+                    import json, sys, types
+                    module = types.ModuleType("aspire_app")
+                    sys.modules["aspire_app"] = module
+                    exec(compile(sys.stdin.buffer.read(), "aspire_app.py", "exec"), module.__dict__)
+                    client = module.AspireClient("unused")
+
+                    class Socket:
+                        def sendall(self, message):
+                            _, payload = message.split(b"\r\n\r\n", 1)
+                            request = json.loads(payload)
+                            print(json.dumps(request["params"]), flush=True)
+                            client._pending_results[request["id"]] = (request["params"][1]["builder"], None)
+                            client._pending_requests[request["id"]].set()
+
+                    client._socket = Socket()
+                    client._connected = True
+                    dependent = module.ExecutableResource(module.Handle({
+                        "$handle": sys.argv[1],
+                        "$type": "Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecutableResource"
+                    }), client)
+                    dependency = module.ContainerResource(module.Handle({
+                        "$handle": sys.argv[2],
+                        "$type": "Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource"
+                    }), client)
+                    assert dependent.with_optional_launch_group_reference(dependency) is dependent
+                    """,
+                    dependentHandle,
+                    dependencyHandle
+                }
+            }
+        };
+        process.Start();
+        var output = process.StandardOutput.ReadToEndAsync(timeout.Token);
+        var error = process.StandardError.ReadToEndAsync(timeout.Token);
+        try
+        {
+            await process.StandardInput.WriteAsync(module.AsMemory(), timeout.Token);
+            process.StandardInput.Close();
+            await process.WaitForExitAsync(timeout.Token);
+            Assert.True(process.ExitCode == 0, $"Generated Python call failed: {await output}{await error}");
+
+            var request = JsonNode.Parse(await output)!.AsArray();
+            Assert.Equal("Aspire.Hosting/withOptionalLaunchGroupReference", request[0]!.GetValue<string>());
+            var result = await dispatcher.InvokeAsync(request[0]!.GetValue<string>(), request[1]!.AsObject());
+
+            Assert.NotNull(result);
+            Assert.True(handles.TryGet(result["$handle"]!.GetValue<string>(), out var returnedBuilder, out _));
+            Assert.Same(dependent, returnedBuilder);
+            var optional = Assert.Single(dependent.Resource.Annotations.OfType<OptionalLaunchGroupDependencyAnnotation>());
+            Assert.Same(dependency.Resource, optional.Resource);
+            Assert.Empty(dependent.Resource.Annotations.OfType<WaitAnnotation>());
+        }
+        finally
+        {
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+                await process.WaitForExitAsync();
+            }
+        }
+    }
+
     [Theory]
     [InlineData("project")]
     [InlineData("csharp")]

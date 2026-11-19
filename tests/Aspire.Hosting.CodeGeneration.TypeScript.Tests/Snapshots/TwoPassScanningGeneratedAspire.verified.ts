@@ -13147,6 +13147,35 @@ export interface ContainerRegistryResource {
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ContainerRegistryResourcePromise;
     /**
+     * Adds a resource to one or more launch groups.
+     *
+     * Repeated calls add membership rather than replacing it. Select one group with the `Aspire:LaunchGroup`
+     * configuration setting. Selecting a group marks resources without that membership for explicit start,
+     * including ungrouped resources, unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
+     * Structural children without their own memberships inherit their parent's memberships. Their own memberships
+     * override that default. Display relationships and references do not inherit membership or select dependencies.
+     * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
+     * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
+     * to select a group. No selection preserves normal startup, and publishing is unaffected.
+     * Selection does not change lifecycle commands.
+     * Unselected resources can be started later from the dashboard or resource commands.
+     * @param launchGroupNames The case-insensitive launch group names.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withLaunchGroups(launchGroupNames: string[]): ContainerRegistryResourcePromise;
+    /**
+     * Declares a local resource reference that is optional during initial launch-group selection.
+     *
+     * This declares a reference relationship for launch-group validation. It does not add a readiness wait or
+     * change behavior when no launch group is selected. Use it only when the dependent resource can run without
+     * the dependency during initial startup.
+     * @param dependency The optional dependency resource builder.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withOptionalLaunchGroupReference(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ContainerRegistryResourcePromise;
+    /**
      * Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start.
      *
      * The command is considered valid if either:
@@ -13518,6 +13547,35 @@ export interface ContainerRegistryResourcePromise extends PromiseLike<ContainerR
      * @returns The resource builder.
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ContainerRegistryResourcePromise;
+    /**
+     * Adds a resource to one or more launch groups.
+     *
+     * Repeated calls add membership rather than replacing it. Select one group with the `Aspire:LaunchGroup`
+     * configuration setting. Selecting a group marks resources without that membership for explicit start,
+     * including ungrouped resources, unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
+     * Structural children without their own memberships inherit their parent's memberships. Their own memberships
+     * override that default. Display relationships and references do not inherit membership or select dependencies.
+     * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
+     * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
+     * to select a group. No selection preserves normal startup, and publishing is unaffected.
+     * Selection does not change lifecycle commands.
+     * Unselected resources can be started later from the dashboard or resource commands.
+     * @param launchGroupNames The case-insensitive launch group names.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withLaunchGroups(launchGroupNames: string[]): ContainerRegistryResourcePromise;
+    /**
+     * Declares a local resource reference that is optional during initial launch-group selection.
+     *
+     * This declares a reference relationship for launch-group validation. It does not add a readiness wait or
+     * change behavior when no launch group is selected. Use it only when the dependent resource can run without
+     * the dependency during initial startup.
+     * @param dependency The optional dependency resource builder.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withOptionalLaunchGroupReference(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ContainerRegistryResourcePromise;
     /**
      * Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start.
      *
@@ -13927,6 +13985,62 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
         const buildImage = options?.buildImage;
         const runtimeImage = options?.runtimeImage;
         return new ContainerRegistryResourcePromiseImpl(this._withDockerfileBaseImageInternal(buildImage, runtimeImage), this._client);
+    }
+
+    /** @internal */
+    private async _withLaunchGroupsInternal(launchGroupNames: string[]): Promise<ContainerRegistryResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, launchGroupNames };
+        const result = await this._client.invokeCapability<ContainerRegistryResourceHandle>(
+            'Aspire.Hosting/withLaunchGroups',
+            rpcArgs
+        );
+        return new ContainerRegistryResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds a resource to one or more launch groups.
+     *
+     * Repeated calls add membership rather than replacing it. Select one group with the `Aspire:LaunchGroup`
+     * configuration setting. Selecting a group marks resources without that membership for explicit start,
+     * including ungrouped resources, unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
+     * Structural children without their own memberships inherit their parent's memberships. Their own memberships
+     * override that default. Display relationships and references do not inherit membership or select dependencies.
+     * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
+     * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
+     * to select a group. No selection preserves normal startup, and publishing is unaffected.
+     * Selection does not change lifecycle commands.
+     * Unselected resources can be started later from the dashboard or resource commands.
+     * @param launchGroupNames The case-insensitive launch group names.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withLaunchGroups(launchGroupNames: string[]): ContainerRegistryResourcePromise {
+        return new ContainerRegistryResourcePromiseImpl(this._withLaunchGroupsInternal(launchGroupNames), this._client);
+    }
+
+    /** @internal */
+    private async _withOptionalLaunchGroupReferenceInternal(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): Promise<ContainerRegistryResource> {
+        dependency = isPromiseLike(dependency) ? await dependency : dependency;
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, dependency };
+        const result = await this._client.invokeCapability<ContainerRegistryResourceHandle>(
+            'Aspire.Hosting/withOptionalLaunchGroupReference',
+            rpcArgs
+        );
+        return new ContainerRegistryResourceImpl(result, this._client);
+    }
+
+    /**
+     * Declares a local resource reference that is optional during initial launch-group selection.
+     *
+     * This declares a reference relationship for launch-group validation. It does not add a readiness wait or
+     * change behavior when no launch group is selected. Use it only when the dependent resource can run without
+     * the dependency during initial startup.
+     * @param dependency The optional dependency resource builder.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withOptionalLaunchGroupReference(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ContainerRegistryResourcePromise {
+        return new ContainerRegistryResourcePromiseImpl(this._withOptionalLaunchGroupReferenceInternal(dependency), this._client);
     }
 
     /** @internal */
@@ -15284,6 +15398,8 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
 const ContainerRegistryResourcePromiseImpl = $aspireCreateFluentPromiseClass<ContainerRegistryResource, ContainerRegistryResourcePromise>((): $aspireFluentPromiseTransitions => ({
     ["withContainerRegistry"]: () => ContainerRegistryResourcePromiseImpl,
     ["withDockerfileBaseImage"]: () => ContainerRegistryResourcePromiseImpl,
+    ["withLaunchGroups"]: () => ContainerRegistryResourcePromiseImpl,
+    ["withOptionalLaunchGroupReference"]: () => ContainerRegistryResourcePromiseImpl,
     ["withRequiredCommand"]: () => ContainerRegistryResourcePromiseImpl,
     ["withRequiredCommandValidation"]: () => ContainerRegistryResourcePromiseImpl,
     ["withSessionLifetime"]: () => ContainerRegistryResourcePromiseImpl,
@@ -15554,6 +15670,35 @@ export interface ContainerResource {
      * @returns The resource builder.
      */
     withContainerNetworkAlias(alias: string): ContainerResourcePromise;
+    /**
+     * Adds a resource to one or more launch groups.
+     *
+     * Repeated calls add membership rather than replacing it. Select one group with the `Aspire:LaunchGroup`
+     * configuration setting. Selecting a group marks resources without that membership for explicit start,
+     * including ungrouped resources, unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
+     * Structural children without their own memberships inherit their parent's memberships. Their own memberships
+     * override that default. Display relationships and references do not inherit membership or select dependencies.
+     * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
+     * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
+     * to select a group. No selection preserves normal startup, and publishing is unaffected.
+     * Selection does not change lifecycle commands.
+     * Unselected resources can be started later from the dashboard or resource commands.
+     * @param launchGroupNames The case-insensitive launch group names.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withLaunchGroups(launchGroupNames: string[]): ContainerResourcePromise;
+    /**
+     * Declares a local resource reference that is optional during initial launch-group selection.
+     *
+     * This declares a reference relationship for launch-group validation. It does not add a readiness wait or
+     * change behavior when no launch group is selected. Use it only when the dependent resource can run without
+     * the dependency during initial startup.
+     * @param dependency The optional dependency resource builder.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withOptionalLaunchGroupReference(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ContainerResourcePromise;
     /**
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
@@ -16422,6 +16567,35 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      * @returns The resource builder.
      */
     withContainerNetworkAlias(alias: string): ContainerResourcePromise;
+    /**
+     * Adds a resource to one or more launch groups.
+     *
+     * Repeated calls add membership rather than replacing it. Select one group with the `Aspire:LaunchGroup`
+     * configuration setting. Selecting a group marks resources without that membership for explicit start,
+     * including ungrouped resources, unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
+     * Structural children without their own memberships inherit their parent's memberships. Their own memberships
+     * override that default. Display relationships and references do not inherit membership or select dependencies.
+     * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
+     * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
+     * to select a group. No selection preserves normal startup, and publishing is unaffected.
+     * Selection does not change lifecycle commands.
+     * Unselected resources can be started later from the dashboard or resource commands.
+     * @param launchGroupNames The case-insensitive launch group names.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withLaunchGroups(launchGroupNames: string[]): ContainerResourcePromise;
+    /**
+     * Declares a local resource reference that is optional during initial launch-group selection.
+     *
+     * This declares a reference relationship for launch-group validation. It does not add a readiness wait or
+     * change behavior when no launch group is selected. Use it only when the dependent resource can run without
+     * the dependency during initial startup.
+     * @param dependency The optional dependency resource builder.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withOptionalLaunchGroupReference(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ContainerResourcePromise;
     /**
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
@@ -17626,6 +17800,62 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
      */
     withContainerNetworkAlias(alias: string): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._withContainerNetworkAliasInternal(alias), this._client);
+    }
+
+    /** @internal */
+    private async _withLaunchGroupsInternal(launchGroupNames: string[]): Promise<ContainerResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, launchGroupNames };
+        const result = await this._client.invokeCapability<ContainerResourceHandle>(
+            'Aspire.Hosting/withLaunchGroups',
+            rpcArgs
+        );
+        return new ContainerResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds a resource to one or more launch groups.
+     *
+     * Repeated calls add membership rather than replacing it. Select one group with the `Aspire:LaunchGroup`
+     * configuration setting. Selecting a group marks resources without that membership for explicit start,
+     * including ungrouped resources, unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
+     * Structural children without their own memberships inherit their parent's memberships. Their own memberships
+     * override that default. Display relationships and references do not inherit membership or select dependencies.
+     * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
+     * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
+     * to select a group. No selection preserves normal startup, and publishing is unaffected.
+     * Selection does not change lifecycle commands.
+     * Unselected resources can be started later from the dashboard or resource commands.
+     * @param launchGroupNames The case-insensitive launch group names.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withLaunchGroups(launchGroupNames: string[]): ContainerResourcePromise {
+        return new ContainerResourcePromiseImpl(this._withLaunchGroupsInternal(launchGroupNames), this._client);
+    }
+
+    /** @internal */
+    private async _withOptionalLaunchGroupReferenceInternal(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): Promise<ContainerResource> {
+        dependency = isPromiseLike(dependency) ? await dependency : dependency;
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, dependency };
+        const result = await this._client.invokeCapability<ContainerResourceHandle>(
+            'Aspire.Hosting/withOptionalLaunchGroupReference',
+            rpcArgs
+        );
+        return new ContainerResourceImpl(result, this._client);
+    }
+
+    /**
+     * Declares a local resource reference that is optional during initial launch-group selection.
+     *
+     * This declares a reference relationship for launch-group validation. It does not add a readiness wait or
+     * change behavior when no launch group is selected. Use it only when the dependent resource can run without
+     * the dependency during initial startup.
+     * @param dependency The optional dependency resource builder.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withOptionalLaunchGroupReference(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ContainerResourcePromise {
+        return new ContainerResourcePromiseImpl(this._withOptionalLaunchGroupReferenceInternal(dependency), this._client);
     }
 
     /** @internal */
@@ -20019,6 +20249,8 @@ const ContainerResourcePromiseImpl = $aspireCreateFluentPromiseClass<ContainerRe
     ["withDockerfileBuilder"]: () => ContainerResourcePromiseImpl,
     ["withDockerfileBaseImage"]: () => ContainerResourcePromiseImpl,
     ["withContainerNetworkAlias"]: () => ContainerResourcePromiseImpl,
+    ["withLaunchGroups"]: () => ContainerResourcePromiseImpl,
+    ["withOptionalLaunchGroupReference"]: () => ContainerResourcePromiseImpl,
     ["withMcpServer"]: () => ContainerResourcePromiseImpl,
     ["withOtlpExporter"]: () => ContainerResourcePromiseImpl,
     ["publishAsConnectionString"]: () => ContainerResourcePromiseImpl,
@@ -20148,6 +20380,35 @@ export interface CSharpAppResource {
      * @returns The resource builder.
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): CSharpAppResourcePromise;
+    /**
+     * Adds a resource to one or more launch groups.
+     *
+     * Repeated calls add membership rather than replacing it. Select one group with the `Aspire:LaunchGroup`
+     * configuration setting. Selecting a group marks resources without that membership for explicit start,
+     * including ungrouped resources, unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
+     * Structural children without their own memberships inherit their parent's memberships. Their own memberships
+     * override that default. Display relationships and references do not inherit membership or select dependencies.
+     * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
+     * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
+     * to select a group. No selection preserves normal startup, and publishing is unaffected.
+     * Selection does not change lifecycle commands.
+     * Unselected resources can be started later from the dashboard or resource commands.
+     * @param launchGroupNames The case-insensitive launch group names.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withLaunchGroups(launchGroupNames: string[]): CSharpAppResourcePromise;
+    /**
+     * Declares a local resource reference that is optional during initial launch-group selection.
+     *
+     * This declares a reference relationship for launch-group validation. It does not add a readiness wait or
+     * change behavior when no launch group is selected. Use it only when the dependent resource can run without
+     * the dependency during initial startup.
+     * @param dependency The optional dependency resource builder.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withOptionalLaunchGroupReference(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): CSharpAppResourcePromise;
     /**
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
@@ -20856,6 +21117,35 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      * @returns The resource builder.
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): CSharpAppResourcePromise;
+    /**
+     * Adds a resource to one or more launch groups.
+     *
+     * Repeated calls add membership rather than replacing it. Select one group with the `Aspire:LaunchGroup`
+     * configuration setting. Selecting a group marks resources without that membership for explicit start,
+     * including ungrouped resources, unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
+     * Structural children without their own memberships inherit their parent's memberships. Their own memberships
+     * override that default. Display relationships and references do not inherit membership or select dependencies.
+     * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
+     * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
+     * to select a group. No selection preserves normal startup, and publishing is unaffected.
+     * Selection does not change lifecycle commands.
+     * Unselected resources can be started later from the dashboard or resource commands.
+     * @param launchGroupNames The case-insensitive launch group names.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withLaunchGroups(launchGroupNames: string[]): CSharpAppResourcePromise;
+    /**
+     * Declares a local resource reference that is optional during initial launch-group selection.
+     *
+     * This declares a reference relationship for launch-group validation. It does not add a readiness wait or
+     * change behavior when no launch group is selected. Use it only when the dependent resource can run without
+     * the dependency during initial startup.
+     * @param dependency The optional dependency resource builder.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withOptionalLaunchGroupReference(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): CSharpAppResourcePromise;
     /**
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
@@ -21601,6 +21891,62 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
         const buildImage = options?.buildImage;
         const runtimeImage = options?.runtimeImage;
         return new CSharpAppResourcePromiseImpl(this._withDockerfileBaseImageInternal(buildImage, runtimeImage), this._client);
+    }
+
+    /** @internal */
+    private async _withLaunchGroupsInternal(launchGroupNames: string[]): Promise<CSharpAppResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, launchGroupNames };
+        const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
+            'Aspire.Hosting/withLaunchGroups',
+            rpcArgs
+        );
+        return new CSharpAppResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds a resource to one or more launch groups.
+     *
+     * Repeated calls add membership rather than replacing it. Select one group with the `Aspire:LaunchGroup`
+     * configuration setting. Selecting a group marks resources without that membership for explicit start,
+     * including ungrouped resources, unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
+     * Structural children without their own memberships inherit their parent's memberships. Their own memberships
+     * override that default. Display relationships and references do not inherit membership or select dependencies.
+     * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
+     * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
+     * to select a group. No selection preserves normal startup, and publishing is unaffected.
+     * Selection does not change lifecycle commands.
+     * Unselected resources can be started later from the dashboard or resource commands.
+     * @param launchGroupNames The case-insensitive launch group names.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withLaunchGroups(launchGroupNames: string[]): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromiseImpl(this._withLaunchGroupsInternal(launchGroupNames), this._client);
+    }
+
+    /** @internal */
+    private async _withOptionalLaunchGroupReferenceInternal(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): Promise<CSharpAppResource> {
+        dependency = isPromiseLike(dependency) ? await dependency : dependency;
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, dependency };
+        const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
+            'Aspire.Hosting/withOptionalLaunchGroupReference',
+            rpcArgs
+        );
+        return new CSharpAppResourceImpl(result, this._client);
+    }
+
+    /**
+     * Declares a local resource reference that is optional during initial launch-group selection.
+     *
+     * This declares a reference relationship for launch-group validation. It does not add a readiness wait or
+     * change behavior when no launch group is selected. Use it only when the dependent resource can run without
+     * the dependency during initial startup.
+     * @param dependency The optional dependency resource builder.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withOptionalLaunchGroupReference(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromiseImpl(this._withOptionalLaunchGroupReferenceInternal(dependency), this._client);
     }
 
     /** @internal */
@@ -24052,6 +24398,8 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
 const CSharpAppResourcePromiseImpl = $aspireCreateFluentPromiseClass<CSharpAppResource, CSharpAppResourcePromise>((): $aspireFluentPromiseTransitions => ({
     ["withContainerRegistry"]: () => CSharpAppResourcePromiseImpl,
     ["withDockerfileBaseImage"]: () => CSharpAppResourcePromiseImpl,
+    ["withLaunchGroups"]: () => CSharpAppResourcePromiseImpl,
+    ["withOptionalLaunchGroupReference"]: () => CSharpAppResourcePromiseImpl,
     ["withMcpServer"]: () => CSharpAppResourcePromiseImpl,
     ["withOtlpExporter"]: () => CSharpAppResourcePromiseImpl,
     ["withReplicas"]: () => CSharpAppResourcePromiseImpl,
@@ -24246,6 +24594,35 @@ export interface DotnetToolResource {
      * @returns The resource builder.
      */
     withWorkingDirectory(workingDirectory: string): DotnetToolResourcePromise;
+    /**
+     * Adds a resource to one or more launch groups.
+     *
+     * Repeated calls add membership rather than replacing it. Select one group with the `Aspire:LaunchGroup`
+     * configuration setting. Selecting a group marks resources without that membership for explicit start,
+     * including ungrouped resources, unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
+     * Structural children without their own memberships inherit their parent's memberships. Their own memberships
+     * override that default. Display relationships and references do not inherit membership or select dependencies.
+     * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
+     * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
+     * to select a group. No selection preserves normal startup, and publishing is unaffected.
+     * Selection does not change lifecycle commands.
+     * Unselected resources can be started later from the dashboard or resource commands.
+     * @param launchGroupNames The case-insensitive launch group names.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withLaunchGroups(launchGroupNames: string[]): DotnetToolResourcePromise;
+    /**
+     * Declares a local resource reference that is optional during initial launch-group selection.
+     *
+     * This declares a reference relationship for launch-group validation. It does not add a readiness wait or
+     * change behavior when no launch group is selected. Use it only when the dependent resource can run without
+     * the dependency during initial startup.
+     * @param dependency The optional dependency resource builder.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withOptionalLaunchGroupReference(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): DotnetToolResourcePromise;
     /**
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
@@ -24990,6 +25367,35 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      * @returns The resource builder.
      */
     withWorkingDirectory(workingDirectory: string): DotnetToolResourcePromise;
+    /**
+     * Adds a resource to one or more launch groups.
+     *
+     * Repeated calls add membership rather than replacing it. Select one group with the `Aspire:LaunchGroup`
+     * configuration setting. Selecting a group marks resources without that membership for explicit start,
+     * including ungrouped resources, unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
+     * Structural children without their own memberships inherit their parent's memberships. Their own memberships
+     * override that default. Display relationships and references do not inherit membership or select dependencies.
+     * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
+     * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
+     * to select a group. No selection preserves normal startup, and publishing is unaffected.
+     * Selection does not change lifecycle commands.
+     * Unselected resources can be started later from the dashboard or resource commands.
+     * @param launchGroupNames The case-insensitive launch group names.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withLaunchGroups(launchGroupNames: string[]): DotnetToolResourcePromise;
+    /**
+     * Declares a local resource reference that is optional during initial launch-group selection.
+     *
+     * This declares a reference relationship for launch-group validation. It does not add a readiness wait or
+     * change behavior when no launch group is selected. Use it only when the dependent resource can run without
+     * the dependency during initial startup.
+     * @param dependency The optional dependency resource builder.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withOptionalLaunchGroupReference(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): DotnetToolResourcePromise;
     /**
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
@@ -25893,6 +26299,62 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
      */
     withWorkingDirectory(workingDirectory: string): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._withWorkingDirectoryInternal(workingDirectory), this._client);
+    }
+
+    /** @internal */
+    private async _withLaunchGroupsInternal(launchGroupNames: string[]): Promise<DotnetToolResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, launchGroupNames };
+        const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
+            'Aspire.Hosting/withLaunchGroups',
+            rpcArgs
+        );
+        return new DotnetToolResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds a resource to one or more launch groups.
+     *
+     * Repeated calls add membership rather than replacing it. Select one group with the `Aspire:LaunchGroup`
+     * configuration setting. Selecting a group marks resources without that membership for explicit start,
+     * including ungrouped resources, unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
+     * Structural children without their own memberships inherit their parent's memberships. Their own memberships
+     * override that default. Display relationships and references do not inherit membership or select dependencies.
+     * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
+     * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
+     * to select a group. No selection preserves normal startup, and publishing is unaffected.
+     * Selection does not change lifecycle commands.
+     * Unselected resources can be started later from the dashboard or resource commands.
+     * @param launchGroupNames The case-insensitive launch group names.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withLaunchGroups(launchGroupNames: string[]): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromiseImpl(this._withLaunchGroupsInternal(launchGroupNames), this._client);
+    }
+
+    /** @internal */
+    private async _withOptionalLaunchGroupReferenceInternal(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): Promise<DotnetToolResource> {
+        dependency = isPromiseLike(dependency) ? await dependency : dependency;
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, dependency };
+        const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
+            'Aspire.Hosting/withOptionalLaunchGroupReference',
+            rpcArgs
+        );
+        return new DotnetToolResourceImpl(result, this._client);
+    }
+
+    /**
+     * Declares a local resource reference that is optional during initial launch-group selection.
+     *
+     * This declares a reference relationship for launch-group validation. It does not add a readiness wait or
+     * change behavior when no launch group is selected. Use it only when the dependent resource can run without
+     * the dependency during initial startup.
+     * @param dependency The optional dependency resource builder.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withOptionalLaunchGroupReference(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromiseImpl(this._withOptionalLaunchGroupReferenceInternal(dependency), this._client);
     }
 
     /** @internal */
@@ -28272,6 +28734,8 @@ const DotnetToolResourcePromiseImpl = $aspireCreateFluentPromiseClass<DotnetTool
     ["publishAsDockerFile"]: () => DotnetToolResourcePromiseImpl,
     ["withExecutableCommand"]: () => DotnetToolResourcePromiseImpl,
     ["withWorkingDirectory"]: () => DotnetToolResourcePromiseImpl,
+    ["withLaunchGroups"]: () => DotnetToolResourcePromiseImpl,
+    ["withOptionalLaunchGroupReference"]: () => DotnetToolResourcePromiseImpl,
     ["withMcpServer"]: () => DotnetToolResourcePromiseImpl,
     ["withOtlpExporter"]: () => DotnetToolResourcePromiseImpl,
     ["withRequiredCommand"]: () => DotnetToolResourcePromiseImpl,
@@ -28430,6 +28894,35 @@ export interface ExecutableResource {
      * @returns The resource builder.
      */
     withWorkingDirectory(workingDirectory: string): ExecutableResourcePromise;
+    /**
+     * Adds a resource to one or more launch groups.
+     *
+     * Repeated calls add membership rather than replacing it. Select one group with the `Aspire:LaunchGroup`
+     * configuration setting. Selecting a group marks resources without that membership for explicit start,
+     * including ungrouped resources, unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
+     * Structural children without their own memberships inherit their parent's memberships. Their own memberships
+     * override that default. Display relationships and references do not inherit membership or select dependencies.
+     * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
+     * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
+     * to select a group. No selection preserves normal startup, and publishing is unaffected.
+     * Selection does not change lifecycle commands.
+     * Unselected resources can be started later from the dashboard or resource commands.
+     * @param launchGroupNames The case-insensitive launch group names.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withLaunchGroups(launchGroupNames: string[]): ExecutableResourcePromise;
+    /**
+     * Declares a local resource reference that is optional during initial launch-group selection.
+     *
+     * This declares a reference relationship for launch-group validation. It does not add a readiness wait or
+     * change behavior when no launch group is selected. Use it only when the dependent resource can run without
+     * the dependency during initial startup.
+     * @param dependency The optional dependency resource builder.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withOptionalLaunchGroupReference(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ExecutableResourcePromise;
     /**
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
@@ -29135,6 +29628,35 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      * @returns The resource builder.
      */
     withWorkingDirectory(workingDirectory: string): ExecutableResourcePromise;
+    /**
+     * Adds a resource to one or more launch groups.
+     *
+     * Repeated calls add membership rather than replacing it. Select one group with the `Aspire:LaunchGroup`
+     * configuration setting. Selecting a group marks resources without that membership for explicit start,
+     * including ungrouped resources, unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
+     * Structural children without their own memberships inherit their parent's memberships. Their own memberships
+     * override that default. Display relationships and references do not inherit membership or select dependencies.
+     * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
+     * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
+     * to select a group. No selection preserves normal startup, and publishing is unaffected.
+     * Selection does not change lifecycle commands.
+     * Unselected resources can be started later from the dashboard or resource commands.
+     * @param launchGroupNames The case-insensitive launch group names.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withLaunchGroups(launchGroupNames: string[]): ExecutableResourcePromise;
+    /**
+     * Declares a local resource reference that is optional during initial launch-group selection.
+     *
+     * This declares a reference relationship for launch-group validation. It does not add a readiness wait or
+     * change behavior when no launch group is selected. Use it only when the dependent resource can run without
+     * the dependency during initial startup.
+     * @param dependency The optional dependency resource builder.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withOptionalLaunchGroupReference(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ExecutableResourcePromise;
     /**
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
@@ -29928,6 +30450,62 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
      */
     withWorkingDirectory(workingDirectory: string): ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._withWorkingDirectoryInternal(workingDirectory), this._client);
+    }
+
+    /** @internal */
+    private async _withLaunchGroupsInternal(launchGroupNames: string[]): Promise<ExecutableResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, launchGroupNames };
+        const result = await this._client.invokeCapability<ExecutableResourceHandle>(
+            'Aspire.Hosting/withLaunchGroups',
+            rpcArgs
+        );
+        return new ExecutableResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds a resource to one or more launch groups.
+     *
+     * Repeated calls add membership rather than replacing it. Select one group with the `Aspire:LaunchGroup`
+     * configuration setting. Selecting a group marks resources without that membership for explicit start,
+     * including ungrouped resources, unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
+     * Structural children without their own memberships inherit their parent's memberships. Their own memberships
+     * override that default. Display relationships and references do not inherit membership or select dependencies.
+     * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
+     * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
+     * to select a group. No selection preserves normal startup, and publishing is unaffected.
+     * Selection does not change lifecycle commands.
+     * Unselected resources can be started later from the dashboard or resource commands.
+     * @param launchGroupNames The case-insensitive launch group names.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withLaunchGroups(launchGroupNames: string[]): ExecutableResourcePromise {
+        return new ExecutableResourcePromiseImpl(this._withLaunchGroupsInternal(launchGroupNames), this._client);
+    }
+
+    /** @internal */
+    private async _withOptionalLaunchGroupReferenceInternal(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): Promise<ExecutableResource> {
+        dependency = isPromiseLike(dependency) ? await dependency : dependency;
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, dependency };
+        const result = await this._client.invokeCapability<ExecutableResourceHandle>(
+            'Aspire.Hosting/withOptionalLaunchGroupReference',
+            rpcArgs
+        );
+        return new ExecutableResourceImpl(result, this._client);
+    }
+
+    /**
+     * Declares a local resource reference that is optional during initial launch-group selection.
+     *
+     * This declares a reference relationship for launch-group validation. It does not add a readiness wait or
+     * change behavior when no launch group is selected. Use it only when the dependent resource can run without
+     * the dependency during initial startup.
+     * @param dependency The optional dependency resource builder.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withOptionalLaunchGroupReference(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ExecutableResourcePromise {
+        return new ExecutableResourcePromiseImpl(this._withOptionalLaunchGroupReferenceInternal(dependency), this._client);
     }
 
     /** @internal */
@@ -32301,6 +32879,8 @@ const ExecutableResourcePromiseImpl = $aspireCreateFluentPromiseClass<Executable
     ["publishAsDockerFile"]: () => ExecutableResourcePromiseImpl,
     ["withExecutableCommand"]: () => ExecutableResourcePromiseImpl,
     ["withWorkingDirectory"]: () => ExecutableResourcePromiseImpl,
+    ["withLaunchGroups"]: () => ExecutableResourcePromiseImpl,
+    ["withOptionalLaunchGroupReference"]: () => ExecutableResourcePromiseImpl,
     ["withMcpServer"]: () => ExecutableResourcePromiseImpl,
     ["withOtlpExporter"]: () => ExecutableResourcePromiseImpl,
     ["withRequiredCommand"]: () => ExecutableResourcePromiseImpl,
@@ -32435,6 +33015,35 @@ export interface ExternalServiceResource {
      * @param options Additional options.
      */
     withHttpHealthCheck(options?: WithHttpHealthCheckOptions): ExternalServiceResourcePromise;
+    /**
+     * Adds a resource to one or more launch groups.
+     *
+     * Repeated calls add membership rather than replacing it. Select one group with the `Aspire:LaunchGroup`
+     * configuration setting. Selecting a group marks resources without that membership for explicit start,
+     * including ungrouped resources, unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
+     * Structural children without their own memberships inherit their parent's memberships. Their own memberships
+     * override that default. Display relationships and references do not inherit membership or select dependencies.
+     * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
+     * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
+     * to select a group. No selection preserves normal startup, and publishing is unaffected.
+     * Selection does not change lifecycle commands.
+     * Unselected resources can be started later from the dashboard or resource commands.
+     * @param launchGroupNames The case-insensitive launch group names.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withLaunchGroups(launchGroupNames: string[]): ExternalServiceResourcePromise;
+    /**
+     * Declares a local resource reference that is optional during initial launch-group selection.
+     *
+     * This declares a reference relationship for launch-group validation. It does not add a readiness wait or
+     * change behavior when no launch group is selected. Use it only when the dependent resource can run without
+     * the dependency during initial startup.
+     * @param dependency The optional dependency resource builder.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withOptionalLaunchGroupReference(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ExternalServiceResourcePromise;
     /**
      * Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start.
      *
@@ -32812,6 +33421,35 @@ export interface ExternalServiceResourcePromise extends PromiseLike<ExternalServ
      * @param options Additional options.
      */
     withHttpHealthCheck(options?: WithHttpHealthCheckOptions): ExternalServiceResourcePromise;
+    /**
+     * Adds a resource to one or more launch groups.
+     *
+     * Repeated calls add membership rather than replacing it. Select one group with the `Aspire:LaunchGroup`
+     * configuration setting. Selecting a group marks resources without that membership for explicit start,
+     * including ungrouped resources, unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
+     * Structural children without their own memberships inherit their parent's memberships. Their own memberships
+     * override that default. Display relationships and references do not inherit membership or select dependencies.
+     * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
+     * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
+     * to select a group. No selection preserves normal startup, and publishing is unaffected.
+     * Selection does not change lifecycle commands.
+     * Unselected resources can be started later from the dashboard or resource commands.
+     * @param launchGroupNames The case-insensitive launch group names.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withLaunchGroups(launchGroupNames: string[]): ExternalServiceResourcePromise;
+    /**
+     * Declares a local resource reference that is optional during initial launch-group selection.
+     *
+     * This declares a reference relationship for launch-group validation. It does not add a readiness wait or
+     * change behavior when no launch group is selected. Use it only when the dependent resource can run without
+     * the dependency during initial startup.
+     * @param dependency The optional dependency resource builder.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withOptionalLaunchGroupReference(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ExternalServiceResourcePromise;
     /**
      * Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start.
      *
@@ -33245,6 +33883,62 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
         const statusCode = options?.statusCode;
         const endpointName = options?.endpointName;
         return new ExternalServiceResourcePromiseImpl(this._withHttpHealthCheckInternal(path, statusCode, endpointName), this._client);
+    }
+
+    /** @internal */
+    private async _withLaunchGroupsInternal(launchGroupNames: string[]): Promise<ExternalServiceResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, launchGroupNames };
+        const result = await this._client.invokeCapability<ExternalServiceResourceHandle>(
+            'Aspire.Hosting/withLaunchGroups',
+            rpcArgs
+        );
+        return new ExternalServiceResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds a resource to one or more launch groups.
+     *
+     * Repeated calls add membership rather than replacing it. Select one group with the `Aspire:LaunchGroup`
+     * configuration setting. Selecting a group marks resources without that membership for explicit start,
+     * including ungrouped resources, unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
+     * Structural children without their own memberships inherit their parent's memberships. Their own memberships
+     * override that default. Display relationships and references do not inherit membership or select dependencies.
+     * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
+     * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
+     * to select a group. No selection preserves normal startup, and publishing is unaffected.
+     * Selection does not change lifecycle commands.
+     * Unselected resources can be started later from the dashboard or resource commands.
+     * @param launchGroupNames The case-insensitive launch group names.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withLaunchGroups(launchGroupNames: string[]): ExternalServiceResourcePromise {
+        return new ExternalServiceResourcePromiseImpl(this._withLaunchGroupsInternal(launchGroupNames), this._client);
+    }
+
+    /** @internal */
+    private async _withOptionalLaunchGroupReferenceInternal(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): Promise<ExternalServiceResource> {
+        dependency = isPromiseLike(dependency) ? await dependency : dependency;
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, dependency };
+        const result = await this._client.invokeCapability<ExternalServiceResourceHandle>(
+            'Aspire.Hosting/withOptionalLaunchGroupReference',
+            rpcArgs
+        );
+        return new ExternalServiceResourceImpl(result, this._client);
+    }
+
+    /**
+     * Declares a local resource reference that is optional during initial launch-group selection.
+     *
+     * This declares a reference relationship for launch-group validation. It does not add a readiness wait or
+     * change behavior when no launch group is selected. Use it only when the dependent resource can run without
+     * the dependency during initial startup.
+     * @param dependency The optional dependency resource builder.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withOptionalLaunchGroupReference(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ExternalServiceResourcePromise {
+        return new ExternalServiceResourcePromiseImpl(this._withOptionalLaunchGroupReferenceInternal(dependency), this._client);
     }
 
     /** @internal */
@@ -34603,6 +35297,8 @@ const ExternalServiceResourcePromiseImpl = $aspireCreateFluentPromiseClass<Exter
     ["withContainerRegistry"]: () => ExternalServiceResourcePromiseImpl,
     ["withDockerfileBaseImage"]: () => ExternalServiceResourcePromiseImpl,
     ["withHttpHealthCheck"]: () => ExternalServiceResourcePromiseImpl,
+    ["withLaunchGroups"]: () => ExternalServiceResourcePromiseImpl,
+    ["withOptionalLaunchGroupReference"]: () => ExternalServiceResourcePromiseImpl,
     ["withRequiredCommand"]: () => ExternalServiceResourcePromiseImpl,
     ["withRequiredCommandValidation"]: () => ExternalServiceResourcePromiseImpl,
     ["withSessionLifetime"]: () => ExternalServiceResourcePromiseImpl,
@@ -34693,6 +35389,35 @@ export interface ParameterResource {
      * @returns The resource builder.
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ParameterResourcePromise;
+    /**
+     * Adds a resource to one or more launch groups.
+     *
+     * Repeated calls add membership rather than replacing it. Select one group with the `Aspire:LaunchGroup`
+     * configuration setting. Selecting a group marks resources without that membership for explicit start,
+     * including ungrouped resources, unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
+     * Structural children without their own memberships inherit their parent's memberships. Their own memberships
+     * override that default. Display relationships and references do not inherit membership or select dependencies.
+     * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
+     * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
+     * to select a group. No selection preserves normal startup, and publishing is unaffected.
+     * Selection does not change lifecycle commands.
+     * Unselected resources can be started later from the dashboard or resource commands.
+     * @param launchGroupNames The case-insensitive launch group names.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withLaunchGroups(launchGroupNames: string[]): ParameterResourcePromise;
+    /**
+     * Declares a local resource reference that is optional during initial launch-group selection.
+     *
+     * This declares a reference relationship for launch-group validation. It does not add a readiness wait or
+     * change behavior when no launch group is selected. Use it only when the dependent resource can run without
+     * the dependency during initial startup.
+     * @param dependency The optional dependency resource builder.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withOptionalLaunchGroupReference(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ParameterResourcePromise;
     /**
      * Sets the description of the parameter resource.
      * @param description The parameter description.
@@ -35112,6 +35837,35 @@ export interface ParameterResourcePromise extends PromiseLike<ParameterResource>
      * @returns The resource builder.
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ParameterResourcePromise;
+    /**
+     * Adds a resource to one or more launch groups.
+     *
+     * Repeated calls add membership rather than replacing it. Select one group with the `Aspire:LaunchGroup`
+     * configuration setting. Selecting a group marks resources without that membership for explicit start,
+     * including ungrouped resources, unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
+     * Structural children without their own memberships inherit their parent's memberships. Their own memberships
+     * override that default. Display relationships and references do not inherit membership or select dependencies.
+     * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
+     * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
+     * to select a group. No selection preserves normal startup, and publishing is unaffected.
+     * Selection does not change lifecycle commands.
+     * Unselected resources can be started later from the dashboard or resource commands.
+     * @param launchGroupNames The case-insensitive launch group names.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withLaunchGroups(launchGroupNames: string[]): ParameterResourcePromise;
+    /**
+     * Declares a local resource reference that is optional during initial launch-group selection.
+     *
+     * This declares a reference relationship for launch-group validation. It does not add a readiness wait or
+     * change behavior when no launch group is selected. Use it only when the dependent resource can run without
+     * the dependency during initial startup.
+     * @param dependency The optional dependency resource builder.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withOptionalLaunchGroupReference(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ParameterResourcePromise;
     /**
      * Sets the description of the parameter resource.
      * @param description The parameter description.
@@ -35569,6 +36323,62 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
         const buildImage = options?.buildImage;
         const runtimeImage = options?.runtimeImage;
         return new ParameterResourcePromiseImpl(this._withDockerfileBaseImageInternal(buildImage, runtimeImage), this._client);
+    }
+
+    /** @internal */
+    private async _withLaunchGroupsInternal(launchGroupNames: string[]): Promise<ParameterResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, launchGroupNames };
+        const result = await this._client.invokeCapability<ParameterResourceHandle>(
+            'Aspire.Hosting/withLaunchGroups',
+            rpcArgs
+        );
+        return new ParameterResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds a resource to one or more launch groups.
+     *
+     * Repeated calls add membership rather than replacing it. Select one group with the `Aspire:LaunchGroup`
+     * configuration setting. Selecting a group marks resources without that membership for explicit start,
+     * including ungrouped resources, unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
+     * Structural children without their own memberships inherit their parent's memberships. Their own memberships
+     * override that default. Display relationships and references do not inherit membership or select dependencies.
+     * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
+     * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
+     * to select a group. No selection preserves normal startup, and publishing is unaffected.
+     * Selection does not change lifecycle commands.
+     * Unselected resources can be started later from the dashboard or resource commands.
+     * @param launchGroupNames The case-insensitive launch group names.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withLaunchGroups(launchGroupNames: string[]): ParameterResourcePromise {
+        return new ParameterResourcePromiseImpl(this._withLaunchGroupsInternal(launchGroupNames), this._client);
+    }
+
+    /** @internal */
+    private async _withOptionalLaunchGroupReferenceInternal(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): Promise<ParameterResource> {
+        dependency = isPromiseLike(dependency) ? await dependency : dependency;
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, dependency };
+        const result = await this._client.invokeCapability<ParameterResourceHandle>(
+            'Aspire.Hosting/withOptionalLaunchGroupReference',
+            rpcArgs
+        );
+        return new ParameterResourceImpl(result, this._client);
+    }
+
+    /**
+     * Declares a local resource reference that is optional during initial launch-group selection.
+     *
+     * This declares a reference relationship for launch-group validation. It does not add a readiness wait or
+     * change behavior when no launch group is selected. Use it only when the dependent resource can run without
+     * the dependency during initial startup.
+     * @param dependency The optional dependency resource builder.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withOptionalLaunchGroupReference(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ParameterResourcePromise {
+        return new ParameterResourcePromiseImpl(this._withOptionalLaunchGroupReferenceInternal(dependency), this._client);
     }
 
     /** @internal */
@@ -37047,6 +37857,8 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
 const ParameterResourcePromiseImpl = $aspireCreateFluentPromiseClass<ParameterResource, ParameterResourcePromise>((): $aspireFluentPromiseTransitions => ({
     ["withContainerRegistry"]: () => ParameterResourcePromiseImpl,
     ["withDockerfileBaseImage"]: () => ParameterResourcePromiseImpl,
+    ["withLaunchGroups"]: () => ParameterResourcePromiseImpl,
+    ["withOptionalLaunchGroupReference"]: () => ParameterResourcePromiseImpl,
     ["withDescription"]: () => ParameterResourcePromiseImpl,
     ["withOptional"]: () => ParameterResourcePromiseImpl,
     ["withRequired"]: () => ParameterResourcePromiseImpl,
@@ -37143,6 +37955,35 @@ export interface ProjectResource {
      * @returns The resource builder.
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ProjectResourcePromise;
+    /**
+     * Adds a resource to one or more launch groups.
+     *
+     * Repeated calls add membership rather than replacing it. Select one group with the `Aspire:LaunchGroup`
+     * configuration setting. Selecting a group marks resources without that membership for explicit start,
+     * including ungrouped resources, unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
+     * Structural children without their own memberships inherit their parent's memberships. Their own memberships
+     * override that default. Display relationships and references do not inherit membership or select dependencies.
+     * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
+     * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
+     * to select a group. No selection preserves normal startup, and publishing is unaffected.
+     * Selection does not change lifecycle commands.
+     * Unselected resources can be started later from the dashboard or resource commands.
+     * @param launchGroupNames The case-insensitive launch group names.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withLaunchGroups(launchGroupNames: string[]): ProjectResourcePromise;
+    /**
+     * Declares a local resource reference that is optional during initial launch-group selection.
+     *
+     * This declares a reference relationship for launch-group validation. It does not add a readiness wait or
+     * change behavior when no launch group is selected. Use it only when the dependent resource can run without
+     * the dependency during initial startup.
+     * @param dependency The optional dependency resource builder.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withOptionalLaunchGroupReference(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ProjectResourcePromise;
     /**
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
@@ -37851,6 +38692,35 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      * @returns The resource builder.
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ProjectResourcePromise;
+    /**
+     * Adds a resource to one or more launch groups.
+     *
+     * Repeated calls add membership rather than replacing it. Select one group with the `Aspire:LaunchGroup`
+     * configuration setting. Selecting a group marks resources without that membership for explicit start,
+     * including ungrouped resources, unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
+     * Structural children without their own memberships inherit their parent's memberships. Their own memberships
+     * override that default. Display relationships and references do not inherit membership or select dependencies.
+     * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
+     * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
+     * to select a group. No selection preserves normal startup, and publishing is unaffected.
+     * Selection does not change lifecycle commands.
+     * Unselected resources can be started later from the dashboard or resource commands.
+     * @param launchGroupNames The case-insensitive launch group names.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withLaunchGroups(launchGroupNames: string[]): ProjectResourcePromise;
+    /**
+     * Declares a local resource reference that is optional during initial launch-group selection.
+     *
+     * This declares a reference relationship for launch-group validation. It does not add a readiness wait or
+     * change behavior when no launch group is selected. Use it only when the dependent resource can run without
+     * the dependency during initial startup.
+     * @param dependency The optional dependency resource builder.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withOptionalLaunchGroupReference(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ProjectResourcePromise;
     /**
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
@@ -38597,6 +39467,62 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
         const buildImage = options?.buildImage;
         const runtimeImage = options?.runtimeImage;
         return new ProjectResourcePromiseImpl(this._withDockerfileBaseImageInternal(buildImage, runtimeImage), this._client);
+    }
+
+    /** @internal */
+    private async _withLaunchGroupsInternal(launchGroupNames: string[]): Promise<ProjectResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, launchGroupNames };
+        const result = await this._client.invokeCapability<ProjectResourceHandle>(
+            'Aspire.Hosting/withLaunchGroups',
+            rpcArgs
+        );
+        return new ProjectResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds a resource to one or more launch groups.
+     *
+     * Repeated calls add membership rather than replacing it. Select one group with the `Aspire:LaunchGroup`
+     * configuration setting. Selecting a group marks resources without that membership for explicit start,
+     * including ungrouped resources, unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
+     * Structural children without their own memberships inherit their parent's memberships. Their own memberships
+     * override that default. Display relationships and references do not inherit membership or select dependencies.
+     * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
+     * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
+     * to select a group. No selection preserves normal startup, and publishing is unaffected.
+     * Selection does not change lifecycle commands.
+     * Unselected resources can be started later from the dashboard or resource commands.
+     * @param launchGroupNames The case-insensitive launch group names.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withLaunchGroups(launchGroupNames: string[]): ProjectResourcePromise {
+        return new ProjectResourcePromiseImpl(this._withLaunchGroupsInternal(launchGroupNames), this._client);
+    }
+
+    /** @internal */
+    private async _withOptionalLaunchGroupReferenceInternal(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): Promise<ProjectResource> {
+        dependency = isPromiseLike(dependency) ? await dependency : dependency;
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, dependency };
+        const result = await this._client.invokeCapability<ProjectResourceHandle>(
+            'Aspire.Hosting/withOptionalLaunchGroupReference',
+            rpcArgs
+        );
+        return new ProjectResourceImpl(result, this._client);
+    }
+
+    /**
+     * Declares a local resource reference that is optional during initial launch-group selection.
+     *
+     * This declares a reference relationship for launch-group validation. It does not add a readiness wait or
+     * change behavior when no launch group is selected. Use it only when the dependent resource can run without
+     * the dependency during initial startup.
+     * @param dependency The optional dependency resource builder.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withOptionalLaunchGroupReference(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ProjectResourcePromise {
+        return new ProjectResourcePromiseImpl(this._withOptionalLaunchGroupReferenceInternal(dependency), this._client);
     }
 
     /** @internal */
@@ -41048,6 +41974,8 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
 const ProjectResourcePromiseImpl = $aspireCreateFluentPromiseClass<ProjectResource, ProjectResourcePromise>((): $aspireFluentPromiseTransitions => ({
     ["withContainerRegistry"]: () => ProjectResourcePromiseImpl,
     ["withDockerfileBaseImage"]: () => ProjectResourcePromiseImpl,
+    ["withLaunchGroups"]: () => ProjectResourcePromiseImpl,
+    ["withOptionalLaunchGroupReference"]: () => ProjectResourcePromiseImpl,
     ["withMcpServer"]: () => ProjectResourcePromiseImpl,
     ["withOtlpExporter"]: () => ProjectResourcePromiseImpl,
     ["withReplicas"]: () => ProjectResourcePromiseImpl,
@@ -41361,6 +42289,35 @@ export interface TestDatabaseResource {
      * @returns The resource builder.
      */
     withContainerNetworkAlias(alias: string): TestDatabaseResourcePromise;
+    /**
+     * Adds a resource to one or more launch groups.
+     *
+     * Repeated calls add membership rather than replacing it. Select one group with the `Aspire:LaunchGroup`
+     * configuration setting. Selecting a group marks resources without that membership for explicit start,
+     * including ungrouped resources, unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
+     * Structural children without their own memberships inherit their parent's memberships. Their own memberships
+     * override that default. Display relationships and references do not inherit membership or select dependencies.
+     * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
+     * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
+     * to select a group. No selection preserves normal startup, and publishing is unaffected.
+     * Selection does not change lifecycle commands.
+     * Unselected resources can be started later from the dashboard or resource commands.
+     * @param launchGroupNames The case-insensitive launch group names.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withLaunchGroups(launchGroupNames: string[]): TestDatabaseResourcePromise;
+    /**
+     * Declares a local resource reference that is optional during initial launch-group selection.
+     *
+     * This declares a reference relationship for launch-group validation. It does not add a readiness wait or
+     * change behavior when no launch group is selected. Use it only when the dependent resource can run without
+     * the dependency during initial startup.
+     * @param dependency The optional dependency resource builder.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withOptionalLaunchGroupReference(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): TestDatabaseResourcePromise;
     /**
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
@@ -42229,6 +43186,35 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      * @returns The resource builder.
      */
     withContainerNetworkAlias(alias: string): TestDatabaseResourcePromise;
+    /**
+     * Adds a resource to one or more launch groups.
+     *
+     * Repeated calls add membership rather than replacing it. Select one group with the `Aspire:LaunchGroup`
+     * configuration setting. Selecting a group marks resources without that membership for explicit start,
+     * including ungrouped resources, unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
+     * Structural children without their own memberships inherit their parent's memberships. Their own memberships
+     * override that default. Display relationships and references do not inherit membership or select dependencies.
+     * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
+     * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
+     * to select a group. No selection preserves normal startup, and publishing is unaffected.
+     * Selection does not change lifecycle commands.
+     * Unselected resources can be started later from the dashboard or resource commands.
+     * @param launchGroupNames The case-insensitive launch group names.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withLaunchGroups(launchGroupNames: string[]): TestDatabaseResourcePromise;
+    /**
+     * Declares a local resource reference that is optional during initial launch-group selection.
+     *
+     * This declares a reference relationship for launch-group validation. It does not add a readiness wait or
+     * change behavior when no launch group is selected. Use it only when the dependent resource can run without
+     * the dependency during initial startup.
+     * @param dependency The optional dependency resource builder.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withOptionalLaunchGroupReference(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): TestDatabaseResourcePromise;
     /**
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
@@ -43432,6 +44418,62 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
      */
     withContainerNetworkAlias(alias: string): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._withContainerNetworkAliasInternal(alias), this._client);
+    }
+
+    /** @internal */
+    private async _withLaunchGroupsInternal(launchGroupNames: string[]): Promise<TestDatabaseResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, launchGroupNames };
+        const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
+            'Aspire.Hosting/withLaunchGroups',
+            rpcArgs
+        );
+        return new TestDatabaseResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds a resource to one or more launch groups.
+     *
+     * Repeated calls add membership rather than replacing it. Select one group with the `Aspire:LaunchGroup`
+     * configuration setting. Selecting a group marks resources without that membership for explicit start,
+     * including ungrouped resources, unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
+     * Structural children without their own memberships inherit their parent's memberships. Their own memberships
+     * override that default. Display relationships and references do not inherit membership or select dependencies.
+     * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
+     * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
+     * to select a group. No selection preserves normal startup, and publishing is unaffected.
+     * Selection does not change lifecycle commands.
+     * Unselected resources can be started later from the dashboard or resource commands.
+     * @param launchGroupNames The case-insensitive launch group names.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withLaunchGroups(launchGroupNames: string[]): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromiseImpl(this._withLaunchGroupsInternal(launchGroupNames), this._client);
+    }
+
+    /** @internal */
+    private async _withOptionalLaunchGroupReferenceInternal(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): Promise<TestDatabaseResource> {
+        dependency = isPromiseLike(dependency) ? await dependency : dependency;
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, dependency };
+        const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
+            'Aspire.Hosting/withOptionalLaunchGroupReference',
+            rpcArgs
+        );
+        return new TestDatabaseResourceImpl(result, this._client);
+    }
+
+    /**
+     * Declares a local resource reference that is optional during initial launch-group selection.
+     *
+     * This declares a reference relationship for launch-group validation. It does not add a readiness wait or
+     * change behavior when no launch group is selected. Use it only when the dependent resource can run without
+     * the dependency during initial startup.
+     * @param dependency The optional dependency resource builder.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withOptionalLaunchGroupReference(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromiseImpl(this._withOptionalLaunchGroupReferenceInternal(dependency), this._client);
     }
 
     /** @internal */
@@ -45825,6 +46867,8 @@ const TestDatabaseResourcePromiseImpl = $aspireCreateFluentPromiseClass<TestData
     ["withDockerfileBuilder"]: () => TestDatabaseResourcePromiseImpl,
     ["withDockerfileBaseImage"]: () => TestDatabaseResourcePromiseImpl,
     ["withContainerNetworkAlias"]: () => TestDatabaseResourcePromiseImpl,
+    ["withLaunchGroups"]: () => TestDatabaseResourcePromiseImpl,
+    ["withOptionalLaunchGroupReference"]: () => TestDatabaseResourcePromiseImpl,
     ["withMcpServer"]: () => TestDatabaseResourcePromiseImpl,
     ["withOtlpExporter"]: () => TestDatabaseResourcePromiseImpl,
     ["publishAsConnectionString"]: () => TestDatabaseResourcePromiseImpl,
@@ -46134,6 +47178,35 @@ export interface TestRedisResource {
      * @returns The resource builder.
      */
     withContainerNetworkAlias(alias: string): TestRedisResourcePromise;
+    /**
+     * Adds a resource to one or more launch groups.
+     *
+     * Repeated calls add membership rather than replacing it. Select one group with the `Aspire:LaunchGroup`
+     * configuration setting. Selecting a group marks resources without that membership for explicit start,
+     * including ungrouped resources, unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
+     * Structural children without their own memberships inherit their parent's memberships. Their own memberships
+     * override that default. Display relationships and references do not inherit membership or select dependencies.
+     * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
+     * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
+     * to select a group. No selection preserves normal startup, and publishing is unaffected.
+     * Selection does not change lifecycle commands.
+     * Unselected resources can be started later from the dashboard or resource commands.
+     * @param launchGroupNames The case-insensitive launch group names.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withLaunchGroups(launchGroupNames: string[]): TestRedisResourcePromise;
+    /**
+     * Declares a local resource reference that is optional during initial launch-group selection.
+     *
+     * This declares a reference relationship for launch-group validation. It does not add a readiness wait or
+     * change behavior when no launch group is selected. Use it only when the dependent resource can run without
+     * the dependency during initial startup.
+     * @param dependency The optional dependency resource builder.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withOptionalLaunchGroupReference(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): TestRedisResourcePromise;
     /**
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
@@ -47086,6 +48159,35 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      * @returns The resource builder.
      */
     withContainerNetworkAlias(alias: string): TestRedisResourcePromise;
+    /**
+     * Adds a resource to one or more launch groups.
+     *
+     * Repeated calls add membership rather than replacing it. Select one group with the `Aspire:LaunchGroup`
+     * configuration setting. Selecting a group marks resources without that membership for explicit start,
+     * including ungrouped resources, unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
+     * Structural children without their own memberships inherit their parent's memberships. Their own memberships
+     * override that default. Display relationships and references do not inherit membership or select dependencies.
+     * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
+     * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
+     * to select a group. No selection preserves normal startup, and publishing is unaffected.
+     * Selection does not change lifecycle commands.
+     * Unselected resources can be started later from the dashboard or resource commands.
+     * @param launchGroupNames The case-insensitive launch group names.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withLaunchGroups(launchGroupNames: string[]): TestRedisResourcePromise;
+    /**
+     * Declares a local resource reference that is optional during initial launch-group selection.
+     *
+     * This declares a reference relationship for launch-group validation. It does not add a readiness wait or
+     * change behavior when no launch group is selected. Use it only when the dependent resource can run without
+     * the dependency during initial startup.
+     * @param dependency The optional dependency resource builder.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withOptionalLaunchGroupReference(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): TestRedisResourcePromise;
     /**
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
@@ -48373,6 +49475,62 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
      */
     withContainerNetworkAlias(alias: string): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._withContainerNetworkAliasInternal(alias), this._client);
+    }
+
+    /** @internal */
+    private async _withLaunchGroupsInternal(launchGroupNames: string[]): Promise<TestRedisResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, launchGroupNames };
+        const result = await this._client.invokeCapability<TestRedisResourceHandle>(
+            'Aspire.Hosting/withLaunchGroups',
+            rpcArgs
+        );
+        return new TestRedisResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds a resource to one or more launch groups.
+     *
+     * Repeated calls add membership rather than replacing it. Select one group with the `Aspire:LaunchGroup`
+     * configuration setting. Selecting a group marks resources without that membership for explicit start,
+     * including ungrouped resources, unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
+     * Structural children without their own memberships inherit their parent's memberships. Their own memberships
+     * override that default. Display relationships and references do not inherit membership or select dependencies.
+     * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
+     * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
+     * to select a group. No selection preserves normal startup, and publishing is unaffected.
+     * Selection does not change lifecycle commands.
+     * Unselected resources can be started later from the dashboard or resource commands.
+     * @param launchGroupNames The case-insensitive launch group names.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withLaunchGroups(launchGroupNames: string[]): TestRedisResourcePromise {
+        return new TestRedisResourcePromiseImpl(this._withLaunchGroupsInternal(launchGroupNames), this._client);
+    }
+
+    /** @internal */
+    private async _withOptionalLaunchGroupReferenceInternal(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): Promise<TestRedisResource> {
+        dependency = isPromiseLike(dependency) ? await dependency : dependency;
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, dependency };
+        const result = await this._client.invokeCapability<TestRedisResourceHandle>(
+            'Aspire.Hosting/withOptionalLaunchGroupReference',
+            rpcArgs
+        );
+        return new TestRedisResourceImpl(result, this._client);
+    }
+
+    /**
+     * Declares a local resource reference that is optional during initial launch-group selection.
+     *
+     * This declares a reference relationship for launch-group validation. It does not add a readiness wait or
+     * change behavior when no launch group is selected. Use it only when the dependent resource can run without
+     * the dependency during initial startup.
+     * @param dependency The optional dependency resource builder.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withOptionalLaunchGroupReference(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): TestRedisResourcePromise {
+        return new TestRedisResourcePromiseImpl(this._withOptionalLaunchGroupReferenceInternal(dependency), this._client);
     }
 
     /** @internal */
@@ -51077,6 +52235,8 @@ const TestRedisResourcePromiseImpl = $aspireCreateFluentPromiseClass<TestRedisRe
     ["withDockerfileBuilder"]: () => TestRedisResourcePromiseImpl,
     ["withDockerfileBaseImage"]: () => TestRedisResourcePromiseImpl,
     ["withContainerNetworkAlias"]: () => TestRedisResourcePromiseImpl,
+    ["withLaunchGroups"]: () => TestRedisResourcePromiseImpl,
+    ["withOptionalLaunchGroupReference"]: () => TestRedisResourcePromiseImpl,
     ["withMcpServer"]: () => TestRedisResourcePromiseImpl,
     ["withOtlpExporter"]: () => TestRedisResourcePromiseImpl,
     ["publishAsConnectionString"]: () => TestRedisResourcePromiseImpl,
@@ -51404,6 +52564,35 @@ export interface TestVaultResource {
      * @returns The resource builder.
      */
     withContainerNetworkAlias(alias: string): TestVaultResourcePromise;
+    /**
+     * Adds a resource to one or more launch groups.
+     *
+     * Repeated calls add membership rather than replacing it. Select one group with the `Aspire:LaunchGroup`
+     * configuration setting. Selecting a group marks resources without that membership for explicit start,
+     * including ungrouped resources, unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
+     * Structural children without their own memberships inherit their parent's memberships. Their own memberships
+     * override that default. Display relationships and references do not inherit membership or select dependencies.
+     * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
+     * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
+     * to select a group. No selection preserves normal startup, and publishing is unaffected.
+     * Selection does not change lifecycle commands.
+     * Unselected resources can be started later from the dashboard or resource commands.
+     * @param launchGroupNames The case-insensitive launch group names.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withLaunchGroups(launchGroupNames: string[]): TestVaultResourcePromise;
+    /**
+     * Declares a local resource reference that is optional during initial launch-group selection.
+     *
+     * This declares a reference relationship for launch-group validation. It does not add a readiness wait or
+     * change behavior when no launch group is selected. Use it only when the dependent resource can run without
+     * the dependency during initial startup.
+     * @param dependency The optional dependency resource builder.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withOptionalLaunchGroupReference(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): TestVaultResourcePromise;
     /**
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
@@ -52274,6 +53463,35 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      * @returns The resource builder.
      */
     withContainerNetworkAlias(alias: string): TestVaultResourcePromise;
+    /**
+     * Adds a resource to one or more launch groups.
+     *
+     * Repeated calls add membership rather than replacing it. Select one group with the `Aspire:LaunchGroup`
+     * configuration setting. Selecting a group marks resources without that membership for explicit start,
+     * including ungrouped resources, unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
+     * Structural children without their own memberships inherit their parent's memberships. Their own memberships
+     * override that default. Display relationships and references do not inherit membership or select dependencies.
+     * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
+     * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
+     * to select a group. No selection preserves normal startup, and publishing is unaffected.
+     * Selection does not change lifecycle commands.
+     * Unselected resources can be started later from the dashboard or resource commands.
+     * @param launchGroupNames The case-insensitive launch group names.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withLaunchGroups(launchGroupNames: string[]): TestVaultResourcePromise;
+    /**
+     * Declares a local resource reference that is optional during initial launch-group selection.
+     *
+     * This declares a reference relationship for launch-group validation. It does not add a readiness wait or
+     * change behavior when no launch group is selected. Use it only when the dependent resource can run without
+     * the dependency during initial startup.
+     * @param dependency The optional dependency resource builder.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withOptionalLaunchGroupReference(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): TestVaultResourcePromise;
     /**
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
@@ -53479,6 +54697,62 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
      */
     withContainerNetworkAlias(alias: string): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._withContainerNetworkAliasInternal(alias), this._client);
+    }
+
+    /** @internal */
+    private async _withLaunchGroupsInternal(launchGroupNames: string[]): Promise<TestVaultResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, launchGroupNames };
+        const result = await this._client.invokeCapability<TestVaultResourceHandle>(
+            'Aspire.Hosting/withLaunchGroups',
+            rpcArgs
+        );
+        return new TestVaultResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds a resource to one or more launch groups.
+     *
+     * Repeated calls add membership rather than replacing it. Select one group with the `Aspire:LaunchGroup`
+     * configuration setting. Selecting a group marks resources without that membership for explicit start,
+     * including ungrouped resources, unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
+     * Structural children without their own memberships inherit their parent's memberships. Their own memberships
+     * override that default. Display relationships and references do not inherit membership or select dependencies.
+     * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
+     * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
+     * to select a group. No selection preserves normal startup, and publishing is unaffected.
+     * Selection does not change lifecycle commands.
+     * Unselected resources can be started later from the dashboard or resource commands.
+     * @param launchGroupNames The case-insensitive launch group names.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withLaunchGroups(launchGroupNames: string[]): TestVaultResourcePromise {
+        return new TestVaultResourcePromiseImpl(this._withLaunchGroupsInternal(launchGroupNames), this._client);
+    }
+
+    /** @internal */
+    private async _withOptionalLaunchGroupReferenceInternal(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): Promise<TestVaultResource> {
+        dependency = isPromiseLike(dependency) ? await dependency : dependency;
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, dependency };
+        const result = await this._client.invokeCapability<TestVaultResourceHandle>(
+            'Aspire.Hosting/withOptionalLaunchGroupReference',
+            rpcArgs
+        );
+        return new TestVaultResourceImpl(result, this._client);
+    }
+
+    /**
+     * Declares a local resource reference that is optional during initial launch-group selection.
+     *
+     * This declares a reference relationship for launch-group validation. It does not add a readiness wait or
+     * change behavior when no launch group is selected. Use it only when the dependent resource can run without
+     * the dependency during initial startup.
+     * @param dependency The optional dependency resource builder.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withOptionalLaunchGroupReference(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): TestVaultResourcePromise {
+        return new TestVaultResourcePromiseImpl(this._withOptionalLaunchGroupReferenceInternal(dependency), this._client);
     }
 
     /** @internal */
@@ -55887,6 +57161,8 @@ const TestVaultResourcePromiseImpl = $aspireCreateFluentPromiseClass<TestVaultRe
     ["withDockerfileBuilder"]: () => TestVaultResourcePromiseImpl,
     ["withDockerfileBaseImage"]: () => TestVaultResourcePromiseImpl,
     ["withContainerNetworkAlias"]: () => TestVaultResourcePromiseImpl,
+    ["withLaunchGroups"]: () => TestVaultResourcePromiseImpl,
+    ["withOptionalLaunchGroupReference"]: () => TestVaultResourcePromiseImpl,
     ["withMcpServer"]: () => TestVaultResourcePromiseImpl,
     ["withOtlpExporter"]: () => TestVaultResourcePromiseImpl,
     ["publishAsConnectionString"]: () => TestVaultResourcePromiseImpl,
@@ -56302,6 +57578,35 @@ export interface Resource {
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ResourcePromise;
     /**
+     * Adds a resource to one or more launch groups.
+     *
+     * Repeated calls add membership rather than replacing it. Select one group with the `Aspire:LaunchGroup`
+     * configuration setting. Selecting a group marks resources without that membership for explicit start,
+     * including ungrouped resources, unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
+     * Structural children without their own memberships inherit their parent's memberships. Their own memberships
+     * override that default. Display relationships and references do not inherit membership or select dependencies.
+     * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
+     * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
+     * to select a group. No selection preserves normal startup, and publishing is unaffected.
+     * Selection does not change lifecycle commands.
+     * Unselected resources can be started later from the dashboard or resource commands.
+     * @param launchGroupNames The case-insensitive launch group names.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withLaunchGroups(launchGroupNames: string[]): ResourcePromise;
+    /**
+     * Declares a local resource reference that is optional during initial launch-group selection.
+     *
+     * This declares a reference relationship for launch-group validation. It does not add a readiness wait or
+     * change behavior when no launch group is selected. Use it only when the dependent resource can run without
+     * the dependency during initial startup.
+     * @param dependency The optional dependency resource builder.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withOptionalLaunchGroupReference(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ResourcePromise;
+    /**
      * Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start.
      *
      * The command is considered valid if either:
@@ -56673,6 +57978,35 @@ export interface ResourcePromise extends PromiseLike<Resource> {
      * @returns The resource builder.
      */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ResourcePromise;
+    /**
+     * Adds a resource to one or more launch groups.
+     *
+     * Repeated calls add membership rather than replacing it. Select one group with the `Aspire:LaunchGroup`
+     * configuration setting. Selecting a group marks resources without that membership for explicit start,
+     * including ungrouped resources, unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
+     * Structural children without their own memberships inherit their parent's memberships. Their own memberships
+     * override that default. Display relationships and references do not inherit membership or select dependencies.
+     * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
+     * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
+     * to select a group. No selection preserves normal startup, and publishing is unaffected.
+     * Selection does not change lifecycle commands.
+     * Unselected resources can be started later from the dashboard or resource commands.
+     * @param launchGroupNames The case-insensitive launch group names.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withLaunchGroups(launchGroupNames: string[]): ResourcePromise;
+    /**
+     * Declares a local resource reference that is optional during initial launch-group selection.
+     *
+     * This declares a reference relationship for launch-group validation. It does not add a readiness wait or
+     * change behavior when no launch group is selected. Use it only when the dependent resource can run without
+     * the dependency during initial startup.
+     * @param dependency The optional dependency resource builder.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withOptionalLaunchGroupReference(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ResourcePromise;
     /**
      * Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start.
      *
@@ -57083,6 +58417,62 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
         const buildImage = options?.buildImage;
         const runtimeImage = options?.runtimeImage;
         return new ResourcePromiseImpl(this._withDockerfileBaseImageInternal(buildImage, runtimeImage), this._client);
+    }
+
+    /** @internal */
+    private async _withLaunchGroupsInternal(launchGroupNames: string[]): Promise<Resource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, launchGroupNames };
+        const result = await this._client.invokeCapability<IResourceHandle>(
+            'Aspire.Hosting/withLaunchGroups',
+            rpcArgs
+        );
+        return new ResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds a resource to one or more launch groups.
+     *
+     * Repeated calls add membership rather than replacing it. Select one group with the `Aspire:LaunchGroup`
+     * configuration setting. Selecting a group marks resources without that membership for explicit start,
+     * including ungrouped resources, unless they have an `ExcludeFromLaunchGroupSelectionAnnotation`.
+     * Structural children without their own memberships inherit their parent's memberships. Their own memberships
+     * override that default. Display relationships and references do not inherit membership or select dependencies.
+     * Valid group names are inferred from membership unless explicitly defined in `Aspire:LaunchGroups`.
+     * Use the `Aspire__LaunchGroup` environment variable or `dotnet run -- Aspire:LaunchGroup=catalog`
+     * to select a group. No selection preserves normal startup, and publishing is unaffected.
+     * Selection does not change lifecycle commands.
+     * Unselected resources can be started later from the dashboard or resource commands.
+     * @param launchGroupNames The case-insensitive launch group names.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withLaunchGroups(launchGroupNames: string[]): ResourcePromise {
+        return new ResourcePromiseImpl(this._withLaunchGroupsInternal(launchGroupNames), this._client);
+    }
+
+    /** @internal */
+    private async _withOptionalLaunchGroupReferenceInternal(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): Promise<Resource> {
+        dependency = isPromiseLike(dependency) ? await dependency : dependency;
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, dependency };
+        const result = await this._client.invokeCapability<IResourceHandle>(
+            'Aspire.Hosting/withOptionalLaunchGroupReference',
+            rpcArgs
+        );
+        return new ResourceImpl(result, this._client);
+    }
+
+    /**
+     * Declares a local resource reference that is optional during initial launch-group selection.
+     *
+     * This declares a reference relationship for launch-group validation. It does not add a readiness wait or
+     * change behavior when no launch group is selected. Use it only when the dependent resource can run without
+     * the dependency during initial startup.
+     * @param dependency The optional dependency resource builder.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withOptionalLaunchGroupReference(dependency: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestMarkerResource | TestMutablePromiseCollisionResource | TestMutablePromiseCollisionResourcePromise | TestPromiseCollisionResource | TestPromiseCollisionResourcePromise | TestRedisResource | TestVaultResource>): ResourcePromise {
+        return new ResourcePromiseImpl(this._withOptionalLaunchGroupReferenceInternal(dependency), this._client);
     }
 
     /** @internal */
@@ -58440,6 +59830,8 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
 const ResourcePromiseImpl = $aspireCreateFluentPromiseClass<Resource, ResourcePromise>((): $aspireFluentPromiseTransitions => ({
     ["withContainerRegistry"]: () => ResourcePromiseImpl,
     ["withDockerfileBaseImage"]: () => ResourcePromiseImpl,
+    ["withLaunchGroups"]: () => ResourcePromiseImpl,
+    ["withOptionalLaunchGroupReference"]: () => ResourcePromiseImpl,
     ["withRequiredCommand"]: () => ResourcePromiseImpl,
     ["withRequiredCommandValidation"]: () => ResourcePromiseImpl,
     ["withSessionLifetime"]: () => ResourcePromiseImpl,

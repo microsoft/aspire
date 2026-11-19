@@ -8,6 +8,8 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Localization;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
+using LaunchGroupBuildType = Aspire.DashboardService.Proto.V1.LaunchGroupBuildType;
+using LaunchGroupExclusionReason = Aspire.DashboardService.Proto.V1.LaunchGroupExclusionReason;
 
 namespace Aspire.Dashboard.Model;
 
@@ -143,11 +145,32 @@ internal class ResourceStateViewModel(string text, Icon icon, Color color)
         }
         else if (resource.IsNotStarted())
         {
+            if (GetLaunchGroupStateDescription(resource) is { } description)
+            {
+                return loc.GetString(description.ResourceName, description.Group);
+            }
+
             return loc[nameof(Columns.StateColumnResourceNotStarted)];
         }
 
         // Fallback to text displayed in column.
         return GetStateText(resource, loc);
+    }
+
+    internal static (string ResourceName, string Group)? GetLaunchGroupStateDescription(ResourceViewModel resource)
+    {
+        // Launch-group metadata describes initial selection, not the current state after a manual Start.
+        if (resource.IsNotStarted() &&
+            resource.LaunchGroup is { ExclusionReason: LaunchGroupExclusionReason.NotInSelectedGroup, SelectedGroup: { } selectedGroup } launchGroup)
+        {
+            var resourceName = launchGroup.BuildType == LaunchGroupBuildType.Deferred
+                ? nameof(Columns.StateColumnResourceNotInLaunchGroupDeferred)
+                : nameof(Columns.StateColumnResourceNotInLaunchGroup);
+
+            return (resourceName, selectedGroup);
+        }
+
+        return null;
     }
 
     private static string GetStateText(ResourceViewModel resource, IStringLocalizer<Columns> loc)

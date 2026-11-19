@@ -44,6 +44,7 @@ internal static class BrowserStorageKeys
     public const string ResourceContentOpen = "Aspire_ResourcePane_ContentOpen";
 
     public const string CollapsedResourceNamesKeyPrefix = "Aspire_Resources_CollapsedResourceNames_";
+    public const string ResourcePaneLaunchGroupsKeyPrefix = "Aspire_ResourcePane_LaunchGroups_";
     public const string ResourceTagsKeyPrefix = "Aspire_Resources_Tags_";
     public const string ResourceOrderKeyPrefix = "Aspire_Resources_Order_";
     public const string MetricPinsKeyPrefix = "Aspire_Metrics_Pins_";
@@ -53,6 +54,11 @@ internal static class BrowserStorageKeys
     public static string CollapsedResourceNamesKey(string applicationName)
     {
         return $"{CollapsedResourceNamesKeyPrefix}{DashboardApplicationNameKey.Create(applicationName)}";
+    }
+
+    public static string ResourcePaneLaunchGroupsKey(string applicationName)
+    {
+        return $"{ResourcePaneLaunchGroupsKeyPrefix}{DashboardApplicationNameKey.Create(applicationName)}";
     }
 
     // Tags, order and pins describe the application, so each application has its own key. Different apps can be served

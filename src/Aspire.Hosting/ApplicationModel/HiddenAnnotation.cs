@@ -16,7 +16,12 @@ public enum HiddenBehavior
     /// <summary>
     /// Hide the resource from default resource lists only after it completes successfully.
     /// </summary>
-    OnCompletion
+    OnCompletion,
+
+    /// <summary>
+    /// Hide the resource from default resource lists before it starts and after it completes successfully.
+    /// </summary>
+    BeforeStartOrOnCompletion
 }
 
 /// <summary>
@@ -34,7 +39,8 @@ public sealed class HiddenAnnotation(HiddenBehavior behavior) : IResourceAnnotat
     public HiddenBehavior Behavior { get; } = behavior;
 
     /// <summary>
-    /// Gets the exit codes that are treated as successful completion when <see cref="Behavior"/> is <see cref="HiddenBehavior.OnCompletion"/>.
+    /// Gets the exit codes that are treated as successful completion when <see cref="Behavior"/> is
+    /// <see cref="HiddenBehavior.OnCompletion"/> or <see cref="HiddenBehavior.BeforeStartOrOnCompletion"/>.
     /// </summary>
     public IReadOnlyList<int> SuccessfulExitCodes { get; init; } = [0];
 }

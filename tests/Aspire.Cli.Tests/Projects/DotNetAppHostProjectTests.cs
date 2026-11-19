@@ -313,8 +313,10 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         Assert.False(env.ContainsKey(KnownAspNetCoreConfigNames.Environment));
     }
 
-    [Fact]
-    public async Task RunAsync_SingleFileAppHostWithoutRunJsonPassesDevelopmentEnvironmentToRunner()
+    [Theory]
+    [InlineData(null)]
+    [InlineData("catalog")]
+    public async Task RunAsync_SingleFileAppHostWithoutRunJsonPassesDevelopmentEnvironmentToRunner(string? launchGroup)
     {
         var appHostFile = CreateSingleFileAppHost();
         var expectedWorkloadId = AppHostWorkloadId.Create(appHostFile);
@@ -342,6 +344,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             Assert.False(env.ContainsKey(KnownAspNetCoreConfigNames.Environment));
             Assert.Equal("https://localhost:17193;http://localhost:15069", env[KnownAspNetCoreConfigNames.Urls]);
             Assert.Equal(expectedWorkloadId, env[KnownConfigNames.DcpWorkloadId]);
+            Assert.Equal(launchGroup is null ? [] : new[] { "--Aspire:LaunchGroup=catalog" }, args);
             return Task.FromResult(0);
         };
 
@@ -350,6 +353,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             AppHostFile = appHostFile,
             NoBuild = true,
             NoRestore = true,
+            LaunchGroup = launchGroup,
             WorkingDirectory = _workspace.WorkspaceRoot,
             EnvironmentVariables = new Dictionary<string, string>()
         }, CancellationToken.None);
@@ -1132,8 +1136,10 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         Assert.Equal(123, exitCode);
     }
 
-    [Fact]
-    public async Task RunAsync_ProjectAppHostDirectLaunchAppliesSelectedLaunchProfile()
+    [Theory]
+    [InlineData(null)]
+    [InlineData("catalog")]
+    public async Task RunAsync_ProjectAppHostDirectLaunchAppliesSelectedLaunchProfile(string? launchGroup)
     {
         var appHostFile = CreateProjectAppHost();
         var appHostCommand = CreateBuiltAppHostCommand("AppHost");
@@ -1157,7 +1163,8 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
                   "workingDirectory": true,
                   "environmentVariables": {
                     "SELECTED_PROFILE": "E2E",
-                    "PROFILE_ONLY": "E2E"
+                    "PROFILE_ONLY": "E2E",
+                    "Aspire__LaunchGroup": "basket"
                   }
                 }
               }
@@ -1190,12 +1197,13 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         {
             Assert.Equal(appHostCommand.FullName, command);
             Assert.Equal("e2e", options.LaunchProfile);
-            Assert.Equal(["--from-profile", "E2E"], args);
+            Assert.Equal(launchGroup is null ? ["--from-profile", "E2E"] : ["--from-profile", "E2E", "--Aspire:LaunchGroup=catalog"], args);
             Assert.NotNull(env);
             Assert.Equal("e2e", env["DOTNET_LAUNCH_PROFILE"]);
             Assert.Equal("http://localhost:16000", env[KnownAspNetCoreConfigNames.Urls]);
             Assert.Equal("from-context", env["SELECTED_PROFILE"]);
             Assert.Equal("E2E", env["PROFILE_ONLY"]);
+            Assert.Equal("basket", env["Aspire__LaunchGroup"]);
             return Task.FromResult(125);
         };
 
@@ -1203,6 +1211,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         {
             AppHostFile = appHostFile,
             LaunchProfile = parseResult.GetValue(AppHostLauncher.s_launchProfileOption),
+            LaunchGroup = launchGroup,
             NoBuild = false,
             NoRestore = false,
             UnmatchedTokens = parseResult.UnmatchedTokens.ToArray(),
@@ -1664,6 +1673,224 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         }, CancellationToken.None);
 
         Assert.Equal(77, exitCode);
+    }
+
+    [Theory]
+    [InlineData("9.2.0", "catalog", false, false, false)]
+    [InlineData("13.6.0", "catalog", false, true, false)]
+    [InlineData("17.0.0", "catalog", true, false, false)]
+    [InlineData("17.0.0", "catalog", false, true, false)]
+    [InlineData("17.1.0-preview.1", "catalog", false, false, true)]
+    [InlineData("17.1.0-preview.1", "catalog", true, false, true)]
+    [InlineData("17.1.0", "catalog", false, true, true)]
+    [InlineData("13.6.0", null, false, false, true)]
+    [InlineData("13.6.0", null, true, true, true)]
+    public async Task RunAsync_LaunchGroupRejectsUnsupportedHostingBeforeStartingAppHost(
+        string hostingVersion, string? launchGroup, bool watch, bool noBuild, bool expectedSuccess)
+    {
+        var appHostFile = CreateProjectAppHost();
+        var appHostCommand = CreateBuiltAppHostCommand("AppHost");
+        if (noBuild)
+        {
+            WriteAspireConfigJson(appHostFile.DirectoryName!, """{ "dotnetAppHostDirectLaunchDisabled": "true" }""");
+        }
+
+        var launchCount = 0;
+        var runner = new TestDotNetCliRunner
+        {
+            BuildAsyncCallback = (_, _, _, _) => 0,
+            RunAppHostCommandAsyncCallback = (_, _, _, _, _, _, _, _) =>
+            {
+                launchCount++;
+                return Task.FromResult(0);
+            },
+            RunAsyncCallback = (_, _, _, _, _, _, _, _, _) =>
+            {
+                launchCount++;
+                return Task.FromResult(0);
+            }
+        };
+        var resolver = new TestAppHostInfoResolver
+        {
+            GetAppHostInfoAsyncCallback = (_, _) => Task.FromResult(new AppHostProjectInfo(
+                ExitCode: 0,
+                IsAspireHost: true,
+                AspireHostingVersion: hostingVersion,
+                IsUsingCliBundle: false,
+                UserSecretsId: null,
+                RunCommand: appHostCommand.FullName,
+                TargetPath: null,
+                RunWorkingDirectory: null,
+                RunArguments: null,
+                TargetFramework: "net10.0",
+                TargetFrameworks: null))
+        };
+        var project = CreateDotNetAppHostProject(runner, appHostInfoResolver: resolver,
+            configureServices: options => options.EnabledFeatures = watch ? [KnownFeatures.DefaultWatchEnabled] : []);
+        var buildCompletion = new TaskCompletionSource<bool>();
+
+        var exitCode = await project.RunAsync(new AppHostProjectContext
+        {
+            AppHostFile = appHostFile,
+            LaunchGroup = launchGroup,
+            NoBuild = noBuild,
+            BuildCompletionSource = buildCompletion,
+            WorkingDirectory = _workspace.WorkspaceRoot
+        }, TestContext.Current.CancellationToken);
+
+        Assert.Equal(expectedSuccess ? 0 : CliExitCodes.FailedToDotnetRunAppHost, exitCode);
+        Assert.Equal(expectedSuccess ? 1 : 0, launchCount);
+        Assert.Equal(expectedSuccess, await buildCompletion.Task.DefaultTimeout());
+    }
+
+    [Theory]
+    [InlineData("Project", false, false)]
+    [InlineData("Project", false, true)]
+    [InlineData("Project", true, false)]
+    [InlineData("Project", true, true)]
+    [InlineData("Executable", false, false)]
+    [InlineData("Executable", false, true)]
+    [InlineData("Executable", true, false)]
+    [InlineData("Executable", true, true)]
+    public async Task RunAsync_LaunchGroupPreservesProfileArgumentsOnSdkAndWatchPaths(string commandName, bool watch, bool explicitAppHostArguments)
+    {
+        var appHostFile = CreateProjectAppHost();
+        var appHostCommand = CreateBuiltAppHostCommand("AppHost");
+        Directory.CreateDirectory(Path.Combine(appHostFile.DirectoryName!, "Properties"));
+        File.WriteAllText(Path.Combine(appHostFile.DirectoryName!, "Properties", "launchSettings.json"), $$"""
+            {
+              "profiles": {
+                "E2E": {
+                  "commandName": "{{commandName}}",
+                  "executablePath": "custom-tool",
+                  "commandLineArgs": "--FeatureX=\"two words\" --Aspire:LaunchGroup=basket",
+                  "environmentVariables": { "Aspire__LaunchGroup": "basket" }
+                }
+              }
+            }
+            """);
+        if (commandName == "Project")
+        {
+            WriteAspireConfigJson(appHostFile.DirectoryName!, """{ "dotnetAppHostDirectLaunchDisabled": "true" }""");
+        }
+
+        var runner = new TestDotNetCliRunner
+        {
+            BuildAsyncCallback = (_, _, _, _) => 0,
+            GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) => (0, CreateAppHostInfoJson(runCommand: appHostCommand.FullName)),
+            RunAppHostCommandAsyncCallback = (_, _, _, _, _, _, _, _) => throw new InvalidOperationException("Expected SDK launch.")
+        };
+        var project = CreateDotNetAppHostProject(runner, configureServices: options =>
+            options.EnabledFeatures = watch ? [KnownFeatures.DefaultWatchEnabled] : []);
+        runner.RunAsyncCallback = (_, actualWatch, _, _, args, _, _, options, _) =>
+        {
+            Assert.Equal(watch, actualWatch);
+            Assert.Equal("E2E", options.LaunchProfile);
+            Assert.Equal(explicitAppHostArguments
+                ? ["--UserOption=true", "--Aspire:LaunchGroup=catalog"]
+                : ["--FeatureX=two words", "--Aspire:LaunchGroup=basket", "--Aspire:LaunchGroup=catalog"], args);
+            return Task.FromResult(0);
+        };
+
+        var exitCode = await project.RunAsync(new AppHostProjectContext
+        {
+            AppHostFile = appHostFile,
+            LaunchProfile = "E2E",
+            LaunchGroup = "catalog",
+            UnmatchedTokens = explicitAppHostArguments ? ["--UserOption=true"] : [],
+            WorkingDirectory = _workspace.WorkspaceRoot
+        }, TestContext.Current.CancellationToken);
+
+        Assert.Equal(0, exitCode);
+    }
+
+    [Theory]
+    [InlineData(false, null, null, "--default")]
+    [InlineData(false, "SECOND", "first", "--selected")]
+    [InlineData(false, null, "second", "--selected")]
+    [InlineData(true, null, null, "--default")]
+    [InlineData(true, "SECOND", "first", "--selected")]
+    [InlineData(true, null, "second", "--selected")]
+    public async Task RunAsync_LaunchGroupPreservesExecutableProfileSelection(
+        bool singleFile, string? explicitProfile, string? inheritedProfile, string expectedArgument)
+    {
+        var appHostFile = singleFile ? CreateSingleFileAppHost() : CreateProjectAppHost();
+        File.WriteAllText(Path.ChangeExtension(appHostFile.FullName, ".run.json"), """
+            {
+              "profiles": {
+                "first": {
+                  "commandName": "Executable",
+                  "executablePath": "custom-tool",
+                  "commandLineArgs": "--default"
+                },
+                "second": {
+                  "commandName": "Executable",
+                  "executablePath": "custom-tool",
+                  "commandLineArgs": "--selected"
+                }
+              }
+            }
+            """);
+        var runner = new TestDotNetCliRunner
+        {
+            BuildAsyncCallback = (_, _, _, _) => 0,
+            GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) => (0, CreateAppHostInfoJson(runCommand: "dotnet")),
+            RunAppHostCommandAsyncCallback = (_, _, _, _, _, _, _, _) => throw new InvalidOperationException("Expected SDK launch."),
+            RunAsyncCallback = (_, _, _, _, args, _, _, options, _) =>
+            {
+                Assert.Equal(explicitProfile ?? inheritedProfile, options.LaunchProfile);
+                Assert.Equal([expectedArgument, "--Aspire:LaunchGroup=catalog"], args);
+                return Task.FromResult(0);
+            }
+        };
+        var project = CreateDotNetAppHostProject(runner, environment: new TestEnvironment(new Dictionary<string, string?>
+        {
+            ["DOTNET_LAUNCH_PROFILE"] = inheritedProfile
+        }));
+
+        var exitCode = await project.RunAsync(new AppHostProjectContext
+        {
+            AppHostFile = appHostFile,
+            LaunchProfile = explicitProfile,
+            LaunchGroup = "catalog",
+            WorkingDirectory = _workspace.WorkspaceRoot
+        }, TestContext.Current.CancellationToken);
+
+        Assert.Equal(0, exitCode);
+    }
+
+    [Theory]
+    [InlineData("{")]
+    [InlineData("""{"profiles":{"E2E":{"commandName":"Executable","commandLineArgs":42}}}""")]
+    [InlineData("""{"profiles":{"E2E":{"commandName":"IISExpress","commandLineArgs":"--unsupported"}}}""")]
+    [InlineData("""{"profiles":{"E2E":{"commandName":"Executable","commandLineArgs":"--first"},"e2e":{"commandName":"Executable","commandLineArgs":"--second"}}}""")]
+    public async Task RunAsync_LaunchGroupLeavesInvalidProfilesToSdk(string launchSettings)
+    {
+        var appHostFile = CreateProjectAppHost();
+        File.WriteAllText(Path.ChangeExtension(appHostFile.FullName, ".run.json"), launchSettings);
+        var runner = new TestDotNetCliRunner
+        {
+            BuildAsyncCallback = (_, _, _, _) => 0,
+            GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) => (0, CreateAppHostInfoJson(runCommand: "dotnet")),
+            RunAppHostCommandAsyncCallback = (_, _, _, _, _, _, _, _) => throw new InvalidOperationException("Expected SDK launch."),
+            RunAsyncCallback = (_, _, _, _, args, _, _, options, _) =>
+            {
+                Assert.Equal("E2E", options.LaunchProfile);
+                Assert.Equal(["--Aspire:LaunchGroup=catalog"], args);
+                return Task.FromResult(0);
+            }
+        };
+        var project = CreateDotNetAppHostProject(runner);
+
+        var exitCode = await project.RunAsync(new AppHostProjectContext
+        {
+            AppHostFile = appHostFile,
+            LaunchProfile = "E2E",
+            LaunchGroup = "catalog",
+            WorkingDirectory = _workspace.WorkspaceRoot
+        }, TestContext.Current.CancellationToken);
+
+        Assert.Equal(0, exitCode);
     }
 
     [Fact]

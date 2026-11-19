@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Net;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dcp;
+using Aspire.Hosting.Orchestrator;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -49,6 +50,7 @@ internal sealed class DashboardServiceHost : IHostedService
         ResourceNotificationService resourceNotificationService,
         ResourceLoggerService resourceLoggerService,
         ResourceCommandService resourceCommandService,
+        LaunchGroupMetadataService launchGroupMetadata,
         InteractionService interactionService,
         IInteractionFileUploadStore fileUploadStore,
         TerminalService terminalService)
@@ -106,6 +108,7 @@ internal sealed class DashboardServiceHost : IHostedService
             builder.Services.AddGrpc();
             builder.Services.AddSingleton(applicationModel);
             builder.Services.AddSingleton(resourceCommandService);
+            builder.Services.AddSingleton(launchGroupMetadata);
             builder.Services.AddSingleton<DashboardServiceData>();
             builder.Services.AddSingleton(resourceNotificationService);
             builder.Services.AddSingleton(resourceLoggerService);

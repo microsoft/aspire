@@ -5,6 +5,7 @@ using System.Collections.Concurrent;
 using System.Text.Json;
 using Aspire.Hosting.Dashboard;
 using Aspire.Hosting.Dcp;
+using Aspire.Hosting.Testing;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Aspire.Shared;
@@ -17,10 +18,64 @@ using Microsoft.Extensions.Options;
 namespace Aspire.Hosting.Tests.Dashboard;
 
 #pragma warning disable ASPIRECERTIFICATES001 // Type is for evaluation purposes only
+#pragma warning disable ASPIRELAUNCHGROUPS001 // Verifies dashboard startup is independent of launch-group selection.
 
 [Trait("Partition", "3")]
 public class DashboardResourceTests(ITestOutputHelper testOutputHelper)
 {
+    [Fact]
+    public async Task LaunchGroupSelectionStartsDashboard()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.DisableDashboard = false, testOutputHelper: testOutputHelper)
+            .WithResourceCleanUp(true);
+        builder.Configuration["Aspire:LaunchGroups:0"] = "catalog";
+        builder.Configuration["Aspire:LaunchGroup"] = "catalog";
+        builder.Configuration[KnownAspNetCoreConfigNames.Urls] = "http://127.0.0.1:0";
+        builder.Configuration[KnownConfigNames.DashboardOtlpGrpcEndpointUrl] = "http://127.0.0.1:0";
+        var excluded = builder.AddExecutable("excluded", "unused", ".")
+            .WithAnnotation(new HiddenAnnotation(HiddenBehavior.Always));
+        await using var app = builder.Build();
+
+        using (var startup = new CancellationTokenSource(TestConstants.DefaultOrchestratorTestLongTimeout))
+        {
+            await app.StartAsync(startup.Token);
+        }
+        var dashboard = Assert.Single(builder.Resources, resource => resource.Name == KnownResourceNames.AspireDashboard);
+        Assert.False(dashboard.HasAnnotationOfType<ExplicitStartupAnnotation>());
+        Assert.True(dashboard.HasAnnotationOfType<ExcludeFromLaunchGroupSelectionAnnotation>());
+        Assert.True(excluded.Resource.HasAnnotationOfType<ExplicitStartupAnnotation>());
+        Assert.False(excluded.Resource.HasAnnotationOfType<ExcludeFromLaunchGroupSelectionAnnotation>());
+        using (var readiness = new CancellationTokenSource(TestConstants.DefaultOrchestratorTestLongTimeout))
+        {
+            await app.ResourceNotifications.WaitForResourceHealthyAsync(KnownResourceNames.AspireDashboard, readiness.Token);
+        }
+        using var shutdown = new CancellationTokenSource(TestConstants.DefaultOrchestratorTestLongTimeout);
+        await app.StopAsync(shutdown.Token);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task LaunchGroupSelectionPreservesExistingDashboardStartupConfiguration(bool explicitStart)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.DisableDashboard = false, testOutputHelper: testOutputHelper);
+        builder.Configuration["Aspire:LaunchGroups:0"] = "catalog";
+        builder.Configuration["Aspire:LaunchGroup"] = "catalog";
+        var dashboard = builder.AddExecutable(KnownResourceNames.AspireDashboard, "unused", ".");
+        if (explicitStart)
+        {
+            dashboard.WithExplicitStart();
+        }
+        await using var app = builder.Build();
+
+        await app.ExecuteBeforeStartHooksAsync(TestContext.Current.CancellationToken);
+
+        Assert.True(dashboard.Resource.HasAnnotationOfType<ExcludeFromLaunchGroupSelectionAnnotation>());
+        Assert.Equal(explicitStart, dashboard.Resource.HasAnnotationOfType<ExplicitStartupAnnotation>());
+    }
+
     [Theory]
     [InlineData(KnownConfigNames.ShowDashboardResources)]
     [InlineData(KnownConfigNames.Legacy.ShowDashboardResources)]

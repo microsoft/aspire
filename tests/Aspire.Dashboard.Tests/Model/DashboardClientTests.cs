@@ -660,6 +660,67 @@ public sealed class DashboardClientTests(ITestOutputHelper testOutputHelper) : I
         }
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task WatchResources_ReconnectRefreshesLaunchGroups(bool clearMetadata)
+    {
+        var first = Channel.CreateUnbounded<WatchResourcesUpdate>();
+        var second = Channel.CreateUnbounded<WatchResourcesUpdate>();
+        var subscriptionsStarted = Channel.CreateUnbounded<int>();
+        var subscriptionCount = 0;
+        string? selectedGroup = "frontend";
+        await using var client = CreateResourceServiceClient();
+        client.SetDashboardServiceClient(new MockDashboardServiceClient
+        {
+            LaunchGroupsProvider = () => Volatile.Read(ref selectedGroup) is { } group
+                ? new LaunchGroupInformation
+                {
+                    SelectedGroup = group,
+                    Groups = { group },
+                    Resources = { new LaunchGroupResourceInfo { Name = "shell", Groups = { group } } }
+                }
+                : null,
+            ResourceUpdatesProvider = () =>
+            {
+                var attempt = Interlocked.Increment(ref subscriptionCount);
+                subscriptionsStarted.Writer.TryWrite(attempt);
+                return attempt == 1 ? first.Reader : second.Reader;
+            }
+        });
+        var ready = client.WhenResourcesReady;
+        Assert.Equal(1, await subscriptionsStarted.Reader.ReadAsync().AsTask().DefaultTimeout());
+        var initialData = new InitialResourceData
+        {
+            Resources = { new Resource { Name = "shell", DisplayName = "shell", CreatedAt = Timestamp.FromDateTime(DateTime.UtcNow) } }
+        };
+        await first.Writer.WriteAsync(new WatchResourcesUpdate { InitialData = initialData });
+        await ready.DefaultTimeout();
+        Assert.Equal("frontend", client.LaunchGroups?.SelectedGroup);
+        Assert.Equal("frontend", Assert.Single(client.GetResources()).LaunchGroup?.SelectedGroup);
+
+        Volatile.Write(ref selectedGroup, clearMetadata ? null : "backend");
+        first.Writer.Complete(new RpcException(new Status(StatusCode.Unavailable, "Resource stream disconnected")));
+        Assert.Equal(2, await subscriptionsStarted.Reader.ReadAsync().AsTask().DefaultTimeout());
+        await second.Writer.WriteAsync(new WatchResourcesUpdate { InitialData = initialData });
+        await client.WhenResourcesReady.DefaultTimeout();
+
+        var resource = Assert.Single(client.GetResources());
+        if (clearMetadata)
+        {
+            Assert.Null(client.LaunchGroups);
+            Assert.Null(resource.LaunchGroup);
+        }
+        else
+        {
+            Assert.Equal("backend", client.LaunchGroups?.SelectedGroup);
+            Assert.Equal(["backend"], client.LaunchGroups!.Groups);
+            var launchGroup = Assert.IsType<ResourceLaunchGroupViewModel>(resource.LaunchGroup);
+            Assert.Equal("backend", launchGroup.SelectedGroup);
+            Assert.Equal(["backend"], launchGroup.Groups);
+        }
+    }
+
     [Fact]
     public async Task SubscribeInteractions_OnCancel_ChannelRemoved()
     {
@@ -1234,6 +1295,7 @@ public sealed class DashboardClientTests(ITestOutputHelper testOutputHelper) : I
         public bool CancelExecuteResourceCommandOnCallCancellation { get; init; }
         public string ApplicationName { get; init; } = "TestApplication";
         public string MinDashboardVersion { get; init; } = "";
+        public Func<LaunchGroupInformation?>? LaunchGroupsProvider { get; init; }
         public IReadOnlyList<WatchResourceConsoleLogsUpdate> ConsoleLogUpdates { get; init; } = [];
         public IReadOnlyList<WatchResourcesUpdate> ResourceUpdates { get; init; } = [];
         public ChannelReader<WatchResourcesUpdate>? ResourceUpdatesChannel { get; init; }
@@ -1292,7 +1354,8 @@ public sealed class DashboardClientTests(ITestOutputHelper testOutputHelper) : I
                 Task.FromResult(new ApplicationInformationResponse
                 {
                     ApplicationName = ApplicationName,
-                    MinDashboardVersion = MinDashboardVersion
+                    MinDashboardVersion = MinDashboardVersion,
+                    LaunchGroups = LaunchGroupsProvider?.Invoke()
                 }),
                 Task.FromResult(new Metadata()),
                 () => Status.DefaultSuccess,

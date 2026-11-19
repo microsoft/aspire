@@ -65,6 +65,9 @@ public sealed class DashboardDataSource : IDashboardRunSelection, IDisposable
 
     internal bool IsReadOnly { get; private set; }
 
+    internal bool IsCurrentResourceRepository(IResourceRepository repository) =>
+        ReferenceEquals(repository, _dataSourcePool.Current.ResourceRepository);
+
     internal void EnsureWritable()
     {
         if (IsReadOnly)

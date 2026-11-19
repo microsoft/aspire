@@ -15,6 +15,7 @@
     <Compile Remove="Dialogs\LegacySettingsDialogTests.cs" />
     <Compile Remove="Layout\LegacyNavMenuTests.cs" />
     <Compile Remove="Layout\MainLayoutTests.Legacy.cs" />
+    <Compile Remove="Pages\ResourcesTests.Legacy.cs" />
   </ItemGroup>
 
   <ItemGroup>

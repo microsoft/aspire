@@ -628,6 +628,18 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 launchSettingsEnvVars["DcpPublisher__RandomizePorts"] = "true";
             }
             await _appHostConfigurationProjector.ApplyEnvironmentVariablesAsync(launchSettingsEnvVars, directory, cancellationToken);
+            // Launch-group selection belongs to the managed model, not the guest client process.
+            // Apply the explicit CLI option last so it overrides JSON and profile configuration.
+            if (context.LaunchGroup is { } launchGroup)
+            {
+                foreach (var key in launchSettingsEnvVars.Keys
+                    .Where(AppHostServerEnvironment.IsLaunchGroupVariable)
+                    .ToArray())
+                {
+                    launchSettingsEnvVars.Remove(key);
+                }
+                launchSettingsEnvVars[AppHostServerEnvironment.LaunchGroupVariableName] = launchGroup;
+            }
             launchSettingsEnvVars[KnownConfigNames.DcpWorkloadId] = AppHostWorkloadId.Create(appHostFile);
             if (appHostServerProject is NativeAppHostServerProject)
             {

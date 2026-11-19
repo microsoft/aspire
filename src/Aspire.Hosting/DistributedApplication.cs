@@ -8,6 +8,7 @@ using Aspire.Hosting.Ats;
 using Aspire.Hosting.Diagnostics;
 using Aspire.Hosting.Eventing;
 using Aspire.Hosting.Lifecycle;
+using Aspire.Hosting.Orchestrator;
 using Aspire.Hosting.Pipelines;
 using Aspire.Shared;
 using Microsoft.Extensions.Configuration;
@@ -619,9 +620,12 @@ public class DistributedApplication : IHost, IAsyncDisposable
     {
         var configuration = _host.Services.GetRequiredService<IConfiguration>();
         using var beforeStartActivity = ProfilingTelemetry.StartAppHostBeforeStart(configuration);
+        Action<Exception?>? completeBuildStartup = null;
 
         try
         {
+            completeBuildStartup = _host.Services.GetKeyedService<Func<Action<Exception?>>>(
+                LaunchGroupMetadataService.BuildPlanStartupKey)?.Invoke();
             var eventSubscribers = _host.Services.GetServices<IDistributedApplicationEventingSubscriber>().ToArray();
             var eventing = _host.Services.GetRequiredService<IDistributedApplicationEventing>();
             var execContext = _host.Services.GetRequiredService<DistributedApplicationExecutionContext>();
@@ -732,9 +736,27 @@ public class DistributedApplication : IHost, IAsyncDisposable
                     throw;
                 }
             }
+
+            if (execContext.IsRunMode)
+            {
+                // Final actions can still add resources and relationships, so select only after the
+                // complete pipeline and materialize group-aware builds from that same model.
+                _host.Services.GetRequiredService<LaunchGroupService>().Configure(appModel);
+                var finalizeBuildPlan = _host.Services.GetKeyedService<Func<DistributedApplicationModel, Task>>(
+                    LaunchGroupMetadataService.BuildPlanFinalizerKey);
+                if (finalizeBuildPlan is not null)
+                {
+                    await finalizeBuildPlan(appModel).ConfigureAwait(false);
+                }
+
+                _host.Services.GetRequiredService<LaunchGroupMetadataService>().FinalizeModel(appModel);
+            }
+
+            completeBuildStartup?.Invoke(null);
         }
         catch (Exception ex)
         {
+            completeBuildStartup?.Invoke(ex);
             beforeStartActivity.SetError(ex);
             throw;
         }

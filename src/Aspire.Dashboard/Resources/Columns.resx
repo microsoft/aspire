@@ -164,6 +164,14 @@ For more information, see https://aka.ms/aspire/container-runtime-unhealthy.</va
   <data name="StateColumnResourceNotStarted" xml:space="preserve">
     <value>Resource is not configured to start automatically.</value>
   </data>
+  <data name="StateColumnResourceNotInLaunchGroup" xml:space="preserve">
+    <value>Not in active launch group '{0}'</value>
+    <comment>{0} is the AppHost's selected launch-group name.</comment>
+  </data>
+  <data name="StateColumnResourceNotInLaunchGroupDeferred" xml:space="preserve">
+    <value>Not in active launch group '{0}', deferred build</value>
+    <comment>{0} is the AppHost's selected launch-group name. The resource's project will be built when manually started.</comment>
+  </data>
   <data name="StateColumnResourceWaiting" xml:space="preserve">
     <value>Resource is waiting for dependencies.</value>
   </data>

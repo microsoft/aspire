@@ -49,7 +49,10 @@ public static class ExecutableResourceBuilderExtensions
     /// <param name="workingDirectory">The working directory of the executable.</param>
     /// <param name="args">The arguments to the executable.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <remarks>This method is not available in polyglot app hosts. Use the string[] overload instead.</remarks>
+    /// <remarks>
+    /// Resource references in <paramref name="args"/> are recorded as reference relationships.
+    /// This method is not available in polyglot app hosts. Use the string[] overload instead.
+    /// </remarks>
     [AspireExportIgnore(Reason = "Uses object[] parameter which is not ATS-compatible. String[] overload is exported.")]
     public static IResourceBuilder<ExecutableResource> AddExecutable(this IDistributedApplicationBuilder builder, [ResourceName] string name, string command, string workingDirectory, params object[]? args)
     {
@@ -62,13 +65,7 @@ public static class ExecutableResourceBuilderExtensions
 
         var executable = new ExecutableResource(name, command, workingDirectory);
         return builder.AddResource(executable)
-                      .WithArgs(context =>
-                      {
-                          if (args is not null)
-                          {
-                              context.Args.AddRange(args);
-                          }
-                      });
+                      .WithArgs(args ?? []);
     }
 
     /// <summary>

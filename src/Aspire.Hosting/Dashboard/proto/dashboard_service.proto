@@ -21,6 +21,39 @@ message ApplicationInformationResponse {
     // support this AppHost's features. If the dashboard's current version is lower than
     // this value, it should display a warning to the user indicating that an update is needed.
     string min_dashboard_version = 2;
+    // Absent when the AppHost predates launch-group metadata.
+    LaunchGroupInformation launch_groups = 3;
+}
+
+message LaunchGroupInformation {
+    optional string selected_group = 1;
+    repeated string groups = 2;
+    repeated LaunchGroupResourceInfo resources = 3;
+}
+
+message LaunchGroupResourceInfo {
+    string name = 1;
+    repeated string groups = 2;
+    optional string inherited_from = 3;
+    bool explicit_start = 4;
+    LaunchGroupExclusionReason exclusion_reason = 5;
+    reserved 6;
+    LaunchGroupBuildType build_type = 7;
+}
+
+enum LaunchGroupExclusionReason {
+    LAUNCH_GROUP_EXCLUSION_REASON_NONE = 0;
+    LAUNCH_GROUP_EXCLUSION_REASON_NOT_IN_SELECTED_GROUP = 1;
+    LAUNCH_GROUP_EXCLUSION_REASON_EXEMPT_FROM_SELECTION = 2;
+}
+
+enum LaunchGroupBuildType {
+    LAUNCH_GROUP_BUILD_TYPE_NOT_COORDINATED = 0;
+    LAUNCH_GROUP_BUILD_TYPE_PENDING = 1;
+    LAUNCH_GROUP_BUILD_TYPE_INITIAL = 2;
+    LAUNCH_GROUP_BUILD_TYPE_INITIAL_PERSISTENT = 3;
+    LAUNCH_GROUP_BUILD_TYPE_INITIAL_SHARED = 4;
+    LAUNCH_GROUP_BUILD_TYPE_DEFERRED = 5;
 }
 
 ////////////////////////////////////////////

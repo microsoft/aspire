@@ -26,6 +26,7 @@ using Bunit;
 using ProtobufValue = Google.Protobuf.WellKnownTypes.Value;
 using Google.Protobuf.Collections;
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Localization;
@@ -457,6 +458,102 @@ public partial class ResourcesTests : DashboardTestContext
 
         // above is triggered asynchronously, so wait for the state to change
         cut.WaitForState(() => cut.Instance.GetFilteredResources().Count() == 2);
+    }
+
+    [Fact]
+    public async Task LaunchGroupFilters_UseEffectiveMembershipAndRoundTripUrlState()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var resources = new List<ResourceViewModel>
+        {
+            ModelTestHelpers.CreateResource("api-1", displayName: "api"),
+            ModelTestHelpers.CreateResource("api-2", displayName: "api"),
+            ModelTestHelpers.CreateResource("worker"),
+            ModelTestHelpers.CreateResource("shared"),
+            ModelTestHelpers.CreateResource("cache"),
+            ModelTestHelpers.CreateResource("unknown")
+        };
+        var information = LaunchGroupTestHelpers.CreateInformation(
+            selectedGroup: "Web",
+            groups: ["Web", "Data Group", "Empty"],
+            resources:
+            [
+                LaunchGroupTestHelpers.CreateResource("api", groups: ["Web"]),
+                LaunchGroupTestHelpers.CreateResource("worker", groups: ["Data Group"]),
+                LaunchGroupTestHelpers.CreateResource("shared", groups: ["Web", "Data Group"]),
+                LaunchGroupTestHelpers.CreateResource("cache")
+            ]);
+        ResourceSetupHelpers.SetupResourcesPage(
+            this,
+            viewport,
+            new LaunchGroupTestDashboardClient(
+                information,
+                resources,
+                Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        SetupResourceGraphModule();
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.GraphUrl());
+        var cut = Render<Components.Pages.Resources>(builder => builder.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.Equal(6, cut.Instance.GetFilteredResources().Count()));
+
+        Assert.Equal(["", "Data Group", "Empty", "Web"], cut.Instance.PageViewModel.ResourceLaunchGroupsToVisibility.Keys.Order(StringComparer.OrdinalIgnoreCase));
+
+        cut.Instance.PageViewModel.ResourceLaunchGroupsToVisibility["Web"] = false;
+        Assert.Equal(
+            ["cache", "shared", "unknown", "worker"],
+            cut.Instance.GetFilteredResources().Select(resource => resource.Name).Order(StringComparer.Ordinal));
+
+        cut.Instance.PageViewModel.ResourceLaunchGroupsToVisibility["Data Group"] = false;
+        Assert.Equal(
+            ["cache", "unknown"],
+            cut.Instance.GetFilteredResources().Select(resource => resource.Name).Order(StringComparer.Ordinal));
+
+        cut.Instance.PageViewModel.ResourceLaunchGroupsToVisibility[string.Empty] = false;
+        Assert.Equal(["unknown"], cut.Instance.GetFilteredResources().Select(resource => resource.Name));
+
+        var url = cut.Instance.GetUrlFromSerializableViewModel(cut.Instance.ConvertViewModelToSerializable());
+        var hiddenLaunchGroups = QueryHelpers.ParseQuery(new Uri(new Uri("http://localhost"), url).Query)["hiddenLaunchGroups"].ToString();
+        Assert.NotEmpty(hiddenLaunchGroups);
+
+        foreach (var group in cut.Instance.PageViewModel.ResourceLaunchGroupsToVisibility.Keys)
+        {
+            cut.Instance.PageViewModel.ResourceLaunchGroupsToVisibility[group] = true;
+        }
+        // bUnit requires query-supplied parameters to come from a Router, but this component is
+        // intentionally rendered directly so the test can exercise its session-state contract.
+#pragma warning disable BL0005
+        cut.Instance.HiddenLaunchGroups = hiddenLaunchGroups;
+#pragma warning restore BL0005
+        await cut.Instance.UpdateViewModelFromQueryAsync(cut.Instance.PageViewModel);
+
+        Assert.False(cut.Instance.PageViewModel.ResourceLaunchGroupsToVisibility[string.Empty]);
+        Assert.False(cut.Instance.PageViewModel.ResourceLaunchGroupsToVisibility["Data Group"]);
+        Assert.False(cut.Instance.PageViewModel.ResourceLaunchGroupsToVisibility["Web"]);
+        Assert.True(cut.Instance.PageViewModel.ResourceLaunchGroupsToVisibility["Empty"]);
+    }
+
+    [Fact]
+    public void LaunchGroupFilters_SupportedEmptyMetadataKeepsDefaultFilterDisplay()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesPage(
+            this,
+            viewport,
+            new LaunchGroupTestDashboardClient(
+                LaunchGroupTestHelpers.CreateInformation(),
+                [ModelTestHelpers.CreateResource("api")],
+                Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        SetupResourceGraphModule();
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.GraphUrl());
+
+        var cut = Render<Components.Pages.Resources>(builder => builder.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.Single(cut.Instance.GetFilteredResources()));
+        cut.Find("#resourceFilterButton").Click();
+
+        Assert.Equal(
+            ["resource-health-states", "resource-states", "resource-types"],
+            cut.FindComponents<SelectResourceOptions<string>>()
+                .Select(component => component.Instance.Id)
+                .Order(StringComparer.Ordinal));
     }
 
     [Fact]

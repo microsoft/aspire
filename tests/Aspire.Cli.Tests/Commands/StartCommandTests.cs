@@ -282,6 +282,7 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
             "--apphost", appHostFile.FullName,
             "--no-build",
             $"{launchProfileOption}=--no-build",
+            "--launch-group=--option-shaped",
             "--",
             .. expectedAppHostArguments
         ]);
@@ -441,6 +442,7 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
             "--format=table",
             "--no-build",
             "--launch-profile", "E2E",
+            "--launch-group", "catalog",
             "--isolated=false",
             "--wait-for-debugger",
             "--non-interactive=false",
@@ -467,6 +469,7 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
                 "--capture-profile",
                 "--no-build",
                 "--launch-profile", "E2E",
+                "--launch-group", "catalog",
                 "--isolated", "false",
                 "--wait-for-debugger",
                 "--log-level", "Debug",
@@ -734,12 +737,13 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
         Assert.True(separatorIndex > 0, "Expected a single child/AppHost separator.");
         Assert.True(noBuildIndex > 0, "Expected detached child arguments to include --no-build.");
         Assert.Equal(1, forwardedArguments.Count(argument => argument == "--no-build"));
-        Assert.Equal(["--no-build", $"--launch-profile={expectedLaunchProfile}", "--", .. expectedAppHostArguments], forwardedArguments[noBuildIndex..]);
+        Assert.Equal(["--no-build", $"--launch-profile={expectedLaunchProfile}", "--launch-group=--option-shaped", "--", .. expectedAppHostArguments], forwardedArguments[noBuildIndex..]);
         Assert.DoesNotContain("--detach", forwardedArguments.Take(separatorIndex));
         var childParseResult = command.Parse(forwardedArguments);
 
         Assert.Empty(childParseResult.Errors);
         Assert.Equal(expectedLaunchProfile, childParseResult.GetValue(AppHostLauncher.s_launchProfileOption));
+        Assert.Equal("--option-shaped", childParseResult.GetValue(AppHostLauncher.s_launchGroupOption));
         Assert.Equal(expectedAppHostArguments, childParseResult.UnmatchedTokens);
     }
 

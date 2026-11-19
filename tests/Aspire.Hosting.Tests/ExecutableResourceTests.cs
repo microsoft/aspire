@@ -56,9 +56,13 @@ public class ExecutableResourceTests
             );
 
         Assert.True(exe2.Resource.TryGetAnnotationsOfType<ResourceRelationshipAnnotation>(out var relationships));
-        // We don't yet process relationships set via the callbacks
-        // so we don't see the testResource2 nor exe1
+        // testResource2 is only supplied by an opaque callback, so it has no relationship.
         Assert.Collection(relationships,
+            r =>
+            {
+                Assert.Equal("Reference", r.Type);
+                Assert.Same(exe1.Resource, r.Resource);
+            },
             r =>
             {
                 Assert.Equal("Reference", r.Type);
@@ -97,6 +101,30 @@ public class ExecutableResourceTests
         """;
 
         Assert.Equal(expectedManifest, manifest.ToString());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AddExecutableWithNullArgsPreservesLaterArguments(bool stringArgs)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var executable = stringArgs
+            ? builder.AddExecutable("worker", "unused", ".", (string[]?)null)
+            : builder.AddExecutable("worker", "unused", ".", (object[]?)null);
+        var callbacks = 0;
+        executable.WithArgs("before").WithArgs(context =>
+        {
+            Interlocked.Increment(ref callbacks);
+            context.Args.Add("callback");
+        }).WithArgs("after");
+
+        Assert.Equal(0, callbacks);
+
+        var args = await ArgumentEvaluator.GetArgumentListAsync(executable.Resource).DefaultTimeout();
+
+        Assert.Equal(["before", "callback", "after"], args);
+        Assert.Equal(1, callbacks);
     }
 
     [Fact]

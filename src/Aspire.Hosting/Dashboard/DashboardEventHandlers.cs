@@ -3,6 +3,7 @@
 
 #pragma warning disable ASPIRECERTIFICATES001 // Type is for evaluation purposes only
 #pragma warning disable ASPIREPROJECTS001 // ProjectLaunchDefaultsAnnotation is experimental.
+#pragma warning disable ASPIRELAUNCHGROUPS001 // The dashboard retains its normal startup independently of workload selection.
 
 using System.Collections.Concurrent;
 using System.Diagnostics;
@@ -187,6 +188,11 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
 
     private void ConfigureAspireDashboardResource(IResource dashboardResource)
     {
+        if (!dashboardResource.HasAnnotationOfType<ExcludeFromLaunchGroupSelectionAnnotation>())
+        {
+            dashboardResource.Annotations.Add(new ExcludeFromLaunchGroupSelectionAnnotation());
+        }
+
         // The built-in dashboard can be visible during development. Prevent it from stopping itself,
         // but preserve lifecycle and rebuild commands when the dashboard is supplied as a .NET project.
         if (!dashboardResource.HasAnnotationOfType<ProjectLaunchDefaultsAnnotation>())

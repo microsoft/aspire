@@ -168,6 +168,8 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
                 _displayedResourcePropertyViewModels.Add(new DisplayedResourcePropertyViewModel(displayedProperty, Loc, TimeProvider));
             }
             AddStateDescriptionProperty(_resource);
+            _displayedResourcePropertyViewModels.AddRange(LaunchGroupDisplayHelpers.GetProperties(_resource.LaunchGroup, Loc)
+                .Select(property => new DisplayedResourcePropertyViewModel(property, Loc, TimeProvider)));
 
             // Collapse details sections when they have no data.
             _isUrlsExpanded = GetUrls().Count > 0;
@@ -231,6 +233,25 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
             }
 
             UpdateResourceActionsMenu();
+        }
+
+        if (_valueComponents is not null && Resource.LaunchGroup is { } launchGroup)
+        {
+            LaunchGroupValue.AddValueComponents(_valueComponents, launchGroup, ShowHiddenResources);
+        }
+
+        if (_valueComponents is not null && ResourceStateViewModel.GetLaunchGroupStateDescription(Resource) is { } description)
+        {
+            _valueComponents[StateDescriptionPropertyKey] = new ComponentMetadata
+            {
+                Type = typeof(LaunchGroupValue),
+                Parameters =
+                {
+                    ["Groups"] = new[] { description.Group },
+                    ["TextFormat"] = ColumnsLoc[description.ResourceName].Value,
+                    ["ShowHiddenResources"] = ShowHiddenResources
+                }
+            };
         }
 
         UpdateTelemetryProperties();

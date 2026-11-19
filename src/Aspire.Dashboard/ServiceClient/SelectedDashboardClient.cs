@@ -19,6 +19,7 @@ internal sealed class SelectedDashboardClient(DashboardClient currentClient, Das
         ? DashboardOptions.GetApplicationNameOrDefault(dataSource.SelectedRun.ApplicationName)
         : currentClient.ApplicationName;
     public string? MinRequiredVersion => IsReadOnly ? null : currentClient.MinRequiredVersion;
+    public LaunchGroupInformationViewModel? LaunchGroups => IsReadOnly ? null : currentClient.LaunchGroups;
 
     public event Action<DashboardConnectionState>? ConnectionStateChanged
     {
@@ -36,9 +37,47 @@ internal sealed class SelectedDashboardClient(DashboardClient currentClient, Das
     }
 
     public Task ReconnectAsync() => IsReadOnly ? Task.CompletedTask : currentClient.ReconnectAsync();
-    public Task<ResourceViewModelSubscription> SubscribeResourcesAsync(CancellationToken cancellationToken) => dataSource.ResourceRepository.SubscribeResourcesAsync(cancellationToken);
-    public ResourceViewModel? GetResource(string resourceName) => dataSource.ResourceRepository.GetResource(resourceName);
-    public IReadOnlyList<ResourceViewModel> GetResources() => dataSource.ResourceRepository.GetResources();
+    public async Task<ResourceViewModelSubscription> SubscribeResourcesAsync(CancellationToken cancellationToken)
+    {
+        var repository = dataSource.ResourceRepository;
+        var isCurrent = dataSource.IsCurrentResourceRepository(repository);
+        var subscription = await repository.SubscribeResourcesAsync(cancellationToken).ConfigureAwait(false);
+        foreach (var resource in subscription.InitialState)
+        {
+            ProjectLaunchGroup(resource, isCurrent);
+        }
+
+        return subscription with
+        {
+            Subscription = ProjectLaunchGroupsAsync(subscription.Subscription, isCurrent)
+        };
+    }
+
+    public ResourceViewModel? GetResource(string resourceName)
+    {
+        var repository = dataSource.ResourceRepository;
+        var resource = repository.GetResource(resourceName);
+        if (resource is not null)
+        {
+            ProjectLaunchGroup(resource, dataSource.IsCurrentResourceRepository(repository));
+        }
+
+        return resource;
+    }
+
+    public IReadOnlyList<ResourceViewModel> GetResources()
+    {
+        var repository = dataSource.ResourceRepository;
+        var resources = repository.GetResources();
+        var isCurrent = dataSource.IsCurrentResourceRepository(repository);
+        foreach (var resource in resources)
+        {
+            ProjectLaunchGroup(resource, isCurrent);
+        }
+
+        return resources;
+    }
+
     public IAsyncEnumerable<IReadOnlyList<ResourceLogLine>> SubscribeConsoleLogs(string resourceName, CancellationToken cancellationToken) =>
         IsReadOnly
             ? dataSource.ResourceRepository.SubscribeConsoleLogs(resourceName, cancellationToken)
@@ -108,6 +147,28 @@ internal sealed class SelectedDashboardClient(DashboardClient currentClient, Das
     {
         await Task.CompletedTask.ConfigureAwait(false);
         yield break;
+    }
+
+    private async IAsyncEnumerable<IReadOnlyList<ResourceViewModelChange>> ProjectLaunchGroupsAsync(
+        IAsyncEnumerable<IReadOnlyList<ResourceViewModelChange>> updates,
+        bool isCurrent)
+    {
+        await foreach (var changes in updates.ConfigureAwait(false))
+        {
+            foreach (var change in changes)
+            {
+                ProjectLaunchGroup(change.Resource, isCurrent);
+            }
+
+            yield return changes;
+        }
+    }
+
+    private void ProjectLaunchGroup(ResourceViewModel resource, bool isCurrent)
+    {
+        // A subscription can outlive a run switch, and its view models are shared by other circuits.
+        // Project using the subscribed repository, not the scope's newly selected run.
+        resource.LaunchGroup = isCurrent ? currentClient.LaunchGroups?.FindResource(resource.DisplayName) : null;
     }
 
     public ValueTask DisposeAsync() => ValueTask.CompletedTask;

@@ -7,6 +7,7 @@ using System.Text;
 using System.Threading.Channels;
 using Aspire.DashboardService.Proto.V1;
 using Aspire.Hosting.Dashboard;
+using Aspire.Hosting.Orchestrator;
 using Aspire.Hosting.Tests.Helpers;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Tests.Utils.Grpc;
@@ -969,6 +970,28 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
         Assert.Equal("MyApp", response.ApplicationName);
     }
 
+    [Fact]
+    public async Task GetApplicationInformation_SucceedsWithoutFinalizedLaunchGroupMetadata()
+    {
+        var metadata = new LaunchGroupMetadataService(NullLogger<LaunchGroupMetadataService>.Instance);
+        var dashboardService = new DashboardServiceImpl(
+            CreateDashboardServiceData(),
+            new TestHostEnvironment { ApplicationName = "InspectApp" },
+            new TestHostApplicationLifetime(),
+            new ConfigurationBuilder().Build(),
+            NullLogger<DashboardServiceImpl>.Instance,
+            new TestInteractionFileUploadStore(),
+            TestTerminalService.Create(),
+            metadata);
+
+        var response = await dashboardService.GetApplicationInformation(
+            new ApplicationInformationRequest(),
+            TestServerCallContext.Create());
+
+        Assert.Equal("InspectApp", response.ApplicationName);
+        Assert.Null(response.LaunchGroups);
+    }
+
     [Theory]
     [InlineData(InputType.File, 0, -1, 0)]       // File, no input max, no server limit → 0
     [InlineData(InputType.File, 0, 50, 50)]      // File, no input max, 50 MB server limit → 50 MB
@@ -1882,8 +1905,11 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
         IConfiguration? configuration = null,
         ILogger<DashboardServiceImpl>? logger = null,
         IInteractionFileUploadStore? fileUploadStore = null,
-                        TerminalService? terminalService = null)
+        TerminalService? terminalService = null)
     {
+        var launchGroupMetadata = new LaunchGroupMetadataService(NullLogger<LaunchGroupMetadataService>.Instance);
+        launchGroupMetadata.FinalizeModel(new Aspire.Hosting.ApplicationModel.DistributedApplicationModel(
+            Enumerable.Empty<Aspire.Hosting.ApplicationModel.IResource>()));
         return new DashboardServiceImpl(
             dashboardServiceData,
             hostEnvironment ?? new TestHostEnvironment(),
@@ -1891,7 +1917,8 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
             configuration ?? new ConfigurationBuilder().Build(),
             logger ?? NullLogger<DashboardServiceImpl>.Instance,
             fileUploadStore ?? new TestInteractionFileUploadStore(),
-            terminalService ?? TestTerminalService.Create());
+            terminalService ?? TestTerminalService.Create(),
+            launchGroupMetadata);
     }
 
     private static DashboardServiceData CreateDashboardServiceData(

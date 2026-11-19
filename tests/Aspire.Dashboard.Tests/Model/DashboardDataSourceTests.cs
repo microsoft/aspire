@@ -281,6 +281,191 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public async Task SelectedClient_LiveResourcesProjectLaunchGroupsForInitialAndSubsequentReplicaUpdates()
+    {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var options = CreateOptions(workspace);
+        using var runStore = CreateRunStore(options);
+        using var dataSourcePool = new DashboardDataSourcePool(runStore, CreateRepositoryFactory(options));
+        using var dataSource = CreateDataSource(runStore, dataSourcePool);
+        using var activitySource = new DashboardActivitySource();
+        await using var currentClient = new DashboardClient(
+            activitySource,
+            NullLoggerFactory.Instance,
+            new ConfigurationManager(),
+            options,
+            new MockKnownPropertyLookup(),
+            new TestStringLocalizer<Resources.Resources>(),
+            (IResourceRepositoryWriter)dataSource.ResourceRepository);
+        currentClient.SetLaunchGroupsForTesting(new LaunchGroupInformation
+        {
+            SelectedGroup = "frontend",
+            Groups = { "frontend" },
+            Resources =
+            {
+                new LaunchGroupResourceInfo
+                {
+                    Name = "FRONTEND-REPLICA",
+                    Groups = { "frontend" },
+                    InheritedFrom = "frontend-parent",
+                    ExplicitStart = true,
+                    BuildType = LaunchGroupBuildType.Initial
+                }
+            }
+        });
+        IDashboardClient selectedClient = new SelectedDashboardClient(currentClient, dataSource);
+        var repositoryWriter = (IResourceRepositoryWriter)dataSource.ResourceRepository;
+        await repositoryWriter.ReplaceResourcesAsync(
+        [
+            new Resource
+            {
+                Name = "frontend-replica-0",
+                DisplayName = "frontend-replica",
+                ResourceType = "Project",
+                CreatedAt = Timestamp.FromDateTime(DateTime.UnixEpoch)
+            }
+        ]);
+
+        var (snapshot, updates) = await selectedClient.SubscribeResourcesAsync(CancellationToken.None);
+
+        Assert.Same(currentClient.LaunchGroups, selectedClient.LaunchGroups);
+        var initialReplica = Assert.Single(snapshot);
+        Assert.Equal("frontend-replica-0", initialReplica.Name);
+        Assert.Equal(1, initialReplica.ReplicaIndex);
+        AssertLaunchGroup(initialReplica);
+
+        await using var enumerator = updates.GetAsyncEnumerator();
+        await repositoryWriter.ApplyChangesAsync(
+        [
+            new WatchResourcesChange
+            {
+                Upsert = new Resource
+                {
+                    Name = "frontend-replica-1",
+                    DisplayName = "frontend-replica",
+                    ResourceType = "Project",
+                    CreatedAt = Timestamp.FromDateTime(DateTime.UnixEpoch)
+                }
+            }
+        ]);
+
+        Assert.True(await enumerator.MoveNextAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(10)));
+        var addedReplica = Assert.Single(enumerator.Current);
+        Assert.Equal(ResourceViewModelChangeType.Upsert, addedReplica.ChangeType);
+        Assert.Equal("frontend-replica-1", addedReplica.Resource.Name);
+        Assert.Equal(2, addedReplica.Resource.ReplicaIndex);
+        AssertLaunchGroup(addedReplica.Resource);
+        Assert.Collection(
+            selectedClient.GetResources().OrderBy(resource => resource.Name),
+            resource =>
+            {
+                Assert.Equal("frontend-replica-0", resource.Name);
+                AssertLaunchGroup(resource);
+            },
+            resource =>
+            {
+                Assert.Equal("frontend-replica-1", resource.Name);
+                AssertLaunchGroup(resource);
+            });
+
+        static void AssertLaunchGroup(ResourceViewModel resource)
+        {
+            var launchGroup = Assert.IsType<ResourceLaunchGroupViewModel>(resource.LaunchGroup);
+            Assert.Equal("frontend", launchGroup.SelectedGroup);
+            Assert.Equal(["frontend"], launchGroup.Groups);
+            Assert.Equal("frontend-parent", launchGroup.InheritedFrom);
+            Assert.True(launchGroup.ExplicitStart);
+            Assert.Equal(LaunchGroupBuildType.Initial, launchGroup.BuildType);
+        }
+    }
+
+    [Fact]
+    public async Task SelectedClient_HistoricalResourcesDoNotProjectCurrentLaunchGroups()
+    {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var options = CreateOptions(workspace);
+        string historicalRunId;
+
+        using (var historicalRunStore = CreateRunStore(options))
+        {
+            historicalRunId = historicalRunStore.RunId;
+            using var resourceContext = CreateResourceRepository(historicalRunStore.DatabasePath);
+            await ((IResourceRepositoryWriter)resourceContext.Repository).ReplaceResourcesAsync(
+            [
+                new Resource
+                {
+                    Name = "frontend-replica-0",
+                    DisplayName = "frontend-replica",
+                    ResourceType = "Project",
+                    CreatedAt = Timestamp.FromDateTime(DateTime.UnixEpoch)
+                }
+            ]);
+            historicalRunStore.PublishRun();
+        }
+
+        using var currentRunStore = CreateRunStore(options);
+        using var dataSourcePool = new DashboardDataSourcePool(currentRunStore, CreateRepositoryFactory(options));
+        using var dataSource = CreateDataSource(currentRunStore, dataSourcePool);
+        using var activitySource = new DashboardActivitySource();
+        await using var currentClient = new DashboardClient(
+            activitySource,
+            NullLoggerFactory.Instance,
+            new ConfigurationManager(),
+            options,
+            new MockKnownPropertyLookup(),
+            new TestStringLocalizer<Resources.Resources>(),
+            (IResourceRepositoryWriter)dataSource.ResourceRepository);
+        currentClient.SetLaunchGroupsForTesting(new LaunchGroupInformation
+        {
+            SelectedGroup = "frontend",
+            Groups = { "frontend" },
+            Resources =
+            {
+                new LaunchGroupResourceInfo
+                {
+                    Name = "frontend-replica",
+                    Groups = { "frontend" }
+                }
+            }
+        });
+        IDashboardClient selectedClient = new SelectedDashboardClient(currentClient, dataSource);
+        using var liveDataSource = CreateDataSource(currentRunStore, dataSourcePool);
+        IDashboardClient liveClient = new SelectedDashboardClient(currentClient, liveDataSource);
+        var liveRepositoryWriter = (IResourceRepositoryWriter)liveDataSource.ResourceRepository;
+        var (_, liveUpdates) = await selectedClient.SubscribeResourcesAsync(CancellationToken.None);
+        await using var liveUpdatesEnumerator = liveUpdates.GetAsyncEnumerator();
+
+        dataSource.SelectRun(historicalRunId);
+        var (snapshot, _) = await selectedClient.SubscribeResourcesAsync(CancellationToken.None);
+
+        Assert.True(selectedClient.IsReadOnly);
+        Assert.Null(selectedClient.LaunchGroups);
+        Assert.Null(Assert.Single(snapshot).LaunchGroup);
+        Assert.Null(Assert.Single(selectedClient.GetResources()).LaunchGroup);
+        Assert.Null(selectedClient.GetResource("frontend-replica-0")!.LaunchGroup);
+
+        await liveRepositoryWriter.ApplyChangesAsync(
+        [
+            new WatchResourcesChange
+            {
+                Upsert = new Resource
+                {
+                    Name = "frontend-replica-0",
+                    DisplayName = "frontend-replica",
+                    ResourceType = "Project",
+                    CreatedAt = Timestamp.FromDateTime(DateTime.UnixEpoch)
+                }
+            }
+        ]);
+        var liveResource = Assert.IsType<ResourceViewModel>(liveClient.GetResource("frontend-replica-0"));
+        Assert.Equal("frontend", liveResource.LaunchGroup?.SelectedGroup);
+
+        // A live update can arrive while a different circuit switches to a recording.
+        Assert.True(await liveUpdatesEnumerator.MoveNextAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(10)));
+        Assert.Equal("frontend", liveResource.LaunchGroup?.SelectedGroup);
+    }
+
+    [Fact]
     public async Task CurrentRun_PinPersistsWhenRunBecomesHistorical()
     {
         using var workspace = TemporaryWorkspace.Create(testOutputHelper);
