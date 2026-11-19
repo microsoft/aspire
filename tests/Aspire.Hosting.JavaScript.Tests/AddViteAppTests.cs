@@ -1064,6 +1064,26 @@ public class AddViteAppTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task NextJsWorkspaceAppValidatesConfigInPackageDirectory()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var workspaceDirectory = Path.Combine(workspace.Path, "pnpm-workspace");
+        var appDirectory = Path.Combine(workspaceDirectory, "packages", "web");
+        Directory.CreateDirectory(appDirectory);
+        File.WriteAllText(Path.Combine(appDirectory, "next.config.js"), "module.exports = { output: 'standalone' };");
+
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: "nextjs-standalone-check-web").WithResourceCleanUp(true);
+        builder.Services.AddSingleton<IPipelineActivityReporter, NullPublishingActivityReporter>();
+
+        var pnpmWorkspace = builder.AddPnpmWorkspace("pnpm", workspaceDirectory);
+        pnpmWorkspace.AddNextJsApp("web", "web-package", "packages/web");
+
+        using var app = builder.Build();
+        var pipeline = app.Services.GetRequiredService<IDistributedApplicationPipeline>();
+        await pipeline.ExecuteAsync(CreatePipelineContext(app));
+    }
+
+    [Fact]
     public void DisableBuildValidationAddsSuppressAnnotation()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
