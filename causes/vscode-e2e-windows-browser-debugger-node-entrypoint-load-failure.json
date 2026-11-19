@@ -1,0 +1,15 @@
+{
+  "id": "vscode-e2e-windows-browser-debugger-node-entrypoint-load-failure",
+  "type": "main-repository-breakage",
+  "title": "VS Code extension E2E (Windows, browser-debugger) step fails with Node.js module-loader error before tests report results",
+  "error_pattern": "at Function._load (node:internal/modules/cjs/loader:1309:12)\nat wrapModuleLoad (node:internal/modules/cjs/loader:254:19)\nat Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:171:5)\n##[error]Process completed with exit code 1.",
+  "occurrences": [
+    {
+      "run_id": 44555711353,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/44555711353",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, browser-debugger)",
+      "observed_at": "2026-11-19T16:09:12Z",
+      "pr_number": 0
+    }
+  ]
+}
