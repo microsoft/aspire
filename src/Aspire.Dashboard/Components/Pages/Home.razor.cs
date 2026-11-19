@@ -16,9 +16,9 @@ namespace Aspire.Dashboard.Components.Pages;
 /// </para>
 /// <para>
 /// Some requests for the root URL are for another page, and are redirected to it:
-/// links created by older tools, such as <c>/?resource=api</c> or <c>/?view=Graph</c>; a dashboard without a
-/// resource service, which has no resources to list; and narrow layouts, where the list is a drawer over a page
-/// rather than a page of its own, so they open on the overview of all resources.
+/// links created by older tools, such as <c>/?resource=api</c> or <c>/?view=Graph</c>; and a dashboard without a
+/// resource service, which has no resources to list. The viewport width doesn't redirect: a narrow layout shows home
+/// as the open resource drawer, so resizing the window keeps the user on home.
 /// </para>
 /// </remarks>
 public sealed partial class Home : ComponentBase
@@ -31,23 +31,17 @@ public sealed partial class Home : ComponentBase
     [SupplyParameterFromQuery(Name = "view")]
     public string? LegacyViewKind { get; set; }
 
-    [CascadingParameter]
-    public required ViewportInformation ViewportInformation { get; set; }
-
     [Inject]
     public required NavigationManager NavigationManager { get; init; }
 
     [Inject]
     public required IDashboardClient DashboardClient { get; init; }
 
-    // Not OnInitialized: the viewport is a cascading value, and a window narrowed while the table is showing must
-    // move to the overview too, or the page would be left empty.
+    // Not OnInitialized: the query parameters are set again when only the query string of "/" changes.
     protected override void OnParametersSet()
     {
         var url = TryGetLegacyRedirectUrl(LegacyResourceName, LegacyViewKind)
-            ?? (!DashboardClient.IsEnabled ? DashboardUrls.StructuredLogsUrl()
-                : !ViewportInformation.IsDesktop ? DashboardUrls.ResourceListUrl()
-                : null);
+            ?? (!DashboardClient.IsEnabled ? DashboardUrls.StructuredLogsUrl() : null);
 
         // The layout re-renders this page while the redirect is in flight. Ask for it once.
         if (url is null || string.Equals(url, _redirectedTo, StringComparison.Ordinal))
