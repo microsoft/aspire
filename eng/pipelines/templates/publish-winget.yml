@@ -132,16 +132,12 @@ steps:
       }
       Write-Host "All installer URLs are accessible."
     displayName: '🟣Validate installer URLs from manifest'
-    # Only run when we'd actually submit (matches the Submit step condition).
-    # On non-production branches the manifest URLs point to artifacts that aren't
-    # published at their canonical ci.dot.net paths, so reachability checks fail
-    # meaninglessly; in dry-run we're not submitting anything so URL probing is
-    # equally moot.
+    # Only run when we'd actually submit (matches the Submit step condition);
+    # in dry-run we're not submitting anything so URL probing is moot.
     condition: |
       and(
         succeeded(),
-        eq('${{ parameters.dryRun }}', 'false'),
-        eq(variables['_IsProductionBranch'], 'true')
+        eq('${{ parameters.dryRun }}', 'false')
       )
 
   - powershell: |
@@ -182,8 +178,7 @@ steps:
     condition: |
       and(
         succeeded(),
-        eq('${{ parameters.dryRun }}', 'false'),
-        eq(variables['_IsProductionBranch'], 'true')
+        eq('${{ parameters.dryRun }}', 'false')
       )
 
   # wingetcreate still targets .NET 9. Both the startup probe and submission
@@ -280,15 +275,10 @@ steps:
       Write-Host "Opened WinGet PR #$pullRequestNumber (ready for review): $pullRequestUrl"
       Write-Host "Successfully submitted WinGet manifest for $packageId $version"
     displayName: '🟣Submit to WinGet'
-    # Guard: only submit to WinGet from production branches.
-    # 1ES PT branch validation surfaces this as a non-blocking warning, which is too easy to miss;
-    # a hard condition stops accidental submissions from feature, fork or dogfood branches.
-    # _IsProductionBranch is defined in eng/pipelines/common-variables.yml.
     condition: |
       and(
         succeeded(),
-        eq('${{ parameters.dryRun }}', 'false'),
-        eq(variables['_IsProductionBranch'], 'true')
+        eq('${{ parameters.dryRun }}', 'false')
       )
     env:
       DOTNET_ROLL_FORWARD: Major
