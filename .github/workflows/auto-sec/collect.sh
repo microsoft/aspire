@@ -60,6 +60,13 @@ phase=auto-sec-pull-requests
 gh pr list --repo "${REPO}" --label auto-sec --state open --limit 20 \
   --json number,title,headRefName,headRefOid,author > .auto-sec/auto-sec-prs.json
 
+# Decide every alert's disposition and target version before the agent starts. The
+# agent previously re-derived hundreds of versions and cooldowns itself and tended to
+# stop early; a computed plan leaves it only the lockfile edits. Registry failures
+# degrade to `agent` entries rather than failing collection.
+phase=fix-plan
+node .github/workflows/auto-sec/auto-sec.js plan
+
 # Bind public totals to collection, not the agent-writable copies of these files.
 phase=report-counts
 node -e '
@@ -77,3 +84,4 @@ echo "Alerts: $(jq length .auto-sec/alerts.json) (malware: $(jq length .auto-sec
 echo "Version-mapped code scanning alerts: $(jq '.version_alerts | length' .auto-sec/code-scanning.json)"
 echo "Open Dependabot PRs: $(jq length .auto-sec/dependabot-prs.json)"
 echo "Open auto-sec PRs: $(jq length .auto-sec/auto-sec-prs.json)"
+echo "Planned fixes: $(jq '.fixes | length' .auto-sec/plan.json)"
