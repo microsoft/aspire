@@ -2298,12 +2298,13 @@ function writeGoWorker(projectName) {
 
 go 1.24
 `);
+  const traceListener = process.platform === 'win32' && shardName === 'resource-debug-tools';
   fs.writeFileSync(path.join(projectDirectory, 'main.go'), `package main
 
 import (
 	"fmt"
 	"log"
-	"net/http"
+${traceListener ? '\t"net"\n' : ''}	"net/http"
 	"os"
 )
 
@@ -2312,10 +2313,19 @@ func main() {
 		message := "go-ok"
 		_, _ = fmt.Fprint(writer, message)
 	})
-	log.Fatal(http.ListenAndServe(":"+os.Getenv("PORT"), nil))
+${traceListener ? `	log.SetFlags(log.LstdFlags | log.LUTC)
+	log.Printf("aspire-e2e-go: launch pid=%d", os.Getpid())
+	listener, err := net.Listen("tcp", ":"+os.Getenv("PORT"))
+	if err != nil {
+		log.Printf("aspire-e2e-go: listen-failed pid=%d", os.Getpid())
+		log.Fatal(err)
+	}
+	log.Printf("aspire-e2e-go: listening pid=%d", os.Getpid())
+	err = http.Serve(listener, nil)
+	log.Printf("aspire-e2e-go: serve-ended pid=%d", os.Getpid())
+	log.Fatal(err)` : '	log.Fatal(http.ListenAndServe(":"+os.Getenv("PORT"), nil))'}
 }
 `);
-
 }
 
 function resolveAppHostSdkVersion(resolvedCliPath) {

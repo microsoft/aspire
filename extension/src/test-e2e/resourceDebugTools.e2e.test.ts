@@ -11,7 +11,7 @@ import { runProcess } from './helpers/process';
 import type { ResourceJson } from '../data/appHostCliContracts';
 import type { AspireExtensionE2ECodeLensProbeResult } from '../types/extensionApi';
 
-async function reportGoAttachFailure(appHostPath: string, resourceName: string): Promise<void> {
+async function reportGoLifecycle(appHostPath: string, resourceName: string): Promise<void> {
     async function readDiagnostics(args: string[]): Promise<string> {
         const status = await executeE2eControlCommand({
             name: 'runAspireCli',
@@ -29,8 +29,10 @@ async function reportGoAttachFailure(appHostPath: string, resourceName: string):
         const { resources } = JSON.parse(await readDiagnostics(['describe'])) as { resources: ResourceJson[] };
         const resource = resources.find(entry => entry.name === resourceName);
         console.info('Go attach resource snapshot:', {
+            observedAt: new Date().toISOString(),
             state: resource?.state,
             exitCode: resource?.exitCode,
+            executablePid: Number(resource?.properties?.['executable.pid']) || undefined,
             health: resource?.healthStatus,
             endpointCount: resource?.urls?.length,
         });
@@ -38,6 +40,13 @@ async function reportGoAttachFailure(appHostPath: string, resourceName: string):
             logs: { content: string; isError: boolean }[];
         };
         const errors = logs.filter(line => line.isError).map(line => line.content);
+        // The Go fixture emits markers with a UTC timestamp:
+        // 2026/11/20 20:30:07 aspire-e2e-go: listening pid=1234
+        const lifecycle = logs.flatMap(({ content }) => {
+            const marker = /^(\d{4}\/\d{2}\/\d{2} \d{2}:\d{2}:\d{2}) aspire-e2e-go: (launch|listening|listen-failed|serve-ended) pid=(\d+)$/.exec(content.trim());
+            return marker ? [{ timestamp: marker[1], event: marker[2], pid: Number(marker[3]) }] : [];
+        });
+        console.info('Go fixture lifecycle:', lifecycle);
         console.info('Go attach stderr summary:', {
             lines: errors.length,
             bindFailure: errors.some(line => /address already in use|only one usage of each socket address/i.test(line)),
@@ -45,7 +54,7 @@ async function reportGoAttachFailure(appHostPath: string, resourceName: string):
             goToolError: errors.some(line => /^go:/i.test(line)),
         });
     } catch {
-        console.warn('Go attach failure diagnostics could not be collected.');
+        console.warn('Go lifecycle diagnostics could not be collected.');
     }
 }
 
@@ -372,11 +381,10 @@ suite('Aspire resource debug language model tool E2E', function () {
                 expectedDebugType: scenario.debugType,
                 expectedResponse: scenario.expectedResponse,
                 timeoutMs: 300000,
-            }, { timeoutMs: 360000 }).catch(async (error: unknown) => {
+            }, { timeoutMs: 360000 }).finally(async () => {
                 if (process.platform === 'win32' && scenario.debugType === 'go') {
-                    await reportGoAttachFailure(appHostPath, scenario.resourceName);
+                    await reportGoLifecycle(appHostPath, scenario.resourceName);
                 }
-                throw error;
             })).result as AttachedResourceDebugProof;
 
             assert.strictEqual(proof.proof, 'aspire-resource-attach-breakpoint-detach');
