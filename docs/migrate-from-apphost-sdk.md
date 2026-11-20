@@ -31,6 +31,12 @@ until that companion merges and publishes, do not assume an installed plugin has
 
 ## 1. Switch the project SDK
 
+`aspire update` targeting Aspire 17 or later automatically switches the SDK and
+adds or updates the explicit `Aspire.Hosting.AppHost` reference. It also maintains
+the central version in `Directory.Packages.props` when Central Package Management
+is enabled. File-based AppHosts migrate to a package directive instead.
+Resource declarations are not rewritten; complete the remaining steps below.
+
 Before:
 
 ```xml

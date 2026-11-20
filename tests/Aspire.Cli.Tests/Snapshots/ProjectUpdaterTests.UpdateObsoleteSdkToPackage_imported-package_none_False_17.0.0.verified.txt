@@ -1,0 +1,12 @@
+﻿{
+  AppHost:
+<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk" />,
+  ImportedDeclarations:
+<?xml version="1.0" encoding="utf-8"?>
+<Project>
+  <ItemGroup>
+    <PackageReference Include="Aspire.Hosting.AppHost" Version="17.0.0" PrivateAssets="all" />
+  </ItemGroup>
+</Project>
+}
