@@ -1992,6 +1992,11 @@ public class AzureSandboxesTests(ITestOutputHelper output)
     [Fact]
     public async Task AzureDevComputeClientAddsDefaultEntraAuthenticatedPort()
     {
+        const string tenantId = "33333333-3333-3333-3333-333333333333";
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);
+        var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
+        sandboxGroup.Resource.Outputs[AzureSandboxGroupResource.TenantIdOutputName] = tenantId;
+
         var handler = new RecordingHandler(async request =>
         {
             Assert.Equal(HttpMethod.Post, request.Method);
@@ -2003,7 +2008,9 @@ public class AzureSandboxesTests(ITestOutputHelper output)
             var entraId = auth.GetProperty("entraId");
             Assert.True(entraId.GetProperty("enabled").GetBoolean());
             Assert.Empty(entraId.GetProperty("objectIds").EnumerateArray());
-            Assert.Empty(entraId.GetProperty("tenantIds").EnumerateArray());
+            Assert.Equal(
+                [tenantId],
+                entraId.GetProperty("tenantIds").EnumerateArray().Select(static item => item.GetString()!).ToArray());
 
             return JsonResponse(
                 """
@@ -2022,7 +2029,7 @@ public class AzureSandboxesTests(ITestOutputHelper output)
             new AzureDevComputeAddPortRequest
             {
                 Port = 8080,
-                Auth = AzureSandboxContainerDeployment.CreatePortAuthConfig(anonymous: false),
+                Auth = AzureSandboxContainerDeployment.CreatePortAuthConfig(anonymous: false, sandboxGroup.Resource),
                 Protocol = "Http"
             },
             CancellationToken.None);
@@ -2030,6 +2037,31 @@ public class AzureSandboxesTests(ITestOutputHelper output)
         var port = Assert.Single(ports);
         Assert.Equal(8080, port.Port);
         Assert.Equal("https://sandbox.example.test/", port.Url.ToString());
+    }
+
+    [Fact]
+    public void AnonymousPortAuthDoesNotRequireTenantOutput()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);
+        var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
+
+        var auth = AzureSandboxContainerDeployment.CreatePortAuthConfig(anonymous: true, sandboxGroup.Resource);
+
+        Assert.True(auth.Anonymous);
+        Assert.Null(auth.EntraId);
+    }
+
+    [Fact]
+    public void EntraPortAuthRequiresSandboxGroupTenantOutput()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, output);
+        var sandboxGroup = builder.AddAzureSandboxGroup("sandboxes");
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => AzureSandboxContainerDeployment.CreatePortAuthConfig(anonymous: false, sandboxGroup.Resource));
+
+        Assert.Contains("'sandboxes'", exception.Message);
+        Assert.Contains(AzureSandboxGroupResource.TenantIdOutputName, exception.Message);
     }
 
     [Fact]

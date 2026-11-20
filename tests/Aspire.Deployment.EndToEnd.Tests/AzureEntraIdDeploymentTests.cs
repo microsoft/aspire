@@ -63,13 +63,16 @@ public sealed class AzureEntraIdDeploymentTests(ITestOutputHelper output)
         var appHostPath = Path.Combine(projectDirectory, "apphost.cs");
         var directives = File.ReadLines(appHostPath).Where(line => line.StartsWith("#:", StringComparison.Ordinal)).ToArray();
         Assert.NotEmpty(directives);
+
+        // Entra registration doesn't depend on the Container Apps environment mode, so use a standard environment.
+        // Express environments are limited per subscription and region (deployments fail with
+        // MaxNumberOfRegionalExpressEnvironmentsInSubExceeded when the limit is reached), and the tests run
+        // concurrently, so AcaExpressDeploymentTests is the only one that creates an Express environment.
         File.WriteAllText(appHostPath, $$"""
             {{string.Join(Environment.NewLine, directives)}}
 
-            #pragma warning disable ASPIREACAEXPRESS001
-
             var builder = DistributedApplication.CreateBuilder(args);
-            builder.AddAzureContainerAppEnvironment("env").AsExpress();
+            builder.AddAzureContainerAppEnvironment("env");
             var identity = builder.AddEntraIdApplication("identity")
                 .WithRedirectUris("{{RedirectUri}}")
                 .WithRedirectUris(builder.AddParameter("redirecturis"));
