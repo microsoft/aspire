@@ -764,6 +764,13 @@ function prKey(pr) {
   return `${prHost(pr)}\n${pr.repository.toLowerCase()}#${pr.number}`;
 }
 
+function hasFocusPriorityLabel(pr) {
+  return pr.labels.some((label) => {
+    const name = label.toLowerCase();
+    return name === "fixes-ci" || name === "urgent-review";
+  });
+}
+
 function compareFirstReadiness(a, b) {
   const timeOrder = Date.parse(a.firstReadyForReviewAt) - Date.parse(b.firstReadyForReviewAt);
   if (timeOrder) return timeOrder;
@@ -816,7 +823,8 @@ export function computeFocusItems(buckets) {
     .filter((i) => !isCommunityPullRequest(i.pullRequest))
     .filter((i) => !isChecksFailing(i.pullRequest))
     .filter((i) => i.pullRequest.firstReadyForReviewAt !== null)
-    .sort((a, b) => compareFirstReadiness(a.pullRequest, b.pullRequest));
+    .sort((a, b) => Number(hasFocusPriorityLabel(b.pullRequest)) - Number(hasFocusPriorityLabel(a.pullRequest)) ||
+      compareFirstReadiness(a.pullRequest, b.pullRequest));
 }
 
 export function computeCommunityItems(prs) {
@@ -847,7 +855,8 @@ function focusExclusionReason(pr, bucketLabels) {
   if (hasMergeConflicts(pr)) return { kind: "merge-conflicts", label: "Merge conflicts", detail: "The author needs to rebase before reviewers can finish it.", tone: "danger" };
   if (pr.review.unresolvedThreadCount > 0) return { kind: "unresolved-feedback", label: "Unresolved feedback", detail: "Open review threads make it author-blocked.", tone: "danger" };
   if (hasNeedsAuthorActionLabel(pr)) return { kind: "held-by-label", label: "Held by label", detail: "A do-not-merge label keeps it out of the focused queue.", tone: "danger" };
-  if (isWaitingOnAuthor(bucketLabels)) return { kind: "author-response", label: "Author response", detail: "Changes were requested, so this is waiting on the author rather than the focused queue.", tone: "danger" };
+  if (isWaitingOnAuthor(bucketLabels, pr)) return { kind: "author-response", label: "Author response", detail: "Changes were requested, so this is waiting on the author rather than the focused queue.", tone: "danger" };
+  if (pr.labelsUnavailable) return { kind: "labels-unavailable", label: "Labels unavailable", detail: "Labels could not be loaded, so this PR is not ranked in Needs attention.", tone: "warning" };
   if (isCommunityPullRequest(pr) && !isAgedOutCommunityPullRequest(pr)) return { kind: "community-list", label: "Community list", detail: "Active external-contributor PRs show in the Community list.", tone: "accent" };
   const specialized = bucketLabels.find((l) => specializedFocusBucketLabels.has(l));
   if (specialized) return { kind: "specialized-lane", label: `${specialized} lane`, detail: `Routed to the ${specialized} lane instead of Needs attention.`, tone: "accent" };
@@ -858,13 +867,16 @@ function focusExclusionReason(pr, bucketLabels) {
   return { kind: "outside-queue", label: "Outside queue", detail: "It does not currently match a focused, actionable lane.", tone: "muted" };
 }
 function exReasonRank(kind) {
-  return ["ci-failing", "merge-conflicts", "unresolved-feedback", "held-by-label", "author-response", "readiness-unavailable", "stale-activity", "community-list", "specialized-lane", "stalled-only", "outside-queue"].indexOf(kind);
+  return ["ci-failing", "merge-conflicts", "unresolved-feedback", "held-by-label", "author-response", "labels-unavailable", "readiness-unavailable", "stale-activity", "community-list", "specialized-lane", "stalled-only", "outside-queue"].indexOf(kind);
 }
 
 // A PR with requested changes is waiting on its author, not the focused queue. Once the
 // author pushes a response and it needs re-review, it re-enters under "Re-review needed".
-function isWaitingOnAuthor(bucketLabels) {
-  return bucketLabels.includes("Author response") && !bucketLabels.includes("Re-review needed");
+function isWaitingOnAuthor(bucketLabels, pr = null) {
+  const authorResponse = bucketLabels.includes("Author response") ||
+    (pr?.labelsUnavailable && pr.review.state === "changes_requested");
+  return authorResponse && !bucketLabels.includes("Re-review needed") &&
+    !(pr?.labelsUnavailable && needsReReview(pr));
 }
 function bucketLabelsByPr(buckets) {
   const map = new Map();
