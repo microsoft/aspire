@@ -1,0 +1,65 @@
+{
+  "run_id": 44649632212,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/44649632212",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-20T01:36:18Z",
+  "verdict": "transient-infra",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 22399,
+    "title": "Show relative time in dashboard capture-paused indicators",
+    "author": "MuhammadBilal64",
+    "state": "closed",
+    "head_branch": "fix/22181-pause-relative-time",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/22399",
+    "merged_at": "2026-11-20T00:54:58Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "b89e590b45e8d02b2ff3daf6112f038b7004bdfb",
+    "failed_sha": "71a9d861bc51b6936d2e583724a1da99a48f9442",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "f6af8fcef9ad5419f81bf14cb8fbf79827da6ac7",
+        "message": "Use conventional Redis TLS and non-TLS target ports (#22350) ## Description Enabling TLS currently leaves Redis's primary TLS endpoint on container port 6379 and adds a non-TLS endpoint on 6380, opposite the common convention. Update the primary endpoint to target 6380 and create the secondary non-TLS endpoint on 6379. Redis does not mandate a TLS port; this follows the common 6380 convention. Endpoint names, explicit host-port settings, connection-string selection, and publish behavior are unch",
+        "html_url": "https://github.com/microsoft/aspire/commit/f6af8fcef9ad5419f81bf14cb8fbf79827da6ac7",
+        "pull_request": {
+          "number": 22350,
+          "title": "Use conventional Redis TLS and non-TLS target ports",
+          "url": "https://github.com/microsoft/aspire/pull/22350",
+          "merged_at": "2026-11-20T00:13:33Z"
+        }
+      },
+      {
+        "sha": "71a9d861bc51b6936d2e583724a1da99a48f9442",
+        "message": "Show relative time in dashboard capture-paused indicators (#22399)",
+        "html_url": "https://github.com/microsoft/aspire/commit/71a9d861bc51b6936d2e583724a1da99a48f9442",
+        "pull_request": {
+          "number": 22399,
+          "title": "Show relative time in dashboard capture-paused indicators",
+          "url": "https://github.com/microsoft/aspire/pull/22399",
+          "merged_at": "2026-11-20T00:54:58Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, browser-debugger)",
+      "id": 136007851374,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/44649632212/job/136007851374",
+      "classification": "transient-infra",
+      "reason": "Mocha before-all hook timed out waiting for Blazor resource 'standalone' to reach Running on Windows; no tests ran, matching recorded environment startup timeout.",
+      "failed_steps": [
+        "Run extension E2E tests"
+      ]
+    }
+  ],
+  "failed_tests": [],
+  "causes": [
+    "extension-e2e-windows-blazor-resource-start-timeout"
+  ]
+}
