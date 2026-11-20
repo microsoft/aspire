@@ -162,7 +162,7 @@ public class AzureWebPubSubExtensionsTests(ITestOutputHelper output)
         await ExecuteBeforeStartHooksAsync(app, default);
 
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
-        var handlers = Assert.Single(model.Resources.OfType<AzureProvisioningResource>(), r => r.Name == "abc-handlers");
+        var handlers = Assert.Single(model.Resources.OfType<AzureProvisioningResource>(), r => r.Name == "wps1-abc-handlers");
         var containerApp = (AzureProvisioningResource)serviceA.Resource.GetDeploymentTargetAnnotation()!.DeploymentTarget;
 
         var (wpsManifest, wpsBicep) = await AzureManifestUtils.GetManifestWithBicep(wps.Resource, skipPreparer: true);
@@ -177,6 +177,23 @@ public class AzureWebPubSubExtensionsTests(ITestOutputHelper output)
         await Verify(wpsBicep, "bicep")
             .AppendContentAsFile(handlersBicep, "bicep")
             .AppendContentAsFile(containerAppBicep, "bicep");
+    }
+
+    [Fact]
+    public void EventHandlerHubModulesHaveUniqueNames()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.AddAzureContainerAppEnvironment("env");
+        var serviceA = builder.AddProject<ProjectA>("serviceA", o => o.ExcludeLaunchProfile = true)
+            .WithHttpsEndpoint()
+            .WithExternalHttpEndpoints();
+        builder.AddParameter("wps1-chat-handlers");
+        builder.AddAzureWebPubSub("wps1").AddHub("chat").AddEventHandler($"{serviceA.GetEndpoint("https")}/eventhandler/{{event}}");
+        builder.AddAzureWebPubSub("wps2").AddHub("chat").AddEventHandler($"{serviceA.GetEndpoint("https")}/eventhandler/{{event}}");
+
+        Assert.Equal(
+            ["wps1-chat-handlers-2", "wps2-chat-handlers"],
+            builder.Resources.OfType<AzureProvisioningResource>().Select(r => r.Name).Where(n => n.Contains("-handlers", StringComparison.Ordinal)).Order(StringComparer.Ordinal));
     }
 
     [Theory]
@@ -217,7 +234,7 @@ public class AzureWebPubSubExtensionsTests(ITestOutputHelper output)
 
         // The module's Bicep is cached before deployment targets are prepared, so the dependency on the
         // app must not rely on parameters discovered from that template.
-        var handlersStep = steps.Single(step => step.Name == "provision-abc-handlers");
+        var handlersStep = steps.Single(step => step.Name == "provision-wps1-abc-handlers");
         Assert.Contains($"provision-{deploymentTarget}", handlersStep.DependsOnSteps);
         Assert.Contains("provision-wps1", handlersStep.DependsOnSteps);
     }
@@ -238,7 +255,7 @@ public class AzureWebPubSubExtensionsTests(ITestOutputHelper output)
         await ExecuteBeforeStartHooksAsync(app, default);
 
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
-        var handlers = Assert.Single(model.Resources.OfType<AzureProvisioningResource>(), r => r.Name == "abc-handlers");
+        var handlers = Assert.Single(model.Resources.OfType<AzureProvisioningResource>(), r => r.Name == "wps1-abc-handlers");
         var website = (AzureProvisioningResource)serviceA.Resource.GetDeploymentTargetAnnotation()!.DeploymentTarget;
         var (_, websiteBicep) = await AzureManifestUtils.GetManifestWithBicep(website, skipPreparer: true);
         var (manifest, handlersBicep) = await AzureManifestUtils.GetManifestWithBicep(handlers, skipPreparer: true);
@@ -281,7 +298,7 @@ public class AzureWebPubSubExtensionsTests(ITestOutputHelper output)
         await ExecuteBeforeStartHooksAsync(app, default);
 
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
-        var handlers = Assert.Single(model.Resources.OfType<AzureProvisioningResource>(), r => r.Name == "abc-handlers");
+        var handlers = Assert.Single(model.Resources.OfType<AzureProvisioningResource>(), r => r.Name == "wps1-abc-handlers");
         var (manifest, _) = await AzureManifestUtils.GetManifestWithBicep(handlers, skipPreparer: true);
         Assert.Equal("{frontdoor.outputs.serviceA_endpointUrl}/callbacks/{event}?source=wps", manifest["params"]!["abc_url_0"]!.ToString());
         Assert.Equal([frontDoor.Resource, wps.Resource], handlers.GetAzureReferences().OrderBy(r => r.Name, StringComparer.Ordinal));
@@ -321,7 +338,7 @@ public class AzureWebPubSubExtensionsTests(ITestOutputHelper output)
 
         await ExecuteBeforeStartHooksAsync(app, default);
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
-        var handlers = Assert.Single(model.Resources.OfType<AzureProvisioningResource>(), r => r.Name == "abc-handlers");
+        var handlers = Assert.Single(model.Resources.OfType<AzureProvisioningResource>(), r => r.Name == "wps1-abc-handlers");
         Assert.Equal([first.Resource, wps.Resource], handlers.GetAzureReferences().OrderBy(r => r.Name, StringComparer.Ordinal));
     }
 

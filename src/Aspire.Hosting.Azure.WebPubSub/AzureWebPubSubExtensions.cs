@@ -416,7 +416,16 @@ public static class AzureWebPubSubExtensions
             return;
         }
 
-        var eventHandlersResource = new AzureProvisioningResource($"{hubResource.Name}-handlers", infrastructure =>
+        // Hubs are not resources in the app model, so hubs with the same name on different Web PubSub
+        // services (or an unrelated resource) could otherwise claim the same module name.
+        var baseName = $"{hubResource.Parent.Name}-{hubResource.Name}-handlers";
+        var moduleName = baseName;
+        for (var suffix = 2; builder.ApplicationBuilder.Resources.Any(r => string.Equals(r.Name, moduleName, StringComparison.OrdinalIgnoreCase)); suffix++)
+        {
+            moduleName = $"{baseName}-{suffix.ToString(CultureInfo.InvariantCulture)}";
+        }
+
+        var eventHandlersResource = new AzureProvisioningResource(moduleName, infrastructure =>
         {
             var service = (WebPubSubService)hubResource.Parent.AddAsExistingResource(infrastructure);
             AddHubToInfrastructure(infrastructure, service, hubResource, isPublishMode: true);
