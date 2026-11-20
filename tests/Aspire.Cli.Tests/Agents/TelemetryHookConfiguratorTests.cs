@@ -58,6 +58,7 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
             GetOutcomes(result));
         Assert.True(File.Exists(Path.Combine(home.FullName, ".copilot", "hooks", "aspire-telemetry.json")));
         Assert.True(File.Exists(Path.Combine(home.FullName, ".claude", "settings.json")));
+        Assert.False(Directory.Exists(Path.Combine(home.FullName, ".aspire", "hooks")));
     }
 
     [Fact]
@@ -177,8 +178,27 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var home = workspace.CreateDirectory("home");
         var claude = Directory.CreateDirectory(Path.Combine(home.FullName, ".claude"));
-        await File.WriteAllTextAsync(Path.Combine(claude.FullName, "settings.json"),
-            """{"hooks":{"PostToolUse":[{"matcher":"*","hooks":[{"type":"command","command":"pwsh","args":["-File","old/track-telemetry.ps1"]},{"type":"command","command":"echo keep"}]}]}}""");
+        var legacyHooks = Directory.CreateDirectory(Path.Combine(home.FullName, ".aspire", "hooks"));
+        var legacyShellScript = Path.Combine(legacyHooks.FullName, "track-telemetry.sh");
+        var legacyPowerShellScript = Path.Combine(legacyHooks.FullName, "track-telemetry.ps1");
+        await File.WriteAllTextAsync(legacyShellScript, "existing shell script").DefaultTimeout();
+        await File.WriteAllTextAsync(legacyPowerShellScript, "existing PowerShell script").DefaultTimeout();
+        var settings = new JsonObject
+        {
+            ["hooks"] = new JsonObject
+            {
+                ["PostToolUse"] = new JsonArray(
+                    new JsonObject
+                    {
+                        ["matcher"] = "*",
+                        ["hooks"] = new JsonArray(
+                            new JsonObject { ["type"] = "command", ["command"] = "pwsh", ["args"] = new JsonArray("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", legacyPowerShellScript) },
+                            new JsonObject { ["type"] = "command", ["command"] = "bash", ["args"] = new JsonArray(legacyShellScript) },
+                            new JsonObject { ["type"] = "command", ["command"] = "echo keep" })
+                    })
+            }
+        };
+        await File.WriteAllTextAsync(Path.Combine(claude.FullName, "settings.json"), settings.ToJsonString()).DefaultTimeout();
         var configurator = CreateConfigurator(workspace, home);
 
         await configurator.ConfigureAsync([ClaudeCodeAgentClient.ClientId], CancellationToken.None);
@@ -186,10 +206,39 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
 
         var groups = await ReadClaudePostToolUseAsync(home);
         Assert.Collection(groups,
-            group => Assert.True(GroupContainsCommand(group, "echo keep") && (string?)group!["matcher"] == "*"),
+            group =>
+            {
+                Assert.Equal("*", (string?)group!["matcher"]);
+                var hook = Assert.Single(group["hooks"]!.AsArray());
+                Assert.Equal("echo keep", (string?)hook!["command"]);
+            },
             group => AssertClaudeGroup(group, ClaudeCodeAgentClient.TelemetryHookSkillMatcher, condition: null),
             group => AssertClaudeGroup(group, ClaudeCodeAgentClient.TelemetryHookMcpMatcher, condition: null),
             group => AssertClaudeGroup(group, ClaudeCodeAgentClient.TelemetryHookReadMatcher, ClaudeCodeAgentClient.TelemetryHookReadIf));
+        Assert.Equal("existing shell script", await File.ReadAllTextAsync(legacyShellScript).DefaultTimeout());
+        Assert.Equal("existing PowerShell script", await File.ReadAllTextAsync(legacyPowerShellScript).DefaultTimeout());
+    }
+
+    [Theory]
+    [InlineData("scripts/track-telemetry.sh")]
+    [InlineData("/home/user/.aspire/hooks/track-telemetry.sh.backup")]
+    public async Task ConfigureAsync_PreservesUserScriptThatIsNotLegacyAspireHook(string scriptPath)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var home = workspace.CreateDirectory("home");
+        var claude = Directory.CreateDirectory(Path.Combine(home.FullName, ".claude"));
+        await File.WriteAllTextAsync(Path.Combine(claude.FullName, "settings.json"),
+            $$$"""{"hooks":{"PostToolUse":[{"matcher":"*","hooks":[{"type":"command","command":"bash","args":["{{{scriptPath}}}"]}]}]}}""");
+        var configurator = CreateConfigurator(workspace, home);
+
+        await configurator.ConfigureAsync([ClaudeCodeAgentClient.ClientId], CancellationToken.None);
+
+        var groups = await ReadClaudePostToolUseAsync(home);
+        var userGroup = groups[0]!;
+        Assert.Equal("*", (string?)userGroup["matcher"]);
+        var userHook = Assert.Single(userGroup["hooks"]!.AsArray());
+        Assert.Equal(scriptPath, (string?)userHook!["args"]![0]);
+        Assert.Equal(4, groups.Count);
     }
 
     [Fact]
@@ -421,8 +470,7 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
             workspace.WorkspaceRoot,
             homeDirectory: home);
         var environment = new TestEnvironment(environmentVariables);
-        var installer = new TelemetryHookInstaller(executionContext, NullLogger<TelemetryHookInstaller>.Instance);
-        return new ConfiguratorHarness(new TelemetryHookConfigurator(installer),
+        return new ConfiguratorHarness(new TelemetryHookConfigurator(),
         [
             new CopilotAgentClient(executionContext, environment, NullLogger<CopilotAgentClient>.Instance),
             new ClaudeCodeAgentClient(executionContext, environment, NullLogger<ClaudeCodeAgentClient>.Instance),

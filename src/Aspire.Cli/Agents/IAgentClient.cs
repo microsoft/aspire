@@ -44,8 +44,12 @@ internal interface IAgentClient
         JsonObject config, string configFilePath, bool configureServer, AgentConfigurationScope scope);
 
     // Telemetry hooks are registered once per client, so a selected client covers all of its environments.
-    // False means the client has no verified hook schema, and ConfigureTelemetryHookAsync throws NotSupportedException.
+    // False means the client has no verified hook schema, and GetTelemetryHookConfigPath and
+    // ConfigureTelemetryHookAsync throw NotSupportedException.
     bool SupportsTelemetryHooks { get; }
+
+    // The user-level file that holds this client's Aspire telemetry hook registration.
+    string GetTelemetryHookConfigPath();
 
     Task<TelemetryHookStatus> ConfigureTelemetryHookAsync(CancellationToken cancellationToken);
 }

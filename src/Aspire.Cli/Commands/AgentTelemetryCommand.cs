@@ -172,9 +172,11 @@ internal sealed class AgentTelemetryCommand : BaseCommand
         // sensitive/high-cardinality data into telemetry.
         var tags = CollectValidTags(parseResult);
 
-        // Nothing valid survived validation (for example a newer hook script paired with an older
-        // CLI dropped every field): emit no span rather than a tagless one.
-        if (tags.Count is 0)
+        // Only record an event when its type and the dimension that identifies it both survived
+        // validation. Otherwise a rejected value (for example an unlisted tool forwarded by an Aspire
+        // 13.5 hook script, or a newer event type this CLI does not know) would still be counted as
+        // an Aspire event with only client and timestamp context.
+        if (!HasIdentifyingDimension(tags))
         {
             return;
         }
@@ -207,15 +209,35 @@ internal sealed class AgentTelemetryCommand : BaseCommand
     {
         var tags = new List<(string Name, string Value)>();
 
+        // Skill, tool, and reference values must also be in the catalog. Native hooks classify against the same
+        // catalog, but hook scripts installed by older CLIs forward their own values: Aspire 13.5 scripts
+        // reported any path under a recognized skill directory and any tool with an Aspire MCP prefix.
+        var catalog = AgentTelemetryCatalog.Canonical;
         AddIfValid(tags, TelemetryConstants.Tags.AgentEventType, parseResult.GetValue(_eventTypeOption), static v => s_knownEventTypes.Contains(v, StringComparer.Ordinal));
         AddIfValid(tags, TelemetryConstants.Tags.AgentClientName, parseResult.GetValue(_clientNameOption), static v => IsSafeIdentifier(v, maxLength: 64));
-        AddIfValid(tags, TelemetryConstants.Tags.AgentSessionId, parseResult.GetValue(_sessionIdOption), static v => IsSafeIdentifier(v, maxLength: 128));
-        AddIfValid(tags, TelemetryConstants.Tags.AgentSkillName, parseResult.GetValue(_skillNameOption), static v => IsSafeIdentifier(v, maxLength: 128));
-        AddIfValid(tags, TelemetryConstants.Tags.AgentToolName, parseResult.GetValue(_toolNameOption), static v => IsSafeIdentifier(v, maxLength: 128));
-        AddIfValid(tags, TelemetryConstants.Tags.AgentFileReference, parseResult.GetValue(_fileReferenceOption), IsSafeReference);
+        // Session IDs must be GUIDs, matching the native hook. Aspire 13.5 hook scripts extract the first
+        // "sessionId" anywhere in the payload, so a nested tool-input value could otherwise be forwarded.
+        AddIfValid(tags, TelemetryConstants.Tags.AgentSessionId, parseResult.GetValue(_sessionIdOption), static v => Guid.TryParseExact(v, "D", out _));
+        AddIfValid(tags, TelemetryConstants.Tags.AgentSkillName, parseResult.GetValue(_skillNameOption), v => IsSafeIdentifier(v, maxLength: 128) && catalog.IsKnownSkill(v));
+        AddIfValid(tags, TelemetryConstants.Tags.AgentToolName, parseResult.GetValue(_toolNameOption), v => IsSafeIdentifier(v, maxLength: 128) && catalog.IsKnownMcpTool(v));
+        AddIfValid(tags, TelemetryConstants.Tags.AgentFileReference, parseResult.GetValue(_fileReferenceOption), v => IsSafeReference(v) && catalog.IsKnownReference(v));
         AddIfValid(tags, TelemetryConstants.Tags.AgentEventTimestamp, parseResult.GetValue(_timestampOption), IsValidTimestamp);
 
         return tags;
+    }
+
+    private static bool HasIdentifyingDimension(List<(string Name, string Value)> tags)
+    {
+        var eventType = tags.FirstOrDefault(static tag => tag.Name == TelemetryConstants.Tags.AgentEventType).Value;
+        var requiredTag = eventType switch
+        {
+            AgentTelemetryProtocol.SkillInvocationEventType => TelemetryConstants.Tags.AgentSkillName,
+            AgentTelemetryProtocol.ToolInvocationEventType => TelemetryConstants.Tags.AgentToolName,
+            AgentTelemetryProtocol.ReferenceFileReadEventType => TelemetryConstants.Tags.AgentFileReference,
+            _ => null
+        };
+
+        return requiredTag is not null && tags.Exists(tag => tag.Name == requiredTag);
     }
 
     private static void AddIfValid(List<(string Name, string Value)> tags, string name, string? value, Func<string, bool> isValid)

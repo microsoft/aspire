@@ -107,12 +107,15 @@ internal sealed class ClaudeCodeAgentClient(
 
     public bool SupportsTelemetryHooks => true;
 
+    public string GetTelemetryHookConfigPath()
+        => Path.Combine(ClaudeCodePaths.GetConfigDirectory(context, environment), "settings.json");
+
     public override string ToString() => Id;
 
     public async Task<TelemetryHookStatus> ConfigureTelemetryHookAsync(CancellationToken cancellationToken)
     {
-        var claudeDirectory = ClaudeCodePaths.GetConfigDirectory(context, environment);
-        var settingsPath = Path.Combine(claudeDirectory, "settings.json");
+        var settingsPath = GetTelemetryHookConfigPath();
+        var claudeDirectory = Path.GetDirectoryName(settingsPath)!;
         var edit = new AgentConfiguration();
         byte[]? bytes;
         try
@@ -263,9 +266,7 @@ internal sealed class ClaudeCodeAgentClient(
         {
             return false;
         }
-        if (hook["command"] is JsonValue commandValue
-            && commandValue.TryGetValue<string>(out var command)
-            && ReferencesTelemetryScript(command))
+        if (LegacyTelemetryHook.IsMatch(hook))
         {
             return true;
         }
@@ -284,16 +285,11 @@ internal sealed class ClaudeCodeAgentClient(
                 && values is [var assemblyPath, AgentTelemetryProtocol.AgentCommandName, AgentTelemetryProtocol.TelemetryCommandName, AgentTelemetryProtocol.HookOptionName]
                 && string.Equals(Path.GetFileName(assemblyPath), "aspire.dll", StringComparison.OrdinalIgnoreCase);
 
-            return isDirectAspireInvocation || isManagedAspireInvocation || values.Any(ReferencesTelemetryScript);
+            return isDirectAspireInvocation || isManagedAspireInvocation;
         }
 
         return false;
     }
-
-    private static bool ReferencesTelemetryScript(string? value)
-        => value is not null
-            && (value.Contains(TelemetryHookInstaller.ShellResourceName, StringComparison.OrdinalIgnoreCase)
-                || value.Contains(TelemetryHookInstaller.PowerShellResourceName, StringComparison.OrdinalIgnoreCase));
 
     private string ManagedSettingsDirectory
         => AgentPath.GetManagedSettingsDirectory(context, environment, "ClaudeCode", "claude-code");

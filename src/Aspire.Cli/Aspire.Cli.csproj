@@ -332,12 +332,8 @@
     <EmbeddedResource Include="$(SharedDir)Mcp\Resources\aspire-32.png" Link="Mcp\Resources\aspire-32.png" />
     <EmbeddedResource Include="$(SharedDir)Mcp\Resources\aspire-48.png" Link="Mcp\Resources\aspire-48.png" />
     <EmbeddedResource Include="$(SharedDir)Mcp\Resources\aspire-64.png" Link="Mcp\Resources\aspire-64.png" />
-    <!-- Compatibility hook scripts are refreshed in ~/.aspire/hooks/ during agent init.
-         New PostToolUse registrations execute the CLI directly. -->
-    <EmbeddedResource Include="Agents\Hooks\track-telemetry.sh" LogicalName="track-telemetry.sh">
-      <WithCulture>false</WithCulture>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Agents\Hooks\track-telemetry.ps1" LogicalName="track-telemetry.ps1">
+    <!-- Skill and reference identifiers regenerated deterministically from aspire-skills. -->
+    <EmbeddedResource Include="Agents\Hooks\telemetry-catalog.json" LogicalName="telemetry-catalog.json">
       <WithCulture>false</WithCulture>
     </EmbeddedResource>
   </ItemGroup>

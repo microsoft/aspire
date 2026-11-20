@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Aspire.Cli.Acquisition;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
@@ -33,6 +34,39 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
         
         // Help should return success
         Assert.Equal(CliExitCodes.Success, exitCode);
+    }
+
+    [Fact]
+    public async Task DoctorCommand_Json_IncludesLegacyTelemetryHookGuidance()
+    {
+        using var context = new AgentConfigurationTestContext(outputHelper);
+        await AgentConfigurationTestContext.WriteAsync(
+            Path.Combine(context.CopilotDirectory, "hooks", "aspire-telemetry.json"),
+            """{"version":1,"hooks":{"postToolUse":[{"bash":"bash '/home/user/.aspire/hooks/track-telemetry.sh'"}]}}""");
+        await AgentConfigurationTestContext.WriteAsync(Path.Combine(context.ClaudeDirectory, "settings.json"),
+            """{"hooks":{"PostToolUse":[{"hooks":[{"command":"pwsh","args":["-File","C:\\Users\\user\\.aspire\\hooks\\track-telemetry.ps1"]}]}]}}""");
+
+        using var doc = await RunDoctorJsonAsync(context.Workspace,
+            configureOptions: options =>
+            {
+                options.CliExecutionContextFactory = _ => context.ExecutionContext;
+                options.CliUpdateNotifierFactory = _ => new TestCliUpdateNotifier();
+            },
+            configureServices: services =>
+            {
+                services.AddSingleton<IEnvironment>(context.Environment);
+                services.AddSingleton<IEnvironmentCheck, LegacyTelemetryHookCheck>();
+            });
+
+        var copilot = GetCheckByName(doc, LegacyTelemetryHookCheck.GetCheckName("copilot"));
+        var claude = GetCheckByName(doc, LegacyTelemetryHookCheck.GetCheckName("claude"));
+        var checks = JsonNode.Parse($"[{copilot.GetRawText()},{claude.GetRawText()}]")!.AsArray();
+        foreach (var check in checks)
+        {
+            check!["details"] = Path.GetRelativePath(context.Home.FullName, check["details"]!.GetValue<string>()).Replace('\\', '/');
+        }
+
+        await Verify(checks.ToJsonString(JsonSourceGenerationContext.RelaxedEscaping.Options), "json");
     }
 
     [Fact]

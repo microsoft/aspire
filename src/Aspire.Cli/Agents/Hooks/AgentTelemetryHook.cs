@@ -21,12 +21,11 @@ internal sealed class AgentTelemetryHook(IEnvironment environment)
     internal const int DefaultMaxPayloadCharacters = 64 * 1024;
     internal const int MaximumPayloadCharacters = 1024 * 1024;
     private const string ContinueResponse = """{"continue":true}""";
-    private static readonly string[] s_mcpPrefixes = ["aspire-", "mcp__aspire__", "mcp_aspire_"];
 
-    // Matches the tool names Classify recognizes through s_mcpPrefixes, for example aspire-list_resources
-    // (Copilot), mcp__aspire__list_resources (Claude Code), and mcp_aspire_list_resources (VS Code).
+    // Matches the tool names Classify recognizes through AgentTelemetryCatalog.McpToolPrefixes, for example
+    // aspire-list_resources (Copilot), mcp__aspire__list_resources (Claude Code), and mcp_aspire_list_resources (VS Code).
     // Clients build their hook matchers from this so they cannot drift from the classifier.
-    internal static string McpMatcher => string.Join('|', s_mcpPrefixes.Select(prefix => prefix + ".+"));
+    internal static string McpMatcher => string.Join('|', AgentTelemetryCatalog.McpToolPrefixes.Select(prefix => prefix + ".+"));
 
     internal static (string Command, string[] Args) GetCommand(string mode)
     {
@@ -135,7 +134,7 @@ internal sealed class AgentTelemetryHook(IEnvironment environment)
                 {
                     skill = skill[7..];
                 }
-                if (AgentTelemetryCatalog.Canonical.Skills.Contains(skill))
+                if (AgentTelemetryCatalog.Canonical.IsKnownSkill(skill))
                 {
                     trackedEvent = (AgentTelemetryProtocol.SkillInvocationEventType, AgentTelemetryProtocol.SkillNameOptionName, skill);
                 }
@@ -154,13 +153,13 @@ internal sealed class AgentTelemetryHook(IEnvironment environment)
                     }
                     var skill = segments[i + 1];
                     var relativePath = string.Join('/', segments[(i + 1)..]);
-                    if (AgentTelemetryCatalog.Canonical.Skills.Contains(skill))
+                    if (AgentTelemetryCatalog.Canonical.IsKnownSkill(skill))
                     {
                         if (segments[^1].Equals(SkillFileName, StringComparison.OrdinalIgnoreCase))
                         {
                             trackedEvent = (AgentTelemetryProtocol.SkillInvocationEventType, AgentTelemetryProtocol.SkillNameOptionName, skill);
                         }
-                        else if (AgentTelemetryCatalog.Canonical.References.Contains(relativePath))
+                        else if (AgentTelemetryCatalog.Canonical.IsKnownReference(relativePath))
                         {
                             trackedEvent = (AgentTelemetryProtocol.ReferenceFileReadEventType, AgentTelemetryProtocol.FileReferenceOptionName, relativePath);
                         }
@@ -168,16 +167,9 @@ internal sealed class AgentTelemetryHook(IEnvironment environment)
                     break;
                 }
             }
-            else
+            else if (AgentTelemetryCatalog.Canonical.IsKnownMcpTool(tool))
             {
-                foreach (var prefix in s_mcpPrefixes)
-                {
-                    if (tool.StartsWith(prefix, StringComparison.Ordinal) && AgentTelemetryCatalog.Canonical.Tools.Contains(tool[prefix.Length..]))
-                    {
-                        trackedEvent = (AgentTelemetryProtocol.ToolInvocationEventType, AgentTelemetryProtocol.ToolNameOptionName, tool);
-                        break;
-                    }
-                }
+                trackedEvent = (AgentTelemetryProtocol.ToolInvocationEventType, AgentTelemetryProtocol.ToolNameOptionName, tool);
             }
 
             if (trackedEvent is not { } telemetryEvent)
