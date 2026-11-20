@@ -140,6 +140,51 @@ named artifacts. Each archive can also contain multiple TRX files, including
 different target frameworks. Selection and availability checks use every
 job/artifact expectation; finding one artifact cannot satisfy another.
 
+For Aspire CI's .NET jobs, collection first tries the smaller, TRX-only
+`All-TestResults` artifact, then falls back per job to its diagnostics archive
+when usable, owned reports are unavailable. Both paths share provenance checks
+and resource limits. Coverage is based on available reports, not a manifest of
+expected target frameworks; an entirely absent framework report cannot be
+detected if another usable report for the same job exists.
+
+The separate `Combined TRX report contract (advisory)` job in `ci.yml` downloads
+`All-TestResults` and checks actual TRX paths with the same `CombinedTrxReports`
+matcher. It runs alongside the required Final Results gate, not as its dependency,
+and uses job-level `continue-on-error` so report-contract failures do not fail
+product CI. It runs on main pushes and on PRs whose existing selected test matrix
+includes `Infrastructure.Tests` or `AnalyzeCiFailure.Tests`. That selection
+already uses `eng/github-ci/test-trigger-map.yml` and the affected-project graph;
+there is no separate report-contract path list or selection step. This is
+deliberately coarser than TRX-only changes: other infrastructure changes and
+full-CI selections also run the advisory check. Unrelated PRs selecting neither
+project and release-branch pushes skip it. Artifact publication and test summaries
+are unaffected. The read-only
+`check-combined-reports` command requires each available, unmerged report to
+identify one known producer. Current jobs retain duplicate identities;
+historical jobs provide rerun context without duplicating current job names.
+Unknown or ambiguous paths, unavailable GitHub metadata, and filesystem errors
+fail the check. Known `testresults/merged/merged-*.trx` summary outputs are excluded.
+
+Selective runs without an `All-TestResults` artifact are treated as an empty
+report set, explicitly reporting that no associations were validated.
+This is not an expected-framework inventory, XML validation, or a test-success
+check: failed, crashed, and skipped jobs need not produce reports.
+
+```bash
+./dotnet.sh run --project tools/AnalyzeCiFailure/AnalyzeCiFailure.csproj -- \
+  check-combined-reports --repo microsoft/aspire --run-id RUN_ID \
+  --run-attempt ATTEMPT --results-dir testresults
+```
+
+`Infrastructure.Tests` separately feeds discovered job/artifact templates and
+aggregate download layouts from `run-tests.yml` and `tests.yml` through the real
+consumer. Controlled metadata mutations exercise drift detection. Its synthetic
+report names do not verify the filename emitter in
+`tests/Shared/RepoTesting/Aspire.RepoTesting.targets`; the advisory job
+validates the actual available outputs instead. The selector's existing routing
+tests cover the shared selection policy; they do not substitute for hosted
+execution of the advisory job condition.
+
 Evidence policy is separate from the result format:
 
 | Policy | Download resource limits | Missing or unreadable results |
@@ -149,7 +194,7 @@ Evidence policy is separate from the result format:
 | `RequiredForInterruptedExecution` | Remaining capacity | Test evidence unavailable, including omission due to limits |
 
 These are inherited safety limits, not financial or analysis quotas: at most
-20 selected artifacts, 100 MiB per archive, 1 GiB cumulative downloaded archives,
+20 acquired/attempted artifacts, 100 MiB per archive, 1 GiB cumulative downloaded archives,
 10,000 ZIP entries per archive, and 1 GiB cumulative expanded result data.
 Required evidence is selected first. In the remaining capacity, results needed
 to establish an interrupted execution's outcome take precedence over optional
@@ -163,7 +208,7 @@ and block publication, but successfully captured observations remain in the
 bundle and summary. A malformed file does not discard other files in its archive,
 and conflicting copies exclude that execution rather than unrelated failures.
 Failed downloads and failed extractions consume the same shared budgets as
-successful acquisitions.
+successful acquisitions, including combined-artifact attempts before fallback.
 TRX reports are processed across all selected archives; copied executions are
 deduplicated only within the same producing job and execution ID, with matching
 raw diagnostics. Distinct target-framework executions remain distinct.
@@ -190,8 +235,10 @@ execution errors identify the job, execution and source artifacts. Text stays
 bounded, redacted and inert in workflow logs, and the same failures are captured
 in the collection problems. A setup or unexplained acquisition failure leaves evidence unavailable, never
 complete merely because no reports were read.
-Result-file names in diagnostics are generated safe extraction names, not
-original ZIP-entry paths; the artifact ID identifies the archive to inspect.
+Result-file names in evidence and diagnostics are generated safe extraction
+names, not original ZIP-entry paths; the artifact ID identifies the archive to
+inspect. Validated entry paths are used only during combined-result association,
+never as filesystem destinations.
 
 To adapt collection to another GitHub workflow:
 

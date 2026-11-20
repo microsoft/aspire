@@ -74,9 +74,12 @@ internal static class TestFailureReader
                 throw ArtifactError($"Cannot read test results for artifact {artifactId}: extracted directory '{relativeDirectory}' does not exist.", artifact);
             }
 
-            var files = Directory.GetFiles(directory, artifact.Format == TestArtifactFormat.Trx ? "*.trx" : "*.json")
+            // A combined archive contains reports for multiple jobs. Read only the
+            // filenames assigned to this producer; null means a job-specific archive.
+            var jobResultFilePaths = Directory.GetFiles(directory, artifact.Format == TestArtifactFormat.Trx ? "*.trx" : "*.json")
+                .Where(resultFilePath => artifact.ResultFiles is null || artifact.ResultFiles.Contains(Path.GetFileName(resultFilePath), StringComparer.Ordinal))
                 .Order(StringComparer.Ordinal).ToArray();
-            if (artifact.RequiresResults && files.Length == 0)
+            if (artifact.RequiresResults && jobResultFilePaths.Length == 0)
             {
                 throw ArtifactError(
                     artifact.Format == TestArtifactFormat.Trx
@@ -84,11 +87,11 @@ internal static class TestFailureReader
                     : $"Cannot read Mocha results for artifact {artifactId}: no result file was found in '{relativeDirectory}'.",
                     artifact);
             }
-            if (artifact.Format == TestArtifactFormat.Mocha && files.Length > 1)
+            if (artifact.Format == TestArtifactFormat.Mocha && jobResultFilePaths.Length > 1)
             {
-                throw ArtifactError($"Cannot read Mocha results for artifact {artifactId}: expected at most one JSON result in '{relativeDirectory}', but found {files.Length}.", artifact);
+                throw ArtifactError($"Cannot read Mocha results for artifact {artifactId}: expected at most one JSON result in '{relativeDirectory}', but found {jobResultFilePaths.Length}.", artifact);
             }
-            foreach (var file in files)
+            foreach (var resultFilePath in jobResultFilePaths)
             {
                 try
                 {
@@ -96,7 +99,7 @@ internal static class TestFailureReader
                     {
                         // TRX executionId identifies copied executions; testName retains the exact
                         // data-row identity, e.g. testName="Tests.Method(value: a/b)".
-                        foreach (var test in (TrxReader.DeserializeTrxFile(file)?.Results?.UnitTestResults
+                        foreach (var test in (TrxReader.DeserializeTrxFile(resultFilePath)?.Results?.UnitTestResults
                                               ?? []).Where(test => test.Outcome == "Failed"))
                         {
                             Add(
@@ -110,7 +113,7 @@ internal static class TestFailureReader
                     }
                     else
                     {
-                        var report = MochaReader.Read(file);
+                        var report = MochaReader.Read(resultFilePath);
                         var completed = report.CompletedTests.ToHashSet(StringComparer.Ordinal);
                         foreach (var test in report.Failures)
                         {
@@ -121,7 +124,7 @@ internal static class TestFailureReader
                             {
                                 reportNonTestFailure?.Invoke(
                                     artifact,
-                                    $"job={job.Id} artifact={artifactId} result={relativeDirectory}/{Path.GetFileName(file)}\n" +
+                                    $"job={job.Id} artifact={artifactId} result={relativeDirectory}/{Path.GetFileName(resultFilePath)}\n" +
                                     $"{test.Name}\n{test.ErrorName}: {test.ErrorMessage}\n{test.StackTrace}");
                                 continue;
                             }
@@ -148,7 +151,7 @@ internal static class TestFailureReader
                             new TestResultSource
                             {
                                 ArtifactId = artifactId,
-                                ResultFile = Path.GetFileName(file),
+                                ResultFile = Path.GetFileName(resultFilePath),
                                 Format = artifact.Format,
                                 ExecutionId = execution is { Length: > 0 } ? execution : null,
                             }));
@@ -157,7 +160,7 @@ internal static class TestFailureReader
                 catch (Exception ex) when (ex is XmlException or JsonException or ValidationException or IOException or InvalidOperationException)
                 {
                     var error = ArtifactError(
-                        $"Cannot parse test result '{CiFailureJson.Display(relativeDirectory + "/" + Path.GetFileName(file))}' from artifact {artifactId}: " +
+                        $"Cannot parse test result '{CiFailureJson.Display(relativeDirectory + "/" + Path.GetFileName(resultFilePath))}' from artifact {artifactId}: " +
                         CiFailureJson.Display(DiagnosticTextSanitizer.Sanitize(ex.GetBaseException().Message, limit: 160)),
                         artifact);
                     if (reportProblem is null)

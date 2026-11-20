@@ -1,9 +1,12 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Text.Json.Nodes;
+using System.Globalization;
 using System.Net;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using Aspire.TestTools;
+using static AnalyzeCiFailure.CiFailureJson;
 
 namespace AnalyzeCiFailure;
 
@@ -45,6 +48,36 @@ internal sealed class AnalysisGitHubClient(GitHubApiClient githubApi, Cancellati
         }
 
         return result;
+    }
+
+    // Include passing and historical producers, but retain current-name precedence.
+    // Historical context identifies reports; it never creates actionable failed jobs.
+    internal async Task<TestArtifactExpectation[]> GetTestArtifactExpectationsForRunAsync(
+        string repository, long runId, int runAttempt, JsonArray allJobs, IGitHubWorkflowConventions workflow)
+    {
+        IEnumerable<JsonObject> producerJobs = allJobs.OfType<JsonObject>();
+        if (runAttempt > 1)
+        {
+            JsonArray historicalJobs;
+            try
+            {
+                historicalJobs = await GetRowsAsync($"repos/{repository}/actions/runs/{runId.ToString(CultureInfo.InvariantCulture)}/jobs?filter=all", "jobs");
+                if (historicalJobs.Count == 0 || historicalJobs.Any(job => string.IsNullOrEmpty(Text(Field(job, "name")))))
+                {
+                    throw new ValidationException("Historical job inventory is empty or contains unnamed producers.");
+                }
+            }
+            catch (Exception error) when (error is ValidationException or JsonException or IOException)
+            {
+                throw new ValidationException($"Combined result producer ownership is unavailable: {error.Message}", error);
+            }
+            var currentNames = producerJobs.Select(job => Text(job["name"])).ToHashSet(StringComparer.Ordinal);
+            producerJobs = producerJobs.Concat(historicalJobs.OfType<JsonObject>()
+                .Where(job => !currentNames.Contains(Text(job["name"])))
+                .DistinctBy(job => Text(job["name"]), StringComparer.Ordinal));
+        }
+
+        return producerJobs.SelectMany(job => workflow.DescribeTestArtifacts(job, runAttempt)).ToArray();
     }
 
     internal Task<JsonNode?> SendJsonAsync(HttpMethod method, string endpoint, JsonNode? body, HttpStatusCode expectedStatus)

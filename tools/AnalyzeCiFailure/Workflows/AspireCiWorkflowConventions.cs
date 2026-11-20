@@ -16,6 +16,79 @@ internal sealed partial class AspireCiWorkflowConventions : IGitHubWorkflowConve
 
     public string WorkflowPath => ".github/workflows/ci.yml";
 
+    /// <summary>Gets the runner bucket and test short name used to match a CI job to combined TRX reports.</summary>
+    /// <remarks>
+    /// For example, "Tests / Package tests - Linux / Hosting-2 (8-core-ubuntu-latest)"
+    /// maps to ("ubuntu-latest", "Hosting-2"). Returns null for non-TRX jobs or unsupported job names or runners.
+    /// </remarks>
+    internal static (string RunnerBucket, string TestShortName)? GetTestJobIdentity(TestArtifactExpectation plan)
+    {
+        var match = TestArtifactJobNameRegex().Match(plan.JobName);
+        if (plan.Format != TestArtifactFormat.Trx || !match.Success)
+        {
+            return null;
+        }
+        // tests.yml merges logs-*-ubuntu-latest into ubuntu-latest/, and likewise
+        // for Windows/macOS. Only the aggregate identity uses these buckets;
+        // source artifact names retain full labels such as 8-core-ubuntu-latest.
+        var runner = match.Groups["runner"].Value;
+        var bucket = runner switch
+        {
+            "ubuntu-latest" or "windows-latest" or "macos-latest" => runner,
+            _ when runner.EndsWith("-ubuntu-latest", StringComparison.Ordinal) => "ubuntu-latest",
+            _ when runner.EndsWith("-windows-latest", StringComparison.Ordinal) => "windows-latest",
+            _ when runner.EndsWith("-macos-latest", StringComparison.Ordinal) => "macos-latest",
+            _ => null,
+        };
+        return bucket is not null ? (bucket, match.Groups["short"].Value) : null;
+    }
+
+    /// <summary>Parses a TRX file's relative path inside All-TestResults to identify its producing runner bucket and test short name.</summary>
+    /// <remarks>
+    /// "ubuntu-latest/testresults/Hosting-2_net10.0_20261103065037.trx" maps to ("ubuntu-latest", "Hosting-2", true);
+    /// "ubuntu-latest/testresults/Hosting-2.trx" maps to ("ubuntu-latest", "Hosting-2", false).
+    /// Returns null for an unrecognized entry path. The suffix flag recognizes a filename pattern, not report contents.
+    /// </remarks>
+    internal static (string RunnerBucket, string TestShortName, bool HasFrameworkAndTimestampSuffix)? ParseCombinedTrxEntryPath(string archiveEntryPath)
+    {
+        var match = CombinedReportPathRegex().Match(archiveEntryPath);
+        if (!match.Success)
+        {
+            return null;
+        }
+        var name = match.Groups["name"].Value;
+        // Aspire.RepoTesting.targets emits <short>_<TargetFramework>_<yyyyMMddhhmmss>.trx;
+        // run-tests.yml's direct-assembly steps emit <short>.trx. Parse the framework/timestamp
+        // suffix from the right so '-' and '_' remain part of the full short name.
+        var fileNameWithSuffix = TrxFileNameWithFrameworkAndTimestampRegex().Match(name);
+        return (match.Groups["runner"].Value, fileNameWithSuffix.Success ? fileNameWithSuffix.Groups["short"].Value : name, fileNameWithSuffix.Success);
+    }
+
+    /// <summary>Returns the matching job short-name length for the class-suffix fallback, or zero when unmatched.</summary>
+    /// <remarks>
+    /// For "ubuntu-latest/testresults/Hosting-2-BatchTests.trx", jobs Hosting and Hosting-2
+    /// in the same runner bucket score 7 and 9 respectively. The caller selects the unique longest match.
+    /// </remarks>
+    internal static int GetClassSuffixFallbackMatchLength(TestArtifactExpectation plan, string archiveEntryPath)
+    {
+        var identity = GetTestJobIdentity(plan);
+        var match = CombinedReportPathRegex().Match(archiveEntryPath);
+        if (identity is null || !match.Success || match.Groups["runner"].Value != identity.Value.RunnerBucket)
+        {
+            return 0;
+        }
+        var name = match.Groups["name"].Value;
+        var prefix = identity.Value.TestShortName + "-";
+        if (!name.StartsWith(prefix, StringComparison.Ordinal) || name.Length == prefix.Length)
+        {
+            return 0;
+        }
+        // An underscored suffix may belong to a report with framework/timestamp
+        // fields from an unknown producer (or a malformed report name),
+        // not a class suffix we can trust.
+        return name.AsSpan(prefix.Length).Contains('_') ? 0 : identity.Value.TestShortName.Length;
+    }
+
     public bool IsAggregationJob(JsonObject job)
     {
         if (Text(job["name"]) == FinalResultsJob)
@@ -88,6 +161,12 @@ internal sealed partial class AspireCiWorkflowConventions : IGitHubWorkflowConve
 
     [GeneratedRegex(@"(^| / )(?<short>[^/]+) \((?<runner>[^()]*)\)\z")]
     private static partial Regex TestArtifactJobNameRegex();
+
+    [GeneratedRegex(@"^(?<runner>[^/\\]+)/testresults/(?<name>[^/\\]+)\.trx\z")]
+    private static partial Regex CombinedReportPathRegex();
+
+    [GeneratedRegex(@"^(?<short>.+)_[^_]+_[0-9]{14}\z")]
+    private static partial Regex TrxFileNameWithFrameworkAndTimestampRegex();
 
     [GeneratedRegex(@"(^| / )VS Code extension E2E \((?<os>Windows|Linux), (?<shard>[^()]+)\)\z")]
     private static partial Regex ExtensionArtifactJobNameRegex();

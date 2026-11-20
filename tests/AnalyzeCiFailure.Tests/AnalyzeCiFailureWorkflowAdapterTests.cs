@@ -11,7 +11,45 @@ namespace Infrastructure.Tests;
 public sealed class AnalyzeCiFailureWorkflowAdapterTests
 {
     [Theory]
+    [InlineData("ubuntu-latest/testresults/Infrastructure_net10.0_20260904120100.trx", true)]
+    [InlineData("ubuntu-latest/testresults/Infrastructure.trx", true)]
+    [InlineData("ubuntu-latest/testresults/Infrastructure-BatchTests.trx", true)]
+    [InlineData("windows-latest/testresults/Infrastructure_net10.0_20260904120100.trx", false)]
+    [InlineData("ubuntu-latest/testresults/InfrastructureOther_net10.0_20260904120100.trx", false)]
+    [InlineData("ubuntu-latest/Infrastructure.trx", false)]
+    [InlineData("ubuntu-latest/testresults/nested/Infrastructure.trx", false)]
+    [InlineData("", false)]
+    [InlineData("ubuntu-latest/testresults/", false)]
+    [InlineData("ubuntu-latest/testresults/infrastructure.trx", false)]
+    [InlineData("Ubuntu-latest/testresults/Infrastructure.trx", false)]
+    public void CombinedResultMappingPreservesRunnerAndProducerBoundaries(string entry, bool expectedMatch)
+    {
+        var plan = new TestArtifactExpectation("Tests / No-package tests / Infrastructure (ubuntu-latest)",
+            "logs-Infrastructure-ubuntu-latest", TestArtifactFormat.Trx, TestEvidencePolicy.Required);
+
+        var reports = new CombinedTrxReports([(entry, "00001.trx")], [plan]);
+
+        Assert.Equal(expectedMatch ? ["00001.trx"] : [], reports.GetFileNamesForJob(plan));
+    }
+
+    [Theory]
+    [InlineData("", "Trx")]
+    [InlineData("Build", "Trx")]
+    [InlineData("Tests / No-package tests / Infrastructure (ubuntu-latest)", "Mocha")]
+    public void CombinedResultMappingRejectsUnrecognizedOrNonTrxProducers(string jobName, string format)
+    {
+        var plan = new TestArtifactExpectation(jobName, "results",
+            Enum.Parse<TestArtifactFormat>(format), TestEvidencePolicy.Required);
+
+        var reports = new CombinedTrxReports(
+            [("ubuntu-latest/testresults/Infrastructure.trx", "00001.trx")], [plan]);
+
+        Assert.Empty(reports.GetFileNamesForJob(plan));
+    }
+
+    [Theory]
     [InlineData("Tests / No-package tests / Infrastructure (ubuntu-latest)", false, "logs-Infrastructure-ubuntu-latest", "Trx", "Required")]
+    [InlineData("Tests / No-package tests / Hosting (8-core-ubuntu-latest)", false, "logs-Hosting-8-core-ubuntu-latest", "Trx", "Required")]
     [InlineData("Custom / Other (windows-latest)", true, "logs-Other-windows-latest", "Trx", "Required")]
     [InlineData("Tests / VS Code extension E2E (Linux, debug)", false, "extension-e2e-diagnostics-linux-x64-debug-attempt2", "Mocha", "OptionalDiagnostics")]
     [InlineData("VS Code extension E2E (Windows, browser)", false, "extension-e2e-diagnostics-win-x64-browser-attempt2", "Mocha", "OptionalDiagnostics")]

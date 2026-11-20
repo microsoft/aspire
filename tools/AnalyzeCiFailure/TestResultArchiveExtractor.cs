@@ -16,7 +16,8 @@ internal static class TestResultArchiveExtractor
         long maxExpandedBytes,
         long? expectedBytes,
         string format,
-        Action<int> expandedBytes)
+        Action<int> expandedBytes,
+        Action<string, string>? extractedFile = null)
         => ExtractCore(
             archivePath,
             outputDirectory,
@@ -25,7 +26,8 @@ internal static class TestResultArchiveExtractor
             maxArchiveBytes: 104857600,
             expectedBytes,
             format,
-            expandedBytes);
+            expandedBytes,
+            extractedFile);
 
     internal static long Extract(
         string archivePath,
@@ -35,7 +37,7 @@ internal static class TestResultArchiveExtractor
         long maxArchiveBytes = 104857600,
         long? expectedBytes = null,
         string format = "trx")
-        => ExtractCore(archivePath, outputDirectory, maxEntries, maxExpandedBytes, maxArchiveBytes, expectedBytes, format, expandedBytes: null);
+        => ExtractCore(archivePath, outputDirectory, maxEntries, maxExpandedBytes, maxArchiveBytes, expectedBytes, format, expandedBytes: null, extractedFile: null);
 
     private static long ExtractCore(
         string archivePath,
@@ -45,7 +47,8 @@ internal static class TestResultArchiveExtractor
         long maxArchiveBytes,
         long? expectedBytes,
         string format,
-        Action<int>? expandedBytes)
+        Action<int>? expandedBytes,
+        Action<string, string>? extractedFile)
     {
         if (!(maxEntries > 0 && maxExpandedBytes > 0 && maxArchiveBytes > 0 && expectedBytes is not < 0 && format is "trx" or "mocha"))
         {
@@ -132,6 +135,9 @@ internal static class TestResultArchiveExtractor
                 {
                     throw new ValidationException("archive result data does not match its central directory");
                 }
+                // Preserve the entry path for ownership matching, not filesystem access.
+                // Mappings are usable only if the entire extraction succeeds.
+                extractedFile?.Invoke(name, Path.GetFileName(destination));
             }
             Directory.Move(staging, outputDirectory);
 
