@@ -24,7 +24,7 @@ Tag grouping replaces the separate Tags navigation entry; resources with multipl
 with untagged resources initially listed last. Telemetry sources keep their ungrouped list.
 
 When search and filters are clear, drag a group's header handle to move the entire group, or focus its
-handle and press **Alt+Up** or **Alt+Down**. Group moves are saved per grouping mode in browser local storage.
+handle and press **Alt+Up** or **Alt+Down**. Group moves are saved per grouping mode in protected browser local storage.
 New groups follow the default sort. A saved move places the group after its previous neighbor at the drop
 position, or before its next neighbor if the previous one is missing.
 
@@ -32,10 +32,10 @@ With grouping set to **None** and no search or filters active, drag a resource's
 before or after a sibling. Alternatively, focus the handle and press **Alt+Up** or **Alt+Down**.
 Children stay under their parent. By default, resources are sorted by AppHost display priority, then by type
 and name for resources without a priority, including resources discovered after the dashboard opens.
-Only custom moves are saved in browser local storage. The dashboard applies them to the current default order,
+Only custom moves are saved in protected browser local storage. The dashboard applies them to the current default order,
 so new resources are still sorted normally. A move places the resource after its previous neighbor at the
 drop position. If that neighbor is missing or no longer a sibling, the move falls back to placing it before
-its next neighbor.
+its next neighbor. If the dashboard's data protection key changes, saved moves fall back to the default order.
 Persistent containers show a pin after their state and resource type.
 
 Resource rows are muted when they do not apply to the current tab or have not sent that type of

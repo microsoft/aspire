@@ -77,9 +77,9 @@ avoiding a temporary argument array in C#. Polyglot SDKs accept an array of tags
 It uses the reserved trait `Aspire_Tag`, which is not dashboard-specific: it also
 appears as the `resource.trait.Aspire_Tag` property in `aspire describe --format json`.
 These tags participate in dashboard tag grouping but cannot be removed in the
-dashboard. User-added tags are stored separately in browser local storage, so
-restarting an AppHost does not lose customizations or copy declared tags from a
-different run.
+dashboard. User-added tags and metric pins are stored in protected browser local storage,
+independently of individual runs. The dashboard ignores old plaintext values and replaces
+them with protected values on the next change. AppHost-declared tags are unaffected.
 
 `WithDisplayOrder` stores its own annotation rather than a trait, and is transported
 as the `resource.displayOrder` resource property; repeated calls replace the previous
@@ -89,8 +89,9 @@ and resources without one are treated as 0, so a negative value moves a resource
 Resources with the same nonzero order are displayed by name. Resources with an order of 0,
 whether declared or not, are sorted by resource type and name, including resources discovered
 after the dashboard opens. Drag-and-drop moves are replayed over that default order.
-Resource moves and group moves are saved separately in browser local storage per application,
-independently of the run database. A move stores the neighbors at the drop position. Replay places the
+Resource moves and group moves are saved separately in protected browser local storage per application,
+independently of the run database. If the dashboard can no longer decrypt the saved moves, it uses the default
+order. A move stores the neighbors at the drop position. Replay places the
 item after its previous neighbor, falling back to placing it before its next neighbor if the previous
 neighbor is missing or no longer a sibling.
 

@@ -8,7 +8,7 @@ using Microsoft.Extensions.Options;
 namespace Aspire.Dashboard.Model;
 
 /// <summary>
-/// Stores explicit resource and group moves per application in browser local storage.
+/// Stores explicit resource and group moves per application in protected browser local storage.
 /// </summary>
 public sealed class ResourceOrderStore
 {
@@ -18,9 +18,9 @@ public sealed class ResourceOrderStore
     public ResourceOrderStore(ILocalStorage localStorage, LocalStorageLocks locks, TimeProvider timeProvider, IOptions<DashboardOptions> options, ILogger<ResourceOrderStore> logger)
     {
         var applicationName = options.Value.GetApplicationNameOrDefault();
-        _resourceOrder = new(localStorage, locks, timeProvider, BrowserStorageKeys.ResourceOrderKey(applicationName), logger,
+        _resourceOrder = new(localStorage, locks, timeProvider, BrowserStorageKeys.ResourceOrderKey(applicationName), logger, protect: true,
             NormalizeMoves, (x, y) => x.SequenceEqual(y), () => Changed?.Invoke());
-        _groupOrder = new(localStorage, locks, timeProvider, BrowserStorageKeys.GroupOrderKey(applicationName), logger,
+        _groupOrder = new(localStorage, locks, timeProvider, BrowserStorageKeys.GroupOrderKey(applicationName), logger, protect: true,
             NormalizeGroupOrder, (x, y) => x.Count == y.Count && x.All(pair => y.TryGetValue(pair.Key, out var moves) && pair.Value.SequenceEqual(moves)),
             () => Changed?.Invoke());
     }

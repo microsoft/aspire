@@ -37,9 +37,7 @@ public sealed class MetricPinStoreTests
         store.SetPinned(s_cpu, ["api"], pinned: true);
         store.SetPinned(s_duration, ["api"], pinned: false);
 
-        Assert.Equal(
-            """[{"resourceName":"api","meterName":"System.Runtime","instrumentName":"dotnet.gc.heap.total_allocated"},{"resourceName":"api","meterName":"System.Runtime","instrumentName":"dotnet.process.cpu.time"}]""",
-            _browser.Items[s_storageKey]);
+        Assert.True((await _browser.Storage.GetUnprotectedAsync<List<MetricPin>>(s_storageKey)).InvalidValue);
 
         // A new store reads the saved pins, as a new circuit does after a refresh or a restart.
         store = await CreateLoadedStoreAsync();
@@ -144,12 +142,24 @@ public sealed class MetricPinStoreTests
     }
 
     [Fact]
+    public async Task Load_IgnoresPlaintextPinsUntilTheNextChange()
+    {
+        await _browser.Storage.SetUnprotectedAsync<List<MetricPin>>(s_storageKey, [Pin("api", s_heap)]);
+        var plaintext = _browser.Items[s_storageKey];
+        var store = await CreateLoadedStoreAsync();
+        Assert.Empty(store.GetPins());
+        Assert.Equal(plaintext, _browser.Items[s_storageKey]);
+
+        store.SetPinned(s_cpu, ["api"], pinned: true);
+
+        Assert.Equal([Pin("api", s_cpu)], (await CreateLoadedStoreAsync()).GetPins());
+        Assert.Equal([s_storageKey], _browser.Items.Keys);
+    }
+
+    [Fact]
     public async Task Load_DropsPinsWithoutAResource()
     {
-        // Pins saved before they were scoped to resources have no resource name, so they can't be attributed.
-        _browser.Items[s_storageKey] =
-            """[{"meterName":"System.Runtime","instrumentName":"dotnet.gc.heap.total_allocated"},{"resourceName":"api","meterName":"System.Runtime","instrumentName":"dotnet.process.cpu.time"}]""";
-
+        await _browser.Storage.SetAsync<List<MetricPin>>(s_storageKey, [Pin("", s_heap), Pin("api", s_cpu)]);
         var store = await CreateLoadedStoreAsync();
 
         Assert.Equal([Pin("api", s_cpu)], store.GetPins());

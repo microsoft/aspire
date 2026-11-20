@@ -19,7 +19,7 @@ namespace Aspire.Dashboard.Model;
 /// share them and they stay valid when replicas get new instance names.
 /// </para>
 /// <para>
-/// Pins describe the application rather than a single run, so they're kept in the browser's local storage under a key
+/// Pins describe the application rather than a single run, so they're kept in protected browser local storage under a key
 /// scoped to the application name. The store is scoped to a circuit. Reads are synchronous and return nothing until
 /// <see cref="EnsureLoadedAsync"/> has read the stored pins, which raises <see cref="Changed"/>. Changes are merged
 /// with pins saved by other tabs of the same browser rather than replacing them.
@@ -31,7 +31,7 @@ public sealed class MetricPinStore
 
     public MetricPinStore(ILocalStorage localStorage, LocalStorageLocks locks, TimeProvider timeProvider, IOptions<DashboardOptions> options, ILogger<MetricPinStore> logger)
     {
-        _setting = new(localStorage, locks, timeProvider, BrowserStorageKeys.MetricPinsKey(options.Value.GetApplicationNameOrDefault()), logger,
+        _setting = new(localStorage, locks, timeProvider, BrowserStorageKeys.MetricPinsKey(options.Value.GetApplicationNameOrDefault()), logger, protect: true,
             NormalizePins, (x, y) => x.SequenceEqual(y), () => Changed?.Invoke());
     }
 
@@ -103,9 +103,7 @@ public sealed class MetricPinStore
         return true;
     }
 
-    // Stored pins can be edited in the browser, so drop incomplete and repeated ones. Pins saved before they were
-    // scoped to resources, such as [{"meterName":"System.Runtime","instrumentName":"dotnet.gc.heap.total_allocated"}],
-    // have no resource name and are dropped too: they can't be attributed to the resources they were meant for.
+    // Drop incomplete and repeated pins. A pin without a resource name can't be attributed to a resource.
     private static List<MetricPin> NormalizePins(List<MetricPin>? stored)
     {
         var pins = new List<MetricPin>();

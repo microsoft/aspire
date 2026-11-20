@@ -36,7 +36,7 @@ internal sealed class InMemoryBrowserLocalStorage
     }
 
     /// <summary>
-    /// Gets the items in local storage, as JSON keyed by storage key.
+    /// Gets the raw items in local storage, keyed by storage key.
     /// </summary>
     public Dictionary<string, string> Items { get; } = new(StringComparer.Ordinal);
 
@@ -54,19 +54,17 @@ internal sealed class InMemoryBrowserLocalStorage
     public Func<Task>? OnAfterReadAsync { get; set; }
 
     /// <summary>
-    /// Waits until a key has a value, for saves that are retried after a delay.
+    /// Waits until a protected value matches, for saves that are retried after a delay.
     /// </summary>
-    public async Task WaitForItemAsync(string key, string expectedJson)
+    public async Task WaitForProtectedItemAsync<TValue>(string key, Func<TValue, bool> matches) where TValue : class
     {
         using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
         while (true)
         {
-            lock (Items)
+            var result = await Storage.GetAsync<TValue>(key);
+            if (result.Success && result.Value is { } value && matches(value))
             {
-                if (Items.TryGetValue(key, out var json) && json == expectedJson)
-                {
-                    return;
-                }
+                return;
             }
             await Task.Delay(TimeSpan.FromMilliseconds(50), cts.Token);
         }
@@ -96,23 +94,19 @@ internal sealed class InMemoryBrowserLocalStorage
 
     private sealed class DelayedReadLocalStorage(ILocalStorage inner, InMemoryBrowserLocalStorage owner) : ILocalStorage
     {
-        public async Task<StorageResult<TValue>> GetUnprotectedAsync<TValue>(string key)
+        public Task<StorageResult<TValue>> GetUnprotectedAsync<TValue>(string key) => inner.GetUnprotectedAsync<TValue>(key);
+
+        public Task SetUnprotectedAsync<TValue>(string key, TValue value) => inner.SetUnprotectedAsync(key, value);
+
+        public async Task<StorageResult<TValue>> GetAsync<TValue>(string key)
         {
-            var result = await inner.GetUnprotectedAsync<TValue>(key);
+            var result = await inner.GetAsync<TValue>(key);
             if (owner.OnAfterReadAsync is { } afterRead)
             {
                 await afterRead();
             }
             return result;
         }
-
-        public Task SetUnprotectedAsync<TValue>(string key, TValue value) => inner.SetUnprotectedAsync(key, value);
-
-        public Task<StorageResult<string>> GetRawUnprotectedAsync(string key) => inner.GetRawUnprotectedAsync(key);
-
-        public Task SetRawUnprotectedAsync(string key, string value) => inner.SetRawUnprotectedAsync(key, value);
-
-        public Task<StorageResult<TValue>> GetAsync<TValue>(string key) => inner.GetAsync<TValue>(key);
 
         public Task SetAsync<TValue>(string key, TValue value) => inner.SetAsync(key, value);
     }

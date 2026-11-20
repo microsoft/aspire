@@ -110,7 +110,7 @@ public sealed class ResourceTagStoreTests
         store.AddTag("worker", "backend");
         store.RemoveTag("api", "core");
 
-        Assert.Equal("""{"api":["backend"],"worker":["backend"]}""", _browser.Items[s_storageKey]);
+        Assert.True((await _browser.Storage.GetUnprotectedAsync<Dictionary<string, List<string>>>(s_storageKey)).InvalidValue);
 
         // A new store reads the saved tags, as a new circuit does after a refresh or a restart.
         var reloadedStore = CreateStore();
@@ -156,9 +156,11 @@ public sealed class ResourceTagStoreTests
         tabB.AddTag("worker", "BACKEND");
         tabB.RemoveTag("cache", "data");
 
-        Assert.Equal("""{"api":["backend"],"worker":["backend"]}""", _browser.Items[s_storageKey]);
         Assert.Equal(["backend"], tabB.GetTags("api"));
-        Assert.Equal(["backend"], tabB.GetTags("worker"));
+        var saved = await CreateLoadedStoreAsync();
+        Assert.Equal(["api", "worker"], saved.GetTagsByResource().Keys.Order(StringComparer.Ordinal));
+        Assert.Equal(["backend"], saved.GetTags("api"));
+        Assert.Equal(["backend"], saved.GetTags("worker"));
         Assert.Equal(3, tabBChanges);
     }
 
@@ -178,7 +180,8 @@ public sealed class ResourceTagStoreTests
         // Tab B's save waits for tab A's, then reads what tab A saved instead of the value both tabs started from.
         Assert.False(_browser.Items.ContainsKey(s_storageKey));
         releaseTabA.SetResult();
-        await _browser.WaitForItemAsync(s_storageKey, """{"api":["backend"],"worker":["db"]}""");
+        await _browser.WaitForProtectedItemAsync<Dictionary<string, List<string>>>(s_storageKey,
+            tags => HasTags(tags, "api", "backend") && HasTags(tags, "worker", "db"));
         await AsyncTestHelpers.AssertIsTrueRetryAsync(
             () => tabB.GetTags("api").SequenceEqual(["backend"]),
             "Tab B should adopt the saved tags.").DefaultTimeout();
@@ -198,7 +201,8 @@ public sealed class ResourceTagStoreTests
         _browser.OnAfterReadAsync = null;
 
         reloadedStore.AddTag("worker", "db");
-        Assert.Equal("""{"api":["backend"],"worker":["db"]}""", _browser.Items[s_storageKey]);
+        await _browser.WaitForProtectedItemAsync<Dictionary<string, List<string>>>(s_storageKey,
+            tags => HasTags(tags, "api", "backend") && HasTags(tags, "worker", "db"));
 
         // The load's older value must not replace the saved one in memory.
         releaseLoad.SetResult();
@@ -212,6 +216,7 @@ public sealed class ResourceTagStoreTests
     {
         var store = await CreateLoadedStoreAsync();
         store.AddTag("api", "backend");
+        var saved = _browser.Items[s_storageKey];
 
         _browser.FailReads = true;
         var reloadedStore = CreateStore();
@@ -220,14 +225,15 @@ public sealed class ResourceTagStoreTests
 
         // The change is kept in memory, and the tags that couldn't be read aren't replaced.
         Assert.Equal(["core"], reloadedStore.GetTags("worker"));
-        Assert.Equal("""{"api":["backend"]}""", _browser.Items[s_storageKey]);
+        Assert.Equal(saved, _browser.Items[s_storageKey]);
 
         // Once storage can be read, loading again reads the stored tags, and the change is saved along with them.
         _browser.FailReads = false;
         await reloadedStore.EnsureLoadedAsync().DefaultTimeout();
         Assert.Equal(["backend"], reloadedStore.GetTags("api"));
         _timeProvider.Advance(TimeSpan.FromSeconds(1));
-        await _browser.WaitForItemAsync(s_storageKey, """{"api":["backend"],"worker":["core"]}""");
+        await _browser.WaitForProtectedItemAsync<Dictionary<string, List<string>>>(s_storageKey,
+            tags => HasTags(tags, "api", "backend") && HasTags(tags, "worker", "core"));
     }
 
     [Fact]
@@ -235,15 +241,17 @@ public sealed class ResourceTagStoreTests
     {
         var store = await CreateLoadedStoreAsync();
         store.AddTag("api", "backend");
+        var saved = _browser.Items[s_storageKey];
 
         // A brief disconnect while the only change is made: the change is saved once storage is back, with no other change.
         _browser.FailReads = true;
         store.AddTag("api", "core");
-        Assert.Equal("""{"api":["backend"]}""", _browser.Items[s_storageKey]);
+        Assert.Equal(saved, _browser.Items[s_storageKey]);
 
         _browser.FailReads = false;
         _timeProvider.Advance(TimeSpan.FromSeconds(1));
-        await _browser.WaitForItemAsync(s_storageKey, """{"api":["backend","core"]}""");
+        await _browser.WaitForProtectedItemAsync<Dictionary<string, List<string>>>(s_storageKey,
+            tags => HasTags(tags, "api", "backend", "core"));
     }
 
     [Fact]
@@ -259,35 +267,20 @@ public sealed class ResourceTagStoreTests
         Assert.Equal([s_storageKey], _browser.Items.Keys);
     }
 
-    [Fact]
-    public async Task Tags_MalformedStoredValueIsKeptAndReplaced()
+    [Theory]
+    [InlineData("""{"api":["backend"]}""")]
+    [InlineData("""{"api":["backend"]""")]
+    public async Task Tags_UnprotectedValueIsIgnoredUntilTheNextChange(string plaintext)
     {
-        // Not valid JSON, for example a value that was cut short, but still holding tags someone could recover.
-        const string malformedValue = """{"api":["backend"]""";
-        _browser.Items[s_storageKey] = malformedValue;
+        _browser.Items[s_storageKey] = plaintext;
         var store = await CreateLoadedStoreAsync();
-
-        store.AddTag("api", "core");
-
-        Assert.Equal("""{"api":["core"]}""", _browser.Items[s_storageKey]);
-        Assert.Equal(malformedValue, _browser.Items[$"{s_storageKey}_Unreadable"]);
-    }
-
-    [Fact]
-    public async Task Tags_InvalidStoredValueIsKeptAndReplaced()
-    {
-        const string invalidValue = """{"api":"backend"}""";
-        _browser.Items[s_storageKey] = invalidValue;
-        var store = CreateStore();
-
-        await store.EnsureLoadedAsync().DefaultTimeout();
         Assert.Empty(store.GetAllTags());
+        Assert.Equal(plaintext, _browser.Items[s_storageKey]);
 
-        // A value that can't be read never will be, so it's kept aside rather than preventing tags from being saved.
         store.AddTag("api", "core");
-        Assert.Equal(["core"], store.GetTags("api"));
-        Assert.Equal("""{"api":["core"]}""", _browser.Items[s_storageKey]);
-        Assert.Equal(invalidValue, _browser.Items[$"{s_storageKey}_Unreadable"]);
+
+        Assert.Equal(["core"], (await CreateLoadedStoreAsync()).GetTags("api"));
+        Assert.Equal([s_storageKey], _browser.Items.Keys);
     }
 
     [Theory]
@@ -307,6 +300,9 @@ public sealed class ResourceTagStoreTests
 
         Assert.Equal(new string('a', ResourceTagStore.MaxTagLength), normalized);
     }
+
+    private static bool HasTags(Dictionary<string, List<string>> tags, string resource, params string[] expected) =>
+        tags.TryGetValue(resource, out var saved) && saved.SequenceEqual(expected);
 
     private ResourceTagStore CreateStore() =>
         new(_browser.Storage, _locks, _timeProvider, Options.Create(new DashboardOptions { ApplicationName = "TestApp" }), NullLogger<ResourceTagStore>.Instance);

@@ -7,6 +7,7 @@ namespace Aspire.Dashboard.Components.Tests.Shared;
 
 public sealed class TestLocalStorage : ILocalStorage
 {
+    private readonly Dictionary<string, object?> _protectedValues = new(StringComparer.Ordinal);
     private readonly Dictionary<string, object?> _unprotectedValues = new(StringComparer.Ordinal);
 
     public Func<string, Task>? OnBeforeGetUnprotectedAsync { get; set; }
@@ -24,8 +25,20 @@ public sealed class TestLocalStorage : ILocalStorage
         if (OnGetAsync is { } callback)
         {
             var (success, value) = callback(key);
-            return Task.FromResult(new StorageResult<T>(success: success, value: (T)(value ?? default(T))!));
+            if (success)
+            {
+                return Task.FromResult(new StorageResult<T>(success: true, value: (T)(value ?? default(T))!));
+            }
         }
+
+        lock (_protectedValues)
+        {
+            if (_protectedValues.TryGetValue(key, out var savedValue) && savedValue is T typedValue)
+            {
+                return Task.FromResult(new StorageResult<T>(success: true, value: typedValue));
+            }
+        }
+
         return Task.FromResult(new StorageResult<T>(success: false, value: default));
     }
 
@@ -65,32 +78,13 @@ public sealed class TestLocalStorage : ILocalStorage
         return new StorageResult<T>(success: false, value: default);
     }
 
-    public Task<StorageResult<string>> GetRawUnprotectedAsync(string key)
-    {
-        if (IsUnprotectedReadFailed?.Invoke(key) == true)
-        {
-            return Task.FromResult(new StorageResult<string>(success: false, value: null) { ReadFailed = true });
-        }
-
-        lock (_unprotectedValues)
-        {
-            return Task.FromResult(_unprotectedValues.TryGetValue(key, out var savedValue) && savedValue is string text
-                ? new StorageResult<string>(success: true, value: text)
-                : new StorageResult<string>(success: false, value: null));
-        }
-    }
-
-    public Task SetRawUnprotectedAsync(string key, string value)
-    {
-        lock (_unprotectedValues)
-        {
-            _unprotectedValues[key] = value;
-        }
-        return Task.CompletedTask;
-    }
-
     public Task SetAsync<T>(string key, T value)
     {
+        lock (_protectedValues)
+        {
+            _protectedValues[key] = value;
+        }
+
         return Task.CompletedTask;
     }
 
