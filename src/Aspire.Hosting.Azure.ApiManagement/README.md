@@ -49,7 +49,21 @@ const apim = await builder.addAzureApiManagement("apim", {
 await apim.addApi("catalog-api", catalog, "catalog");
 ```
 
-The compute-targeted `AddApi` overload creates an API, an APIM backend, and root and catch-all operations for supported HTTP methods that forward requests to the deployed endpoint of the target resource. Both the API suffix itself (for example, `/catalog`) and its descendants are forwarded. APIs require an APIM subscription key by default. Set `subscriptionRequired: false` only when the API should be callable without one.
+The compute-targeted `AddApi` overload creates an API, an APIM backend, and root and catch-all operations for supported HTTP methods that forward requests to the deployed endpoint of the target resource. Both the API suffix itself (for example, `/catalog`) and its descendants are forwarded. APIs require an APIM subscription key by default. Set `SubscriptionRequired = false` in `AzureApiManagementApiOptions` only when the API should be callable without one. The same options type configures the optional `DisplayName` on both `AddApi` overloads and `AddOpenAIApi`.
+
+```csharp
+apim.AddApi("public-api", catalog, "public", new AzureApiManagementApiOptions
+{
+    DisplayName = "Public catalog",
+    SubscriptionRequired = false,
+});
+```
+
+```typescript
+await apim.addApi("public-api", catalog, "public", {
+    options: { displayName: "Public catalog", subscriptionRequired: false },
+});
+```
 
 Explicit operations must have unique HTTP method and URL-template combinations, including templates that differ only in parameter names. Routes reserved for generated root and catch-all operations are rejected unless an OpenAPI import is configured for the API, regardless of whether `WithOpenApiDocument` is called before or after `AddOperation`.
 
@@ -186,8 +200,8 @@ var backend = apim.AddBackend(
         {
             Name = "serverErrors",
             FailureCount = 3,
-            FailureIntervalSeconds = 30,
-            TripDurationSeconds = 60,
+            FailureInterval = TimeSpan.FromSeconds(30),
+            TripDuration = TimeSpan.FromMinutes(1),
             StatusCodeRanges = [new(500, 599)],
         },
     });
@@ -195,6 +209,8 @@ var backend = apim.AddBackend(
 apim.AddApi("custom-api", path: "custom")
     .WithBackend(backend);
 ```
+
+Circuit-breaker durations must be whole seconds and at least one second; both default to 10 seconds. In TypeScript, `failureInterval` and `tripDuration` are expressed in milliseconds (for example, `30_000` and `60_000`).
 
 Generic backends do not infer Azure role assignments because the required role is service-specific. Configure permissions for `apim.Resource.Identity` on the target resource when using managed identity.
 

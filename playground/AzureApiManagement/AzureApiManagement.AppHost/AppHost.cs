@@ -71,8 +71,11 @@ var catalogApi = apim.AddApi(
     "catalog-api",
     catalog,
     path: "catalog",
-    displayName: "Catalog API",
-    subscriptionRequired: false)
+    options: new()
+    {
+        DisplayName = "Catalog API",
+        SubscriptionRequired = false,
+    })
     .WithInboundPolicy(
         """<rate-limit-by-key calls="100" renewal-period="60" counter-key="@(context.Request.IpAddress)" />""");
 

@@ -20,9 +20,10 @@ public sealed class AzureApiManagementCircuitBreakerOptions
     public int FailureCount { get; init; } = 1;
 
     /// <summary>
-    /// Gets or sets the interval, in seconds, during which failures are counted.
+    /// Gets or sets the interval during which failures are counted.
     /// </summary>
-    public int FailureIntervalSeconds { get; init; } = 10;
+    /// <remarks>Must be a whole number of seconds and at least one second. Defaults to 10 seconds.</remarks>
+    public TimeSpan FailureInterval { get; init; } = TimeSpan.FromSeconds(10);
 
     /// <summary>
     /// Gets or sets the HTTP status-code ranges treated as failures.
@@ -30,9 +31,10 @@ public sealed class AzureApiManagementCircuitBreakerOptions
     public AzureApiManagementStatusCodeRange[] StatusCodeRanges { get; init; } = [];
 
     /// <summary>
-    /// Gets or sets how many seconds the circuit remains open.
+    /// Gets or sets how long the circuit remains open.
     /// </summary>
-    public int TripDurationSeconds { get; init; } = 10;
+    /// <remarks>Must be a whole number of seconds and at least one second. Defaults to 10 seconds.</remarks>
+    public TimeSpan TripDuration { get; init; } = TimeSpan.FromSeconds(10);
 
     /// <summary>
     /// Gets or sets whether API Management honors the backend's <c>Retry-After</c> header.
