@@ -92,13 +92,24 @@ public sealed class AppHostInfoResolverTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var projectFile = CreateProjectFile(workspace);
+        var assetsFile = Path.Combine(workspace.WorkspaceRoot.FullName, "obj", "project.assets.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(assetsFile)!);
+        await File.WriteAllTextAsync(assetsFile, """
+            {
+              "libraries": {
+                "Aspire.Hosting/17.0.3": { "type": "package" }
+              }
+            }
+            """);
         var runner = new TestDotNetCliRunner
         {
-            GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) => (0, JsonDocument.Parse("""
+            GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) => (0, JsonDocument.Parse($$"""
                 {
                   "Properties": {
                     "IsAspireHost": "true",
-                    "AspireHostingSDKVersion": "17.0.3"
+                    "AspireHostingSDKVersion": "13.5.0",
+                    "_AspireAppHostPackageVersion": "13.6.0",
+                    "ProjectAssetsFile": {{JsonSerializer.Serialize(assetsFile)}}
                   },
                   "Items": {
                     "PackageReference": [
@@ -125,7 +136,10 @@ public sealed class AppHostInfoResolverTests(ITestOutputHelper outputHelper)
         {
             GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) => (0, JsonDocument.Parse("""
                 {
-                  "Properties": { "IsAspireHost": "true" },
+                  "Properties": {
+                    "IsAspireHost": "true",
+                    "AspireHostingSDKVersion": "13.5.0"
+                  },
                   "Items": {
                     "PackageReference": [
                       { "Identity": "Aspire.Hosting.AppHost", "Version": "17.*" }
@@ -140,6 +154,78 @@ public sealed class AppHostInfoResolverTests(ITestOutputHelper outputHelper)
 
         Assert.True(info.IsAspireHost);
         Assert.Equal("17.*", info.AspireHostingVersion);
+    }
+
+    [Fact]
+    public async Task GetAppHostInfoAsync_IgnoresOrphanCentralPackageVersion()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var projectFile = CreateProjectFile(workspace);
+        var runner = new TestDotNetCliRunner
+        {
+            GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) => (0, JsonDocument.Parse("""
+                {
+                  "Properties": {
+                    "IsAspireHost": "true",
+                    "AspireHostingSDKVersion": "17.1.0"
+                  },
+                  "Items": {
+                    "PackageReference": [
+                      { "Identity": "Some.Other.Package", "Version": "1.0.0" }
+                    ],
+                    "PackageVersion": [
+                      { "Identity": "Aspire.Hosting.AppHost", "Version": "9.0.0" }
+                    ]
+                  }
+                }
+                """)),
+        };
+        var resolver = new AppHostInfoResolver(runner, new NullAppHostInfoDiskCache());
+
+        var info = await resolver.GetAppHostInfoAsync(projectFile, CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal("17.1.0", info.AspireHostingVersion);
+    }
+
+    [Fact]
+    public async Task GetAppHostInfoAsync_RefreshesWhenProjectAssetsChange()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var projectFile = CreateProjectFile(workspace);
+        var assetsFile = Path.Combine(workspace.WorkspaceRoot.FullName, "obj", "project.assets.json");
+        var msbuildCalls = 0;
+        var runner = new TestDotNetCliRunner
+        {
+            GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) =>
+            {
+                var version = Interlocked.Increment(ref msbuildCalls) == 1 ? "13.5.0" : "13.6.0";
+                return (0, JsonDocument.Parse($$"""
+                    {
+                      "Properties": {
+                        "IsAspireHost": "true",
+                        "_AspireAppHostPackageVersion": "{{version}}"
+                      },
+                      "Items": {}
+                    }
+                    """));
+            },
+        };
+        var diskCache = new TestAppHostInfoDiskCache
+        {
+            GetCacheKeyCallback = _ => File.Exists(assetsFile)
+                ? File.GetLastWriteTimeUtc(assetsFile).Ticks.ToString()
+                : "not-restored",
+        };
+        var resolver = new AppHostInfoResolver(runner, diskCache);
+
+        var unrestored = await resolver.GetAppHostInfoAsync(projectFile, CancellationToken.None).DefaultTimeout();
+        Directory.CreateDirectory(Path.GetDirectoryName(assetsFile)!);
+        await File.WriteAllTextAsync(assetsFile, "{}");
+        var restored = await resolver.GetAppHostInfoAsync(projectFile, CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal("13.5.0", unrestored.AspireHostingVersion);
+        Assert.Equal("13.6.0", restored.AspireHostingVersion);
+        Assert.Equal(2, msbuildCalls);
     }
 
     [Fact]
@@ -283,7 +369,7 @@ public sealed class AppHostInfoResolverTests(ITestOutputHelper outputHelper)
         // target on its single MSBuild probe so the cached run metadata is correct.
         Assert.NotNull(capturedProperties);
         Assert.Equal(
-            ["IsAspireHost", "AspireHostingSDKVersion", "AspireUseCliBundle", "UserSecretsId", "RunCommand", "TargetPath", "RunWorkingDirectory", "RunArguments", "TargetFramework", "TargetFrameworks"],
+            ["IsAspireHost", "AspireHostingSDKVersion", "_AspireAppHostPackageVersion", "ProjectAssetsFile", "AspireUseCliBundle", "UserSecretsId", "RunCommand", "TargetPath", "RunWorkingDirectory", "RunArguments", "TargetFramework", "TargetFrameworks"],
             capturedProperties);
         Assert.NotNull(capturedTargets);
         Assert.Equal(["ComputeRunArguments"], capturedTargets);
@@ -321,9 +407,10 @@ public sealed class AppHostInfoResolverTests(ITestOutputHelper outputHelper)
     private sealed class TestAppHostInfoDiskCache : IAppHostInfoDiskCache
     {
         public AppHostInfoCacheEntry? Entry { get; init; }
+        public Func<FileInfo, string>? GetCacheKeyCallback { get; init; }
 
         public string GetCacheKey(FileInfo projectFile)
-            => "test-key";
+            => GetCacheKeyCallback?.Invoke(projectFile) ?? "test-key";
 
         public Task<AppHostInfoCacheEntry?> TryGetAsync(FileInfo projectFile, CancellationToken cancellationToken)
             => Task.FromResult(Entry);

@@ -86,6 +86,22 @@ public class AppHostInfoDiskCacheTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task PreviousSchemaVersionIsTreatedAsMiss()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var cache = CreateCache(workspace);
+        var projectFile = CreateProjectFile(workspace);
+        var cacheDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "cache", "apphost-info");
+        Directory.CreateDirectory(cacheDirectory);
+        var cachePath = Path.Combine(cacheDirectory, $"{cache.GetCacheKey(projectFile)}.json");
+        await File.WriteAllTextAsync(cachePath, JsonSerializer.Serialize(SampleEntry() with { SchemaVersion = "v1" }, JsonSerializerOptions.Web));
+
+        var hit = await cache.TryGetAsync(new FileInfo(projectFile.FullName), CancellationToken.None).DefaultTimeout();
+
+        Assert.Null(hit);
+    }
+
+    [Fact]
     public async Task CacheEntryMissingRunCommandIsTreatedAsMiss()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

@@ -25,6 +25,7 @@ using Aspire.Hosting.Utils;
 using Aspire.Shared;
 using Aspire.Shared.UserSecrets;
 using Microsoft.Extensions.Logging;
+using Semver;
 
 namespace Aspire.Cli.Projects;
 
@@ -1868,7 +1869,8 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
     private async Task<(bool IsCompatibleAppHost, string? AspireHostingVersion)> CheckAppHostCompatibilityAsync(
         FileInfo effectiveAppHostFile,
         bool isSingleFileAppHost,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool deferUnresolvedVersion = false)
     {
         if (isSingleFileAppHost)
         {
@@ -1888,6 +1890,14 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         // Issue #17197: the legacy code path went runner → MSBuild for both validation and
         // the compatibility gate, doubling project inspection cost on every `aspire run`.
         var info = await _appHostInfoResolver.GetAppHostInfoAsync(effectiveAppHostFile, cancellationToken);
+        if (deferUnresolvedVersion &&
+            info.ExitCode == 0 &&
+            info.IsAspireHost &&
+            !SemVersion.TryParse(info.AspireHostingVersion, SemVersionStyles.Any, out _))
+        {
+            return (true, info.AspireHostingVersion);
+        }
+
         var appHostCompatibilityCheck = AppHostHelper.EvaluateAppHostCompatibility(
             info.ExitCode,
             info.IsAspireHost,
@@ -2480,16 +2490,15 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         var isSingleFileAppHost = !IsProjectFile(effectiveAppHostFile) && IsValidSingleFileAppHost(effectiveAppHostFile);
         var env = new Dictionary<string, string>(context.EnvironmentVariables);
 
-        // Check compatibility for project-based apphosts
+        // Preserve the cheap rejection for known concrete versions, but defer ranges until
+        // restore has selected the package version they represent.
         if (!isSingleFileAppHost)
         {
-            // Route through the cached helper so publish shares the same MSBuild
-            // inspection result that PublishCommand's earlier ValidateAppHostAsync
-            // populated. Issue #17197.
             var compatibilityCheck = await CheckAppHostCompatibilityAsync(
                 effectiveAppHostFile,
                 isSingleFileAppHost: false,
-                cancellationToken);
+                cancellationToken,
+                deferUnresolvedVersion: true);
 
             if (!compatibilityCheck.IsCompatibleAppHost)
             {
@@ -2497,7 +2506,6 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
                     $"The app host is not compatible. Aspire.Hosting version: {compatibilityCheck.AspireHostingVersion}",
                     "Aspire.Hosting",
                     compatibilityCheck.AspireHostingVersion);
-                // Signal the backchannel completion source so the caller doesn't wait forever
                 context.BackchannelCompletionSource?.TrySetException(exception);
                 throw exception;
             }
@@ -2537,6 +2545,27 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
             }
 
             builtByCli = true;
+        }
+
+        // A floating PackageReference cannot identify the effective Hosting version until restore
+        // runs. Re-inspect after the optional build so project.assets.json invalidates the shared
+        // cache and compatibility/launch-contract decisions use the concrete package version.
+        if (!isSingleFileAppHost)
+        {
+            var compatibilityCheck = await CheckAppHostCompatibilityAsync(
+                effectiveAppHostFile,
+                isSingleFileAppHost: false,
+                cancellationToken);
+
+            if (!compatibilityCheck.IsCompatibleAppHost)
+            {
+                var exception = new AppHostIncompatibleException(
+                    $"The app host is not compatible. Aspire.Hosting version: {compatibilityCheck.AspireHostingVersion}",
+                    "Aspire.Hosting",
+                    compatibilityCheck.AspireHostingVersion);
+                context.BackchannelCompletionSource?.TrySetException(exception);
+                throw exception;
+            }
         }
 
         // Create collector and store in context for exception handling

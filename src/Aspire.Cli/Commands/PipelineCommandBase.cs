@@ -21,6 +21,7 @@ using Aspire.Dashboard.Utils;
 using Aspire.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Semver;
 using Spectre.Console;
 using StreamJsonRpc;
 
@@ -551,8 +552,10 @@ internal abstract class PipelineCommandBase : BaseCommand
     private static bool IsKnownIncompatibleWithListSteps(string? aspireHostingVersion)
     {
         if (string.IsNullOrWhiteSpace(aspireHostingVersion) ||
-            !AppHostHelper.TryParseAspireHostingVersion(aspireHostingVersion, out var version))
+            !SemVersion.TryParse(aspireHostingVersion, SemVersionStyles.Any, out var version))
         {
+            // Floating declarations are not the resolved AppHost version. Let publish build and
+            // restore the project, then validate any concrete version exposed by the AppHost.
             return false;
         }
 

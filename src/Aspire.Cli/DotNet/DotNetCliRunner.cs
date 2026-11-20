@@ -750,7 +750,7 @@ internal sealed class DotNetCliRunner(
         var (exitCode, jsonDocument) = await GetProjectItemsAndPropertiesAsync(
             projectFile,
             ["PackageReference", "AspireProjectOrPackageReference", "PackageVersion"],
-            ["IsAspireHost", "AspireHostingSDKVersion"],
+            ["IsAspireHost", "AspireHostingSDKVersion", "_AspireAppHostPackageVersion", "ProjectAssetsFile"],
             targets: [],
             options,
             cancellationToken);
