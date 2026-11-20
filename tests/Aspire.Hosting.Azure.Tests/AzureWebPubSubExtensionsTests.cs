@@ -4,9 +4,11 @@
 #pragma warning disable CS0618 // Retain legacy ProjectResource Azure publishing/provisioning contracts with synthetic metadata.
 using System.Runtime.CompilerServices;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Utils;
 using Azure.Provisioning.WebPubSub;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using static Aspire.Hosting.Utils.AzureManifestUtils;
 
 namespace Aspire.Hosting.Azure.Tests;
@@ -175,6 +177,49 @@ public class AzureWebPubSubExtensionsTests(ITestOutputHelper output)
         await Verify(wpsBicep, "bicep")
             .AppendContentAsFile(handlersBicep, "bicep")
             .AppendContentAsFile(containerAppBicep, "bicep");
+    }
+
+    [Theory]
+    [InlineData("aca", "serviceA-containerapp")]
+    [InlineData("appservice", "serviceA-website")]
+    public async Task EventHandlerHubModuleProvisioningDependsOnReferencedApp(string computeEnvironment, string deploymentTarget)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: "inspect");
+        if (computeEnvironment == "aca")
+        {
+            builder.AddAzureContainerAppEnvironment("env");
+        }
+        else
+        {
+            builder.AddAzureAppServiceEnvironment("env");
+        }
+
+        var serviceA = builder.AddProject<ProjectA>("serviceA", o => o.ExcludeLaunchProfile = true)
+            .WithHttpsEndpoint()
+            .WithExternalHttpEndpoints();
+        var hub = builder.AddAzureWebPubSub("wps1").AddHub("abc").AddEventHandler($"{serviceA.GetEndpoint("https")}/eventhandler/{{event}}");
+        serviceA.WithReference(hub);
+
+        IReadOnlyList<PipelineStep> steps = [];
+        builder.Pipeline.AddStep("inspect", _ => Task.CompletedTask);
+        builder.Pipeline.AddPipelineConfiguration(context =>
+        {
+            steps = context.Steps.ToArray();
+            return Task.CompletedTask;
+        });
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+        await app.Services.GetRequiredService<IDistributedApplicationPipeline>().ExecuteAsync(
+            new PipelineContext(app.Services.GetRequiredService<DistributedApplicationModel>(),
+                app.Services.GetRequiredService<DistributedApplicationExecutionContext>(), app.Services,
+                NullLogger.Instance, TestContext.Current.CancellationToken));
+
+        // The module's Bicep is cached before deployment targets are prepared, so the dependency on the
+        // app must not rely on parameters discovered from that template.
+        var handlersStep = steps.Single(step => step.Name == "provision-abc-handlers");
+        Assert.Contains($"provision-{deploymentTarget}", handlersStep.DependsOnSteps);
+        Assert.Contains("provision-wps1", handlersStep.DependsOnSteps);
     }
 
     [Fact]

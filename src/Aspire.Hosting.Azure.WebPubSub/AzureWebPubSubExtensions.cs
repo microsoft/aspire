@@ -9,6 +9,7 @@ using System.Text.Json.Nodes;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
 using Aspire.Hosting.Azure.WebPubSub;
+using Aspire.Hosting.Pipelines;
 using Azure.Provisioning;
 using Azure.Provisioning.Expressions;
 using Azure.Provisioning.WebPubSub;
@@ -420,6 +421,37 @@ public static class AzureWebPubSubExtensions
             var service = (WebPubSubService)hubResource.Parent.AddAsExistingResource(infrastructure);
             AddHubToInfrastructure(infrastructure, service, hubResource, isPublishMode: true);
         });
+
+        // Provisioning dependencies are normally discovered from the module's Bicep parameters, but
+        // that template is generated and cached before deployment targets are prepared, when handler
+        // URLs still resolve through the compute environment. Depend explicitly on each referenced
+        // app's deployment target (and any ingress resource that supplies its URL) so the module waits
+        // for, and fails with, the app's provisioning step instead of an implicit wait inside it.
+        eventHandlersResource.Annotations.Add(new PipelineConfigurationAnnotation(context =>
+        {
+            var provisionSteps = context.GetSteps(eventHandlersResource, WellKnownPipelineTags.ProvisionInfrastructure);
+            var handlerEndpoints = new List<EndpointReference>();
+            foreach (var handler in hubResource.EventHandlers)
+            {
+                CollectEndpointReferences(handler.url, handlerEndpoints);
+            }
+
+            foreach (var endpoint in handlerEndpoints)
+            {
+                if (endpoint.Resource.GetDeploymentTargetAnnotation()?.DeploymentTarget is { } deploymentTarget)
+                {
+                    provisionSteps.DependsOn(context.GetSteps(deploymentTarget, WellKnownPipelineTags.ProvisionInfrastructure));
+                }
+
+                foreach (var annotation in endpoint.Resource.Annotations.OfType<AzureDeployedEndpointUrlAnnotation>())
+                {
+                    if (annotation.Url is { } url && string.Equals(annotation.EndpointName, endpoint.EndpointName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        provisionSteps.DependsOn(context.GetSteps(url.Resource, WellKnownPipelineTags.ProvisionInfrastructure));
+                    }
+                }
+            }
+        }));
 
         hubResource.EventHandlersResource = eventHandlersResource;
         builder.ApplicationBuilder.AddResource(eventHandlersResource);
