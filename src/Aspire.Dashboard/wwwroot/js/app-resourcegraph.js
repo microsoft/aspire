@@ -5,6 +5,13 @@ let resourceGraph = null;
 const resourceNodeRadius = 53;
 const resourceLinkMaskRadius = resourceNodeRadius + 3;
 const selectedNodeScale = 1.2;
+const selectedResourceLinkMaskRadius = resourceLinkMaskRadius * selectedNodeScale;
+const menuCogRadius = 14;
+const tagMenuCogYOffset = -5;
+const tagMenuCogGap = 4;
+const tagMenuBridgeOverlap = 4;
+const tagBoundaryBasePadding = 24;
+const tagBoundaryPaddingPerLevel = 28;
 const tagGroupGap = 24;
 
 export function initializeResourcesGraph(resourcesInterop, graphIcons, enableTagSelection) {
@@ -65,7 +72,8 @@ class ResourceGraph {
         this.outerTagGroups = [];
         this.hasFitGraph = false;
 
-        this.svg = d3.select('.resource-graph');
+        this.svg = d3.select('.resource-graph')
+            .style('--resource-graph-selected-scale', String(selectedNodeScale));
         this.baseGroup = this.svg.append("g");
 
         // Enable zoom + pan
@@ -169,9 +177,10 @@ class ResourceGraph {
             });
 
         var defs = this.svg.append("defs");
-        this.createArrowMarker(defs, "arrow-normal", "arrow-normal", 10, 10, 66);
-        this.createArrowMarker(defs, "arrow-highlight", "arrow-highlight", 15, 15, 48);
-        this.createArrowMarker(defs, "arrow-highlight-expand", "arrow-highlight-expand", 15, 15, 56);
+        const highlightedArrowSize = 15;
+        this.createArrowMarker(defs, "arrow-normal", 10, resourceLinkMaskRadius, 0);
+        this.createArrowMarker(defs, "arrow-highlight", highlightedArrowSize, resourceLinkMaskRadius, 1);
+        this.createArrowMarker(defs, "arrow-highlight-expand", highlightedArrowSize, selectedResourceLinkMaskRadius, 1.8);
 
         // Mask only links, including in the transparent gap just outside each node's border.
         this.linkMask = defs.append("mask")
@@ -191,19 +200,20 @@ class ResourceGraph {
             .attr("height", resourceNodeRadius * 2);
         this.nodeBackgroundFills = nodeTagTint.append("g").attr("opacity", 0.5);
 
+        const highlightTileSize = 17.5;
         var highlightedPattern = defs.append("pattern")
             .attr("id", "highlighted-pattern")
             .attr("patternUnits", "userSpaceOnUse")
-            .attr("width", "17.5")
-            .attr("height", "17.5")
+            .attr("width", highlightTileSize)
+            .attr("height", highlightTileSize)
             .attr("patternTransform", "rotate(45)");
 
         highlightedPattern
             .append("rect")
             .attr("x", "0")
             .attr("y", "0")
-            .attr("width", "17.5")
-            .attr("height", "17.5")
+            .attr("width", highlightTileSize)
+            .attr("height", highlightTileSize)
             .attr("fill", "var(--aspire-page-background)");
 
         highlightedPattern
@@ -211,7 +221,7 @@ class ResourceGraph {
             .attr("x1", "0")
             .attr("y", "0")
             .attr("x2", "0")
-            .attr("y2", "17.5")
+            .attr("y2", highlightTileSize)
             .attr("stroke", "var(--resource-graph-secondary-hover-background)")
             .attr("stroke-width", "15");
 
@@ -274,19 +284,23 @@ class ResourceGraph {
         this.svg.transition().call(this.zoom.scaleBy, 2 / 3);
     }
 
-    createArrowMarker(parent, id, className, width, height, x) {
+    createArrowMarker(parent, id, size, targetMaskRadius, tipClearance) {
+        const viewBoxSize = 10;
+        const halfViewBoxSize = viewBoxSize / 2;
+        // refX is in marker coordinates. Convert the desired distance behind the endpoint from graph units.
+        const refX = viewBoxSize + (targetMaskRadius + tipClearance) * viewBoxSize / size;
         parent.append("marker")
             .attr("id", id)
-            .attr("viewBox", "0 -5 10 10")
-            .attr("refX", x)
+            .attr("viewBox", `0 ${-halfViewBoxSize} ${viewBoxSize} ${viewBoxSize}`)
+            .attr("refX", refX)
             .attr("refY", 0)
-            .attr("markerWidth", width)
-            .attr("markerHeight", height)
+            .attr("markerWidth", size)
+            .attr("markerHeight", size)
             .attr("orient", "auto")
             .attr("markerUnits", "userSpaceOnUse")
-            .attr("class", className)
+            .attr("class", id)
             .append("path")
-            .attr("d", 'M0,-5L10,0L0,5');
+            .attr("d", `M0,${-halfViewBoxSize}L${viewBoxSize},0L0,${halfViewBoxSize}`);
     }
 
     // The element the SVG is drawn in (.resource-graph-container). Every page that hosts the graph (the overview, the
@@ -391,23 +405,19 @@ class ResourceGraph {
         const updatedNodes = [];
         let hasAddedNodes = false;
 
-        // calculate degree (number of connections) for each resource
-        const degreeMap = new Map();
-        newResources.forEach(resource => {
-            degreeMap.set(resource.name, resource.referencedNames.length);
-        });
-
-        // also count incoming connections
-        newResources.forEach(resource => {
-            resource.referencedNames.forEach(refName => {
-                const currentDegree = degreeMap.get(refName) || 0;
-                degreeMap.set(refName, currentDegree + 1);
-            });
-        });
+        const degreeMap = new Map(newResources.map(resource => [resource.name, 0]));
+        for (const resource of newResources) {
+            for (const refName of resource.referencedNames) {
+                if (degreeMap.has(refName)) {
+                    degreeMap.set(resource.name, degreeMap.get(resource.name) + 1);
+                    degreeMap.set(refName, degreeMap.get(refName) + 1);
+                }
+            }
+        }
 
         newResources.forEach(resource => {
             const existingNode = existingNodes.find(node => node.id === resource.name);
-            const degree = degreeMap.get(resource.name) || 1;
+            const degree = degreeMap.get(resource.name);
 
             if (existingNode) {
                 // D3 retains the drag subject until mouseup. Replacing it during a resource update interrupts the
@@ -502,9 +512,10 @@ class ResourceGraph {
             }
             anchors.push(remaining.splice(nextIndex, 1)[0]);
         }
-        const largestGroup = Math.max(0, ...this.tagGroups.map(group => group.nodes.length));
-        const spacing = 220 * Math.sqrt(largestGroup) + 100;
-        const radius = anchors.length <= 1 ? 0 : Math.max(300, spacing / (2 * Math.sin(Math.PI / anchors.length)));
+        // Size the ring for the resources it holds, not the number of tags. Nested and overlapping tags
+        // reuse the same space, and the hull collision force provides clearance where groups meet.
+        const taggedNodeCount = this.nodes.filter(node => node.tagKeys.size !== 0).length;
+        const radius = anchors.length <= 1 ? 0 : Math.max(200, 125 * Math.sqrt(taggedNodeCount));
         anchors.forEach((anchor, index) => {
             const angle = index * 2 * Math.PI / anchors.length - Math.PI / 2;
             anchor.x = Math.cos(angle) * radius;
@@ -531,9 +542,11 @@ class ResourceGraph {
         });
         this.outerTagGroups = this.tagCollisionGroups.filter(a => !this.tagCollisionGroups.some(b =>
             a !== b && a.nodes.length < b.nodes.length && a.nodes.every(node => node.tagKeys.has(b.key))));
+        // Isolated nodes have no links drawing them back toward the graph when tag hulls push them away.
+        const getPositionStrength = node => (node.tagKeys.size || node.degree === 0) ? 0.03 : 0.005;
         this.simulation
-            .force("x", d3.forceX(node => node.tagX).strength(node => !groups.size ? 0.2 : node.tagKeys.size ? 0.03 : 0.005))
-            .force("y", d3.forceY(node => node.tagY).strength(node => !groups.size ? 0.4 : node.tagKeys.size ? 0.03 : 0.005))
+            .force("x", d3.forceX(node => node.tagX).strength(groups.size ? getPositionStrength : 0.2))
+            .force("y", d3.forceY(node => node.tagY).strength(groups.size ? getPositionStrength : 0.4))
             .force("tagSeparation", groups.size ? this.separateTagGroups : null)
             .force("untaggedRepulsion", groups.size ? this.repelUntaggedNodes : null)
             .force("tagCohesion", groups.size ? this.pullTagGroupsTogether : null);
@@ -553,7 +566,10 @@ class ResourceGraph {
                     // Keep the hover bridge outside the button so it doesn't stretch the focus outline.
                     controls.append("rect")
                         .attr("class", "resource-tag-menu-bridge")
-                        .attr("y", -19).attr("width", 8).attr("height", 28).attr("fill", "transparent");
+                        .attr("y", tagMenuCogYOffset - menuCogRadius)
+                        .attr("width", tagMenuCogGap + tagMenuBridgeOverlap)
+                        .attr("height", menuCogRadius * 2)
+                        .attr("fill", "transparent");
                     this.appendMenuCog(controls, this.openTagContextMenu)
                         .classed("resource-tag-menu-cog", true);
                 }
@@ -597,7 +613,8 @@ class ResourceGraph {
             const controls = d3.select(this);
             if (hasMenu) {
                 const labelWidth = controls.select(".resource-tag-label").node().getComputedTextLength();
-                controls.select(".resource-tag-menu-cog").attr("transform", `translate(${labelWidth + 18},-5)`);
+                const cogX = labelWidth + tagMenuCogGap + menuCogRadius;
+                controls.select(".resource-tag-menu-cog").attr("transform", `translate(${cogX},${tagMenuCogYOffset})`);
                 controls.select(".resource-tag-menu-bridge").attr("x", labelWidth);
             }
             const bounds = this.getBBox();
@@ -764,7 +781,7 @@ class ResourceGraph {
     }
 
     getTagPadding(group) {
-        return 24 + group.level * 28;
+        return tagBoundaryBasePadding + group.level * tagBoundaryPaddingPerLevel;
     }
 
     getTagHull(group, anticipateMovement = false) {
@@ -838,9 +855,12 @@ class ResourceGraph {
             .append("circle")
             .attr("r", resourceNodeRadius)
             .attr("class", "resource-node-border");
+        const iconSize = 48;
+        const halfIconSize = iconSize / 2;
+        const iconLiftForEndpoint = 13;
         var iconTransform = newNodesContainer
             .append("g")
-            .attr("transform", n => n.endpointText ? "translate(-24,-37)" : "translate(-24,-24)")
+            .attr("transform", n => `translate(${-halfIconSize},${-halfIconSize - (n.endpointText ? iconLiftForEndpoint : 0)})`);
         var iconPath = iconTransform
             .append("path");
         iconPath
@@ -850,8 +870,6 @@ class ResourceGraph {
 
         // Icon paths could be mixed size. We need to transform icons to always be displayed at a consistent size.
         iconPath.each(function (d) {
-            const iconSize = 48;
-
             const path = d3.select(this);
             const node = path.node();
             const bbox = node.getBBox();
@@ -869,7 +887,7 @@ class ResourceGraph {
 
             // apply scaling & centering inside this group
             path.attr("transform",
-                `translate(${iconSize / 2},${iconSize / 2}) scale(${scale}) translate(${-cx},${-cy})`);
+                `translate(${halfIconSize},${halfIconSize}) scale(${scale}) translate(${-cx},${-cy})`);
         });
 
         var endpointGroup = newNodesContainer
@@ -1065,7 +1083,7 @@ class ResourceGraph {
     updateLinkMask() {
         const [minX = 0, maxX = 0] = d3.extent(this.nodes, node => node.x);
         const [minY = 0, maxY = 0] = d3.extent(this.nodes, node => node.y);
-        const padding = resourceLinkMaskRadius * selectedNodeScale + 4;
+        const padding = selectedResourceLinkMaskRadius + 4;
         const x = minX - padding;
         const y = minY - padding;
         const width = maxX - minX + padding * 2;
@@ -1084,7 +1102,7 @@ class ResourceGraph {
             .attr("fill", "black")
             .attr("cx", node => node.x)
             .attr("cy", node => node.y)
-            .attr("r", node => resourceLinkMaskRadius * (this.nodeEquals(node, this.selectedNode) ? selectedNodeScale : 1));
+            .attr("r", node => this.nodeEquals(node, this.selectedNode) ? selectedResourceLinkMaskRadius : resourceLinkMaskRadius);
     }
 
     onTick = () => {
@@ -1151,7 +1169,7 @@ class ResourceGraph {
                 return openMenu(trigger.__data__, Math.round(bounds.left + bounds.width / 2),
                     Math.round(bounds.top + bounds.height / 2), trigger, trigger.id);
             });
-        cog.append("circle").attr("r", 14).attr("class", "resource-menu-cog-background");
+        cog.append("circle").attr("r", menuCogRadius).attr("class", "resource-menu-cog-background");
         if (this.menuIcon) {
             cog.append("path")
                 .attr("class", "resource-menu-cog-icon")

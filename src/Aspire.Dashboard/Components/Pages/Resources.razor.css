@@ -176,19 +176,6 @@
     height: 100%;
 }
 
-::deep .resource-graph-controls {
-    position: absolute;
-    right: 30px;
-    bottom: 30px;
-    display: flex;
-    column-gap: var(--aspire-space-2);
-}
-
-::deep .resource-graph-controls.resource-graph-game-launch {
-    left: 30px;
-    right: auto;
-}
-
 ::deep .resource-graph-controls fluent-button {
     --aspire-button-background: var(--aspire-page-background);
     --aspire-button-border-color: transparent;
@@ -203,11 +190,6 @@
 ::deep .resource-graph-controls fluent-button:active,
 ::deep .resource-graph-controls fluent-button:hover:active {
     background-color: var(--resource-graph-secondary-hover-background);
-}
-
-::deep .resource-graph-controls fluent-button > svg {
-    width: 24px;
-    height: 24px;
 }
 
 ::deep .resource-graph .texts {
@@ -258,10 +240,6 @@
 
 ::deep .resource-group-hover .resource-node {
     fill: var(--resource-graph-hover-background) !important;
-}
-
-::deep .resource-group-selected .resource-scale {
-    transform: scale(1.2);
 }
 
 ::deep .resource-group-selected .resource-node {

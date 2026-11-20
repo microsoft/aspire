@@ -120,8 +120,8 @@ function createGraph(environment = null, enableTagSelection = true) {
                 forceSimulation: () => behavior,
                 forceManyBody: () => behavior,
                 forceCollide: () => behavior,
-                forceX: () => behavior,
-                forceY: () => behavior,
+                forceX: geometry.forceX,
+                forceY: geometry.forceY,
                 forceCenter: () => behavior,
             },
         });
@@ -407,6 +407,26 @@ test("overlapping groups get nearby anchors rather than being separated by unrel
     assert.ok(distance(anchors.get("A"), anchors.get("C")) < distance(anchors.get("A"), anchors.get("D")));
 });
 
+test("adding nested tags does not push disjoint groups farther from the graph center", () => {
+    const graph = createGraph();
+    const hierarchy = Array.from({ length: 8 }, (_, i) => ({ id: `tree-${i}`, tags: createTags("Hierarchy") }));
+    graph.nodes = [...hierarchy, { id: "worker", tags: createTags("Workers") }];
+    const distanceFromCenter = key => {
+        const { anchor } = graph.tagGroups.find(group => group.key === key);
+        return Math.hypot(anchor.x, anchor.y);
+    };
+
+    graph.updateTagGroups();
+    const initialDistance = distanceFromCenter("HIERARCHY");
+    hierarchy[0].tags.push(...createTags("Roots"));
+    hierarchy[1].tags.push(...createTags("Branches"));
+    hierarchy[2].tags.push(...createTags("Leaves"));
+    graph.updateTagGroups();
+
+    assert.ok(distanceFromCenter("HIERARCHY") <= initialDistance + 1);
+    assert.ok(distanceFromCenter("WORKERS") <= initialDistance + 1);
+});
+
 function createPhysicsNode(id, tags, x, y) {
     return { id, tags: createTags(...tags), x, y, vx: 0, vy: 0, bounds: { x: -56, y: -70, width: 112, height: 150 } };
 }
@@ -619,6 +639,36 @@ test("untagged exclusion clears the complete node footprint from a pinned group'
     }
     assert.deepEqual([member.x, member.y, member.fx, member.fy], [0, 0, 0, 0]);
     assert.ok(Number.isFinite(untagged.x) && Number.isFinite(untagged.y));
+});
+
+test("isolated resources settle closer to a tagged graph without entering its boundary", () => {
+    const graph = createGraph();
+    const icon = { path: "", color: "", tooltip: "" };
+    const api = { name: "api", displayName: "api", tags: createTags("Backend"), referencedNames: ["worker"], resourceIcon: icon, stateIcon: icon };
+    const worker = { ...api, name: "worker", tags: [], referencedNames: [] };
+    const isolated = { ...worker, name: "isolated", referencedNames: ["filtered-out"] };
+    graph.updateNodes([api, worker, isolated]);
+
+    const [apiNode, workerNode, isolatedNode] = graph.nodes;
+    const bounds = { x: -56, y: -70, width: 112, height: 150 };
+    Object.assign(apiNode, { bounds, fx: 0, fy: 0 });
+    Object.assign(workerNode, { bounds, fx: -200, fy: 0 });
+    Object.assign(isolatedNode, { bounds, x: 800, y: 0 });
+    graph.updateTagGroups();
+    const simulation = geometry.forceSimulation(graph.nodes).stop()
+        .force("charge", geometry.forceManyBody().strength(-800))
+        .force("collide", geometry.forceCollide(node => graph.getCollisionRadius(node)).iterations(10))
+        .force("x", graph.simulation.force("x"))
+        .force("y", graph.simulation.force("y"))
+        .force("untaggedRepulsion", graph.simulation.force("untaggedRepulsion"));
+    simulation.tick(300);
+
+    const distance = Math.hypot(isolatedNode.x - apiNode.x, isolatedNode.y - apiNode.y);
+    assert.ok(distance < 310, `Unexpected isolated resource distance: ${distance}`);
+    const hull = graph.getTagHull(graph.tagGroups[0]);
+    for (const point of graph.getPredictedNodeHull(isolatedNode)) {
+        assert.equal(geometry.polygonContains(hull, point), false);
+    }
 });
 
 test("cohesion brings unlinked group members together without reducing collision spacing", () => {

@@ -6,6 +6,37 @@
     src: url("../fonts/geist/Geist-Variable.woff2") format("woff2");
 }
 
+.resource-graph-container {
+    --resource-graph-control-inset: 30px;
+    --resource-graph-control-icon-size: 24px;
+}
+
+.resource-graph-container .resource-graph-controls {
+    position: absolute;
+    right: var(--resource-graph-control-inset-override, var(--resource-graph-control-inset));
+    bottom: var(--resource-graph-control-inset-override, var(--resource-graph-control-inset));
+    display: flex;
+    column-gap: var(--aspire-space-2);
+}
+
+.resource-graph-container .resource-graph-game-launch {
+    left: var(--resource-graph-control-inset);
+    right: auto;
+}
+
+.resource-graph-container .resource-graph-controls fluent-button > svg {
+    width: var(--resource-graph-control-icon-size);
+}
+
+/* The overview uses the Fluent button's default icon height. */
+.resource-graph-container:not(.home-resource-graph-layout *) .resource-graph-controls fluent-button > svg {
+    height: var(--resource-graph-control-icon-size);
+}
+
+.resource-graph .resource-group-selected .resource-scale {
+    transform: scale(var(--resource-graph-selected-scale));
+}
+
 .resource-tag-fill,
 .resource-tag-boundary {
     fill: var(--tag-color);
