@@ -9,7 +9,7 @@
       </trans-unit>
       <trans-unit id="ErrorHandlerPageSubtitle">
         <source>An error occurred while processing your request</source>
-        <target state="translated">Une erreur s'est produite lors du traitement de votre demande</target>
+        <target state="translated">Une erreur s’est produite lors du traitement de votre demande</target>
         <note />
       </trans-unit>
       <trans-unit id="ErrorHandlerPageTitle">
@@ -19,7 +19,7 @@
       </trans-unit>
       <trans-unit id="NotAuthorized">
         <source>Not authorized</source>
-        <target state="new">Not authorized</target>
+        <target state="translated">Non autorisé</target>
         <note />
       </trans-unit>
       <trans-unit id="NotFoundDescription">

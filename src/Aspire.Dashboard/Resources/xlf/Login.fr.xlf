@@ -14,17 +14,17 @@
       </trans-unit>
       <trans-unit id="HelpScreenshotAltText">
         <source>Screenshot of example console output showing where to find the dashboard frontend token. A red box highlights the token at the end of a url. The token is the value of a query parameter named 't'.</source>
-        <target state="translated">Capture d’écran de l’exemple de sortie de console montrant où trouver le jeton frontend du tableau de bord. Une zone rouge met en surbrillance le jeton à la fin d’une URL. Le jeton est la valeur d’un paramètre de requête nommé « t ».</target>
+        <target state="translated">Capture d’écran d’un exemple de sortie de console indiquant où trouver le jeton front-end du tableau de bord. Un cadre rouge met en évidence le jeton à la fin d’une URL. Le jeton est la valeur d’un paramètre de requête nommé « t ».</target>
         <note />
       </trans-unit>
       <trans-unit id="InvalidTokenErrorMessage">
         <source>Invalid token. Please try again</source>
-        <target state="translated">Le jeton n’est pas valide. Veuillez réessayer</target>
+        <target state="translated">Jeton non valide. Veuillez réessayer</target>
         <note />
       </trans-unit>
       <trans-unit id="LogInButtonText">
         <source>Log in</source>
-        <target state="translated">Connexion</target>
+        <target state="translated">Se connecter</target>
         <note />
       </trans-unit>
       <trans-unit id="LoggedInAs">
@@ -39,7 +39,7 @@
       </trans-unit>
       <trans-unit id="PageTitle">
         <source>{0} login</source>
-        <target state="translated">Connexion {0}</target>
+        <target state="translated">Connexion à {0}</target>
         <note>{0} is an application name</note>
       </trans-unit>
       <trans-unit id="SignOut">
@@ -49,12 +49,12 @@
       </trans-unit>
       <trans-unit id="TextFieldPlaceholder">
         <source>Enter token to log in...</source>
-        <target state="translated">Entrez un jeton pour vous connecter...</target>
+        <target state="translated">Entrez le jeton pour vous connecter...</target>
         <note />
       </trans-unit>
       <trans-unit id="TokenHelpTextLine1">
         <source>Copy the highlighted token from the console to the login page and log in.</source>
-        <target state="translated">Copiez le jeton en surbrillance de la console dans la page de connexion et connectez-vous.</target>
+        <target state="translated">Copiez le jeton mis en évidence dans la console, collez-le dans la page de connexion, puis connectez-vous.</target>
         <note />
       </trans-unit>
       <trans-unit id="TokenHelpTextLine2">

@@ -4,7 +4,7 @@
     <body>
       <trans-unit id="ConsoleLogsErrorWatchingLogs">
         <source>Error watching logs</source>
-        <target state="translated">Erreur lors de la consultation des journaux</target>
+        <target state="translated">Erreur lors de la surveillance des journaux</target>
         <note />
       </trans-unit>
       <trans-unit id="ConsoleLogsFinishedWatchingLogs">
@@ -19,7 +19,7 @@
       </trans-unit>
       <trans-unit id="ConsoleLogsLoadingResources">
         <source>Loading resources ...</source>
-        <target state="translated">Chargement en cours des ressources... Merci de patienter.</target>
+        <target state="translated">Chargement des ressources...</target>
         <note />
       </trans-unit>
       <trans-unit id="ConsoleLogsLogsNotYetAvailable">
@@ -44,12 +44,12 @@
       </trans-unit>
       <trans-unit id="ConsoleLogsNoWrapLogs">
         <source>Don't wrap log lines</source>
-        <target state="translated">Ne pas envelopper les lignes de journal</target>
+        <target state="translated">Désactiver le retour automatique à la ligne</target>
         <note />
       </trans-unit>
       <trans-unit id="ConsoleLogsNotCapturedForRun">
         <source>Console logs weren't captured for this run. Console logs are only captured if this page is visited while the AppHost is running.</source>
-        <target state="translated">Les journaux de la console n’ont pas été capturés pour cette exécution. Les journaux de la console ne sont capturés que si cette page est consultée alors que l'AppHost est en cours d'exécution.</target>
+        <target state="translated">Les journaux de console n’ont pas été capturés pour cette exécution. Ils ne sont capturés que si cette page est consultée pendant l’exécution de l’AppHost.</target>
         <note />
       </trans-unit>
       <trans-unit id="ConsoleLogsPageTitle">
@@ -59,12 +59,12 @@
       </trans-unit>
       <trans-unit id="ConsoleLogsPauseActive">
         <source>&lt;Log capture paused at {0}, {1} log(s) filtered out&gt;</source>
-        <target state="translated">&lt;Capture de journal suspendue à {0}, {1} journal(aux) est(sont) filtré(s)&gt;</target>
+        <target state="translated">&lt;Capture des journaux suspendue à {0}, {1} journal(aux) filtré(s)&gt;</target>
         <note>{0} is a date, {1} is a number</note>
       </trans-unit>
       <trans-unit id="ConsoleLogsPauseDetails">
         <source>&lt;Log capture paused between {0} and {1}, {2} log(s) filtered out&gt;</source>
-        <target state="translated">&lt;Capture de journal suspendue entre le ou les journaux {0} et {1}, {2} filtrés&gt;</target>
+        <target state="translated">&lt;Capture des journaux suspendue entre {0} et {1}, {2} journal(aux) filtré(s)&gt;</target>
         <note>{0} is a date, {1} is a date, {2} is a number.</note>
       </trans-unit>
       <trans-unit id="ConsoleLogsSelectResourceToolbar">
@@ -79,7 +79,7 @@
       </trans-unit>
       <trans-unit id="ConsoleLogsTextFilter">
         <source>Console logs filter</source>
-        <target state="translated">Filtre des journaux de la console</target>
+        <target state="translated">Filtre des journaux de console</target>
         <note />
       </trans-unit>
       <trans-unit id="ConsoleLogsTimestampHide">
@@ -94,7 +94,7 @@
       </trans-unit>
       <trans-unit id="ConsoleLogsTimestampShowUtc">
         <source>UTC timestamps</source>
-        <target state="translated">Horodateurs UTC</target>
+        <target state="translated">Horodatages UTC</target>
         <note />
       </trans-unit>
       <trans-unit id="ConsoleLogsUnknownState">
@@ -104,12 +104,12 @@
       </trans-unit>
       <trans-unit id="ConsoleLogsWatchingLogs">
         <source>Watching logs...</source>
-        <target state="translated">Surveillance en cours des journaux... Merci de patienter.</target>
+        <target state="translated">Surveillance des journaux...</target>
         <note />
       </trans-unit>
       <trans-unit id="ConsoleLogsWrapLogs">
         <source>Wrap log lines</source>
-        <target state="translated">Envelopper les lignes de journal</target>
+        <target state="translated">Activer le retour automatique à la ligne</target>
         <note />
       </trans-unit>
       <trans-unit id="DownloadLogs">
@@ -124,7 +124,7 @@
       </trans-unit>
       <trans-unit id="PauseInProgressText">
         <source>Console logs capture paused at {0}</source>
-        <target state="translated">La capture des journaux de la console est suspendue à {0}</target>
+        <target state="translated">Capture des journaux de console suspendue à {0}</target>
         <note>{0} is a time</note>
       </trans-unit>
     </body>

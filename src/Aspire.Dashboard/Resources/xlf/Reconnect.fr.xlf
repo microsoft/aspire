@@ -9,7 +9,7 @@
       </trans-unit>
       <trans-unit id="ReconnectFirstAttemptText">
         <source>Rejoining the server...</source>
-        <target state="translated">Rejoindre le serveur...</target>
+        <target state="translated">Reconnexion au serveur...</target>
         <note />
       </trans-unit>
       <trans-unit id="ReconnectRepeatedAttemptText">
@@ -24,7 +24,7 @@
       </trans-unit>
       <trans-unit id="ResourceServiceReconnectDisconnectedText">
         <source>Lost connection to the AppHost. Attempting to reconnect...</source>
-        <target state="translated">Connexion à AppHost perdue. Tentative de reconnexion...</target>
+        <target state="translated">Connexion à l’AppHost perdue. Tentative de reconnexion...</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceServiceReconnectRetryButtonText">
@@ -34,7 +34,7 @@
       </trans-unit>
       <trans-unit id="ResourceServiceReconnectUnsupportedText">
         <source>{0} app requires dashboard {2} or later.&lt;br /&gt;&lt;br /&gt;See &lt;a href="{1}" target="_blank" rel="noreferrer noopener"&gt;upgrade Aspire&lt;/a&gt; for more information.</source>
-        <target state="translated">{0}'application nécessite un tableau de bord {2} ou une version ultérieure.&lt;br /&gt;&lt;br /&gt;Consultez &lt;a href="{1}" target="_blank" rel="noreferrer noopener"&gt;Aspire&lt;/a&gt; de mise à niveau pour plus d’informations.</target>
+        <target state="translated">L’application {0} nécessite le tableau de bord {2} ou une version ultérieure.&lt;br /&gt;&lt;br /&gt;Pour plus d’informations, consultez &lt;a href="{1}" target="_blank" rel="noreferrer noopener"&gt;Mettre à niveau Aspire&lt;/a&gt;.</target>
         <note />
       </trans-unit>
     </body>

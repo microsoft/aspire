@@ -4,12 +4,12 @@
     <body>
       <trans-unit id="HiddenResourceIconTooltip">
         <source>Hidden by default. Visible when "Show hidden resources" is enabled.</source>
-        <target state="translated">Masqué par défaut. Visible lorsque l’option « Afficher masqué » est activée.</target>
+        <target state="translated">Masqué par défaut. Visible lorsque l’option « Afficher les ressources masquées » est activée.</target>
         <note />
       </trans-unit>
       <trans-unit id="PersistentContainerIconTooltip">
         <source>This container is persistent and won't be stopped when the app host is shut down.</source>
-        <target state="translated">Ce conteneur est persistant et ne sera pas arrêté lorsque l’hôte de l’application sera arrêté.</target>
+        <target state="translated">Ce conteneur est persistant et ne sera pas arrêté à l’arrêt de l’hôte d’application.</target>
         <note />
       </trans-unit>
       <trans-unit id="RunningAndUnhealthyResourceStateToolTip">
@@ -25,13 +25,13 @@
       <trans-unit id="StateColumnResourceContainerRuntimeUnhealthy">
         <source>Container runtime was found but appears to be unhealthy. Ensure that it is running.
 For more information, see https://aka.ms/aspire/container-runtime-unhealthy.</source>
-        <target state="translated">Le moteur d'exécution de conteneurs a été détecté, mais semble être dans un état dégradé. Assurez-vous qu’il est en cours d’exécution.
-Pour plus d'informations, consultez https://aka.ms/aspire/container-runtime-unhealthy.</target>
+        <target state="translated">Le runtime de conteneur a été détecté, mais il semble défectueux. Vérifiez qu’il est en cours d’exécution.
+Pour plus d’informations, consultez https://aka.ms/aspire/container-runtime-unhealthy.</target>
         <note>Contains a new line</note>
       </trans-unit>
       <trans-unit id="StateColumnResourceExited">
         <source>{0} is no longer running.</source>
-        <target state="translated">{0} n'est plus en cours d'exécution.</target>
+        <target state="translated">{0} n’est plus en cours d’exécution.</target>
         <note>{0} is a resource type</note>
       </trans-unit>
       <trans-unit id="StateColumnResourceExitedUnexpectedly">
@@ -46,12 +46,12 @@ Pour plus d'informations, consultez https://aka.ms/aspire/container-runtime-unhe
       </trans-unit>
       <trans-unit id="StateColumnResourceNotStarted">
         <source>Resource is not configured to start automatically.</source>
-        <target state="translated">La ressource n'est pas configurée pour démarrer automatiquement.</target>
+        <target state="translated">La ressource n’est pas configurée pour démarrer automatiquement.</target>
         <note />
       </trans-unit>
       <trans-unit id="StateColumnResourceWaiting">
         <source>Resource is waiting for dependencies.</source>
-        <target state="translated">La ressource attend des dépendances.</target>
+        <target state="translated">La ressource attend ses dépendances.</target>
         <note />
       </trans-unit>
       <trans-unit id="StateColumnResourceWaitingFor">
@@ -71,7 +71,7 @@ Pour plus d'informations, consultez https://aka.ms/aspire/container-runtime-unhe
       </trans-unit>
       <trans-unit id="UnreadLogErrorsBadgeOneErrorLog">
         <source>1 error log</source>
-        <target state="translated">1 journal des erreurs</target>
+        <target state="translated">1 journal d’erreurs</target>
         <note />
       </trans-unit>
       <trans-unit id="UrlsColumnDisplayOverflowTitle">
