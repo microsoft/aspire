@@ -56,7 +56,8 @@ public class ResourcesLayoutHomeTests : DashboardTestContext
     }
 
     // Escape goes home only where there's a table to go to and it isn't already showing or loading. On a narrow layout
-    // "/" redirects to the overview, and without the resource service it redirects to the structured logs (see Home).
+    // the list is a drawer that Escape closes, and without the resource service "/" redirects to the structured logs
+    // (see Home).
     [Theory]
     [InlineData("home")]
     [InlineData("narrow")]
@@ -115,7 +116,6 @@ public class ResourcesLayoutHomeTests : DashboardTestContext
 
     [Theory]
     [InlineData(true)]
-    // A narrow layout has no full-page table, and "/" gives way to the overview of all resources (see Home).
     [InlineData(false)]
     public void Home_DoesNotRestoreTheRememberedSelection(bool isDesktop)
     {
@@ -137,13 +137,80 @@ public class ResourcesLayoutHomeTests : DashboardTestContext
         // no selection of its own, so it stays where it is.
         Assert.Equal(string.Empty, navigation.ToBaseRelativePath(navigation.Uri));
         Assert.Equal(isDesktop, cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
+        // A narrow layout has no room for the table, so home opens the list as its drawer.
+        Assert.Equal(!isDesktop, cut.Find(".resources-layout").ClassList.Contains("drawer-open"));
         Assert.Empty(cut.Instance.SelectedResourceNames);
+    }
 
-        // On a narrow layout, home's redirect then opens the overview of all resources, still without the selection.
-        navigation.NavigateTo(DashboardUrls.ResourceListUrl(), new NavigationOptions { ReplaceHistoryEntry = true });
-        cut.Render();
+    // Resizing across the breakpoint keeps the user on "/": the table becomes the open drawer and back again.
+    [Fact]
+    public void Home_SwitchesBetweenTableAndOpenDrawerWhenTheViewportChanges()
+    {
+        var desktop = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var narrow = desktop with { IsDesktop = false };
+        ResourceSetupHelpers.SetupResourcesLayout(this, desktop, new TestDashboardClient(isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("api"), ModelTestHelpers.CreateResource("cache")],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo("/");
+        var cut = Render<CascadingValue<ViewportInformation>>(p => p.Add(v => v.Value, desktop).AddChildContent<ResourcesLayout>());
+        cut.WaitForAssertion(() => Assert.True(cut.FindComponent<ResourcesLayout>().Instance.IsLoaded));
+        Assert.True(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
+
+        cut.Render(p => p.Add(v => v.Value, narrow).AddChildContent<ResourcesLayout>());
+        Assert.Equal(string.Empty, navigation.ToBaseRelativePath(navigation.Uri));
+        Assert.False(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
+        Assert.True(cut.Find(".resources-layout").ClassList.Contains("drawer-open"));
+        Assert.False(cut.Find(".resource-pane").HasAttribute("hidden"));
+        Assert.Equal(["api", "cache"], cut.FindAll("[data-resource-name]").Select(row => row.GetAttribute("data-resource-name")));
+        // On home the drawer is the page, so there's nothing beneath it to close to.
+        Assert.Empty(cut.FindAll($"[aria-label='{Resources.Layout.ResourcePaneClose}']"));
+
+        cut.Render(p => p.Add(v => v.Value, desktop).AddChildContent<ResourcesLayout>());
+        Assert.Equal(string.Empty, navigation.ToBaseRelativePath(navigation.Uri));
+        Assert.True(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
+        Assert.False(cut.Find(".resources-layout").ClassList.Contains("drawer-open"));
+    }
+
+    // A narrow home selects the Home tab. Overview opens the overview of all resources, and Home goes back.
+    [Fact]
+    public async Task NarrowHome_SelectsTheHomeTabAndOverviewOpensTheOverview()
+    {
+        var desktop = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var narrow = desktop with { IsDesktop = false };
+        ResourceSetupHelpers.SetupResourcesLayout(this, desktop, new TestDashboardClient(isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("api")],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo("/");
+        var cut = Render<CascadingValue<ViewportInformation>>(p => p.Add(v => v.Value, desktop).AddChildContent<ResourcesLayout>());
+        var layout = cut.FindComponent<ResourcesLayout>();
+        cut.WaitForAssertion(() => Assert.True(layout.Instance.IsLoaded));
+        // The wide layout goes home from the brand instead.
+        Assert.Empty(cut.FindAll("#resource-tab-home"));
+
+        cut.Render(p => p.Add(v => v.Value, narrow).AddChildContent<ResourcesLayout>());
+        Assert.True(cut.Find(".resources-layout").ClassList.Contains("drawer-open"));
+        Assert.Equal("true", cut.Find(".resources-layout").GetAttribute("data-list-home"));
+        Assert.Equal("resource-tab-home", cut.FindComponent<FluentTabs>().Instance.ActiveTabId);
+        Assert.Equal("resource-tab-home", cut.FindComponents<FluentTab>()[0].Instance.Id);
+        Assert.Equal(ResourceTab.Overview, layout.Instance.CurrentTab);
+
+        // The layout's script reports a click on the current tab.
+        await cut.InvokeAsync(() => layout.Instance.OpenTabFromFullCanvasAsync("tab-Overview"));
+        cut.Render(p => p.Add(v => v.Value, narrow).AddChildContent<ResourcesLayout>());
         Assert.Equal("resources", navigation.ToBaseRelativePath(navigation.Uri));
-        Assert.Empty(cut.Instance.SelectedResourceNames);
+        Assert.False(cut.Find(".resources-layout").ClassList.Contains("drawer-open"));
+        Assert.Null(cut.Find(".resources-layout").GetAttribute("data-list-home"));
+        Assert.Equal("tab-Overview", cut.FindComponent<FluentTabs>().Instance.ActiveTabId);
+
+        var tabs = cut.FindComponent<FluentTabs>();
+        var home = cut.FindComponents<FluentTab>().Single(t => t.Instance.Id == "resource-tab-home").Instance;
+        await cut.InvokeAsync(() => tabs.Instance.ActiveTabChanged.InvokeAsync(home));
+        cut.Render(p => p.Add(v => v.Value, narrow).AddChildContent<ResourcesLayout>());
+        Assert.Equal(string.Empty, navigation.ToBaseRelativePath(navigation.Uri));
+        Assert.True(cut.Find(".resources-layout").ClassList.Contains("drawer-open"));
+        Assert.Equal("resource-tab-home", cut.FindComponent<FluentTabs>().Instance.ActiveTabId);
     }
 
     [Fact]

@@ -63,7 +63,8 @@
                                       Title="@Loc[nameof(Dashboard.Resources.Layout.ResourcePaneGrouping)]" />
                 }
 
-                @if (!isDesktop)
+                @* On home the drawer is the page, so there's nothing beneath it to close to. *@
+                @if (!isDesktop && !IsHome)
                 {
                     <FluentButton Class="toolbar-button resource-pane-button"
                                   Appearance="ButtonAppearance.Default"
@@ -355,6 +356,7 @@
          data-pane-location="@_lastLocation"
          data-pane-interactions-ready="@(_isOrderingRegistered ? "true" : "false")"
          data-home-pending="@(_homeNavigation is not null ? "true" : null)"
+         data-list-home="@(IsResourceListShownAsHome ? "true" : null)"
          data-escape-home="@(CanEscapeGoHome ? "true" : null)"
          style="@GetLayoutStyle()"
          @ref="_layoutElement">
@@ -816,21 +818,34 @@
     {
         // When the row no longer has room for every label, the container query swaps this for the compact dropdown
         // instead of letting the top navigation grow its own scrollbar.
-        // While a tab click navigates, the strip keeps showing the clicked tab (see OnTabChanged). While the resource
-        // list fills the page, its content is closed and no tab is shown selected: each tab then opens that view for
-        // the selection, which is all resources once the content is closed. CurrentTab is kept for the session, so
+        // While a tab click navigates, the strip keeps showing the clicked tab (see OnTabChanged). While home shows the
+        // resource list, its content is closed and no resource tab is selected: each tab then opens that view for the
+        // selection, which is all resources once the content is closed. CurrentTab is kept for the session, so
         // selecting resources in the list opens the tab that was last shown.
-        ResourceTab? activeTab = _isPaneFullCanvas ? null : _navigatingToTab ?? CurrentTab;
+        ResourceTab? activeTab = IsResourceListShownAsHome ? null : _navigatingToTab ?? CurrentTab;
+        var showHomeTab = ShowsHomeTab(isDesktop);
+        var homeIsActive = showHomeTab && IsResourceListShownAsHome;
+        Icon homeIcon = homeIsActive ? new Icons.Filled.Size24.Home() : new Icons.Regular.Size24.Home();
         var renderedLocation = _lastLocation;
         var currentTabItem = activeTab is { } active ? GetTabs().FirstOrDefault(t => t.Tab == active) : null;
+        var compactText = currentTabItem?.Text ?? Loc[homeIsActive ? nameof(Dashboard.Resources.Layout.ResourceTabHome) : nameof(Dashboard.Resources.Layout.ResourceTabsLandmark)];
+        var compactIcon = currentTabItem?.Icon ?? (homeIsActive ? homeIcon : null);
     <div class="resource-tabs-nav">
         @* Keep queued native change events bound to their original location. Reusing the component would
            rebind its callback before those events arrive, making an old change look like a new user navigation. *@
         <FluentTabs @key="renderedLocation"
                     Class="resources-tab-header"
-                    ActiveTabId="@(activeTab is { } activeId ? GetTabId(activeId) : NoActiveTabId)"
+                    ActiveTabId="@(activeTab is { } activeId ? GetTabId(activeId) : homeIsActive ? HomeTabId : NoActiveTabId)"
                     ActiveTabChanged="@(tab => OnTabChanged(tab, isDesktop, renderedLocation))"
                     Size="null">
+            @if (showHomeTab)
+            {
+                <FluentTab HeaderClass="tab-label" Id="@HomeTabId" IconStart="@homeIcon">
+                    <HeaderTemplate>
+                        <span>@Loc[nameof(Dashboard.Resources.Layout.ResourceTabHome)]</span>
+                    </HeaderTemplate>
+                </FluentTab>
+            }
             @foreach (var tab in GetTabs())
             {
                 <FluentTab HeaderClass="tab-label"
@@ -865,10 +880,10 @@
         </div>
         @* The button already shows the current view, so a tooltip would only cover the controls above it. *@
         <AspireMenuButton ButtonClass="resource-tabs-compact-button"
-                          Text="@(currentTabItem?.Text ?? Loc[nameof(Dashboard.Resources.Layout.ResourceTabsLandmark)])"
-                          IconStart="@currentTabItem?.Icon"
+                          Text="@compactText"
+                          IconStart="@compactIcon"
                           ButtonAppearance="ButtonAppearance.Default"
-                          ItemsProvider="@GetTabMenuItems"
+                          ItemsProvider="@(() => GetTabMenuItems(showHomeTab))"
                           Title="@Loc[nameof(Dashboard.Resources.Layout.ResourceTabsLandmark)]"
                           data-tooltip="" />
     </div>

@@ -36,17 +36,17 @@ internal static class ResourcePaneNavigation
     }
 
     /// <summary>
-    /// Opens the overview of all resources. The dashboard's home page, "/", is the full-page resource list with no view
-    /// open on desktop, and its "All resources" row opens the overview at /resources. Narrow layouts have no full-page
-    /// list and already show the overview, as does /resources itself.
+    /// Opens the overview of all resources. The dashboard's home page, "/", shows the resource list with no view open:
+    /// the full-page table on desktop, the open drawer on narrow layouts. Its "All resources" row opens the overview at
+    /// /resources. /resources itself already shows the overview.
     /// </summary>
     public static async Task OpenAllResourcesOverviewAsync(IPage page)
     {
         await Assertions.Expect(page.Locator(".resources-layout")).ToHaveAttributeAsync("data-pane-interactions-ready", "true");
-        if (await page.Locator(".resources-layout.pane-full-canvas").CountAsync() > 0)
+        if (await page.Locator(".resources-layout[data-list-home='true']").CountAsync() > 0)
         {
             await page.Locator(".resource-row-all .resource-row-link").ClickAsync();
-            await Assertions.Expect(page.Locator(".resources-layout.pane-full-canvas")).ToHaveCountAsync(0);
+            await Assertions.Expect(page.Locator(".resources-layout[data-list-home='true']")).ToHaveCountAsync(0);
         }
     }
 

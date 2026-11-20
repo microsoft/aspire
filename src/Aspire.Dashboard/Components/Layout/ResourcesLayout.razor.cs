@@ -79,6 +79,8 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private bool _isLoaded;
     private bool _isPaneCollapsed;
     private bool _isDrawerOpen;
+    // The viewport home's table or drawer was last set up for (see OnParametersSetAsync).
+    private bool _renderedIsDesktop;
     // Whether the resource list fills the page as a table. It does at the home URL, and only there, so the table
     // is a page with its own address rather than a state of whichever tab was showing (see IsResourceListHome).
     private bool _isPaneFullCanvas;
@@ -286,6 +288,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
         _lastLocation = NavigationManager.Uri;
         UpdateFromLocation(_lastLocation);
+        _renderedIsDesktop = ViewportInformation.IsDesktop;
 
         // OnParametersSetAsync only acts on a location change, and the location this layout is created with isn't
         // one, so the home check also runs here. No transition: there's no earlier view to animate from.
@@ -503,6 +506,9 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         {
             _isResourcePickerOpen = false;
         }
+        // Compared with the viewport home's state was last set for, so a resize during initialization isn't missed.
+        var viewportChanged = _renderedIsDesktop != ViewportInformation.IsDesktop;
+        _renderedIsDesktop = ViewportInformation.IsDesktop;
         if (!ViewportInformation.IsDesktop && (_isPaneFullCanvas || _isPaneSelectionReveal))
         {
             _isPaneFullCanvas = false;
@@ -511,6 +517,14 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             _animatedPaneNavigation = null;
             _isDrawerOpen = false;
             ClearPaneActivity();
+        }
+
+        // A resize doesn't change the URL, so the location handling below won't run. Home is the table on a wide
+        // layout and the open drawer on a narrow one, so switch between them here.
+        if (viewportChanged && IsResourceListHome(NavigationManager.Uri))
+        {
+            SetResourceListVisible(true);
+            _animatePaneTransition = false;
         }
 
         // The router sets a new body on every navigation. Selection is updated here, rather than in a
@@ -555,6 +569,8 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         // Closing the menu can yield a render. Publish the new selection first so
         // its reveal cannot briefly show the previous resource's heading.
         UpdateFromLocation(location);
+        // Set before showResourceList is applied, which reopens the drawer on a narrow home.
+        _isDrawerOpen = false;
         if (showResourceList)
         {
             SetResourceListVisible(true);
@@ -562,7 +578,6 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             // the back button or a link, shows the table at once, like any other page.
             _animatePaneTransition = brandWentHome;
         }
-        _isDrawerOpen = false;
         // Modifier selection changes the URL without dismissing the picker. Other navigation still closes it.
         _isResourcePickerOpen = _isResourcePickerOpen && string.Equals(location, _resourcePickerSelectionLocation, StringComparison.Ordinal);
         _resourcePickerSelectionLocation = null;
@@ -593,9 +608,9 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
     // Whether Escape, when nothing else uses it, goes to the dashboard's home as the brand does (see
     // registerResourceContextMenu in ResourcesLayout.razor.js). Every page beside the docked list can go there. Home
-    // itself can't, nor a narrow layout, where "/" redirects to the overview because there's no full-page list, nor a
-    // dashboard without the resource service, whose "/" redirects to the structured logs (see Home). While home is
-    // loading, Escape would only start the same navigation again.
+    // itself can't, nor a narrow layout, where home is the drawer rather than the table, nor a dashboard without
+    // the resource service, whose "/" redirects to the structured logs (see Home). While home is loading, Escape would
+    // only start the same navigation again.
     internal bool CanEscapeGoHome =>
         ViewportInformation.IsDesktop && DashboardClient.IsEnabled && !_isPaneFullCanvas && _homeNavigation is null;
 
@@ -732,7 +747,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     }
 
     private IList<MenuButtonItem> GetOverflowMenuItems() =>
-        GetTabMenuItems().Where(item => _overflowTabIds.Contains(item.Id!.Replace("-menu-item", string.Empty, StringComparison.Ordinal))).ToList();
+        GetTabMenuItems(includeHome: false).Where(item => _overflowTabIds.Contains(item.Id!.Replace("-menu-item", string.Empty, StringComparison.Ordinal))).ToList();
 
     /// <summary>
     /// Called by the pane resizer after the user resizes the resource list.
@@ -757,13 +772,19 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     /// <remarks>
     /// The table isn't a view of a selection, so it isn't one of the tabs: it's the list itself at full width, and
     /// it has its own URL. Reloading, the back button and links to "/" therefore all show the table, and the
-    /// overview of all resources keeps /resources to itself. Narrow layouts have no full-page list; there "/" shows
-    /// the overview of all resources (see Home).
+    /// overview of all resources keeps /resources to itself. A narrow layout has no room for the table, so there home
+    /// is the open drawer, still at "/".
     /// </remarks>
     private bool IsResourceListHome(string location)
     {
-        return ViewportInformation.IsDesktop && DashboardClient.IsEnabled && IsRootLocation(location);
+        return DashboardClient.IsEnabled && IsRootLocation(location);
     }
+
+    private bool IsHome => _lastLocation is { } location && IsResourceListHome(location);
+
+    // Home shows the list in place of any tab's content: no resource tab is selected, and choosing one, including the
+    // current tab, opens its content.
+    private bool IsResourceListShownAsHome => _isPaneFullCanvas || (!ViewportInformation.IsDesktop && IsHome);
 
     // Whether a location is the root URL, "/", whatever its query string.
     private bool IsRootLocation(string location)
@@ -2800,8 +2821,33 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     // start with "tab-", so OnTabChanged ignores it.
     private const string NoActiveTabId = "resource-tab-none";
 
+    // The narrow layout's Home tab. It doesn't start with "tab-", so the resource tab handlers ignore it.
+    private const string HomeTabId = "resource-tab-home";
+
+    // A narrow layout has no room for the brand, so its tab strip goes home instead. Without the resource service there's
+    // no home to go to (see Home).
+    private bool ShowsHomeTab(bool isDesktop) => !isDesktop && DashboardClient.IsEnabled;
+
+    // Goes home as the brand does, which clears the stored selection.
+    private Task GoHomeAsync()
+    {
+        if (MainLayout is { } mainLayout)
+        {
+            return mainLayout.GoToAllResourcesAsync();
+        }
+
+        NavigationManager.NavigateTo(DashboardUrls.HomeUrl());
+        return Task.CompletedTask;
+    }
+
     private async Task OnTabChanged(FluentTab? newTab, bool isDesktop, string? renderedLocation)
     {
+        if (newTab?.Id == HomeTabId)
+        {
+            await OnHomeTabChosenAsync(isDesktop, renderedLocation);
+            return;
+        }
+
         // FluentTabs also raises this when a tab is disposed, for example when leaving the resources view, and
         // when it syncs with ActiveTabId after a navigation. Only a change made while this layout shows the current
         // URL is a user selecting a tab.
@@ -2902,12 +2948,46 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         await NavigateToTabAsync(href);
     }
 
+    // Like the resource tabs (see OnTabChanged), Home is also reported when FluentTabs syncs with ActiveTabId or the
+    // outgoing strip is torn down. Only a change from the current strip, with Home focused, is the user's choice.
+    private async Task OnHomeTabChosenAsync(bool isDesktop, string? renderedLocation)
+    {
+        if (_isDisposed || _jsModule is null || IsResourceListShownAsHome || _homeNavigation is not null || !IsCurrentStrip())
+        {
+            return;
+        }
+
+        bool isFocused;
+        try
+        {
+            isFocused = await _jsModule.InvokeAsync<bool>("isResourceTabFocused", HomeTabId);
+        }
+        catch (JSDisconnectedException)
+        {
+            return;
+        }
+
+        // A navigation or resize may have finished while the focus check was in flight.
+        if (!isFocused || _isDisposed || !IsCurrentStrip())
+        {
+            return;
+        }
+
+        await GoHomeAsync();
+
+        bool IsCurrentStrip() =>
+            isDesktop == ViewportInformation.IsDesktop &&
+            ShowsHomeTab(isDesktop) &&
+            string.Equals(renderedLocation, _lastLocation, StringComparison.Ordinal) &&
+            string.Equals(NavigationManager.Uri, _lastLocation, StringComparison.Ordinal);
+    }
+
     // Opens a tab the user chose, for the current selection. While the full-page list is showing, choosing the tab that's
     // already current opens its content; otherwise it navigates to the tab.
     private async Task OpenChosenTabAsync(ResourceTab tab)
     {
         if (GetTabs().FirstOrDefault(t => t.Tab == tab && t.IsVisible)?.Href is not { } href ||
-            (tab == CurrentTab && !_isPaneFullCanvas))
+            (tab == CurrentTab && !IsResourceListShownAsHome))
         {
             return;
         }
@@ -2922,8 +3002,8 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     }
 
     /// <summary>
-    /// Called by the layout's script when the user clicks a tab, or presses Enter or Space on it, while the resource list
-    /// fills the page. No tab is shown selected then, so choosing the current tab must open its content. FluentTabs
+    /// Called by the layout's script when the user clicks a tab, or presses Enter or Space on it, while home shows the
+    /// resource list. No resource tab is selected then, so choosing the current tab must open its content. FluentTabs
     /// can't report that choice: it raises the same change when it syncs with ActiveTabId, for example right after
     /// closing the content with a tab still focused, which would reopen it. Other tabs open through OnTabChanged.
     /// </summary>
@@ -2946,7 +3026,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             return;
         }
 
-        if (!_isPaneFullCanvas
+        if (!IsResourceListShownAsHome
             || tab != CurrentTab
             || GetTabs().FirstOrDefault(t => t.Tab == tab && t.IsVisible)?.Href is not { } href)
         {
@@ -3034,9 +3114,24 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             : Task.CompletedTask;
     }
 
-    private IList<MenuButtonItem> GetTabMenuItems()
+    private IList<MenuButtonItem> GetTabMenuItems(bool includeHome)
     {
         var items = new List<MenuButtonItem>();
+
+        if (includeHome)
+        {
+            var homeIsActive = IsResourceListShownAsHome;
+            items.Add(new MenuButtonItem
+            {
+                Id = $"{HomeTabId}-menu-item",
+                Class = "resource-tab-menu-item",
+                Text = Loc[nameof(Resources.Layout.ResourceTabHome)],
+                StartIcon = homeIsActive ? new Icons.Filled.Size24.Home() : new Icons.Regular.Size24.Home(),
+                Role = MenuItemRole.Radio,
+                Checked = homeIsActive,
+                OnClick = GoHomeAsync
+            });
+        }
 
         foreach (var tab in GetTabs())
         {
@@ -3053,7 +3148,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
                 StartIcon = tab.Icon,
                 Role = MenuItemRole.Radio,
                 // Like the tab strip, the menu shows no current view while the content is closed.
-                Checked = tab.Tab == CurrentTab && !_isPaneFullCanvas,
+                Checked = tab.Tab == CurrentTab && !IsResourceListShownAsHome,
                 Tooltip = tab.IsAvailable ? null : Loc[nameof(Resources.Layout.ResourceTabUnavailable)].Value,
                 OnClick = () => ChooseTabFromMenuAsync(tab.Tab)
             });

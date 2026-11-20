@@ -1042,6 +1042,15 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Home.
+        /// </summary>
+        public static string ResourceTabHome {
+            get {
+                return ResourceManager.GetString("ResourceTabHome", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to More views.
         /// </summary>
         public static string ResourceTabsMore {
