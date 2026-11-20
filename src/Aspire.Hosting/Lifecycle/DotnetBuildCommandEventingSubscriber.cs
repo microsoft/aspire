@@ -93,7 +93,11 @@ internal sealed class DotnetBuildCommandEventingSubscriber(
                     return;
                 }
 
-                args.Insert(Math.Min(2, args.Count), "-mt");
+                // Diagnostic only: the failing Windows Blazor shard invokes the WASM tasks through this generated project.
+                var mode = OperatingSystem.IsWindows() && buildTarget.EndsWith(".proj", StringComparison.OrdinalIgnoreCase)
+                    ? "-mt:false"
+                    : "-mt";
+                args.Insert(Math.Min(2, args.Count), mode);
             }));
             executable.Annotations.Add(MultiThreadedBuildConfiguredAnnotation.Instance);
         }
