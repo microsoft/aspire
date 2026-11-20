@@ -1,0 +1,28 @@
+{
+  "id": "vscode-e2e-winui-definition-probe-timeout-windows",
+  "type": "flaky-test",
+  "title": "VS Code WinUI debug E2E C# definition probe times out on Windows",
+  "error_pattern": "The C# definition probe for InitializeComponent failed: Timed out after 204ms waiting for E2E control revision",
+  "occurrences": [
+    {
+      "run_id": 44812139244,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/44812139244",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, winui-debug)",
+      "observed_at": "2026-11-20T21:59:53Z",
+      "pr_number": 0,
+      "tests": [
+        {
+          "name": "Aspire WinUI debug E2E debugs an unpackaged WinUI project through its generated apphost executable",
+          "job_id": 136583671453,
+          "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, winui-debug)",
+          "error": "The C# definition probe for InitializeComponent in C:\\Users\\runneradmin\\AppData\\Local\\Temp\\aev-2kpQXK\\workspace\\AspireE2E.WinUI\\App.xaml.cs failed: Timed out after 204ms waiting for E2E control revision 1795210781009.\nLast error: <none>\nLast state: {\n  \"extensionHostSessionId\": \"0f949c86-49b1-4f87-a729-24ecca8201b8\",\n  \"updatedAt\": \"2026-11-20T21:42:12.003Z\",\n  \"runId\": \"5752-1795210691672\",\n  \"state\": {\n    \"viewMode\": \"workspace\",\n    \"isRepositoryLoading\": false,\n    \"isWorkspaceAppHostDiscoveryComplete\": true,\n    \"hasError\": false,\n    \"workspaceAppHostName\": \"AspireE2E.AppHost.csproj\",\n    \"workspaceAppHostPath\": \"c:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-2kpQXK\\\\workspace\\\\AspireE2E.AppHost\\\\AspireE2E.AppHost.csproj\",\n    \"workspaceAppHostCandidatePaths\": [\n      \"c:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-2kpQXK\\\\workspace\\\\AspireE2E.AppHost\\\\AspireE2E.AppHost.csproj\"\n    ],\n    \"workspaceAppHostDescription\": \"Workspace view selected because aspire ls found one b",
+          "stack_trace": "Error: The C# definition probe for InitializeComponent in C:\\Users\\runneradmin\\AppData\\Local\\Temp\\aev-2kpQXK\\workspace\\AspireE2E.WinUI\\App.xaml.cs failed: Timed out after 204ms waiting for E2E control revision 1795210781009.\nLast error: <none>\nLast state: {\n  \"extensionHostSessionId\": \"0f949c86-49b1-4f87-a729-24ecca8201b8\",\n  \"updatedAt\": \"2026-11-20T21:42:12.003Z\",\n  \"runId\": \"5752-1795210691672\",\n  \"state\": {\n    \"viewMode\": \"workspace\",\n    \"isRepositoryLoading\": false,\n    \"isWorkspaceAppHostDiscoveryComplete\": true,\n    \"hasError\": false,\n    \"workspaceAppHostName\": \"AspireE2E.AppHost.csproj\",\n    \"workspaceAppHostPath\": \"c:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-2kpQXK\\\\workspace\\\\AspireE2E.AppHost\\\\AspireE2E.AppHost.csproj\",\n    \"workspaceAppHostCandidatePaths\": [\n      \"c:\\\\Users\\\\runneradmin\\\\AppData\\\\Local\\\\Temp\\\\aev-2kpQXK\\\\workspace\\\\AspireE2E.AppHost\\\\AspireE2E.AppHost.csproj\"\n    ],\n    \"workspaceAppHostDescription\": \"Workspace view selected because aspire ls found one buildable C# AppHost.\",\n    \"workspaceResources\": [],\n    \"appHosts\": [],\n    \"launchingPaths\": [],\n    \"stoppingPaths\": [],\n    \"debugSessions\": []\n  },\n  \"commandInvocations\": [],\n  \"terminalCommands\": [],\n  \"debugLaunches\": [],\n  \"debugConsoleOutputs\": [],\n  \"stoppingPathEvents\": [],\n  \"taskProcessEvents\": [],\n  \"browserDebugSessions\": [],\n  \"control\": {\n    \"revision\": 1795210781008,\n    \"status\": \"applied\",\n    \"startedObserved\": true,\n    \"result\": []\n  }\n}\n    at D:\\a\\aspire\\aspire\\extension\\out\\test-e2e\\test-e2e\\winUiDebug.e2e.test.js:108:19\n    at async waitForCSharpProjectLoad (out\\test-e2e\\test-e2e\\winUiDebug.e2e.test.js:101:24)\n    at async Context.<anonymous> (out\\test-e2e\\test-e2e\\winUiDebug.e2e.test.js:70:9)",
+          "standard_output": "",
+          "standard_error": "",
+          "result_file": "00001.json",
+          "result_format": "mocha"
+        }
+      ]
+    }
+  ]
+}

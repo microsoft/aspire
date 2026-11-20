@@ -1,0 +1,29 @@
+{
+  "id": "native-core-provider-replacement-capabilities-race",
+  "type": "flaky-test",
+  "title": "Intermittent NativeProviderClientTests replacement provider capability count mismatch on Windows",
+  "error_pattern": "Assert.Equal() Failure: Values differ\nExpected: 0\nActual:   3",
+  "occurrences": [
+    {
+      "run_id": 44812139244,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/44812139244",
+      "job": "Tests / No-package tests (regular, Aspire.Hosting.Native.Core.Tests, Hosting.Native.Core, Hosting.Native.... / Hosting.Native.Core (windows-latest)",
+      "observed_at": "2026-11-20T21:59:53Z",
+      "pr_number": 0,
+      "tests": [
+        {
+          "name": "Aspire.Hosting.Native.Core.Tests.NativeProviderClientTests.ReplacementProviderReusesCapabilitiesAndTypesWithoutRevivingDisconnectedHandles",
+          "job_id": 136576146515,
+          "job": "Tests / No-package tests (regular, Aspire.Hosting.Native.Core.Tests, Hosting.Native.Core, Hosting.Native.... / Hosting.Native.Core (windows-latest)",
+          "error": "Assert.Equal() Failure: Values differ\nExpected: 0\nActual:   3",
+          "stack_trace": "   at Aspire.Hosting.Native.Core.Tests.NativeProviderClientTests.ReplacementProviderReusesCapabilitiesAndTypesWithoutRevivingDisconnectedHandles() in D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.Native.Core.Tests\\NativeProviderClientTests.cs:line 42\n   at Aspire.Hosting.Native.Core.Tests.NativeProviderClientTests.ReplacementProviderReusesCapabilitiesAndTypesWithoutRevivingDisconnectedHandles() in D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.Native.Core.Tests\\NativeProviderClientTests.cs:line 44\n   at Aspire.Hosting.Native.Core.Tests.NativeProviderClientTests.ReplacementProviderReusesCapabilitiesAndTypesWithoutRevivingDisconnectedHandles() in D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.Native.Core.Tests\\NativeProviderClientTests.cs:line 46\n   at Aspire.Hosting.Native.Core.Tests.NativeProviderClientTests.ReplacementProviderReusesCapabilitiesAndTypesWithoutRevivingDisconnectedHandles() in D:\\a\\aspire\\aspire\\tests\\Aspire.Hosting.Native.Core.Tests\\NativeProviderClientTests.cs:line 46\n--- End of stack trace from previous location ---",
+          "standard_output": "",
+          "standard_error": "",
+          "result_file": "00001.trx",
+          "result_format": "trx",
+          "execution_id": "d13ad968-c3b1-4a44-a3c8-bc4bb2150e44"
+        }
+      ]
+    }
+  ]
+}

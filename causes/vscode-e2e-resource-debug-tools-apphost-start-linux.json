@@ -1,0 +1,50 @@
+{
+  "id": "vscode-e2e-resource-debug-tools-apphost-start-linux",
+  "type": "flaky-test",
+  "title": "VS Code resource-debug-tools E2E apphost start fails and resource waits time out on Linux",
+  "error_pattern": "aspire start --apphost ... exited with code 2\nTimed out after 180000ms waiting for resource 'e2e-worker' state Running.",
+  "occurrences": [
+    {
+      "run_id": 44812139244,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/44812139244",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, resource-debug-tools)",
+      "observed_at": "2026-11-20T21:59:53Z",
+      "pr_number": 0,
+      "tests": [
+        {
+          "name": "Aspire resource debug language model tool E2E attaches packaged .NET and Go debuggers, hits breakpoints, detaches, and tears down",
+          "job_id": 136583671618,
+          "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, resource-debug-tools)",
+          "error": "Failed to apply E2E control revision 1795210678260: Aspire extension E2E /tmp/aev-ygs69w/cli/aspire start --apphost /tmp/aev-ygs69w/workspace/AspireE2E.AppHost/AspireE2E.AppHost.csproj --format json --non-interactive --nologo exited with code 2.",
+          "stack_trace": "Error: Failed to apply E2E control revision 1795210678260: Aspire extension E2E /tmp/aev-ygs69w/cli/aspire start --apphost /tmp/aev-ygs69w/workspace/AspireE2E.AppHost/AspireE2E.AppHost.csproj --format json --non-interactive --nologo exited with code 2.\n    at applyE2eControl (out/test-e2e/test-e2e/helpers/assertions.js:389:15)\n    at async executeE2eControlCommand (out/test-e2e/test-e2e/helpers/fixtures.js:170:12)\n    at async Context.<anonymous> (out/test-e2e/test-e2e/resourceDebugTools.e2e.test.js:244:24)",
+          "standard_output": "",
+          "standard_error": "",
+          "result_file": "00001.json",
+          "result_format": "mocha"
+        },
+        {
+          "name": "Aspire resource debug language model tool E2E attaches to a .NET resource launched with Run Without Debugging",
+          "job_id": 136583671618,
+          "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, resource-debug-tools)",
+          "error": "Timed out after 180000ms waiting for resource 'e2e-worker' state Running.\nLast error: <none>\nLast state: {\n  \"extensionHostSessionId\": \"5653665b-7a6f-401f-ac1b-30559a0881ee\",\n  \"updatedAt\": \"2026-11-20T21:38:37.880Z\",\n  \"runId\": \"7192-1795210641613\",\n  \"state\": {\n    \"viewMode\": \"workspace\",\n    \"isRepositoryLoading\": false,\n    \"isWorkspaceAppHostDiscoveryComplete\": true,\n    \"hasError\": false,\n    \"workspaceAppHostName\": \"AspireE2E.AppHost.csproj\",\n    \"workspaceAppHostPath\": \"/tmp/aev-ygs69w/workspace/AspireE2E.AppHost/AspireE2E.AppHost.csproj\",\n    \"workspaceAppHostCandidatePaths\": [\n      \"/tmp/aev-ygs69w/workspace/AspireE2E.AppHost/AspireE2E.AppHost.csproj\"\n    ],\n    \"workspaceAppHostDescription\": \"Workspace view selected because aspire ls found one buildable C# AppHost.\",\n    \"workspaceResources\": [],\n    \"appHosts\": [],\n    \"launchingPaths\": [],\n    \"stoppingPaths\": [],\n    \"debugSessions\": []\n  },\n  \"commandInvocations\": [\n    {\n      \"command\": \"aspire-vscode.runAppHost\",\n  ",
+          "stack_trace": "Error: Timed out after 180000ms waiting for resource 'e2e-worker' state Running.\nLast error: <none>\nLast state: {\n  \"extensionHostSessionId\": \"5653665b-7a6f-401f-ac1b-30559a0881ee\",\n  \"updatedAt\": \"2026-11-20T21:38:37.880Z\",\n  \"runId\": \"7192-1795210641613\",\n  \"state\": {\n    \"viewMode\": \"workspace\",\n    \"isRepositoryLoading\": false,\n    \"isWorkspaceAppHostDiscoveryComplete\": true,\n    \"hasError\": false,\n    \"workspaceAppHostName\": \"AspireE2E.AppHost.csproj\",\n    \"workspaceAppHostPath\": \"/tmp/aev-ygs69w/workspace/AspireE2E.AppHost/AspireE2E.AppHost.csproj\",\n    \"workspaceAppHostCandidatePaths\": [\n      \"/tmp/aev-ygs69w/workspace/AspireE2E.AppHost/AspireE2E.AppHost.csproj\"\n    ],\n    \"workspaceAppHostDescription\": \"Workspace view selected because aspire ls found one buildable C# AppHost.\",\n    \"workspaceResources\": [],\n    \"appHosts\": [],\n    \"launchingPaths\": [],\n    \"stoppingPaths\": [],\n    \"debugSessions\": []\n  },\n  \"commandInvocations\": [\n    {\n      \"command\": \"aspire-vscode.runAppHost\",\n      \"outcome\": \"success\",\n      \"durationMs\": 230,\n      \"source\": \"tree\",\n      \"sequence\": 1\n    }\n  ],\n  \"terminalCommands\": [],\n  \"debugLaunches\": [\n    {\n      \"sequence\": 1,\n      \"appHostPath\": \"/tmp/aev-ygs69w/workspace/AspireE2E.AppHost/AspireE2E.AppHost.csproj\",\n      \"command\": \"run\",\n      \"noDebug\": true,\n      \"executionSuppressed\": false\n    }\n  ],\n  \"debugConsoleOutputs\": [\n    {\n      \"sequence\": 1,\n      \"debugSessionId\": \"aspire-extension-run-3ae77ca92d8f31bf\",\n      \"appHostPath\": \"/tmp/aev-ygs69w/workspace/AspireE2E.AppHost/AspireE2E.AppHost.csproj\",\n      \"category\": \"stdout\",\n      \"output\": \"\uD83D\uDCC2  Launching Aspire run session for AppHost /tmp/aev-ygs69w/workspace/AspireE2E.AppHost/AspireE2E.AppHost.csproj...\\n\"\n    },\n    {\n      \"sequence\": 2,\n      \"debugSessionId\": \"aspire-extension-run-3ae77ca92d8f31bf\",\n      \"appHostPath\": \"/tmp/aev-ygs69w/workspace/AspireE2E.AppHost/AspireE2E.AppHost.csproj\",\n      \"category\": \"stdout\",\n      \"output\": \"\\u001b[2m\uD83D\uDD10\\u00",
+          "standard_output": "",
+          "standard_error": "",
+          "result_file": "00001.json",
+          "result_format": "mocha"
+        },
+        {
+          "name": "Aspire resource debug language model tool E2E attaches to a Go resource launched with Run Without Debugging, hits a breakpoint, and detaches",
+          "job_id": 136583671618,
+          "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Linux, resource-debug-tools)",
+          "error": "Timed out after 180000ms waiting for resource 'e2e-go' state Running.\nLast error: <none>\nLast state: {\n  \"extensionHostSessionId\": \"5653665b-7a6f-401f-ac1b-30559a0881ee\",\n  \"updatedAt\": \"2026-11-20T21:41:40.895Z\",\n  \"runId\": \"7192-1795210641613\",\n  \"state\": {\n    \"viewMode\": \"workspace\",\n    \"isRepositoryLoading\": false,\n    \"isWorkspaceAppHostDiscoveryComplete\": true,\n    \"hasError\": false,\n    \"workspaceAppHostName\": \"AspireE2E.AppHost.csproj\",\n    \"workspaceAppHostPath\": \"/tmp/aev-ygs69w/workspace/AspireE2E.AppHost/AspireE2E.AppHost.csproj\",\n    \"workspaceAppHostCandidatePaths\": [\n      \"/tmp/aev-ygs69w/workspace/AspireE2E.AppHost/AspireE2E.AppHost.csproj\"\n    ],\n    \"workspaceAppHostDescription\": \"Workspace view selected because aspire ls found one buildable C# AppHost.\",\n    \"workspaceResources\": [],\n    \"appHosts\": [],\n    \"launchingPaths\": [],\n    \"stoppingPaths\": [],\n    \"debugSessions\": []\n  },\n  \"commandInvocations\": [\n    {\n      \"command\": \"aspire-vscode.runAppHost\",\n      ",
+          "stack_trace": "Error: Timed out after 180000ms waiting for resource 'e2e-go' state Running.\nLast error: <none>\nLast state: {\n  \"extensionHostSessionId\": \"5653665b-7a6f-401f-ac1b-30559a0881ee\",\n  \"updatedAt\": \"2026-11-20T21:41:40.895Z\",\n  \"runId\": \"7192-1795210641613\",\n  \"state\": {\n    \"viewMode\": \"workspace\",\n    \"isRepositoryLoading\": false,\n    \"isWorkspaceAppHostDiscoveryComplete\": true,\n    \"hasError\": false,\n    \"workspaceAppHostName\": \"AspireE2E.AppHost.csproj\",\n    \"workspaceAppHostPath\": \"/tmp/aev-ygs69w/workspace/AspireE2E.AppHost/AspireE2E.AppHost.csproj\",\n    \"workspaceAppHostCandidatePaths\": [\n      \"/tmp/aev-ygs69w/workspace/AspireE2E.AppHost/AspireE2E.AppHost.csproj\"\n    ],\n    \"workspaceAppHostDescription\": \"Workspace view selected because aspire ls found one buildable C# AppHost.\",\n    \"workspaceResources\": [],\n    \"appHosts\": [],\n    \"launchingPaths\": [],\n    \"stoppingPaths\": [],\n    \"debugSessions\": []\n  },\n  \"commandInvocations\": [\n    {\n      \"command\": \"aspire-vscode.runAppHost\",\n      \"outcome\": \"success\",\n      \"durationMs\": 230,\n      \"source\": \"tree\",\n      \"sequence\": 1\n    },\n    {\n      \"command\": \"aspire-vscode.runAppHost\",\n      \"outcome\": \"success\",\n      \"durationMs\": 171,\n      \"source\": \"tree\",\n      \"sequence\": 2\n    }\n  ],\n  \"terminalCommands\": [],\n  \"debugLaunches\": [\n    {\n      \"sequence\": 1,\n      \"appHostPath\": \"/tmp/aev-ygs69w/workspace/AspireE2E.AppHost/AspireE2E.AppHost.csproj\",\n      \"command\": \"run\",\n      \"noDebug\": true,\n      \"executionSuppressed\": false\n    },\n    {\n      \"sequence\": 2,\n      \"appHostPath\": \"/tmp/aev-ygs69w/workspace/AspireE2E.AppHost/AspireE2E.AppHost.csproj\",\n      \"command\": \"run\",\n      \"noDebug\": true,\n      \"executionSuppressed\": false\n    }\n  ],\n  \"debugConsoleOutputs\": [\n    {\n      \"sequence\": 1,\n      \"debugSessionId\": \"aspire-extension-run-3ae77ca92d8f31bf\",\n      \"appHostPath\": \"/tmp/aev-ygs69w/workspace/AspireE2E.AppHost/AspireE2E.AppHost.csproj\",\n      \"category\": \"stdout\",\n      \"output\": \"\uD83D\uDCC2  Launchi",
+          "standard_output": "",
+          "standard_error": "",
+          "result_file": "00001.json",
+          "result_format": "mocha"
+        }
+      ]
+    }
+  ]
+}
