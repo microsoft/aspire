@@ -847,8 +847,8 @@ extends:
                     # Reuse the alias-validation helpers for both registries. They are mirrored in
                     # eng/scripts/validate-npm-release-aliases.ps1, which is exercised directly by
                     # ValidateNpmReleaseAliasesTests. releaseJob runs with `checkout: none`, so these
-                    # functions are inlined here instead of dot-sourced. Keep the helper bodies
-                    # in sync with the script.
+                    # functions are inlined here instead of dot-sourced. Manually keep the helper
+                    # bodies in sync with the script; the script tests do not enforce synchronization.
                     # >>> BEGIN npm release alias helpers (keep in sync with eng/scripts/validate-npm-release-aliases.ps1) >>>
                     function Format-NpmReleaseAliasForError([string] $value) {
                       $escaped = $value.Replace("`r", '\r').Replace("`n", '\n')

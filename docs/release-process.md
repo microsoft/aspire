@@ -172,7 +172,7 @@ The npm release path validates Windows, Linux, and macOS install summaries, publ
 
 NuGet publishing remains available for prereleases when npm publishing is skipped. The pipeline stages only the flattened artifact's root-level `.nupkg` files in a clean `nuget-esrp-submission` directory, verifies their signatures, and submits that directory without rebuilding or repacking.
 
-SBOMs, manifests, and `.snupkg` files are not submitted. Legacy `.symbols.nupkg` files, nested packages, empty selections, and filename collisions during flattening fail validation.
+SBOMs, manifests, and `.snupkg` files are not submitted. Source `.nupkg` files are gathered recursively and flattened into the prepared artifact; duplicate filenames fail validation. Legacy `.symbols.nupkg` files, nested packages in the prepared artifact, and empty selections also fail validation.
 
 NuGet submission waits for ESRP completion before npm and channel promotion. The release job has a shared **360-minute timeout**, including NuGet and both npm approval/completion waits; arrange approver availability before starting.
 
