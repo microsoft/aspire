@@ -49,7 +49,7 @@ public sealed class ResourceOrderStoreTests
         var api = CreateResource("api");
         var cache = CreateResource("cache");
         var worker = CreateResource("worker");
-        Assert.Equal(ResourceOrderMoveResult.Moved, store.MoveResource(worker, cache, after: false, [api, cache, worker]));
+        Assert.Equal(ResourceOrderMoveResult.Moved, await store.MoveResourceAsync(worker, cache, after: false, [api, cache, worker]));
 
         var saved = Assert.Single((await _browser.Storage.GetAsync<List<RelativeOrderMove>>(s_resourceKey)).Value!);
         Assert.Equal(("worker_0", "api_0", "cache_0"), (saved.Key, saved.PreviousKey, saved.NextKey));
@@ -73,7 +73,7 @@ public sealed class ResourceOrderStoreTests
         var api = CreateResource("api");
         var cache = CreateResource("cache");
         var worker = CreateResource("worker");
-        Assert.Equal(ResourceOrderMoveResult.Moved, store.MoveResource(worker, cache, after: false, [api, cache, worker]));
+        Assert.Equal(ResourceOrderMoveResult.Moved, await store.MoveResourceAsync(worker, cache, after: false, [api, cache, worker]));
 
         var resources = new List<ResourceViewModel> { worker, CreateResource("auth") };
         if (hasPrevious)
@@ -96,7 +96,7 @@ public sealed class ResourceOrderStoreTests
         var other = CreateResource("other");
         var api = CreateResource("api", parent: "root");
         var worker = CreateResource("worker", parent: "root");
-        Assert.Equal(ResourceOrderMoveResult.Moved, store.MoveResource(worker, api, after: false, [root, other, api, worker]));
+        Assert.Equal(ResourceOrderMoveResult.Moved, await store.MoveResourceAsync(worker, api, after: false, [root, other, api, worker]));
 
         Assert.Equal(["worker", "api", "other", "root"], GetNames(store, root, other, api, worker));
         Assert.Equal(["api", "other", "root", "worker"], GetNames(store, root, other, api, CreateResource("worker", parent: "other")));
@@ -114,11 +114,11 @@ public sealed class ResourceOrderStoreTests
         var d = CreateResource("d");
 
         ResourceViewModel[] resources = [a, b, c, d];
-        Assert.Equal(ResourceOrderMoveResult.Moved, tabA.MoveResource(a, c, after: true, resources));
-        Assert.Equal(ResourceOrderMoveResult.Moved, tabB.MoveResource(b, d, after: true, resources));
+        Assert.Equal(ResourceOrderMoveResult.Moved, await tabA.MoveResourceAsync(a, c, after: true, resources));
+        Assert.Equal(ResourceOrderMoveResult.Moved, await tabB.MoveResourceAsync(b, d, after: true, resources));
         Assert.Equal(["c", "a", "d", "b"], GetNames(await CreateLoadedStoreAsync(), resources));
 
-        Assert.Equal(ResourceOrderMoveResult.Moved, tabA.MoveResource(a, d, after: true, resources));
+        Assert.Equal(ResourceOrderMoveResult.Moved, await tabA.MoveResourceAsync(a, d, after: true, resources));
 
         var saved = (await _browser.Storage.GetAsync<List<RelativeOrderMove>>(s_resourceKey)).Value!;
         Assert.Equal(["b_0", "a_0"], saved.Select(move => move.Key));
@@ -135,8 +135,8 @@ public sealed class ResourceOrderStoreTests
         for (var i = 0; i < 401; i++)
         {
             var after = i % 2 != 0;
-            Assert.Equal(ResourceOrderMoveResult.Moved, store.MoveResource(worker, api, after, [api, worker]));
-            Assert.Equal(ResourceOrderMoveResult.Moved, store.MoveGroup("Tags", "Worker", "Api", after, OrderGroups(store, "Tags", "Api", "Worker")));
+            Assert.Equal(ResourceOrderMoveResult.Moved, await store.MoveResourceAsync(worker, api, after, [api, worker]));
+            Assert.Equal(ResourceOrderMoveResult.Moved, await store.MoveGroupAsync("Tags", "Worker", "Api", after, OrderGroups(store, "Tags", "Api", "Worker")));
         }
 
         var savedResources = (await _browser.Storage.GetAsync<List<RelativeOrderMove>>(s_resourceKey)).Value!;
@@ -159,15 +159,15 @@ public sealed class ResourceOrderStoreTests
         ResourceViewModel[] resources = [a, b, c];
         string[] groups = ["a", "b", "c"];
 
-        Assert.Equal(ResourceOrderMoveResult.Moved, store.MoveResource(b, a, after: false, resources));
-        Assert.Equal(ResourceOrderMoveResult.Moved, store.MoveGroup("Tags", "b", "a", after: false, groups));
-        Assert.Equal(ResourceOrderMoveResult.Moved, store.MoveResource(c, b, after: true, resources));
-        Assert.Equal(ResourceOrderMoveResult.Moved, store.MoveGroup("Tags", "c", "b", after: true, OrderGroups(store, "Tags", groups)));
+        Assert.Equal(ResourceOrderMoveResult.Moved, await store.MoveResourceAsync(b, a, after: false, resources));
+        Assert.Equal(ResourceOrderMoveResult.Moved, await store.MoveGroupAsync("Tags", "b", "a", after: false, groups));
+        Assert.Equal(ResourceOrderMoveResult.Moved, await store.MoveResourceAsync(c, b, after: true, resources));
+        Assert.Equal(ResourceOrderMoveResult.Moved, await store.MoveGroupAsync("Tags", "c", "b", after: true, OrderGroups(store, "Tags", groups)));
         Assert.Equal(["b", "c", "a"], GetNames(store, resources));
         Assert.Equal(["b", "c", "a"], OrderGroups(store, "Tags", groups));
 
-        Assert.Equal(ResourceOrderMoveResult.Moved, store.MoveResource(b, a, after: false, resources));
-        Assert.Equal(ResourceOrderMoveResult.Moved, store.MoveGroup("Tags", "b", "a", after: false, OrderGroups(store, "Tags", groups)));
+        Assert.Equal(ResourceOrderMoveResult.Moved, await store.MoveResourceAsync(b, a, after: false, resources));
+        Assert.Equal(ResourceOrderMoveResult.Moved, await store.MoveGroupAsync("Tags", "b", "a", after: false, OrderGroups(store, "Tags", groups)));
 
         // Replacing B's first move lets C shift, but B must still land before A.
         Assert.Equal(["b", "a", "c"], GetNames(store, resources));
@@ -189,17 +189,17 @@ public sealed class ResourceOrderStoreTests
         for (var i = 0; i < names.Length; i++)
         {
             var resource = CreateResource(names[i]);
-            Assert.Equal(ResourceOrderMoveResult.Moved, store.MoveResource(resource, nextAnchor, after: false, [previousAnchor, nextAnchor, resource]));
+            Assert.Equal(ResourceOrderMoveResult.Moved, await store.MoveResourceAsync(resource, nextAnchor, after: false, [previousAnchor, nextAnchor, resource]));
             var grouping = i % 2 == 0 ? "Tags" : "ResourceType";
-            Assert.Equal(ResourceOrderMoveResult.Moved, store.MoveGroup(grouping, names[i], nextAnchor.DisplayName, after: false,
+            Assert.Equal(ResourceOrderMoveResult.Moved, await store.MoveGroupAsync(grouping, names[i], nextAnchor.DisplayName, after: false,
                 [previousAnchor.DisplayName, nextAnchor.DisplayName, names[i]]));
         }
 
         // A drop back into place must not rewrite either setting or evict a saved move.
         var savedResourceValue = _browser.Items[s_resourceKey];
         var savedGroupValue = _browser.Items[s_groupKey];
-        Assert.Equal(ResourceOrderMoveResult.Unchanged, store.MoveResource(previousAnchor, nextAnchor, after: false, [previousAnchor, nextAnchor]));
-        Assert.Equal(ResourceOrderMoveResult.Unchanged, store.MoveGroup("Tags", nextAnchor.DisplayName, previousAnchor.DisplayName, after: true,
+        Assert.Equal(ResourceOrderMoveResult.Unchanged, await store.MoveResourceAsync(previousAnchor, nextAnchor, after: false, [previousAnchor, nextAnchor]));
+        Assert.Equal(ResourceOrderMoveResult.Unchanged, await store.MoveGroupAsync("Tags", nextAnchor.DisplayName, previousAnchor.DisplayName, after: true,
             [previousAnchor.DisplayName, nextAnchor.DisplayName]));
         Assert.Equal(savedResourceValue, _browser.Items[s_resourceKey]);
         Assert.Equal(savedGroupValue, _browser.Items[s_groupKey]);
@@ -221,8 +221,8 @@ public sealed class ResourceOrderStoreTests
     public async Task GroupOrder_PersistsOnlyMovesAndKeepsGroupingModesIndependent()
     {
         var store = await CreateLoadedStoreAsync();
-        Assert.Equal(ResourceOrderMoveResult.Moved, store.MoveGroup("Tags", "", "Alpha", after: false, ["Alpha", "Beta", ""]));
-        Assert.Equal(ResourceOrderMoveResult.Moved, store.MoveGroup("ResourceType", "Project", "Container", after: false, ["Container", "Project"]));
+        Assert.Equal(ResourceOrderMoveResult.Moved, await store.MoveGroupAsync("Tags", "", "Alpha", after: false, ["Alpha", "Beta", ""]));
+        Assert.Equal(ResourceOrderMoveResult.Moved, await store.MoveGroupAsync("ResourceType", "Project", "Container", after: false, ["Container", "Project"]));
 
         var saved = (await _browser.Storage.GetAsync<Dictionary<string, List<RelativeOrderMove>>>(s_groupKey)).Value!;
         Assert.Equal(2, saved.Count);
@@ -242,7 +242,7 @@ public sealed class ResourceOrderStoreTests
     public async Task GroupOrder_FallsBackToTheNextGroupWhenTheDropTargetIsRemoved()
     {
         var store = await CreateLoadedStoreAsync();
-        Assert.Equal(ResourceOrderMoveResult.Moved, store.MoveGroup("Tags", "", "Api", after: true, ["Api", "Database", "Web", ""]));
+        Assert.Equal(ResourceOrderMoveResult.Moved, await store.MoveGroupAsync("Tags", "", "Api", after: true, ["Api", "Database", "Web", ""]));
 
         var reloaded = await CreateLoadedStoreAsync();
         Assert.Equal(["Api", "", "Cache", "Database", "Web"], OrderGroups(reloaded, "Tags", "Api", "Cache", "Database", "Web", ""));
@@ -255,15 +255,15 @@ public sealed class ResourceOrderStoreTests
         var store = await CreateLoadedStoreAsync();
         var api = CreateResource("api");
         var worker = CreateResource("worker");
-        Assert.Equal(ResourceOrderMoveResult.Moved, store.MoveResource(worker, api, after: false, [api, worker]));
+        Assert.Equal(ResourceOrderMoveResult.Moved, await store.MoveResourceAsync(worker, api, after: false, [api, worker]));
         var saved = _browser.Items[s_resourceKey];
 
         _browser.FailReads = true;
         var reloaded = await CreateLoadedStoreAsync();
         var cache = CreateResource("cache");
-        Assert.Equal(ResourceOrderMoveResult.Moved, reloaded.MoveResource(cache, api, after: false, [api, cache, worker]));
+        Assert.Equal(ResourceOrderMoveResult.NotSaved, await reloaded.MoveResourceAsync(cache, api, after: false, [api, cache, worker]));
 
-        Assert.Equal(["cache", "api", "worker"], GetNames(reloaded, api, cache, worker));
+        Assert.Equal(["api", "cache", "worker"], GetNames(reloaded, api, cache, worker));
         Assert.Equal(saved, _browser.Items[s_resourceKey]);
     }
 
@@ -277,7 +277,7 @@ public sealed class ResourceOrderStoreTests
         var store = await CreateLoadedStoreAsync();
         Assert.Equal(["api", "worker"], GetNames(store, api, worker));
 
-        Assert.Equal(ResourceOrderMoveResult.Moved, store.MoveResource(worker, api, after: false, [api, worker]));
+        Assert.Equal(ResourceOrderMoveResult.Moved, await store.MoveResourceAsync(worker, api, after: false, [api, worker]));
 
         Assert.Equal(["worker", "api"], GetNames(await CreateLoadedStoreAsync(), api, worker));
         Assert.Equal([s_resourceKey], _browser.Items.Keys);

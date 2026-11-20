@@ -355,8 +355,8 @@ public class ResourcesLayoutActivityTests : DashboardTestContext
             }
         });
         var tags = Services.GetRequiredService<ResourceTagStore>();
-        tags.AddTag("api-TestId", "Backend");
-        tags.AddTag("api-TestId", "Shared");
+        await tags.AddTagAsync("api-TestId", "Backend");
+        await tags.AddTagAsync("api-TestId", "Shared");
         var navigation = Services.GetRequiredService<NavigationManager>();
         navigation.NavigateTo("/resources?pane=tags");
         var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));

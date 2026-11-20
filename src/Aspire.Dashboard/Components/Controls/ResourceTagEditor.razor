@@ -23,7 +23,7 @@
                                 class="tag-chip-remove"
                                 data-tooltip="@string.Format(CultureInfo.CurrentCulture, Loc[nameof(Dashboard.Resources.Resources.ResourceTagsRemove)], tag)"
                                 aria-label="@string.Format(CultureInfo.CurrentCulture, Loc[nameof(Dashboard.Resources.Resources.ResourceTagsRemove)], tag)"
-                                @onclick="@(() => RemoveTag(tag))">
+                                @onclick="@(() => RemoveTagAsync(tag))">
                             <FluentIcon Value="@(new Icons.Regular.Size12.Dismiss())" Width="10px" Color="Color.Custom" CustomColor="currentColor" />
                         </button>
                     }

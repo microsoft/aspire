@@ -473,6 +473,9 @@
   <data name="ResourcePaneReorderUnavailable" xml:space="preserve">
     <value>Clear search, filters and grouping, and move resources within the same parent.</value>
   </data>
+  <data name="BrowserStorageSaveFailed" xml:space="preserve">
+    <value>Couldn't save the change. Check that browser storage is available and try again.</value>
+  </data>
   <data name="ResourcePaneMovedBefore" xml:space="preserve">
     <value>{0} moved before {1}.</value>
     <comment>{0} is the moved resource name; {1} is the target resource name.</comment>

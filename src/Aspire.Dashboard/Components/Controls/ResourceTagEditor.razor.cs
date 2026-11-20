@@ -47,6 +47,9 @@ public sealed partial class ResourceTagEditor : ComponentBase, IDisposable
     public required IStringLocalizer<Resources.Resources> Loc { get; init; }
 
     [Inject]
+    public required IStringLocalizer<Resources.Layout> LayoutLoc { get; init; }
+
+    [Inject]
     public required ToastNotificationService ToastService { get; init; }
 
     private string ListboxId => $"{_id}-listbox";
@@ -175,7 +178,7 @@ public sealed partial class ResourceTagEditor : ComponentBase, IDisposable
                 // Like other token inputs, Backspace in an empty input removes the last tag.
                 if (_tags.LastOrDefault(t => !IsAppHostTag(t)) is { } removableTag)
                 {
-                    RemoveTag(removableTag);
+                    await RemoveTagAsync(removableTag);
                 }
                 break;
         }
@@ -195,11 +198,14 @@ public sealed partial class ResourceTagEditor : ComponentBase, IDisposable
             _addingTag = true;
             try
             {
-                var update = TagStore.AddTag(resourceName, tag);
-                if (await update.Completion == SettingUpdateResult.LimitReached)
+                switch (await TagStore.AddTagAsync(resourceName, tag))
                 {
-                    await ToastService.ShowWarningToastAsync(Loc[nameof(Resources.Resources.ResourceTagsLimitReached), ResourceTagStore.MaxSavedTagAssignments]);
-                    return;
+                    case SettingUpdateResult.LimitReached:
+                        await ToastService.ShowWarningToastAsync(Loc[nameof(Resources.Resources.ResourceTagsLimitReached), ResourceTagStore.MaxSavedTagAssignments]);
+                        return;
+                    case SettingUpdateResult.NotSaved:
+                        await ToastService.ShowWarningToastAsync(LayoutLoc[nameof(Resources.Layout.BrowserStorageSaveFailed)]);
+                        return;
                 }
             }
             finally
@@ -218,15 +224,16 @@ public sealed partial class ResourceTagEditor : ComponentBase, IDisposable
         UpdateOptions();
     }
 
-    private void RemoveTag(string tag)
+    private async Task RemoveTagAsync(string tag)
     {
         if (IsAppHostTag(tag))
         {
             return;
         }
-        TagStore.RemoveTag(ResourceName, tag);
-        UpdateTags();
-        UpdateOptions();
+        if (await TagStore.RemoveTagAsync(ResourceName, tag) == SettingUpdateResult.NotSaved)
+        {
+            await ToastService.ShowWarningToastAsync(LayoutLoc[nameof(Resources.Layout.BrowserStorageSaveFailed)]);
+        }
     }
 
     private bool IsAppHostTag(string tag) => AppHostTags.Contains(tag, StringComparer.OrdinalIgnoreCase);

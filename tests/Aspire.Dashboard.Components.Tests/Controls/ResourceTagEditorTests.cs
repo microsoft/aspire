@@ -22,11 +22,11 @@ namespace Aspire.Dashboard.Components.Tests.Controls;
 public class ResourceTagEditorTests : DashboardTestContext
 {
     [Fact]
-    public void AppHostTagsAreLockedAndOnlyUserTagsCanBeRemoved()
+    public async Task AppHostTagsAreLockedAndOnlyUserTagsCanBeRemoved()
     {
         var store = Services.GetRequiredService<ResourceTagStore>();
-        store.AddTag("api", "Personal");
-        store.AddTag("api", "backend");
+        await store.AddTagAsync("api", "Personal");
+        await store.AddTagAsync("api", "backend");
         var cut = Render<ResourceTagEditor>(p => p.Add(c => c.ResourceName, "api")
             .Add(c => c.AppHostTags, new[] { "Backend", "API" }));
 
@@ -71,31 +71,43 @@ public class ResourceTagEditorTests : DashboardTestContext
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public void AddTag_SavesToProtectedStorageOnlyWhenReadable(bool readFailed)
+    public async Task AddTag_SavesToProtectedStorageOnlyWhenReadable(bool readFailed)
     {
         // As while the circuit is disconnected: saving would replace stored tags that couldn't be read.
         _localStorage.IsReadFailed = _ => readFailed;
         var writes = new ConcurrentQueue<(string Key, bool Protected)>();
         _localStorage.OnSetAsync = (key, _) => writes.Enqueue((key, true));
         _localStorage.OnSetUnprotectedAsync = (key, _) => writes.Enqueue((key, false));
-        var cut = Render<ResourceTagEditor>(p => p.Add(c => c.ResourceName, "api"));
+        var toasts = Render<FluentToastProvider>();
+        var cut = RenderEditor("api");
 
         cut.Find(".tag-add").Click();
         cut.Find(".tag-input").Input("backend");
-        cut.Find(".tag-input").KeyDown("Enter");
+        await cut.Find(".tag-input").KeyDownAsync(new KeyboardEventArgs { Key = "Enter" });
 
-        Assert.Equal(["backend"], cut.FindAll(".tag-chip-name").Select(c => c.TextContent));
-        Assert.Equal(["backend"], _tagStore.GetTags("api"));
+        Assert.Equal(readFailed ? [] : ["backend"], cut.FindAll(".tag-chip-name").Select(c => c.TextContent));
+        Assert.Equal(readFailed ? [] : ["backend"], _tagStore.GetTags("api"));
+        Assert.Equal(readFailed ? "backend" : string.Empty, cut.Find(".tag-input").GetAttribute("value"));
+        if (readFailed)
+        {
+            var toast = Assert.Single(toasts.FindComponents<FluentToast>()).Instance;
+            Assert.Equal(ToastIntent.Warning, toast.Intent);
+            Assert.Equal("Couldn't save the change. Check that browser storage is available and try again.", toast.Title);
+        }
+        else
+        {
+            Assert.Empty(toasts.FindComponents<FluentToast>());
+        }
         var storageKey = BrowserStorageKeys.ResourceTagsKey(new DashboardOptions().GetApplicationNameOrDefault());
         Assert.Equal(readFailed ? [] : [(storageKey, true)], writes);
     }
 
     [Fact]
-    public void Render_ShowsResourceTags()
+    public async Task Render_ShowsResourceTags()
     {
-        _tagStore.AddTag("api", "backend");
-        _tagStore.AddTag("api", "core");
-        _tagStore.AddTag("worker", "jobs");
+        await _tagStore.AddTagAsync("api", "backend");
+        await _tagStore.AddTagAsync("api", "core");
+        await _tagStore.AddTagAsync("worker", "jobs");
 
         var cut = RenderEditor("api");
 
@@ -106,11 +118,11 @@ public class ResourceTagEditorTests : DashboardTestContext
     }
 
     [Fact]
-    public void Input_SuggestsExistingTagsAndCreateOption()
+    public async Task Input_SuggestsExistingTagsAndCreateOption()
     {
-        _tagStore.AddTag("api", "backend");
-        _tagStore.AddTag("worker", "background");
-        _tagStore.AddTag("worker", "jobs");
+        await _tagStore.AddTagAsync("api", "backend");
+        await _tagStore.AddTagAsync("worker", "background");
+        await _tagStore.AddTagAsync("worker", "jobs");
 
         var cut = RenderEditor("api");
         cut.Find(".tag-add").Click();
@@ -123,9 +135,9 @@ public class ResourceTagEditorTests : DashboardTestContext
     }
 
     [Fact]
-    public void Enter_AddsActiveSuggestionAndKeepsEditorOpen()
+    public async Task Enter_AddsActiveSuggestionAndKeepsEditorOpen()
     {
-        _tagStore.AddTag("worker", "Background");
+        await _tagStore.AddTagAsync("worker", "Background");
 
         var cut = RenderEditor("api");
         cut.Find(".tag-add").Click();
@@ -180,10 +192,10 @@ public class ResourceTagEditorTests : DashboardTestContext
     }
 
     [Fact]
-    public void RemoveButton_RemovesTag()
+    public async Task RemoveButton_RemovesTag()
     {
-        _tagStore.AddTag("api", "backend");
-        _tagStore.AddTag("api", "core");
+        await _tagStore.AddTagAsync("api", "backend");
+        await _tagStore.AddTagAsync("api", "core");
 
         var cut = RenderEditor("api");
         cut.Find("button[aria-label='Remove tag backend']").Click();
@@ -193,10 +205,10 @@ public class ResourceTagEditorTests : DashboardTestContext
     }
 
     [Fact]
-    public void Backspace_InEmptyInputRemovesLastTag()
+    public async Task Backspace_InEmptyInputRemovesLastTag()
     {
-        _tagStore.AddTag("api", "backend");
-        _tagStore.AddTag("api", "core");
+        await _tagStore.AddTagAsync("api", "backend");
+        await _tagStore.AddTagAsync("api", "core");
 
         var cut = RenderEditor("api");
         cut.Find(".tag-add").Click();
@@ -206,11 +218,11 @@ public class ResourceTagEditorTests : DashboardTestContext
     }
 
     [Fact]
-    public void TagStoreChange_UpdatesChips()
+    public async Task TagStoreChange_UpdatesChips()
     {
         var cut = RenderEditor("api");
 
-        _tagStore.AddTag("api", "backend");
+        await _tagStore.AddTagAsync("api", "backend");
 
         cut.WaitForAssertion(() => Assert.Equal(["backend"], cut.FindAll(".tag-chip-name").Select(e => e.TextContent)));
     }

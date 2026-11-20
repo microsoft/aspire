@@ -17,12 +17,16 @@ public partial class MetricPinButton : ComponentBase, IDisposable
     private static readonly Icon s_pinnedIcon = new Icons.Filled.Size16.Pin();
     private static readonly Icon s_unpinnedIcon = new Icons.Regular.Size16.Pin();
     private bool _isPinned;
+    private bool _saving;
 
     [Inject]
     public required MetricPinStore PinStore { get; init; }
 
     [Inject]
     public required IStringLocalizer<MetricsResources> Loc { get; init; }
+
+    [Inject]
+    public required IStringLocalizer<Resources.Layout> LayoutLoc { get; init; }
 
     [Inject]
     public required ToastNotificationService ToastService { get; init; }
@@ -60,11 +64,27 @@ public partial class MetricPinButton : ComponentBase, IDisposable
 
     private async Task TogglePinnedAsync()
     {
-        var update = PinStore.SetPinned(InstrumentKey, ResourceNames, !_isPinned);
-        _isPinned = PinStore.IsPinned(InstrumentKey, ResourceNames);
-        if (await update.Completion == SettingUpdateResult.LimitReached)
+        if (_saving)
         {
-            await ToastService.ShowWarningToastAsync(Loc[nameof(MetricsResources.MetricsPinLimitReached), MetricPinStore.MaxSavedPins]);
+            return;
+        }
+
+        _saving = true;
+        try
+        {
+            switch (await PinStore.SetPinnedAsync(InstrumentKey, ResourceNames, !_isPinned))
+            {
+                case SettingUpdateResult.LimitReached:
+                    await ToastService.ShowWarningToastAsync(Loc[nameof(MetricsResources.MetricsPinLimitReached), MetricPinStore.MaxSavedPins]);
+                    break;
+                case SettingUpdateResult.NotSaved:
+                    await ToastService.ShowWarningToastAsync(LayoutLoc[nameof(Resources.Layout.BrowserStorageSaveFailed)]);
+                    break;
+            }
+        }
+        finally
+        {
+            _saving = false;
         }
     }
 

@@ -30,10 +30,10 @@ public sealed class MetricPinStoreTests
     {
         var store = await CreateLoadedStoreAsync();
 
-        store.SetPinned(s_heap, ["api"], pinned: true);
-        store.SetPinned(s_duration, ["api"], pinned: true);
-        store.SetPinned(s_cpu, ["api"], pinned: true);
-        store.SetPinned(s_duration, ["api"], pinned: false);
+        await store.SetPinnedAsync(s_heap, ["api"], pinned: true);
+        await store.SetPinnedAsync(s_duration, ["api"], pinned: true);
+        await store.SetPinnedAsync(s_cpu, ["api"], pinned: true);
+        await store.SetPinnedAsync(s_duration, ["api"], pinned: false);
 
         Assert.True((await _browser.Storage.GetUnprotectedAsync<List<MetricPin>>(s_storageKey)).InvalidValue);
 
@@ -44,7 +44,7 @@ public sealed class MetricPinStoreTests
         Assert.False(store.IsPinned(s_duration, ["api"]));
 
         // Re-pinning moves the instrument to the end because pins are listed in the order they were pinned.
-        store.SetPinned(s_duration, ["api"], pinned: true);
+        await store.SetPinnedAsync(s_duration, ["api"], pinned: true);
         store = await CreateLoadedStoreAsync();
         Assert.Equal([Pin("api", s_heap), Pin("api", s_cpu), Pin("api", s_duration)], store.GetPins());
     }
@@ -55,7 +55,7 @@ public sealed class MetricPinStoreTests
         var store = await CreateLoadedStoreAsync();
 
         // Pinning while two resources are selected pins the instrument for both, and only for them.
-        store.SetPinned(s_duration, ["api", "worker"], pinned: true);
+        await store.SetPinnedAsync(s_duration, ["api", "worker"], pinned: true);
         Assert.Equal([Pin("api", s_duration), Pin("worker", s_duration)], store.GetPins());
         Assert.False(store.IsPinned(s_duration, ["cache"]));
 
@@ -63,11 +63,11 @@ public sealed class MetricPinStoreTests
         Assert.True(store.IsPinned(s_duration, ["cache", "WORKER"]));
 
         // Pinning it again for a resource that has it keeps a single pin.
-        store.SetPinned(s_duration, ["api", "cache"], pinned: true);
+        await store.SetPinnedAsync(s_duration, ["api", "cache"], pinned: true);
         Assert.Equal([Pin("api", s_duration), Pin("worker", s_duration), Pin("cache", s_duration)], store.GetPins());
 
         // Unpinning unpins it for every selected resource, and leaves the others.
-        store.SetPinned(s_duration, ["worker", "cache"], pinned: false);
+        await store.SetPinnedAsync(s_duration, ["worker", "cache"], pinned: false);
         Assert.Equal([Pin("api", s_duration)], store.GetPins());
     }
 
@@ -75,11 +75,11 @@ public sealed class MetricPinStoreTests
     public async Task SetPinned_BeforeLoadIsMergedWithStoredPins()
     {
         var store = await CreateLoadedStoreAsync();
-        store.SetPinned(s_heap, ["api"], pinned: true);
+        await store.SetPinnedAsync(s_heap, ["api"], pinned: true);
 
         // Pinning before the stored pins are read must not replace them.
         store = CreateStore();
-        store.SetPinned(s_cpu, ["api"], pinned: true);
+        await store.SetPinnedAsync(s_cpu, ["api"], pinned: true);
         await store.EnsureLoadedAsync().DefaultTimeout();
 
         Assert.Equal([Pin("api", s_heap), Pin("api", s_cpu)], store.GetPins());
@@ -91,12 +91,12 @@ public sealed class MetricPinStoreTests
     {
         var tabA = await CreateLoadedStoreAsync();
         var tabB = await CreateLoadedStoreAsync();
-        tabA.SetPinned(s_heap, ["api"], pinned: true);
-        tabA.SetPinned(s_duration, ["api"], pinned: true);
+        await tabA.SetPinnedAsync(s_heap, ["api"], pinned: true);
+        await tabA.SetPinnedAsync(s_duration, ["api"], pinned: true);
 
         // Tab B didn't see tab A's pins. Its changes are applied to what tab A saved.
-        tabB.SetPinned(s_cpu, ["api"], pinned: true);
-        tabB.SetPinned(s_duration, ["api"], pinned: false);
+        await tabB.SetPinnedAsync(s_cpu, ["api"], pinned: true);
+        await tabB.SetPinnedAsync(s_duration, ["api"], pinned: false);
 
         Assert.Equal([Pin("api", s_heap), Pin("api", s_cpu)], tabB.GetPins());
         Assert.Equal([Pin("api", s_heap), Pin("api", s_cpu)], (await CreateLoadedStoreAsync()).GetPins());
@@ -109,49 +109,49 @@ public sealed class MetricPinStoreTests
         var staleTab = await CreateLoadedStoreAsync();
         var names = Enumerable.Range(1, 49).Select(i => FormattableString.Invariant($"resource-{i:D2}")).ToArray();
         var initialPins = names.Select(name => Pin(name, s_heap)).ToArray();
-        firstTab.SetPinned(s_heap, names, pinned: true);
+        await firstTab.SetPinnedAsync(s_heap, names, pinned: true);
 
-        firstTab.SetPinned(s_cpu, ["api", "worker"], pinned: true);
+        Assert.Equal(SettingUpdateResult.LimitReached, await firstTab.SetPinnedAsync(s_cpu, ["api", "worker"], pinned: true));
         Assert.Equal(initialPins, firstTab.GetPins());
 
         // The stale tab has local capacity but cannot save a selection that exceeds the combined limit.
-        staleTab.SetPinned(s_cpu, ["api", "worker"], pinned: true);
-        Assert.Equal(initialPins, staleTab.GetPins());
+        Assert.Equal(SettingUpdateResult.LimitReached, await staleTab.SetPinnedAsync(s_cpu, ["api", "worker"], pinned: true));
+        Assert.Empty(staleTab.GetPins());
         Assert.Equal(initialPins, (await CreateLoadedStoreAsync()).GetPins());
 
-        staleTab.SetPinned(s_cpu, ["api"], pinned: true);
-        staleTab.SetPinned(s_cpu, ["worker"], pinned: true);
+        await staleTab.SetPinnedAsync(s_cpu, ["api"], pinned: true);
+        await staleTab.SetPinnedAsync(s_cpu, ["worker"], pinned: true);
         Assert.Equal([.. initialPins, Pin("api", s_cpu)], (await CreateLoadedStoreAsync()).GetPins());
 
-        staleTab.SetPinned(s_cpu, ["api"], pinned: false);
-        staleTab.SetPinned(s_cpu, ["worker"], pinned: true);
+        await staleTab.SetPinnedAsync(s_cpu, ["api"], pinned: false);
+        await staleTab.SetPinnedAsync(s_cpu, ["worker"], pinned: true);
         Assert.Equal([.. initialPins, Pin("worker", s_cpu)], (await CreateLoadedStoreAsync()).GetPins());
     }
 
     [Fact]
-    public void SetPinned_RaisesChangedOnlyWhenPinsChange()
+    public async Task SetPinned_RaisesChangedOnlyWhenPinsChange()
     {
         var store = CreateStore();
         var changedCount = 0;
         store.Changed += () => changedCount++;
 
-        store.SetPinned(s_heap, ["api"], pinned: true);
-        store.SetPinned(s_heap, ["api"], pinned: true);
-        store.SetPinned(s_cpu, ["api"], pinned: false);
-        store.SetPinned(s_heap, ["worker"], pinned: false);
-        store.SetPinned(s_heap, ["api"], pinned: false);
+        await store.SetPinnedAsync(s_heap, ["api"], pinned: true);
+        await store.SetPinnedAsync(s_heap, ["api"], pinned: true);
+        await store.SetPinnedAsync(s_cpu, ["api"], pinned: false);
+        await store.SetPinnedAsync(s_heap, ["worker"], pinned: false);
+        await store.SetPinnedAsync(s_heap, ["api"], pinned: false);
 
         Assert.Equal(2, changedCount);
         Assert.Empty(store.GetPins());
     }
 
     [Fact]
-    public void GetPinnedInstruments_ReturnsInstrumentsPinnedForTheirResourceInPinnedOrder()
+    public async Task GetPinnedInstruments_ReturnsInstrumentsPinnedForTheirResourceInPinnedOrder()
     {
         var store = CreateStore();
-        store.SetPinned(s_cpu, ["api"], pinned: true);
-        store.SetPinned(s_duration, ["worker"], pinned: true);
-        store.SetPinned(s_heap, ["api"], pinned: true);
+        await store.SetPinnedAsync(s_cpu, ["api"], pinned: true);
+        await store.SetPinnedAsync(s_duration, ["worker"], pinned: true);
+        await store.SetPinnedAsync(s_heap, ["api"], pinned: true);
 
         var apiHeap = CreateInstrument("api", s_heap);
         var apiCpu = CreateInstrument("api", s_cpu);
@@ -174,7 +174,7 @@ public sealed class MetricPinStoreTests
         Assert.Empty(store.GetPins());
         Assert.Equal(plaintext, _browser.Items[s_storageKey]);
 
-        store.SetPinned(s_cpu, ["api"], pinned: true);
+        await store.SetPinnedAsync(s_cpu, ["api"], pinned: true);
 
         Assert.Equal([Pin("api", s_cpu)], (await CreateLoadedStoreAsync()).GetPins());
         Assert.Equal([s_storageKey], _browser.Items.Keys);

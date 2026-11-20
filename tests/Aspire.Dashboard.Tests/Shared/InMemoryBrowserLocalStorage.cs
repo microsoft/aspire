@@ -4,7 +4,6 @@
 using Aspire.Dashboard.Model.BrowserStorage;
 using Aspire.Dashboard.Serialization;
 using Aspire.Tests.Shared;
-using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.AspNetCore.Components.Server;
 using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage;
 using Microsoft.AspNetCore.DataProtection;
@@ -28,7 +27,7 @@ internal sealed class InMemoryBrowserLocalStorage
         // Matches the resolvers the dashboard registers, so a stored type missing from the context fails here too.
         circuitOptions.JsonTypeInfoResolvers.Add(DashboardJsonSerializerContext.Default);
 #pragma warning restore ASPNETCORE9004
-        Storage = new DelayedReadLocalStorage(new LocalBrowserStorage(
+        Storage = new InterceptedLocalStorage(new LocalBrowserStorage(
             jsRuntime,
             new ProtectedLocalStorage(jsRuntime, new EphemeralDataProtectionProvider()),
             NullLogger<LocalBrowserStorage>.Instance,
@@ -45,6 +44,8 @@ internal sealed class InMemoryBrowserLocalStorage
     /// </summary>
     public bool FailReads { get; set; }
 
+    public bool FailWrites { get; set; }
+
     public ILocalStorage Storage { get; }
 
     /// <summary>
@@ -53,22 +54,7 @@ internal sealed class InMemoryBrowserLocalStorage
     /// </summary>
     public Func<Task>? OnAfterReadAsync { get; set; }
 
-    /// <summary>
-    /// Waits until a background save writes the expected protected value.
-    /// </summary>
-    public async Task WaitForProtectedItemAsync<TValue>(string key, Func<TValue, bool> matches) where TValue : class
-    {
-        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
-        while (true)
-        {
-            var result = await Storage.GetAsync<TValue>(key);
-            if (result.Success && result.Value is { } value && matches(value))
-            {
-                return;
-            }
-            await Task.Delay(TimeSpan.FromMilliseconds(50), cts.Token);
-        }
-    }
+    public Func<Task>? OnAfterWriteAsync { get; set; }
 
     private object? HandleLocalStorageCall((string Identifier, object?[]? Args) call)
     {
@@ -84,6 +70,10 @@ internal sealed class InMemoryBrowserLocalStorage
                     }
                     return Items.GetValueOrDefault(key);
                 case "localStorage.setItem":
+                    if (FailWrites)
+                    {
+                        throw new JSException("Local storage cannot be written.");
+                    }
                     Items[key] = (string)call.Args[1]!;
                     return null;
                 default:
@@ -92,11 +82,18 @@ internal sealed class InMemoryBrowserLocalStorage
         }
     }
 
-    private sealed class DelayedReadLocalStorage(ILocalStorage inner, InMemoryBrowserLocalStorage owner) : ILocalStorage
+    private sealed class InterceptedLocalStorage(ILocalStorage inner, InMemoryBrowserLocalStorage owner) : ILocalStorage
     {
         public Task<StorageResult<TValue>> GetUnprotectedAsync<TValue>(string key) => inner.GetUnprotectedAsync<TValue>(key);
 
-        public Task SetUnprotectedAsync<TValue>(string key, TValue value) => inner.SetUnprotectedAsync(key, value);
+        public async Task SetUnprotectedAsync<TValue>(string key, TValue value)
+        {
+            await inner.SetUnprotectedAsync(key, value);
+            if (owner.OnAfterWriteAsync is { } afterWrite)
+            {
+                await afterWrite();
+            }
+        }
 
         public async Task<StorageResult<TValue>> GetAsync<TValue>(string key)
         {
@@ -108,6 +105,13 @@ internal sealed class InMemoryBrowserLocalStorage
             return result;
         }
 
-        public Task SetAsync<TValue>(string key, TValue value) => inner.SetAsync(key, value);
+        public async Task SetAsync<TValue>(string key, TValue value)
+        {
+            await inner.SetAsync(key, value);
+            if (owner.OnAfterWriteAsync is { } afterWrite)
+            {
+                await afterWrite();
+            }
+        }
     }
 }
