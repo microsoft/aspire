@@ -433,6 +433,11 @@ path_rules:
     targets: [test:Aspire.Cli.EndToEnd.Tests]
     reason: builds or loads the CLI E2E images consumed only by Aspire.Cli.EndToEnd.Tests
   - paths:
+      - eng/scripts/build-cli-e2e-images.sh
+      - eng/scripts/run-bounded-image-build.ts
+    targets: [test:Aspire.Cli.EndToEnd.Tests, test:Infrastructure.Tests]
+    reason: shared image build entry point and its shell behavior tests
+  - paths:
       - eng/scripts/pack-cli-npm-package.ps1
     targets: [test:Aspire.Cli.Tests, test:Infrastructure.Tests]
     reason: Cli.Tests/Npm/AspireJsLauncherTests and Infrastructure.Tests parse the pack script
