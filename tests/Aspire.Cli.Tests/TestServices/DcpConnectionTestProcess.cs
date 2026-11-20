@@ -182,7 +182,10 @@ internal sealed class DcpConnectionTestProcess(
         var root = metadata.RootElement;
         var command = root.GetProperty("Command").GetString();
         var arguments = root.GetProperty("Args");
-        if (string.Equals(command, executable, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal) &&
+        // On Windows, the test DCP directory comes from $(DcpDir), which mixes '\' and '/' separators,
+        // while DCP logs the controller path with '\' only. GetFullPath normalizes both to '\'.
+        if (command is not null &&
+            string.Equals(Path.GetFullPath(command), Path.GetFullPath(executable), OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal) &&
             arguments.GetArrayLength() > 0 &&
             arguments[0].GetString() == "run-controllers")
         {
