@@ -466,9 +466,11 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
         }
     }
 
+    private IEnumerable<ResourceViewModel> GetGraphResources() => _resourceByName.Values.Where(Filter);
+
     private List<ResourceDto> GetResourceGraphResources()
     {
-        var activeResources = ResourceGraphMapper.OrderResources(_resourceByName.Values.Where(Filter));
+        var activeResources = ResourceGraphMapper.OrderResources(GetGraphResources());
         var tagsByResource = TagStore.GetTagsByResource(activeResources);
         return activeResources.Select(r => ResourceGraphMapper.MapResource(r, activeResources, _resourceByName, ColumnsLoc, PageViewModel.ShowHiddenResources, IconResolver,
             tagsByResource.GetValueOrDefault(r.DisplayName) ?? [])).ToList();
@@ -498,7 +500,8 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
 
         [JSInvokable]
         public Task SelectTagGroup(string tagName, MouseEventArgs e) =>
-            (resources.ResourceLayout ?? throw new InvalidOperationException("Tag selection requires a resources layout.")).SelectTagGroupAsync(tagName, e);
+            (resources.ResourceLayout ?? throw new InvalidOperationException("Tag selection requires a resources layout."))
+                .SelectGraphTagGroupAsync(tagName, e, resources.GetGraphResources(), resources.PageViewModel.ShowHiddenResources);
 
         [JSInvokable]
         public async Task SelectResource(string id)
@@ -787,7 +790,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
     private async Task<bool> ShowTagGroupContextMenuAsync(string tagName, int clientX, int clientY)
     {
         var items = ResourceMenuBuilder.CreateTagGroupMenuItems(tagName, ResourceContextMenuHeaderId,
-            () => ResourceGraphMapper.GetTagMembers(_resourceByName.Values.Where(Filter), tagName, TagStore),
+            () => ResourceGraphMapper.GetTagMembers(GetGraphResources(), tagName, TagStore),
             (resource, command) => DashboardCommandExecutor.IsExecuting(resource.Name, command.Name),
             ExecuteResourceCommandAsync);
         if (_contextMenu is not { } contextMenu || items.Count == 0)

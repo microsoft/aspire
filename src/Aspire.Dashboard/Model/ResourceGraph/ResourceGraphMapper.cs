@@ -19,9 +19,7 @@ public static class ResourceGraphMapper
     {
         var resources = graphResources.ToList();
         var tagsByResource = tagStore?.GetTagsByResource(resources);
-        return resources.Where(resource =>
-            (tagsByResource is null ? resource.AppHostTags : tagsByResource.GetValueOrDefault(resource.DisplayName) ?? [])
-                .Contains(tagName, StringComparer.OrdinalIgnoreCase)).ToList();
+        return resources.Where(resource => ResourceTagStore.HasTag(resource, tagName, tagsByResource)).ToList();
     }
 
     // The text of the game's DOM controls. What the game draws on its canvas stays in English: its bitmap font only has ASCII.

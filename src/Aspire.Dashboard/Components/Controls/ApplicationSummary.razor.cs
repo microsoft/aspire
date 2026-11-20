@@ -930,14 +930,15 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
         _cts.Dispose();
     }
 
-    private sealed class ApplicationSummaryInterop(ApplicationSummary summary)
+    internal sealed class ApplicationSummaryInterop(ApplicationSummary summary)
     {
         [JSInvokable]
         public Task SelectResource(string id) => summary.SelectResourceAsync(id);
 
         [JSInvokable]
         public Task SelectTagGroup(string tagName, MouseEventArgs e) =>
-            (summary.ResourceLayout ?? throw new InvalidOperationException("Tag selection requires a resources layout.")).SelectTagGroupAsync(tagName, e);
+            (summary.ResourceLayout ?? throw new InvalidOperationException("Tag selection requires a resources layout."))
+                .SelectGraphTagGroupAsync(tagName, e, summary.GetResourcesInScope(), showHiddenResources: false);
 
         [JSInvokable]
         public Task ResourceContextMenu(string id, int clientX, int clientY, string? _) =>

@@ -2824,7 +2824,7 @@ public class ResourcesLayoutTests : DashboardTestContext
 
         await cut.InvokeAsync(() => navigation.NavigateTo(DashboardUrls.ResourceOverviewUrl("cache")));
         cut.Render();
-        await cut.Instance.SelectTagGroupAsync("bAcKeNd", click);
+        await cut.Instance.SelectGraphTagGroupAsync("bAcKeNd", click, resources.Where(r => !r.IsParameter), showHiddenResources: false);
         cut.Render();
         cut.WaitForAssertion(() => Assert.Equal(expectedSelection, cut.Instance.SelectedResourceNames));
         Assert.Equal(sidebarUrl, navigation.Uri);

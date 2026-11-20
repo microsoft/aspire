@@ -8,6 +8,7 @@ using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
+using Aspire.Dashboard.Model.BrowserStorage;
 using Aspire.Dashboard.Model.ResourceGraph;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
@@ -18,10 +19,14 @@ using Aspire.Tests.Shared.DashboardModel;
 using Aspire.Tests.Shared.Telemetry;
 using Bunit;
 using Google.Protobuf.Collections;
+using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Sections;
+using Microsoft.AspNetCore.Components.Web;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Time.Testing;
+using Microsoft.FluentUI.AspNetCore.Components;
+using Microsoft.JSInterop;
 using OpenTelemetry.Proto.Logs.V1;
 using OpenTelemetry.Proto.Trace.V1;
 using Xunit;
@@ -244,6 +249,70 @@ public class ApplicationSummaryTests : DashboardTestContext
 
         await cut.InvokeAsync(() => cut.Render(builder => builder.Add(p => p.ResourceNames, null)));
         cut.WaitForAssertion(() => Assert.Equal(["api", "broken"], GetGraphResources().Select(resource => resource.Name).Order(StringComparer.Ordinal)));
+    }
+
+    [Theory]
+    [InlineData("api", false)]
+    [InlineData("no-matches", false)]
+    [InlineData("api", true)]
+    [InlineData("no-matches", true)]
+    public async Task GraphTagSelection_UsesGraphScopeInsteadOfSidebarSearch(string search, bool scoped)
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources:
+            [
+                ModelTestHelpers.CreateResource("api-1", displayName: "api"),
+                ModelTestHelpers.CreateResource("api-2", displayName: "api"),
+                ModelTestHelpers.CreateResource("api-hidden", displayName: "api", hidden: true),
+                ModelTestHelpers.CreateResource("cache"),
+                ModelTestHelpers.CreateResource("worker"),
+                ModelTestHelpers.CreateResource("other"),
+                ModelTestHelpers.CreateResource("parameter", resourceType: KnownResourceTypes.Parameter),
+                ModelTestHelpers.CreateResource("hidden-parameter", resourceType: KnownResourceTypes.Parameter, hidden: true)
+            ],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        var storage = Assert.IsType<TestLocalStorage>(Services.GetRequiredService<ILocalStorage>());
+        storage.OnGetUnprotectedAsync = key => key == BrowserStorageKeys.ResourcePaneGrouping ? (true, "Tags") : (false, null);
+        var tags = Services.GetRequiredService<ResourceTagStore>();
+        foreach (var name in new[] { "api", "worker", "other", "parameter", "hidden-parameter" })
+        {
+            tags.AddTag(name, "Backend");
+        }
+
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo(DashboardUrls.ResourceOverviewUrl("cache"));
+        var layout = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
+        layout.WaitForAssertion(() => Assert.True(layout.Instance.IsLoaded));
+        var sidebarSearch = layout.FindComponent<FluentTextInput>();
+        await sidebarSearch.InvokeAsync(() => sidebarSearch.Instance.ValueChanged.InvokeAsync(search));
+        Assert.Equal(search == "api" ? ["api-1", "api-2"] : [],
+            layout.FindAll(".resource-tag-group .resource-row-name").Select(row => row.TextContent.Trim()));
+
+        var module = JSInterop.SetupModule("/js/app-resourcegraph.js");
+        module.Mode = JSRuntimeMode.Loose;
+        var graph = Render<ApplicationSummary>(builder => builder
+            .AddCascadingValue(viewport)
+            .AddCascadingValue(layout.Instance)
+            .Add(p => p.ResourceNames, scoped ? ["api-1", "worker"] : null));
+        await graph.InvokeAsync(() => Services.GetRequiredService<DashboardViewPreferences>().SetGroupOverviewAsync(GroupOverview.Graph));
+        graph.WaitForAssertion(() =>
+        {
+            var update = module.Invocations.Last(invocation => invocation.Identifier == "updateResourcesGraph");
+            var nodes = Assert.IsType<List<ResourceDto>>(update.Arguments[0]);
+            Assert.Equal(scoped ? ["api-1", "worker"] : ["api-1", "api-2", "cache", "other", "worker"],
+                nodes.Select(resource => resource.Name));
+            Assert.Equal(scoped ? ["api-1", "worker"] : ["api-1", "api-2", "other", "worker"],
+                nodes.Where(resource => resource.Tags.Any(tag => tag.Name == "Backend")).Select(resource => resource.Name));
+        });
+
+        var initialize = Assert.Single(module.Invocations, invocation => invocation.Identifier == "initializeResourcesGraph");
+        var interop = Assert.IsType<DotNetObjectReference<ApplicationSummary.ApplicationSummaryInterop>>(initialize.Arguments[0]).Value;
+        await graph.InvokeAsync(() => interop.SelectTagGroup("bAcKeNd", new MouseEventArgs()));
+        layout.Render();
+
+        layout.WaitForAssertion(() => Assert.Equal(scoped ? ["api-1", "api-2", "parameter", "worker"] : ["api-1", "api-2", "other", "parameter", "worker"],
+            layout.Instance.SelectedResourceNames.Order(StringComparer.Ordinal)));
     }
 
     [Fact]
