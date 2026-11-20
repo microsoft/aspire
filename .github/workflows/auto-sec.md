@@ -136,9 +136,9 @@ safe-outputs:
     repositories: ["aspire"]
   # These outputs carry free agent text into public issues, and the agent sees private
   # alert details, so they are never published. The agent-job scrub also drops them.
-  missing-tool:
+  report-missing-tool:
     create-issue: false
-  missing-data:
+  report-missing-data:
     create-issue: false
   report-incomplete:
     create-issue: false

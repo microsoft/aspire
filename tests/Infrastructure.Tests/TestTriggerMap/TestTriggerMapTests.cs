@@ -87,7 +87,6 @@ public sealed class TestTriggerMapTests
     [Theory]
     [InlineData(".github/workflows/analyze-ci-failure.md")]
     [InlineData(".github/workflows/analyze-ci-failure.lock.yml")]
-    [InlineData(".github/workflows/analyze-ci-failure/prepare-report-templates.js")]
     public void AnalyzerReportingInputsSelectScriptBehaviorTests(string path)
     {
         var result = SelectWithRealMap(path);

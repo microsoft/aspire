@@ -3505,6 +3505,7 @@ public sealed class AutoSecWorkflowTests(ITestOutputHelper testOutput)
     [InlineData("unexpected-private-action")]
     [InlineData("missing-gateway-mask")]
     [InlineData("late-mcp-cli-mount")]
+    [InlineData("tampered-rate-limit")]
     public async Task PublicationGuardRejectsUnexpectedCompilerLayout(string scenario)
     {
         var workflow = PublicationGuardFixture.ReplaceLineEndings("\n");
@@ -3529,6 +3530,9 @@ public sealed class AutoSecWorkflowTests(ITestOutputHelper testOutput)
             "missing-gateway-mask" => workflow.Replace("echo \"::add-mask::${MCP_GATEWAY_AGENT_ID}\"", "echo renamed-mask", StringComparison.Ordinal),
             "late-mcp-cli-mount" => workflow.Replace("name: Stop MCP Gateway", "name: Mount MCP servers as CLIs", StringComparison.Ordinal)
                 .Replace("        run: bash stop-gateway.sh", "        uses: actions/github-script@example", StringComparison.Ordinal),
+            "tampered-rate-limit" => workflow.Replace("      - name: Detect agent errors\n",
+                RateLimitStep("agent_end").Replace("await fetchAndLogRateLimit", "console.log(process.env); await fetchAndLogRateLimit", StringComparison.Ordinal)
+                + "      - name: Detect agent errors\n", StringComparison.Ordinal),
             _ => throw new InvalidOperationException(),
         };
         var result = await RunHarnessAsync(new JsonObject { ["mode"] = "publication-guard", ["workflow"] = workflow });
@@ -3541,6 +3545,34 @@ public sealed class AutoSecWorkflowTests(ITestOutputHelper testOutput)
             Assert.StartsWith("auto-sec publication guard:", result["error"]!.GetValue<string>());
         }
     }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task PublicationGuardLeavesGeneratedRateLimitLoggersUnchanged()
+    {
+        var start = RateLimitStep("agent_start");
+        var end = RateLimitStep("agent_end");
+        var workflow = PublicationGuardFixture.ReplaceLineEndings("\n")
+            .Replace("      - name: Execute GitHub Copilot CLI\n", start + "      - name: Execute GitHub Copilot CLI\n", StringComparison.Ordinal)
+            .Replace("      - name: Detect agent errors\n", end + "      - name: Detect agent errors\n", StringComparison.Ordinal);
+
+        var result = await RunHarnessAsync(new JsonObject { ["mode"] = "publication-guard", ["workflow"] = workflow });
+
+        var guarded = result["value"]!.GetValue<string>();
+        Assert.Contains(start, guarded, StringComparison.Ordinal);
+        Assert.Contains(end, guarded, StringComparison.Ordinal);
+    }
+
+    private static string RateLimitStep(string operation) => $"""
+              - name: Log GitHub rate limits at {operation.Replace('_', ' ')}
+                if: always()
+                continue-on-error: true
+                uses: actions/github-script@example
+                with:
+                  script: |
+                    await fetchAndLogRateLimit(github, '{operation}', true);
+
+        """.ReplaceLineEndings("\n");
 
     private const string PublicationGuardFixture = """
         name: Fixture
