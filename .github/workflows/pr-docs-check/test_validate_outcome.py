@@ -429,7 +429,7 @@ class ValidateOutcomeTests(unittest.TestCase):
 
 
 class SideEffectOutcomeTests(unittest.TestCase):
-    def test_valid_draft_allows_comment_and_sme_review(self) -> None:
+    def test_valid_draft_allows_comment_and_people(self) -> None:
         drafted_payload = payload("drafted", target_branch="release/13.5")
         drafted_payload["items"].append(create_pull_request_item())
 
@@ -441,7 +441,7 @@ class SideEffectOutcomeTests(unittest.TestCase):
         )
 
         self.assertTrue(outcome["allow_comment"])
-        self.assertTrue(outcome["allow_sme_review"])
+        self.assertTrue(outcome["allow_people"])
         self.assertEqual("drafted", outcome["render_kind"])
         self.assertEqual(EXPECTED_SOURCE_PR_NUMBER, outcome["source_pr_number"])
 
@@ -457,7 +457,7 @@ class SideEffectOutcomeTests(unittest.TestCase):
         )
 
         self.assertTrue(outcome["allow_comment"])
-        self.assertFalse(outcome["allow_sme_review"])
+        self.assertFalse(outcome["allow_people"])
         self.assertEqual("invalid", outcome["render_kind"])
         self.assertIn("does not match resolved", outcome["diagnostic"])
 
@@ -470,8 +470,23 @@ class SideEffectOutcomeTests(unittest.TestCase):
         )
 
         self.assertTrue(outcome["allow_comment"])
-        self.assertFalse(outcome["allow_sme_review"])
+        self.assertFalse(outcome["allow_people"])
         self.assertEqual("skipped", outcome["render_kind"])
+
+    def test_drafted_without_pr_allows_people_for_fallback_issue(self) -> None:
+        drafted_payload = payload("drafted", target_branch="release/13.5")
+        drafted_payload["items"].append(create_pull_request_item())
+
+        outcome = build_side_effect_outcome(
+            drafted_payload,
+            "",
+            EXPECTED_SOURCE_PR_NUMBER,
+            "",
+        )
+
+        self.assertTrue(outcome["allow_comment"])
+        self.assertTrue(outcome["allow_people"])
+        self.assertEqual("drafted_missing_pr", outcome["render_kind"])
 
     def test_duplicate_notifications_allow_only_generic_warning(self) -> None:
         duplicate_payload = payload("drafted")
@@ -485,7 +500,7 @@ class SideEffectOutcomeTests(unittest.TestCase):
         )
 
         self.assertTrue(outcome["allow_comment"])
-        self.assertFalse(outcome["allow_sme_review"])
+        self.assertFalse(outcome["allow_people"])
         self.assertEqual("invalid", outcome["render_kind"])
 
     def test_mismatched_source_identity_allows_no_side_effects(self) -> None:
@@ -497,7 +512,7 @@ class SideEffectOutcomeTests(unittest.TestCase):
         )
 
         self.assertFalse(outcome["allow_comment"])
-        self.assertFalse(outcome["allow_sme_review"])
+        self.assertFalse(outcome["allow_people"])
 
     def test_integral_float_source_identity_allows_no_side_effects(self) -> None:
         outcome = build_side_effect_outcome(
@@ -508,7 +523,7 @@ class SideEffectOutcomeTests(unittest.TestCase):
         )
 
         self.assertFalse(outcome["allow_comment"])
-        self.assertFalse(outcome["allow_sme_review"])
+        self.assertFalse(outcome["allow_people"])
 
     def test_skipped_create_request_allows_only_generic_warning(self) -> None:
         contradictory_payload = payload()
@@ -522,7 +537,7 @@ class SideEffectOutcomeTests(unittest.TestCase):
         )
 
         self.assertTrue(outcome["allow_comment"])
-        self.assertFalse(outcome["allow_sme_review"])
+        self.assertFalse(outcome["allow_people"])
         self.assertEqual("invalid", outcome["render_kind"])
 
     def test_draft_failed_with_created_pr_allows_only_generic_warning(self) -> None:
@@ -534,7 +549,7 @@ class SideEffectOutcomeTests(unittest.TestCase):
         )
 
         self.assertTrue(outcome["allow_comment"])
-        self.assertFalse(outcome["allow_sme_review"])
+        self.assertFalse(outcome["allow_people"])
         self.assertEqual("invalid", outcome["render_kind"])
 
 
@@ -604,7 +619,7 @@ class ValidatorCliTests(unittest.TestCase):
 
         self.assertEqual(0, exit_code)
         self.assertTrue(outcome["allow_comment"])
-        self.assertFalse(outcome["allow_sme_review"])
+        self.assertFalse(outcome["allow_people"])
         self.assertEqual("invalid", outcome["render_kind"])
 
     def test_process_exits_zero_for_success(self) -> None:

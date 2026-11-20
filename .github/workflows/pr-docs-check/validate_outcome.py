@@ -215,13 +215,12 @@ def build_side_effect_outcome(
 ) -> dict[str, Any]:
     base_outcome: dict[str, Any] = {
         "allow_comment": False,
-        "allow_sme_review": False,
+        "allow_people": False,
         "diagnostic": "",
         "render_kind": "invalid",
         "source_pr_number": expected_source_pr_number,
         "summary": "",
         "target_branch": "",
-        "sme_login": "",
     }
 
     try:
@@ -243,7 +242,6 @@ def build_side_effect_outcome(
             "allow_comment": True,
             "summary": str(item.get("summary") or ""),
             "target_branch": str(item.get("target_branch") or ""),
-            "sme_login": str(item.get("sme_login") or ""),
         }
     )
 
@@ -261,12 +259,16 @@ def build_side_effect_outcome(
         base_outcome["diagnostic"] = str(error)
         if result == "drafted" and not created_pr_url:
             base_outcome["render_kind"] = "drafted_missing_pr"
+            # gh-aw's `fallback-as-issue` may have opened a docs issue in place of
+            # the PR. People are still applied to it; the notify job locates that
+            # issue by this run's URL and does nothing when there is none.
+            base_outcome["allow_people"] = True
         elif result == "draft_failed" and not created_pr_url:
             base_outcome["render_kind"] = "draft_failed"
         return base_outcome
 
     base_outcome["render_kind"] = result
-    base_outcome["allow_sme_review"] = result == "drafted"
+    base_outcome["allow_people"] = result == "drafted"
     return base_outcome
 
 
@@ -315,7 +317,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         except (OutcomeValidationError, SafeOutputTargetError) as error:
             outcome = {
                 "allow_comment": False,
-                "allow_sme_review": False,
+                "allow_people": False,
                 "diagnostic": str(error),
                 "render_kind": "invalid",
             }
