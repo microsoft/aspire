@@ -1,0 +1,20 @@
+﻿{
+  AppHost:
+<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <PackageReference Include="aspire.hosting.apphost" PrivateAssets="all" />
+  </ItemGroup>
+</Project>,
+  CentralPackages:
+<?xml version="1.0" encoding="utf-8"?>
+<Project>
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageVersion Include="Aspire.Hosting.AppHost" Version="17.0.0" />
+    <PackageVersion Include="Unrelated" Version="1.0.0" />
+  </ItemGroup>
+</Project>
+}

@@ -551,8 +551,11 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
         Assert.Empty(Directory.EnumerateDirectories(Path.Combine(workspace.Path, ".aspire"), ".aspire-nuget-config-*"));
     }
 
-    [Fact]
-    public async Task UpdateAsync_UnresolvableSdkAndBackslashReference_RepairsSdkForNativeEvaluation()
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task UpdateAsync_UnresolvableSdkAndBackslashReference_RepairsSdkForNativeEvaluation(bool migrate, bool centrallyManaged)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHostDirectory = workspace.CreateDirectory("AppHost");
@@ -561,10 +564,12 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
         var newFeed = workspace.CreateDirectory("new-feed");
         var packageCache = workspace.CreateDirectory("packages");
         var suffix = Guid.NewGuid().ToString("N");
-        var oldVersion = $"99.0.0-missing-{suffix}";
-        var newVersion = $"99.0.1-native-{suffix}";
+        var oldVersion = $"13.6.0-missing-{suffix}";
+        var newVersion = migrate ? $"17.0.0-native-{suffix}" : $"13.6.1-native-{suffix}";
         var packageId = $"Aspire.UpdateRepair.{suffix}";
         NuGetTestHelper.CreatePackage(newFeed, packageId, newVersion,
+            new Dictionary<string, string> { ["lib/net10.0/_._"] = "" });
+        NuGetTestHelper.CreatePackage(newFeed, "Aspire.Hosting.AppHost", newVersion,
             new Dictionary<string, string> { ["lib/net10.0/_._"] = "" });
         NuGetTestHelper.CreatePackage(newFeed, "Aspire.AppHost.Sdk", newVersion, new Dictionary<string, string>
         {
@@ -594,10 +599,17 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
         var webProject = new FileInfo(Path.Combine(webDirectory.FullName, "Web.csproj"));
         await File.WriteAllTextAsync(webProject.FullName, $$"""
             <Project Sdk="Microsoft.NET.Sdk">
-              <PropertyGroup><TargetFramework>net10.0</TargetFramework><DisableImplicitFrameworkReferences>true</DisableImplicitFrameworkReferences><NuGetAudit>false</NuGetAudit></PropertyGroup>
+              <PropertyGroup><TargetFramework>net10.0</TargetFramework><DisableImplicitFrameworkReferences>true</DisableImplicitFrameworkReferences><NuGetAudit>false</NuGetAudit><ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally></PropertyGroup>
               <ItemGroup><PackageReference Include="{{packageId}}" Version="{{oldVersion}}" /></ItemGroup>
             </Project>
             """);
+        var centralFile = Path.Combine(workspace.Path, "Directory.Packages.props");
+        const string centralContent = "<Project><PropertyGroup><ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally></PropertyGroup></Project>";
+        if (centrallyManaged)
+        {
+            await File.WriteAllTextAsync(centralFile, centralContent);
+        }
+        var originalProject = await File.ReadAllTextAsync(projectFile.FullName);
         using var nativeProvider = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.DotNetCliExecutionFactoryFactory = _ =>
@@ -605,6 +617,7 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
         }).BuildServiceProvider();
         var nativeRunner = nativeProvider.GetRequiredService<IDotNetCliRunner>();
         var inspectionCount = 0;
+        var restoreCount = 0;
         var runner = new TestDotNetCliRunner
         {
             GetProjectItemsAndPropertiesAsyncCallbackWithTargetsAsync = async (file, items, properties, targets, options, token) =>
@@ -629,13 +642,19 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
                 File.WriteAllText(file.FullName, File.ReadAllText(file.FullName).Replace(oldVersion, version, StringComparison.Ordinal));
                 return 0;
             },
-            RestoreAsyncCallback = (_, options, _) =>
+            RestoreAsyncCallbackAsync = async (file, options, token) =>
             {
+                restoreCount++;
                 Assert.Equal(2, inspectionCount);
                 Assert.NotNull(options.NuGetRestoreTargetsFile);
                 Assert.Equal([newFeed.FullName], NuGetTestHelper.GetEligiblePackageSources(
                     options.NuGetRestoreTargetsFile.DirectoryName!, packageId));
-                return 0;
+                var document = System.Xml.Linq.XDocument.Load(file.FullName);
+                Assert.Equal("Microsoft.NET.Sdk", document.Root!.Attribute("Sdk")!.Value);
+                var reference = Assert.Single(document.Descendants("PackageReference"));
+                Assert.Equal("Aspire.Hosting.AppHost", reference.Attribute("Include")!.Value);
+                Assert.Equal(centrallyManaged ? null : newVersion, reference.Attribute("Version")?.Value);
+                return await nativeRunner.RestoreAsync(file, options, token);
             }
         };
         using var provider = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
@@ -650,10 +669,20 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
         // NUGET_PACKAGES can override the fixture's configured globalPackagesFolder.
         var globalPackagesFolder = provider.GetRequiredService<BundleNuGetService>().GetGlobalPackagesFolder(appHostDirectory);
         var result = await provider.GetRequiredService<IProjectUpdater>().UpdateProjectAsync(
-            CreateContext(projectFile, channel, hasExplicitChannel: true), TestContext.Current.CancellationToken);
+            CreateContext(projectFile, channel, hasExplicitChannel: true, dryRun: migrate), TestContext.Current.CancellationToken);
 
-        Assert.True(result.UpdatedApplied);
+        Assert.Equal(!migrate, result.UpdatedApplied);
         Assert.Equal(2, inspectionCount);
+        Assert.Equal(migrate ? 1 : 0, restoreCount);
+        if (migrate)
+        {
+            Assert.Equal(originalProject, await File.ReadAllTextAsync(projectFile.FullName));
+            if (centrallyManaged)
+            {
+                Assert.Equal(centralContent, await File.ReadAllTextAsync(centralFile));
+            }
+            return;
+        }
         using var parsed = provider.GetRequiredService<FallbackProjectParser>().ParseProject(projectFile);
         Assert.Equal(newVersion, parsed.RootElement.GetProperty("Properties").GetProperty("AspireHostingSDKVersion").GetString());
         using var parsedWeb = provider.GetRequiredService<FallbackProjectParser>().ParseProject(webProject);
@@ -1470,7 +1499,7 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
             Assert.True(result.UpdatedApplied);
             AssertUpdatedSdk(provider, projectFile);
             Assert.Equal([newSource], NuGetTestHelper.GetEligiblePackageSources(projectFile.DirectoryName!, "Aspire.Hosting.Redis"));
-            Assert.Equal(["discover:Aspire.AppHost.Sdk", "discover:Aspire.Hosting.Redis", "bootstrap", "package", "tool"], calls);
+            Assert.Equal(["discover:Aspire.Hosting.AppHost", "discover:Aspire.AppHost.Sdk", "discover:Aspire.Hosting.Redis", "bootstrap", "package", "tool"], calls);
         }
         else
         {
