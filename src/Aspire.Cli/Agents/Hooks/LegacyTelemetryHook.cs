@@ -3,12 +3,11 @@
 
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using Aspire.Cli.Utils;
 
 namespace Aspire.Cli.Agents.Hooks;
 
 /// <summary>
-/// Recognizes telemetry hook registrations written by Aspire 13.5, which ran
+/// Recognizes telemetry hook registrations written by Aspire 13.5 and 13.6, which ran
 /// <c>track-telemetry.sh</c> or <c>track-telemetry.ps1</c> from the Aspire home <c>hooks</c> directory
 /// instead of invoking the CLI directly.
 /// </summary>
@@ -31,13 +30,17 @@ internal static class LegacyTelemetryHook
 
         var content = await File.ReadAllTextAsync(configPath, cancellationToken);
 
-        // JsonObject materializes properties lazily, so a repeated key would otherwise throw
-        // ArgumentException on first lookup instead of failing here as malformed JSON.
-        var options = ConfigurationHelper.ParseOptions;
-        options.AllowDuplicateProperties = false;
-
-        return IsRegistered(JsonNode.Parse(content, documentOptions: options));
+        // Parse the same way the Claude hook writer does, so `aspire doctor` only reports a registration
+        // that `aspire agent init` can replace.
+        return IsRegistered(JsonNode.Parse(content, documentOptions: ParseOptions));
     }
+
+    /// <summary>
+    /// Strict JSON options for hook configuration files. JsonObject materializes properties lazily, so
+    /// a repeated key would otherwise throw <see cref="ArgumentException"/> on first lookup instead of
+    /// failing at parse time as malformed JSON.
+    /// </summary>
+    internal static JsonDocumentOptions ParseOptions { get; } = new() { AllowDuplicateProperties = false };
 
     internal static bool IsMatch(JsonObject hook)
         => ReferencesScript(hook["command"])
@@ -80,7 +83,7 @@ internal static class LegacyTelemetryHook
             return false;
         }
 
-        // Aspire 13.5 wrote the script path as the final token of a shell command, single-quoted, or as a
+        // Aspire 13.5 and 13.6 wrote the script path as the final token of a shell command, single-quoted, or as a
         // discrete exec-form argument:
         //   bash '/home/me/.aspire/hooks/track-telemetry.sh'
         //   pwsh -NoProfile -ExecutionPolicy Bypass -File 'C:\Users\me\.aspire\hooks\track-telemetry.ps1'

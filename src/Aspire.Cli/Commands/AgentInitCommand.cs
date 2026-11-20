@@ -728,7 +728,8 @@ internal sealed class AgentInitCommand : BaseCommand
         // The hooks only report aspire@aspire-skills skills and Aspire MCP tool usage, so a client gets a
         // hook only when this run registered that plugin or configured the Aspire MCP server for it at the
         // requested scope, either is already set up there, or the client has a user-level legacy script
-        // registration to replace. The latter cases keep re-runs that skip both choices refreshing the hook. Selecting the aspire skill choice is not enough: skill sources can
+        // registration to replace. The latter cases keep re-runs that skip both choices refreshing the hook.
+        // Selecting the aspire skill choice is not enough: skill sources can
         // disable the default source or replace its plugins.
         await ConfigureTelemetryHooksForAspireSetupAsync(
             selectedClients,
@@ -800,11 +801,10 @@ internal sealed class AgentInitCommand : BaseCommand
 
     private static async Task<bool> HasLegacyTelemetryHookAsync(IAgentClient client, CancellationToken cancellationToken)
     {
-        // A user-level 13.5 script registration proves Aspire was set up for this client at some scope.
-        // `aspire doctor` points users here to replace it, so refresh it even when the selected scope
-        // has no MCP server or skills registration of its own. An unreadable or malformed file falls
-        // through to the existing setup probe; if that selects the client, the hook configurator then
-        // reports the file problem.
+        // A user-level script registration from Aspire 13.5 or 13.6 is owned by Aspire and runs an obsolete
+        // script. `aspire doctor` points users here to replace it, so refresh it even when the selected
+        // scope has no MCP server or skills registration of its own. An unreadable or malformed file
+        // falls through to the existing setup probe.
         try
         {
             return await LegacyTelemetryHook.IsRegisteredAsync(client.GetTelemetryHookConfigPath(), cancellationToken);

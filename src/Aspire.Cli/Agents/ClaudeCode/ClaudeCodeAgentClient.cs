@@ -136,7 +136,7 @@ internal sealed class ClaudeCodeAgentClient(
             JsonNode? parsed;
             try
             {
-                parsed = JsonNode.Parse(content);
+                parsed = JsonNode.Parse(content, documentOptions: LegacyTelemetryHook.ParseOptions);
             }
             catch (JsonException ex)
             {

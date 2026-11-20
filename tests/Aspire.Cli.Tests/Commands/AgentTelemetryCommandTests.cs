@@ -355,7 +355,7 @@ public class AgentTelemetryCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
-        // A newer hook script may pass a flag this CLI version does not understand; it must not fail.
+        // A hook registered by a newer CLI may pass a flag this CLI version does not understand; it must not fail.
         var result = command.Parse("agent telemetry --event-type skill_invocation --some-future-flag value");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();

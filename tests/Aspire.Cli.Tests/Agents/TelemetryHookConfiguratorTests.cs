@@ -274,15 +274,16 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task ConfigureAsync_SkipsClaude_WhenSettingsAreMalformed(bool selectCopilot)
+    [InlineData("{ this is not valid json", false)]
+    [InlineData("{ this is not valid json", true)]
+    [InlineData("""{"permissions":{},"permissions":{}}""", false)]
+    [InlineData("""{"permissions":{},"permissions":{}}""", true)]
+    public async Task ConfigureAsync_SkipsClaude_WhenSettingsAreMalformed(string malformed, bool selectCopilot)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var home = workspace.CreateDirectory("home");
         var claudeDirectory = Directory.CreateDirectory(Path.Combine(home.FullName, ".claude"));
         var settingsPath = Path.Combine(claudeDirectory.FullName, "settings.json");
-        const string malformed = "{ this is not valid json";
         await File.WriteAllTextAsync(settingsPath, malformed).DefaultTimeout();
 
         var configurator = CreateConfigurator(workspace, home);

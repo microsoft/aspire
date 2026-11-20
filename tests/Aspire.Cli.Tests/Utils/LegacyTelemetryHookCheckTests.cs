@@ -59,23 +59,36 @@ public class LegacyTelemetryHookCheckTests(ITestOutputHelper outputHelper)
     [InlineData("claude", """{"hooks":{"PostToolUse":[{"hooks":[{"command":"bash '/home/user/.aspire/hooks/track-telemetry.sh'"}]}]}}""")]
     [InlineData("claude", """{"hooks":{"PostToolUse":[{"hooks":[{"command":"pwsh -File 'C:\\Users\\user\\.aspire\\hooks\\track-telemetry.ps1'"}]}]}}""")]
     [InlineData("copilot", """{"hooks":{"postToolUse":[{"powershell":"pwsh -File 'C:\\Users\\user\\.aspire\\hooks\\track-telemetry.ps1'"}]}}""")]
-    public async Task CheckAsync_RecognizesLegacyHookVariants(string clientId, string config)
+    public async Task CheckAsync_LegacyHookVariantsWarnUntilAgentInitRefreshesThem(string clientId, string config)
     {
         using var context = new AgentConfigurationTestContext(outputHelper);
         var configPath = clientId == CopilotAgentClient.ClientId
             ? Path.Combine(context.CopilotDirectory, "hooks", "aspire-telemetry.json")
             : Path.Combine(context.ClaudeDirectory, "settings.json");
         await AgentConfigurationTestContext.WriteAsync(configPath, config);
+        var check = CreateCheck(context);
 
-        var warning = Assert.Single(await CreateCheck(context).CheckAsync(TestContext.Current.CancellationToken));
+        var warning = Assert.Single(await check.CheckAsync(TestContext.Current.CancellationToken));
 
         Assert.Equal(EnvironmentCheckStatus.Warning, warning.Status);
         Assert.Contains($"aspire agent init --agents {clientId}", warning.Fix);
+
+        var services = context.CreateServiceCollection(outputHelper);
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var exitCode = await command.Parse(
+            $"agent init --agents {clientId} --scope project --skills none --mcp=false --non-interactive").InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Empty(await check.CheckAsync(TestContext.Current.CancellationToken));
     }
 
     [Theory]
     [InlineData("null")]
     [InlineData("{malformed")]
+    // The Claude hook writer rejects comments and trailing commas, so `aspire agent init` could not
+    // replace a registration in such a file. Doctor must not recommend it.
+    [InlineData("""{"hooks":{"PostToolUse":[{"hooks":[{"command":"bash","args":["/home/user/.aspire/hooks/track-telemetry.sh"]}]}]},}""")]
     [InlineData("""{"hooks":[]}""")]
     [InlineData("""{"hooks":{"postToolUse":false,"PostToolUse":[null,{"hooks":false}]}}""")]
     [InlineData("""{"hooks":{"postToolUse":[{"exec":"aspire","args":["agent","telemetry","--hook"]}],"PostToolUse":[{"hooks":[{"command":"aspire","args":["agent","telemetry","--hook"]}]}]}}""")]

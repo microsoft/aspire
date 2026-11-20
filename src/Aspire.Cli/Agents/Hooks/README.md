@@ -29,8 +29,9 @@ exercise the embedded catalog.
 
 First-party MCP tool names come from the CLI's
 [`KnownMcpTools.All`](../../Mcp/KnownMcpTools.cs), not the catalog file.
-The [aspire-skills](https://github.com/microsoft/aspire-skills) repository will
-regenerate the catalog from `skills/*` and `skills/*/references`.
+Update the catalog by hand when skills or references change. Automation in the
+[aspire-skills](https://github.com/microsoft/aspire-skills) repository to
+regenerate it from `skills/*` and `skills/*/references` is planned.
 
 See [Agent usage telemetry](../../../../docs/specs/aspire-product-telemetry.md#agent-usage-telemetry)
 for registration, legacy hook handling, classification, privacy, and delivery
