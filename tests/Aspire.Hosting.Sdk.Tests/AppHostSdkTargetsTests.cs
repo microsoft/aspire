@@ -1273,7 +1273,7 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var directory = ResolveAspireCliBundle.GetPinnedLayoutDirectory(workspace.Path, version);
+        var directory = Aspire.Shared.AspireCliBundleLayoutResolver.GetPinnedLayoutDirectory(workspace.Path, version);
 
         Assert.Equal(Path.Combine(workspace.Path, "dnx", "aspire.cli", expectedDirectoryName), directory);
     }

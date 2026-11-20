@@ -91,11 +91,23 @@ internal static class PathLookupHelper
     /// <returns>The matching executable paths in PATH lookup order.</returns>
     public static IEnumerable<string> FindAllFullPathsFromPath(string command)
     {
+        return FindAllFullPathsFromPath(command, Environment.GetEnvironmentVariable("PATH"), Environment.GetEnvironmentVariable("PATHEXT"));
+    }
+
+    /// <summary>
+    /// Finds all full paths of a command by searching the given PATH and PATHEXT values instead of the process environment.
+    /// </summary>
+    /// <param name="command">The command name to search for.</param>
+    /// <param name="pathVariable">The PATH value to search.</param>
+    /// <param name="pathExtensionsVariable">The PATHEXT value to apply on Windows; ignored on other platforms.</param>
+    /// <returns>The matching executable paths in PATH lookup order.</returns>
+    public static IEnumerable<string> FindAllFullPathsFromPath(string command, string? pathVariable, string? pathExtensionsVariable)
+    {
         var pathExtensions = OperatingSystem.IsWindows()
-            ? Environment.GetEnvironmentVariable("PATHEXT")?.Split(';', StringSplitOptions.RemoveEmptyEntries) ?? []
+            ? pathExtensionsVariable?.Split(';', StringSplitOptions.RemoveEmptyEntries) ?? []
             : null;
 
-        return FindAllFullPathsFromPath(command, Environment.GetEnvironmentVariable("PATH"), Path.PathSeparator, FileExistsAndIsExecutable, pathExtensions);
+        return FindAllFullPathsFromPath(command, pathVariable, Path.PathSeparator, FileExistsAndIsExecutable, pathExtensions);
     }
 
     /// <summary>

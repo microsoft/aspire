@@ -16,6 +16,7 @@
   <ItemGroup>
     <InternalsVisibleTo Include="Aspire.Hosting.Sdk.Tests" />
     <Compile Include="$(SharedDir)ProcessStartInfoHelper.cs" Link="ProcessStartInfoHelper.cs" />
+    <Compile Include="$(SharedDir)AspireCliBundleLayoutResolver.cs" Link="AspireCliBundleLayoutResolver.cs" />
   </ItemGroup>
 
 </Project>

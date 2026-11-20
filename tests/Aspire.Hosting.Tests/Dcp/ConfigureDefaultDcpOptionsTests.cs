@@ -2,7 +2,10 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.Dcp;
+using Aspire.Shared;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Testing;
 
 namespace Aspire.Hosting.Tests.Dcp;
 
@@ -328,7 +331,98 @@ public class ConfigureDefaultDcpOptionsTests
         Assert.True(options.PersistPortsInIsolatedMode);
     }
 
+    [Fact]
+    public void MissingBundleMetadataFallsBackToLayoutPinnedToHostingVersion()
+    {
+        var aspireHome = Directory.CreateTempSubdirectory("aspire-dcp-fallback-");
+        try
+        {
+            var hostingVersion = AssemblyVersionHelper.GetDisplayVersion(typeof(DcpOptions).Assembly)!;
+            var pinnedLayout = AspireCliBundleLayoutResolver.GetPinnedLayoutDirectory(aspireHome.FullName, hostingVersion);
+            CreateBundleLayout(pinnedLayout);
+            // A shared Aspire home layout can belong to a different CLI version, so the pinned layout must win.
+            CreateBundleLayout(aspireHome.FullName);
+            var logger = new FakeLogger<ConfigureDefaultDcpOptions>();
+
+            var options = Configure([], aspireHome.FullName, DistributedApplicationOperation.Run, logger);
+
+            Assert.Equal(Path.Combine(pinnedLayout, "dcp", BundleDiscovery.GetDcpExecutableName()), options.CliPath);
+            Assert.Equal(Path.Combine(pinnedLayout, "dcp", "ext"), options.ExtensionsPath);
+            Assert.Equal(Path.Combine(pinnedLayout, "dashboard", BundleDiscovery.GetExecutableFileName(BundleDiscovery.DashboardExecutableName)), options.DashboardPath);
+            Assert.Equal(Path.Combine(pinnedLayout, "terminalhost", BundleDiscovery.GetExecutableFileName(BundleDiscovery.TerminalHostExecutableName)), options.TerminalHostPath);
+            Assert.Equal(string.Empty, options.TerminalHostInvocationArgs);
+            var record = Assert.Single(logger.Collector.GetSnapshot());
+            Assert.Equal(LogLevel.Warning, record.Level);
+            Assert.Equal(
+                $"The AppHost assembly 'Aspire.Hosting' is missing the DCP and dashboard path metadata that the Aspire.Hosting.AppHost build targets embed. Using the Aspire CLI bundle in '{pinnedLayout}' instead. Rebuild the AppHost project to restore the embedded paths.",
+                record.Message);
+        }
+        finally
+        {
+            aspireHome.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void BundleFallbackOnlyFillsMissingPaths()
+    {
+        var aspireHome = Directory.CreateTempSubdirectory("aspire-dcp-fallback-");
+        try
+        {
+            CreateBundleLayout(aspireHome.FullName);
+            var configuredDashboardPath = Path.Combine(aspireHome.FullName, "custom", "Aspire.Dashboard");
+            var logger = new FakeLogger<ConfigureDefaultDcpOptions>();
+
+            var options = Configure(new()
+            {
+                ["DcpPublisher:DashboardPath"] = configuredDashboardPath,
+            }, aspireHome.FullName, DistributedApplicationOperation.Run, logger);
+
+            Assert.Equal(Path.Combine(aspireHome.FullName, "dcp", BundleDiscovery.GetDcpExecutableName()), options.CliPath);
+            Assert.Equal(configuredDashboardPath, options.DashboardPath);
+            Assert.Contains("is missing the DCP path metadata", Assert.Single(logger.Collector.GetSnapshot()).Message);
+        }
+        finally
+        {
+            aspireHome.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void BundleFallbackDoesNotRunInPublishMode()
+    {
+        var aspireHome = Directory.CreateTempSubdirectory("aspire-dcp-fallback-");
+        try
+        {
+            CreateBundleLayout(aspireHome.FullName);
+            var logger = new FakeLogger<ConfigureDefaultDcpOptions>();
+
+            var options = Configure([], aspireHome.FullName, DistributedApplicationOperation.Publish, logger);
+
+            Assert.Null(options.CliPath);
+            Assert.Null(options.DashboardPath);
+            Assert.Empty(logger.Collector.GetSnapshot());
+        }
+        finally
+        {
+            aspireHome.Delete(recursive: true);
+        }
+    }
+
     private static DcpOptions ConfigureWithDcpPublisher(Dictionary<string, string?> dcpPublisherSettings)
+    {
+        // Point the bundle fallback at an Aspire home that doesn't exist so a CLI installed on the test machine
+        // cannot supply paths the test expects to come from configuration.
+        var missingAspireHome = Path.Combine(Path.GetTempPath(), "aspire-dcp-options-tests-missing-home");
+
+        return Configure(dcpPublisherSettings, missingAspireHome, DistributedApplicationOperation.Run, new FakeLogger<ConfigureDefaultDcpOptions>());
+    }
+
+    private static DcpOptions Configure(
+        Dictionary<string, string?> dcpPublisherSettings,
+        string aspireHome,
+        DistributedApplicationOperation operation,
+        ILogger<ConfigureDefaultDcpOptions> logger)
     {
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(dcpPublisherSettings)
@@ -342,10 +436,33 @@ public class ConfigureDefaultDcpOptionsTests
         {
             AssemblyName = typeof(DcpOptions).Assembly.GetName().Name,
         };
-        var configurer = new ConfigureDefaultDcpOptions(appOptions, configuration);
+        var configurer = new ConfigureDefaultDcpOptions(appOptions, configuration, new DistributedApplicationExecutionContext(operation), logger)
+        {
+            // An empty PATH disables the CLI search, so only the given Aspire home is probed.
+            GetEnvironmentVariable = name => name switch
+            {
+                "ASPIRE_HOME" => aspireHome,
+                "PATH" => string.Empty,
+                _ => null,
+            },
+        };
         var options = new DcpOptions();
         configurer.Configure(options);
 
         return options;
+    }
+
+    private static void CreateBundleLayout(string bundleRoot)
+    {
+        CreateEmptyFile(Path.Combine(bundleRoot, "dcp", BundleDiscovery.GetDcpExecutableName()));
+        CreateEmptyFile(Path.Combine(bundleRoot, "managed", BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName)));
+        CreateEmptyFile(Path.Combine(bundleRoot, "dashboard", BundleDiscovery.GetExecutableFileName(BundleDiscovery.DashboardExecutableName)));
+        CreateEmptyFile(Path.Combine(bundleRoot, "terminalhost", BundleDiscovery.GetExecutableFileName(BundleDiscovery.TerminalHostExecutableName)));
+    }
+
+    private static void CreateEmptyFile(string path)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllBytes(path, []);
     }
 }
