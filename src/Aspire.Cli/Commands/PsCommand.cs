@@ -7,6 +7,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Channels;
 using Aspire.Cli.Backchannel;
+using Aspire.Cli.Diagnostics;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Processes;
 using Aspire.Cli.Resources;
@@ -76,6 +77,7 @@ internal sealed partial class PsCommand : BaseCommand
     private readonly IAuxiliaryBackchannelMonitor _backchannelMonitor;
     private readonly IEnvironment _environment;
     private readonly OrphanedAppHostCollector _collector;
+    private readonly FileLoggerProvider _fileLoggerProvider;
     private readonly ILogger<PsCommand> _logger;
     private readonly IProcessIdentityProvider _processIdentityProvider;
     private readonly TimeProvider _timeProvider;
@@ -99,6 +101,7 @@ internal sealed partial class PsCommand : BaseCommand
         IAuxiliaryBackchannelMonitor backchannelMonitor,
         IEnvironment environment,
         OrphanedAppHostCollector collector,
+        FileLoggerProvider fileLoggerProvider,
         IProcessIdentityProvider processIdentityProvider,
         TimeProvider timeProvider,
         TrayProtocolOutput protocolOutput,
@@ -109,6 +112,7 @@ internal sealed partial class PsCommand : BaseCommand
         _backchannelMonitor = backchannelMonitor;
         _environment = environment;
         _collector = collector;
+        _fileLoggerProvider = fileLoggerProvider;
         _logger = logger;
         _processIdentityProvider = processIdentityProvider;
         _timeProvider = timeProvider;
@@ -161,7 +165,13 @@ internal sealed partial class PsCommand : BaseCommand
         // leaked aspire-managed/AppHost processes are cleaned up. Best effort: CollectAsync swallows scan/stop
         // failures (only cancellation propagates), so a collection hiccup never fails `aspire ps`. The listing
         // scan below still surfaces its own failures.
-        await _collector.CollectAsync(cancellationToken).ConfigureAwait(false);
+        var collected = await _collector.CollectAsync(cancellationToken).ConfigureAwait(false);
+        if (collected > 0)
+        {
+            // Stopping processes is a side effect worth diagnosing later, but the collector records it
+            // only at Debug, so keep this otherwise successful run's log.
+            _fileLoggerProvider.RetainLogFile();
+        }
 
         // Scan for running AppHosts (same as ListAppHostsTool). JSON output must not go
         // through status rendering because non-interactive status text shares stdout.

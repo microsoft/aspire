@@ -240,7 +240,7 @@ public class FileLoggerProviderTests(ITestOutputHelper outputHelper)
 
         new FileLoggerProvider(path, logsDirectory, errorWriter, isManagedLog: true).Dispose();
 
-        Assert.Equal(oldPaths.Skip(2).Append(linkPath).Append(path).Order(), Directory.GetFiles(logsDirectory, "cli_*.log").Order());
+        Assert.Equal(oldPaths.Skip(1).Append(linkPath).Append(path).Order(), Directory.GetFiles(logsDirectory, "cli_*.log").Order());
         Assert.EndsWith("sentinel", File.ReadAllText(targetPath));
         Assert.Empty(errorWriter.MarkupLines);
     }
@@ -430,24 +430,26 @@ public class FileLoggerProviderTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData(false, false, null, true)]
-    [InlineData(true, false, null, false)]
-    [InlineData(true, false, LogLevel.Information, false)]
-    [InlineData(true, false, LogLevel.Warning, true)]
-    [InlineData(true, false, LogLevel.Error, true)]
-    [InlineData(true, true, null, true)]
-    public void Dispose_DeletesMarkedLogOnlyWhenNoWarningsWereLoggedOrCancellationRequested(bool deleteOnDispose, bool cancelAfterMarking, LogLevel? loggedLevel, bool expectedExists)
+    [InlineData(false, false, null, false, false, true)]
+    [InlineData(true, false, null, false, false, false)]
+    [InlineData(true, false, LogLevel.Information, false, false, false)]
+    [InlineData(true, false, LogLevel.Warning, false, false, true)]
+    [InlineData(true, false, LogLevel.Error, false, false, true)]
+    [InlineData(true, false, LogLevel.Debug, true, false, true)]
+    [InlineData(true, false, null, false, true, true)]
+    [InlineData(true, true, null, false, false, true)]
+    public void Dispose_DiscardsManagedLogOnlyWhenNotRetainedOrCanceled(bool discardOnDispose, bool cancelAfterMarking, LogLevel? loggedLevel, bool logException, bool retain, bool expectedExists)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var logFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, "test.log");
+        var logFilePath = FileLoggerProvider.GenerateLogFilePath(workspace.Path, TimeProvider.System);
         var errorWriter = new TestStartupErrorWriter();
         using var cts = new CancellationTokenSource();
 
-        using (var provider = new FileLoggerProvider(logFilePath, errorWriter))
+        using (var provider = new FileLoggerProvider(logFilePath, logsDirectory: null, errorWriter, isManagedLog: true))
         {
-            if (deleteOnDispose)
+            if (discardOnDispose)
             {
-                provider.DeleteOnDisposeIfNoWarnings(cts.Token);
+                provider.DiscardLogFileOnDisposeUnlessRetained(cts.Token);
             }
 
             if (cancelAfterMarking)
@@ -457,12 +459,50 @@ public class FileLoggerProviderTests(ITestOutputHelper outputHelper)
 
             if (loggedLevel is { } level)
             {
-                provider.CreateLogger("Test").Log(level, "Log entry");
+                provider.CreateLogger("Test").Log(level, logException ? new InvalidOperationException("Handled") : null, "Log entry");
+            }
+
+            if (retain)
+            {
+                provider.RetainLogFile();
             }
         }
 
         Assert.Equal(expectedExists, File.Exists(logFilePath));
         Assert.Empty(errorWriter.MarkupLines);
+    }
+
+    [Fact]
+    public void Dispose_DoesNotDiscardCustomLogFile()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var logFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, "test.log");
+        var errorWriter = new TestStartupErrorWriter();
+
+        using (var provider = new FileLoggerProvider(logFilePath, errorWriter))
+        {
+            provider.DiscardLogFileOnDisposeUnlessRetained(CancellationToken.None);
+        }
+
+        Assert.True(File.Exists(logFilePath));
+        Assert.Empty(errorWriter.MarkupLines);
+    }
+
+    [Fact]
+    public void Dispose_DoesNotDiscardManagedLogPathItFailedToCreate()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var logFilePath = FileLoggerProvider.GenerateLogFilePath(workspace.Path, TimeProvider.System);
+        File.WriteAllText(logFilePath, "Existing file");
+        var errorWriter = new TestStartupErrorWriter();
+
+        using (var provider = new FileLoggerProvider(logFilePath, logsDirectory: null, errorWriter, isManagedLog: true))
+        {
+            provider.DiscardLogFileOnDisposeUnlessRetained(CancellationToken.None);
+        }
+
+        Assert.Equal("Existing file", File.ReadAllText(logFilePath));
+        Assert.StartsWith("Could not create log file at ", Assert.Single(errorWriter.MarkupLines));
     }
 
     private static List<string> CreateOldLogFiles(string directory, int count)

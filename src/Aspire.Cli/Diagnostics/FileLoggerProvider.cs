@@ -33,9 +33,15 @@ internal sealed partial class FileLoggerProvider : ILoggerProvider
     private readonly StreamWriter? _writer;
     private readonly Channel<string>? _channel;
     private readonly Task? _writerTask;
+
+    // True only when this instance created a new managed log file. Only that file may be discarded
+    // on dispose; custom --log-file targets and files this instance failed to create are never deleted.
+    private readonly bool _ownsManagedLogFile;
     private bool _disposed;
-    private volatile bool _hasWarnings;
-    private CancellationToken? _deleteOnDisposeUnlessCanceled;
+
+    // Set once anything worth keeping is recorded. It is never cleared.
+    private volatile bool _retainLogFile;
+    private CancellationToken? _discardOnDisposeUnlessCanceled;
 
     private FileLoggerProvider(string logFilePath)
     {
@@ -55,7 +61,7 @@ internal sealed partial class FileLoggerProvider : ILoggerProvider
     /// </summary>
     /// <param name="logsDirectory">The directory where log files will be written.</param>
     /// <param name="timeProvider">The time provider for timestamp generation.</param>
-    /// <param name="suffix">An optional suffix appended before the extension (e.g. "detach-child").</param>
+    /// <param name="suffix">An optional suffix inserted before <c>_managed.log</c>.</param>
     internal static string GenerateLogFilePath(string logsDirectory, TimeProvider timeProvider, string? suffix = null)
     {
         var timestamp = timeProvider.GetUtcNow().ToString("yyyyMMdd'T'HHmmss", CultureInfo.InvariantCulture);
@@ -132,6 +138,7 @@ internal sealed partial class FileLoggerProvider : ILoggerProvider
             }
 
             _writer = writer;
+            _ownsManagedLogFile = isManagedLog;
 
             _channel = CreateChannel();
             _writerTask = Task.Run(ProcessLogQueueAsync);
@@ -367,9 +374,11 @@ internal sealed partial class FileLoggerProvider : ILoggerProvider
 
     internal void WriteLog(DateTimeOffset timestamp, LogLevel level, string category, string message, Exception? exception = null)
     {
-        if (level >= LogLevel.Warning && level != LogLevel.None)
+        // Best-effort operations often log handled exceptions at Debug, so an exception at any level
+        // is kept along with warnings and errors.
+        if ((level >= LogLevel.Warning && level != LogLevel.None) || exception is not null)
         {
-            _hasWarnings = true;
+            _retainLogFile = true;
         }
 
         var ts = timestamp.UtcDateTime.ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture);
@@ -409,7 +418,7 @@ internal sealed partial class FileLoggerProvider : ILoggerProvider
 
         // Deciding after the writer drains means late warnings and cancellation, such as a Ctrl+C
         // during host or telemetry shutdown, still keep the log.
-        if (_deleteOnDisposeUnlessCanceled is { IsCancellationRequested: false } && !_hasWarnings && _writer is not null)
+        if (_ownsManagedLogFile && _discardOnDisposeUnlessCanceled is { IsCancellationRequested: false } && !_retainLogFile)
         {
             try
             {
@@ -423,18 +432,29 @@ internal sealed partial class FileLoggerProvider : ILoggerProvider
     }
 
     /// <summary>
-    /// Deletes the log file on dispose unless a warning or error was logged or cancellation was requested.
+    /// Deletes the managed log file on dispose unless it is retained or cancellation was requested.
     /// </summary>
     /// <param name="cancellationToken">The run's cancellation token. It is checked at dispose time, so
     /// cancellation that arrives during shutdown keeps the log.</param>
     /// <remarks>
     /// Tools such as the VS Code extension run one-shot query commands like <c>aspire ps</c> repeatedly.
     /// Their logs are still written as the command runs, so a hang, crash, or kill leaves a log behind.
-    /// Only a clean run's log is discarded.
+    /// Only a clean run's log is discarded. The log is retained when a warning, error, or exception is
+    /// logged, or when <see cref="RetainLogFile"/> is called. Has no effect on a custom <c>--log-file</c>
+    /// or on a file this provider did not create.
     /// </remarks>
-    internal void DeleteOnDisposeIfNoWarnings(CancellationToken cancellationToken)
+    internal void DiscardLogFileOnDisposeUnlessRetained(CancellationToken cancellationToken)
     {
-        _deleteOnDisposeUnlessCanceled = cancellationToken;
+        _discardOnDisposeUnlessCanceled = cancellationToken;
+    }
+
+    /// <summary>
+    /// Keeps the log file even if it is later marked for discard, for runs that record a side effect
+    /// worth diagnosing, such as stopping processes, without logging a warning.
+    /// </summary>
+    internal void RetainLogFile()
+    {
+        _retainLogFile = true;
     }
 }
 

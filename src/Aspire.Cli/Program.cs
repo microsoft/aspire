@@ -1318,6 +1318,7 @@ public class Program
             : StartMainActivity(telemetry, app.Services.GetRequiredService<InstallSourceDetector>());
         ProfileCaptureService.ProfileCaptureSession? profileCaptureSession = null;
         var exitCode = CliExitCodes.Success;
+        var discardLogOnSuccess = false;
 
         try
         {
@@ -1419,12 +1420,8 @@ public class Program
                 }
             }
 
-            if (profileCaptureOptions is null && ShouldDiscardLogOnSuccess(exitCode, cancellationManager.Token.IsCancellationRequested, parseResult))
-            {
-                // The provider deletes the file when it is disposed after the shutdown below, and
-                // keeps it if anything logs a warning or error or cancellation is requested before then.
-                startupContext.FileLoggerProvider.DeleteOnDisposeIfNoWarnings(cancellationManager.Token);
-            }
+            discardLogOnSuccess = profileCaptureOptions is null
+                && ShouldDiscardLogOnSuccess(exitCode, cancellationManager.Token.IsCancellationRequested, parseResult);
 
             return exitCode;
         }
@@ -1453,6 +1450,14 @@ public class Program
                 {
                     await shutdownTelemetryTask.ConfigureAwait(false);
                 }
+            }
+
+            // Arm deletion only after shutdown completes, so a shutdown failure that throws without
+            // logging a warning still keeps the log. The provider deletes the file when it is disposed
+            // and keeps it if anything is retained or cancellation is requested before then.
+            if (discardLogOnSuccess)
+            {
+                startupContext.FileLoggerProvider.DiscardLogFileOnDisposeUnlessRetained(cancellationManager.Token);
             }
         }
     }
