@@ -80,6 +80,9 @@ These tags participate in dashboard tag grouping but cannot be removed in the
 dashboard. User-added tags and metric pins are stored in protected browser local storage,
 independently of individual runs. The dashboard ignores old plaintext values and replaces
 them with protected values on the next change. AppHost-declared tags are unaffected.
+Each application can store up to 50 user-added tag assignments and 50 metric pins. A tag
+assigned to multiple resources counts once per resource. A pin counts once per resource and
+instrument. Edits that exceed either limit are rejected without removing existing entries.
 
 `WithDisplayOrder` stores its own annotation rather than a trait, and is transported
 as the `resource.displayOrder` resource property; repeated calls replace the previous
