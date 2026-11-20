@@ -14,6 +14,11 @@ namespace Aspire.Cli.Utils;
 
 internal static class AppHostHelper
 {
+    /// <summary>
+    /// The oldest Aspire.Hosting version whose AppHosts provide the CLI backchannel.
+    /// </summary>
+    internal static SemVersion MinimumSupportedAspireHostingVersion { get; } = SemVersion.Parse("9.2.0");
+
     internal static async Task<(bool IsCompatibleAppHost, string? AspireHostingVersion)> CheckAppHostCompatibilityAsync(IDotNetCliRunner runner, IInteractionService interactionService, FileInfo projectFile, AspireCliTelemetry telemetry, DirectoryInfo workingDirectory, string logFilePath, CancellationToken cancellationToken)
     {
         var appHostInformation = await GetAppHostInformationAsync(runner, interactionService, projectFile, telemetry, workingDirectory, cancellationToken);
@@ -57,8 +62,7 @@ internal static class AppHostHelper
             return (false, null);
         }
 
-        var minimumVersion = SemVersion.Parse("9.2.0");
-        if (aspireVersion.ComparePrecedenceTo(minimumVersion) < 0)
+        if (aspireVersion.ComparePrecedenceTo(MinimumSupportedAspireHostingVersion) < 0)
         {
             interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, ErrorStrings.AspireSDKVersionNotSupported, aspireHostingVersion));
             return (false, aspireHostingVersion);
@@ -102,6 +106,56 @@ internal static class AppHostHelper
             !SemVersion.TryParse(aspireHostingVersion, SemVersionStyles.Any, out _) &&
             VersionRange.TryParse(aspireHostingVersion, out var range) &&
             range.Float is not null;
+
+    /// <summary>
+    /// Determines whether restore could select a version at or above <paramref name="minimumVersion"/>
+    /// for a floating range whose lower bound is below it, such as <c>9.*</c> for a 9.2 minimum.
+    /// </summary>
+    /// <remarks>
+    /// Returns <see langword="false"/> for concrete versions and for floating ranges that are
+    /// wholly on one side of the minimum, because evaluating their lower bound already gives the
+    /// correct answer. For example, every version <c>9.1.*</c> can select is below 9.2, and every
+    /// version <c>13.*</c> can select is at or above it. Only ranges that cross the minimum need
+    /// the concrete version restore selects.
+    /// </remarks>
+    internal static bool IsFloatingVersionSpanningMinimum(string? aspireHostingVersion, SemVersion minimumVersion)
+    {
+        if (aspireHostingVersion is null ||
+            !IsFloatingVersion(aspireHostingVersion) ||
+            !VersionRange.TryParse(aspireHostingVersion, out var range) ||
+            range.Float is not { } floatRange ||
+            !NuGetVersion.TryParse(minimumVersion.ToString(), out var minimum))
+        {
+            return false;
+        }
+
+        var lowerBound = floatRange.MinVersion;
+        if (lowerBound >= minimum)
+        {
+            return false;
+        }
+
+        // The floating segment bounds what restore can select, for example:
+        //   9.1.0-*  -> 9.1.0 prereleases or 9.1.0       (below 9.1.1)
+        //   9.1.0.*  -> 9.1.0.x                          (below 9.1.1)
+        //   9.1.*    -> 9.1.x, optionally prerelease     (below 9.2.0)
+        //   9.*      -> 9.x.y, optionally prerelease     (below 10.0.0)
+        //   *, *-*   -> any version                      (unbounded)
+        // See https://learn.microsoft.com/nuget/concepts/package-versioning#floating-version-resolutions
+        NuGetVersion? exclusiveUpperBound = floatRange.FloatBehavior switch
+        {
+            NuGetVersionFloatBehavior.Prerelease or
+            NuGetVersionFloatBehavior.Revision or
+            NuGetVersionFloatBehavior.PrereleaseRevision => new NuGetVersion(lowerBound.Major, lowerBound.Minor, lowerBound.Patch + 1),
+            NuGetVersionFloatBehavior.Patch or
+            NuGetVersionFloatBehavior.PrereleasePatch => new NuGetVersion(lowerBound.Major, lowerBound.Minor + 1, 0),
+            NuGetVersionFloatBehavior.Minor or
+            NuGetVersionFloatBehavior.PrereleaseMinor => new NuGetVersion(lowerBound.Major + 1, 0, 0),
+            _ => null,
+        };
+
+        return exclusiveUpperBound is null || minimum < exclusiveUpperBound;
+    }
 
     /// <summary>
     /// Reads the Aspire.Hosting version compiled into an AppHost's build output.

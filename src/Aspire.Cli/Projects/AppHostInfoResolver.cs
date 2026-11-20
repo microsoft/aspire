@@ -227,6 +227,7 @@ internal sealed class AppHostInfoResolver(IDotNetCliRunner runner, IAppHostInfoD
             // wins over the AppHost metapackage, and Central Package Management contributes only
             // to references that are actually present. Orphan PackageVersion entries must not
             // override a different project reference or the SDK default.
+            // https://learn.microsoft.com/nuget/consume-packages/central-package-management#overriding-package-versions
             aspireHostingVersion = GetEffectivePackageVersion(items.PackageReference, items.PackageVersion, "Aspire.Hosting")
                 ?? GetEffectivePackageVersion(items.PackageReference, items.PackageVersion, "Aspire.Hosting.AppHost")
                 ?? GetEffectivePackageVersion(items.AspireProjectOrPackageReference, items.PackageVersion, "Aspire.Hosting")
@@ -255,6 +256,13 @@ internal sealed class AppHostInfoResolver(IDotNetCliRunner runner, IAppHostInfoD
             if (!string.Equals(reference.Identity, packageId, StringComparison.OrdinalIgnoreCase))
             {
                 continue;
+            }
+
+            // A PackageReference VersionOverride takes precedence over the central PackageVersion
+            // (and over any Version metadata) when Central Package Management is enabled.
+            if (!string.IsNullOrWhiteSpace(reference.VersionOverride))
+            {
+                return reference.VersionOverride;
             }
 
             return !string.IsNullOrWhiteSpace(reference.Version)
@@ -347,4 +355,7 @@ internal sealed record AppHostProjectInspectionItem
 
     [JsonPropertyName("Version")]
     public string? Version { get; init; }
+
+    [JsonPropertyName("VersionOverride")]
+    public string? VersionOverride { get; init; }
 }

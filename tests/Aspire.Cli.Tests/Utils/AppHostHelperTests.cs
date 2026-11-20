@@ -54,6 +54,23 @@ public class AppHostHelperTests(ITestOutputHelper outputHelper)
         Assert.Equal(expected, AppHostHelper.IsFloatingVersion(version));
     }
 
+    [Theory]
+    [InlineData("*", true)]
+    [InlineData("*-*", true)]
+    [InlineData("9.*", true)]
+    [InlineData("9.*-*", true)]
+    [InlineData("9.1.*", false)]
+    [InlineData("9.1.*-*", false)]
+    [InlineData("9.1.0-*", false)]
+    [InlineData("9.2.*", false)]
+    [InlineData("13.*", false)]
+    [InlineData("9.1.0", false)]
+    [InlineData(null, false)]
+    public void IsFloatingVersionSpanningMinimum_OnlyMatchesRangesCrossingTheMinimum(string? version, bool expected)
+    {
+        Assert.Equal(expected, AppHostHelper.IsFloatingVersionSpanningMinimum(version, AppHostHelper.MinimumSupportedAspireHostingVersion));
+    }
+
     [Fact]
     public void TryGetBuiltAspireHostingVersion_ReadsHostingAssemblyNextToTargetPath()
     {

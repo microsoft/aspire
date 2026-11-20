@@ -188,6 +188,36 @@ public sealed class AppHostInfoResolverTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task GetAppHostInfoAsync_PrefersVersionOverrideOverCentralPackageVersion()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var projectFile = CreateProjectFile(workspace);
+        var runner = new TestDotNetCliRunner
+        {
+            GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) => (0, JsonDocument.Parse("""
+                {
+                  "Properties": {
+                    "IsAspireHost": "true"
+                  },
+                  "Items": {
+                    "PackageReference": [
+                      { "Identity": "Aspire.Hosting.AppHost", "VersionOverride": "17.*" }
+                    ],
+                    "PackageVersion": [
+                      { "Identity": "Aspire.Hosting.AppHost", "Version": "9.1.0" }
+                    ]
+                  }
+                }
+                """)),
+        };
+        var resolver = new AppHostInfoResolver(runner, new NullAppHostInfoDiskCache());
+
+        var info = await resolver.GetAppHostInfoAsync(projectFile, CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal("17.*", info.AspireHostingVersion);
+    }
+
+    [Fact]
     public async Task GetAppHostInfoAsync_RefreshesWhenRestoreInputsChange()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

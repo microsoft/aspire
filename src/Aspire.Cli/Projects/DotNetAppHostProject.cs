@@ -1838,7 +1838,8 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
 
         var extensionHasBuildCapability = extensionBackchannel is not null && await extensionBackchannel.HasCapabilityAsync(KnownCapabilities.BuildDotnetUsingCli, cancellationToken);
         var extensionCanLaunchProject = extensionBackchannel is not null && await extensionBackchannel.HasCapabilityAsync(KnownCapabilities.Project, cancellationToken);
-        if (isExtensionHost && extensionCanLaunchProject && !extensionHasBuildCapability)
+        if (isExtensionHost && extensionCanLaunchProject && !extensionHasBuildCapability &&
+            !await RequiresCliBuildForHostingVersionAsync(effectiveAppHostFile, isSingleFileAppHost, cancellationToken))
         {
             // Older extension hosts own the AppHost build themselves. Building again in the CLI would
             // duplicate work and could race the extension's diagnostics/launch pipeline. Newer hosts
@@ -1900,12 +1901,14 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         var aspireHostingVersion = GetEffectiveAspireHostingVersion(info, useBuildOutput);
         if (info.ExitCode == 0 &&
             info.IsAspireHost &&
-            AppHostHelper.IsFloatingVersion(aspireHostingVersion))
+            AppHostHelper.IsFloatingVersionSpanningMinimum(aspireHostingVersion, AppHostHelper.MinimumSupportedAspireHostingVersion))
         {
             // Only restore selects the package a floating range such as "9.*" represents, and its
-            // minimum is not necessarily that version. Without build output identifying the
-            // concrete package (before the build, for multi-targeted AppHosts, or when the
-            // build is owned elsewhere), do not reject the AppHost on the range's lower bound.
+            // lower bound is not necessarily that version. Without build output identifying the
+            // concrete package (before the build or for multi-targeted AppHosts), do not reject
+            // the AppHost on the range's lower bound. Ranges wholly below the minimum, such as
+            // "9.1.*", fall through and are rejected; callers that launch without a CLI build
+            // re-check the build output or build first (see RequiresCliBuildForHostingVersionAsync).
             return (true, aspireHostingVersion);
         }
 
@@ -1922,6 +1925,27 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
             appHostCompatibilityCheck.AspireHostingVersion);
 
         return appHostCompatibilityCheck;
+    }
+
+    private async Task<bool> RequiresCliBuildForHostingVersionAsync(
+        FileInfo effectiveAppHostFile,
+        bool isSingleFileAppHost,
+        CancellationToken cancellationToken)
+    {
+        if (isSingleFileAppHost)
+        {
+            return false;
+        }
+
+        // An extension-owned build launches the AppHost before the CLI can inspect its output, so
+        // a floating range that crosses the minimum supported version would otherwise launch
+        // without validating the concrete version restore selected. Build in the CLI first so
+        // the compatibility check can read the Hosting assembly; the extension's own build is
+        // then an incremental no-op.
+        var info = await _appHostInfoResolver.GetAppHostInfoAsync(effectiveAppHostFile, cancellationToken);
+        return info.ExitCode == 0 &&
+            info.IsAspireHost &&
+            AppHostHelper.IsFloatingVersionSpanningMinimum(info.AspireHostingVersion, AppHostHelper.MinimumSupportedAspireHostingVersion);
     }
 
     private static string? GetEffectiveAspireHostingVersion(AppHostProjectInfo info, bool useBuildOutput)
