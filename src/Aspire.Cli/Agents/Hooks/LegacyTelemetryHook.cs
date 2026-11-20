@@ -39,8 +39,8 @@ internal static class LegacyTelemetryHook
 
         var content = await File.ReadAllTextAsync(configPath, cancellationToken);
 
-        // Parse the same way the hook writers do, so `aspire doctor` only reports a registration
-        // that `aspire agent init` can replace.
+        // Parse with the same strict options as Claude's settings writer, so `aspire doctor` does not
+        // report a Claude registration that `aspire agent init` would skip as malformed.
         var config = JsonNode.Parse(content, documentOptions: TelemetryHookJson.ParseOptions);
         if (config is not JsonObject root || root["hooks"] is not JsonObject events || events[eventName] is not JsonArray entries)
         {

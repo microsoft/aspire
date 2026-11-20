@@ -8,8 +8,9 @@ namespace Aspire.Cli.Agents.Hooks;
 internal static class TelemetryHookJson
 {
     /// <summary>
-    /// Strict JSON options shared by the code that writes telemetry hook configuration and the code that
-    /// inspects it, so <c>aspire doctor</c> only reports a file that <c>aspire agent init</c> can rewrite.
+    /// Strict JSON options shared by Claude's settings writer and the legacy hook inspector, so
+    /// <c>aspire doctor</c> only reports a Claude registration that <c>aspire agent init</c> can merge into.
+    /// Copilot's hook file is Aspire-owned and is overwritten without parsing.
     /// JsonObject materializes properties lazily, so a repeated key would otherwise throw
     /// <see cref="ArgumentException"/> on first lookup instead of failing at parse time as malformed JSON.
     /// </summary>
