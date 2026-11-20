@@ -11,7 +11,6 @@ using Google.Protobuf.WellKnownTypes;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
-using Microsoft.Extensions.Time.Testing;
 using Xunit;
 
 namespace Aspire.Dashboard.Tests.Model;
@@ -21,7 +20,6 @@ public sealed class ResourceTagStoreTests
     private static readonly string s_storageKey = BrowserStorageKeys.ResourceTagsKey("TestApp");
 
     private readonly InMemoryBrowserLocalStorage _browser = new();
-    private readonly FakeTimeProvider _timeProvider = new();
     private readonly LocalStorageLocks _locks = new();
 
     [Fact]
@@ -253,31 +251,31 @@ public sealed class ResourceTagStoreTests
         Assert.Equal(["core"], reloadedStore.GetTags("worker"));
         Assert.Equal(saved, _browser.Items[s_storageKey]);
 
-        // Once storage can be read, loading again reads the stored tags, and the change is saved along with them.
+        // Reading again can load the stored tags, but it does not save the earlier edit.
         _browser.FailReads = false;
         await reloadedStore.EnsureLoadedAsync().DefaultTimeout();
         Assert.Equal(["backend"], reloadedStore.GetTags("api"));
-        _timeProvider.Advance(TimeSpan.FromSeconds(1));
-        await _browser.WaitForProtectedItemAsync<Dictionary<string, List<string>>>(s_storageKey,
-            tags => HasTags(tags, "api", "backend") && HasTags(tags, "worker", "core"));
+        Assert.Empty(reloadedStore.GetTags("worker"));
+        Assert.Equal(saved, _browser.Items[s_storageKey]);
     }
 
     [Fact]
-    public async Task Tags_SaveIsRetriedAfterStorageIsUnavailable()
+    public async Task Tags_AfterFailedSaveOnlyNewEditsAreSaved()
     {
         var store = await CreateLoadedStoreAsync();
         store.AddTag("api", "backend");
         var saved = _browser.Items[s_storageKey];
 
-        // A brief disconnect while the only change is made: the change is saved once storage is back, with no other change.
         _browser.FailReads = true;
         store.AddTag("api", "core");
+        Assert.Equal(["backend", "core"], store.GetTags("api"));
         Assert.Equal(saved, _browser.Items[s_storageKey]);
 
         _browser.FailReads = false;
-        _timeProvider.Advance(TimeSpan.FromSeconds(1));
-        await _browser.WaitForProtectedItemAsync<Dictionary<string, List<string>>>(s_storageKey,
-            tags => HasTags(tags, "api", "backend", "core"));
+        store.AddTag("worker", "db");
+        var reloaded = await CreateLoadedStoreAsync();
+        Assert.Equal(["backend"], reloaded.GetTags("api"));
+        Assert.Equal(["db"], reloaded.GetTags("worker"));
     }
 
     [Fact]
@@ -286,7 +284,7 @@ public sealed class ResourceTagStoreTests
         var store = await CreateLoadedStoreAsync();
         store.AddTag("api", "backend");
 
-        var otherApp = new ResourceTagStore(_browser.Storage, _locks, _timeProvider, Options.Create(new DashboardOptions { ApplicationName = "Other App" }), NullLogger<ResourceTagStore>.Instance);
+        var otherApp = new ResourceTagStore(_browser.Storage, _locks, Options.Create(new DashboardOptions { ApplicationName = "Other App" }), NullLogger<ResourceTagStore>.Instance);
         await otherApp.EnsureLoadedAsync().DefaultTimeout();
 
         Assert.Empty(otherApp.GetAllTags());
@@ -331,7 +329,7 @@ public sealed class ResourceTagStoreTests
         tags.TryGetValue(resource, out var saved) && saved.SequenceEqual(expected);
 
     private ResourceTagStore CreateStore() =>
-        new(_browser.Storage, _locks, _timeProvider, Options.Create(new DashboardOptions { ApplicationName = "TestApp" }), NullLogger<ResourceTagStore>.Instance);
+        new(_browser.Storage, _locks, Options.Create(new DashboardOptions { ApplicationName = "TestApp" }), NullLogger<ResourceTagStore>.Instance);
 
     private async Task<ResourceTagStore> CreateLoadedStoreAsync()
     {

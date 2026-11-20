@@ -12,7 +12,6 @@ using Bunit;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
-using Microsoft.Extensions.Time.Testing;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Xunit;
 using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
@@ -63,7 +62,7 @@ public class ResourceTagEditorTests : DashboardTestContext
     public ResourceTagEditorTests()
     {
         // Fake time keeps saves that fail from retrying in the background after a test.
-        _tagStore = new(_localStorage, new LocalStorageLocks(), new FakeTimeProvider(), Options.Create(new DashboardOptions()), NullLogger<ResourceTagStore>.Instance);
+        _tagStore = new(_localStorage, new LocalStorageLocks(), Options.Create(new DashboardOptions()), NullLogger<ResourceTagStore>.Instance);
         FluentUISetupHelpers.SetupFluentUIComponents(this);
         Services.AddLocalization();
         Services.AddSingleton(_tagStore);

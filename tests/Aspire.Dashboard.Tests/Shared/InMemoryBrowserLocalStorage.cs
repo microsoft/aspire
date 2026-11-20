@@ -54,7 +54,7 @@ internal sealed class InMemoryBrowserLocalStorage
     public Func<Task>? OnAfterReadAsync { get; set; }
 
     /// <summary>
-    /// Waits until a protected value matches, for saves that are retried after a delay.
+    /// Waits until a background save writes the expected protected value.
     /// </summary>
     public async Task WaitForProtectedItemAsync<TValue>(string key, Func<TValue, bool> matches) where TValue : class
     {

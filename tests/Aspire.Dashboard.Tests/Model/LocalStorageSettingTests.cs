@@ -27,7 +27,7 @@ public sealed class LocalStorageSettingTests
             await browser.Storage.SetUnprotectedAsync<List<int>>(key, [1]);
         }
 
-        var setting = new LocalStorageSetting<List<int>>(browser.Storage, new LocalStorageLocks(), TimeProvider.System,
+        var setting = new LocalStorageSetting<List<int>>(browser.Storage, new LocalStorageLocks(),
             key, NullLogger.Instance, protect, stored => stored ?? [], (x, y) => x.SequenceEqual(y), () => { });
         await setting.EnsureLoadedAsync().DefaultTimeout();
         Assert.Equal([1], setting.Read(value => value.ToArray()));

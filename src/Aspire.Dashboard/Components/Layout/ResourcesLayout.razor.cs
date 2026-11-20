@@ -1599,22 +1599,27 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     public async Task<bool> ReorderResourceAsync(string resourceName, string targetName, bool after)
     {
         // Revalidate on the server: filters, grouping, or the resource tree can change during a drag.
-        if (!CanReorderResources ||
-            !_resourceByName.TryGetValue(resourceName, out var resource) ||
-            !_resourceByName.TryGetValue(targetName, out var target) ||
-            !_filter.Filter(resource) || !_filter.Filter(target) ||
-            !OrderStore.TryMoveResource(resource, target, after, GetOrderableResources()))
+        if (CanReorderResources &&
+            _resourceByName.TryGetValue(resourceName, out var resource) &&
+            _resourceByName.TryGetValue(targetName, out var target) &&
+            _filter.Filter(resource) && _filter.Filter(target))
         {
-            Logger.LogDebug("Rejected resource reorder from '{ResourceName}' to '{TargetName}' because the visible list changed or the resources aren't siblings.", resourceName, targetName);
-            await ToastService.ShowWarningToastAsync(Loc[nameof(Resources.Layout.ResourcePaneReorderUnavailable)]);
-            return false;
+            switch (OrderStore.MoveResource(resource, target, after, GetOrderableResources()))
+            {
+                case ResourceOrderMoveResult.Unchanged:
+                    return false;
+                case ResourceOrderMoveResult.Moved:
+                    _orderStatus = string.Format(CultureInfo.CurrentCulture,
+                        Loc[after ? nameof(Resources.Layout.ResourcePaneMovedAfter) : nameof(Resources.Layout.ResourcePaneMovedBefore)],
+                        GetResourceName(resource), GetResourceName(target));
+                    StateHasChanged();
+                    return true;
+            }
         }
 
-        _orderStatus = string.Format(CultureInfo.CurrentCulture,
-            Loc[after ? nameof(Resources.Layout.ResourcePaneMovedAfter) : nameof(Resources.Layout.ResourcePaneMovedBefore)],
-            GetResourceName(resource), GetResourceName(target));
-        StateHasChanged();
-        return true;
+        Logger.LogDebug("Rejected resource reorder from '{ResourceName}' to '{TargetName}' because the visible list changed or the resources aren't siblings.", resourceName, targetName);
+        await ToastService.ShowWarningToastAsync(Loc[nameof(Resources.Layout.ResourcePaneReorderUnavailable)]);
+        return false;
     }
 
     private void OnOrderChanged() => _ = InvokeAsync(StateHasChanged);
@@ -1626,19 +1631,24 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             ? GetResourceGroups() : [];
         var group = groups.Find(group => StringComparers.ResourceName.Equals(GetGroupKey(group), groupKey));
         var target = groups.Find(group => StringComparers.ResourceName.Equals(GetGroupKey(group), targetKey));
-        if (group is null || target is null ||
-            !OrderStore.TryMoveGroup(grouping, GetGroupOrderKey(group), GetGroupOrderKey(target), after, groups.Select(GetGroupOrderKey)))
+        if (group is not null && target is not null)
         {
-            Logger.LogDebug("Rejected group reorder from '{GroupKey}' to '{TargetKey}' because the grouping or visible list changed.", groupKey, targetKey);
-            await ToastService.ShowWarningToastAsync(Loc[nameof(Resources.Layout.ResourcePaneGroupReorderUnavailable)]);
-            return false;
+            switch (OrderStore.MoveGroup(grouping, GetGroupOrderKey(group), GetGroupOrderKey(target), after, groups.Select(GetGroupOrderKey)))
+            {
+                case ResourceOrderMoveResult.Unchanged:
+                    return false;
+                case ResourceOrderMoveResult.Moved:
+                    _orderStatus = string.Format(CultureInfo.CurrentCulture,
+                        Loc[after ? nameof(Resources.Layout.ResourcePaneMovedAfter) : nameof(Resources.Layout.ResourcePaneMovedBefore)],
+                        GetGroupName(group.Value), GetGroupName(target.Value));
+                    StateHasChanged();
+                    return true;
+            }
         }
 
-        _orderStatus = string.Format(CultureInfo.CurrentCulture,
-            Loc[after ? nameof(Resources.Layout.ResourcePaneMovedAfter) : nameof(Resources.Layout.ResourcePaneMovedBefore)],
-            GetGroupName(group.Value), GetGroupName(target.Value));
-        StateHasChanged();
-        return true;
+        Logger.LogDebug("Rejected group reorder from '{GroupKey}' to '{TargetKey}' because the grouping or visible list changed.", groupKey, targetKey);
+        await ToastService.ShowWarningToastAsync(Loc[nameof(Resources.Layout.ResourcePaneGroupReorderUnavailable)]);
+        return false;
     }
 
     private async Task OnToggleCollapseAsync(string uniqueResourceName)

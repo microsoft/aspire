@@ -18,8 +18,8 @@ namespace Aspire.Dashboard.Model.BrowserStorage;
 /// </para>
 /// <para>
 /// When storage can't be read, for example while the circuit is disconnected, nothing is written: writing then would
-/// replace the stored value with one missing everything it contained. Writes are retried a few times with increasing
-/// delays, and again with the next change or when a view loads the setting.
+/// replace the stored value with one missing everything it contained. A failed save is not retried. The changes stay
+/// visible in memory until a load or a later successful save adopts the stored value.
 /// </para>
 /// <para>
 /// If the stored value is invalid for the selected mode, the default is used until the next change replaces it.
@@ -34,14 +34,10 @@ namespace Aspire.Dashboard.Model.BrowserStorage;
 /// <typeparam name="TValue">The stored value. It must be registered with the dashboard's JSON serializer context.</typeparam>
 internal sealed class LocalStorageSetting<TValue> where TValue : class
 {
-    // Retries cover a reconnecting circuit: delays of 1, 2, 4 and 8 seconds wait about 15 seconds in all.
-    private const int MaxWriteAttempts = 5;
-    private static readonly TimeSpan s_firstRetryDelay = TimeSpan.FromSeconds(1);
     private static readonly TimeSpan s_saveLockTimeout = TimeSpan.FromSeconds(10);
 
     private readonly ILocalStorage _localStorage;
     private readonly LocalStorageLocks _locks;
-    private readonly TimeProvider _timeProvider;
     private readonly ILogger _logger;
     private readonly bool _protect;
     private readonly Func<TValue?, TValue> _normalize;
@@ -59,7 +55,6 @@ internal sealed class LocalStorageSetting<TValue> where TValue : class
 
     /// <param name="localStorage">The browser's local storage.</param>
     /// <param name="locks">Makes saves of the setting from different tabs run one at a time.</param>
-    /// <param name="timeProvider">Times the delays between save retries.</param>
     /// <param name="key">The local storage key.</param>
     /// <param name="logger">Logs values that can't be read or saved.</param>
     /// <param name="protect">Whether to use data protection. Use <see langword="false"/> only for non-sensitive values.</param>
@@ -69,11 +64,10 @@ internal sealed class LocalStorageSetting<TValue> where TValue : class
     /// </param>
     /// <param name="equals">Returns whether two normalized values have the same content, to only notify real changes.</param>
     /// <param name="onChanged">Invoked, on any thread, after the in-memory value changes.</param>
-    public LocalStorageSetting(ILocalStorage localStorage, LocalStorageLocks locks, TimeProvider timeProvider, string key, ILogger logger, bool protect, Func<TValue?, TValue> normalize, Func<TValue, TValue, bool> equals, Action onChanged)
+    public LocalStorageSetting(ILocalStorage localStorage, LocalStorageLocks locks, string key, ILogger logger, bool protect, Func<TValue?, TValue> normalize, Func<TValue, TValue, bool> equals, Action onChanged)
     {
         _localStorage = localStorage;
         _locks = locks;
-        _timeProvider = timeProvider;
         Key = key;
         _logger = logger;
         _protect = protect;
@@ -97,8 +91,7 @@ internal sealed class LocalStorageSetting<TValue> where TValue : class
     }
 
     /// <summary>
-    /// Reads the stored value into memory, once per circuit, or again after storage couldn't be read. Also saves
-    /// changes that earlier writes couldn't save.
+    /// Reads the stored value into memory, once per circuit, or again after storage couldn't be read.
     /// </summary>
     public Task EnsureLoadedAsync()
     {
@@ -121,10 +114,6 @@ internal sealed class LocalStorageSetting<TValue> where TValue : class
         if (loaded is not null)
         {
             _ = LoadAsync(loaded);
-        }
-        else if (loadTask.IsCompleted)
-        {
-            StartWritingIfPending();
         }
 
         return loadTask;
@@ -195,28 +184,10 @@ internal sealed class LocalStorageSetting<TValue> where TValue : class
         {
             loaded.SetResult();
         }
-
-        // Changes made while the stored value couldn't be read are saved now that it can be.
-        StartWritingIfPending();
-    }
-
-    private void StartWritingIfPending()
-    {
-        bool startWriting;
-        lock (_lock)
-        {
-            startWriting = _pendingChanges.Count > 0 && !_isWriting;
-            _isWriting |= startWriting;
-        }
-        if (startWriting)
-        {
-            _ = WriteAsync();
-        }
     }
 
     private async Task WriteAsync()
     {
-        var failedAttempts = 0;
         while (true)
         {
             Func<TValue, bool>[] changes;
@@ -230,48 +201,42 @@ internal sealed class LocalStorageSetting<TValue> where TValue : class
                 changes = [.. _pendingChanges];
             }
 
+            TValue? saved = null;
             Exception? error = null;
             try
             {
-                if (await TryWriteAsync(changes).ConfigureAwait(false))
-                {
-                    failedAttempts = 0;
-                    continue;
-                }
+                saved = await TryWriteAsync(changes).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
-                // Includes a disconnected circuit, which can reconnect.
                 error = ex;
             }
 
-            failedAttempts++;
-            if (failedAttempts == MaxWriteAttempts)
+            if (saved is not null)
             {
-                // Settings are a convenience: changes stay applied for the rest of the circuit, and are saved with the
-                // next change or when a view loads the setting, if storage can be used again by then.
-                _logger.LogWarning(error, "Unable to save '{Key}' to browser local storage.", Key);
-                lock (_lock)
-                {
-                    _isWriting = false;
-                }
-                return;
+                Adopt(saved, changes.Length, loadedAfterSaveCount: null);
+                continue;
             }
 
-            await Task.Delay(s_firstRetryDelay * Math.Pow(2, failedAttempts - 1), _timeProvider).ConfigureAwait(false);
+            _logger.LogWarning(error, "Unable to save '{Key}' to browser local storage.", Key);
+            lock (_lock)
+            {
+                // The browser may have committed the write without acknowledging it. Never replay this batch,
+                // but still save any new changes queued while the attempt was in flight.
+                _pendingChanges.RemoveRange(0, changes.Length);
+            }
         }
     }
 
-    /// <returns><see langword="false"/> when storage couldn't be read, so nothing was written.</returns>
-    private async Task<bool> TryWriteAsync(Func<TValue, bool>[] changes)
+    /// <returns>The saved value, or <see langword="null"/> when no write was attempted.</returns>
+    private async Task<TValue?> TryWriteAsync(Func<TValue, bool>[] changes)
     {
         // Another tab saving the same setting between this read and write would have its change replaced, so the whole
-        // save holds the setting's lock. A browser that stops answering would otherwise hold up saves in other tabs
-        // until its JavaScript call times out; giving up is retried like storage that can't be read.
+        // save holds the setting's lock. Other tabs stop waiting if a browser takes too long to answer.
         var saveLock = _locks.GetLock(Key);
         if (!await saveLock.WaitAsync(s_saveLockTimeout).ConfigureAwait(false))
         {
-            return false;
+            return null;
         }
 
         try
@@ -288,12 +253,12 @@ internal sealed class LocalStorageSetting<TValue> where TValue : class
         ? _localStorage.GetAsync<TValue>(Key)
         : _localStorage.GetUnprotectedAsync<TValue>(Key);
 
-    private async Task<bool> TryWriteLockedAsync(Func<TValue, bool>[] changes)
+    private async Task<TValue?> TryWriteLockedAsync(Func<TValue, bool>[] changes)
     {
         var result = await ReadStoredAsync().ConfigureAwait(false);
         if (result.ReadFailed)
         {
-            return false;
+            return null;
         }
 
         var value = _normalize(result.Success ? result.Value : null);
@@ -303,8 +268,7 @@ internal sealed class LocalStorageSetting<TValue> where TValue : class
         }
 
         await (_protect ? _localStorage.SetAsync(Key, value) : _localStorage.SetUnprotectedAsync(Key, value)).ConfigureAwait(false);
-        Adopt(value, changes.Length, loadedAfterSaveCount: null);
-        return true;
+        return value;
     }
 
     /// <summary>
