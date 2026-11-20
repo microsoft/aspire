@@ -18,25 +18,51 @@ const PRIVATE_TELEMETRY_STEPS = new Set([
 ]);
 const PRIVATE_DIAGNOSTIC_STEPS = new Set(['Detect agent errors', 'Redact secrets in logs']);
 // These github-script steps only query GET /rate_limit with the workflow token and
-// log the returned quota counters; they read no agent-writable data. Accept exactly
-// this generated shape and fail closed on anything else:
-//   - name: Log GitHub rate limits at agent start
-//     ...
-//         await fetchAndLogRateLimit(github, 'agent_start', true);
+// log the returned quota counters; they read no agent-writable data. Accept only the
+// complete audited step, line for line, and fail closed on any other property or
+// statement (a lookalike step could otherwise read private logs before the scrub):
+//   - name: Log GitHub rate limits at agent end
+//     if: always()
+//     continue-on-error: true
+//     uses: actions/github-script@<sha> # v9.0.0
+//     with:
+//       github-token: ${{ secrets.GH_AW_GITHUB_MCP_SERVER_TOKEN || ... }}
+//       script: |
+//         ...
+//         await fetchAndLogRateLimit(github, 'agent_end', true);
 // https://github.com/github/gh-aw/blob/v1.2.2/actions/setup/js/github_rate_limit_logger.cjs
 const RATE_LIMIT_STEPS = new Map([
-    ['Log GitHub rate limits at agent start', 'agent_start'],
-    ['Log GitHub rate limits at agent end', 'agent_end'],
+    ['Log GitHub rate limits at agent start', { operation: 'agent_start', condition: null }],
+    ['Log GitHub rate limits at agent end', { operation: 'agent_end', condition: 'always()' }],
 ]);
+const RATE_LIMIT_TOKEN = '${{ secrets.GH_AW_GITHUB_MCP_SERVER_TOKEN || secrets.GH_AW_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}';
+const RATE_LIMIT_SCRIPT = [
+    "const path = require('path');",
+    "const actionsDir = path.join(process.env.RUNNER_TEMP, 'gh-aw', 'actions');",
+    "const { setupGlobals } = require(path.join(actionsDir, 'setup_globals.cjs'));",
+    'setupGlobals(core, github, context, exec, io, getOctokit);',
+    "const { fetchAndLogRateLimit } = require(path.join(actionsDir, 'github_rate_limit_logger.cjs'));",
+];
 
 function isRateLimitStep(step, name) {
-    const operation = RATE_LIMIT_STEPS.get(name);
-    if (!operation) {
+    const audited = RATE_LIMIT_STEPS.get(name);
+    if (!audited) {
         return false;
     }
-    const scripts = [...step.matchAll(/^            await ([^\r\n]+)\r?$/gm)];
-    if (!/^        uses: actions\/github-script@/m.test(step) || /^        (?:run|env):/m.test(step)
-        || scripts.length !== 1 || scripts[0][1] !== `fetchAndLogRateLimit(github, '${operation}', true);`) {
+    const expected = [
+        `      - name: ${name}`,
+        ...(audited.condition ? [`        if: ${audited.condition}`] : []),
+        '        continue-on-error: true',
+        /^        uses: actions\/github-script@[0-9a-f]{40}(?: # v\d+\.\d+\.\d+)?$/,
+        '        with:',
+        `          github-token: ${RATE_LIMIT_TOKEN}`,
+        '          script: |',
+        ...RATE_LIMIT_SCRIPT.map(line => `            ${line}`),
+        `            await fetchAndLogRateLimit(github, '${audited.operation}', true);`,
+    ];
+    const lines = step.replace(/\r\n/g, '\n').replace(/\n+$/, '').split('\n');
+    if (lines.length !== expected.length
+        || !lines.every((line, i) => typeof expected[i] === 'string' ? line === expected[i] : expected[i].test(line))) {
         throw new Error('auto-sec publication guard: unexpected rate-limit step');
     }
     return true;
