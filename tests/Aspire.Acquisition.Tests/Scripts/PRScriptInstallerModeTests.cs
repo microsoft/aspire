@@ -166,11 +166,8 @@ public class PRScriptInstallerModeTests(ITestOutputHelper testOutput)
                 exit 0
                 ;;
               style)
-                if [[ "${2:-}" == "--fix" ]]; then
-                  shift
-                fi
-                if [[ $# -ne 2 || "$2" != "{{brewRepository}}/Library/Taps/local/homebrew-aspire/Casks/aspire.rb" || ! -f "$2" ]]; then
-                  echo "Expected brew style to target the generated cask file: $*" >&2
+                if [[ $# -ne 3 || "$2" != "--cask" || "$3" != "local/aspire/aspire" ]]; then
+                  echo "Expected brew style to target the qualified cask name: $*" >&2
                   exit 1
                 fi
                 exit 0
