@@ -688,6 +688,7 @@ internal sealed partial class WorkflowRunEvidenceCollector
                     {
                         job = plan.JobName,
                         artifact = plan.ArtifactName,
+                        results_required = plan.RequiresResults,
                         ids = selected.Select(selection => GetValueText(selection.Artifact.Id)).ToArray()
                     });
             }
