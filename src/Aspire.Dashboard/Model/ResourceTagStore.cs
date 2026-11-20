@@ -13,7 +13,7 @@ namespace Aspire.Dashboard.Model;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Tags describe the application rather than a single run, so they're kept in the browser's local storage under a key
+/// Tags describe the application rather than a single run, so they're kept in protected browser local storage under a key
 /// scoped to the application name, and every run of the application shows them. They aren't shared between browsers.
 /// Tags are keyed by the resource's display name because replica names have a random suffix that changes on every
 /// run; a tag therefore applies to every replica of a resource.
@@ -32,7 +32,7 @@ public sealed class ResourceTagStore
 
     public ResourceTagStore(ILocalStorage localStorage, LocalStorageLocks locks, TimeProvider timeProvider, IOptions<DashboardOptions> options, ILogger<ResourceTagStore> logger)
     {
-        _setting = new(localStorage, locks, timeProvider, BrowserStorageKeys.ResourceTagsKey(options.Value.GetApplicationNameOrDefault()), logger,
+        _setting = new(localStorage, locks, timeProvider, BrowserStorageKeys.ResourceTagsKey(options.Value.GetApplicationNameOrDefault()), logger, protect: true,
             NormalizeTags, TagsEqual, () => Changed?.Invoke());
     }
 

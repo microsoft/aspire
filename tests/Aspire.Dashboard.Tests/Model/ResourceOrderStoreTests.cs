@@ -53,8 +53,9 @@ public sealed class ResourceOrderStoreTests
         var worker = CreateResource("worker");
         Assert.True(store.TryMoveResource(worker, cache, after: false, [api, cache, worker]));
 
-        var saved = Assert.Single((await _browser.Storage.GetUnprotectedAsync<List<RelativeOrderMove>>(s_resourceKey)).Value!);
+        var saved = Assert.Single((await _browser.Storage.GetAsync<List<RelativeOrderMove>>(s_resourceKey)).Value!);
         Assert.Equal(("worker_0", "api_0", "cache_0"), (saved.Key, saved.PreviousKey, saved.NextKey));
+        Assert.True((await _browser.Storage.GetUnprotectedAsync<List<RelativeOrderMove>>(s_resourceKey)).InvalidValue);
         Assert.Equal([s_resourceKey], _browser.Items.Keys);
 
         var reloaded = await CreateLoadedStoreAsync();
@@ -129,10 +130,11 @@ public sealed class ResourceOrderStoreTests
         Assert.True(store.TryMoveGroup("Tags", "", "Alpha", after: false, ["Alpha", "Beta", ""]));
         Assert.True(store.TryMoveGroup("ResourceType", "Project", "Container", after: false, ["Container", "Project"]));
 
-        var saved = (await _browser.Storage.GetUnprotectedAsync<Dictionary<string, List<RelativeOrderMove>>>(s_groupKey)).Value!;
+        var saved = (await _browser.Storage.GetAsync<Dictionary<string, List<RelativeOrderMove>>>(s_groupKey)).Value!;
         Assert.Equal(2, saved.Count);
         Assert.Equal("", Assert.Single(saved["Tags"]).Key);
         Assert.Equal("Project", Assert.Single(saved["ResourceType"]).Key);
+        Assert.True((await _browser.Storage.GetUnprotectedAsync<Dictionary<string, List<RelativeOrderMove>>>(s_groupKey)).InvalidValue);
         Assert.Equal([s_groupKey], _browser.Items.Keys);
 
         var reloaded = await CreateLoadedStoreAsync();
@@ -172,16 +174,19 @@ public sealed class ResourceOrderStoreTests
     }
 
     [Fact]
-    public async Task Order_InvalidStoredValueIsKeptAndReplaced()
+    public async Task Order_UnprotectedMovesAreIgnoredAndReplacedWithoutBackup()
     {
-        _browser.Items[s_resourceKey] = "{invalid-json}";
-        var store = await CreateLoadedStoreAsync();
+        await _browser.Storage.SetUnprotectedAsync<List<RelativeOrderMove>>(s_resourceKey,
+            [new(Guid.NewGuid(), "worker_0", PreviousKey: null, NextKey: "api_0")]);
         var api = CreateResource("api");
         var worker = CreateResource("worker");
+        var store = await CreateLoadedStoreAsync();
+        Assert.Equal(["api", "worker"], GetNames(store, api, worker));
+
         Assert.True(store.TryMoveResource(worker, api, after: false, [api, worker]));
 
         Assert.Equal(["worker", "api"], GetNames(await CreateLoadedStoreAsync(), api, worker));
-        Assert.Equal("{invalid-json}", _browser.Items[$"{s_resourceKey}_Unreadable"]);
+        Assert.Equal([s_resourceKey], _browser.Items.Keys);
     }
 
     [Fact]
@@ -189,7 +194,7 @@ public sealed class ResourceOrderStoreTests
     {
         var first = new RelativeOrderMove(Guid.NewGuid(), "api_0", PreviousKey: "worker_0", NextKey: null);
         var second = new RelativeOrderMove(Guid.NewGuid(), "api_0", PreviousKey: null, NextKey: "worker_0");
-        await _browser.Storage.SetUnprotectedAsync<List<RelativeOrderMove>>(s_resourceKey, [first, second, first]);
+        await _browser.Storage.SetAsync<List<RelativeOrderMove>>(s_resourceKey, [first, second, first]);
 
         Assert.Equal(["api", "worker"], GetNames(await CreateLoadedStoreAsync(), CreateResource("api"), CreateResource("worker")));
     }
