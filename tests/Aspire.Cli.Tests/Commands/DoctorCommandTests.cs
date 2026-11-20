@@ -42,9 +42,9 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
         using var context = new AgentConfigurationTestContext(outputHelper);
         await AgentConfigurationTestContext.WriteAsync(
             Path.Combine(context.CopilotDirectory, "hooks", "aspire-telemetry.json"),
-            """{"version":1,"hooks":{"postToolUse":[{"bash":"bash '/home/user/.aspire/hooks/track-telemetry.sh'"}]}}""");
+            context.WithLegacyScriptPaths("""{"version":1,"hooks":{"postToolUse":[{"bash":"bash '{sh}'"}]}}"""));
         await AgentConfigurationTestContext.WriteAsync(Path.Combine(context.ClaudeDirectory, "settings.json"),
-            """{"hooks":{"PostToolUse":[{"hooks":[{"command":"pwsh","args":["-File","C:\\Users\\user\\.aspire\\hooks\\track-telemetry.ps1"]}]}]}}""");
+            context.WithLegacyScriptPaths("""{"hooks":{"PostToolUse":[{"hooks":[{"command":"pwsh","args":["-File","{ps1}"]}]}]}}"""));
 
         using var doc = await RunDoctorJsonAsync(context.Workspace,
             configureOptions: options =>

@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Agents;
 using Aspire.Cli.Agents.ClaudeCode;
@@ -221,14 +222,16 @@ public class TelemetryHookConfiguratorTests(ITestOutputHelper outputHelper)
 
     [Theory]
     [InlineData("scripts/track-telemetry.sh")]
-    [InlineData("/home/user/.aspire/hooks/track-telemetry.sh.backup")]
+    [InlineData("/work/project/hooks/track-telemetry.sh")]
+    [InlineData("{home}/.aspire/hooks/track-telemetry.sh.backup")]
     public async Task ConfigureAsync_PreservesUserScriptThatIsNotLegacyAspireHook(string scriptPath)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var home = workspace.CreateDirectory("home");
+        scriptPath = scriptPath.Replace("{home}", home.FullName);
         var claude = Directory.CreateDirectory(Path.Combine(home.FullName, ".claude"));
         await File.WriteAllTextAsync(Path.Combine(claude.FullName, "settings.json"),
-            $$$"""{"hooks":{"PostToolUse":[{"matcher":"*","hooks":[{"type":"command","command":"bash","args":["{{{scriptPath}}}"]}]}]}}""");
+            $$$"""{"hooks":{"PostToolUse":[{"matcher":"*","hooks":[{"type":"command","command":"bash","args":["{{{JsonEncodedText.Encode(scriptPath)}}}"]}]}]}}""");
         var configurator = CreateConfigurator(workspace, home);
 
         await configurator.ConfigureAsync([ClaudeCodeAgentClient.ClientId], CancellationToken.None);

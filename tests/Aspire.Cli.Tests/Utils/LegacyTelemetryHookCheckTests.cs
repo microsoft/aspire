@@ -30,9 +30,9 @@ public class LegacyTelemetryHookCheckTests(ITestOutputHelper outputHelper)
         var configPath = clientId == CopilotAgentClient.ClientId
             ? Path.Combine(context.CopilotDirectory, "hooks", "aspire-telemetry.json")
             : Path.Combine(context.ClaudeDirectory, "settings.json");
-        var config = clientId == CopilotAgentClient.ClientId
-            ? """{"version":1,"hooks":{"postToolUse":[{"type":"command","bash":"bash '/home/user/.aspire/hooks/track-telemetry.sh'","powershell":"pwsh -File 'C:\\Users\\user\\.aspire\\hooks\\track-telemetry.ps1'"}]}}"""
-            : """{"hooks":{"PostToolUse":[{"matcher":"*","hooks":[{"type":"command","command":"bash","args":["/home/user/.aspire/hooks/track-telemetry.sh"]},{"type":"command","command":"pwsh","args":["-File","C:\\Users\\user\\.aspire\\hooks\\track-telemetry.ps1"]}]}]}}""";
+        var config = context.WithLegacyScriptPaths(clientId == CopilotAgentClient.ClientId
+            ? """{"version":1,"hooks":{"postToolUse":[{"type":"command","bash":"bash '{sh}'","powershell":"pwsh -File '{ps1}'"}]}}"""
+            : """{"hooks":{"PostToolUse":[{"matcher":"*","hooks":[{"type":"command","command":"bash","args":["{sh}"]},{"type":"command","command":"pwsh","args":["-File","{ps1}"]}]}]}}""");
         await AgentConfigurationTestContext.WriteAsync(configPath, config);
         // No MCP or skills setup exists at the selected scope. The legacy registration alone must be
         // enough for the doctor's suggested command to replace it.
@@ -56,18 +56,18 @@ public class LegacyTelemetryHookCheckTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData("claude", """{"hooks":{"PostToolUse":[{"hooks":[{"command":"bash '/home/user/.aspire/hooks/track-telemetry.sh'"}]}]}}""")]
-    [InlineData("claude", """{"hooks":{"PostToolUse":[{"hooks":[{"command":"pwsh -File 'C:\\Users\\user\\.aspire\\hooks\\track-telemetry.ps1'"}]}]}}""")]
-    [InlineData("copilot", """{"hooks":{"postToolUse":[{"powershell":"pwsh -File 'C:\\Users\\user\\.aspire\\hooks\\track-telemetry.ps1'"}]}}""")]
+    [InlineData("claude", """{"hooks":{"PostToolUse":[{"hooks":[{"command":"bash '{sh}'"}]}]}}""")]
+    [InlineData("claude", """{"hooks":{"PostToolUse":[{"hooks":[{"command":"pwsh -File '{ps1}'"}]}]}}""")]
+    [InlineData("copilot", """{"hooks":{"postToolUse":[{"powershell":"pwsh -File '{ps1}'"}]}}""")]
     // Copilot keeps the last repeated property, so the legacy script still runs.
-    [InlineData("copilot", """{"hooks":{},"hooks":{"postToolUse":[{"bash":"bash '/home/user/.aspire/hooks/track-telemetry.sh'"}]}}""")]
+    [InlineData("copilot", """{"hooks":{},"hooks":{"postToolUse":[{"bash":"bash '{sh}'"}]}}""")]
     public async Task CheckAsync_LegacyHookVariantsWarnUntilAgentInitRefreshesThem(string clientId, string config)
     {
         using var context = new AgentConfigurationTestContext(outputHelper);
         var configPath = clientId == CopilotAgentClient.ClientId
             ? Path.Combine(context.CopilotDirectory, "hooks", "aspire-telemetry.json")
             : Path.Combine(context.ClaudeDirectory, "settings.json");
-        await AgentConfigurationTestContext.WriteAsync(configPath, config);
+        await AgentConfigurationTestContext.WriteAsync(configPath, context.WithLegacyScriptPaths(config));
         var check = CreateCheck(context);
 
         var warning = Assert.Single(await check.CheckAsync(TestContext.Current.CancellationToken));
@@ -90,22 +90,26 @@ public class LegacyTelemetryHookCheckTests(ITestOutputHelper outputHelper)
     [InlineData("{malformed")]
     // The Claude hook writer rejects comments and trailing commas, so `aspire agent init` could not
     // replace a registration in such a file. Doctor must not recommend it.
-    [InlineData("""{"hooks":{"PostToolUse":[{"hooks":[{"command":"bash","args":["/home/user/.aspire/hooks/track-telemetry.sh"]}]}]},}""")]
+    [InlineData("""{"hooks":{"PostToolUse":[{"hooks":[{"command":"bash","args":["{sh}"]}]}]},}""")]
     [InlineData("""{"hooks":[]}""")]
     [InlineData("""{"hooks":{"postToolUse":false,"PostToolUse":[null,{"hooks":false}]}}""")]
     // Each client only replaces its own shape: Copilot entry-level postToolUse hooks and Claude hooks
     // nested in PostToolUse groups. A legacy path in the other shape is not one agent init can refresh.
-    [InlineData("""{"hooks":{"postToolUse":[{"hooks":[{"command":"bash '/home/user/.aspire/hooks/track-telemetry.sh'"}]}],"PostToolUse":[{"command":"bash '/home/user/.aspire/hooks/track-telemetry.sh'"}]}}""")]
+    [InlineData("""{"hooks":{"postToolUse":[{"hooks":[{"command":"bash '{sh}'"}]}],"PostToolUse":[{"command":"bash '{sh}'"}]}}""")]
     [InlineData("""{"hooks":{"postToolUse":[{"exec":"aspire","args":["agent","telemetry","--hook"]}],"PostToolUse":[{"hooks":[{"command":"aspire","args":["agent","telemetry","--hook"]}]}]}}""")]
     [InlineData("""{"hooks":{"postToolUse":[{"bash":"bash '/custom/track-telemetry.sh'"}],"PostToolUse":[{"hooks":[{"command":"bash","args":["/custom/track-telemetry.sh"]}]}]}}""")]
-    [InlineData("""{"hooks":{"postToolUse":[{"bash":"bash '/home/user/.aspire/hooks/track-telemetry.sh.backup'"}],"PostToolUse":[{"hooks":[{"command":"pwsh","args":["-File","C:\\Users\\user\\.aspire\\hooks\\track-telemetry.ps1.old"]}]}]}}""")]
+    // A user's own hooks directory is not the Aspire home, even with the same script names.
+    [InlineData("""{"hooks":{"postToolUse":[{"bash":"bash /work/project/hooks/track-telemetry.sh"}],"PostToolUse":[{"hooks":[{"command":"bash","args":["/work/project/hooks/track-telemetry.sh"]}]}]}}""")]
+    [InlineData("""{"hooks":{"postToolUse":[{"powershell":"pwsh -File 'C:\\work\\hooks\\track-telemetry.ps1'"}],"PostToolUse":[{"hooks":[{"command":"pwsh -File 'C:\\work\\hooks\\track-telemetry.ps1'"}]}]}}""")]
+    [InlineData("""{"hooks":{"postToolUse":[{"bash":"bash '{sh}.backup'"}],"PostToolUse":[{"hooks":[{"command":"pwsh","args":["-File","{ps1}.old"]}]}]}}""")]
     // A later repeated property replaces the legacy registration for Copilot. The Claude hook writer rejects
     // repeated properties, so `aspire agent init` could not replace a Claude registration in such a file.
-    [InlineData("""{"hooks":{"postToolUse":[{"bash":"bash '/home/user/.aspire/hooks/track-telemetry.sh'"}]},"hooks":{}}""")]
-    [InlineData("""{"hooks":{},"hooks":{"PostToolUse":[{"hooks":[{"command":"bash '/home/user/.aspire/hooks/track-telemetry.sh'"}]}]}}""")]
+    [InlineData("""{"hooks":{"postToolUse":[{"bash":"bash '{sh}'"}]},"hooks":{}}""")]
+    [InlineData("""{"hooks":{},"hooks":{"PostToolUse":[{"hooks":[{"command":"bash '{sh}'"}]}]}}""")]
     public async Task CheckAsync_DoesNotWarnWithoutLegacyRegistrations(string config)
     {
         using var context = new AgentConfigurationTestContext(outputHelper);
+        config = context.WithLegacyScriptPaths(config);
         await AgentConfigurationTestContext.WriteAsync(
             Path.Combine(context.CopilotDirectory, "hooks", "aspire-telemetry.json"), config);
         await AgentConfigurationTestContext.WriteAsync(Path.Combine(context.ClaudeDirectory, "settings.json"), config);
@@ -120,7 +124,7 @@ public class LegacyTelemetryHookCheckTests(ITestOutputHelper outputHelper)
         await AgentConfigurationTestContext.WriteAsync(
             Path.Combine(context.CopilotDirectory, "hooks", "aspire-telemetry.json"), "{malformed");
         await AgentConfigurationTestContext.WriteAsync(Path.Combine(context.ClaudeDirectory, "settings.json"),
-            """{"hooks":{"PostToolUse":[{"hooks":[{"command":"bash","args":["/home/user/.aspire/hooks/track-telemetry.sh"]}]}]}}""");
+            context.WithLegacyScriptPaths("""{"hooks":{"PostToolUse":[{"hooks":[{"command":"bash","args":["{sh}"]}]}]}}"""));
 
         var warning = Assert.Single(await CreateCheck(context).CheckAsync(TestContext.Current.CancellationToken));
 

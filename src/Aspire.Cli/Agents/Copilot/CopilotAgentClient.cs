@@ -142,7 +142,7 @@ internal sealed class CopilotAgentClient(
     public async Task<string?> FindLegacyTelemetryHookAsync(CancellationToken cancellationToken)
     {
         var path = GetTelemetryHookConfigPath();
-        return await LegacyTelemetryHook.IsRegisteredAsync(path, "postToolUse", nestedHooks: false, allowDuplicateProperties: true, cancellationToken) ? path : null;
+        return await new LegacyTelemetryHook(context, environment).IsRegisteredAsync(path, "postToolUse", nestedHooks: false, allowDuplicateProperties: true, cancellationToken) ? path : null;
     }
 
     private string GetTelemetryHookConfigPath()

@@ -112,7 +112,7 @@ internal sealed class ClaudeCodeAgentClient(
     public async Task<string?> FindLegacyTelemetryHookAsync(CancellationToken cancellationToken)
     {
         var path = GetTelemetryHookConfigPath();
-        return await LegacyTelemetryHook.IsRegisteredAsync(path, "PostToolUse", nestedHooks: true, allowDuplicateProperties: false, cancellationToken) ? path : null;
+        return await new LegacyTelemetryHook(context, environment).IsRegisteredAsync(path, "PostToolUse", nestedHooks: true, allowDuplicateProperties: false, cancellationToken) ? path : null;
     }
 
     private string GetTelemetryHookConfigPath()
@@ -200,7 +200,7 @@ internal sealed class ClaudeCodeAgentClient(
             hooks["PostToolUse"] = postToolUse;
         }
 
-        RemoveExistingAspireHooks(postToolUse);
+        RemoveExistingAspireHooks(postToolUse, new LegacyTelemetryHook(context, environment));
         // Run directly, without a shell, and only for tools or skill file reads the classifier can
         // track so Claude does not launch the CLI on every tool call or read.
         // https://docs.claude.com/en/docs/claude-code/hooks
@@ -243,7 +243,7 @@ internal sealed class ClaudeCodeAgentClient(
         };
     }
 
-    private static void RemoveExistingAspireHooks(JsonArray postToolUse)
+    private static void RemoveExistingAspireHooks(JsonArray postToolUse, LegacyTelemetryHook legacyHook)
     {
         // Remove individual Aspire hooks, preserving user hooks that share the same matcher group.
         for (var groupIndex = postToolUse.Count - 1; groupIndex >= 0; groupIndex--)
@@ -255,7 +255,7 @@ internal sealed class ClaudeCodeAgentClient(
             }
             for (var hookIndex = hooks.Count - 1; hookIndex >= 0; hookIndex--)
             {
-                if (IsAspireHook(hooks[hookIndex]))
+                if (IsAspireHook(hooks[hookIndex], legacyHook))
                 {
                     hooks.RemoveAt(hookIndex);
                 }
@@ -267,14 +267,14 @@ internal sealed class ClaudeCodeAgentClient(
         }
     }
 
-    private static bool IsAspireHook(JsonNode? node)
+    private static bool IsAspireHook(JsonNode? node, LegacyTelemetryHook legacyHook)
     {
         // Match legacy scripts or our exact CLI invocation, not arbitrary Aspire commands.
         if (node is not JsonObject hook)
         {
             return false;
         }
-        if (LegacyTelemetryHook.IsMatch(hook))
+        if (legacyHook.IsMatch(hook))
         {
             return true;
         }
