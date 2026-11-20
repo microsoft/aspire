@@ -1,5 +1,43 @@
 # GitHub Workflows
 
+## Script inputs
+
+Pass GitHub expressions containing inputs, matrix values, or step outputs through
+step `env:` values, then reference quoted shell variables (or `process.env` in
+JavaScript). Do not interpolate them into executable `run:` or `script:` bodies.
+See [GitHub's script injection guidance](https://docs.github.com/en/actions/security-for-github-actions/security-guides/security-hardening-for-github-actions#understanding-the-risk-of-script-injections).
+
+Reusable workflows accepting argument strings use `parse-command-line.py` to
+split them into argument arrays. The parser supports POSIX-style
+quoting, for example `--filter-trait "Partition=My Tests"`, on all platforms.
+The parser does not evaluate shell expressions, command substitution, variable
+expansion, or wildcard expansion. Malformed quoting fails the step. It uses the
+Python installation supplied by the GitHub-hosted runner (`python` on Windows,
+`python3` on Linux/macOS); callers must pass the resulting arrays without
+evaluating them as shell source.
+
+On Windows, invoke `eng/build.ps1` through `pwsh -NoProfile -File` and call the
+SDK's `dotnet.exe` resolved by `InitializeDotNetCli` in `eng/common/tools.ps1`.
+Keep its SDK bootstrap and first-run settings, but bypass `build.cmd` and
+`dotnet.cmd`: those wrappers reparse arguments as PowerShell or CMD source.
+Array splatting before a batch wrapper is not sufficient to keep inputs literal.
+See [PowerShell native argument passing](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_parsing?view=powershell-7.5#passing-arguments-that-contain-quote-characters).
+
+The child `pwsh` also preserves the build's external-process output boundary.
+Arcade launches native tools with inherited console handles, so calling its
+scripts in-process does not send their native output through PowerShell stream
+redirection. Capturing the child process preserves native output and host output
+in test-build logs.
+
+These changes remove workflow expression interpolation and batch-wrapper
+reparsing, not all downstream interpretation. Parsing is not general sanitization:
+downstream build scripts and tools may interpret values. This does not establish
+arbitrary Unicode or end-to-end safety.
+
+Large matrices must travel through files rather than executable here-strings or
+environment variables, which are subject to per-variable OS size limits.
+`enumerate-tests` writes `artifacts/github-test-matrix.json` for `tests.yml`.
+
 ## Agentic workflow maintenance
 
 Agentic workflows are authored in `.github/workflows/*.md`. Upgrade the active

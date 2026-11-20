@@ -1189,9 +1189,11 @@ jobs:
       - name: Print E2E diagnostics links
         if: always()
         working-directory: extension
+        env:
+          ARTIFACT_URL: ${{ steps.upload_e2e_diagnostics.outputs.artifact-url }}
         run: |
           $artifactName = "extension-e2e-diagnostics-${{ matrix.rid }}-${{ matrix.shardName }}-attempt${{ github.run_attempt }}"
-          $artifactUrl = "${{ steps.upload_e2e_diagnostics.outputs.artifact-url }}"
+          $artifactUrl = $env:ARTIFACT_URL
           $uploadOutcome = "${{ steps.upload_e2e_diagnostics.outcome }}"
           if ([string]::IsNullOrWhiteSpace($artifactUrl)) {
             $artifactUrl = "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}#artifacts"

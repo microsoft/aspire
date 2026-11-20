@@ -67,11 +67,15 @@ jobs:
       # The '|| default' is needed because GitHub Actions passes empty strings for
       # unset workflow_call inputs, bypassing the input-level default: values.
       EFFECTIVE_MTP_BASE_ARGS: ${{ inputs.mtpBaseArgs || '--ignore-exit-code 8 --crashdump --hangdump --hangdump-type none --hangdump-timeout 10m --timeout 20m' }}
+      TEST_SHORT_NAME: ${{ inputs.testShortName }}
+      TEST_PROJECT_PATH_OVERRIDE: ${{ inputs.testProjectPath }}
+      VERSION_OVERRIDE_ARG: ${{ inputs.versionOverrideArg }}
+      EXTRA_TEST_ARGS: ${{ inputs.extraTestArgs }}
     steps:
       - name: Validate arguments
         shell: pwsh
         run: |
-          if ([string]::IsNullOrEmpty("${{ inputs.testShortName }}")) {
+          if ([string]::IsNullOrEmpty($env:TEST_SHORT_NAME)) {
             Write-Error "Error: testShortName is required."
             exit 1
           }
@@ -91,14 +95,23 @@ jobs:
       - name: Setup vars (Windows)
         if: ${{ runner.os == 'Windows' }}
         run: |
-          echo "DOTNET_SCRIPT=.\dotnet.cmd" >> $env:GITHUB_ENV
-          echo "BUILD_SCRIPT=.\build.cmd" >> $env:GITHUB_ENV
+          echo "BUILD_SCRIPT=.\eng\build.ps1" >> $env:GITHUB_ENV
           Write-Output "NUGET_PACKAGES=${{ github.workspace }}/.nuget/packages" >> $env:GITHUB_ENV
           echo "TEST_RUN_PATH=${{ github.workspace }}\run-tests" >> $env:GITHUB_ENV
           echo ${{ github.workspace }}\.dotnet >> $env:GITHUB_PATH
 
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Resolve SDK executable (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          # Match dotnet.cmd's SDK bootstrap, but never forward arguments through CMD.
+          . ./eng/common/tools.ps1
+          $dotnet = Join-Path (InitializeDotNetCli -install:$true -createSdkLocationFile:$true) 'dotnet.exe'
+          "DOTNET_SCRIPT=$dotnet" >> $env:GITHUB_ENV
+          "DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1" >> $env:GITHUB_ENV
 
       # Diagnostics only: samples CPU, memory, commit charge, page file, and disk pressure
       # into the uploaded logs so slow or hung Windows jobs can be correlated with machine
@@ -137,7 +150,7 @@ jobs:
         # Remove this workaround once https://github.com/dotnet/aspnetcore/pull/65392 has shipped
         run: |
           EXIT_CODE=0
-          ${{ env.DOTNET_SCRIPT }} dev-certs https --trust || EXIT_CODE=$?
+          "$DOTNET_SCRIPT" dev-certs https --trust || EXIT_CODE=$?
           if [ $EXIT_CODE -ne 0 ] && [ $EXIT_CODE -ne 4 ]; then
             echo "dev-certs https --trust failed with exit code $EXIT_CODE"
             exit $EXIT_CODE
@@ -301,8 +314,9 @@ jobs:
 
       - name: Install sdk for nuget based testing
         if: ${{ fromJson(inputs.properties).requiresTestSdk == true }}
+        shell: pwsh
         run: >
-          ${{ env.DOTNET_SCRIPT }} build ${{ github.workspace }}/tests/workloads.proj
+          & $env:DOTNET_SCRIPT build "${{ github.workspace }}/tests/workloads.proj"
           /p:SkipPackageCheckForTemplatesTesting=true
           /bl:${{ github.workspace }}/artifacts/log/Debug/InstallSdkForTesting.binlog
 
@@ -333,8 +347,8 @@ jobs:
         id: compute_project_path
         shell: pwsh
         run: |
-          $testShortName = "${{ inputs.testShortName }}"
-          $overrideTestProjectPath = "${{ inputs.testProjectPath }}"
+          $testShortName = $env:TEST_SHORT_NAME
+          $overrideTestProjectPath = $env:TEST_PROJECT_PATH_OVERRIDE
           $projectPath1 = "${{ github.workspace }}/tests/$testShortName.Tests/$testShortName.Tests.csproj"
           $projectPath2 = "${{ github.workspace }}/tests/Aspire.$testShortName.Tests/Aspire.$testShortName.Tests.csproj"
 
@@ -363,32 +377,57 @@ jobs:
 
       - name: Build test project
         if: ${{ fromJson(inputs.properties).requiresNugets != true }}
-        run: >
-          ${{ env.BUILD_SCRIPT }}
-          -restore
-          -ci
-          -build
-          -projects ${{ env.TEST_PROJECT_PATH }}
-          ${{ fromJson(inputs.properties).enablePlaywrightInstall != true && '/p:InstallBrowsersForPlaywright=false' || '' }}
-          ${{ inputs.versionOverrideArg }}
+        shell: pwsh
+        run: |
+          $python = if ($IsWindows) { 'python' } else { 'python3' }
+          $versionArgsJson = & $python .github/workflows/parse-command-line.py VERSION_OVERRIDE_ARG
+          if ($LASTEXITCODE -ne 0) { throw 'Invalid versionOverrideArg.' }
+          $versionArgs = @($versionArgsJson | ConvertFrom-Json)
+          $buildCommand = $env:BUILD_SCRIPT
+          $buildPrefix = @()
+          if ($IsWindows) {
+            $buildCommand = 'pwsh'
+            $buildPrefix = @('-NoProfile', '-File', $env:BUILD_SCRIPT)
+          }
+          & $buildCommand @buildPrefix `
+            -restore `
+            -ci `
+            -build `
+            -projects $env:TEST_PROJECT_PATH `
+            ${{ fromJson(inputs.properties).enablePlaywrightInstall != true && '/p:InstallBrowsersForPlaywright=false' || '' }} `
+            @versionArgs
+          exit $LASTEXITCODE
 
       - name: Build and archive test project
         if: ${{ fromJson(inputs.properties).requiresNugets == true }}
-        run: >
-          ${{ env.BUILD_SCRIPT }} -restore -ci -build -projects ${{ env.TEST_PROJECT_PATH }}
-          /p:PrepareForHelix=true
-          /p:ArchiveTests=true
-          /bl:${{ github.workspace }}/artifacts/log/Debug/BuildAndArchive.binlog
-          ${{ fromJson(inputs.properties).enablePlaywrightInstall != true && '/p:InstallBrowsersForPlaywright=false' || '' }}
-          ${{ inputs.versionOverrideArg }}
+        shell: pwsh
+        run: |
+          $python = if ($IsWindows) { 'python' } else { 'python3' }
+          $versionArgsJson = & $python .github/workflows/parse-command-line.py VERSION_OVERRIDE_ARG
+          if ($LASTEXITCODE -ne 0) { throw 'Invalid versionOverrideArg.' }
+          $versionArgs = @($versionArgsJson | ConvertFrom-Json)
+          $buildCommand = $env:BUILD_SCRIPT
+          $buildPrefix = @()
+          if ($IsWindows) {
+            $buildCommand = 'pwsh'
+            $buildPrefix = @('-NoProfile', '-File', $env:BUILD_SCRIPT)
+          }
+          & $buildCommand @buildPrefix -restore -ci -build -projects $env:TEST_PROJECT_PATH `
+            /p:PrepareForHelix=true `
+            /p:ArchiveTests=true `
+            "/bl:${{ github.workspace }}/artifacts/log/Debug/BuildAndArchive.binlog" `
+            ${{ fromJson(inputs.properties).enablePlaywrightInstall != true && '/p:InstallBrowsersForPlaywright=false' || '' }} `
+            @versionArgs
+          exit $LASTEXITCODE
 
       # Workaround for bug in Azure Functions Worker SDK. See https://github.com/Azure/azure-functions-dotnet-worker/issues/2969.
       - name: Rebuild for Azure Functions project
         if: inputs.testShortName == 'Playground'
         env:
           UseSharedCompilation: ${{ runner.os == 'Windows' && 'false' || '' }}
+        shell: pwsh
         run: |
-          ${{ env.DOTNET_SCRIPT }} build ${{ github.workspace }}/playground/AzureFunctionsEndToEnd/AzureFunctionsEndToEnd.Functions/AzureFunctionsEndToEnd.Functions.csproj /p:SkipUnstableEmulators=true
+          & $env:DOTNET_SCRIPT build "${{ github.workspace }}/playground/AzureFunctionsEndToEnd/AzureFunctionsEndToEnd.Functions/AzureFunctionsEndToEnd.Functions.csproj" /p:SkipUnstableEmulators=true
 
       - name: Unpack tests
         if: ${{ fromJson(inputs.properties).requiresNugets == true }}
@@ -438,7 +477,7 @@ jobs:
       # See https://github.com/microsoft/aspire/issues/15832
       - name: Shutdown build server
         if: runner.os == 'Windows'
-        run: ${{ env.DOTNET_SCRIPT }} build-server shutdown
+        run: '& $env:DOTNET_SCRIPT build-server shutdown'
 
       - name: Run nuget dependent tests (Linux/macOS)
         if: ${{ fromJson(inputs.properties).requiresNugets == true && runner.os != 'Windows' }}
@@ -460,19 +499,28 @@ jobs:
           ASPIRE_E2E_CLI_ARCHIVE_DIR: ${{ fromJson(inputs.properties).requiresCliArchive == true && format('{0}/cli-archives', github.workspace) || '' }}
           GH_TOKEN: ${{ (fromJson(inputs.properties).requiresGitHubToken == true || fromJson(inputs.properties).requiresCliArchive == true) && github.token || '' }}
         run: |
+          args_file=$(mktemp)
+          trap 'rm -f "$args_file"' EXIT
+          python3 "$GITHUB_WORKSPACE/.github/workflows/parse-command-line.py" --format nul EFFECTIVE_MTP_BASE_ARGS > "$args_file"
+          mtp_args=()
+          while IFS= read -r -d '' arg; do mtp_args+=("$arg"); done < "$args_file"
+          python3 "$GITHUB_WORKSPACE/.github/workflows/parse-command-line.py" --format nul EXTRA_TEST_ARGS > "$args_file"
+          extra_args=()
+          while IFS= read -r -d '' arg; do extra_args+=("$arg"); done < "$args_file"
+
           # Start heartbeat monitor in background (60s interval to reduce log noise)
-          ${{ github.workspace }}/${{ env.DOTNET_SCRIPT }} ${{ github.workspace }}/tools/scripts/Heartbeat.cs 60 &
+          "$GITHUB_WORKSPACE/$DOTNET_SCRIPT" "$GITHUB_WORKSPACE/tools/scripts/Heartbeat.cs" 60 &
           HEARTBEAT_PID=$!
 
           # Run tests. Capture the real MTP exit code without letting "set -e" abort the step:
           # "|| TEST_EXIT_CODE=$?" both records the code and keeps the compound command successful.
           TEST_EXIT_CODE=0
-          dotnet ${{ env.TEST_ASSEMBLY_NAME }}.dll \
-            ${{ env.EFFECTIVE_MTP_BASE_ARGS }} \
-            --report-trx --report-trx-filename "${{ inputs.testShortName }}.trx" \
+          dotnet "$TEST_ASSEMBLY_NAME.dll" \
+            "${mtp_args[@]}" \
+            --report-trx --report-trx-filename "$TEST_SHORT_NAME.trx" \
             --results-directory ${{ github.workspace }}/testresults \
             --filter-not-trait "category=failing" \
-            ${{ inputs.extraTestArgs }} || TEST_EXIT_CODE=$?
+            "${extra_args[@]}" || TEST_EXIT_CODE=$?
 
           # Persist the MTP exit code so the "Verify test results exist" gate can classify the outcome
           # (test outcome vs. infrastructure failure) even though we exit 0 below when failures are ignored.
@@ -512,6 +560,13 @@ jobs:
           ASPIRE_E2E_CLI_ARCHIVE_DIR: ${{ fromJson(inputs.properties).requiresCliArchive == true && format('{0}/cli-archives', github.workspace) || '' }}
           GH_TOKEN: ${{ (fromJson(inputs.properties).requiresGitHubToken == true || fromJson(inputs.properties).requiresCliArchive == true) && github.token || '' }}
         run: |
+          $mtpArgsJson = python "$env:GITHUB_WORKSPACE/.github/workflows/parse-command-line.py" EFFECTIVE_MTP_BASE_ARGS
+          if ($LASTEXITCODE -ne 0) { throw 'Invalid mtpBaseArgs.' }
+          $mtpArgs = @($mtpArgsJson | ConvertFrom-Json)
+          $extraArgsJson = python "$env:GITHUB_WORKSPACE/.github/workflows/parse-command-line.py" EXTRA_TEST_ARGS
+          if ($LASTEXITCODE -ne 0) { throw 'Invalid extraTestArgs.' }
+          $extraArgs = @($extraArgsJson | ConvertFrom-Json)
+
           # Start heartbeat monitor in background (output goes to console directly)
           # Use 60s interval on Windows to reduce overhead on constrained 2-core runners
           $heartbeatProcess = Start-Process -FilePath "dotnet" `
@@ -522,12 +577,12 @@ jobs:
             # Ensure UTF-8 encoding for all output on Windows
             [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
             # Run tests
-            dotnet ${{ env.TEST_ASSEMBLY_NAME }}.dll `
-              ${{ env.EFFECTIVE_MTP_BASE_ARGS }} `
-              --report-trx --report-trx-filename "${{ inputs.testShortName }}.trx" `
+            dotnet "$env:TEST_ASSEMBLY_NAME.dll" `
+              @mtpArgs `
+              --report-trx --report-trx-filename "$env:TEST_SHORT_NAME.trx" `
               --results-directory ${{ github.workspace }}/testresults `
               --filter-not-trait "category=failing" `
-              ${{ inputs.extraTestArgs }}
+              @extraArgs
             $testExitCode = $LASTEXITCODE
           }
           finally {
@@ -576,25 +631,34 @@ jobs:
           ASPIRE_E2E_CLI_ARCHIVE_DIR: ${{ fromJson(inputs.properties).requiresCliArchive == true && format('{0}/cli-archives', github.workspace) || '' }}
           GH_TOKEN: ${{ (fromJson(inputs.properties).requiresGitHubToken == true || fromJson(inputs.properties).requiresCliArchive == true) && github.token || '' }}
         run: |
+          args_file=$(mktemp)
+          trap 'rm -f "$args_file"' EXIT
+          python3 .github/workflows/parse-command-line.py --format nul EFFECTIVE_MTP_BASE_ARGS > "$args_file"
+          mtp_args=()
+          while IFS= read -r -d '' arg; do mtp_args+=("$arg"); done < "$args_file"
+          python3 .github/workflows/parse-command-line.py --format nul EXTRA_TEST_ARGS > "$args_file"
+          extra_args=()
+          while IFS= read -r -d '' arg; do extra_args+=("$arg"); done < "$args_file"
+
           # Start heartbeat monitor in background (60s interval to reduce log noise)
-          ${{ env.DOTNET_SCRIPT }} ${{ github.workspace }}/tools/scripts/Heartbeat.cs 60 &
+          "$DOTNET_SCRIPT" "$GITHUB_WORKSPACE/tools/scripts/Heartbeat.cs" 60 &
           HEARTBEAT_PID=$!
 
           # Run tests. Capture the real MTP exit code without letting "set -e" abort the step:
           # "|| TEST_EXIT_CODE=$?" both records the code and keeps the compound command successful.
           TEST_EXIT_CODE=0
-          ${{ env.DOTNET_SCRIPT }} test --project ${{ env.TEST_PROJECT_PATH }} \
+          "$DOTNET_SCRIPT" test --project "$TEST_PROJECT_PATH" \
             /p:ContinuousIntegrationBuild=true \
-            /p:TrxFileNamePrefix="${{ inputs.testShortName }}" \
+            "/p:TrxFileNamePrefix=$TEST_SHORT_NAME" \
             -bl:${{ github.workspace }}/testresults/test.binlog \
             --no-launch-profile \
             --no-restore \
             --no-build \
             -- \
-            ${{ env.EFFECTIVE_MTP_BASE_ARGS }} \
+            "${mtp_args[@]}" \
             --report-trx \
             --results-directory ${{ github.workspace }}/testresults \
-            ${{ inputs.extraTestArgs }} || TEST_EXIT_CODE=$?
+            "${extra_args[@]}" || TEST_EXIT_CODE=$?
 
           # `--ignore-exit-code 8` only remaps the test module's exit code. Normalize the
           # aggregated `dotnet test` result with the same helper exercised by Infrastructure.Tests.
@@ -641,9 +705,16 @@ jobs:
           ASPIRE_E2E_CLI_ARCHIVE_DIR: ${{ fromJson(inputs.properties).requiresCliArchive == true && format('{0}/cli-archives', github.workspace) || '' }}
           GH_TOKEN: ${{ (fromJson(inputs.properties).requiresGitHubToken == true || fromJson(inputs.properties).requiresCliArchive == true) && github.token || '' }}
         run: |
+          $mtpArgsJson = python .github/workflows/parse-command-line.py EFFECTIVE_MTP_BASE_ARGS
+          if ($LASTEXITCODE -ne 0) { throw 'Invalid mtpBaseArgs.' }
+          $mtpArgs = @($mtpArgsJson | ConvertFrom-Json)
+          $extraArgsJson = python .github/workflows/parse-command-line.py EXTRA_TEST_ARGS
+          if ($LASTEXITCODE -ne 0) { throw 'Invalid extraTestArgs.' }
+          $extraArgs = @($extraArgsJson | ConvertFrom-Json)
+
           # Start heartbeat monitor in background (output goes to console directly)
           # Use 60s interval on Windows to reduce overhead on constrained 2-core runners
-          $heartbeatProcess = Start-Process -FilePath "${{ env.DOTNET_SCRIPT }}" `
+          $heartbeatProcess = Start-Process -FilePath $env:DOTNET_SCRIPT `
             -ArgumentList "${{ github.workspace }}\tools\scripts\Heartbeat.cs 60" `
             -NoNewWindow -PassThru
 
@@ -651,18 +722,18 @@ jobs:
             # Ensure UTF-8 encoding for all output on Windows
             [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
             # Run tests
-            & ${{ env.DOTNET_SCRIPT }} test --project ${{ env.TEST_PROJECT_PATH }} `
+            & $env:DOTNET_SCRIPT test --project $env:TEST_PROJECT_PATH `
               /p:ContinuousIntegrationBuild=true `
-              /p:TrxFileNamePrefix="${{ inputs.testShortName }}" `
+              "/p:TrxFileNamePrefix=$env:TEST_SHORT_NAME" `
               -bl:${{ github.workspace }}/testresults/test.binlog `
               --no-launch-profile `
               --no-restore `
               --no-build `
               -- `
-              ${{ env.EFFECTIVE_MTP_BASE_ARGS }} `
+              @mtpArgs `
               --report-trx `
               --results-directory ${{ github.workspace }}/testresults `
-              ${{ inputs.extraTestArgs }}
+              @extraArgs
             $testExitCode = $LASTEXITCODE
 
             # `--ignore-exit-code 8` only remaps the test module's exit code. Normalize the
@@ -803,6 +874,8 @@ jobs:
       - name: Generate test results summary
         if: always()
         shell: pwsh
+        env:
+          ARTIFACT_URL: ${{ steps.upload-logs.outputs.artifact-url }}
         run: |
           if (Test-Path "${{ github.workspace }}/testresults") {
             $summaryArgs = @(
@@ -813,10 +886,10 @@ jobs:
               "${{ github.workspace }}/testresults"
             )
 
-            $artifactUrl = "${{ steps.upload-logs.outputs.artifact-url }}"
+            $artifactUrl = $env:ARTIFACT_URL
             if (-not [string]::IsNullOrWhiteSpace($artifactUrl)) {
               $summaryArgs += @("-u", $artifactUrl)
             }
 
-            & ${{ env.DOTNET_SCRIPT }} @summaryArgs
+            & $env:DOTNET_SCRIPT @summaryArgs
           }

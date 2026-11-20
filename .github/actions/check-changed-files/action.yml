@@ -50,6 +50,7 @@ runs:
       id: check_files
       shell: bash
       env:
+        PATTERNS_FILE: ${{ inputs.patterns_file }}
         PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
         PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
       run: |
@@ -99,8 +100,6 @@ runs:
         }
 
         PATTERNS=()
-
-        PATTERNS_FILE="${{ inputs.patterns_file }}"
 
         # Read glob patterns from file, skip comments and blank lines
         FULL_PATH="${GITHUB_WORKSPACE}/${PATTERNS_FILE}"
