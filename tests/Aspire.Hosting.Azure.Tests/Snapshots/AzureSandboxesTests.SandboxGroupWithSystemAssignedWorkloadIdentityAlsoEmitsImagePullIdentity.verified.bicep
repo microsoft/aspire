@@ -57,4 +57,4 @@ output name string = sandboxes.name
 
 output location string = sandboxes.location
 
-output imagePullIdentityClientId string = sandboxes_mi.properties.clientId
+output imagePullIdentityId string = sandboxes_mi.id
