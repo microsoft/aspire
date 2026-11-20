@@ -372,6 +372,10 @@ public class AzurePromptAgentResource : Resource, IResourceWithEnvironment, IRes
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
+            await notificationService.PublishUpdateAsync(this, s => s with
+            {
+                State = new("Canceled", KnownResourceStateStyles.Info)
+            }).ConfigureAwait(false);
         }
         catch (Exception ex)
         {

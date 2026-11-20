@@ -389,6 +389,10 @@ public sealed class FoundryToolboxResource : Resource, IResourceWithConnectionSt
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
+            await notificationService.PublishUpdateAsync(this, snapshot => snapshot with
+            {
+                State = new("Canceled", KnownResourceStateStyles.Info)
+            }).ConfigureAwait(false);
         }
         catch (Exception ex)
         {

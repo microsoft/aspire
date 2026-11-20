@@ -1081,6 +1081,25 @@ internal sealed class AzureProvisioningController(
             new ResourceStateSnapshot(StartingState, KnownResourceStateStyles.Info) { IsInProgress = true },
             cancellationToken).ConfigureAwait(false);
 
+        try
+        {
+            return await ProvisionResourcesCoreAsync(model, azureResources, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            await PublishAzureEnvironmentStateAsync(
+                model,
+                new ResourceStateSnapshot(AzureProvisioningStrings.ResourceStateCanceled, KnownResourceStateStyles.Info),
+                CancellationToken.None).ConfigureAwait(false);
+            throw;
+        }
+    }
+
+    private async Task<bool> ProvisionResourcesCoreAsync(
+        DistributedApplicationModel model,
+        IReadOnlyList<(IResource Resource, IAzureResource AzureResource)> azureResources,
+        CancellationToken cancellationToken)
+    {
         var parentChildLookup = model.Resources.OfType<IResourceWithParent>().ToLookup(r => r.Parent);
         var independentlyProvisionedResources = azureResources.Select(static resource => resource.Resource).ToHashSet();
         var afterProvisionTasks = new List<Task>(azureResources.Count);

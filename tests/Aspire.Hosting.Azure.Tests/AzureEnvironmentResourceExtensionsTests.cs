@@ -906,6 +906,7 @@ public class AzureEnvironmentResourceExtensionsTests(ITestOutputHelper testOutpu
                 testBicepProvisioner.FirstProvisionStarted.Task,
                 provisioningTask,
                 "Provisioning completed before the resource started provisioning.");
+            await WaitForResourceStateAsync(notifications, cosmos.Resource.Name, KnownResourceStates.Running);
             Assert.True(notifications.TryGetCurrentState(cosmos.Resource.Name, out var parent));
             Assert.Equal(KnownResourceStates.Running, parent.Snapshot.State?.Text);
             Assert.False(parent.Snapshot.State?.IsInProgress);
@@ -5398,6 +5399,10 @@ public class AzureEnvironmentResourceExtensionsTests(ITestOutputHelper testOutpu
         Assert.True(notifications.TryGetCurrentState(storage.Resource.Name, out storageEvent));
         Assert.Equal(AzureProvisioningStrings.ResourceStateCanceled, storageEvent.Snapshot.State?.Text);
         Assert.Equal(KnownResourceStateStyles.Info, storageEvent.Snapshot.State?.Style);
+        var environmentResource = Assert.Single(model.Resources.OfType<AzureEnvironmentResource>());
+        Assert.True(notifications.TryGetCurrentState(environmentResource.Name, out var environmentEvent));
+        Assert.Equal(AzureProvisioningStrings.ResourceStateCanceled, environmentEvent.Snapshot.State?.Text);
+        Assert.False(environmentEvent.Snapshot.State?.IsInProgress);
     }
 
     [Fact]
