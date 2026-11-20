@@ -228,6 +228,8 @@ resource public_appRoute 'Microsoft.Cdn/profiles/afdEndpoints/routes@2025-06-01'
   ]
 }
 
+output id string = frontdoor.id
+
 output web_endpointUrl string = 'https://${webEndpoint.properties.hostName}'
 
 output web_endpointId string = webEndpoint.id
