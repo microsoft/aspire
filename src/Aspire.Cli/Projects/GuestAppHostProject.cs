@@ -337,10 +337,10 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
     /// Builds the AppHost server project and generates SDK code.
     /// </summary>
     /// <returns><see langword="true"/> if the code was generated successfully; otherwise, <see langword="false"/>.</returns>
-    internal Task<bool> BuildAndGenerateSdkAsync(DirectoryInfo directory, string? packageSourceOverride = null, CancellationToken cancellationToken = default)
-        => BuildAndGenerateSdkAsync(ResolveAppHostFile(directory), packageSourceOverride, cancellationToken);
+    internal Task<bool> BuildAndGenerateSdkAsync(DirectoryInfo directory, bool updateDependencies, string? packageSourceOverride = null, CancellationToken cancellationToken = default)
+        => BuildAndGenerateSdkAsync(ResolveAppHostFile(directory), updateDependencies, packageSourceOverride, cancellationToken);
 
-    internal Task<bool> BuildAndGenerateSdkAsync(FileInfo appHostFile, string? packageSourceOverride = null, CancellationToken cancellationToken = default)
+    internal Task<bool> BuildAndGenerateSdkAsync(FileInfo appHostFile, bool updateDependencies, string? packageSourceOverride = null, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(appHostFile);
 
@@ -351,6 +351,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             appHostFile,
             config,
             config.Channel,
+            updateDependencies,
             packageSourceOverride,
             packageSourceOverridePattern: null,
             cancellationToken);
@@ -361,6 +362,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         FileInfo appHostFile,
         AspireConfigFile config,
         string? requestedChannel,
+        bool updateDependencies,
         string? packageSourceOverride = null,
         string? packageSourceOverridePattern = null,
         CancellationToken cancellationToken = default)
@@ -405,12 +407,13 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             config.SdkVersion,
             serverEnvironmentVariables: null,
             guestEnvironmentVariables: new Dictionary<string, string>(),
+            updateDependencies,
             treatMissingJavaScriptToolAsWarning: !hasNpmIntegrationHosts,
             cancellationToken);
 
         // npm lifecycle scripts can compile the host's ATS imports. Generate the
         // core SDK and install its transport dependencies before running those scripts.
-        if (hasNpmIntegrationHosts && installResult != 0)
+        if (installResult != 0)
         {
             return false;
         }
@@ -465,6 +468,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         string? targetSdkVersion,
         Dictionary<string, string>? serverEnvironmentVariables,
         IDictionary<string, string> guestEnvironmentVariables,
+        bool updateDependencies,
         bool treatMissingJavaScriptToolAsWarning,
         CancellationToken cancellationToken)
     {
@@ -502,13 +506,15 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             directory,
             rpcClient,
             guestEnvironmentVariables,
+            updateDependencies,
             treatMissingJavaScriptToolAsWarning,
             cancellationToken);
     }
 
     Task<bool> IGuestAppHostSdkGenerator.BuildAndGenerateSdkAsync(DirectoryInfo directory, string? packageSourceOverride, CancellationToken cancellationToken)
     {
-        return BuildAndGenerateSdkAsync(directory, packageSourceOverride, cancellationToken);
+        // Starter templates have just scaffolded their dependency manifests.
+        return BuildAndGenerateSdkAsync(directory, updateDependencies: true, packageSourceOverride, cancellationToken);
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -675,6 +681,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                     config.SdkVersion,
                     launchSettingsEnvVars,
                     environmentVariables,
+                    updateDependencies: false,
                     treatMissingJavaScriptToolAsWarning: false,
                     cancellationToken);
                 if (bootstrapResult != 0)
@@ -816,6 +823,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                         directory,
                         rpcClient,
                         environmentVariables,
+                        updateDependencies: false,
                         treatMissingJavaScriptToolAsWarning: false,
                         cancellationToken);
                 if (installResult != 0)
@@ -1479,6 +1487,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                     config.SdkVersion,
                     launchSettingsEnvVars,
                     environmentVariables,
+                    updateDependencies: false,
                     treatMissingJavaScriptToolAsWarning: false,
                     cancellationToken);
                 if (bootstrapResult != 0)
@@ -1577,6 +1586,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                         directory,
                         rpcClient,
                         environmentVariables,
+                        updateDependencies: false,
                         treatMissingJavaScriptToolAsWarning: false,
                         cancellationToken);
                 if (installResult != 0)
@@ -1845,6 +1855,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             context.AppHostFile,
             config,
             requestedChannel,
+            updateDependencies: true,
             context.Source,
             context.SourcePackagePattern,
             cancellationToken);
@@ -2012,6 +2023,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                         context.AppHostFile,
                         config,
                         requestedChannel,
+                        updateDependencies: true,
                         packageSourceOverridePattern: null,
                         cancellationToken: cancellationToken);
 
@@ -2542,6 +2554,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         DirectoryInfo directory,
         IAppHostRpcClient rpcClient,
         IDictionary<string, string> environmentVariables,
+        bool updateDependencies,
         bool treatMissingJavaScriptToolAsWarning,
         CancellationToken cancellationToken)
     {
@@ -2574,7 +2587,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             JavaAppHostToolchainResolver.ClearStagedDependencies(javaToolchain);
         }
 
-        var (result, output) = await _guestRuntime.InstallDependenciesAsync(directory, environmentVariables, cancellationToken);
+        var (result, output) = await _guestRuntime.InstallDependenciesAsync(directory, environmentVariables, updateDependencies, cancellationToken);
         if (result != 0)
         {
             var lines = output.GetLines().ToArray();

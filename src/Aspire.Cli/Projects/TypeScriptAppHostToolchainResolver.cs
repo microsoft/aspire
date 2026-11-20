@@ -27,6 +27,7 @@ internal static class TypeScriptAppHostToolchainResolver
     private const string YarnLockFileName = "yarn.lock";
     private const string YarnClassicLockFileVersionLine = "# yarn lockfile v1";
     private const string YarnConfigFileName = ".yarnrc.yml";
+    private const string NpmShrinkwrapFileName = "npm-shrinkwrap.json";
     private const string PackageLockFileName = "package-lock.json";
     private const string PnpmLockFileName = "pnpm-lock.yaml";
     private const string DenoLockFileName = "deno.lock";
@@ -104,6 +105,11 @@ internal static class TypeScriptAppHostToolchainResolver
             if (File.Exists(Path.Combine(candidateDirectory.FullName, DenoJsoncFileName)))
             {
                 return CreateLockFileResolution(TypeScriptAppHostToolchain.Deno, DenoJsoncFileName, candidateDirectory);
+            }
+
+            if (File.Exists(Path.Combine(candidateDirectory.FullName, NpmShrinkwrapFileName)))
+            {
+                return CreateLockFileResolution(TypeScriptAppHostToolchain.Npm, NpmShrinkwrapFileName, candidateDirectory);
             }
 
             if (File.Exists(Path.Combine(candidateDirectory.FullName, PackageLockFileName)))
