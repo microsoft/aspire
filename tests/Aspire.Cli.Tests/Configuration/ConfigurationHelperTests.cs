@@ -223,22 +223,58 @@ public class ConfigurationHelperTests(ITestOutputHelper outputHelper)
         var path = Path.Combine(workspace.Path, AspireConfigFile.FileName);
         await File.WriteAllTextAsync(path, "{}");
         // Mimic an antivirus scan that opens the destination without FILE_SHARE_DELETE.
-        var scanner = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-        var replaceAttempted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        await using var scanner = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+        var attempts = 0;
 
-        var write = ConfigurationHelper.WriteSettingsFileAtomicallyAsync(
+        // beforeReplace runs before every publication attempt, so a second call proves the first
+        // attempt hit the lock. Releasing the lock there gates the retry deterministically.
+        await ConfigurationHelper.WriteSettingsFileAtomicallyAsync(
             path, new JsonObject { ["custom"] = "updated" }, CancellationToken.None,
             beforeReplace: _ =>
             {
-                replaceAttempted.SetResult();
+                if (++attempts == 2)
+                {
+                    scanner.Dispose();
+                }
                 return Task.CompletedTask;
-            });
-        await replaceAttempted.Task.WaitAsync(TimeSpan.FromSeconds(30));
-        await Task.Delay(TimeSpan.FromMilliseconds(100));
-        await scanner.DisposeAsync();
-        await write.WaitAsync(TimeSpan.FromSeconds(30));
+            }).WaitAsync(TimeSpan.FromSeconds(30));
 
+        Assert.Equal(2, attempts);
         Assert.Equal("updated", JsonNode.Parse(await File.ReadAllTextAsync(path))!["custom"]!.GetValue<string>());
+        Assert.Equal(path, Assert.Single(Directory.GetFiles(workspace.Path)));
+    }
+
+    [Fact]
+    public async Task WriteSettingsFileAtomically_RevalidatesBeforeRetryAfterTransientLock()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Skip("Replace sharing violations are specific to Windows.");
+            return;
+        }
+
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var path = Path.Combine(workspace.Path, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(path, "{}");
+        await using var scanner = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+        var attempts = 0;
+
+        // The second validation stands in for detecting an edit made by another process during backoff.
+        var exception = await Assert.ThrowsAsync<IOException>(() => ConfigurationHelper.WriteSettingsFileAtomicallyAsync(
+            path, new JsonObject { ["custom"] = "updated" }, CancellationToken.None,
+            beforeReplace: _ =>
+            {
+                if (++attempts == 2)
+                {
+                    scanner.Dispose();
+                    throw new IOException("Inputs changed during backoff.");
+                }
+                return Task.CompletedTask;
+            }).WaitAsync(TimeSpan.FromSeconds(30)));
+
+        Assert.Equal("Inputs changed during backoff.", exception.Message);
+        Assert.Equal(2, attempts);
+        Assert.Equal("{}", await File.ReadAllTextAsync(path));
         Assert.Equal(path, Assert.Single(Directory.GetFiles(workspace.Path)));
     }
 

@@ -376,19 +376,27 @@ internal static partial class ConfigurationHelper
             {
                 File.SetUnixFileMode(temporaryPath, mode);
             }
-            if (unixMetadata is not null && unixMetadata != await ReadUnixMetadataAsync(filePath, cancellationToken))
+            // Validation runs before every publication attempt, not just the first. Another process can
+            // edit the destination while a retry waits out a transient lock, and the next attempt must
+            // not silently overwrite that edit.
+            async Task ValidateBeforePublishAsync()
             {
-                throw SettingsWriteRefused(filePath);
+                if (unixMetadata is not null && unixMetadata != await ReadUnixMetadataAsync(filePath, cancellationToken))
+                {
+                    throw SettingsWriteRefused(filePath);
+                }
+                if (beforeReplace is not null)
+                {
+                    await beforeReplace(cancellationToken);
+                }
+                cancellationToken.ThrowIfCancellationRequested();
             }
-            if (beforeReplace is not null)
-            {
-                await beforeReplace(cancellationToken);
-            }
-            cancellationToken.ThrowIfCancellationRequested();
+
             if (OperatingSystem.IsWindows() && destinationExists)
             {
                 // Replace preserves the destination DACL and other Windows file metadata.
                 await RetryOnTransientWindowsFileLockAsync(
+                    ValidateBeforePublishAsync,
                     () => File.Replace(temporaryPath, filePath, destinationBackupFileName: null), cancellationToken);
             }
             else
@@ -397,6 +405,7 @@ internal static partial class ConfigurationHelper
                 // Untracked workspace writes retain their existing overwrite behavior.
                 var overwrite = destinationExists || beforeReplace is null;
                 await RetryOnTransientWindowsFileLockAsync(
+                    ValidateBeforePublishAsync,
                     () => File.Move(temporaryPath, filePath, overwrite), cancellationToken);
             }
         }
@@ -428,10 +437,12 @@ internal static partial class ConfigurationHelper
         TimeSpan.FromMilliseconds(800),
     ];
 
-    private static async Task RetryOnTransientWindowsFileLockAsync(Action operation, CancellationToken cancellationToken)
+    private static async Task RetryOnTransientWindowsFileLockAsync(Func<Task> beforeAttempt, Action operation, CancellationToken cancellationToken)
     {
         for (var attempt = 0; ; attempt++)
         {
+            // Outside the try so validation failures are never treated as retryable file locks.
+            await beforeAttempt();
             try
             {
                 operation();
