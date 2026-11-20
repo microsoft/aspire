@@ -411,46 +411,61 @@ function createPhysicsNode(id, tags, x, y) {
     return { id, tags: createTags(...tags), x, y, vx: 0, vy: 0, bounds: { x: -56, y: -70, width: 112, height: 150 } };
 }
 
-test("overlapping tag groups keep labels and their action buttons clear as resources move", () => {
+test("tag groups stack only when their labels and action buttons substantially overlap", () => {
     const graph = createGraph();
     const shared = createPhysicsNode("shared", ["A", "B", "C"], 100, -200);
     const left = createPhysicsNode("left", ["A"], 0, 0);
     graph.nodes = [shared, left, createPhysicsNode("right", ["B"], 240, 0), createPhysicsNode("bottom", ["C"], 100, 240)];
     graph.updateTagGroups();
 
-    graph.tagElements.attr = function (name, value) {
-        this.values.forEach(value);
-        return this;
-    };
     for (const group of graph.tagGroups) {
         // A 40-unit text label followed by its action button.
         group.controlBounds = { x: 0, y: -19, width: 72, height: 28 };
     }
 
-    function positions() {
-        graph.onTick();
-        const transform = graph.tagControls.attributes.get("transform");
-        return new Map(graph.tagControls.values.map(group => {
-            const [x, y] = transform(group).slice("translate(".length, -1).split(",").map(Number);
-            return [group.key, { x, y }];
-        }));
-    }
-
-    const stacked = positions();
+    const stacked = tagControlPositions(graph);
     const rows = [...stacked.values()].sort((a, b) => a.y - b.y);
     assert.ok(rows.every(row => row.x === rows[0].x));
     assert.ok(rows[1].y - rows[0].y >= 28);
     assert.ok(rows[2].y - rows[1].y >= 28);
 
     left.y = shared.y;
-    left.x = shared.x - 55;
-    const withButtonCollision = positions();
-    assert.equal(withButtonCollision.get("B").x - withButtonCollision.get("A").x, 55);
+    left.x = shared.x - 30;
+    const withButtonCollision = tagControlPositions(graph);
+    assert.equal(withButtonCollision.get("B").x - withButtonCollision.get("A").x, 30);
     assert.ok(Math.abs(withButtonCollision.get("B").y - withButtonCollision.get("A").y) >= 28);
 
-    left.x = shared.x - 120;
-    assert.equal(positions().get("A").y, stacked.get("C").y);
+    left.x = shared.x - 55;
+    assert.equal(tagControlPositions(graph).get("A").y, stacked.get("C").y);
 });
+
+test("tags on different boundaries stay with their hulls when the controls only graze vertically", () => {
+    const graph = createGraph();
+    graph.nodes = [createPhysicsNode("shell", ["Backend", "Development"], 100, -200)];
+    graph.updateTagGroups();
+    for (const group of graph.tagGroups) {
+        group.controlBounds = { x: 0, y: -23, width: 110, height: 34 };
+    }
+
+    const positions = tagControlPositions(graph);
+    for (const group of graph.tagGroups) {
+        const [x, y] = group.labelAnchor;
+        assert.deepEqual(positions.get(group.key), { x, y });
+    }
+});
+
+function tagControlPositions(graph) {
+    graph.tagElements.attr = function (name, value) {
+        this.values.forEach(value);
+        return this;
+    };
+    graph.onTick();
+    const transform = graph.tagControls.attributes.get("transform");
+    return new Map(graph.tagControls.values.map(group => {
+        const [x, y] = transform(group).slice("translate(".length, -1).split(",").map(Number);
+        return [group.key, { x, y }];
+    }));
+}
 
 test("group cohesion pulls unlinked members together, cools and does not double count aliases", () => {
     const graph = createGraph();

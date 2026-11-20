@@ -620,15 +620,21 @@ class ResourceGraph {
                 let top = y + bounds.y;
                 let bottom = top + bounds.height;
 
-                // Keep the label aligned with its hull. Check lower controls first so each upward move
-                // only needs to consider controls still above it.
-                for (const other of placed) {
-                    if (top >= other.bottom + gap) {
-                        break;
-                    }
-                    if (right + gap > other.left && left < other.right + gap && bottom + gap > other.top) {
-                        bottom = other.top - gap;
-                        top = bottom - bounds.height;
+                // Leave labels on their own outlines unless the overlap covers at least half the smaller span
+                // on both axes. Labels on neighboring outlines can graze without obscuring one another.
+                const needsStacking = placed.some(other =>
+                    Math.min(right, other.right) - Math.max(left, other.left) >= Math.min(bounds.width, other.right - other.left) / 2 &&
+                    Math.min(bottom, other.bottom) - Math.max(top, other.top) >= Math.min(bounds.height, other.bottom - other.top) / 2);
+                if (needsStacking) {
+                    // Check lower controls first so each upward move only needs to consider controls still above it.
+                    for (const other of placed) {
+                        if (top >= other.bottom + gap) {
+                            break;
+                        }
+                        if (right + gap > other.left && left < other.right + gap && bottom + gap > other.top) {
+                            bottom = other.top - gap;
+                            top = bottom - bounds.height;
+                        }
                     }
                 }
                 labelY = top - bounds.y;
