@@ -11,7 +11,6 @@ using Aspire.Cli.Interaction;
 using Aspire.Cli.Processes;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
-using Aspire.Shared;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
 
@@ -134,6 +133,9 @@ internal sealed partial class PsCommand : BaseCommand
     protected override bool IsJsonFormatRequested(ParseResult parseResult)
         => parseResult.GetValue(s_outputOption) == PsOutput.Snapshot || base.IsJsonFormatRequested(parseResult);
 
+    protected override bool RunsUnderLauncherWatchdog(ParseResult parseResult)
+        => parseResult.GetValue(s_followOption);
+
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         using var activity = Telemetry.StartDiagnosticActivity(Name);
@@ -229,12 +231,14 @@ internal sealed partial class PsCommand : BaseCommand
         {
             return CommandResult.Failure(CliExitCodes.InvalidCommand, PsCommandStrings.FollowRequiresJson);
         }
-        using var followCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         // A host that spawns `ps --follow` (the VS Code extension) can be force-killed before it runs
-        // its own cleanup. Watch that host so an orphaned follower exits instead of waiting forever for
-        // a stdout stream nobody reads; an idle follower otherwise never writes and never notices.
-        await using var parentWatchdog = ParentProcessWatchdog.StartForCliParent(followCancellationTokenSource);
-        var followCancellationToken = followCancellationTokenSource.Token;
+        // its own cleanup. BaseCommand arms the launcher watchdog for --follow, so this token is
+        // cancelled when that host disappears and every await below observes it.
+        var followCancellationToken = cancellationToken;
+
+        // Cancelling this source stops the background watcher when the command finishes on its own.
+        // It is not the watchdog's token: the watchdog scope stays armed until BaseCommand disposes it.
+        using var followCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(followCancellationToken);
         var updates = Channel.CreateUnbounded<PsFollowUpdate>(new UnboundedChannelOptions
         {
             SingleReader = true
@@ -309,6 +313,9 @@ internal sealed partial class PsCommand : BaseCommand
         }
         finally
         {
+            // Stop the background watcher by cancelling the command's own token source. The launcher
+            // watchdog stays armed until BaseCommand disposes its scope, so the force-exit backstop
+            // remains available while the command unwinds.
             await followCancellationTokenSource.CancelAsync().ConfigureAwait(false);
         }
 

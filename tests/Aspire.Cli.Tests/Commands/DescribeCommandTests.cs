@@ -10,6 +10,7 @@ using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Dashboard.Model;
+using Aspire.Hosting;
 using Aspire.Shared.Model.Serialization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.AspNetCore.InternalTesting;
@@ -1301,6 +1302,140 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Equal("", string.Join("", outputWriter.Logs));
         Assert.NotEmpty(errorWriter.ToString());
+    }
+
+    [Fact]
+    public async Task DescribeCommand_Follow_ExitsWhenLauncherDiesDuringInitialSnapshotLoad()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        var errorWriter = new StringWriter();
+        var launcherExited = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var provider = CreateDescribeTestServices(workspace, outputWriter, [],
+            disableAnsi: true,
+            errorTextWriter: errorWriter,
+            configureConnection: connection =>
+            {
+                // The AppHost stops answering while the follower is still loading its initial snapshot,
+                // which is exactly where a force-killed launcher used to leave the CLI orphaned.
+                connection.GetResourceSnapshotsHandler = async cancellationToken =>
+                {
+                    try
+                    {
+                        await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        launcherExited.TrySetResult();
+                        throw;
+                    }
+
+                    return [];
+                };
+            });
+
+        // A parent PID that has already exited: the watchdog probes it immediately and cancels setup.
+        using var parentPid = EnvVarOverride.CreateForExitedProcess(KnownConfigNames.CliParentProcessId);
+        using var parentStarted = new EnvVarOverride(KnownConfigNames.CliParentProcessStarted, null);
+
+        var exitCode = await provider.GetRequiredService<RootCommand>().Parse("describe --follow --format json").InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.True(launcherExited.Task.IsCompleted, "The stalled initial snapshot load should have been cancelled by the launcher watchdog.");
+        Assert.Equal("", string.Join("", outputWriter.Logs));
+    }
+
+    [Fact]
+    public async Task DescribeCommand_Follow_ArmsLauncherWatchdogBeforeConnectionResolution()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        var scanStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var scanCancelled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var monitor = new TestAuxiliaryBackchannelMonitor
+        {
+            // Connection resolution is the first await in the command. If the watchdog were armed after
+            // it, this stall would never be cancelled and the follower would be orphaned here.
+            ScanAsyncCallback = async cancellationToken =>
+            {
+                scanStarted.TrySetResult();
+                try
+                {
+                    await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+                }
+                catch (OperationCanceledException)
+                {
+                    scanCancelled.TrySetResult();
+                    throw;
+                }
+            }
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
+            options.OutputTextWriter = outputWriter;
+            options.DisableAnsi = true;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        // A parent PID that has already exited: the watchdog probes it immediately and cancels setup.
+        using var parentPid = EnvVarOverride.CreateForExitedProcess(KnownConfigNames.CliParentProcessId);
+        using var parentStarted = new EnvVarOverride(KnownConfigNames.CliParentProcessStarted, null);
+
+        var exitCode = await provider.GetRequiredService<RootCommand>().Parse("describe --follow --format json").InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.True(scanStarted.Task.IsCompleted, "describe --follow should have started scanning for AppHosts.");
+        Assert.True(scanCancelled.Task.IsCompleted, "Connection resolution should be cancelled by the launcher watchdog, not run unwatched.");
+    }
+
+    [Fact]
+    public async Task DescribeCommand_WithoutFollow_DoesNotArmLauncherWatchdog()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        var scanCancelled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var monitor = new TestAuxiliaryBackchannelMonitor
+        {
+            ScanAsyncCallback = async cancellationToken =>
+            {
+                try
+                {
+                    await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+                }
+                catch (OperationCanceledException)
+                {
+                    scanCancelled.TrySetResult();
+                    throw;
+                }
+            }
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
+            options.OutputTextWriter = outputWriter;
+            options.DisableAnsi = true;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        using var parentPid = EnvVarOverride.CreateForExitedProcess(KnownConfigNames.CliParentProcessId);
+        using var parentStarted = new EnvVarOverride(KnownConfigNames.CliParentProcessStarted, null);
+        using var cts = new CancellationTokenSource();
+
+        var invocation = provider.GetRequiredService<RootCommand>()
+            .Parse("describe --format json")
+            .InvokeAsync(new System.CommandLine.InvocationConfiguration(), cts.Token);
+
+        // A one-shot describe is not a stream a host can orphan, so the watchdog must stay disarmed:
+        // only the caller's own cancellation ends it.
+        await Task.Delay(TimeSpan.FromSeconds(1));
+        Assert.False(scanCancelled.Task.IsCompleted, "The launcher watchdog must not be armed for a one-shot describe.");
+
+        cts.Cancel();
+        await invocation.DefaultTimeout();
+        Assert.True(scanCancelled.Task.IsCompleted);
     }
 
     [Fact]

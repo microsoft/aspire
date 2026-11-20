@@ -3,6 +3,7 @@
 
 using System.Net;
 using System.Net.Sockets;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Commands;
@@ -10,6 +11,7 @@ using Aspire.Cli.Interaction;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
+using Aspire.Hosting;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -630,6 +632,42 @@ public class PsCommandTests(ITestOutputHelper outputHelper)
                     Assert.Same(rpcException, dashboardLog.Exception);
                 });
         }
+    }
+
+    [Fact]
+    public async Task PsCommand_Follow_ExitsWhenLauncherDiesBeforeAnyOutput()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var monitor = new TestAuxiliaryBackchannelMonitor
+        {
+            // No AppHost is ever discovered, so the follower idles without writing anything. That is the
+            // state where a force-killed launcher used to leave the process parked forever.
+            WatchConnectionsHandler = cancellationToken => IdleConnectionsAsync(cancellationToken)
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        // A launcher PID that has already exited: the watchdog probes it immediately.
+        using var parentPid = EnvVarOverride.CreateForExitedProcess(KnownConfigNames.CliParentProcessId);
+        using var parentStarted = new EnvVarOverride(KnownConfigNames.CliParentProcessStarted, null);
+
+        var exitCode = await provider.GetRequiredService<RootCommand>()
+            .Parse("ps --format json --follow")
+            .InvokeAsync()
+            .DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+    }
+
+    private static async IAsyncEnumerable<IReadOnlyList<IAppHostAuxiliaryBackchannel>> IdleConnectionsAsync(
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+        yield break;
     }
 
     [Fact]

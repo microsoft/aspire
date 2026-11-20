@@ -144,6 +144,9 @@ internal sealed class DescribeCommand : BaseCommand
     protected override bool IsMachineReadableFormatRequested(ParseResult parseResult) =>
         parseResult.GetValue(s_formatOption) is ResourceOutputFormat.Json or ResourceOutputFormat.Mermaid;
 
+    protected override bool RunsUnderLauncherWatchdog(ParseResult parseResult) =>
+        parseResult.GetValue(s_followOption);
+
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         using var activity = Telemetry.StartDiagnosticActivity(Name);
@@ -161,6 +164,10 @@ internal sealed class DescribeCommand : BaseCommand
             return CommandResult.Failure(CliExitCodes.InvalidCommand, DescribeCommandStrings.MermaidFollowNotSupported);
         }
 
+        // A host that spawns `describe --follow` (the VS Code extension) can be force-killed before
+        // it runs its own cleanup. BaseCommand arms the launcher watchdog before ExecuteAsync, so every
+        // await below - including connection resolution and the initial snapshot load - observes a token
+        // that is cancelled when that host disappears.
         var result = await _connectionResolver.ResolveConnectionAsync(
             passedAppHostProjectFile,
             SharedCommandStrings.ScanningForRunningAppHosts,
@@ -195,41 +202,33 @@ internal sealed class DescribeCommand : BaseCommand
         var allSnapshots = resourceWatcher.GetAllResources();
         _resourceColorMap.ResolveAll(allSnapshots.Select(s => ResourceSnapshotMapper.GetResourceName(s, allSnapshots)));
 
-        if (follow)
-        {
-            using var followCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            // A host that spawns `describe --follow` (the VS Code extension) can be force-killed before
-            // it runs its own cleanup. Watch that host so an orphaned follower exits instead of waiting
-            // forever for a stdout stream nobody reads; an idle follower otherwise never writes and
-            // never notices the broken pipe.
-            await using var parentWatchdog = ParentProcessWatchdog.StartForCliParent(followCancellationTokenSource);
-            try
-            {
-                return CommandResult.FromExitCode(await ExecuteWatchAsync(resourceWatcher, dashboardBaseUrl, resourceName, format, includeDisabledCommands, followCancellationTokenSource.Token));
-            }
-            catch (OperationCanceledException ex) when (ex.CancellationToken == followCancellationTokenSource.Token || followCancellationTokenSource.IsCancellationRequested)
-            {
-                return CommandResult.Success();
-            }
-            catch (Exception ex) when (BackchannelDisconnectHelpers.IsExpectedDisconnect(ex))
-            {
-                if (cancellationToken.IsCancellationRequested)
-                {
-                    return CommandResult.Success();
-                }
-
-                // Stopping or restarting the AppHost can tear down the JSON-RPC stream while
-                // describe --follow is active. Treat the lost watch as a normal end of stream
-                // rather than surfacing it as an unexpected CLI failure. Emit the status
-                // message on stderr so JSON output on stdout remains parseable.
-                AppHostFollowDisconnectHelpers.WriteStatusMessage(InteractionService, connection);
-
-                return CommandResult.Success();
-            }
-        }
-        else
+        if (!follow)
         {
             return CommandResult.FromExitCode(ExecuteSnapshot(resourceWatcher.GetResources().ToList(), dashboardBaseUrl, resourceName, format, includeDisabledCommands));
+        }
+
+        try
+        {
+            return CommandResult.FromExitCode(await ExecuteWatchAsync(resourceWatcher, dashboardBaseUrl, resourceName, format, includeDisabledCommands, cancellationToken));
+        }
+        catch (OperationCanceledException ex) when (ex.CancellationToken == cancellationToken || cancellationToken.IsCancellationRequested)
+        {
+            return CommandResult.Success();
+        }
+        catch (Exception ex) when (BackchannelDisconnectHelpers.IsExpectedDisconnect(ex))
+        {
+            if (cancellationToken.IsCancellationRequested)
+            {
+                return CommandResult.Success();
+            }
+
+            // Stopping or restarting the AppHost can tear down the JSON-RPC stream while
+            // describe --follow is active. Treat the lost watch as a normal end of stream
+            // rather than surfacing it as an unexpected CLI failure. Emit the status
+            // message on stderr so JSON output on stdout remains parseable.
+            AppHostFollowDisconnectHelpers.WriteStatusMessage(InteractionService, connection);
+
+            return CommandResult.Success();
         }
     }
 
