@@ -210,6 +210,38 @@ public class ConfigurationHelperTests(ITestOutputHelper outputHelper)
         Assert.Equal(file.FullName, Assert.Single(Directory.GetFiles(workspace.Path)));
     }
 
+    [Fact]
+    public async Task WriteSettingsFileAtomically_RetriesWhileDestinationIsTransientlyLocked()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Skip("Replace sharing violations are specific to Windows.");
+            return;
+        }
+
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var path = Path.Combine(workspace.Path, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(path, "{}");
+        // Mimic an antivirus scan that opens the destination without FILE_SHARE_DELETE.
+        var scanner = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+        var replaceAttempted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var write = ConfigurationHelper.WriteSettingsFileAtomicallyAsync(
+            path, new JsonObject { ["custom"] = "updated" }, CancellationToken.None,
+            beforeReplace: _ =>
+            {
+                replaceAttempted.SetResult();
+                return Task.CompletedTask;
+            });
+        await replaceAttempted.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        await Task.Delay(TimeSpan.FromMilliseconds(100));
+        await scanner.DisposeAsync();
+        await write.WaitAsync(TimeSpan.FromSeconds(30));
+
+        Assert.Equal("updated", JsonNode.Parse(await File.ReadAllTextAsync(path))!["custom"]!.GetValue<string>());
+        Assert.Equal(path, Assert.Single(Directory.GetFiles(workspace.Path)));
+    }
+
     private static IConfiguration BuildConfigurationFromSettingsFile(
         TemporaryWorkspace workspace, string content)
     {
