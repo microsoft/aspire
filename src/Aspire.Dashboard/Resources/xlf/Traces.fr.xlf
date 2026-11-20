@@ -4,12 +4,12 @@
     <body>
       <trans-unit id="MessageExceededLimitBody">
         <source>A maximum of {0} traces are stored. Old traces are automatically removed.</source>
-        <target state="translated">Un maximum de {0} traces sont stockées. Les anciennes traces sont automatiquement supprimées.</target>
+        <target state="translated">Au maximum {0} traces sont conservées. Les plus anciennes sont automatiquement supprimées.</target>
         <note>{0} is the max count</note>
       </trans-unit>
       <trans-unit id="MessageExceededLimitTitle">
         <source>Exceeded trace limit</source>
-        <target state="translated">Limite de trace dépassée</target>
+        <target state="translated">Limite de traces dépassée</target>
         <note />
       </trans-unit>
       <trans-unit id="PauseInProgressText">
@@ -24,7 +24,7 @@
       </trans-unit>
       <trans-unit id="SpanTypeSelectSpanType">
         <source>Select span type</source>
-        <target state="translated">Sélectionnez le type de plage</target>
+        <target state="translated">Sélectionner le type d’étendue</target>
         <note />
       </trans-unit>
       <trans-unit id="TotalItemsFooterPluralText">
@@ -49,7 +49,7 @@
       </trans-unit>
       <trans-unit id="TracesNameFilter">
         <source>Name filter</source>
-        <target state="translated">Nom du filtre</target>
+        <target state="translated">Filtre de nom</target>
         <note />
       </trans-unit>
       <trans-unit id="TracesNoTraces">
@@ -64,7 +64,7 @@
       </trans-unit>
       <trans-unit id="TracesResourceSpans">
         <source>{0} spans</source>
-        <target state="translated">Étendues {0}</target>
+        <target state="translated">Étendues de {0}</target>
         <note>{0} is a resource name</note>
       </trans-unit>
       <trans-unit id="TracesSpansColumnHeader">
@@ -89,7 +89,7 @@
       </trans-unit>
       <trans-unit id="VirtualizedLimitText">
         <source>Showing &lt;strong&gt;{0} of {1} traces&lt;/strong&gt;. Use filters to narrow the results</source>
-        <target state="translated">Affichage de &lt;strong&gt;{0} traces sur {1}&lt;/strong&gt;. Utiliser des filtres pour affiner les résultats</target>
+        <target state="translated">Affichage de &lt;strong&gt;{0} traces sur {1}&lt;/strong&gt;. Utilisez des filtres pour affiner les résultats</target>
         <note>{0} is the displayed count. {1} is the total count. This is raw markup, so &lt;strong&gt; and &lt;/strong&gt; should not be modified.</note>
       </trans-unit>
     </body>

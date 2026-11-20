@@ -4,17 +4,17 @@
     <body>
       <trans-unit id="MainLayoutToggleTerminalDock">
         <source>Toggle terminal (`)</source>
-        <target state="translated">Activer ou désactiver le terminal (`)</target>
+        <target state="translated">Afficher ou masquer le terminal (`)</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalCloseTab">
         <source>Close tab</source>
-        <target state="translated">Fermer un onglet</target>
+        <target state="translated">Fermer l’onglet</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalCopyFailed">
         <source>Could not copy to clipboard.</source>
-        <target state="translated">Nous n’avons pas pu copier dans le Presse-papiers.</target>
+        <target state="translated">Impossible de copier dans le Presse-papiers.</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalCopyTitle">
@@ -29,7 +29,7 @@
       </trans-unit>
       <trans-unit id="TerminalDisconnected">
         <source>The terminal disconnected and automatic retries have stopped. Check that the resource is running, then retry.</source>
-        <target state="translated">Le terminal est déconnecté et les nouvelles tentatives automatiques ont cessé. Vérifiez que la ressource est en cours d’exécution, puis réessayez.</target>
+        <target state="translated">Le terminal s’est déconnecté et les nouvelles tentatives automatiques ont été arrêtées. Vérifiez que la ressource est en cours d’exécution, puis réessayez.</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDisconnectedMessage">
@@ -39,7 +39,7 @@
       </trans-unit>
       <trans-unit id="TerminalDisconnectedWithExitCode">
         <source>Terminal disconnected (exit code {0}). The last output has been preserved.</source>
-        <target state="translated">Le terminal a été déconnecté (code de sortie {0}). La dernière sortie a été conservée.</target>
+        <target state="translated">Terminal déconnecté (code de sortie {0}). La dernière sortie a été conservée.</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDismissError">
@@ -54,17 +54,17 @@
       </trans-unit>
       <trans-unit id="TerminalDockCloseTimedOutMessage">
         <source>Timed out waiting for terminal '{0}' to shut down. Cleanup is continuing in the background.</source>
-        <target state="translated">Expiration du délai d’attente de l’arrêt du terminal '{0}'. Le nettoyage se poursuit en arrière-plan.</target>
+        <target state="translated">Le délai d’attente de l’arrêt du terminal « {0} » a expiré. Le nettoyage se poursuit en arrière-plan.</target>
         <note>{0} is the terminal's display title.</note>
       </trans-unit>
       <trans-unit id="TerminalDockCloseTimedOutTitle">
         <source>Terminal close timed out</source>
-        <target state="translated">Délai d’expiration dépassé de fermeture du terminal</target>
+        <target state="translated">Délai de fermeture du terminal expiré</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDockDetach">
         <source>Open terminal in a new window</source>
-        <target state="translated">Ouvrir un terminal dans une nouvelle fenêtre</target>
+        <target state="translated">Ouvrir le terminal dans une nouvelle fenêtre</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDockDetachBlocked">
@@ -89,12 +89,12 @@
       </trans-unit>
       <trans-unit id="TerminalDockHide">
         <source>Hide terminal panel (`)</source>
-        <target state="translated">Masquer le panneau terminal (`)</target>
+        <target state="translated">Masquer le panneau du terminal (`)</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDockMoreInformation">
         <source>More information</source>
-        <target state="translated">Autres informations</target>
+        <target state="translated">Plus d’informations</target>
         <note>Link to documentation about dashboard terminals, shown when the terminal dock is empty.</note>
       </trans-unit>
       <trans-unit id="TerminalDockPanelHeading">
@@ -119,7 +119,7 @@
       </trans-unit>
       <trans-unit id="TerminalDockResizeHelp">
         <source>Use Up or Down to resize, Shift for larger steps, Home for minimum height, and End for maximum height.</source>
-        <target state="translated">Utilisez Haut ou Bas pour redimensionner, Maj pour les étapes plus grandes, Accueil pour la hauteur minimale et Fin pour la hauteur maximale.</target>
+        <target state="translated">Utilisez Haut ou Bas pour redimensionner, Maj pour des incréments plus grands, Origine pour la hauteur minimale et Fin pour la hauteur maximale.</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalDockReturnToDock">
@@ -144,7 +144,7 @@
       </trans-unit>
       <trans-unit id="TerminalExpand">
         <source>Expand terminal</source>
-        <target state="new">Expand terminal</target>
+        <target state="translated">Agrandir le terminal</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalFocusControlsDescription">
@@ -164,17 +164,17 @@
       </trans-unit>
       <trans-unit id="TerminalMinimize">
         <source>Minimize terminal</source>
-        <target state="new">Minimize terminal</target>
+        <target state="translated">Réduire le terminal</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalMountFailed">
         <source>The terminal could not connect or initialize its renderer. Check that the resource is running and your browser supports WebGPU or WebGL2, then reconnect to try again. You can still view this resource's console logs.</source>
-        <target state="translated">Le terminal n’a pas pu se connecter ou initialiser son renderer. Vérifiez que la ressource est en cours d’exécution et que votre navigateur prend en charge WebGPU ou WebGL2, puis reconnectez-vous pour réessayer. Vous pouvez toujours afficher les journaux de console de cette ressource.</target>
+        <target state="translated">Le terminal n’a pas pu se connecter ou initialiser son moteur de rendu. Vérifiez que la ressource est en cours d’exécution et que votre navigateur prend en charge WebGPU ou WebGL2, puis reconnectez-vous pour réessayer. Vous pouvez toujours afficher les journaux de console de cette ressource.</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalOpenForResource">
         <source>Open terminal for {0}</source>
-        <target state="new">Open terminal for {0}</target>
+        <target state="translated">Ouvrir le terminal de {0}</target>
         <note>{0} is the resource name.</note>
       </trans-unit>
       <trans-unit id="TerminalPalette">
@@ -289,7 +289,7 @@
       </trans-unit>
       <trans-unit id="TerminalToolbarOpenInWindowFailed">
         <source>Unable to open the terminal window. Reload the dashboard and try again.</source>
-        <target state="translated">Nous ne pouvons pas ouvrir la fenêtre du terminal. Rechargez le tableau de bord, puis réessayez.</target>
+        <target state="translated">Impossible d’ouvrir la fenêtre du terminal. Rechargez le tableau de bord, puis réessayez.</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalWindowEnded">
@@ -314,7 +314,7 @@
       </trans-unit>
       <trans-unit id="TerminalsSelectAResource">
         <source>Select a resource to view its terminal</source>
-        <target state="translated">Sélectionner une ressource pour afficher son terminal</target>
+        <target state="translated">Sélectionnez une ressource pour afficher son terminal</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalsSelectResourceToolbar">
@@ -324,7 +324,7 @@
       </trans-unit>
       <trans-unit id="TerminalsSettings">
         <source>View options</source>
-        <target state="translated">Afficher les options</target>
+        <target state="translated">Options d’affichage</target>
         <note />
       </trans-unit>
     </body>

@@ -9,7 +9,7 @@
       </trans-unit>
       <trans-unit id="ActionViewDetailsText">
         <source>View details</source>
-        <target state="translated">Afficher des informations</target>
+        <target state="translated">Afficher les détails</target>
         <note />
       </trans-unit>
       <trans-unit id="ActionsButtonText">
@@ -44,7 +44,7 @@
       </trans-unit>
       <trans-unit id="ChartContainerGraphAccessibleLabel">
         <source>Graph. For an accessible view please navigate to the Table tab</source>
-        <target state="translated">Graphique. Si vous souhaitez obtenir un affichage accessible, veuillez accéder à l’onglet Tableau</target>
+        <target state="translated">Graphique. Pour un affichage accessible, accédez à l’onglet Tableau</target>
         <note />
       </trans-unit>
       <trans-unit id="ChartContainerGraphTab">
@@ -54,7 +54,7 @@
       </trans-unit>
       <trans-unit id="ChartContainerIncompatibleHistogramBounds">
         <source>Some histograms have no shared bucket boundaries. Percentiles cannot be calculated for those intervals. Use Show count to view observation counts.</source>
-        <target state="translated">Certains histogrammes n’ont pas de limites de compartiment partagées. Nous ne pouvons pas calculer les percentiles pour ces intervalles. Utilisez « Afficher le nombre » pour voir le nombre d’observations.</target>
+        <target state="translated">Certains histogrammes n’ont pas de limites de compartiment communes. Impossible de calculer les centiles pour ces intervalles. Utilisez « Afficher le nombre » pour voir le nombre d’observations.</target>
         <note />
       </trans-unit>
       <trans-unit id="ChartContainerOptionsHeader">
@@ -64,12 +64,12 @@
       </trans-unit>
       <trans-unit id="ChartContainerOverflowDescription">
         <source>Some dimensions for the metric have been dropped by the OpenTelemetry SDK.</source>
-        <target state="translated">Certaines dimensions de la métrique ont été supprimées par le Kit de développement logiciel (SDK) OpenTelemetry.</target>
+        <target state="translated">Certaines dimensions de la métrique ont été supprimées par le SDK OpenTelemetry.</target>
         <note>OpenTelemetry is the name of the standard.</note>
       </trans-unit>
       <trans-unit id="ChartContainerOverflowLink">
         <source>For more information, see &lt;a href="{0}" target="_blank"&gt;OpenTelemetry specification cardinality limits&lt;/a&gt;.</source>
-        <target state="translated">Pour découvrir plus d’informations, consultez &lt;a href="{0}" target="_blank"&gt;Plafonnement de cardinalité de la spécification OpenTelemetry&lt;/a&gt;.</target>
+        <target state="translated">Pour plus d’informations, consultez &lt;a href="{0}" target="_blank"&gt;les limites de cardinalité de la spécification OpenTelemetry&lt;/a&gt;.</target>
         <note>OpenTelemetry is the name of the standard.</note>
       </trans-unit>
       <trans-unit id="ChartContainerOverflowTitle">
@@ -79,7 +79,7 @@
       </trans-unit>
       <trans-unit id="ChartContainerShowChangePerIntervalLabel">
         <source>Show change per interval</source>
-        <target state="new">Show change per interval</target>
+        <target state="translated">Afficher la variation par intervalle</target>
         <note />
       </trans-unit>
       <trans-unit id="ChartContainerShowCountLabel">
@@ -89,7 +89,7 @@
       </trans-unit>
       <trans-unit id="ChartContainerTableTab">
         <source>Table</source>
-        <target state="translated">Table</target>
+        <target state="translated">Tableau</target>
         <note />
       </trans-unit>
       <trans-unit id="ChartContainerUnableToDisplay">
@@ -99,7 +99,7 @@
       </trans-unit>
       <trans-unit id="ChartContainerUnitPerInterval">
         <source>{0} per interval</source>
-        <target state="new">{0} per interval</target>
+        <target state="translated">{0} par intervalle</target>
         <note>{0} is the instrument's unit, e.g. "Requests"</note>
       </trans-unit>
       <trans-unit id="ClearAllResources">
@@ -109,17 +109,17 @@
       </trans-unit>
       <trans-unit id="ClearPendingSelectedResource">
         <source>Remove telemetry for resource</source>
-        <target state="translated">Supprimer les données de télémétrie pour la ressource</target>
+        <target state="translated">Supprimer les données de télémétrie de la ressource</target>
         <note />
       </trans-unit>
       <trans-unit id="ClearSelectedResource">
         <source>Remove telemetry for {0}</source>
-        <target state="translated">Supprimer les données de télémétrie pour {0}</target>
+        <target state="translated">Supprimer les données de télémétrie de {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="ClearSignalsButtonTitle">
         <source>Remove data</source>
-        <target state="translated">Supprimer des données</target>
+        <target state="translated">Supprimer les données</target>
         <note />
       </trans-unit>
       <trans-unit id="CollapseAllSpansText">
@@ -169,27 +169,27 @@
       </trans-unit>
       <trans-unit id="OverviewGraphAccessibleLabel">
         <source>Resource graph. The resource list shows the same resources in an accessible format</source>
-        <target state="new">Resource graph. The resource list shows the same resources in an accessible format</target>
+        <target state="translated">Graphe des ressources. La liste des ressources présente les mêmes ressources dans un format accessible</target>
         <note />
       </trans-unit>
       <trans-unit id="ParameterDeleteValueAction">
         <source>Delete value</source>
-        <target state="new">Delete value</target>
+        <target state="translated">Supprimer la valeur</target>
         <note />
       </trans-unit>
       <trans-unit id="PauseWarningText">
         <source>{0} capture paused</source>
-        <target state="new">{0} capture paused</target>
+        <target state="translated">{0} : capture suspendue</target>
         <note>{0} is the type of captured data.</note>
       </trans-unit>
       <trans-unit id="ResourcesContainerGraphAccessibleLabel">
         <source>Graph. For an accessible view please navigate to the Resources tab</source>
-        <target state="translated">Graph. Pour obtenir un affichage accessible, naviguez vers l’onglet des Ressources</target>
+        <target state="translated">Graphe. Pour un affichage accessible, accédez à l’onglet Ressources</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcesContainerGraphTab">
         <source>Graph</source>
-        <target state="translated">Graph</target>
+        <target state="translated">Graphe</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourcesContainerParametersTab">
@@ -209,12 +209,12 @@
       </trans-unit>
       <trans-unit id="SummaryDetailsViewCloseViewWithShortcut">
         <source>Close (Esc)</source>
-        <target state="new">Close (Esc)</target>
+        <target state="translated">Fermer (Échap)</target>
         <note>Tooltip of a close button that the Escape key also triggers. Esc is the label of the Escape key on keyboards.</note>
       </trans-unit>
       <trans-unit id="TextVisualizerContentLabel">
         <source>Text content</source>
-        <target state="translated">Contenu de texte</target>
+        <target state="translated">Contenu texte</target>
         <note>Accessible name for the scrollable text/code region in the text visualizer.</note>
       </trans-unit>
       <trans-unit id="ViewJson">
@@ -299,7 +299,7 @@
       </trans-unit>
       <trans-unit id="GenAIDetailsTitle">
         <source>GenAI details</source>
-        <target state="translated">Détails sur GenAI</target>
+        <target state="translated">Détails GenAI</target>
         <note />
       </trans-unit>
       <trans-unit id="GridValueCopied">
@@ -314,12 +314,12 @@
       </trans-unit>
       <trans-unit id="GridValueMaskHideValue">
         <source>Hide value</source>
-        <target state="translated">Masquer une valeur</target>
+        <target state="translated">Masquer la valeur</target>
         <note />
       </trans-unit>
       <trans-unit id="GridValueMaskShowValue">
         <source>Show value</source>
-        <target state="translated">Afficher une valeur</target>
+        <target state="translated">Afficher la valeur</target>
         <note />
       </trans-unit>
       <trans-unit id="HideHiddenResources">
@@ -329,7 +329,7 @@
       </trans-unit>
       <trans-unit id="LabelAll">
         <source>(All)</source>
-        <target state="translated">(Tout)</target>
+        <target state="translated">(Tous)</target>
         <note />
       </trans-unit>
       <trans-unit id="LabelEmpty">
@@ -374,7 +374,7 @@
       </trans-unit>
       <trans-unit id="MetricTableNoMetricsFound">
         <source>No metrics data found</source>
-        <target state="translated">Données de métriques introuvables</target>
+        <target state="translated">Aucune donnée de métrique trouvée</target>
         <note />
       </trans-unit>
       <trans-unit id="MetricTableShowOnlyValueChanges">
@@ -389,12 +389,12 @@
       </trans-unit>
       <trans-unit id="MetricTableValueDecreased">
         <source>Value decreased</source>
-        <target state="translated">Valeur réduite</target>
+        <target state="translated">La valeur a diminué</target>
         <note />
       </trans-unit>
       <trans-unit id="MetricTableValueIncreased">
         <source>Value increased</source>
-        <target state="translated">Valeur augmentée</target>
+        <target state="translated">La valeur a augmenté</target>
         <note />
       </trans-unit>
       <trans-unit id="MetricTableValueNoChange">
@@ -404,7 +404,7 @@
       </trans-unit>
       <trans-unit id="MetricTableViewExemplarsLabel">
         <source>View exemplars</source>
-        <target state="translated">Afficher les machines virtuelles</target>
+        <target state="translated">Afficher les exemplaires</target>
         <note />
       </trans-unit>
       <trans-unit id="NameColumnHeader">
@@ -479,7 +479,7 @@
       </trans-unit>
       <trans-unit id="ResourceDetailsBackReferences">
         <source>Back references</source>
-        <target state="translated">Références de retour</target>
+        <target state="translated">Références inverses</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceDetailsEnvironmentVariablesHeader">
@@ -524,7 +524,7 @@
       </trans-unit>
       <trans-unit id="ResourceGraphNoEndpoints">
         <source>No endpoints</source>
-        <target state="translated">Aucun point de terminaison</target>
+        <target state="translated">Aucune URL</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceHealthChecksHeader">
@@ -634,7 +634,7 @@
       </trans-unit>
       <trans-unit id="SpanTypeMessaging">
         <source>Messaging</source>
-        <target state="translated">Xamarin Messaging</target>
+        <target state="translated">Messagerie</target>
         <note />
       </trans-unit>
       <trans-unit id="SpanTypeRpc">
@@ -674,12 +674,12 @@
       </trans-unit>
       <trans-unit id="StructuredLogsDetailsTimestampLabel">
         <source>Timestamp</source>
-        <target state="translated">Horodateur</target>
+        <target state="translated">Horodatage</target>
         <note />
       </trans-unit>
       <trans-unit id="TimeOffsetColumnHeader">
         <source>Time offset</source>
-        <target state="translated">Décalage de l’heure</target>
+        <target state="translated">Décalage temporel</target>
         <note />
       </trans-unit>
       <trans-unit id="TimestampColumnHeader">
@@ -709,12 +709,12 @@
       </trans-unit>
       <trans-unit id="SummaryDetailsViewSplitHorizontal">
         <source>Split horizontal</source>
-        <target state="translated">Fractionner horizontalement</target>
+        <target state="translated">Disposition horizontale</target>
         <note />
       </trans-unit>
       <trans-unit id="SummaryDetailsViewSplitVertical">
         <source>Split vertical</source>
-        <target state="translated">Fractionner verticalement</target>
+        <target state="translated">Disposition verticale</target>
         <note />
       </trans-unit>
       <trans-unit id="ViewStructuredLogsText">
@@ -729,7 +729,7 @@
       </trans-unit>
       <trans-unit id="VolumeMountTypeReadOnlyTitle">
         <source>Read-only</source>
-        <target state="new">Read-only</target>
+        <target state="translated">Lecture seule</target>
         <note />
       </trans-unit>
       <trans-unit id="VolumePathColumnHeader">
@@ -739,12 +739,12 @@
       </trans-unit>
       <trans-unit id="VolumeRevealFailed">
         <source>Couldn't open '{0}'. It may not exist on this machine.</source>
-        <target state="new">Couldn't open '{0}'. It may not exist on this machine.</target>
+        <target state="translated">Impossible d’ouvrir « {0} ». Il n’existe peut-être pas sur cet ordinateur.</target>
         <note />
       </trans-unit>
       <trans-unit id="VolumeRevealInFileExplorer">
         <source>Reveal in file explorer</source>
-        <target state="new">Reveal in file explorer</target>
+        <target state="translated">Afficher dans l’explorateur de fichiers</target>
         <note />
       </trans-unit>
     </body>

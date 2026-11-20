@@ -9,7 +9,7 @@
       </trans-unit>
       <trans-unit id="MessageExceededLimitBody">
         <source>A maximum of {0} structured logs are stored. Old structured logs are automatically removed.</source>
-        <target state="translated">Un maximum de {0} journaux structurés est stocké. Les anciens journaux structurés sont automatiquement supprimés.</target>
+        <target state="translated">Au maximum {0} journaux structurés sont conservés. Les plus anciens sont automatiquement supprimés.</target>
         <note>{0} is the max count</note>
       </trans-unit>
       <trans-unit id="MessageExceededLimitTitle">
@@ -49,7 +49,7 @@
       </trans-unit>
       <trans-unit id="StructuredLogsMessageFilter">
         <source>Message filter</source>
-        <target state="translated">Filtre de messages</target>
+        <target state="translated">Filtre de message</target>
         <note />
       </trans-unit>
       <trans-unit id="StructuredLogsMinimumLogFilter">
@@ -59,7 +59,7 @@
       </trans-unit>
       <trans-unit id="StructuredLogsNoLogsFound">
         <source>No structured logs found</source>
-        <target state="translated">Journaux structurés introuvables</target>
+        <target state="translated">Aucun journal structuré trouvé</target>
         <note />
       </trans-unit>
       <trans-unit id="StructuredLogsPageTitle">
@@ -79,7 +79,7 @@
       </trans-unit>
       <trans-unit id="StructuredLogsTimestampColumnHeader">
         <source>Timestamp</source>
-        <target state="translated">Timestamp</target>
+        <target state="translated">Horodatage</target>
         <note />
       </trans-unit>
       <trans-unit id="StructuredLogsTraceColumnHeader">
@@ -89,17 +89,17 @@
       </trans-unit>
       <trans-unit id="TotalItemsFooterPluralText">
         <source>Showing &lt;strong&gt;{0} structured logs&lt;/strong&gt;</source>
-        <target state="translated">Affichage &lt;strong&gt;{0} de journaux structurés&lt;/strong&gt;</target>
+        <target state="translated">Affichage de &lt;strong&gt;{0} journaux structurés&lt;/strong&gt;</target>
         <note>{0} is a number. This is raw markup, so &lt;strong&gt; and &lt;/strong&gt; should not be modified</note>
       </trans-unit>
       <trans-unit id="TotalItemsFooterSingularText">
         <source>Showing &lt;strong&gt;{0} structured log&lt;/strong&gt;</source>
-        <target state="translated">Affichage &lt;strong&gt;{0} de journal structuré&lt;/strong&gt;</target>
+        <target state="translated">Affichage de &lt;strong&gt;{0} journal structuré&lt;/strong&gt;</target>
         <note>{0} is a number. This is raw markup, so &lt;strong&gt; and &lt;/strong&gt; should not be modified</note>
       </trans-unit>
       <trans-unit id="VirtualizedLimitText">
         <source>Showing &lt;strong&gt;{0} of {1} logs&lt;/strong&gt;. Use filters to narrow the results</source>
-        <target state="translated">Affichage de &lt;strong&gt;{0} journaux sur {1}&lt;/strong&gt;. Utiliser des filtres pour affiner les résultats</target>
+        <target state="translated">Affichage de &lt;strong&gt;{0} journaux sur {1}&lt;/strong&gt;. Utilisez des filtres pour affiner les résultats</target>
         <note>{0} is the displayed count. {1} is the total count. This is raw markup, so &lt;strong&gt; and &lt;/strong&gt; should not be modified.</note>
       </trans-unit>
     </body>
