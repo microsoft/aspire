@@ -1,0 +1,87 @@
+﻿{
+  "spec": {
+    "mode": "persistent",
+    "lifecycleKey": "process-key",
+    "process": {
+      "executablePath": "/usr/bin/server",
+      "args": [
+        "--port",
+        "{{ portForServing \u0022http\u0022 }}"
+      ],
+      "workingDirectory": "/src",
+      "ambientEnvironment": {
+        "behavior": "DoNotInherit"
+      },
+      "env": [
+        {
+          "name": "EMPTY",
+          "value": ""
+        }
+      ]
+    },
+    "ports": [
+      {
+        "address": "localhost",
+        "port": 0,
+        "name": "http",
+        "serviceRef": "app/service"
+      },
+      {
+        "port": 8083,
+        "name": "admin",
+        "service": {
+          "name": "admin",
+          "protocol": "TCP",
+          "address": "localhost",
+          "port": 8082,
+          "addressAllocationMode": "Localhost"
+        }
+      }
+    ],
+    "monitorPID": 4294967294,
+    "monitorTimestamp": "2026-11-09T12:00:00.123456Z",
+    "stop": true
+  },
+  "status": {
+    "ports": [
+      {
+        "name": "http",
+        "serviceRef": "app/service",
+        "address": "localhost",
+        "port": 8081
+      }
+    ],
+    "runtimeLogs": {
+      "name": "process",
+      "uid": "process-uid",
+      "stdoutFile": "/logs/process.out",
+      "stderrFile": "/logs/process.err",
+      "raw": true,
+      "available": true,
+      "complete": true
+    },
+    "phase": "Exited",
+    "physicalProcessRef": "app/process-physical",
+    "lifecycleKey": "process-key",
+    "pid": 4294967295,
+    "identityTimestamp": "2026-11-09T12:00:00.000000Z",
+    "finishedAt": "2026-11-09T12:00:02.000000Z",
+    "exitCode": 0,
+    "conditions": [
+      {
+        "lastTransitionTime": "2026-11-09T12:00:02Z",
+        "message": "Exited",
+        "observedGeneration": 1,
+        "reason": "ProcessExited",
+        "status": "False",
+        "type": "Ready"
+      }
+    ]
+  },
+  "metadata": {
+    "name": "resource",
+    "namespace": "app"
+  },
+  "apiVersion": "usvc-dev.developer.microsoft.com/v2",
+  "kind": "LogicalProcess"
+}

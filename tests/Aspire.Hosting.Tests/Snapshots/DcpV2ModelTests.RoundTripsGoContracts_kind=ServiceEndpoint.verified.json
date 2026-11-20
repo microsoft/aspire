@@ -1,0 +1,21 @@
+﻿{
+  "spec": {
+    "serviceRef": "app/service",
+    "addresses": [
+      {
+        "address": "127.0.0.1",
+        "port": 8081
+      },
+      {
+        "address": "::1",
+        "port": 8081
+      }
+    ]
+  },
+  "metadata": {
+    "name": "resource",
+    "namespace": "app"
+  },
+  "apiVersion": "usvc-dev.developer.microsoft.com/v2",
+  "kind": "ServiceEndpoint"
+}
