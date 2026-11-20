@@ -9,6 +9,11 @@ if (-not (Test-Path -LiteralPath $DashboardPath -PathType Leaf)) {
     throw "Native AOT Dashboard executable was not found at '$DashboardPath'."
 }
 
+$packagedBrPath = Join-Path (Split-Path -Parent $DashboardPath) 'wwwroot/_framework/blazor.web.js.br'
+if (-not (Test-Path -LiteralPath $packagedBrPath -PathType Leaf)) {
+    throw "Native AOT Dashboard packaged Brotli asset was not found at '$packagedBrPath'."
+}
+
 $dashboardUrl = $null
 $testDirectory = Join-Path ([System.IO.Path]::GetTempPath()) "aspire-dashboard-smoke-$([guid]::NewGuid().ToString('N'))"
 $null = New-Item -ItemType Directory -Path $testDirectory
@@ -95,7 +100,6 @@ try {
             }
 
             $actualBytes = $response.Content.ReadAsByteArrayAsync().GetAwaiter().GetResult()
-            $packagedBrPath = Join-Path (Split-Path -Parent $DashboardPath) 'wwwroot/_framework/blazor.web.js.br'
             $expectedBytes = [System.IO.File]::ReadAllBytes($packagedBrPath)
             if (-not [System.Linq.Enumerable]::SequenceEqual($expectedBytes, $actualBytes)) {
                 throw "Precompressed Brotli response for '$fingerprintedPath' did not match '$packagedBrPath'."
