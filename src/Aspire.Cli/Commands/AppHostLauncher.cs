@@ -244,7 +244,7 @@ internal sealed class AppHostLauncher(
         {
             launchResult = await interactionService.ShowDynamicStatusAsync(
                 RunCommandStrings.StartingAppHostInBackground,
-                updateStatus => LaunchAndWaitForBackchannelAsync(executablePath, childArgs, effectiveAppHostFile.FullName, appHostSelectionOrigin, TimeSpan.FromSeconds(timeoutSeconds), updateStatus, cancellationToken));
+                updateStatus => LaunchAndWaitForBackchannelAsync(executablePath, childArgs, childLogFile, effectiveAppHostFile.FullName, appHostSelectionOrigin, TimeSpan.FromSeconds(timeoutSeconds), updateStatus, cancellationToken));
         }
         catch (OperationCanceledException)
         {
@@ -403,6 +403,7 @@ internal sealed class AppHostLauncher(
     /// still relies on them for IDE execution and dashboard integration.
     /// </summary>
     internal const string ExtensionEnvironmentVariablePrefix = "ASPIRE_EXTENSION_";
+    internal const string ManagedLogFileEnvironmentVariable = "ASPIRE_CLI_MANAGED_LOG_FILE";
 
     /// <summary>
     /// Returns <see langword="true"/> if the specified environment variable name
@@ -448,6 +449,7 @@ internal sealed class AppHostLauncher(
     private async Task<LaunchResult> LaunchAndWaitForBackchannelAsync(
         string executablePath,
         List<string> childArgs,
+        string childLogFile,
         string appHostPath,
         string? appHostSelectionOrigin,
         TimeSpan timeout,
@@ -466,10 +468,12 @@ internal sealed class AppHostLauncher(
                     IsolateConsole = true,
                     EnvironmentVariableFilter = IsExtensionEnvironmentVariable
                 };
+                var childEnvironment = CreateDetachedChildEnvironment(Activity.Current, appHostSelectionOrigin);
+                childEnvironment[ManagedLogFileEnvironmentVariable] = childLogFile;
                 childProcess = processExecutionFactory.CreateExecution(
                     executablePath,
                     childArgs.ToArray(),
-                    CreateDetachedChildEnvironment(Activity.Current, appHostSelectionOrigin),
+                    childEnvironment,
                     executionContext.WorkingDirectory,
                     options);
 
@@ -1030,7 +1034,7 @@ internal sealed class AppHostLauncher(
     {
         var timestamp = timeProvider.GetUtcNow().ToString("yyyyMMddTHHmmssfff", CultureInfo.InvariantCulture);
         var uniqueId = Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
-        var fileName = $"cli_{timestamp}_detach-child_{uniqueId}.log";
+        var fileName = $"cli_{timestamp}_detach-child_{uniqueId}_managed.log";
         return Path.Combine(logsDirectory, fileName);
     }
 

@@ -76,7 +76,8 @@ public class Program
     /// <param name="DebugMode">Whether --debug or -d was specified.</param>
     /// <param name="LogsDirectory">The directory where log files are stored.</param>
     /// <param name="LogFilePath">The full path to the current session's log file.</param>
-    internal record CliLoggingOptions(LogLevel? ConsoleLogLevel, bool DebugMode, string LogsDirectory, string LogFilePath);
+    /// <param name="IsManagedLogFile">Whether the CLI owns the file and may prune it later.</param>
+    internal record CliLoggingOptions(LogLevel? ConsoleLogLevel, bool DebugMode, string LogsDirectory, string LogFilePath, bool IsManagedLogFile);
 
     /// <summary>
     /// Holds the objects created during early CLI startup, before DI is available.
@@ -135,9 +136,10 @@ public class Program
         }
 
         var logsDirectory = Path.Combine(GetUsersAspirePath(processPath), "logs");
-        var logFilePath = ParseLogFileOption(args) ?? FileLoggerProvider.GenerateLogFilePath(logsDirectory, TimeProvider.System);
+        var explicitLogFilePath = ParseLogFileOption(args);
+        var logFilePath = explicitLogFilePath ?? FileLoggerProvider.GenerateLogFilePath(logsDirectory, TimeProvider.System);
 
-        return new CliLoggingOptions(logLevel, debugMode, logsDirectory, logFilePath);
+        return new CliLoggingOptions(logLevel, debugMode, logsDirectory, logFilePath, IsManagedLogFile: explicitLogFilePath is null);
     }
 
     /// <summary>
@@ -179,13 +181,15 @@ public class Program
     /// <see cref="ParseLoggingOptions"/>, which only recognizes the space-separated form, so inline forms
     /// such as <c>--log-level=Debug</c> also keep the log. Only explicitly passed options count, and their
     /// values are never read. Help and version actions clear parse errors and return success, so an invalid
-    /// value such as <c>--log-level bogus</c> or a bare <c>--log-file</c> can reach this check, where reading
-    /// the value would throw. Implicit results are skipped because System.CommandLine creates one for options
-    /// with a default value, such as <c>--debug</c>.
+    /// value such as <c>--log-level bogus</c>, a bare <c>--log-file</c>, or a repeated <c>--follow</c> can
+    /// reach this check, where reading the value would throw. A parse result with errors therefore keeps the
+    /// log before any command reads its options. Implicit results are skipped because System.CommandLine
+    /// creates one for options with a default value, such as <c>--debug</c>.
     /// </remarks>
     internal static bool ShouldDiscardLogOnSuccess(int exitCode, bool cancellationRequested, ParseResult parseResult)
         => exitCode == CliExitCodes.Success
             && !cancellationRequested
+            && parseResult.Errors.Count == 0
             && parseResult.GetResult(RootCommand.DebugOption) is not { Implicit: false }
             && parseResult.GetResult(RootCommand.DebugLevelOption) is not { Implicit: false }
             && parseResult.GetResult(RootCommand.s_logFileOption) is not { Implicit: false }
@@ -271,7 +275,7 @@ public class Program
             ((args[0] == "mcp" && args[1] == "start") || (args[0] == "agent" && args[1] == "mcp"));
 
         // Create file logger provider from pre-computed path info
-        var fileLoggerProvider = new FileLoggerProvider(loggingOptions.LogFilePath, loggingOptions.LogsDirectory, errorWriter);
+        var fileLoggerProvider = new FileLoggerProvider(loggingOptions.LogFilePath, loggingOptions.LogsDirectory, errorWriter, loggingOptions.IsManagedLogFile);
 
         var factory = LoggerFactory.Create(builder =>
         {
@@ -1212,6 +1216,15 @@ public class Program
             : null;
 
         var loggingOptions = ParseLoggingOptions(args);
+        // A detached child receives an explicit path from its parent, but that path is still
+        // CLI-managed. Consume the handoff so AppHost descendants do not inherit it.
+        var managedLogPath = Environment.GetEnvironmentVariable(AppHostLauncher.ManagedLogFileEnvironmentVariable);
+        Environment.SetEnvironmentVariable(AppHostLauncher.ManagedLogFileEnvironmentVariable, null);
+        if (managedLogPath is not null && string.Equals(managedLogPath, loggingOptions.LogFilePath,
+            OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
+        {
+            loggingOptions = loggingOptions with { IsManagedLogFile = true };
+        }
         var errorWriter = new StartupErrorWriter(loggingOptions.LogFilePath);
         var logBufferContext = new ConsoleLogBufferContext();
         var (loggerFactory, fileLoggerProvider) = CreateLoggerFactory(args, loggingOptions, errorWriter, logBufferContext);
@@ -1409,8 +1422,8 @@ public class Program
             if (profileCaptureOptions is null && ShouldDiscardLogOnSuccess(exitCode, cancellationManager.Token.IsCancellationRequested, parseResult))
             {
                 // The provider deletes the file when it is disposed after the shutdown below, and
-                // keeps it if anything logs a warning or error before then.
-                startupContext.FileLoggerProvider.DeleteOnDisposeIfNoWarnings();
+                // keeps it if anything logs a warning or error or cancellation is requested before then.
+                startupContext.FileLoggerProvider.DeleteOnDisposeIfNoWarnings(cancellationManager.Token);
             }
 
             return exitCode;

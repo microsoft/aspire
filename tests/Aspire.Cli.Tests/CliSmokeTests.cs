@@ -2,6 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Commands;
+using Aspire.Cli.Diagnostics;
+using Aspire.Cli.Tests.TestServices;
 using Aspire.Hosting;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.DotNet.RemoteExecutor;
@@ -196,6 +198,46 @@ public class CliSmokeTests(ITestOutputHelper outputHelper)
         outputHelper.WriteLine(result.Process.StandardOutput.ReadToEnd());
 
         Assert.Single(Directory.GetFiles(Path.Combine(home.FullName, "logs"), "cli_*.log"));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void DetachedLogHandoff_TracksOnlyTheHandedOffFile(bool matchingPath)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var home = workspace.CreateDirectory("aspire-home");
+        var logsDirectory = Path.Combine(home.FullName, "logs");
+        var childLogPath = AppHostLauncher.GenerateChildLogFilePath(logsDirectory, TimeProvider.System);
+        var options = new RemoteInvokeOptions();
+        options.StartInfo.RedirectStandardOutput = true;
+        options.StartInfo.WorkingDirectory = workspace.Path;
+        options.StartInfo.Environment[KnownConfigNames.AspireHome] = home.FullName;
+        options.StartInfo.Environment[AppHostLauncher.ManagedLogFileEnvironmentVariable] = matchingPath
+            ? childLogPath
+            : Path.Combine(logsDirectory, "another.log");
+        foreach (var name in options.StartInfo.Environment.Keys.Where(AppHostLauncher.IsExtensionEnvironmentVariable).ToList())
+        {
+            options.StartInfo.Environment.Remove(name);
+        }
+
+        using var result = RemoteExecutor.Invoke(async logPath =>
+        {
+            var exitCode = await Program.Main(["--version", "--log-file", logPath]).DefaultTimeout();
+            Assert.Equal(CliExitCodes.Success, exitCode);
+            Assert.Null(Environment.GetEnvironmentVariable(AppHostLauncher.ManagedLogFileEnvironmentVariable));
+        }, childLogPath, options: options);
+        outputHelper.WriteLine(result.Process.StandardOutput.ReadToEnd());
+        File.SetLastWriteTimeUtc(childLogPath, DateTime.UtcNow.AddDays(-1));
+
+        for (var index = 0; index < 99; index++)
+        {
+            var path = FileLoggerProvider.GenerateLogFilePath(logsDirectory, TimeProvider.System);
+            new FileLoggerProvider(path, logsDirectory: null, new TestStartupErrorWriter(), isManagedLog: true).Dispose();
+        }
+        new FileLoggerProvider(logsDirectory, TimeProvider.System, new TestStartupErrorWriter()).Dispose();
+
+        Assert.Equal(!matchingPath, File.Exists(childLogPath));
     }
 
 #if DEBUG

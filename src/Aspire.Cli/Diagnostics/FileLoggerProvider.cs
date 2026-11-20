@@ -25,9 +25,9 @@ internal sealed partial class FileLoggerProvider : ILoggerProvider
     // Includes the current process's file.
     private const int RetainedLogFileCount = 100;
 
-    // Pruning runs on the startup path. Directories that accumulated tens of thousands of logs
-    // before pruning existed drain over several runs instead of stalling one.
+    // Limit filesystem work on the startup path when many tracked logs have accumulated.
     private const int MaxPrunedLogFilesPerRun = 100;
+    private const string ManagedLogHeaderPrefix = "# Aspire CLI managed diagnostic log: ";
 
     private readonly string _logFilePath;
     private readonly StreamWriter? _writer;
@@ -35,7 +35,7 @@ internal sealed partial class FileLoggerProvider : ILoggerProvider
     private readonly Task? _writerTask;
     private bool _disposed;
     private volatile bool _hasWarnings;
-    private volatile bool _deleteOnDispose;
+    private CancellationToken? _deleteOnDisposeUnlessCanceled;
 
     private FileLoggerProvider(string logFilePath)
     {
@@ -61,8 +61,8 @@ internal sealed partial class FileLoggerProvider : ILoggerProvider
         var timestamp = timeProvider.GetUtcNow().ToString("yyyyMMdd'T'HHmmss", CultureInfo.InvariantCulture);
         var id = Guid.NewGuid().ToString("N")[..8];
         var name = suffix is null
-            ? $"cli_{timestamp}_{id}.log"
-            : $"cli_{timestamp}_{id}_{suffix}.log";
+            ? $"cli_{timestamp}_{id}_managed.log"
+            : $"cli_{timestamp}_{id}_{suffix}_managed.log";
         return Path.Combine(logsDirectory, name);
     }
 
@@ -73,7 +73,7 @@ internal sealed partial class FileLoggerProvider : ILoggerProvider
     /// <param name="timeProvider">The time provider for timestamp generation.</param>
     /// <param name="errorWriter">Error writer for startup error messages.</param>
     public FileLoggerProvider(string logsDirectory, TimeProvider timeProvider, IStartupErrorWriter errorWriter)
-        : this(GenerateLogFilePath(logsDirectory, timeProvider), logsDirectory, errorWriter)
+        : this(GenerateLogFilePath(logsDirectory, timeProvider), logsDirectory, errorWriter, isManagedLog: true)
     {
     }
 
@@ -83,7 +83,7 @@ internal sealed partial class FileLoggerProvider : ILoggerProvider
     /// <param name="logFilePath">The full path to the log file.</param>
     /// <param name="errorWriter">Error writer for startup error messages.</param>
     internal FileLoggerProvider(string logFilePath, IStartupErrorWriter errorWriter)
-        : this(logFilePath, logsDirectory: null, errorWriter)
+        : this(logFilePath, logsDirectory: null, errorWriter, isManagedLog: false)
     {
     }
 
@@ -91,7 +91,7 @@ internal sealed partial class FileLoggerProvider : ILoggerProvider
     /// Creates a file logger. When its parent is the dedicated logs directory, repairs the directory's
     /// permissions and prunes old log files.
     /// </summary>
-    internal FileLoggerProvider(string logFilePath, string? logsDirectory, IStartupErrorWriter errorWriter)
+    internal FileLoggerProvider(string logFilePath, string? logsDirectory, IStartupErrorWriter errorWriter, bool isManagedLog)
     {
         _logFilePath = logFilePath;
 
@@ -105,7 +105,7 @@ internal sealed partial class FileLoggerProvider : ILoggerProvider
                 if (logsDirectory is not null && Path.GetRelativePath(logsDirectory, directory) == ".")
                 {
                     DirectoryHelper.CreateWithOwnerOnlyPermissions(directory);
-                    PruneOldLogFiles(directory);
+                    PruneOldLogFiles(directory, reserveSlot: isManagedLog);
                 }
                 else if (OperatingSystem.IsWindows())
                 {
@@ -117,7 +117,21 @@ internal sealed partial class FileLoggerProvider : ILoggerProvider
                 }
             }
 
-            _writer = CreateWriter(logFilePath);
+            var writer = CreateWriter(logFilePath, isManagedLog);
+            try
+            {
+                if (isManagedLog)
+                {
+                    writer.WriteLine(ManagedLogHeaderPrefix + Path.GetFileName(logFilePath));
+                }
+            }
+            catch
+            {
+                writer.Dispose();
+                throw;
+            }
+
+            _writer = writer;
 
             _channel = CreateChannel();
             _writerTask = Task.Run(ProcessLogQueueAsync);
@@ -134,13 +148,14 @@ internal sealed partial class FileLoggerProvider : ILoggerProvider
     // commands like `aspire ps`, so the logs directory grows without bound unless old files are removed.
     // Pruning is best-effort: concurrent CLI processes may prune at the same time, and any file that
     // cannot be deleted is left for a later run.
-    private static void PruneOldLogFiles(string logsDirectory)
+    private static void PruneOldLogFiles(string logsDirectory, bool reserveSlot)
     {
         FileInfo[] logFiles;
         try
         {
-            logFiles = new DirectoryInfo(logsDirectory).GetFiles("cli_*.log")
+            logFiles = new DirectoryInfo(logsDirectory).GetFiles("cli_*_managed.log")
                 .Where(file => GeneratedLogFileNameRegex().IsMatch(file.Name))
+                .Where(IsManagedLogFile)
                 .ToArray();
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -148,44 +163,70 @@ internal sealed partial class FileLoggerProvider : ILoggerProvider
             return;
         }
 
-        // Leave room for the file this process is about to create.
-        var excessCount = logFiles.Length - (RetainedLogFileCount - 1);
+        // Only automatic logs need a slot in the tracked retention window.
+        var excessCount = Math.Min(logFiles.Length - (RetainedLogFileCount - (reserveSlot ? 1 : 0)), MaxPrunedLogFilesPerRun);
+        if (excessCount <= 0)
+        {
+            return;
+        }
 
         // Only deleted files count toward the per-run limit. Otherwise old logs that can't be deleted, such as
         // logs held open by long-running commands, could fill the limit on every run and keep newer inactive
         // logs from ever being pruned.
         var prunedCount = 0;
-        foreach (var file in logFiles.OrderBy(file => file.LastWriteTimeUtc).Take(excessCount))
+        foreach (var file in logFiles.OrderBy(file => file.LastWriteTimeUtc))
         {
-            // Opening a link with DeleteOnClose on Windows deletes the link target, which may live outside the logs directory.
+            // Do not follow links that may point outside the logs directory.
             if (file.Attributes.HasFlag(FileAttributes.ReparsePoint))
             {
                 continue;
             }
 
-            if (TryDeleteInactiveLogFile(file.FullName) && ++prunedCount == MaxPrunedLogFilesPerRun)
+            if (TryDeleteInactiveLogFile(file.FullName) && ++prunedCount == excessCount)
             {
                 break;
             }
         }
     }
 
-    // Only names the CLI generates are counted and pruned, so a custom --log-file name in the logs directory,
-    // such as cli_support.log, is left alone. Generated names start with "cli_" and a UTC timestamp:
-    //   cli_20260212T180000_1a2b3c4d.log                                          (GenerateLogFilePath)
-    //   cli_20260212T180000000_detach-child_0123456789abcdef0123456789abcdef.log  (AppHostLauncher.GenerateChildLogFilePath)
-    [GeneratedRegex(@"^cli_[0-9]{8}T[0-9]{6}(?:[0-9]{3})?_.+\.log$")]
+    // The marker is also checked in the file: a custom --log-file can use a generated-looking name.
+    // Legacy files have no marker and cannot safely be distinguished from user-owned files.
+    [GeneratedRegex(@"^cli_[0-9]{8}T[0-9]{6}(?:[0-9]{3})?_.+_managed\.log$")]
     private static partial Regex GeneratedLogFileNameRegex();
+
+    private static bool IsManagedLogFile(FileInfo file)
+    {
+        try
+        {
+            if (file.Attributes.HasFlag(FileAttributes.ReparsePoint))
+            {
+                return false;
+            }
+
+            using var stream = new FileStream(file.FullName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            return HasManagedLogHeader(stream, file.Name);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
 
     private static bool TryDeleteInactiveLogFile(string path)
     {
         try
         {
             // Long-running commands such as `aspire run` keep their log open with FileShare.Read.
-            // Requesting FileShare.None fails for those files, so an active log is not removed. On Unix
-            // .NET enforces this with an advisory flock, which is skipped when DOTNET_SYSTEM_IO_DISABLEFILELOCKING
-            // is set and on some network filesystems. File.Delete would unlink an active log on Unix regardless.
-            using var handle = File.OpenHandle(path, FileMode.Open, FileAccess.Write, FileShare.None, FileOptions.DeleteOnClose);
+            // On Unix .NET enforces exclusive access with an advisory flock, which may be unavailable.
+            // Windows must allow delete sharing so File.Delete can mark this open file for deletion.
+            var share = OperatingSystem.IsWindows() ? FileShare.Delete : FileShare.None;
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.ReadWrite, share);
+            if (!HasManagedLogHeader(stream, Path.GetFileName(path)))
+            {
+                return false;
+            }
+
+            File.Delete(path);
             return true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -194,11 +235,23 @@ internal sealed partial class FileLoggerProvider : ILoggerProvider
         }
     }
 
-    private static StreamWriter CreateWriter(string logFilePath)
+    // Managed files start with "# Aspire CLI managed diagnostic log: cli_<timestamp>_<id>_managed.log".
+    // Binding the marker to the filename keeps a renamed copy from becoming another managed log.
+    private static bool HasManagedLogHeader(Stream stream, string fileName)
+    {
+        using var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, bufferSize: 1024, leaveOpen: true);
+        var expectedHeader = ManagedLogHeaderPrefix + fileName;
+        Span<char> header = stackalloc char[expectedHeader.Length + 1];
+        return reader.ReadBlock(header) == header.Length
+            && header[..^1].SequenceEqual(expectedHeader)
+            && header[^1] is '\r' or '\n';
+    }
+
+    private static StreamWriter CreateWriter(string logFilePath, bool isManagedLog)
     {
         var options = new FileStreamOptions
         {
-            Mode = OperatingSystem.IsWindows() ? FileMode.Create : FileMode.OpenOrCreate,
+            Mode = isManagedLog ? FileMode.CreateNew : OperatingSystem.IsWindows() ? FileMode.Create : FileMode.OpenOrCreate,
             Access = FileAccess.Write,
             Share = FileShare.Read
         };
@@ -354,9 +407,9 @@ internal sealed partial class FileLoggerProvider : ILoggerProvider
 
         _writer?.Dispose();
 
-        // Deleting after the writer drains means late warnings, such as those logged during
-        // host shutdown, still keep the log.
-        if (_deleteOnDispose && !_hasWarnings && _writer is not null)
+        // Deciding after the writer drains means late warnings and cancellation, such as a Ctrl+C
+        // during host or telemetry shutdown, still keep the log.
+        if (_deleteOnDisposeUnlessCanceled is { IsCancellationRequested: false } && !_hasWarnings && _writer is not null)
         {
             try
             {
@@ -370,16 +423,18 @@ internal sealed partial class FileLoggerProvider : ILoggerProvider
     }
 
     /// <summary>
-    /// Deletes the log file on dispose unless a warning or error was logged.
+    /// Deletes the log file on dispose unless a warning or error was logged or cancellation was requested.
     /// </summary>
+    /// <param name="cancellationToken">The run's cancellation token. It is checked at dispose time, so
+    /// cancellation that arrives during shutdown keeps the log.</param>
     /// <remarks>
     /// Tools such as the VS Code extension run one-shot query commands like <c>aspire ps</c> repeatedly.
     /// Their logs are still written as the command runs, so a hang, crash, or kill leaves a log behind.
     /// Only a clean run's log is discarded.
     /// </remarks>
-    internal void DeleteOnDisposeIfNoWarnings()
+    internal void DeleteOnDisposeIfNoWarnings(CancellationToken cancellationToken)
     {
-        _deleteOnDispose = true;
+        _deleteOnDisposeUnlessCanceled = cancellationToken;
     }
 }
 

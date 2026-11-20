@@ -5,6 +5,7 @@ using Aspire.Cli.Commands;
 using Aspire.Cli.Diagnostics;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Tests.TestServices;
+using Microsoft.DotNet.RemoteExecutor;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Time.Testing;
 
@@ -22,7 +23,7 @@ public class FileLoggerProviderTests(ITestOutputHelper outputHelper)
         var path = FileLoggerProvider.GenerateLogFilePath(workspace.Path, TimeProvider.System);
         var errorWriter = new TestStartupErrorWriter();
 
-        new FileLoggerProvider(path, workspace.Path, errorWriter).Dispose();
+        new FileLoggerProvider(path, workspace.Path, errorWriter, isManagedLog: true).Dispose();
 
         Assert.Equal(oldPaths.Skip(6).Append(path).Order(), Directory.GetFiles(workspace.Path, "cli_*.log").Order());
         Assert.True(File.Exists(unrelatedPath));
@@ -37,7 +38,7 @@ public class FileLoggerProviderTests(ITestOutputHelper outputHelper)
         var path = FileLoggerProvider.GenerateLogFilePath(workspace.Path, TimeProvider.System);
         var errorWriter = new TestStartupErrorWriter();
 
-        new FileLoggerProvider(path, workspace.Path, errorWriter).Dispose();
+        new FileLoggerProvider(path, workspace.Path, errorWriter, isManagedLog: true).Dispose();
 
         Assert.Equal(oldPaths.Skip(100).Append(path).Order(), Directory.GetFiles(workspace.Path, "cli_*.log").Order());
         Assert.Empty(errorWriter.MarkupLines);
@@ -50,12 +51,12 @@ public class FileLoggerProviderTests(ITestOutputHelper outputHelper)
         var oldPaths = CreateOldLogFiles(workspace.Path, 100);
         var errorWriter = new TestStartupErrorWriter();
 
-        // Hold the oldest file open the same way an active CLI writer does, without changing its
-        // last write time, so it remains the only prune candidate.
+        // The oldest file is active, so the next inactive file must be pruned instead.
         using (new FileStream(oldPaths[0], FileMode.Open, FileAccess.Write, FileShare.Read))
-        using (new FileLoggerProvider(workspace.Path, TimeProvider.System, errorWriter))
+        using (var provider = new FileLoggerProvider(workspace.Path, TimeProvider.System, errorWriter))
         {
-            Assert.All(oldPaths, path => Assert.True(File.Exists(path)));
+            Assert.Equal(oldPaths.Take(1).Concat(oldPaths.Skip(2)).Append(provider.LogFilePath).Order(),
+                Directory.GetFiles(workspace.Path, "cli_*.log").Order());
         }
 
         Assert.Empty(errorWriter.MarkupLines);
@@ -69,8 +70,7 @@ public class FileLoggerProviderTests(ITestOutputHelper outputHelper)
         var path = FileLoggerProvider.GenerateLogFilePath(workspace.Path, TimeProvider.System);
         var errorWriter = new TestStartupErrorWriter();
 
-        // Hold the 100 oldest logs open the same way active CLI writers do. They fill a whole run's
-        // prune limit, so the inactive log behind them is only pruned if skipped files are not counted.
+        // Locked logs must not consume the deletion budget or prevent newer inactive logs from being pruned.
         var activeLogs = new List<FileStream>();
         try
         {
@@ -79,7 +79,7 @@ public class FileLoggerProviderTests(ITestOutputHelper outputHelper)
                 activeLogs.Add(new FileStream(activePath, FileMode.Open, FileAccess.Write, FileShare.Read));
             }
 
-            new FileLoggerProvider(path, workspace.Path, errorWriter).Dispose();
+            new FileLoggerProvider(path, workspace.Path, errorWriter, isManagedLog: true).Dispose();
         }
         finally
         {
@@ -89,7 +89,7 @@ public class FileLoggerProviderTests(ITestOutputHelper outputHelper)
             }
         }
 
-        Assert.Equal(oldPaths.Take(100).Concat(oldPaths.Skip(101)).Append(path).Order(), Directory.GetFiles(workspace.Path, "cli_*.log").Order());
+        Assert.Equal(oldPaths.Take(100).Append(path).Order(), Directory.GetFiles(workspace.Path, "cli_*.log").Order());
         Assert.Empty(errorWriter.MarkupLines);
     }
 
@@ -101,33 +101,147 @@ public class FileLoggerProviderTests(ITestOutputHelper outputHelper)
         var customPath = FileLoggerProvider.GenerateLogFilePath(workspace.CreateDirectory("custom").FullName, TimeProvider.System);
         var errorWriter = new TestStartupErrorWriter();
 
-        new FileLoggerProvider(customPath, workspace.Path, errorWriter).Dispose();
+        new FileLoggerProvider(customPath, workspace.Path, errorWriter, isManagedLog: false).Dispose();
 
         Assert.Equal(oldPaths.Order(), Directory.GetFiles(workspace.Path, "cli_*.log").Order());
         Assert.Empty(errorWriter.MarkupLines);
     }
 
     [Fact]
-    public void Constructor_PrunesOnlyGeneratedLogFileNames()
+    public void CustomLogFile_InLogsDirectory_DoesNotReserveTrackedLogSlot()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var oldPaths = CreateOldLogFiles(workspace.Path, 100);
+        var customPath = Path.Combine(workspace.Path, "custom.log");
+        var errorWriter = new TestStartupErrorWriter();
+
+        new FileLoggerProvider(customPath, workspace.Path, errorWriter, isManagedLog: false).Dispose();
+
+        Assert.Equal(oldPaths.Order(), Directory.GetFiles(workspace.Path, "cli_*.log").Order());
+        Assert.True(File.Exists(customPath));
+        Assert.Empty(errorWriter.MarkupLines);
+    }
+
+    [Fact]
+    public void Constructor_PrunesOnlyTrackedLogFiles()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var oldestTime = new DateTimeOffset(1999, 1, 1, 0, 0, 0, TimeSpan.Zero);
-        var customPath = Path.Combine(workspace.Path, "cli_support.log");
+        var customPath = FileLoggerProvider.GenerateLogFilePath(workspace.Path, new FakeTimeProvider(oldestTime));
         File.WriteAllText(customPath, "custom");
         File.SetLastWriteTimeUtc(customPath, oldestTime.UtcDateTime);
+        var legacyPath = Path.Combine(workspace.Path, "cli_19990101T000000_12345678.log");
+        File.WriteAllText(legacyPath, "legacy");
+        File.SetLastWriteTimeUtc(legacyPath, oldestTime.UtcDateTime);
         var detachChildTime = oldestTime.AddMinutes(1);
         var detachChildPath = AppHostLauncher.GenerateChildLogFilePath(workspace.Path, new FakeTimeProvider(detachChildTime));
-        File.WriteAllText(detachChildPath, "old");
+        new FileLoggerProvider(detachChildPath, logsDirectory: null, new TestStartupErrorWriter(), isManagedLog: true).Dispose();
         File.SetLastWriteTimeUtc(detachChildPath, detachChildTime.UtcDateTime);
+        var copiedPath = FileLoggerProvider.GenerateLogFilePath(workspace.Path, new FakeTimeProvider(oldestTime));
+        File.Copy(detachChildPath, copiedPath);
+        File.SetLastWriteTimeUtc(copiedPath, oldestTime.UtcDateTime);
         var oldPaths = CreateOldLogFiles(workspace.Path, 99);
         var path = FileLoggerProvider.GenerateLogFilePath(workspace.Path, TimeProvider.System);
         var errorWriter = new TestStartupErrorWriter();
 
-        new FileLoggerProvider(path, workspace.Path, errorWriter).Dispose();
+        new FileLoggerProvider(path, workspace.Path, errorWriter, isManagedLog: true).Dispose();
 
-        // The custom file is the oldest, but it is neither deleted nor counted, so only the
-        // detach-child log is pruned to make room for the new file.
-        Assert.Equal(oldPaths.Append(path).Append(customPath).Order(), Directory.GetFiles(workspace.Path, "cli_*.log").Order());
+        // A copied log has the original filename in its marker, so it is not tracked under its new name.
+        Assert.Equal(oldPaths.Append(path).Append(customPath).Append(legacyPath).Append(copiedPath).Order(), Directory.GetFiles(workspace.Path, "cli_*.log").Order());
+        Assert.Empty(errorWriter.MarkupLines);
+    }
+
+    [Fact]
+    public void Constructor_ManagedLogDoesNotOverwriteExistingFile()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var path = FileLoggerProvider.GenerateLogFilePath(workspace.Path, TimeProvider.System);
+        File.WriteAllText(path, "custom");
+        var errorWriter = new TestStartupErrorWriter();
+
+        new FileLoggerProvider(path, workspace.Path, errorWriter, isManagedLog: true).Dispose();
+
+        Assert.Equal("custom", File.ReadAllText(path));
+        Assert.StartsWith("Could not create log file at ", Assert.Single(errorWriter.MarkupLines));
+    }
+
+    [Fact]
+    public void Constructor_PreservesManagedLogReusedAsCustomFile()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var oldPaths = CreateOldLogFiles(workspace.Path, 100);
+        var customPath = oldPaths[0];
+        using (var customLog = new FileLoggerProvider(customPath, new TestStartupErrorWriter()))
+        {
+            customLog.WriteLog("custom");
+        }
+
+        var path = FileLoggerProvider.GenerateLogFilePath(workspace.Path, TimeProvider.System);
+        new FileLoggerProvider(path, workspace.Path, new TestStartupErrorWriter(), isManagedLog: true).Dispose();
+
+        Assert.Equal("custom" + Environment.NewLine, File.ReadAllText(customPath));
+        Assert.Equal(oldPaths.Append(path).Order(), Directory.GetFiles(workspace.Path, "cli_*.log").Order());
+    }
+
+    [Fact]
+    public void Constructor_DoesNotPruneLogFileHeldByAnotherProcess()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var oldPaths = CreateOldLogFiles(workspace.Path, 100);
+        var readyPath = Path.Combine(workspace.Path, "ready");
+        var releasePath = Path.Combine(workspace.Path, "release");
+
+        using var result = RemoteExecutor.Invoke(static (activePath, readyPath, releasePath) =>
+        {
+            using var activeLog = new FileStream(activePath, FileMode.Open, FileAccess.Write, FileShare.Read);
+            File.WriteAllText(readyPath, string.Empty);
+
+            if (!SpinWait.SpinUntil(() => File.Exists(releasePath), TimeSpan.FromSeconds(30)))
+            {
+                throw new TimeoutException("Timed out waiting for the parent process to release the log holder.");
+            }
+        }, oldPaths[0], readyPath, releasePath);
+
+        try
+        {
+            Assert.True(
+                SpinWait.SpinUntil(() => File.Exists(readyPath), TimeSpan.FromSeconds(30)),
+                "Timed out waiting for the child process to open the log.");
+
+            var path = FileLoggerProvider.GenerateLogFilePath(workspace.Path, TimeProvider.System);
+            var errorWriter = new TestStartupErrorWriter();
+            new FileLoggerProvider(path, workspace.Path, errorWriter, isManagedLog: true).Dispose();
+
+            Assert.Equal(oldPaths.Take(1).Concat(oldPaths.Skip(2)).Append(path).Order(),
+                Directory.GetFiles(workspace.Path, "cli_*.log").Order());
+            Assert.Empty(errorWriter.MarkupLines);
+        }
+        finally
+        {
+            File.WriteAllText(releasePath, string.Empty);
+        }
+    }
+
+    [Fact]
+    public void Constructor_DoesNotPruneOrFollowSymbolicLinks()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var logsDirectory = workspace.CreateDirectory("logs").FullName;
+        var oldestTime = new DateTimeOffset(1999, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        var linkPath = FileLoggerProvider.GenerateLogFilePath(logsDirectory, new FakeTimeProvider(oldestTime));
+        // The target carries a valid marker for the link's name, so only the reparse-point check protects it.
+        var targetPath = Path.Combine(workspace.Path, "outside.log");
+        File.WriteAllText(targetPath, $"# Aspire CLI managed diagnostic log: {Path.GetFileName(linkPath)}{Environment.NewLine}sentinel");
+        File.SetLastWriteTimeUtc(targetPath, oldestTime.UtcDateTime);
+        TestSymlinkHelper.TryCreateSymlink(linkPath, targetPath, isDirectory: false);
+        var oldPaths = CreateOldLogFiles(logsDirectory, 100);
+        var path = FileLoggerProvider.GenerateLogFilePath(logsDirectory, TimeProvider.System);
+        var errorWriter = new TestStartupErrorWriter();
+
+        new FileLoggerProvider(path, logsDirectory, errorWriter, isManagedLog: true).Dispose();
+
+        Assert.Equal(oldPaths.Skip(2).Append(linkPath).Append(path).Order(), Directory.GetFiles(logsDirectory, "cli_*.log").Order());
+        Assert.EndsWith("sentinel", File.ReadAllText(targetPath));
         Assert.Empty(errorWriter.MarkupLines);
     }
 
@@ -276,7 +390,7 @@ public class FileLoggerProviderTests(ITestOutputHelper outputHelper)
             UnixFileMode.GroupRead | UnixFileMode.GroupExecute | UnixFileMode.OtherRead | UnixFileMode.OtherExecute;
         File.SetUnixFileMode(parentDirectory, originalMode);
         var logPath = Path.Combine(parentDirectory, "test.log");
-        var options = new Program.CliLoggingOptions(null, false, logsDirectory, logPath);
+        var options = new Program.CliLoggingOptions(null, false, logsDirectory, logPath, IsManagedLogFile: false);
         var errorWriter = new TestStartupErrorWriter();
 
         var (loggerFactory, provider) = Program.CreateLoggerFactory([], options, errorWriter, new ConsoleLogBufferContext());
@@ -316,22 +430,29 @@ public class FileLoggerProviderTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData(false, null, true)]
-    [InlineData(true, null, false)]
-    [InlineData(true, LogLevel.Information, false)]
-    [InlineData(true, LogLevel.Warning, true)]
-    [InlineData(true, LogLevel.Error, true)]
-    public void Dispose_DeletesMarkedLogOnlyWhenNoWarningsWereLogged(bool deleteOnDispose, LogLevel? loggedLevel, bool expectedExists)
+    [InlineData(false, false, null, true)]
+    [InlineData(true, false, null, false)]
+    [InlineData(true, false, LogLevel.Information, false)]
+    [InlineData(true, false, LogLevel.Warning, true)]
+    [InlineData(true, false, LogLevel.Error, true)]
+    [InlineData(true, true, null, true)]
+    public void Dispose_DeletesMarkedLogOnlyWhenNoWarningsWereLoggedOrCancellationRequested(bool deleteOnDispose, bool cancelAfterMarking, LogLevel? loggedLevel, bool expectedExists)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var logFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, "test.log");
         var errorWriter = new TestStartupErrorWriter();
+        using var cts = new CancellationTokenSource();
 
         using (var provider = new FileLoggerProvider(logFilePath, errorWriter))
         {
             if (deleteOnDispose)
             {
-                provider.DeleteOnDisposeIfNoWarnings();
+                provider.DeleteOnDisposeIfNoWarnings(cts.Token);
+            }
+
+            if (cancelAfterMarking)
+            {
+                cts.Cancel();
             }
 
             if (loggedLevel is { } level)
@@ -351,7 +472,7 @@ public class FileLoggerProviderTests(ITestOutputHelper outputHelper)
         for (var index = 0; index < count; index++)
         {
             var path = FileLoggerProvider.GenerateLogFilePath(directory, timeProvider);
-            File.WriteAllText(path, "old");
+            new FileLoggerProvider(path, logsDirectory: null, new TestStartupErrorWriter(), isManagedLog: true).Dispose();
             File.SetLastWriteTimeUtc(path, timeProvider.GetUtcNow().UtcDateTime);
             paths.Add(path);
             timeProvider.Advance(TimeSpan.FromMinutes(1));

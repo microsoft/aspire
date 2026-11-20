@@ -185,7 +185,9 @@ public class ProgramTests(ITestOutputHelper outputHelper)
     [InlineData("--version --log-file")]
     [InlineData("ps --help --log-level bogus")]
     [InlineData("describe --help --log-level bogus")]
-    public void ShouldDiscardLogOnSuccess_KeepsLog_WhenDiagnosticOptionValueIsInvalid(string commandLine)
+    [InlineData("ps --help --follow=false --follow=true")]
+    [InlineData("describe --help --follow=false --follow=true")]
+    public void ShouldDiscardLogOnSuccess_KeepsLog_WhenOptionValueIsInvalid(string commandLine)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);

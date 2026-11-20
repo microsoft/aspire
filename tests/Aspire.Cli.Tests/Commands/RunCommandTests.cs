@@ -1582,10 +1582,13 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         }
 
         var childEnvironment = Assert.IsAssignableFrom<IDictionary<string, string>>(processFactory.LastEnvironmentVariables);
-        var childArguments = Assert.IsAssignableFrom<IEnumerable<string>>(processFactory.LastArguments);
+        var childArguments = Assert.IsAssignableFrom<IEnumerable<string>>(processFactory.LastArguments).ToArray();
         Assert.Contains("run", childArguments);
         Assert.DoesNotContain("--detach", childArguments);
         Assert.Equal("true", childEnvironment[KnownConfigNames.CliRunDetached]);
+        var logFileIndex = Array.IndexOf(childArguments, "--log-file");
+        Assert.True(logFileIndex >= 0);
+        Assert.Equal(childArguments[logFileIndex + 1], childEnvironment[AppHostLauncher.ManagedLogFileEnvironmentVariable]);
 
         var cliPrefetchStarted = false;
         var testNotifier = new TestCliUpdateNotifier
