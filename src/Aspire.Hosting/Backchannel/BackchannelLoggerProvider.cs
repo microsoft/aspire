@@ -103,6 +103,7 @@ internal class BackchannelLogger(string categoryName, BackchannelLoggerProvider 
                 CategoryName = categoryName,
                 LogLevel = logLevel,
                 EventId = eventId,
+                EventName = eventId.Name,
                 Message = formatter(state, exception),
                 Exception = exception?.ToString(),
             };

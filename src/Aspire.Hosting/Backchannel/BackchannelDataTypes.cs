@@ -953,11 +953,26 @@ internal static class CompletionStates
     public const string CompletedWithError = "CompletedWithError";
 }
 
+/// <summary>
+/// Names of AppHost log events that the CLI displays to the user, in addition to writing them to its log file.
+/// </summary>
+internal static class BackchannelLogEventNames
+{
+    public const string DashboardStoppedUnexpectedly = "DashboardStoppedUnexpectedly";
+}
+
 internal class BackchannelLogEntry
 {
     public long SequenceNumber { get; set; }
     public Guid GenerationId { get; set; }
     public required EventId EventId { get; set; }
+
+    /// <summary>
+    /// Gets or sets the name of the log event. <see cref="EventId"/> does not round-trip through the
+    /// CLI's JSON serializer, so the name is also sent as a plain string.
+    /// </summary>
+    public string? EventName { get; set; }
+
     public required LogLevel LogLevel { get; set; }
     public required string Message { get; set; }
 
