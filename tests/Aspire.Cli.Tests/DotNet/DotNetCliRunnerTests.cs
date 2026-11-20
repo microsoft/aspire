@@ -2794,6 +2794,12 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
                         "IsAspireHost": "true"
                       },
                       "Items": {
+                        "PackageReference": [
+                          {
+                            "Identity": "Aspire.Hosting.AppHost",
+                            "Version": null
+                          }
+                        ],
                         "PackageVersion": [
                           {
                             "Identity": "Aspire.Hosting.AppHost",

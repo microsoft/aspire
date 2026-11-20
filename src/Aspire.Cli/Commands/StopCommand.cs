@@ -12,7 +12,6 @@ using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Logging;
-using Semver;
 
 namespace Aspire.Cli.Commands;
 
@@ -514,7 +513,7 @@ internal sealed partial class StopCommand : BaseCommand
     private static bool SupportsCleanup(string? aspireHostingVersion, int minimumMajorVersion, int minimumMinorVersion)
     {
         if (string.IsNullOrWhiteSpace(aspireHostingVersion) ||
-            !SemVersion.TryParse(aspireHostingVersion, SemVersionStyles.Any, out var version))
+            !AppHostHelper.TryParseAspireHostingVersion(aspireHostingVersion, out var version))
         {
             return false;
         }

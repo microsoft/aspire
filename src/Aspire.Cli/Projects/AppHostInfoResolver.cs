@@ -16,13 +16,16 @@ internal interface IAppHostInfoResolver
 
 internal sealed class AppHostInfoResolver(IDotNetCliRunner runner, IAppHostInfoDiskCache diskCache) : IAppHostInfoResolver
 {
-    private readonly ConcurrentDictionary<(string Path, DateTime LastWriteUtc), Task<AppHostProjectInfo>> _cache = new();
+    private readonly ConcurrentDictionary<(string Path, DateTime LastWriteUtc, string Fingerprint), Task<AppHostProjectInfo>> _cache = new();
 
     public async Task<AppHostProjectInfo> GetAppHostInfoAsync(FileInfo projectFile, CancellationToken cancellationToken)
     {
         // Refresh so FileInfo reflects the on-disk mtime even when callers pass a long-lived instance.
         projectFile.Refresh();
-        var key = (projectFile.FullName, projectFile.LastWriteTimeUtc);
+        // The project path and mtime keep entries isolated per project even when the disk cache is
+        // disabled and returns an empty fingerprint. The fingerprint adds the restore and
+        // Directory.* inputs that can change package versions without touching the project file.
+        var key = (projectFile.FullName, projectFile.LastWriteTimeUtc, diskCache.GetCacheKey(projectFile));
         var task = GetOrAddSharedFetch(key, projectFile);
 
         try
@@ -51,7 +54,7 @@ internal sealed class AppHostInfoResolver(IDotNetCliRunner runner, IAppHostInfoD
         }
     }
 
-    private Task<AppHostProjectInfo> GetOrAddSharedFetch((string Path, DateTime LastWriteUtc) key, FileInfo projectFile)
+    private Task<AppHostProjectInfo> GetOrAddSharedFetch((string Path, DateTime LastWriteUtc, string Fingerprint) key, FileInfo projectFile)
     {
         while (true)
         {
@@ -72,7 +75,7 @@ internal sealed class AppHostInfoResolver(IDotNetCliRunner runner, IAppHostInfoD
         }
     }
 
-    private async Task CompleteSharedFetchAsync((string Path, DateTime LastWriteUtc) key, FileInfo projectFile, TaskCompletionSource<AppHostProjectInfo> completion)
+    private async Task CompleteSharedFetchAsync((string Path, DateTime LastWriteUtc, string Fingerprint) key, FileInfo projectFile, TaskCompletionSource<AppHostProjectInfo> completion)
     {
         try
         {
@@ -213,44 +216,68 @@ internal sealed class AppHostInfoResolver(IDotNetCliRunner runner, IAppHostInfoD
             return new AppHostProjectInfo(ExitCode: exitCode, IsAspireHost: false, AspireHostingVersion: null, IsUsingCliBundle: isUsingCliBundle, UserSecretsId: userSecretsId, RunCommand: runCommand, TargetPath: targetPath, RunWorkingDirectory: runWorkingDirectory, RunArguments: runArguments, TargetFramework: targetFramework, TargetFrameworks: targetFrameworks);
         }
 
-        // Try to get Aspire.Hosting version from PackageReference items first, then fall back
-        // to AspireProjectOrPackageReference (for SDK-provided refs) and PackageVersion (CPM),
-        // then finally to the SDK version. Mirrors DotNetCliRunner.GetAppHostInformationAsync.
+        // Report the declared reference, which may be a NuGet floating range such as "13.*".
+        // Restore output is intentionally not consulted here: project.assets.json can describe
+        // stale inputs or a different target framework than the one that will run. Callers that
+        // need the concrete version read it from the AppHost build output instead.
         string? aspireHostingVersion = null;
-
         if (items is not null)
         {
-            aspireHostingVersion = GetPackageVersionFromItems(items.PackageReference, "Aspire.Hosting")
-                ?? GetPackageVersionFromItems(items.PackageReference, "Aspire.Hosting.AppHost");
-
-            aspireHostingVersion ??= GetPackageVersionFromItems(items.AspireProjectOrPackageReference, "Aspire.Hosting")
-                ?? GetPackageVersionFromItems(items.AspireProjectOrPackageReference, "Aspire.Hosting.AppHost");
-
-            aspireHostingVersion ??= GetPackageVersionFromItems(items.PackageVersion, "Aspire.Hosting")
-                ?? GetPackageVersionFromItems(items.PackageVersion, "Aspire.Hosting.AppHost");
+            // Preserve the effective-reference order used by NuGet: a direct Hosting reference
+            // wins over the AppHost metapackage, and Central Package Management contributes only
+            // to references that are actually present. Orphan PackageVersion entries must not
+            // override a different project reference or the SDK default.
+            // https://learn.microsoft.com/nuget/consume-packages/central-package-management#overriding-package-versions
+            aspireHostingVersion = GetEffectivePackageVersion(items.PackageReference, items.PackageVersion, "Aspire.Hosting")
+                ?? GetEffectivePackageVersion(items.PackageReference, items.PackageVersion, "Aspire.Hosting.AppHost")
+                ?? GetEffectivePackageVersion(items.AspireProjectOrPackageReference, items.PackageVersion, "Aspire.Hosting")
+                ?? GetEffectivePackageVersion(items.AspireProjectOrPackageReference, items.PackageVersion, "Aspire.Hosting.AppHost");
         }
 
-        aspireHostingVersion ??= properties.AspireHostingSDKVersion;
+        aspireHostingVersion ??= string.IsNullOrWhiteSpace(properties.AspireHostingSDKVersion)
+            ? null
+            : properties.AspireHostingSDKVersion;
 
         return new AppHostProjectInfo(ExitCode: exitCode, IsAspireHost: true, AspireHostingVersion: aspireHostingVersion, IsUsingCliBundle: isUsingCliBundle, UserSecretsId: userSecretsId, RunCommand: runCommand, TargetPath: targetPath, RunWorkingDirectory: runWorkingDirectory, RunArguments: runArguments, TargetFramework: targetFramework, TargetFrameworks: targetFrameworks);
     }
 
-    private static string? GetPackageVersionFromItems(IReadOnlyList<AppHostProjectInspectionItem>? items, string packageId)
+    private static string? GetEffectivePackageVersion(
+        IReadOnlyList<AppHostProjectInspectionItem>? references,
+        IReadOnlyList<AppHostProjectInspectionItem>? centralVersions,
+        string packageId)
     {
-        if (items is null)
+        if (references is null)
         {
             return null;
         }
 
-        foreach (var item in items)
+        foreach (var reference in references)
         {
-            if (string.Equals(item.Identity, packageId, StringComparison.OrdinalIgnoreCase))
+            if (!string.Equals(reference.Identity, packageId, StringComparison.OrdinalIgnoreCase))
             {
-                return item.Version;
+                continue;
             }
+
+            // A PackageReference VersionOverride takes precedence over the central PackageVersion
+            // (and over any Version metadata) when Central Package Management is enabled.
+            if (!string.IsNullOrWhiteSpace(reference.VersionOverride))
+            {
+                return reference.VersionOverride;
+            }
+
+            return !string.IsNullOrWhiteSpace(reference.Version)
+                ? reference.Version
+                : GetPackageVersionFromItems(centralVersions, packageId);
         }
 
         return null;
+    }
+
+    private static string? GetPackageVersionFromItems(IReadOnlyList<AppHostProjectInspectionItem>? items, string packageId)
+    {
+        return items?.FirstOrDefault(item =>
+            string.Equals(item.Identity, packageId, StringComparison.OrdinalIgnoreCase) &&
+            !string.IsNullOrWhiteSpace(item.Version))?.Version;
     }
 }
 
@@ -328,4 +355,7 @@ internal sealed record AppHostProjectInspectionItem
 
     [JsonPropertyName("Version")]
     public string? Version { get; init; }
+
+    [JsonPropertyName("VersionOverride")]
+    public string? VersionOverride { get; init; }
 }

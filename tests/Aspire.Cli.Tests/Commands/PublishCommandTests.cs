@@ -68,6 +68,7 @@ public class PublishCommandTests(ITestOutputHelper outputHelper)
             options.DotNetCliRunnerFactory = (sp) =>
             {
                 var runner = new TestDotNetCliRunner();
+                runner.BuildAsyncCallback = (projectFile, noRestore, options, cancellationToken) => 0;
                 runner.GetAppHostInformationAsyncCallback = (projectFile, options, cancellationToken) =>
                 {
                     return (0, false, "9.0.0"); // Simulate an incompatible app host
@@ -161,8 +162,10 @@ public class PublishCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.FailedToBuildArtifacts, exitCode); // Ensure the command fails
     }
 
-    [Fact]
-    public async Task PublishCommandSucceedsEndToEnd()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task PublishCommandSucceedsEndToEnd(bool useWildcardVersion)
     {
         // Arrange
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -180,7 +183,7 @@ public class PublishCommandTests(ITestOutputHelper outputHelper)
                 // Simulate a successful app host information retrieval
                 runner.GetAppHostInformationAsyncCallback = (projectFile, options, cancellationToken) =>
                 {
-                    return (0, true, VersionHelper.GetDefaultTemplateVersion()); // Compatible app host with backchannel support
+                    return (0, true, useWildcardVersion ? "17.*" : VersionHelper.GetDefaultTemplateVersion()); // Compatible app host with backchannel support
                 };
 
                 // Simulate apphost running successfully and establishing a backchannel

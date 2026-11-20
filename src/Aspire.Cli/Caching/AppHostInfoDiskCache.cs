@@ -77,8 +77,8 @@ namespace Aspire.Cli.Caching;
 /// </remarks>
 internal sealed class AppHostInfoDiskCache : IAppHostInfoDiskCache
 {
-    // Bump this after shipping if the cached property set changes so old entries are ignored.
-    private const string SchemaVersion = "v1";
+    // Bump this after shipping if the cached property set or its resolution semantics change so old entries are ignored.
+    private const string SchemaVersion = "v2";
 
     // Keep AppHost inspection entries isolated from other Aspire caches so `aspire cache clear`
     // can delete the whole subtree without needing to understand the file naming scheme.
@@ -292,7 +292,7 @@ internal sealed class AppHostInfoDiskCache : IAppHostInfoDiskCache
     internal static string ComputeKeyAsync(FileInfo projectFile, IEnvironment environment, in DotNetAppHostProject.AppHostImportDependencies importDependencies)
     {
         // Raw fingerprint shape:
-        //   v1|/repo/app/AppHost.csproj|csproj=638831006400000000|assets=638831006410000000|...
+        //   v2|/repo/app/AppHost.csproj|csproj=638831006400000000|assets=638831006410000000|...
         // Each file input is represented by a stable tag and its UTC last-write timestamp ticks,
         // or '-' when the file is absent/inaccessible. The raw fingerprint intentionally includes full
         // paths so two projects with identical mtimes cannot collide, but that makes it too long
@@ -414,7 +414,7 @@ internal interface IAppHostInfoDiskCache
 internal sealed record AppHostInfoCacheEntry
 {
     [JsonPropertyName("schemaVersion")]
-    public string SchemaVersion { get; init; } = "v1";
+    public string SchemaVersion { get; init; } = "v2";
 
     [JsonPropertyName("exitCode")]
     public int ExitCode { get; init; }
