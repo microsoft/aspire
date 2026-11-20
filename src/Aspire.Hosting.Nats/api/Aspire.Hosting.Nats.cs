@@ -49,6 +49,8 @@ namespace Aspire.Hosting.ApplicationModel
 
         public EndpointReference PrimaryEndpoint { get { throw null; } }
 
+        public override string ResourceTypeDisplayName { get { throw null; } }
+
         public ReferenceExpression UriExpression { get { throw null; } }
 
         public ParameterResource? UserNameParameter { get { throw null; } set { } }
