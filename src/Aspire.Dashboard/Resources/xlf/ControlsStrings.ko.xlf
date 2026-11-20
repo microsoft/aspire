@@ -177,6 +177,11 @@
         <target state="new">Delete value</target>
         <note />
       </trans-unit>
+      <trans-unit id="PauseWarningText">
+        <source>{0} capture paused</source>
+        <target state="new">{0} capture paused</target>
+        <note>{0} is the type of captured data.</note>
+      </trans-unit>
       <trans-unit id="ResourcesContainerGraphAccessibleLabel">
         <source>Graph. For an accessible view please navigate to the Resources tab</source>
         <target state="translated">그래프. 액세스 가능한 보기를 보려면 리소스 탭으로 이동하세요.</target>
@@ -425,11 +430,6 @@
       <trans-unit id="PauseButtonTitle">
         <source>Pause incoming data</source>
         <target state="translated">들어오는 데이터 일시 중지</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="PauseWarningTitle">
-        <source>Capture paused</source>
-        <target state="translated">캡처 일시 중지됨</target>
         <note />
       </trans-unit>
       <trans-unit id="PlotlyChartCount">

@@ -177,6 +177,11 @@
         <target state="new">Delete value</target>
         <note />
       </trans-unit>
+      <trans-unit id="PauseWarningText">
+        <source>{0} capture paused</source>
+        <target state="new">{0} capture paused</target>
+        <note>{0} is the type of captured data.</note>
+      </trans-unit>
       <trans-unit id="ResourcesContainerGraphAccessibleLabel">
         <source>Graph. For an accessible view please navigate to the Resources tab</source>
         <target state="translated">圖表。如需可存取的檢視，請瀏覽至 [資源] 索引標籤</target>
@@ -425,11 +430,6 @@
       <trans-unit id="PauseButtonTitle">
         <source>Pause incoming data</source>
         <target state="translated">暫停傳入資料</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="PauseWarningTitle">
-        <source>Capture paused</source>
-        <target state="translated">擷取已暫停</target>
         <note />
       </trans-unit>
       <trans-unit id="PlotlyChartCount">
