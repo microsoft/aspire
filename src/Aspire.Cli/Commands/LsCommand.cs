@@ -68,6 +68,9 @@ internal sealed class LsCommand : BaseCommand
         });
     }
 
+    // --stream only streams discovery results and then exits, so every mode is a one-shot query.
+    internal override bool DiscardsLogOnSuccess(ParseResult parseResult) => true;
+
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         using var activity = Telemetry.StartDiagnosticActivity(Name);

@@ -133,6 +133,8 @@ internal sealed partial class PsCommand : BaseCommand
     protected override bool IsJsonFormatRequested(ParseResult parseResult)
         => parseResult.GetValue(s_outputOption) == PsOutput.Snapshot || base.IsJsonFormatRequested(parseResult);
 
+    internal override bool DiscardsLogOnSuccess(ParseResult parseResult) => !parseResult.GetValue(s_followOption);
+
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         using var activity = Telemetry.StartDiagnosticActivity(Name);
