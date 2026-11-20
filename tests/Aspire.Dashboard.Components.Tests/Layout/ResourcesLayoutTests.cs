@@ -1153,6 +1153,9 @@ public class ResourcesLayoutTests : DashboardTestContext
         Assert.Equal(["Alpha", "Untagged"], tags.GetTags("api"));
         Assert.Equal(["Beta"], tags.GetTags("cache"));
 
+        Assert.False(await cut.InvokeAsync(() => cut.Instance.ReorderGroupAsync(grouping, movedKey, targetKey, after: false)));
+        Assert.Equal(expectedKeys, GetKeys());
+
         GetGroup(movedKey).QuerySelector(".resource-row-toggle")!.Click();
         Assert.True(await cut.InvokeAsync(() => cut.Instance.ReorderGroupAsync(grouping, movedKey, targetKey, after: true)));
         Assert.Empty(GetGroup(movedKey).QuerySelectorAll(".resource-row"));
@@ -1486,6 +1489,8 @@ public class ResourcesLayoutTests : DashboardTestContext
 
         Assert.True(await cut.InvokeAsync(() => cut.Instance.ReorderResourceAsync("b", "a", after: false)));
         Assert.Equal(["root", "b", "a", "worker"], GetNames());
+        Assert.False(await cut.InvokeAsync(() => cut.Instance.ReorderResourceAsync("a", "b", after: true)));
+        Assert.Empty(toasts.FindComponents<FluentToast>());
         Assert.False(await cut.InvokeAsync(() => cut.Instance.ReorderResourceAsync("a", "worker", after: true)));
         Assert.Equal(Resources.Layout.ResourcePaneReorderUnavailable, Assert.Single(toasts.FindComponents<FluentToast>()).Instance.Title);
         Assert.Equal(["root", "b", "a", "worker"], GetNames());

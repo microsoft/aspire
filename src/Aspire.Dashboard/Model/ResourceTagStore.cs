@@ -32,10 +32,10 @@ public sealed class ResourceTagStore
     private readonly LocalStorageSetting<Dictionary<string, List<string>>> _setting;
     private readonly ILogger<ResourceTagStore> _logger;
 
-    public ResourceTagStore(ILocalStorage localStorage, LocalStorageLocks locks, TimeProvider timeProvider, IOptions<DashboardOptions> options, ILogger<ResourceTagStore> logger)
+    public ResourceTagStore(ILocalStorage localStorage, LocalStorageLocks locks, IOptions<DashboardOptions> options, ILogger<ResourceTagStore> logger)
     {
         _logger = logger;
-        _setting = new(localStorage, locks, timeProvider, BrowserStorageKeys.ResourceTagsKey(options.Value.GetApplicationNameOrDefault()), logger, protect: true,
+        _setting = new(localStorage, locks, BrowserStorageKeys.ResourceTagsKey(options.Value.GetApplicationNameOrDefault()), logger, protect: true,
             NormalizeTags, TagsEqual, () => Changed?.Invoke());
     }
 

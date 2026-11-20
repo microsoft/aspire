@@ -19,12 +19,12 @@ public sealed class ResourceOrderStore
     private readonly LocalStorageSetting<List<RelativeOrderMove>> _resourceOrder;
     private readonly LocalStorageSetting<Dictionary<string, List<RelativeOrderMove>>> _groupOrder;
 
-    public ResourceOrderStore(ILocalStorage localStorage, LocalStorageLocks locks, TimeProvider timeProvider, IOptions<DashboardOptions> options, ILogger<ResourceOrderStore> logger)
+    public ResourceOrderStore(ILocalStorage localStorage, LocalStorageLocks locks, IOptions<DashboardOptions> options, ILogger<ResourceOrderStore> logger)
     {
         var applicationName = options.Value.GetApplicationNameOrDefault();
-        _resourceOrder = new(localStorage, locks, timeProvider, BrowserStorageKeys.ResourceOrderKey(applicationName), logger, protect: true,
+        _resourceOrder = new(localStorage, locks, BrowserStorageKeys.ResourceOrderKey(applicationName), logger, protect: true,
             NormalizeResourceOrder, (x, y) => x.SequenceEqual(y), () => Changed?.Invoke());
-        _groupOrder = new(localStorage, locks, timeProvider, BrowserStorageKeys.GroupOrderKey(applicationName), logger, protect: true,
+        _groupOrder = new(localStorage, locks, BrowserStorageKeys.GroupOrderKey(applicationName), logger, protect: true,
             NormalizeGroupOrder, (x, y) => x.Count == y.Count && x.All(pair => y.TryGetValue(pair.Key, out var moves) && pair.Value.SequenceEqual(moves)),
             () => Changed?.Invoke());
     }
@@ -58,14 +58,19 @@ public sealed class ResourceOrderStore
         return groups;
     }
 
-    public bool TryMoveResource(ResourceViewModel resource, ResourceViewModel anchor, bool after, IEnumerable<ResourceViewModel> resources)
+    internal ResourceOrderMoveResult MoveResource(ResourceViewModel resource, ResourceViewModel anchor, bool after, IEnumerable<ResourceViewModel> resources)
     {
         var ordered = OrderResources(resources);
         var names = GetResourceNames(ordered);
         var parent = GetVisibleParent(resource, names);
         var siblingKeys = ordered.Where(r => StringComparer.Ordinal.Equals(GetVisibleParent(r, names), parent)).Select(r => r.PersistentKey);
-        var move = CreateMove(resource.PersistentKey, anchor.PersistentKey, after, siblingKeys);
-        return move is not null && _resourceOrder.Update(moves =>
+        var result = CreateMove(resource.PersistentKey, anchor.PersistentKey, after, siblingKeys, out var move);
+        if (move is null)
+        {
+            return result;
+        }
+
+        return _resourceOrder.Update(moves =>
         {
             if (!ReplaceMove(moves, move))
             {
@@ -74,15 +79,15 @@ public sealed class ResourceOrderStore
 
             TrimResourceMoves(moves);
             return true;
-        });
+        }) ? ResourceOrderMoveResult.Moved : ResourceOrderMoveResult.Unchanged;
     }
 
-    public bool TryMoveGroup(string grouping, string key, string anchor, bool after, IEnumerable<string> orderedGroupKeys)
+    internal ResourceOrderMoveResult MoveGroup(string grouping, string key, string anchor, bool after, IEnumerable<string> orderedGroupKeys)
     {
-        var move = CreateMove(key, anchor, after, orderedGroupKeys);
+        var result = CreateMove(key, anchor, after, orderedGroupKeys, out var move);
         if (move is null)
         {
-            return false;
+            return result;
         }
 
         return _groupOrder.Update(order =>
@@ -99,7 +104,7 @@ public sealed class ResourceOrderStore
 
             TrimGroupMoves(order);
             return true;
-        });
+        }) ? ResourceOrderMoveResult.Moved : ResourceOrderMoveResult.Unchanged;
     }
 
     private static HashSet<string> GetResourceNames(IEnumerable<ResourceViewModel> resources) =>
@@ -108,28 +113,35 @@ public sealed class ResourceOrderStore
     private static string? GetVisibleParent(ResourceViewModel resource, HashSet<string> names) =>
         resource.GetResourcePropertyValue(KnownProperties.Resource.ParentName) is { } parent && names.Contains(parent) ? parent : null;
 
-    private static RelativeOrderMove? CreateMove(string key, string anchor, bool after, IEnumerable<string> orderedKeys)
+    private static ResourceOrderMoveResult CreateMove(string key, string anchor, bool after, IEnumerable<string> orderedKeys, out RelativeOrderMove? move)
     {
+        move = null;
         var keys = orderedKeys.ToList();
         var sourceIndex = keys.FindIndex(item => StringComparers.ResourceName.Equals(item, key));
         if (sourceIndex < 0)
         {
-            return null;
+            return ResourceOrderMoveResult.Invalid;
         }
 
         keys.RemoveAt(sourceIndex);
         var anchorIndex = keys.FindIndex(item => StringComparers.ResourceName.Equals(item, anchor));
         if (anchorIndex < 0)
         {
-            return null;
+            return ResourceOrderMoveResult.Invalid;
         }
 
         // Take the neighbors at the destination, not the neighbors the item is leaving.
         var insertionIndex = anchorIndex + (after ? 1 : 0);
-        return new RelativeOrderMove(Guid.NewGuid(), key,
+        if (insertionIndex == sourceIndex)
+        {
+            return ResourceOrderMoveResult.Unchanged;
+        }
+
+        move = new RelativeOrderMove(Guid.NewGuid(), key,
             PreviousKey: insertionIndex > 0 ? keys[insertionIndex - 1] : null,
             NextKey: insertionIndex < keys.Count ? keys[insertionIndex] : null,
             PreferNext: !after);
+        return ResourceOrderMoveResult.Moved;
     }
 
     private static void ReplayMoves<T>(List<T> items, RelativeOrderMove[] moves, Func<T, string> getKey, Func<T, T, bool>? canMove)
@@ -165,7 +177,7 @@ public sealed class ResourceOrderStore
 
     private static bool ReplaceMove(List<RelativeOrderMove> moves, RelativeOrderMove move)
     {
-        // A storage retry can read back a move it already saved. Replaying a duplicate could undo a later move.
+        // A load can read back a move before the writer has removed it from the in-memory queue.
         if (moves.Exists(existing => existing.Id == move.Id))
         {
             return false;
@@ -229,7 +241,7 @@ public sealed class ResourceOrderStore
 /// <summary>
 /// A user move replayed over the default order of the current resources or groups.
 /// </summary>
-/// <param name="Id">Identifies the move, not the item, so storage retries do not record it twice.</param>
+/// <param name="Id">Identifies the move, not the item, so the same move is applied only once.</param>
 /// <param name="Key">
 /// The item to move: a resource's <see cref="ResourceViewModel.PersistentKey"/> or a key within the grouping mode.
 /// An empty group key represents the untagged group.
@@ -238,3 +250,10 @@ public sealed class ResourceOrderStore
 /// <param name="NextKey">The neighbor to place the item before. <see langword="null"/> for a drop at the end.</param>
 /// <param name="PreferNext">Whether the next neighbor was the drop target and should be tried first.</param>
 internal sealed record RelativeOrderMove(Guid Id, string Key, string? PreviousKey, string? NextKey, bool PreferNext);
+
+internal enum ResourceOrderMoveResult
+{
+    Invalid,
+    Unchanged,
+    Moved
+}
