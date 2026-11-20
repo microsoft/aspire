@@ -524,7 +524,7 @@
       </trans-unit>
       <trans-unit id="ResourceGraphNoEndpoints">
         <source>No endpoints</source>
-        <target state="translated">Aucun point de terminaison</target>
+        <target state="translated">Aucune URL</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceHealthChecksHeader">

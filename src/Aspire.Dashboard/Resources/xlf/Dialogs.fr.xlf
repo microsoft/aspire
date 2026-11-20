@@ -1005,12 +1005,12 @@ Pour plus d’informations sur l’utilisation des agents IA avec le tableau de 
       </trans-unit>
       <trans-unit id="SettingsDialogDashboardExperienceNew">
         <source>New dashboard</source>
-        <target state="translated">Nouveau tableau de bord</target>
+        <target state="translated">Nouvelle</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogDashboardExperiencePrevious">
         <source>Previous dashboard</source>
-        <target state="translated">Tableau de bord précédent</target>
+        <target state="translated">Précédente</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogDashboardExperienceSelectorLabel">
