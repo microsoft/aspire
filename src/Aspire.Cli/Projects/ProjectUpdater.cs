@@ -364,6 +364,7 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
                     .Distinct(StringComparer.Ordinal)
                     .ToArray();
                 var restoreOutput = new OutputCollector(fileLoggerProvider, CliLogFormat.Categories.Package);
+                var failedRestoreProject = projectFile;
                 var restoreExitCode = await interactionService.ShowStatusAsync(
                     UpdateCommandStrings.RestoringPackagesAfterUpdate,
                     async () =>
@@ -394,6 +395,7 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
                             }, cancellationToken);
                             if (exitCode != 0)
                             {
+                                failedRestoreProject = restoreProject;
                                 return exitCode;
                             }
                         }
@@ -402,7 +404,7 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
                 if (restoreExitCode != 0)
                 {
                     interactionService.DisplayLines(restoreOutput.GetLines());
-                    throw new ProjectUpdaterException(string.Format(CultureInfo.InvariantCulture, UpdateCommandStrings.FailedToRestoreAfterUpdateFormat, channel.Name, projectFile.FullName));
+                    throw new ProjectUpdaterException(string.Format(CultureInfo.InvariantCulture, UpdateCommandStrings.FailedToRestoreAfterUpdateFormat, channel.Name, failedRestoreProject.FullName));
                 }
             }
 

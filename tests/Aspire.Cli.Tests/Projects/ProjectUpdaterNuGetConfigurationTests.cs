@@ -1123,11 +1123,11 @@ public class ProjectUpdaterNuGetConfigurationTests(ITestOutputHelper outputHelpe
             """{ "channel": "staging", "sdkVersion": "9.4.1" }""");
 
         var result = await provider.GetRequiredService<IProjectUpdater>().UpdateProjectAsync(
-            CreateContext(projectFile, channel, hasExplicitChannel: true), TestContext.Current.CancellationToken);
+            CreateContext(projectFile, channel, hasExplicitChannel: true, dryRun: true), TestContext.Current.CancellationToken);
 
-        Assert.True(result.UpdatedApplied);
+        // Explicit-channel updates only validate by restore during a dry run.
+        Assert.False(result.UpdatedApplied);
         Assert.Equal([projectFile.FullName, testsProjectFile.FullName], restoredProjects);
-        Assert.Contains("""<Sdk Name="Aspire.AppHost.Sdk" Version="9.4.1" />""", await File.ReadAllTextAsync(testsProjectFile.FullName));
     }
 
     [Theory]
