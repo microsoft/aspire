@@ -159,7 +159,6 @@ public static class DotnetToolResourceExtensions
         return builder;
     }
 
-#pragma warning disable ASPIRECOMMAND001 // Retained SDK validation uses the experimental command-validation contract.
     internal static async Task<RequiredCommandValidationResult> ValidateDotnetSdkVersionAsync(RequiredCommandValidationContext context, string workingDirectory)
     {
         var versionProvider = context.Services.GetRequiredService<IDotnetSdkVersionProvider>();
@@ -169,5 +168,4 @@ public static class DotnetToolResourceExtensions
 
         return DotnetToolHelpers.ValidateSdkVersion(version, nameof(DotnetToolResource));
     }
-#pragma warning restore ASPIRECOMMAND001
 }

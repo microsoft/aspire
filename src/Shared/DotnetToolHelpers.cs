@@ -9,7 +9,7 @@ using static Aspire.Hosting.Resources.MessageStrings;
 
 namespace Aspire.Hosting;
 
-#pragma warning disable ASPIRECOMMAND001, ASPIREEXTENSION001 // Shared implementation of experimental tool APIs.
+#pragma warning disable ASPIREEXTENSION001 // Shared implementation of experimental tool APIs.
 
 /// <summary>
 /// Implements tool execution and metadata for both canonical and legacy resource contracts.
