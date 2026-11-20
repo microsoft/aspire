@@ -216,7 +216,8 @@ internal static class DotnetProgramPublishing
                 OutputPath = runtimeOutputPath,
                 ImageFormat = buildResult.ImageFormat,
                 TargetPlatform = buildResult.TargetPlatform ?? ContainerTargetPlatform.LinuxAmd64,
-                RequiresLocalImageStore = true
+                RequiresLocalImageStore = true,
+                AdditionalArguments = buildResult.AdditionalArguments
             };
 
             if (exportsArchive)

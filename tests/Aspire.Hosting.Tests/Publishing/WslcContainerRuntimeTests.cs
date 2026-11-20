@@ -63,6 +63,34 @@ public class WslcContainerRuntimeTests(ITestOutputHelper output)
         Assert.Equal(1, Assert.Single(runner.Disposables).DisposeCallCount);
     }
 
+    [Fact]
+    public async Task BuildImageAsync_AppendsAdditionalArgumentsBeforeContext()
+    {
+        var runner = new TestProcessRunner();
+        var runtime = new WslcContainerRuntime(NullLogger<WslcContainerRuntime>.Instance, runner);
+        const string cacheDestination = "type=local,dest=/tmp/build cache";
+
+        await runtime.BuildImageAsync(
+            "context",
+            "Dockerfile",
+            new ContainerImageBuildOptions
+            {
+                ImageName = "myapp",
+                Tag = "latest",
+                AdditionalArguments = ["--cache-to", cacheDestination]
+            },
+            [],
+            [],
+            null,
+            TestContext.Current.CancellationToken);
+
+        var spec = Assert.Single(runner.ProcessSpecs);
+        Assert.Null(spec.Arguments);
+        Assert.Equal(
+            ["build", "--file", "Dockerfile", "--tag", "myapp:latest", "--cache-to", cacheDestination, Path.GetFullPath("context")],
+            spec.ArgumentList);
+    }
+
     [Theory]
     [InlineData(null, null, null)]
     [InlineData("host-value", null, "host-value")]

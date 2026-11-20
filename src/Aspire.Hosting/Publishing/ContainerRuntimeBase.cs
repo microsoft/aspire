@@ -524,6 +524,23 @@ internal abstract class ContainerRuntimeBase<TLogger> : IContainerRuntime where 
     }
 
     /// <summary>
+    /// Returns caller-supplied build arguments as individual argv tokens.
+    /// Each entry is already one argument, such as "--cache-from" or "type=registry,ref=img:cache".
+    /// Commas, spaces, and quotes stay inside that token; joining or quoting them would split cache destinations.
+    /// </summary>
+    /// <param name="additionalArguments">The additional arguments to append.</param>
+    /// <returns>The additional argument tokens, or an empty collection when none are provided.</returns>
+    protected static List<string> BuildAdditionalArguments(IReadOnlyList<string>? additionalArguments)
+    {
+        if (additionalArguments is not { Count: > 0 })
+        {
+            return [];
+        }
+
+        return [.. additionalArguments];
+    }
+
+    /// <summary>
     /// Executes a container runtime command and returns the process result without throwing for non-zero exit codes.
     /// </summary>
     protected Task<ProcessResult> ExecuteContainerCommandWithResultAsync(

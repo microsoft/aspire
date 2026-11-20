@@ -600,6 +600,44 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public async Task BuildImageAsync_FlowsAdditionalArgumentsToContainerRuntime()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(output);
+
+        var fakeContainerRuntime = new FakeContainerRuntime(shouldFail: false);
+        builder.Services.AddFakeContainerRuntime(fakeContainerRuntime);
+
+        using var tempDockerfileContext = await DockerfileUtils.CreateTemporaryDockerfileAsync(output);
+        var container = builder.AddDockerfile("container", tempDockerfileContext.ContextPath, tempDockerfileContext.DockerfilePath)
+            .WithContainerBuildOptions(ctx =>
+            {
+                ctx.AdditionalArguments.Add("--cache-from");
+                ctx.AdditionalArguments.Add("type=registry,ref=cr.example.com/container:cache");
+                ctx.AdditionalArguments.Add("--cache-to");
+                ctx.AdditionalArguments.Add("type=registry,ref=cr.example.com/container:cache,mode=max");
+            });
+
+        using var app = builder.Build();
+
+        using var cts = new CancellationTokenSource(TestConstants.LongTimeoutTimeSpan);
+        var imageBuilder = app.Services.GetRequiredService<IResourceContainerImageManager>();
+        await imageBuilder.BuildImageAsync(container.Resource, cts.Token);
+
+        // Assert
+        Assert.True(fakeContainerRuntime.WasBuildImageCalled);
+        var buildCall = Assert.Single(fakeContainerRuntime.BuildImageCalls);
+        Assert.NotNull(buildCall.options?.AdditionalArguments);
+        Assert.Equal(
+            [
+                "--cache-from",
+                "type=registry,ref=cr.example.com/container:cache",
+                "--cache-to",
+                "type=registry,ref=cr.example.com/container:cache,mode=max"
+            ],
+            buildCall.options.AdditionalArguments);
+    }
+
+    [Fact]
     public async Task PushImageAsync_ThrowsWhenContainerRuntimeFails()
     {
         using var builder = TestDistributedApplicationBuilder.Create(output);
@@ -987,6 +1025,7 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
         var archivePath = Path.Combine(workspace.WorkspaceRoot.FullName, "program.tar.gz");
         File.WriteAllText(archivePath, "previous archive");
         var projectPath = Path.Combine(workspace.WorkspaceRoot.FullName, "program.csproj");
+        var callbackCount = 0;
         var resource = builder.AddResource(new ProjectResource("program"))
             .WithAnnotation(new TestProjectMetadata(projectPath))
             .WithAnnotation(new ContainerFilesDestinationAnnotation
@@ -996,6 +1035,8 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
             })
             .WithContainerBuildOptions(context =>
             {
+                callbackCount++;
+                context.AdditionalArguments.AddRange(["--cache-from", "type=registry,ref=cr.example.com/program:cache"]);
                 context.Destination = ContainerImageDestination.Archive;
                 context.ImageFormat = ContainerImageFormat.Docker;
                 context.OutputPath = archivePath;
@@ -1012,6 +1053,7 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
             Assert.NotEqual(archivePath, options.OutputPath);
             Assert.True(Directory.Exists(options.OutputPath));
             Assert.True(options.RequiresLocalImageStore);
+            Assert.Equal(["--cache-from", "type=registry,ref=cr.example.com/program:cache"], options.AdditionalArguments);
             Assert.Equal(imageName, options.ImageName);
             Assert.StartsWith("aspire-layered-", options.Tag);
 
@@ -1027,6 +1069,7 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
 
         await imageBuilder.BuildImageAsync(resource.Resource);
 
+        Assert.Equal(1, callbackCount);
         Assert.True(File.Exists(archivePath));
         Assert.Equal<byte>([0x1f, 0x8b], File.ReadAllBytes(archivePath)[..2]);
         Assert.Equal([$"{imageName}:{imageTag}"], TestContainerImageArchive.ReadDockerImageReferences(archivePath));
@@ -1773,7 +1816,14 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
 
         var result = ContainerRuntimeBase<DockerContainerRuntime>.BuildSecrets(secrets, useCsv: true);
 
-        Assert.Equal(["--secret", "id=ENV_TOKEN,type=env,env=ENV_TOKEN", "--secret", "id=npmrc,type=file,src=/app/.npmrc"], result);
+        Assert.Equal(
+            [
+                "--secret",
+                "id=ENV_TOKEN,type=env,env=ENV_TOKEN",
+                "--secret",
+                "id=npmrc,type=file,src=/app/.npmrc"
+            ],
+            result);
     }
 
     [Fact]
@@ -2340,6 +2390,7 @@ public class ResourceContainerImageBuilderTests(ITestOutputHelper output)
             File.Exists(expectedArchivePath),
             $"Expected an image archive at '{expectedArchivePath}'. '{outputPath}' contains: {actualArchives}.");
     }
+
 }
 
 file sealed class TestProjectMetadata(string projectPath) : IProjectMetadata
