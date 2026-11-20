@@ -1564,8 +1564,9 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
         });
         services.AddSingleton<IEnvironment>(new TestEnvironment());
         using var provider = services.BuildServiceProvider();
-        var client = provider.GetServices<IAgentClient>().Single(client => string.Equals(client.Id, clientId, StringComparisons.AgentClientId));
-        var hookConfigPath = client.GetTelemetryHookConfigPath();
+        var hookConfigPath = clientId == "claude"
+            ? Path.Combine(homeDirectory.FullName, ".claude", "settings.json")
+            : Path.Combine(homeDirectory.FullName, ".copilot", "hooks", "aspire-telemetry.json");
         Directory.CreateDirectory(Path.GetDirectoryName(hookConfigPath)!);
         await File.WriteAllTextAsync(hookConfigPath, hookConfig);
 

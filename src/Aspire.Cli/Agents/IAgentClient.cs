@@ -44,16 +44,14 @@ internal interface IAgentClient
         JsonObject config, string configFilePath, bool configureServer, AgentConfigurationScope scope);
 
     // Telemetry hooks are registered once per client, so a selected client covers all of its environments.
-    // False means the client has no verified hook schema, and the telemetry hook members below
-    // throw NotSupportedException.
+    // False means the client has no verified hook schema, and ConfigureTelemetryHookAsync
+    // throws NotSupportedException.
     bool SupportsTelemetryHooks { get; }
 
-    // The user-level file that holds this client's Aspire telemetry hook registration.
-    string GetTelemetryHookConfigPath();
-
-    // Whether the hook file registers an Aspire 13.5 or 13.6 script where ConfigureTelemetryHookAsync
-    // replaces it. Throws JsonException, IOException, or UnauthorizedAccessException for an unreadable file.
-    Task<bool> HasLegacyTelemetryHookAsync(CancellationToken cancellationToken);
+    // Returns the user-level hook file path when it registers an Aspire 13.5 or 13.6 script that
+    // ConfigureTelemetryHookAsync replaces; otherwise null, including for clients Aspire never wrote hooks for.
+    // Throws JsonException, IOException, or UnauthorizedAccessException for an unreadable file.
+    Task<string?> FindLegacyTelemetryHookAsync(CancellationToken cancellationToken);
 
     Task<TelemetryHookStatus> ConfigureTelemetryHookAsync(CancellationToken cancellationToken);
 }

@@ -136,13 +136,16 @@ internal sealed class CopilotAgentClient(
     // https://code.visualstudio.com/docs/agent-customization/hooks#_choose-a-hook-source
     public bool SupportsTelemetryHooks => true;
 
-    public string GetTelemetryHookConfigPath()
-        => Path.Combine(GetSettingsDirectory(), "hooks", "aspire-telemetry.json");
-
     // Aspire 13.5 and 13.6 wrote each postToolUse entry as a hook, and ConfigureTelemetryHookAsync
     // replaces the whole file.
-    public Task<bool> HasLegacyTelemetryHookAsync(CancellationToken cancellationToken)
-        => LegacyTelemetryHook.IsRegisteredAsync(GetTelemetryHookConfigPath(), "postToolUse", nestedHooks: false, cancellationToken);
+    public async Task<string?> FindLegacyTelemetryHookAsync(CancellationToken cancellationToken)
+    {
+        var path = GetTelemetryHookConfigPath();
+        return await LegacyTelemetryHook.IsRegisteredAsync(path, "postToolUse", nestedHooks: false, cancellationToken) ? path : null;
+    }
+
+    private string GetTelemetryHookConfigPath()
+        => Path.Combine(GetSettingsDirectory(), "hooks", "aspire-telemetry.json");
 
     public async Task<TelemetryHookStatus> ConfigureTelemetryHookAsync(CancellationToken cancellationToken)
     {

@@ -107,12 +107,15 @@ internal sealed class ClaudeCodeAgentClient(
 
     public bool SupportsTelemetryHooks => true;
 
-    public string GetTelemetryHookConfigPath()
-        => Path.Combine(ClaudeCodePaths.GetConfigDirectory(context, environment), "settings.json");
-
     // ConfigureTelemetryHookAsync replaces only hooks nested in PostToolUse groups.
-    public Task<bool> HasLegacyTelemetryHookAsync(CancellationToken cancellationToken)
-        => LegacyTelemetryHook.IsRegisteredAsync(GetTelemetryHookConfigPath(), "PostToolUse", nestedHooks: true, cancellationToken);
+    public async Task<string?> FindLegacyTelemetryHookAsync(CancellationToken cancellationToken)
+    {
+        var path = GetTelemetryHookConfigPath();
+        return await LegacyTelemetryHook.IsRegisteredAsync(path, "PostToolUse", nestedHooks: true, cancellationToken) ? path : null;
+    }
+
+    private string GetTelemetryHookConfigPath()
+        => Path.Combine(ClaudeCodePaths.GetConfigDirectory(context, environment), "settings.json");
 
     public override string ToString() => Id;
 

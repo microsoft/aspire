@@ -21,23 +21,21 @@ internal sealed class LegacyTelemetryHookCheck(
     {
         var results = new List<EnvironmentCheckResult>();
 
-        // Only inspect user-level registrations that agent init owns and can refresh.
-        foreach (var client in clients.Where(c => c.SupportsTelemetryHooks))
+        foreach (var client in clients)
         {
-            var path = client.GetTelemetryHookConfigPath();
-            bool isRegistered;
+            string? path;
             try
             {
-                isRegistered = await client.HasLegacyTelemetryHookAsync(cancellationToken);
+                path = await client.FindLegacyTelemetryHookAsync(cancellationToken);
             }
             catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
             {
                 // A malformed file for one client must not hide a legacy hook for another client.
-                logger.LogDebug(ex, "Could not inspect telemetry hook configuration at {Path}.", path);
+                logger.LogDebug(ex, "Could not inspect {Client} telemetry hook configuration.", client.DisplayName);
                 continue;
             }
 
-            if (isRegistered)
+            if (path is not null)
             {
                 results.Add(new EnvironmentCheckResult
                 {

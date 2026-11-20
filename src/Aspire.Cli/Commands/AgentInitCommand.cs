@@ -807,7 +807,7 @@ internal sealed class AgentInitCommand : BaseCommand
         // falls through to the existing setup probe.
         try
         {
-            return await client.HasLegacyTelemetryHookAsync(cancellationToken);
+            return await client.FindLegacyTelemetryHookAsync(cancellationToken) is not null;
         }
         catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
         {
