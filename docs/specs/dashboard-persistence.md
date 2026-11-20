@@ -86,10 +86,13 @@ as the `resource.displayOrder` resource property; repeated calls replace the pre
 value. It isn't specific to the dashboard, so other UIs can use it too. Like
 `ResourceUrlAnnotation.DisplayOrder`, it's a relative sort key: higher values appear first,
 and resources without one are treated as 0, so a negative value moves a resource after them.
-Resources with the same nonzero order are displayed by name; resources with an order of 0,
-whether declared or not, keep their existing order. Orders can change between runs until
-the user reorders resources. Existing saved dashboard ordering takes precedence. Drag-and-drop ordering is saved
-per application, independently of the run database.
+Resources with the same nonzero order are displayed by name. Resources with an order of 0,
+whether declared or not, are sorted by resource type and name, including resources discovered
+after the dashboard opens. Drag-and-drop moves are replayed over that default order.
+Resource moves and group moves are saved separately in browser local storage per application,
+independently of the run database. A move stores the neighbors at the drop position. Replay places the
+item after its previous neighbor, falling back to placing it before its next neighbor if the previous
+neighbor is missing or no longer a sibling.
 
 Traits are transported as list-valued resource properties named `resource.trait.<name>`,
 including in recorded snapshots. Trait names are case-sensitive; dashboard tags are

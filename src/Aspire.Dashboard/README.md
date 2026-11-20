@@ -31,13 +31,18 @@ The **...** menu on each group header lists commands for that group's resources.
 available on individual parameter rows, not as bulk actions.
 
 When search and filters are clear, drag a group's header handle to move the entire group, or focus its
-handle and press **Alt+Up** or **Alt+Down**. Each grouping mode has its own saved order in the AppHost
-settings database. New groups are appended, and temporarily absent groups retain their position when they return.
+handle and press **Alt+Up** or **Alt+Down**. Group moves are saved per grouping mode in browser local storage.
+New groups follow the default sort. A saved move places the group after its previous neighbor at the drop
+position, or before its next neighbor if the previous one is missing.
 
 With grouping set to **None** and no search or filters active, drag a resource's reorder handle to move it
 before or after a sibling. Alternatively, focus the handle and press **Alt+Up** or **Alt+Down**.
-Children stay under their parent. Order is stored alongside tags in the AppHost's application settings database
-and survives dashboard and AppHost restarts; new resources are appended to their sibling list.
+Children stay under their parent. By default, resources are sorted by AppHost display priority, then by type
+and name for resources without a priority, including resources discovered after the dashboard opens.
+Only custom moves are saved in browser local storage. The dashboard applies them to the current default order,
+so new resources are still sorted normally. A move places the resource after its previous neighbor at the
+drop position. If that neighbor is missing or no longer a sibling, the move falls back to placing it before
+its next neighbor.
 Persistent containers show a pin after their state and resource type.
 
 Resource rows are muted when they do not apply to the current tab or have not sent that type of

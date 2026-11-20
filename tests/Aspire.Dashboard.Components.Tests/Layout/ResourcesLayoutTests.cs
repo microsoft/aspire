@@ -1116,7 +1116,7 @@ public class ResourcesLayoutTests : DashboardTestContext
     [InlineData("Tags", "Tags:A new group")]
     [InlineData("ResourceType", "ResourceType:AAA")]
     [InlineData("State", "State:Building")]
-    public async Task AppHost_GroupMovesPreserveMembershipAndModeSpecificOrderAndAppendNewGroups(string grouping, string newGroupKey)
+    public async Task AppHost_GroupMovesPreserveMembershipAndNewGroupsUseDefaultOrder(string grouping, string newGroupKey)
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
@@ -1138,10 +1138,6 @@ public class ResourcesLayoutTests : DashboardTestContext
         Render<FluentToastProvider>();
         var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
         cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
-        var store = Services.GetRequiredService<ResourceOrderStore>();
-        var resourcePositions = store.GetPositions();
-        var otherModes = new[] { "Tags", "ResourceType", "State" }.Where(mode => mode != grouping)
-            .ToDictionary(mode => mode, store.GetGroupPositions);
         var originalKeys = GetKeys();
         var memberships = cut.FindAll(".resource-tag-group").ToDictionary(group => group.GetAttribute("data-resource-group-key")!,
             group => group.QuerySelectorAll(".resource-row-name").Select(name => name.TextContent.Trim()).ToArray());
@@ -1154,8 +1150,6 @@ public class ResourcesLayoutTests : DashboardTestContext
         Assert.Equal(expectedKeys, GetKeys());
         Assert.All(memberships, pair => Assert.Equal(pair.Value,
             GetGroup(pair.Key).QuerySelectorAll(".resource-row-name").Select(name => name.TextContent.Trim())));
-        Assert.Equal(resourcePositions, store.GetPositions());
-        Assert.All(otherModes, pair => Assert.Equal(pair.Value, store.GetGroupPositions(pair.Key)));
         Assert.Equal(["Alpha", "Untagged"], tags.GetTags("api"));
         Assert.Equal(["Beta"], tags.GetTags("cache"));
 
@@ -1177,17 +1171,16 @@ public class ResourcesLayoutTests : DashboardTestContext
             await channel.Writer.WriteAsync([new(ResourceViewModelChangeType.Upsert,
                 ModelTestHelpers.CreateResource("new-resource", state: KnownResourceState.Building, resourceType: "AAA"))]);
         }
-        cut.WaitForAssertion(() => Assert.True(store.GetGroupPositions(grouping).ContainsKey(newGroupKey[(grouping.Length + 1)..])));
         await cut.InvokeAsync(() => search.Instance.ValueChanged.InvokeAsync(string.Empty));
-        cut.WaitForAssertion(() => Assert.Equal(expectedKeys.Append(newGroupKey), GetKeys()));
+        cut.WaitForAssertion(() => Assert.Equal(expectedKeys.Prepend(newGroupKey), GetKeys()));
 
         var menu = await OpenGroupingMenuAsync(cut);
-        var otherMode = otherModes.Keys.First();
+        var otherMode = grouping == "Tags" ? "ResourceType" : "Tags";
         await cut.InvokeAsync(menu.Instance.Items.Single(item => item.Id == $"resource-grouping-{otherMode}").OnClick!);
         Assert.False(await cut.InvokeAsync(() => cut.Instance.ReorderGroupAsync(grouping, movedKey, targetKey, after: false)));
         await cut.Find("#resourcePaneGroupingButton").ClickAsync(new MouseEventArgs());
         await cut.InvokeAsync(menu.Instance.Items.Single(item => item.Id == $"resource-grouping-{grouping}").OnClick!);
-        Assert.Equal(expectedKeys.Append(newGroupKey), GetKeys());
+        Assert.Equal(expectedKeys.Prepend(newGroupKey), GetKeys());
 
         string[] GetKeys() => cut.FindAll(".resource-tag-group").Select(group => group.GetAttribute("data-resource-group-key")!).ToArray();
         AngleSharp.Dom.IElement GetGroup(string key) => cut.FindAll(".resource-tag-group").Single(group => group.GetAttribute("data-resource-group-key") == key);
@@ -1215,7 +1208,7 @@ public class ResourcesLayoutTests : DashboardTestContext
         Render<FluentToastProvider>();
         var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
         cut.WaitForAssertion(() => Assert.Equal(2, cut.FindAll("[data-resource-group-drag-handle]").Count));
-        var positions = Services.GetRequiredService<ResourceOrderStore>().GetGroupPositions("State");
+        var originalKeys = GetGroupKeys();
         Func<Task> reset;
         if (filter == "Search")
         {
@@ -1233,9 +1226,11 @@ public class ResourcesLayoutTests : DashboardTestContext
         Assert.Equal("false", cut.Find(".resource-pane-list").GetAttribute("data-group-reorder-enabled"));
         Assert.Empty(cut.FindAll("[data-resource-group-drag-handle]"));
         Assert.False(await cut.InvokeAsync(() => cut.Instance.ReorderGroupAsync("State", "State:Running", "State:Exited", after: false)));
-        Assert.Equal(positions, Services.GetRequiredService<ResourceOrderStore>().GetGroupPositions("State"));
         await cut.InvokeAsync(reset);
         Assert.Equal(2, cut.FindAll("[data-resource-group-drag-handle]").Count);
+        Assert.Equal(originalKeys, GetGroupKeys());
+
+        string?[] GetGroupKeys() => cut.FindAll(".resource-tag-group").Select(group => group.GetAttribute("data-resource-group-key")).ToArray();
     }
 
     [Theory]
@@ -1440,7 +1435,32 @@ public class ResourcesLayoutTests : DashboardTestContext
     }
 
     [Fact]
-    public async Task AppHost_ReorderingPreservesHierarchyAndAppendsNewSiblings()
+    public async Task AppHost_DefaultResourceOrderSortsLateResourcesByTypeThenName()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources:
+            [
+                ModelTestHelpers.CreateResource("worker", resourceType: "Project"),
+                ModelTestHelpers.CreateResource("frontend", resourceType: "Project")
+            ], resourceChannelProvider: () => channel));
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.ResourceListUrl());
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.Equal(["frontend", "worker"], GetNames()));
+
+        await channel.Writer.WriteAsync(
+        [
+            new(ResourceViewModelChangeType.Upsert, ModelTestHelpers.CreateResource("proxy", resourceType: "Project")),
+            new(ResourceViewModelChangeType.Upsert, ModelTestHelpers.CreateResource("redis", resourceType: "Container"))
+        ]);
+        cut.WaitForAssertion(() => Assert.Equal(["redis", "frontend", "proxy", "worker"], GetNames()));
+
+        string?[] GetNames() => cut.FindAll(".resource-row-kind-resource").Select(row => row.GetAttribute("data-resource-name")).ToArray();
+    }
+
+    [Fact]
+    public async Task AppHost_ReorderingPreservesHierarchyAndNewSiblingsUseDefaultOrder()
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
@@ -1458,21 +1478,17 @@ public class ResourcesLayoutTests : DashboardTestContext
                     [KnownProperties.Resource.ParentName] = new(KnownProperties.Resource.ParentName, Value.ForString("root"), false, null, 0, null, false)
                 })
             ], resourceChannelProvider: () => channel));
-        var store = Services.GetRequiredService<ResourceOrderStore>();
-        store.EnsureResources(["worker_0", "root_0", "b_0", "a_0"]);
         // The docked list beside the overview of all resources. The default URL, "/", is the full-page table.
         Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.ResourceListUrl());
         var toasts = Render<FluentToastProvider>();
         var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
-        cut.WaitForAssertion(() => Assert.Equal(["worker", "root", "b", "a"], GetNames()));
+        cut.WaitForAssertion(() => Assert.Equal(["root", "a", "b", "worker"], GetNames()));
 
-        Assert.True(await cut.InvokeAsync(() => cut.Instance.ReorderResourceAsync("root", "worker", after: false)));
+        Assert.True(await cut.InvokeAsync(() => cut.Instance.ReorderResourceAsync("b", "a", after: false)));
         Assert.Equal(["root", "b", "a", "worker"], GetNames());
-        Assert.True(await cut.InvokeAsync(() => cut.Instance.ReorderResourceAsync("a", "b", after: false)));
-        Assert.Equal(["root", "a", "b", "worker"], GetNames());
         Assert.False(await cut.InvokeAsync(() => cut.Instance.ReorderResourceAsync("a", "worker", after: true)));
         Assert.Equal(Resources.Layout.ResourcePaneReorderUnavailable, Assert.Single(toasts.FindComponents<FluentToast>()).Instance.Title);
-        Assert.Equal(["root", "a", "b", "worker"], GetNames());
+        Assert.Equal(["root", "b", "a", "worker"], GetNames());
 
         Assert.Empty(cut.FindAll("[data-resource-name='root'] .resource-row-child-count"));
         cut.Find("[data-resource-name='root'] .resource-row-toggle").Click();
@@ -1483,17 +1499,14 @@ public class ResourcesLayoutTests : DashboardTestContext
         Assert.Equal(string.Format(System.Globalization.CultureInfo.CurrentCulture, Resources.Layout.ResourcePaneNestedCount, 2), childCount.GetAttribute("data-tooltip"));
         Assert.True(await cut.InvokeAsync(() => cut.Instance.ReorderResourceAsync("worker", "root", after: false)));
         cut.Find("[data-resource-name='root'] .resource-row-toggle").Click();
-        Assert.Equal(["worker", "root", "a", "b"], GetNames());
+        Assert.Equal(["worker", "root", "b", "a"], GetNames());
         Assert.Empty(cut.FindAll("[data-resource-name='root'] .resource-row-child-count"));
 
         await channel.Writer.WriteAsync([new(ResourceViewModelChangeType.Upsert, ModelTestHelpers.CreateResource("0", properties: new()
         {
             [KnownProperties.Resource.ParentName] = new(KnownProperties.Resource.ParentName, Value.ForString("root"), false, null, 0, null, false)
         }))]);
-        cut.WaitForAssertion(() => Assert.Equal(["worker", "root", "a", "b", "0"], GetNames()));
-
-        Assert.Equal(["worker_0", "root_0", "a_0", "b_0", "0_0"],
-            store.GetPositions().OrderBy(pair => pair.Value).Select(pair => pair.Key));
+        cut.WaitForAssertion(() => Assert.Equal(["worker", "root", "0", "b", "a"], GetNames()));
 
         string?[] GetNames() => cut.FindAll("[data-resource-name]").Select(row => row.GetAttribute("data-resource-name")).ToArray();
     }
@@ -2849,13 +2862,13 @@ public class ResourcesLayoutTests : DashboardTestContext
         Assert.True(await cut.InvokeAsync(() => cut.Instance.ReorderResourceAsync("cache", originalApi.Name, after: false)));
 
         await channel.Writer.WriteAsync([new(ResourceViewModelChangeType.Upsert, ModelTestHelpers.CreateResource("aaa"))]);
-        cut.WaitForAssertion(() => Assert.Equal(["cache", "api-first-run", "aaa"],
+        cut.WaitForAssertion(() => Assert.Equal(["aaa", "cache", "api-first-run"],
             cut.FindAll("[data-resource-name]").Select(row => row.GetAttribute("data-resource-name"))));
         await channel.Writer.WriteAsync([
             new(ResourceViewModelChangeType.Delete, originalApi),
             new(ResourceViewModelChangeType.Upsert, ModelTestHelpers.CreateResource("api-second-run", displayName: "api"))
         ]);
-        cut.WaitForAssertion(() => Assert.Equal(["cache", "api-second-run", "aaa"],
+        cut.WaitForAssertion(() => Assert.Equal(["aaa", "cache", "api-second-run"],
             cut.FindAll("[data-resource-name]").Select(row => row.GetAttribute("data-resource-name"))));
     }
 
@@ -2882,7 +2895,7 @@ public class ResourcesLayoutTests : DashboardTestContext
         Render<FluentToastProvider>();
         var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
         cut.WaitForAssertion(() => Assert.Equal(2, cut.FindAll("[data-resource-drag-handle]").Count));
-        var positions = Services.GetRequiredService<ResourceOrderStore>().GetPositions();
+        var originalNames = GetNames();
         Func<Task> reset;
         if (mode == "Search")
         {
@@ -2906,10 +2919,12 @@ public class ResourcesLayoutTests : DashboardTestContext
         Assert.Empty(cut.FindAll("[data-resource-drag-handle]"));
         Assert.Equal("false", cut.Find(".resource-pane-list").GetAttribute("data-reorder-enabled"));
         Assert.False(await cut.InvokeAsync(() => cut.Instance.ReorderResourceAsync("api", "cache", after: false)));
-        Assert.Equal(positions, Services.GetRequiredService<ResourceOrderStore>().GetPositions());
         await cut.InvokeAsync(reset);
         Assert.Equal(2, cut.FindAll("[data-resource-drag-handle]").Count);
         Assert.Equal("true", cut.Find(".resource-pane-list").GetAttribute("data-reorder-enabled"));
+        Assert.Equal(originalNames, GetNames());
+
+        string?[] GetNames() => cut.FindAll(".resource-row-kind-resource").Select(row => row.GetAttribute("data-resource-name")).ToArray();
     }
 
     [Theory]
@@ -3181,8 +3196,8 @@ public class ResourcesLayoutTests : DashboardTestContext
             ModelTestHelpers.CreateResource("api", state: KnownResourceState.Running))]);
         cut.WaitForAssertion(() =>
         {
-            Assert.Equal(["Unknown", "Running"], cut.FindAll(".resource-tag-group").Select(group => group.GetAttribute("aria-label")));
-            Assert.Equal(["worker", "api"], cut.FindAll(".resource-tag-group .resource-row-name").Select(name => name.TextContent.Trim()));
+            Assert.Equal(["Running", "Unknown"], cut.FindAll(".resource-tag-group").Select(group => group.GetAttribute("aria-label")));
+            Assert.Equal(["api", "worker"], cut.FindAll(".resource-tag-group .resource-row-name").Select(name => name.TextContent.Trim()));
         });
     }
 
