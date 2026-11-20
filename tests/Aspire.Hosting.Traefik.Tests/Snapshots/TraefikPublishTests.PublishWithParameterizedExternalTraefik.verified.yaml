@@ -1,0 +1,22 @@
+﻿services:
+  whoami:
+    image: "traefik/whoami:latest"
+    expose:
+      - "80"
+    networks:
+      - "aspire"
+      - "traefik-public"
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.whoami.rule: "Host(`whoami.example.com`)"
+      traefik.http.routers.whoami.entrypoints: "${TRAEFIK_ENTRYPOINT}"
+      traefik.http.routers.whoami.service: "whoami"
+      traefik.http.routers.whoami.tls: "true"
+      traefik.http.routers.whoami.tls.certresolver: "${TRAEFIK_CERTRESOLVER}"
+      traefik.http.services.whoami.loadbalancer.server.port: "80"
+      traefik.docker.network: "traefik-public"
+networks:
+  aspire:
+    driver: "bridge"
+  traefik-public:
+    external: true

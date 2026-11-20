@@ -1,0 +1,5 @@
+{
+  "appHost": {
+    "path": "Traefik.AppHost/Traefik.AppHost.csproj"
+  }
+}

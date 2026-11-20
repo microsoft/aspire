@@ -1,0 +1,63 @@
+﻿services:
+  traefik:
+    image: "docker.io/library/traefik:v3.7"
+    command:
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.traefik.address=:8080"
+      - "--global.checknewversion=false"
+      - "--global.sendanonymoususage=false"
+      - "--ping=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker.constraints=Label(`aspire.traefik.traefik`, `true`)"
+    ports:
+      - "80:80"
+    expose:
+      - "8080"
+    volumes:
+      - type: "bind"
+        target: "/var/run/docker.sock"
+        source: "/var/run/docker.sock"
+        read_only: true
+    networks:
+      - "aspire"
+  whoami:
+    image: "traefik/whoami:latest"
+    expose:
+      - "80"
+    networks:
+      - "aspire"
+    labels:
+      traefik.enable: "true"
+      aspire.traefik.traefik: "true"
+      traefik.http.routers.whoami.rule: "Host(`whoami.example.com`)"
+      traefik.http.routers.whoami.entrypoints: "web"
+      traefik.http.routers.whoami.service: "whoami"
+      traefik.http.routers.whoami.middlewares: "sec"
+      traefik.http.middlewares.sec.headers.frameDeny: "true"
+      traefik.http.middlewares.sec.headers.stsSeconds: "31536000"
+      traefik.http.middlewares.sec.headers.accessControlAllowOriginList: "${CORS_ORIGIN}"
+      traefik.http.services.whoami.loadbalancer.server.port: "80"
+  api:
+    image: "myregistry/api:latest"
+    expose:
+      - "8080"
+    networks:
+      - "aspire"
+    labels:
+      traefik.enable: "true"
+      aspire.traefik.traefik: "true"
+      traefik.http.routers.api.rule: "Host(`app.example.com`) && PathPrefix(`/v1`)"
+      traefik.http.routers.api.entrypoints: "web"
+      traefik.http.routers.api.service: "api"
+      traefik.http.routers.api.middlewares: "sec,compress,rewrite"
+      traefik.http.middlewares.sec.headers.frameDeny: "true"
+      traefik.http.middlewares.sec.headers.stsSeconds: "31536000"
+      traefik.http.middlewares.sec.headers.accessControlAllowOriginList: "${CORS_ORIGIN}"
+      traefik.http.middlewares.compress.compress: "true"
+      traefik.http.middlewares.rewrite.replacePathRegex.regex: "^/v1/(.*)"
+      traefik.http.middlewares.rewrite.replacePathRegex.replacement: "/$$1"
+      traefik.http.services.api.loadbalancer.server.port: "8080"
+networks:
+  aspire:
+    driver: "bridge"

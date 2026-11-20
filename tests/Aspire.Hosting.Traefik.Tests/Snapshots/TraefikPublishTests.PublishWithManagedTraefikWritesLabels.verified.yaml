@@ -1,0 +1,98 @@
+﻿services:
+  compose-dashboard:
+    image: "mcr.microsoft.com/aspire/nightly/dashboard:17.0"
+    environment:
+      ASPIRE_DASHBOARD_TELEMETRY_OPTOUT: "true"
+    ports:
+      - "18888"
+    expose:
+      - "18889"
+      - "18890"
+    networks:
+      - "aspire"
+    restart: "always"
+  traefik:
+    image: "docker.io/library/traefik:v3.7"
+    command:
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--entrypoints.traefik.address=:8080"
+      - "--entrypoints.websecure.http.tls.certresolver=letsencrypt"
+      - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
+      - "--global.checknewversion=false"
+      - "--global.sendanonymoususage=false"
+      - "--ping=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker.constraints=Label(`aspire.traefik.traefik`, `true`)"
+      - "--api.dashboard=true"
+      - "--certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL}"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+      - "--certificatesresolvers.letsencrypt.acme.tlschallenge=true"
+      - "--tracing.otlp=true"
+      - "--tracing.otlp.grpc=true"
+      - "--tracing.otlp.grpc.endpoint=compose-dashboard:18889"
+      - "--tracing.otlp.grpc.insecure=true"
+      - "--metrics.otlp=true"
+      - "--metrics.otlp.grpc=true"
+      - "--metrics.otlp.grpc.endpoint=compose-dashboard:18889"
+      - "--metrics.otlp.grpc.insecure=true"
+      - "--tracing.servicename=traefik"
+      - "--metrics.otlp.servicename=traefik"
+      - "--metrics.otlp.addrouterslabels=true"
+    ports:
+      - "80:80"
+      - "443:443"
+    expose:
+      - "8080"
+    volumes:
+      - type: "bind"
+        target: "/var/run/docker.sock"
+        source: "/var/run/docker.sock"
+        read_only: true
+      - type: "volume"
+        target: "/letsencrypt"
+        source: "aspire.hosting.testutilities-0123456789-traefik-letsencrypt"
+        read_only: false
+    networks:
+      - "aspire"
+  whoami:
+    image: "traefik/whoami:latest"
+    expose:
+      - "80"
+    networks:
+      - "aspire"
+    labels:
+      traefik.enable: "true"
+      aspire.traefik.traefik: "true"
+      traefik.http.routers.whoami.rule: "Host(`whoami.${DOMAIN}`)"
+      traefik.http.routers.whoami.entrypoints: "websecure"
+      traefik.http.routers.whoami.service: "whoami"
+      traefik.http.routers.whoami.tls: "true"
+      traefik.http.routers.whoami.tls.certresolver: "letsencrypt"
+      traefik.http.services.whoami.loadbalancer.server.port: "80"
+  api:
+    image: "myregistry/api:latest"
+    environment:
+      PORT: "8000"
+    expose:
+      - "8000"
+    networks:
+      - "aspire"
+    labels:
+      traefik.enable: "true"
+      aspire.traefik.traefik: "true"
+      traefik.http.routers.api.rule: "Host(`app.${DOMAIN}`) && PathPrefix(`/api`)"
+      traefik.http.routers.api.entrypoints: "websecure"
+      traefik.http.routers.api.service: "api"
+      traefik.http.routers.api.priority: "100"
+      traefik.http.routers.api.tls: "true"
+      traefik.http.routers.api.tls.certresolver: "letsencrypt"
+      traefik.http.services.api.loadbalancer.server.port: "8000"
+networks:
+  aspire:
+    driver: "bridge"
+volumes:
+  aspire.hosting.testutilities-0123456789-traefik-letsencrypt:
+    driver: "local"

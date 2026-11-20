@@ -1,0 +1,102 @@
+﻿services:
+  auth-server:
+    image: "myregistry/auth:latest"
+    expose:
+      - "9000"
+    networks:
+      - "aspire"
+      - "traefik-public"
+  keycloak:
+    image: "keycloak:latest"
+    environment:
+      KC_HOSTNAME: "https://auth.example.com"
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
+      KC_PROXY_HEADERS: "xforwarded"
+      KC_HTTP_ENABLED: "true"
+    expose:
+      - "8080"
+    networks:
+      - "aspire"
+      - "traefik-public"
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.keycloak.rule: "Host(`auth.example.com`)"
+      traefik.http.routers.keycloak.entrypoints: "websecure"
+      traefik.http.routers.keycloak.service: "keycloak"
+      traefik.http.routers.keycloak.tls: "true"
+      traefik.http.routers.keycloak.tls.certresolver: "letsencrypt"
+      traefik.http.services.keycloak.loadbalancer.server.port: "8080"
+      traefik.docker.network: "traefik-public"
+  sso-proxy:
+    image: "quay.io/oauth2-proxy/oauth2-proxy:v7.15.5"
+    command:
+      - "--http-address=0.0.0.0:4180"
+      - "--proxy-prefix=/oauth2"
+      - "--provider=keycloak-oidc"
+      - "--client-id=oauth2-proxy"
+      - "--oidc-issuer-url=https://auth.example.com/realms/demo"
+      - "--skip-oidc-discovery=true"
+      - "--login-url=https://auth.example.com/realms/demo/protocol/openid-connect/auth"
+      - "--redeem-url=http://keycloak:8080/realms/demo/protocol/openid-connect/token"
+      - "--oidc-jwks-url=http://keycloak:8080/realms/demo/protocol/openid-connect/certs"
+      - "--upstream=static://202"
+      - "--reverse-proxy=true"
+      - "--set-xauthrequest=true"
+      - "--skip-provider-button=true"
+      - "--code-challenge-method=S256"
+      - "--cookie-secure=true"
+      - "--email-domain=*"
+      - "--whitelist-domain=admin.example.com"
+    environment:
+      OAUTH2_PROXY_CLIENT_SECRET: "${CLIENT_SECRET}"
+      OAUTH2_PROXY_COOKIE_SECRET: "${SSO_COOKIE_SECRET}"
+    expose:
+      - "4180"
+    depends_on:
+      keycloak:
+        condition: "service_started"
+    networks:
+      - "aspire"
+      - "traefik-public"
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.sso-proxy-1.rule: "Host(`admin.example.com`) && PathPrefix(`/oauth2`)"
+      traefik.http.routers.sso-proxy-1.entrypoints: "websecure"
+      traefik.http.routers.sso-proxy-1.service: "sso-proxy-1"
+      traefik.http.routers.sso-proxy-1.priority: "1000000"
+      traefik.http.routers.sso-proxy-1.tls: "true"
+      traefik.http.routers.sso-proxy-1.tls.certresolver: "letsencrypt"
+      traefik.http.services.sso-proxy-1.loadbalancer.server.port: "4180"
+      traefik.docker.network: "traefik-public"
+  api:
+    image: "myregistry/api:latest"
+    expose:
+      - "8080"
+    networks:
+      - "aspire"
+      - "traefik-public"
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.api.rule: "Host(`api.example.com`)"
+      traefik.http.routers.api.entrypoints: "websecure"
+      traefik.http.routers.api.service: "api"
+      traefik.http.routers.api.tls: "true"
+      traefik.http.routers.api.tls.certresolver: "letsencrypt"
+      traefik.http.routers.api.middlewares: "check"
+      traefik.http.middlewares.check.forwardAuth.address: "http://auth-server:9000/verify"
+      traefik.http.services.api.loadbalancer.server.port: "8080"
+      traefik.docker.network: "traefik-public"
+      traefik.http.routers.api-2.rule: "Host(`admin.example.com`)"
+      traefik.http.routers.api-2.entrypoints: "websecure"
+      traefik.http.routers.api-2.service: "api-2"
+      traefik.http.routers.api-2.tls: "true"
+      traefik.http.routers.api-2.tls.certresolver: "letsencrypt"
+      traefik.http.routers.api-2.middlewares: "sso"
+      traefik.http.middlewares.sso.forwardAuth.address: "http://sso-proxy:4180/"
+      traefik.http.middlewares.sso.forwardAuth.authResponseHeaders: "X-Auth-Request-User,X-Auth-Request-Email,X-Auth-Request-Preferred-Username,X-Auth-Request-Groups"
+      traefik.http.services.api-2.loadbalancer.server.port: "8080"
+networks:
+  aspire:
+    driver: "bridge"
+  traefik-public:
+    external: true
