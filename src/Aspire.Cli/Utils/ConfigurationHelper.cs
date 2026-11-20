@@ -376,25 +376,37 @@ internal static partial class ConfigurationHelper
             {
                 File.SetUnixFileMode(temporaryPath, mode);
             }
-            if (unixMetadata is not null && unixMetadata != await ReadUnixMetadataAsync(filePath, cancellationToken))
+            // Validation runs before every publication attempt, not just the first. Another process can
+            // edit the destination while a retry waits out a transient lock, and the next attempt must
+            // not silently overwrite that edit.
+            async Task ValidateBeforePublishAsync()
             {
-                throw SettingsWriteRefused(filePath);
+                if (unixMetadata is not null && unixMetadata != await ReadUnixMetadataAsync(filePath, cancellationToken))
+                {
+                    throw SettingsWriteRefused(filePath);
+                }
+                if (beforeReplace is not null)
+                {
+                    await beforeReplace(cancellationToken);
+                }
+                cancellationToken.ThrowIfCancellationRequested();
             }
-            if (beforeReplace is not null)
-            {
-                await beforeReplace(cancellationToken);
-            }
-            cancellationToken.ThrowIfCancellationRequested();
+
             if (OperatingSystem.IsWindows() && destinationExists)
             {
                 // Replace preserves the destination DACL and other Windows file metadata.
-                File.Replace(temporaryPath, filePath, destinationBackupFileName: null);
+                await RetryOnTransientWindowsFileLockAsync(
+                    ValidateBeforePublishAsync,
+                    () => File.Replace(temporaryPath, filePath, destinationBackupFileName: null), cancellationToken);
             }
             else
             {
                 // A tracked edit must not overwrite a new file created after validation.
                 // Untracked workspace writes retain their existing overwrite behavior.
-                File.Move(temporaryPath, filePath, overwrite: destinationExists || beforeReplace is null);
+                var overwrite = destinationExists || beforeReplace is null;
+                await RetryOnTransientWindowsFileLockAsync(
+                    ValidateBeforePublishAsync,
+                    () => File.Move(temporaryPath, filePath, overwrite), cancellationToken);
             }
         }
         finally
@@ -404,6 +416,60 @@ internal static partial class ConfigurationHelper
                 File.Delete(temporaryPath);
             }
         }
+    }
+
+    // Win32 errors that indicate another process briefly holds one of the files open. Antivirus
+    // real-time scanning (for example Microsoft Defender) and the search indexer commonly open a
+    // freshly written file without FILE_SHARE_DELETE, which makes ReplaceFile/MoveFileEx fail until
+    // the scan finishes. See https://learn.microsoft.com/windows/win32/api/winbase/nf-winbase-replacefilew.
+    // ERROR_UNABLE_TO_MOVE_REPLACEMENT (1176) is intentionally excluded: with no backup file, ReplaceFile
+    // has already deleted the destination at that point, so a retry would not be equivalent.
+    private const int ErrorSharingViolation = 32;
+    private const int ErrorLockViolation = 33;
+    private const int ErrorUnableToRemoveReplaced = 1175;
+
+    private static readonly TimeSpan[] s_transientFileLockRetryDelays =
+    [
+        TimeSpan.FromMilliseconds(50),
+        TimeSpan.FromMilliseconds(100),
+        TimeSpan.FromMilliseconds(200),
+        TimeSpan.FromMilliseconds(400),
+        TimeSpan.FromMilliseconds(800),
+    ];
+
+    private static async Task RetryOnTransientWindowsFileLockAsync(Func<Task> beforeAttempt, Action operation, CancellationToken cancellationToken)
+    {
+        for (var attempt = 0; ; attempt++)
+        {
+            // Outside the try so validation failures are never treated as retryable file locks.
+            await beforeAttempt();
+            try
+            {
+                operation();
+                return;
+            }
+            catch (IOException ex) when (attempt < s_transientFileLockRetryDelays.Length && IsTransientWindowsFileLock(ex))
+            {
+                await Task.Delay(s_transientFileLockRetryDelays[attempt], cancellationToken);
+            }
+        }
+    }
+
+    private static bool IsTransientWindowsFileLock(IOException exception)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return false;
+        }
+
+        // IOException.HResult carries the Win32 error wrapped as HRESULT_FROM_WIN32 (0x8007xxxx).
+        var hresult = exception.HResult;
+        if ((hresult & 0xFFFF0000) != 0x80070000)
+        {
+            return false;
+        }
+
+        return (hresult & 0xFFFF) is ErrorSharingViolation or ErrorLockViolation or ErrorUnableToRemoveReplaced;
     }
 
     private static FileStream CreateSettingsStagingFile(string temporary, string destination, bool existed, bool preserveOwnershipAndAcl)
