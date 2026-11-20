@@ -1,0 +1,21 @@
+{
+  "area": "Testing",
+  "areaEmoji": "🧪",
+  "backport": true,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [
+    "@afscrome"
+  ],
+  "description": "Microsoft.Testing.Platform test projects that reference Aspire.Hosting.AppHost are no longer launched through the Aspire CLI run hook, so dotnet test can run them.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🧬",
+  "firstMergedAt": "2026-11-20T16:58:11Z",
+  "lastMergedAt": "2026-11-20T16:58:11Z",
+  "name": "AppHost CLI run hook suppressed for MTP tests",
+  "owner": "joperezr",
+  "prs": [
+    22444
+  ]
+}

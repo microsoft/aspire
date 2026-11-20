@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Backport of #22414; dashboard tooltip fix",
+  "mergedAt": "2026-11-20T16:25:37Z",
+  "number": 22424,
+  "runDate": "2026-11-20T18:10:00Z",
+  "status": "included",
+  "title": "[release/17.0] Fix dashboard tooltips over non-localhost HTTP"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "unknown",
+  "comment": "No matching changelog entry found",
+  "mergedAt": "2026-11-20T14:30:04Z",
+  "number": 2223,
+  "runDate": "2026-11-20T18:10:00Z",
+  "status": "excluded",
+  "title": "Clarify what --isolated allows for aspire run and aspire start"
+}

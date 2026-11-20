@@ -1,0 +1,9 @@
+{
+  "author": "karolz-ms",
+  "comment": "Test-only change",
+  "mergedAt": "2026-11-20T16:23:03Z",
+  "number": 22409,
+  "runDate": "2026-11-20T18:10:00Z",
+  "status": "excluded",
+  "title": "[release/17.0] Stabilize CLI update E2E tests"
+}

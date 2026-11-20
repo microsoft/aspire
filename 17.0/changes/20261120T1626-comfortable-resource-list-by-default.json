@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": true,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The resource list now defaults to the Comfortable density, showing each resource's state and type as text on a second line. Saved preferences are kept, and Compact is still available in Settings.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🛋️",
+  "firstMergedAt": "2026-11-20T16:26:30Z",
+  "lastMergedAt": "2026-11-20T16:26:30Z",
+  "name": "Comfortable resource list by default",
+  "owner": "JamesNK",
+  "prs": [
+    22391
+  ]
+}

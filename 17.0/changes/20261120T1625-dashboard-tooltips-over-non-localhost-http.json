@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": true,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Tooltips on dashboard controls and resource graph nodes now work when the dashboard is opened over plain HTTP on a non-localhost hostname or IP address.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "💬",
+  "firstMergedAt": "2026-11-20T16:25:37Z",
+  "lastMergedAt": "2026-11-20T16:25:37Z",
+  "name": "Dashboard tooltips over non-localhost HTTP",
+  "owner": "JamesNK",
+  "prs": [
+    22424
+  ]
+}

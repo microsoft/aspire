@@ -1,0 +1,9 @@
+{
+  "author": "afscrome",
+  "comment": "Backport of #22381; MTP test project fix",
+  "mergedAt": "2026-11-20T16:58:11Z",
+  "number": 22444,
+  "runDate": "2026-11-20T18:10:00Z",
+  "status": "included",
+  "title": "[release/17.0] Suppress AppHost CLI run hook for MTP tests"
+}
