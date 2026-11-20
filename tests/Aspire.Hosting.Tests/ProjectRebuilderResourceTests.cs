@@ -80,6 +80,43 @@ public class ProjectRebuilderResourceTests
             args);
     }
 
+    [Fact]
+    public async Task AddProjectRebuilderUsesAppHostGlobalArtifactsPath()
+    {
+        // https://github.com/microsoft/aspire/issues/6887: the rebuild must write to the artifacts path that the
+        // project is launched from, otherwise restarting it would keep running the stale output.
+        using var builder = CreateBuilder();
+        UseDotnetSdkVersion(builder, "11.0.100-preview.7.25380.108");
+#pragma warning disable CS0618 // Retain the legacy project rebuild and watch command contract.
+        var project = builder.AddProject<Projects.ServiceA>("servicea", options => options.ExcludeLaunchProfile = true);
+#pragma warning restore CS0618
+        var launchDefaults = Assert.Single(project.Resource.Annotations.OfType<ProjectLaunchDefaultsAnnotation>());
+        launchDefaults.BuildConfiguration = "Release";
+
+        var rebuilder = Assert.Single(builder.Resources.OfType<ProjectRebuilderResource>());
+        await using var app = builder.Build();
+        var artifactsPath = Path.Combine(Path.GetTempPath(), "aspire-artifacts");
+        app.Services.GetRequiredService<DistributedApplicationOptions>().GlobalArtifactsPath = artifactsPath;
+        await EventingTestHelpers.SubscribeEventingSubscribersAsync(
+            app,
+            TestContext.Current.CancellationToken);
+        await builder.Eventing.PublishAsync(
+            new BeforeResourceStartedEvent(rebuilder, app.Services),
+            TestContext.Current.CancellationToken);
+        var args = await ArgumentEvaluator.GetArgumentListAsync(rebuilder, app.Services);
+
+        Assert.Equal(
+            [
+                "build",
+                project.Resource.GetProjectMetadata().ProjectPath,
+                "--configuration",
+                "Release",
+                "--artifacts-path",
+                artifactsPath
+            ],
+            args);
+    }
+
     private static IDistributedApplicationTestingBuilder CreateBuilder()
     {
         return TestDistributedApplicationBuilder.Create();

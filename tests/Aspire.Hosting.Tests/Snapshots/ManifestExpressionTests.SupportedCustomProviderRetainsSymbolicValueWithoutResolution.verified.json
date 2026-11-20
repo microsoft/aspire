@@ -1,0 +1,20 @@
+﻿{
+  "resources": {
+    "public-host": {
+      "type": "parameter.v0",
+      "value": "{public-host.inputs.value}",
+      "inputs": {
+        "value": {
+          "type": "string"
+        }
+      }
+    },
+    "backend": {
+      "type": "container.v0",
+      "image": "image:latest",
+      "env": {
+        "HOST": "{public-host.value}"
+      }
+    }
+  }
+}

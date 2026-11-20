@@ -315,8 +315,9 @@ public class BaseCommandTests(ITestOutputHelper outputHelper)
             options.ExtensionBackchannelFactory = _ => new TestExtensionBackchannel();
             options.InteractionServiceFactory = serviceProvider => new TestExtensionInteractionService(serviceProvider)
             {
-                TryDisplayCommandFailureAsyncCallback = (errorMessage, capturedCliLogPath, capturedAppHostLogPath, _) =>
+                TryDisplayCommandFailureAsyncCallback = (errorMessage, capturedCliLogPath, capturedAppHostLogPath, allowMarkup, _) =>
                 {
+                    Assert.False(allowMarkup);
                     capturedFailure = (errorMessage, capturedCliLogPath, capturedAppHostLogPath);
                     return Task.FromResult(true);
                 }
@@ -437,8 +438,93 @@ public class BaseCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, exitCode);
 
         var cancellation = Assert.Single(testInteractionService.DisplayedCancellations);
-        Assert.Null(cancellation.Message);
+        Assert.Equal(InteractionServiceStrings.StoppingAspire, cancellation.Message);
         Assert.Null(cancellation.ConsoleOverride);
+    }
+
+    [Theory]
+    [InlineData("publish", false)]
+    [InlineData("publish", true)]
+    [InlineData("deploy", false)]
+    [InlineData("deploy", true)]
+    [InlineData("destroy --yes", false)]
+    [InlineData("destroy --yes", true)]
+    [InlineData("do test-step", false)]
+    [InlineData("do test-step", true)]
+    public async Task BaseCommand_OnPipelineCancellation_DisplaysCancellationMessageOnceWithoutError(string commandArgs, bool slowShutdown)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var testInteractionService = new TestInteractionService();
+        var handlerEnteredTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var stoppingMessageDisplayedTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var shutdownTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        testInteractionService.DisplayCancellationMessageCallback = (_, _) => stoppingMessageDisplayedTcs.TrySetResult();
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = async (_, _, _, cancellationToken) =>
+            {
+                handlerEnteredTcs.TrySetResult();
+                try
+                {
+                    await AsyncTestHelpers.WaitForCancellationAsync(cancellationToken);
+                }
+                catch (OperationCanceledException)
+                {
+                    if (slowShutdown)
+                    {
+                        await shutdownTcs.Task;
+                    }
+
+                    throw;
+                }
+
+                return new AppHostProjectSearchResult(null, []);
+            }
+        };
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => testInteractionService;
+            options.ProjectLocatorFactory = _ => projectLocator;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse(commandArgs);
+        using var cts = new CancellationTokenSource();
+        var pendingRun = result.InvokeAsync(cancellationToken: cts.Token);
+
+        await handlerEnteredTcs.Task.DefaultTimeout();
+        await cts.CancelAsync();
+
+        if (slowShutdown)
+        {
+            try
+            {
+                var firstCompletedTask = await Task.WhenAny(stoppingMessageDisplayedTcs.Task, pendingRun).DefaultTimeout();
+                Assert.Same(stoppingMessageDisplayedTcs.Task, firstCompletedTask);
+            }
+            finally
+            {
+                shutdownTcs.TrySetResult();
+            }
+        }
+
+        var exitCode = await pendingRun.DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.FailedToBuildArtifacts, exitCode);
+        Assert.Empty(testInteractionService.DisplayedErrors);
+        var cancellation = Assert.Single(testInteractionService.DisplayedCancellations);
+        string? expectedMessage = commandArgs switch
+        {
+            "publish" => null,
+            "deploy" => DeployCommandStrings.DeploymentCanceled,
+            "destroy --yes" => DestroyCommandStrings.DestroyCanceled,
+            "do test-step" => DoCommandStrings.OperationCanceled,
+            _ => throw new ArgumentOutOfRangeException(nameof(commandArgs))
+        };
+        Assert.Equal(expectedMessage, cancellation.Message);
+        ConsoleOutput? expectedConsoleOverride = slowShutdown ? null : ConsoleOutput.Error;
+        Assert.Equal(expectedConsoleOverride, cancellation.ConsoleOverride);
     }
 
     [Fact]

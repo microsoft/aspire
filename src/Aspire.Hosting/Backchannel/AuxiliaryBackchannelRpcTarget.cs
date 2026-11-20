@@ -1210,6 +1210,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
             Version = snapshot.Version,
             DisplayName = resource.Name,
             ResourceType = snapshot.ResourceType,
+            ResourceTypeDisplayName = snapshot.ResourceTypeDisplayName,
             State = snapshot.State?.Text,
             WaitingFor = waitingFor,
             StateStyle = snapshot.State?.Style,

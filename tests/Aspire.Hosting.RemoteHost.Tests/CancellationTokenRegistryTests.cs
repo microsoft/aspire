@@ -71,6 +71,35 @@ public class CancellationTokenRegistryTests
     }
 
     [Fact]
+    public void Cancel_BeforeGetOrCreate_PreservesCancellation()
+    {
+        using var registry = new CancellationTokenRegistry();
+
+        var result = registry.Cancel("ct_delayed_registration");
+        var token = registry.GetOrCreate("ct_delayed_registration");
+
+        Assert.False(result);
+        Assert.True(token.IsCancellationRequested);
+    }
+
+    [Fact]
+    public void Cancel_UnknownIds_BoundsPendingCancellations()
+    {
+        using var registry = new CancellationTokenRegistry();
+
+        for (var i = 0; i <= 1024; i++)
+        {
+            Assert.False(registry.Cancel($"ct_pending_{i}"));
+        }
+
+        var evictedToken = registry.GetOrCreate("ct_pending_0");
+        var retainedToken = registry.GetOrCreate("ct_pending_1024");
+
+        Assert.False(evictedToken.IsCancellationRequested);
+        Assert.True(retainedToken.IsCancellationRequested);
+    }
+
+    [Fact]
     public void TryGetToken_ReturnsTrueAndTokenForRegisteredId()
     {
         using var registry = new CancellationTokenRegistry();

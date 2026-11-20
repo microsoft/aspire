@@ -1,17 +1,29 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Reflection;
 using Azure.Messaging.ServiceBus;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Xunit;
+using Xunit.Sdk;
 
 namespace Aspire.Azure.Messaging.ServiceBus.Tests;
 
 public class AspireServiceBusExtensionsTests
 {
     private const string ConnectionString = "Endpoint=sb://aspireservicebustests.servicebus.windows.net/;SharedAccessKeyName=fake;SharedAccessKey=fake";
+
+    [Fact]
+    public void TestParallelizationIsDisabled()
+    {
+        // Guards against https://github.com/microsoft/aspire/issues/18815. See AssemblyInfo.cs.
+        var parallelization = typeof(AspireServiceBusExtensionsTests).Assembly.GetCustomAttribute<ParallelizationAttribute>();
+
+        Assert.NotNull(parallelization);
+        Assert.Equal(ParallelMode.None, parallelization.GetMode());
+    }
 
     [Theory]
     [InlineData(true)]

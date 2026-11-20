@@ -18,6 +18,119 @@ namespace Aspire.Cli.Tests.Commands;
 
 public class DescribeCommandTests(ITestOutputHelper outputHelper)
 {
+    [Theory]
+    [InlineData("Finished", 1, "[red]Finished (exit code: 1)[/]")]
+    [InlineData("Finished", -532462766, "[red]Finished (exit code: -532462766)[/]")]
+    [InlineData("Exited", 1, "[red]Exited (exit code: 1)[/]")]
+    [InlineData("Exited", -532462766, "[red]Exited (exit code: -532462766)[/]")]
+    [InlineData("Finished", 0, "[grey]Finished (exit code: 0)[/]")]
+    [InlineData("Exited", 0, "[grey]Exited (exit code: 0)[/]")]
+    [InlineData("Finished", null, "[grey]Finished[/]")]
+    [InlineData("Exited", null, "[grey]Exited[/]")]
+    [InlineData("finished", 1, "[red]finished (exit code: 1)[/]")]
+    [InlineData("EXITED", 1, "[red]EXITED (exit code: 1)[/]")]
+    [InlineData("Running", 1, "[green]Running[/]")]
+    [InlineData("FailedToStart", null, "[red]FailedToStart[/]")]
+    [InlineData("custom[state]", 1, "custom[[state]]")]
+    [InlineData(null, 1, "Unknown")]
+    public void GetSnapshotStateMarkup_FormatsExitCodes(string? state, int? exitCode, string expectedMarkup)
+    {
+        var snapshot = new ResourceSnapshot { Name = "resource", State = state, ExitCode = exitCode };
+
+        Assert.Equal(expectedMarkup, DescribeCommand.GetSnapshotStateMarkup(snapshot));
+    }
+
+    [Theory]
+    [InlineData("describe")]
+    [InlineData("describe finished-negative")]
+    public async Task DescribeCommand_DefaultTable_IncludesExitCodes(string commandLine)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        using var provider = CreateDescribeTestServices(workspace, outputWriter,
+        [
+            new() { Name = "running", ResourceType = "Project", State = "Running", HealthStatus = "Healthy" },
+            new() { Name = "finished-positive", ResourceType = "Project", State = "Finished", ExitCode = 1 },
+            new() { Name = "finished-negative", ResourceType = "Project", State = "Finished", ExitCode = -532462766 },
+            new() { Name = "finished-zero", ResourceType = "Project", State = "Finished", ExitCode = 0 },
+            new() { Name = "finished-unknown", ResourceType = "Project", State = "Finished" },
+            new() { Name = "exited-positive", ResourceType = "Container", State = "Exited", ExitCode = 1 },
+            new() { Name = "exited-negative", ResourceType = "Container", State = "Exited", ExitCode = -532462766 },
+            new() { Name = "exited-zero", ResourceType = "Container", State = "Exited", ExitCode = 0 },
+            new() { Name = "exited-unknown", ResourceType = "Container", State = "Exited" }
+        ], disableAnsi: true);
+
+        var exitCode = await provider.GetRequiredService<RootCommand>().Parse(commandLine).InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        await Verify(string.Join("", outputWriter.Logs), "txt").UseParameters(commandLine);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task DescribeCommand_JsonFormat_PreservesExitCodeAndState(bool follow)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        using var provider = CreateDescribeTestServices(workspace, outputWriter,
+        [
+            new() { Name = "api", ResourceType = "Project", State = "Finished", ExitCode = -532462766 }
+        ], configureConnection: connection =>
+        {
+            connection.WatchResourceSnapshotsHandler = (_, cancellationToken) => EmptyResourceSnapshots(cancellationToken);
+        });
+
+        var commandLine = follow ? "describe --format json --follow" : "describe --format json";
+        var exitCode = await provider.GetRequiredService<RootCommand>().Parse(commandLine).InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        using var document = JsonDocument.Parse(string.Join("", outputWriter.Logs));
+        var resource = follow
+            ? document.RootElement
+            : Assert.Single(document.RootElement.GetProperty("resources").EnumerateArray());
+        Assert.Equal("Finished", resource.GetProperty("state").GetString());
+        Assert.Equal(-532462766, resource.GetProperty("exitCode").GetInt32());
+    }
+
+    [Fact]
+    public async Task DescribeCommand_Follow_TableFormat_PreservesStateOnlyDisplay()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        using var provider = CreateDescribeTestServices(workspace, outputWriter,
+        [
+            new() { Name = "api", ResourceType = "Project", State = "Finished", ExitCode = -532462766 }
+        ], disableAnsi: true, configureConnection: connection =>
+        {
+            connection.WatchResourceSnapshotsHandler = (_, cancellationToken) => EmptyResourceSnapshots(cancellationToken);
+        });
+
+        var exitCode = await provider.GetRequiredService<RootCommand>().Parse("describe --follow").InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal(["[api] Finished"], outputWriter.Logs.Where(line => line.StartsWith("[api]", StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public async Task DescribeCommand_DefaultTable_UsesResourceTypeDisplayNamesAndFallbacks()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        using var provider = CreateDescribeTestServices(workspace, outputWriter,
+        [
+            new ResourceSnapshot { Name = "cache", ResourceType = "Container", ResourceTypeDisplayName = "Redis", State = "Running" },
+            new ResourceSnapshot { Name = "postgres", ResourceType = "Container", ResourceTypeDisplayName = "PostgreSQL Server", State = "Running" },
+            new ResourceSnapshot { Name = "orders", ResourceType = "Project", ResourceTypeDisplayName = "ASP.NET Core", State = "Running" },
+            new ResourceSnapshot { Name = "generic", ResourceType = "Container", State = "Running" }
+        ], disableAnsi: true);
+
+        var exitCode = await provider.GetRequiredService<RootCommand>().Parse("describe").InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        await Verify(string.Join("", outputWriter.Logs), "txt");
+    }
+
     [Fact]
     public async Task DescribeCommand_Help_Works()
     {
@@ -1188,6 +1301,54 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Equal("", string.Join("", outputWriter.Logs));
         Assert.NotEmpty(errorWriter.ToString());
+    }
+
+    [Fact]
+    public async Task DescribeCommand_WhenCanceledAtAppHostSelectionPrompt_DoesNotDisplayStoppingAspire()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        using var cts = new CancellationTokenSource();
+        var prompted = false;
+        var interactionService = new TestInteractionService
+        {
+            // Simulate the user pressing CTRL+C while the AppHost selection prompt is shown.
+            PromptForSelectionCallback = (_, _, _, cancellationToken) =>
+            {
+                prompted = true;
+                cts.Cancel();
+                throw new OperationCanceledException(cancellationToken);
+            }
+        };
+
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        monitor.AddConnection("socket.hash1", new TestAppHostAuxiliaryBackchannel
+        {
+            IsInScope = false,
+            AppHostInfo = new AppHostInformation
+            {
+                AppHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "OtherAppHost", "OtherAppHost.csproj"),
+                ProcessId = 1234
+            }
+        });
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
+            options.InteractionServiceFactory = _ => interactionService;
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("describe");
+
+        var exitCode = await result.InvokeAsync(new System.CommandLine.InvocationConfiguration(), cts.Token).DefaultTimeout();
+
+        Assert.True(prompted);
+        Assert.Equal(CliExitCodes.Cancelled, exitCode);
+        // "Stopping Aspire." implies the AppHost is being stopped, but describe never owns the AppHost.
+        var cancellation = Assert.Single(interactionService.DisplayedCancellations);
+        Assert.Null(cancellation.Message);
     }
 
     private ServiceProvider CreateDescribeTestServices(

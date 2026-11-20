@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Reflection;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Lifecycle;
 using Aspire.Hosting.Maui.Annotations;
@@ -107,7 +106,7 @@ internal static class MauiPlatformHelper
         // that DCP later passes to the Run target.
         var workingDir = Path.GetDirectoryName(projectPath)
             ?? throw new InvalidOperationException($"Unable to determine directory from project path: {projectPath}");
-        var configuration = resourceBuilder.ApplicationBuilder.AppHostAssembly?.GetCustomAttribute<AssemblyConfigurationAttribute>()?.Configuration;
+        var configuration = resourceBuilder.ApplicationBuilder.Configuration["AppHost:BuildConfiguration"];
         resourceBuilder.WithAnnotation(new MauiBuildInfoAnnotation(
             projectPath,
             workingDir,

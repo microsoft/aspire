@@ -21,7 +21,7 @@ public class PeerInstallProbeTests(ITestOutputHelper outputHelper) : IDisposable
     // so a failure log tells us why the probe took whichever code path it
     // took. Keep the factory alive for the lifetime of the test class so
     // logs aren't cut off mid-probe by an early dispose.
-    private readonly ILoggerFactory _loggerFactory = LoggerFactory.Create(builder => builder.AddXunit(outputHelper, LogLevel.Trace));
+    private readonly ILoggerFactory _loggerFactory = LoggerFactory.Create(builder => builder.SetMinimumLevel(LogLevel.Trace).AddXunit(outputHelper, LogLevel.Trace));
 
     public void Dispose() => _loggerFactory.Dispose();
 
@@ -354,6 +354,44 @@ public class PeerInstallProbeTests(ITestOutputHelper outputHelper) : IDisposable
     }
 
     [Fact]
+    public async Task ProbeAsync_VersionFallbackDescendantHoldsStdoutOpen_KeepsCapturedVersion()
+    {
+        // Regression test for https://github.com/microsoft/aspire/issues/20147. The peer prints its
+        // version and exits 0, but a descendant that inherited stdout keeps the pipe open past the
+        // post-exit drain bound. The output the peer already wrote must not be discarded.
+        Assert.SkipWhen(OperatingSystem.IsWindows(),
+            "Uses a POSIX background child to hold the inherited stdout pipe open.");
+
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var pidFile = Path.Combine(workspace.WorkspaceRoot.FullName, "descendant.pid");
+        using var fakePeer = FakePeerScript.BuildVersionWithStdoutHoldingDescendant(outputHelper, versionStdout: "9.0.0", pidFile);
+
+        try
+        {
+            var probe = CreateProbeWithGenerousTimeout();
+            var result = await probe.ProbeAsync(fakePeer.Path, TestContext.Current.CancellationToken);
+
+            var ok = AssertProbeOk(result);
+            Assert.Equal("9.0.0", ok.Info.Version);
+        }
+        finally
+        {
+            if (File.Exists(pidFile) && int.TryParse(File.ReadAllText(pidFile).Trim(), out var pid))
+            {
+                try
+                {
+                    using var descendant = Process.GetProcessById(pid);
+                    descendant.Kill();
+                }
+                catch (ArgumentException)
+                {
+                    // Already exited.
+                }
+            }
+        }
+    }
+
+    [Fact]
     public async Task ProbeAsync_PeerHangs_TimesOutAndReturnsFailed()
     {
         // Sleep significantly longer than the probe timeout we configure so
@@ -502,6 +540,11 @@ internal static class FakePeerScript
         return BuildInternal(outputHelper, body: ScriptBody.SleepWithPidFile(pidFile, sleepSeconds));
     }
 
+    internal static FakeScriptResult BuildVersionWithStdoutHoldingDescendant(ITestOutputHelper outputHelper, string versionStdout, string pidFile)
+    {
+        return BuildInternal(outputHelper, body: ScriptBody.VersionWithStdoutHoldingDescendant(versionStdout, pidFile));
+    }
+
     internal static FakeScriptResult BuildRepeatedStderr(ITestOutputHelper outputHelper, int byteCount, int exitCode)
     {
         return BuildInternal(outputHelper, body: ScriptBody.StderrRepeat(byteCount, exitCode));
@@ -591,6 +634,8 @@ internal abstract record ScriptBody
     public static ScriptBody DoctorOrVersion(string doctorStdout, int doctorExitCode, string versionStdout, int versionExitCode)
         => new DoctorOrVersionScript(doctorStdout, doctorExitCode, versionStdout, versionExitCode);
     public static ScriptBody ArgvRecorder(string argvFile) => new ArgvRecorderScript(argvFile);
+    public static ScriptBody VersionWithStdoutHoldingDescendant(string versionStdout, string pidFile)
+        => new VersionWithStdoutHoldingDescendantScript(versionStdout, pidFile);
 
     private sealed record EmitExit(string Stdout, string Stderr, int ExitCode) : ScriptBody
     {
@@ -682,6 +727,26 @@ internal abstract record ScriptBody
 
         public override string RenderBatch() =>
             throw new PlatformNotSupportedException("POSIX pid-file sleeper is not supported on Windows.");
+    }
+
+    private sealed record VersionWithStdoutHoldingDescendantScript(string VersionStdout, string PidFile) : ScriptBody
+    {
+        // `doctor` fails so the probe falls back to `--version`. The version branch prints, then
+        // leaves a background child that inherits stdout (holding the pipe open) and exits 0.
+        public override string RenderShell() =>
+            $$"""
+              #!/bin/sh
+              if [ "$1" = "--version" ]; then
+                printf '%s\n' '{{VersionStdout}}'
+                sleep 60 &
+                printf '%s\n' "$!" > '{{PidFile}}'
+                exit 0
+              fi
+              exit 1
+              """;
+
+        public override string RenderBatch() =>
+            throw new PlatformNotSupportedException("POSIX background descendant is not supported on Windows.");
     }
 
     private sealed record DoctorOrVersionScript(string DoctorStdout, int DoctorExitCode, string VersionStdout, int VersionExitCode) : ScriptBody

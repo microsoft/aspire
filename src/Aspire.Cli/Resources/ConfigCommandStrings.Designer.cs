@@ -10,8 +10,8 @@
 
 namespace Aspire.Cli.Resources {
     using System;
-
-
+    
+    
     /// <summary>
     ///   A strongly-typed resource class, for looking up localized strings, etc.
     /// </summary>
@@ -23,15 +23,15 @@ namespace Aspire.Cli.Resources {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
     internal class ConfigCommandStrings {
-
+        
         private static global::System.Resources.ResourceManager resourceMan;
-
+        
         private static global::System.Globalization.CultureInfo resourceCulture;
-
+        
         [global::System.Diagnostics.CodeAnalysis.SuppressMessageAttribute("Microsoft.Performance", "CA1811:AvoidUncalledPrivateCode")]
         internal ConfigCommandStrings() {
         }
-
+        
         /// <summary>
         ///   Returns the cached ResourceManager instance used by this class.
         /// </summary>
@@ -45,7 +45,7 @@ namespace Aspire.Cli.Resources {
                 return resourceMan;
             }
         }
-
+        
         /// <summary>
         ///   Overrides the current thread's CurrentUICulture property for all
         ///   resource lookups using this strongly typed resource class.
@@ -59,7 +59,7 @@ namespace Aspire.Cli.Resources {
                 resourceCulture = value;
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Available features.
         /// </summary>
@@ -68,7 +68,34 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("AvailableFeaturesHeader", resourceCulture);
             }
         }
-
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Configuration key &apos;{0}&apos; requires a non-negative integer array index..
+        /// </summary>
+        internal static string ConfigurationArrayIndexInvalid {
+            get {
+                return ResourceManager.GetString("ConfigurationArrayIndexInvalid", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Array index {0} in configuration key &apos;{1}&apos; is out of range. Edit an existing element or append at index {2}..
+        /// </summary>
+        internal static string ConfigurationArrayIndexOutOfRange {
+            get {
+                return ResourceManager.GetString("ConfigurationArrayIndexOutOfRange", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Configuration key &apos;{0}&apos; requires an array, but the existing value is not an array..
+        /// </summary>
+        internal static string ConfigurationArrayRequired {
+            get {
+                return ResourceManager.GetString("ConfigurationArrayRequired", resourceCulture);
+            }
+        }
+        
         /// <summary>
         ///   Looks up a localized string similar to Configuration &apos;{0}&apos; deleted globally..
         /// </summary>
@@ -77,7 +104,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ConfigurationKeyDeletedGlobally", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Configuration &apos;{0}&apos; deleted locally..
         /// </summary>
@@ -86,7 +113,16 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ConfigurationKeyDeletedLocally", resourceCulture);
             }
         }
-
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Configuration key &apos;{0}&apos; is invalid. Use dots for nested properties and brackets containing a non-negative integer for array indices..
+        /// </summary>
+        internal static string ConfigurationKeyInvalid {
+            get {
+                return ResourceManager.GetString("ConfigurationKeyInvalid", resourceCulture);
+            }
+        }
+        
         /// <summary>
         ///   Looks up a localized string similar to Configuration &apos;{0}&apos; set to &apos;{1}&apos; globally..
         /// </summary>
@@ -95,7 +131,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ConfigurationKeySetGlobally", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Configuration &apos;{0}&apos; set to &apos;{1}&apos; locally..
         /// </summary>
@@ -104,7 +140,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ConfigurationKeySetLocally", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Delete a configuration value.
         /// </summary>
@@ -113,7 +149,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("DeleteCommand_Description", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Delete the configuration value from the global $HOME/.aspire/settings.json instead of the local settings file.
         /// </summary>
@@ -122,16 +158,16 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("DeleteCommand_GlobalArgumentDescription", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to The configuration key to delete.
+        ///   Looks up a localized string similar to The configuration key to delete. Use dots for nested properties and [index] for array elements..
         /// </summary>
         internal static string DeleteCommand_KeyArgumentDescription {
             get {
                 return ResourceManager.GetString("DeleteCommand_KeyArgumentDescription", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Delete the configuration value from the global $HOME/.aspire/settings.json instead of the local settings file?.
         /// </summary>
@@ -140,7 +176,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("DeleteCommand_PromptForGlobal", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Which config value do you want to delete?.
         /// </summary>
@@ -149,7 +185,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("DeleteCommand_PromptForKey", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Manage CLI configuration including feature flags.
         /// </summary>
@@ -158,7 +194,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("Description", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to What do you want to do?.
         /// </summary>
@@ -167,7 +203,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ExtensionActionPrompt", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Get a configuration value.
         /// </summary>
@@ -176,16 +212,16 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("GetCommand_Description", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to The configuration key to retrieve.
+        ///   Looks up a localized string similar to The configuration key to retrieve. Use dots for nested properties and [index] for array elements..
         /// </summary>
         internal static string GetCommand_KeyArgumentDescription {
             get {
                 return ResourceManager.GetString("GetCommand_KeyArgumentDescription", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Which configuration key do you want to retrieve?.
         /// </summary>
@@ -194,7 +230,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("GetCommand_PromptForKey", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Global configuration.
         /// </summary>
@@ -203,7 +239,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("GlobalConfigurationHeader", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Key.
         /// </summary>
@@ -212,7 +248,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("HeaderKey", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Value.
         /// </summary>
@@ -221,7 +257,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("HeaderValue", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Available features.
         /// </summary>
@@ -230,7 +266,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("InfoCommand_AvailableFeatures", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Display configuration file paths and available features.
         /// </summary>
@@ -239,7 +275,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("InfoCommand_Description", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Global settings path.
         /// </summary>
@@ -248,7 +284,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("InfoCommand_GlobalSettingsPath", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Output information in JSON format.
         /// </summary>
@@ -257,7 +293,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("InfoCommand_JsonOptionDescription", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Local settings path.
         /// </summary>
@@ -266,7 +302,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("InfoCommand_LocalSettingsPath", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Settings file properties.
         /// </summary>
@@ -275,7 +311,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("InfoCommand_SettingsProperties", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Run &apos;aspire config list --all&apos; to see all available feature flags..
         /// </summary>
@@ -284,7 +320,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ListCommand_AllFeaturesHint", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Show all available features that can be configured.
         /// </summary>
@@ -293,7 +329,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ListCommand_AllOptionDescription", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to List all configuration values.
         /// </summary>
@@ -302,7 +338,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ListCommand_Description", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Local configuration.
         /// </summary>
@@ -311,7 +347,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("LocalConfigurationHeader", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to No configuration values found..
         /// </summary>
@@ -320,7 +356,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("NoConfigurationValuesFound", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to No global configuration found..
         /// </summary>
@@ -329,7 +365,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("NoGlobalConfigurationFound", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to No local configuration found..
         /// </summary>
@@ -338,7 +374,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("NoLocalConfigurationFound", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Set a configuration value.
         /// </summary>
@@ -347,7 +383,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("SetCommand_Description", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Set the configuration value globally in $HOME/.aspire/settings.json instead of the local settings file.
         /// </summary>
@@ -356,16 +392,16 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("SetCommand_GlobalArgumentDescription", resourceCulture);
             }
         }
-
+        
         /// <summary>
-        ///   Looks up a localized string similar to The configuration key to set.
+        ///   Looks up a localized string similar to The configuration key to set. Use dots for nested properties and [index] to create or edit array elements..
         /// </summary>
         internal static string SetCommand_KeyArgumentDescription {
             get {
                 return ResourceManager.GetString("SetCommand_KeyArgumentDescription", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Where do you want to set the configuration value?.
         /// </summary>
@@ -374,7 +410,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("SetCommand_PromptForGlobal", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Globally ($HOME/.aspire/settings.json).
         /// </summary>
@@ -383,7 +419,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("SetCommand_PromptForGlobal_GlobalOption", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Locally.
         /// </summary>
@@ -392,7 +428,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("SetCommand_PromptForGlobal_LocalOption", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Which configuration key do you want to set?.
         /// </summary>
@@ -401,7 +437,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("SetCommand_PromptForKey", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to What value do you want to set?.
         /// </summary>
@@ -410,7 +446,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("SetCommand_PromptForValue", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to The configuration value to set.
         /// </summary>
@@ -419,7 +455,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("SetCommand_ValueArgumentDescription", resourceCulture);
             }
         }
-
+        
         /// <summary>
         ///   Looks up a localized string similar to Use &apos;aspire config set features.&lt;name&gt; true|false&apos; to enable or disable a feature..
         /// </summary>

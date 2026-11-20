@@ -120,7 +120,7 @@ internal sealed class RepositoryToolUpdater(INpmRunner npmRunner, IInteractionSe
                     : manifest.IsNpm && reference.Version.StartsWith('~') ? "~" : string.Empty;
                 if (!SemVersion.TryParse(reference.Version[prefix.Length..], SemVersionStyles.Strict, out var currentVersion))
                 {
-                    interactionService.DisplayMessage(KnownEmojis.Warning, string.Format(CultureInfo.CurrentCulture,
+                    interactionService.DisplayMessage(KnownEmojis.PoliceCarLight, string.Format(CultureInfo.CurrentCulture,
                         UpdateCommandStrings.UnsupportedToolVersionFormat, manifest.File.FullName, reference.Version));
                     skippedReference = true;
                     continue;

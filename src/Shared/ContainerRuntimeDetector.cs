@@ -33,8 +33,7 @@ internal static class ContainerRuntimeDetector
     public static async Task<ContainerRuntimeInfo?> FindAvailableRuntimeAsync(
         string? configuredRuntime = null,
         ILogger? logger = null,
-        CancellationToken cancellationToken = default,
-        IReadOnlyCollection<string>? supportedRuntimes = null)
+        CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
         if (!string.IsNullOrEmpty(configuredRuntime))
@@ -45,7 +44,6 @@ internal static class ContainerRuntimeDetector
         }
 
         var runtimes = GetKnownRuntimes(OperatingSystem.IsWindows())
-            .Where(runtime => supportedRuntimes is null || supportedRuntimes.Contains(runtime.Key, StringComparers.ContainerRuntime))
             .ToArray();
         logger?.LogDebug("Auto-detecting container runtime, probing {Count} known runtimes...", runtimes.Length);
         var results = await Task.WhenAll(runtimes.Select(runtime => runtime.CheckAsync(logger, cancellationToken))).ConfigureAwait(false);

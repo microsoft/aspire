@@ -250,6 +250,66 @@ public class DevTunnelMonitorTests
     }
 
     [Fact]
+    public async Task BrowserOriginsAreFinalizedBeforeNotificationAndFollowReconnects()
+    {
+        using var test = new TestDevTunnelMonitor();
+        var endpoint = test.Port.GetEndpoint(DevTunnelPortResource.TunnelEndpointName);
+        var origin = endpoint.BrowserOrigins;
+        var callbacks = 0;
+        var notifications = 0;
+        test.Port.Annotations.Add(new ResourceUrlsCallbackAnnotation(context =>
+        {
+            callbacks++;
+            var tunnelUrl = Assert.Single(context.Urls, url => url.Endpoint?.EndpointName == DevTunnelPortResource.TunnelEndpointName);
+            tunnelUrl.Url += "/swagger?x=1#operations";
+            context.Urls.Add(new()
+            {
+                Endpoint = tunnelUrl.Endpoint,
+                Url = "https://original-3000.usw2.devtunnels.ms/health"
+            });
+            context.Urls.Add(new()
+            {
+                Endpoint = tunnelUrl.Endpoint,
+                Url = "https://custom.example/app"
+            });
+            return Task.CompletedTask;
+        }));
+        test.App.Services.GetRequiredService<IDistributedApplicationEventing>()
+            .Subscribe<ResourceEndpointsAllocatedEvent>(test.Port, async (_, ct) =>
+            {
+                notifications++;
+                Assert.Equal(1, callbacks);
+                Assert.Equal("https://custom.example,https://original-3000.usw2.devtunnels.ms", await origin.GetValueAsync(ct));
+            });
+
+        await test.StartAsync();
+        await test.ReadyAsync();
+
+        Assert.Equal(
+            "https://custom.example,https://original-3000.usw2.devtunnels.ms",
+            await endpoint.BrowserOrigins.GetValueAsync());
+
+        test.Client.TunnelStatus = test.Client.TunnelStatus with
+        {
+            Ports = [new(3000, "http") { PortUri = new("https://replacement-3000.usw2.devtunnels.ms") }]
+        };
+        await test.Monitor.CheckHealthAsync(CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal(1, callbacks);
+        Assert.Equal(1, notifications);
+        Assert.Equal("https://custom.example,https://replacement-3000.usw2.devtunnels.ms", await origin.GetValueAsync());
+        Assert.Equal(
+            "https://custom.example,https://replacement-3000.usw2.devtunnels.ms",
+            await endpoint.BrowserOrigins.GetValueAsync());
+        Assert.Equal([
+            "https://replacement-3000.usw2.devtunnels.ms/swagger?x=1#operations",
+            "https://replacement-3000-inspect.usw2.devtunnels.ms",
+            "https://replacement-3000.usw2.devtunnels.ms/health",
+            "https://custom.example/app"
+        ], test.Snapshot(test.Port).Urls.Select(url => url.Url));
+    }
+
+    [Fact]
     public async Task CustomizedUrlsSurviveReadinessReconciliationAndReconnect()
     {
         using var test = new TestDevTunnelMonitor();
@@ -772,5 +832,50 @@ public class DevTunnelMonitorTests
         Assert.Equal(3, queries);
         Assert.False(response.Task.IsCompleted);
         await Assert.ThrowsAsync<ObjectDisposedException>(() => test.Monitor.CheckHealthAsync(CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task FixtureDisposalStopsMonitorBeforeServicesAreDisposed()
+    {
+        var test = new TestDevTunnelMonitor(configureServices: services => services.AddSingleton<DisposalProbe>());
+        var queried = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var response = new TaskCompletionSource<DevTunnelAccessStatus>(TaskCreationOptions.RunContinuationsAsynchronously);
+        test.Client.GetAccessCallback = (port, ct) =>
+        {
+            if (port is null)
+            {
+                return Task.FromResult(test.Client.AccessStatus);
+            }
+            queried.TrySetResult();
+            return response.Task.WaitAsync(ct);
+        };
+        // Resolved after the monitor, so the provider disposes the probe first. Its disposal runs
+        // after the provider rejects resolution, which is where a still-running monitor would publish.
+        var probe = test.App.Services.GetRequiredService<DisposalProbe>();
+        probe.Disposing = () =>
+        {
+            var refresh = test.Monitor.WaitForAccessRefreshAsync(CancellationToken.None);
+            response.TrySetResult(test.Client.AccessStatus);
+            Task.WhenAny(refresh).DefaultTimeout().GetAwaiter().GetResult();
+        };
+        await test.StartAsync();
+        await test.ReadyAsync();
+        await queried.Task.DefaultTimeout();
+
+        test.Dispose();
+
+        Assert.True(probe.Disposed);
+    }
+
+    private sealed class DisposalProbe : IDisposable
+    {
+        public Action? Disposing { get; set; }
+        public bool Disposed { get; private set; }
+
+        public void Dispose()
+        {
+            Disposed = true;
+            Disposing?.Invoke();
+        }
     }
 }

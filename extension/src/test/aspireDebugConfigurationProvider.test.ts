@@ -7,6 +7,7 @@ import * as os from 'os';
 import * as path from 'path';
 import * as sinon from 'sinon';
 import * as vscode from 'vscode';
+import * as capabilitiesModule from '../capabilities';
 import { AspireDebugConfigurationProvider, type ExternalLaunchReservation } from '../debugger/AspireDebugConfigurationProvider';
 import { appHostLaunchReservationIdConfigKey, appHostLaunchTokenConfigKey, appHostSelectionOriginConfigKey, appHostTelemetryTargetPathConfigKey } from '../debugger/AspireDebugConfigurationMetadata';
 import { isAspireDebugConfigurationExtensionOwned, markAspireDebugConfigurationAsExtensionOwned, markAspireDebugConfigurationWithResolvedCliPath, markAspireDebugConfigurationWithResolvedCliPathScope, stripAspireDebugConfigurationProviderInternalProperties } from '../debugger/AspireDebugConfigurationProviderInternal';
@@ -14,11 +15,12 @@ import type { AspireExtendedDebugConfiguration } from '../dcp/types';
 import {
     resetLaunchFailureStore,
 } from '../services/launchFailureStore';
-import { appHostOperationAlreadyInProgress, defaultConfigurationName, defaultConfigurationNameForWorkspaceFolder } from '../loc/strings';
+import { appHostLifecycleDisableLaunchProfileNotSupported, appHostLifecycleLaunchProfileRequiresRun, appHostOperationAlreadyInProgress, defaultConfigurationName, defaultConfigurationNameForWorkspaceFolder } from '../loc/strings';
 import * as cliPathModule from '../utils/cliPath';
 import { getCliPathTargetKey, windowCliPathTarget, workspaceFolderCliPathTarget } from '../utils/cliPathVariables';
 import { AppHostDiscoveryService, type CandidateAppHostDisplayInfo } from '../utils/appHostDiscovery';
 import { __resetAppHostIdentityRegistryForTests } from '../utils/appHostIdentity';
+import { appHostDebuggerSetupRequired, debuggerSetupAction } from '../loc/strings';
 
 import { removeDirectorySafely } from './testHelpers';
 /** Captures the AppHost paths the provider claims for `launch.json`/F5 launches. */
@@ -65,6 +67,9 @@ class RecordingLaunchReservation implements ExternalLaunchReservation {
 
     markLaunchAttemptFailureRecorded(configuration: vscode.DebugConfiguration): void {
         this.configurationsWithRecordedLaunchFailures.push(configuration);
+    }
+
+    markLaunchAttemptCanceled(_configuration: vscode.DebugConfiguration): void {
     }
 
     validateOrReacquireExternalLaunchReservation(appHostPath: string, reservationId: string, isDirectoryScope = false): string | false {
@@ -159,6 +164,7 @@ suite('AspireDebugConfigurationProvider', () => {
     let launchReservation: RecordingLaunchReservation;
     let resolveCliPathStub: sinon.SinonStub;
     let tryExecuteCliStub: sinon.SinonStub;
+    let isCsharpInstalledStub: sinon.SinonStub;
     let workspaceState: TestMemento;
 
     setup(() => {
@@ -175,6 +181,8 @@ suite('AspireDebugConfigurationProvider', () => {
             source: 'configured',
         });
         tryExecuteCliStub = sandbox.stub(cliPathModule, 'tryExecuteCli').resolves(true);
+        isCsharpInstalledStub = sandbox.stub(capabilitiesModule, 'isCsharpInstalled').returns(true);
+        sandbox.stub(vscode.extensions, 'getExtension').returns({} as vscode.Extension<unknown>);
     });
 
     teardown(() => {
@@ -182,6 +190,48 @@ suite('AspireDebugConfigurationProvider', () => {
         __resetAppHostIdentityRegistryForTests();
         sandbox.restore();
         removeDirectorySafely(tempDir);
+    });
+
+    for (const [fileName, language, extensionIds] of [
+        ['apphost.go', 'Go', ['golang.go']],
+        ['apphost.rs', 'Rust', ['vadimcn.vscode-lldb']],
+        ['AppHost.java', 'Java', ['redhat.java', 'vscjava.vscode-java-debug']],
+    ] as const) {
+        test(`offers debugger setup instead of silently running ${fileName}`, async () => {
+            const appHostPath = path.join(tempDir, fileName);
+            fs.writeFileSync(appHostPath, '');
+            const getExtension = vscode.extensions.getExtension as sinon.SinonStub;
+            getExtension.returns(undefined);
+            const warning = sandbox.stub(vscode.window, 'showWarningMessage').resolves(debuggerSetupAction as never);
+            const execute = sandbox.stub(vscode.commands, 'executeCommand').resolves();
+            const provider = createProvider(createAppHostDiscoveryService(appHostPath), launchReservation);
+
+            const result = await provider.resolveDebugConfigurationWithSubstitutedVariables(undefined, {
+                name: 'Debug AppHost', type: 'aspire', request: 'launch', program: appHostPath,
+            });
+
+            assert.strictEqual(result, undefined);
+            assert.deepStrictEqual(warning.firstCall.args, [appHostDebuggerSetupRequired(language), debuggerSetupAction]);
+            sinon.assert.calledWith(execute, 'aspire-vscode.installDebuggerExtension', {
+                debuggerName: language, debuggerType: language.toLowerCase(), extensionIds: [...extensionIds],
+            });
+            assert.deepStrictEqual(launchReservation.reserved, []);
+        });
+    }
+
+    test('preserves Run Without Debugging when Go debugger support is absent', async () => {
+        const appHostPath = path.join(tempDir, 'apphost.go');
+        fs.writeFileSync(appHostPath, '');
+        (vscode.extensions.getExtension as sinon.SinonStub).returns(undefined);
+        const warning = sandbox.stub(vscode.window, 'showWarningMessage').resolves();
+        const provider = createProvider(createAppHostDiscoveryService(appHostPath), launchReservation);
+
+        const result = await provider.resolveDebugConfigurationWithSubstitutedVariables(undefined, {
+            name: 'Run AppHost', type: 'aspire', request: 'launch', program: appHostPath, noDebug: true,
+        });
+
+        assert.strictEqual(result?.program, appHostPath);
+        sinon.assert.notCalled(warning);
     });
 
     test('resolves launch config SDK-style AppHost Program.cs to containing project file', async () => {
@@ -460,6 +510,51 @@ suite('AspireDebugConfigurationProvider', () => {
         assert.deepStrictEqual(launchReservation.prepared, []);
     });
 
+    for (const [command, debuggerKind] of [['publish', 'apphost'], ['deploy', 'project']] as const) {
+        test(`passes a nested ${debuggerKind} profile to ${command} validation and propagates its error without C#`, async () => {
+            isCsharpInstalledStub.returns(false);
+            const appHostPath = path.join(tempDir, 'AppHost.csproj');
+            fs.writeFileSync(appHostPath, '<Project Sdk="Aspire.AppHost.Sdk" />');
+            launchReservation.preparationError = new Error(appHostLifecycleLaunchProfileRequiresRun);
+            const provider = createProvider(createAppHostDiscoveryService(appHostPath), launchReservation);
+
+            await assert.rejects(
+                provider.resolveDebugConfigurationWithSubstitutedVariables(undefined, {
+                    name: 'AppHost',
+                    type: 'aspire',
+                    request: 'launch',
+                    command,
+                    program: appHostPath,
+                    debuggers: { [debuggerKind]: { launchProfile: 'Selected Profile' } },
+                }),
+                { message: appHostLifecycleLaunchProfileRequiresRun });
+
+            assert.strictEqual(launchReservation.prepared[0]?.launchProfile, 'Selected Profile');
+            assert.deepStrictEqual(launchReservation.reservedOperations, []);
+        });
+    }
+
+    test('rejects a nested profile for an unrecognized explicit command without C#', async () => {
+        isCsharpInstalledStub.returns(false);
+        const appHostPath = path.join(tempDir, 'AppHost.csproj');
+        fs.writeFileSync(appHostPath, '<Project Sdk="Aspire.AppHost.Sdk" />');
+        const provider = createProvider(createAppHostDiscoveryService(appHostPath), launchReservation);
+
+        await assert.rejects(
+            provider.resolveDebugConfigurationWithSubstitutedVariables(undefined, {
+                name: 'AppHost',
+                type: 'aspire',
+                request: 'launch',
+                command: 'start',
+                program: appHostPath,
+                debuggers: { apphost: { launchProfile: 'Selected Profile' } },
+            }),
+            { message: appHostLifecycleLaunchProfileRequiresRun });
+
+        assert.deepStrictEqual(launchReservation.prepared, []);
+        assert.deepStrictEqual(launchReservation.reservedOperations, []);
+    });
+
     test('claims the concrete AppHost when the workspace-folder launch config leaves program as the directory', async () => {
         // The default `${workspaceFolder}` configuration deliberately resolves to the folder,
         // so claiming `config.program` would claim a directory. A directory is not the same
@@ -712,7 +807,7 @@ suite('AspireDebugConfigurationProvider', () => {
         }]);
     });
 
-    test('prepares the CLI with the nested AppHost launch profile instead of the top-level profile', async () => {
+    test('keeps the nested AppHost launch profile debugger-owned when C# is available', async () => {
         const appHostPath = path.join(tempDir, 'AppHost.csproj');
         fs.writeFileSync(appHostPath, '<Project Sdk="Aspire.AppHost.Sdk" />');
         const provider = createProvider(createAppHostDiscoveryService(appHostPath), launchReservation);
@@ -736,6 +831,82 @@ suite('AspireDebugConfigurationProvider', () => {
             '--app-argument',
         ]);
         assert.strictEqual(launchReservation.prepared[0].launchProfile, undefined);
+    });
+
+    for (const debuggerKind of ['apphost', 'project'] as const) {
+        test(`forwards the nested ${debuggerKind} launch profile when C# is unavailable`, async () => {
+            isCsharpInstalledStub.returns(false);
+            const appHostPath = path.join(tempDir, 'AppHost.csproj');
+            fs.writeFileSync(appHostPath, '<Project Sdk="Aspire.AppHost.Sdk" />');
+            const provider = createProvider(createAppHostDiscoveryService(appHostPath), launchReservation);
+            const debuggers = {
+                project: { launchProfile: 'Project Profile' },
+                [debuggerKind]: { launchProfile: 'Selected Profile' },
+            };
+
+            const config = await provider.resolveDebugConfigurationWithSubstitutedVariables(undefined, {
+                name: 'Run AppHost',
+                type: 'aspire',
+                request: 'launch',
+                program: appHostPath,
+                launchProfile: 'Top Level',
+                args: ['--launch-profile=Argument Profile', '--', '--launch-profile', 'AppHost Argument'],
+                debuggers,
+            });
+
+            assert.deepStrictEqual(launchReservation.prepared, [{
+                appHostPath,
+                command: 'run',
+                args: ['--', '--launch-profile', 'AppHost Argument'],
+                cliPath: '/resolved/aspire',
+                launchProfile: 'Selected Profile',
+            }]);
+            assert.deepStrictEqual(config?.debuggers, debuggers);
+        });
+    }
+
+    test('forwards a nested profile for a file-based AppHost when C# is unavailable', async () => {
+        isCsharpInstalledStub.returns(false);
+        const appHostPath = path.join(tempDir, 'apphost.cs');
+        fs.writeFileSync(appHostPath, '#:sdk Aspire.AppHost.Sdk\nvar builder = DistributedApplication.CreateBuilder(args);');
+        const provider = createProvider(createAppHostDiscoveryService(appHostPath), launchReservation);
+
+        await provider.resolveDebugConfigurationWithSubstitutedVariables(undefined, {
+            name: 'Run AppHost',
+            type: 'aspire',
+            request: 'launch',
+            program: appHostPath,
+            debuggers: { apphost: { launchProfile: 'Selected Profile' } },
+        });
+
+        assert.strictEqual(launchReservation.prepared[0].launchProfile, 'Selected Profile');
+    });
+
+    test('resolves configuration while the unsupported disableLaunchProfile warning remains open', async () => {
+        isCsharpInstalledStub.returns(false);
+        const pendingWarning = new Promise<vscode.MessageItem | undefined>(() => { });
+        const warning = sandbox.stub(vscode.window, 'showWarningMessage').returns(pendingWarning);
+        const appHostPath = path.join(tempDir, 'AppHost.csproj');
+        fs.writeFileSync(appHostPath, '<Project Sdk="Aspire.AppHost.Sdk" />');
+        const provider = createProvider(createAppHostDiscoveryService(appHostPath), launchReservation);
+
+        const config = await provider.resolveDebugConfigurationWithSubstitutedVariables(undefined, {
+            name: 'Run AppHost',
+            type: 'aspire',
+            request: 'launch',
+            program: appHostPath,
+            launchProfile: 'Top Level',
+            args: ['--launch-profile=Argument Profile'],
+            debuggers: {
+                apphost: { launchProfile: 'Selected Profile', disableLaunchProfile: true },
+            },
+        });
+
+        assert.strictEqual(config?.program, appHostPath);
+        assert.deepStrictEqual(launchReservation.prepared[0].args, []);
+        assert.strictEqual(launchReservation.prepared[0].launchProfile, undefined);
+        assert.strictEqual(warning.calledOnce, true);
+        assert.deepStrictEqual(warning.firstCall.args, [appHostLifecycleDisableLaunchProfileNotSupported]);
     });
 
     test('removes the root CLI launch profile when nested AppHost settings disable profiles', async () => {
@@ -788,6 +959,26 @@ suite('AspireDebugConfigurationProvider', () => {
         assert.strictEqual(launchReservation.prepared[0].launchProfile, 'Top Level');
     });
 
+    test('keeps a non-dotnet AppHost nested profile debugger-owned when C# is unavailable', async () => {
+        isCsharpInstalledStub.returns(false);
+        const appHostPath = path.join(tempDir, 'apphost.ts');
+        fs.writeFileSync(appHostPath, 'import { createBuilder } from "./.aspire/modules/aspire";');
+        const provider = createProvider(
+            createAppHostDiscoveryService(appHostPath, appHostPath, 'typescript/nodejs'),
+            launchReservation);
+
+        await provider.resolveDebugConfigurationWithSubstitutedVariables(undefined, {
+            name: 'Run AppHost',
+            type: 'aspire',
+            request: 'launch',
+            program: appHostPath,
+            launchProfile: 'Top Level',
+            debuggers: { apphost: { launchProfile: 'AppHost Profile' } },
+        });
+
+        assert.strictEqual(launchReservation.prepared[0].launchProfile, undefined);
+    });
+
     test('classifies a suffix-shaped AppHost directory by its contents', async () => {
         const appHostDirectory = path.join(tempDir, 'apphost.cs');
         fs.mkdirSync(appHostDirectory);
@@ -835,6 +1026,48 @@ suite('AspireDebugConfigurationProvider', () => {
         assert.deepStrictEqual(launchReservation.prepared[0].args, []);
         assert.strictEqual(launchReservation.prepared[0].launchProfile, undefined);
     });
+
+    test('forwards a nested project profile for a directory-based dotnet AppHost when C# is unavailable', async () => {
+        isCsharpInstalledStub.returns(false);
+        const appHostDirectory = path.join(tempDir, 'AppHost');
+        fs.mkdirSync(appHostDirectory);
+        fs.writeFileSync(path.join(appHostDirectory, 'AppHost.csproj'), '<Project Sdk="Aspire.AppHost.Sdk" />');
+        const provider = createProvider(createAppHostDiscoveryService(appHostDirectory, null), launchReservation);
+
+        await provider.resolveDebugConfigurationWithSubstitutedVariables(undefined, {
+            name: 'Run AppHost',
+            type: 'aspire',
+            request: 'launch',
+            program: appHostDirectory,
+            debuggers: { project: { launchProfile: 'Project Profile' } },
+        });
+
+        assert.strictEqual(launchReservation.prepared[0].launchProfile, 'Project Profile');
+    });
+
+    for (const [profileSource, noDebug] of [['apphost', false], ['project', true]] as const) {
+        test(`forwards the ${profileSource} profile for an unclassified directory without C#, noDebug=${noDebug}`, async () => {
+            isCsharpInstalledStub.returns(false);
+            const program = path.join(tempDir, 'src');
+            fs.mkdirSync(program);
+            const provider = createProvider(createAppHostDiscoveryService(program, null), launchReservation);
+
+            await provider.resolveDebugConfigurationWithSubstitutedVariables(undefined, {
+                name: 'Run AppHost',
+                type: 'aspire',
+                request: 'launch',
+                program,
+                noDebug,
+                launchProfile: 'Root Profile',
+                args: ['--launch-profile=Argument Profile', '--', '--app-argument'],
+                debuggers: { [profileSource]: { launchProfile: 'Nested Profile' } },
+            });
+
+            assert.strictEqual(launchReservation.prepared.length, 1);
+            assert.strictEqual(launchReservation.prepared[0].launchProfile, 'Nested Profile');
+            assert.deepStrictEqual(launchReservation.prepared[0].args, ['--', '--app-argument']);
+        });
+    }
 
     test('strips disabled root launch profiles before non-run command handling', async () => {
         const appHostPath = path.join(tempDir, 'AppHost.csproj');

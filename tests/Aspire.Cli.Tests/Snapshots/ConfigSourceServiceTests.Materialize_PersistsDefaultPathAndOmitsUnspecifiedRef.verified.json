@@ -1,0 +1,7 @@
+﻿{
+  "configSource": {
+    "repository": "https://git.example/organization/config",
+    "path": "aspire.config.json",
+    "appliedVersion": "version-1"
+  }
+}

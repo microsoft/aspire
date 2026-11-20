@@ -165,7 +165,7 @@ internal sealed class FileLoggerProvider : ILoggerProvider
 
     private static void WriteWarning(IStartupErrorWriter errorWriter, string path, string message)
     {
-        errorWriter.WriteMarkup($"Could not create log file at [blue]{path.EscapeMarkup()}[/]: {message.EscapeMarkup()}", KnownEmojis.Warning);
+        errorWriter.WriteMarkup($"Could not create log file at [blue]{path.EscapeMarkup()}[/]: {message.EscapeMarkup()}", KnownEmojis.PoliceCarLight);
     }
 
     private async Task ProcessLogQueueAsync()

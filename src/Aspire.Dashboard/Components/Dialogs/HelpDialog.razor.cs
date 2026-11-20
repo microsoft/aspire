@@ -4,6 +4,8 @@
 using Aspire.Dashboard.Components.CustomIcons;
 using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Configuration;
+using Aspire.Dashboard.Model;
+using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Options;
@@ -50,7 +52,25 @@ public partial class HelpDialog
     [Inject]
     public required IOptionsMonitor<DashboardOptions> Options { get; init; }
 
+    [Inject]
+    public required IDashboardClient DashboardClient { get; init; }
+
+    [Inject]
+    public required DashboardViewPreferences ViewPreferences { get; init; }
+
+    [Inject]
+    public required ISessionStorage SessionStorage { get; init; }
+
+    [Inject]
+    public required NavigationManager NavigationManager { get; init; }
+
+    [CascadingParameter]
+    public IDialogInstance? Dialog { get; set; }
+
     private bool IsAgentHelpEnabled => Options.CurrentValue.UI.DisableAgentHelp != true;
+
+    // The game is played on the resource graph, which needs the resource service and can be disabled.
+    private bool IsGameAvailable => DashboardClient.IsEnabled && ViewPreferences.IsGraphEnabled;
 
     protected override void OnInitialized()
     {
@@ -68,6 +88,23 @@ public partial class HelpDialog
         {
             _activeTab = activeTab;
         }
+    }
+
+    private async Task OpenResourceGraphAsync()
+    {
+        await ViewPreferences.SetGroupOverviewAsync(GroupOverview.Graph);
+
+        // Entering the resources view restores the last selection, which would show only those resources. Forget it
+        // so the game starts with all of them, the same way clearing the selection in the resource list does.
+        await SessionStorage.SetAsync(BrowserStorageKeys.LastSelectedResources, new List<string>());
+
+        // Close first: the layout returns focus to the help button once the dialog is gone.
+        if (Dialog is not null)
+        {
+            await Dialog.CloseAsync();
+        }
+
+        NavigationManager.NavigateTo(DashboardUrls.ResourceListUrl());
     }
 
     private List<HelpLinkSection> GetLinkSections() =>
@@ -100,11 +137,24 @@ public partial class HelpDialog
             new(Loc[nameof(Resources.Dialogs.HelpDialogDashboardFeedbackTitle)],
                 Loc[nameof(Resources.Dialogs.HelpDialogDashboardFeedbackDescription)],
                 DashboardFeedbackDialog.DiscussionUrl,
-                new Icons.Regular.Size24.ChatHelp())
+                new Icons.Regular.Size24.ChatHelp()),
+            .. IsGameAvailable
+                ? new HelpLink[]
+                {
+                    new(Loc[nameof(Resources.Dialogs.HelpDialogGameTitle)],
+                        Loc[nameof(Resources.Dialogs.HelpDialogGameDescription)],
+                        DashboardUrls.GraphUrl(),
+                        new Icons.Regular.Size24.Games(),
+                        OpenResourceGraphAsync)
+                }
+                : []
         ])
     ];
 
-    private sealed record HelpLink(string Title, string Description, string Url, Icon Icon);
+    /// <summary>
+    /// A link in the help dialog. It opens in a new tab, unless <paramref name="OnClick"/> handles it inside the dashboard.
+    /// </summary>
+    private sealed record HelpLink(string Title, string Description, string Url, Icon Icon, Func<Task>? OnClick = null);
 
     private sealed record HelpLinkSection(string Id, string Heading, List<HelpLink> Links);
 }

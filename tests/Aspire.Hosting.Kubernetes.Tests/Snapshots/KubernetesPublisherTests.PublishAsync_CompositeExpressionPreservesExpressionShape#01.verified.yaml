@@ -8,4 +8,4 @@ metadata:
     app.kubernetes.io/component: "myapp"
     app.kubernetes.io/instance: "{{ .Release.Name }}"
 data:
-  COMPOSITE: "prefix-{literal}-{{ .Values.config.myapp.second }}-{{ .Values.config.myapp.first }}-{{ .Values.config.myapp.second }}-suffix"
+  COMPOSITE: {{ tpl "prefix-{literal}-{{ .Values.config.myapp.second }}-{{ .Values.config.myapp.first }}-{{ .Values.config.myapp.second }}-suffix" . | quote }}

@@ -114,4 +114,16 @@ public class GlobalizationHelpersTests
             Assert.Null(requestCulture);
         }
     }
+
+    [Fact]
+    public async Task ResolveSetCultureToAcceptedCultureAsync_FallsBackToSupportedParentCulture()
+    {
+        var englishCulture = CultureInfo.GetCultureInfo("en");
+
+        var requestCulture = await GlobalizationHelpers.ResolveSetCultureToAcceptedCultureAsync("en-US", [englishCulture]);
+
+        Assert.NotNull(requestCulture);
+        Assert.Equal(englishCulture, requestCulture.Culture);
+        Assert.Equal(englishCulture, requestCulture.UICulture);
+    }
 }

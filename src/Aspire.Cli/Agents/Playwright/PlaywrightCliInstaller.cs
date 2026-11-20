@@ -85,7 +85,7 @@ internal sealed class PlaywrightCliInstaller(
     /// <summary>
     /// Generates skills in isolation before copying them to the selected absolute destinations.
     /// </summary>
-    public async Task<(PlaywrightInstallStatus Status, string? Message)> InstallSelectedAsync(IReadOnlySet<string> selectedSkillDirectories, CancellationToken cancellationToken)
+    public async Task<(PlaywrightInstallStatus Status, string? Message, IReadOnlyList<string> InstalledSkillDirectories)> InstallSelectedAsync(IReadOnlySet<string> selectedSkillDirectories, CancellationToken cancellationToken)
     {
         // The upstream generator chooses its own output directories. Generate in isolation,
         // then copy only to destinations belonging to the selected agents and scope.
@@ -125,21 +125,21 @@ internal sealed class PlaywrightCliInstaller(
     /// <param name="repoRoot">The workspace/repository root directory.</param>
     /// <param name="selectedSkillDirectories">The skill directories the user explicitly selected.</param>
     /// <param name="cancellationToken">A token to cancel the operation.</param>
-    /// <returns>A tuple where <c>Status</c> indicates the outcome (installed, skipped, or failed) and <c>Message</c> contains additional details when applicable.</returns>
-    public async Task<(PlaywrightInstallStatus Status, string? Message)> InstallAsync(string repoRoot, IReadOnlySet<string> selectedSkillDirectories, CancellationToken cancellationToken)
+    /// <returns>The installation status, optional message, and selected skill directories that were successfully written.</returns>
+    public async Task<(PlaywrightInstallStatus Status, string? Message, IReadOnlyList<string> InstalledSkillDirectories)> InstallAsync(string repoRoot, IReadOnlySet<string> selectedSkillDirectories, CancellationToken cancellationToken)
     {
         return await interactionService.ShowStatusAsync(
             AgentCommandStrings.PlaywrightCliInstaller_InstallingStatus,
             () => InstallCoreAsync(repoRoot, selectedSkillDirectories, cancellationToken));
     }
 
-    private async Task<(PlaywrightInstallStatus Status, string? Message)> InstallCoreAsync(string repoRoot, IReadOnlySet<string> selectedSkillDirectories, CancellationToken cancellationToken)
+    private async Task<(PlaywrightInstallStatus Status, string? Message, IReadOnlyList<string> InstalledSkillDirectories)> InstallCoreAsync(string repoRoot, IReadOnlySet<string> selectedSkillDirectories, CancellationToken cancellationToken)
     {
         // Early exit if npm is not available — playwright-cli requires npm.
         if (!npmRunner.IsAvailable)
         {
             logger.LogDebug("npm is not available on PATH, skipping Playwright CLI installation.");
-            return (PlaywrightInstallStatus.Skipped, null);
+            return (PlaywrightInstallStatus.Skipped, null, []);
         }
 
         // Step 1: Resolve the target version from the public npm registry.
@@ -156,7 +156,7 @@ internal sealed class PlaywrightCliInstaller(
             // See https://semver.org/spec/v2.0.0.html for the accepted shape.
             if (!SemVersion.TryParse(versionOverride, SemVersionStyles.Strict, out _))
             {
-                return (PlaywrightInstallStatus.Failed, string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.PlaywrightCliInstaller_InvalidVersionOverride, VersionOverrideKey, versionOverride));
+                return (PlaywrightInstallStatus.Failed, string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.PlaywrightCliInstaller_InvalidVersionOverride, VersionOverrideKey, versionOverride), []);
             }
 
             effectiveRange = versionOverride;
@@ -172,7 +172,7 @@ internal sealed class PlaywrightCliInstaller(
 
         if (packageInfo is null)
         {
-            return (PlaywrightInstallStatus.Failed, string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.PlaywrightCliInstaller_FailedToResolvePackage, NpmPackageInfo.FormatPackageSpecifier(PackageName, effectiveRange)));
+            return (PlaywrightInstallStatus.Failed, string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.PlaywrightCliInstaller_FailedToResolvePackage, NpmPackageInfo.FormatPackageSpecifier(PackageName, effectiveRange)), []);
         }
 
         logger.LogDebug("Resolved {PackageSpecifier}.", NpmPackageInfo.FormatPackageSpecifier(PackageName, packageInfo.Version));
@@ -221,7 +221,7 @@ internal sealed class PlaywrightCliInstaller(
             if (tarballPath is null)
             {
                 logger.LogWarning("Failed to download {PackageSpecifier}.", NpmPackageInfo.FormatPackageSpecifier(PackageName, packageInfo.Version));
-                return (PlaywrightInstallStatus.Failed, string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.PlaywrightCliInstaller_FailedToDownload, NpmPackageInfo.FormatPackageSpecifier(PackageName, packageInfo.Version)));
+                return (PlaywrightInstallStatus.Failed, string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.PlaywrightCliInstaller_FailedToDownload, NpmPackageInfo.FormatPackageSpecifier(PackageName, packageInfo.Version)), []);
             }
 
             if (!validationDisabled)
@@ -250,7 +250,7 @@ internal sealed class PlaywrightCliInstaller(
                         NpmPackageInfo.FormatPackageSpecifier(PackageName, packageInfo.Version),
                         provenanceResult.Outcome,
                         ExpectedSourceRepository);
-                    return (PlaywrightInstallStatus.Failed, string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.PlaywrightCliInstaller_ProvenanceVerificationFailed, NpmPackageInfo.FormatPackageSpecifier(PackageName, packageInfo.Version), provenanceResult.Outcome));
+                    return (PlaywrightInstallStatus.Failed, string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.PlaywrightCliInstaller_ProvenanceVerificationFailed, NpmPackageInfo.FormatPackageSpecifier(PackageName, packageInfo.Version), provenanceResult.Outcome), []);
                 }
 
                 logger.LogDebug(
@@ -266,7 +266,7 @@ internal sealed class PlaywrightCliInstaller(
             if (!installSuccess)
             {
                 logger.LogWarning("Failed to install {PackageSpecifier} globally.", NpmPackageInfo.FormatPackageSpecifier(PackageName, packageInfo.Version));
-                return (PlaywrightInstallStatus.Failed, string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.PlaywrightCliInstaller_FailedToInstallGlobally, NpmPackageInfo.FormatPackageSpecifier(PackageName, packageInfo.Version)));
+                return (PlaywrightInstallStatus.Failed, string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.PlaywrightCliInstaller_FailedToInstallGlobally, NpmPackageInfo.FormatPackageSpecifier(PackageName, packageInfo.Version)), []);
             }
 
             // Step 6: Generate skill files and mirror to selected locations.
@@ -294,7 +294,7 @@ internal sealed class PlaywrightCliInstaller(
     /// to the user-selected locations and cleans up any unselected locations that
     /// playwright-cli created during this run.
     /// </summary>
-    private async Task<(PlaywrightInstallStatus Status, string? Message)> InstallAndMirrorSkillsAsync(
+    private async Task<(PlaywrightInstallStatus Status, string? Message, IReadOnlyList<string> InstalledSkillDirectories)> InstallAndMirrorSkillsAsync(
         string repoRoot,
         IReadOnlySet<string> selectedSkillDirectories,
         CancellationToken cancellationToken)
@@ -304,7 +304,7 @@ internal sealed class PlaywrightCliInstaller(
         var skillsInstalled = await playwrightCliRunner.InstallSkillsAsync(repoRoot, cancellationToken);
         if (!skillsInstalled)
         {
-            return (PlaywrightInstallStatus.Failed, AgentCommandStrings.PlaywrightCliInstaller_FailedToGenerateSkillFiles);
+            return (PlaywrightInstallStatus.Failed, AgentCommandStrings.PlaywrightCliInstaller_FailedToGenerateSkillFiles, []);
         }
 
         return MirrorSkillFiles(repoRoot, selectedSkillDirectories, preExisting);
@@ -348,7 +348,7 @@ internal sealed class PlaywrightCliInstaller(
     /// user-selected skill directories, then cleans up any directories that
     /// playwright-cli created in unselected locations during this run.
     /// </summary>
-    private (PlaywrightInstallStatus Status, string? Message) MirrorSkillFiles(string repoRoot, IReadOnlySet<string> selectedSkillDirectories, HashSet<string> preExistingLocations)
+    private (PlaywrightInstallStatus Status, string? Message, IReadOnlyList<string> InstalledSkillDirectories) MirrorSkillFiles(string repoRoot, IReadOnlySet<string> selectedSkillDirectories, HashSet<string> preExistingLocations)
     {
         // Playwright emits Claude-format skills even when another client is selected.
         // https://github.com/microsoft/playwright-cli/issues/294
@@ -359,15 +359,16 @@ internal sealed class PlaywrightCliInstaller(
         if (!Directory.Exists(primarySkillDir))
         {
             logger.LogWarning("Primary skill directory does not exist: {PrimarySkillDir}", primarySkillDir);
-            return (PlaywrightInstallStatus.Failed, AgentCommandStrings.PlaywrightCliInstaller_FailedToGenerateSkillFiles);
+            return (PlaywrightInstallStatus.Failed, AgentCommandStrings.PlaywrightCliInstaller_FailedToGenerateSkillFiles, []);
         }
 
-        var mirrorFailures = 0;
+        var installedSkillDirectories = new List<string>();
         // Mirror to each user-selected location (skip the primary — it's the source).
         foreach (var skillBaseDir in selectedSkillDirectories)
         {
             if (string.Equals(skillBaseDir, primarySkillBaseDirectory, StringComparison.OrdinalIgnoreCase))
             {
+                installedSkillDirectories.Add(skillBaseDir);
                 continue;
             }
 
@@ -376,12 +377,12 @@ internal sealed class PlaywrightCliInstaller(
             try
             {
                 SyncDirectory(primarySkillDir, targetSkillDir);
+                installedSkillDirectories.Add(skillBaseDir);
                 logger.LogDebug("Mirrored playwright-cli skills to {TargetDir}.", targetSkillDir);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
                 logger.LogWarning(ex, "Failed to mirror playwright-cli skills to {TargetDir}.", targetSkillDir);
-                mirrorFailures++;
             }
         }
 
@@ -419,14 +420,14 @@ internal sealed class PlaywrightCliInstaller(
             }
         }
 
-        if (mirrorFailures == 0)
+        if (installedSkillDirectories.Count == selectedSkillDirectories.Count)
         {
-            return (PlaywrightInstallStatus.Installed, null);
+            return (PlaywrightInstallStatus.Installed, null, installedSkillDirectories);
         }
 
-        return mirrorFailures == selectedSkillDirectories.Count
-            ? (PlaywrightInstallStatus.Failed, AgentCommandStrings.PlaywrightCliInstaller_FailedToMirrorSkillFiles)
-            : (PlaywrightInstallStatus.InstalledWithWarnings, AgentCommandStrings.PlaywrightCliInstaller_InstalledWithMirrorWarnings);
+        return installedSkillDirectories.Count == 0
+            ? (PlaywrightInstallStatus.Failed, AgentCommandStrings.PlaywrightCliInstaller_FailedToMirrorSkillFiles, installedSkillDirectories)
+            : (PlaywrightInstallStatus.InstalledWithWarnings, AgentCommandStrings.PlaywrightCliInstaller_InstalledWithMirrorWarnings, installedSkillDirectories);
     }
 
     /// <summary>

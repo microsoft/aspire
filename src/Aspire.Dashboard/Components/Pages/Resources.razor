@@ -1,4 +1,5 @@
 @layout ResourcesLayout
+@using Aspire.Dashboard.Components.CustomIcons
 @using Aspire.Dashboard.Components.ResourcesGridColumns
 @using Aspire.Dashboard.Resources
 @using Aspire.Dashboard.Components.Controls.Grid
@@ -111,7 +112,7 @@
                                             @* FluentDataGrid rows activate on Enter/NumpadEnter from Blazor keydown handlers.
                                                Stop Blazor keydown propagation from nested controls so keyboard activation doesn't
                                                also open resource details. Browser-native keyboard behavior still runs on the control. *@
-                                            <AspireTemplateColumn ColumnId="@NameColumn" ColumnManager="@_manager" Title="@ControlsStringsLoc[nameof(ControlsStrings.NameColumnHeader)]" Sortable="true" SortBy="@_nameSort" Tooltip="true" TooltipText="@(c => $"{c.Resource.ResourceType}: {GetResourceName(c.Resource)}")" Class="expand-col">
+                                            <AspireTemplateColumn ColumnId="@NameColumn" ColumnManager="@_manager" Title="@ControlsStringsLoc[nameof(ControlsStrings.NameColumnHeader)]" Sortable="true" SortBy="@_nameSort" Tooltip="true" TooltipText="@(c => $"{c.Resource.ResourceTypeDisplayName}: {GetResourceName(c.Resource)}")" Class="expand-col">
                                                 @{
                                                     var indent = context.Depth * 16;
                                                 }
@@ -224,6 +225,14 @@
                                                       data-tooltip="@Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphResetButton)]"
                                                       aria-label="@Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphResetButton)]">
                                             <FluentIcon Value="new Icons.Regular.Size24.ArrowReset()" Color="Color.Primary" />
+                                        </FluentButton>
+                                    </div>
+                                    <div class="resource-graph-controls resource-graph-game-launch">
+                                        <FluentButton Appearance="ButtonAppearance.Transparent"
+                                                      Class="aspire-icon-button graph-game"
+                                                      data-tooltip="@Loc[nameof(Dashboard.Resources.Resources.ResourceGraphGamePlay)]"
+                                                      aria-label="@Loc[nameof(Dashboard.Resources.Resources.ResourceGraphGamePlay)]">
+                                            <FluentIcon Value="new AspireIcons.Size24.GameBot()" Color="Color.Primary" />
                                         </FluentButton>
                                     </div>
                                 </div>

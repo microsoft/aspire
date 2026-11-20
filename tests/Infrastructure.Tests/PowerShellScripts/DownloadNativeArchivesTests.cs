@@ -1,8 +1,10 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
 using System.IO.Compression;
 using System.Net;
+using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
 using Aspire.TestUtilities;
@@ -24,6 +26,20 @@ public sealed class DownloadNativeArchivesTests : IDisposable
     }
 
     public void Dispose() => _workspace.Dispose();
+
+    [Fact]
+    public void MockAzdoServer_ReservesItsPortBeforeStart()
+    {
+        using var server = new MockAzdoServer();
+        var port = new Uri(server.CollectionUri).Port;
+
+        // Another socket must not be able to take the server's port between construction and Start().
+        using var competitor = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+        var ex = Assert.Throws<SocketException>(() => competitor.Bind(new IPEndPoint(IPAddress.Loopback, port)));
+        Assert.Equal(SocketError.AddressAlreadyInUse, ex.SocketErrorCode);
+
+        server.Start();
+    }
 
     [Fact]
     [RequiresTools(["pwsh"])]
@@ -449,7 +465,7 @@ public sealed class DownloadNativeArchivesTests : IDisposable
 
     private sealed class MockAzdoServer : IDisposable
     {
-        private readonly HttpListener _listener;
+        private readonly TcpListener _listener;
         private readonly int _port;
         private readonly Dictionary<string, byte[]> _artifactZips = new();
         private readonly HashSet<string> _failingArtifacts = new();
@@ -462,9 +478,11 @@ public sealed class DownloadNativeArchivesTests : IDisposable
 
         public MockAzdoServer()
         {
-            _port = GetFreeTcpPort();
-            _listener = new HttpListener();
-            _listener.Prefixes.Add($"http://127.0.0.1:{_port}/");
+            // Bind port 0 and keep the socket so the OS-assigned port stays reserved for this server.
+            // Probing for a free port and binding it later lets another socket take it in between.
+            _listener = new TcpListener(IPAddress.Loopback, 0);
+            _listener.Start();
+            _port = ((IPEndPoint)_listener.LocalEndpoint).Port;
         }
 
         public string CollectionUri => $"http://127.0.0.1:{_port}/";
@@ -544,7 +562,6 @@ public sealed class DownloadNativeArchivesTests : IDisposable
 
         public void Start()
         {
-            _listener.Start();
             _cts = new CancellationTokenSource();
             _serverTask = Task.Run(() => RunAsync(_cts.Token));
         }
@@ -553,31 +570,84 @@ public sealed class DownloadNativeArchivesTests : IDisposable
         {
             while (!token.IsCancellationRequested)
             {
-                HttpListenerContext ctx;
+                TcpClient client;
                 try
                 {
-                    ctx = await _listener.GetContextAsync().WaitAsync(token).ConfigureAwait(false);
+                    client = await _listener.AcceptTcpClientAsync(token).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException) { return; }
-                catch (HttpListenerException) { return; }
+                catch (SocketException) { return; }
                 catch (ObjectDisposedException) { return; }
 
-                try
+                // Requests are handled one at a time, so the per-artifact counters need no synchronization.
+                using (client)
                 {
-                    HandleRequest(ctx);
-                }
-                catch
-                {
-                    // Best-effort: don't crash the server loop on per-request errors.
-                    try { ctx.Response.StatusCode = 500; ctx.Response.Close(); } catch { }
+                    try
+                    {
+                        var stream = client.GetStream();
+                        var path = await ReadRequestPathAsync(stream, token).ConfigureAwait(false);
+                        if (path is not null)
+                        {
+                            HandleRequest(client, stream, path);
+                        }
+                    }
+                    catch (Exception) when (!token.IsCancellationRequested)
+                    {
+                        // Best-effort: don't crash the server loop on per-request errors.
+                    }
                 }
             }
         }
 
-        private void HandleRequest(HttpListenerContext ctx)
+        private static async Task<string?> ReadRequestPathAsync(NetworkStream stream, CancellationToken token)
         {
-            var path = ctx.Request.Url?.AbsolutePath ?? string.Empty;
+            var buffer = new byte[8192];
+            var received = 0;
+            while (true)
+            {
+                var headerEnd = buffer.AsSpan(0, received).IndexOf("\r\n\r\n"u8);
+                if (headerEnd >= 0)
+                {
+                    var requestLine = Encoding.ASCII.GetString(buffer, 0, buffer.AsSpan(0, received).IndexOf("\r\n"u8));
+                    var target = requestLine.Split(' ')[1];
+                    var queryStart = target.IndexOf('?');
+                    return Uri.UnescapeDataString(queryStart < 0 ? target : target[..queryStart]);
+                }
 
+                if (received == buffer.Length)
+                {
+                    Array.Resize(ref buffer, buffer.Length * 2);
+                }
+
+                var read = await stream.ReadAsync(buffer.AsMemory(received), token).ConfigureAwait(false);
+                if (read == 0)
+                {
+                    return null;
+                }
+                received += read;
+            }
+        }
+
+        private static void WriteResponse(NetworkStream stream, int statusCode, string? contentType, byte[] body, int? bodyBytesToWrite = null)
+        {
+            var reason = statusCode switch { 200 => "OK", 404 => "Not Found", _ => "Internal Server Error" };
+            var headers = new StringBuilder()
+                .Append(CultureInfo.InvariantCulture, $"HTTP/1.1 {statusCode} {reason}\r\n")
+                .Append(CultureInfo.InvariantCulture, $"Content-Length: {body.Length}\r\n")
+                .Append("Connection: close\r\n");
+            if (contentType is not null)
+            {
+                headers.Append(CultureInfo.InvariantCulture, $"Content-Type: {contentType}\r\n");
+            }
+            headers.Append("\r\n");
+
+            stream.Write(Encoding.ASCII.GetBytes(headers.ToString()));
+            stream.Write(body, 0, bodyBytesToWrite ?? body.Length);
+            stream.Flush();
+        }
+
+        private void HandleRequest(TcpClient client, NetworkStream stream, string path)
+        {
             // Artifact list endpoint.
             if (path.EndsWith("/_apis/build/builds/" + GetBuildIdFromPath(path) + "/artifacts", StringComparison.Ordinal)
                 || path.Contains("/_apis/build/builds/", StringComparison.Ordinal) && path.EndsWith("/artifacts", StringComparison.Ordinal))
@@ -593,11 +663,7 @@ public sealed class DownloadNativeArchivesTests : IDisposable
                 }).ToArray();
 
                 var payload = JsonSerializer.Serialize(new { value = artifactDescriptors });
-                var bytes = Encoding.UTF8.GetBytes(payload);
-                ctx.Response.ContentType = "application/json";
-                ctx.Response.ContentLength64 = bytes.Length;
-                ctx.Response.OutputStream.Write(bytes, 0, bytes.Length);
-                ctx.Response.Close();
+                WriteResponse(stream, 200, "application/json", Encoding.UTF8.GetBytes(payload));
                 return;
             }
 
@@ -607,18 +673,15 @@ public sealed class DownloadNativeArchivesTests : IDisposable
                 var fileName = Path.GetFileNameWithoutExtension(path); // strip .zip
                 if (_failingArtifacts.Contains(fileName))
                 {
-                    ctx.Response.StatusCode = 500;
-                    ctx.Response.Close();
+                    WriteResponse(stream, 500, contentType: null, []);
                     return;
                 }
                 // Flaky artifacts fail their first N requests, then fall through
-                // to serving the zip. The HttpListener loop handles requests one
-                // at a time, so this counter needs no extra synchronization.
+                // to serving the zip.
                 if (_flakyRemaining.TryGetValue(fileName, out var remaining) && remaining > 0)
                 {
                     _flakyRemaining[fileName] = remaining - 1;
-                    ctx.Response.StatusCode = 500;
-                    ctx.Response.Close();
+                    WriteResponse(stream, 500, contentType: null, []);
                     return;
                 }
                 // Truncated artifacts start like successful downloads, then close
@@ -630,11 +693,9 @@ public sealed class DownloadNativeArchivesTests : IDisposable
                 {
                     _truncatedRemaining[fileName] = truncateLeft - 1;
                     var prefixLength = Math.Min(16, zipBytes.Length - 1);
-                    ctx.Response.ContentType = "application/zip";
-                    ctx.Response.ContentLength64 = zipBytes.Length;
-                    ctx.Response.OutputStream.Write(zipBytes, 0, prefixLength);
-                    ctx.Response.OutputStream.Flush();
-                    ctx.Response.Abort();
+                    WriteResponse(stream, 200, "application/zip", zipBytes, prefixLength);
+                    // Reset the connection instead of closing it gracefully, like an aborted response.
+                    client.Client.LingerState = new LingerOption(true, 0);
                     return;
                 }
                 // Corrupt artifacts respond 200 with non-zip bytes for their first
@@ -643,28 +704,19 @@ public sealed class DownloadNativeArchivesTests : IDisposable
                 if (_corruptRemaining.TryGetValue(fileName, out var corruptLeft) && corruptLeft > 0)
                 {
                     _corruptRemaining[fileName] = corruptLeft - 1;
-                    var garbage = Encoding.UTF8.GetBytes("this is not a zip file");
-                    ctx.Response.ContentType = "application/zip";
-                    ctx.Response.ContentLength64 = garbage.Length;
-                    ctx.Response.OutputStream.Write(garbage, 0, garbage.Length);
-                    ctx.Response.Close();
+                    WriteResponse(stream, 200, "application/zip", Encoding.UTF8.GetBytes("this is not a zip file"));
                     return;
                 }
                 if (_artifactZips.TryGetValue(fileName, out var bytes))
                 {
-                    ctx.Response.ContentType = "application/zip";
-                    ctx.Response.ContentLength64 = bytes.Length;
-                    ctx.Response.OutputStream.Write(bytes, 0, bytes.Length);
-                    ctx.Response.Close();
+                    WriteResponse(stream, 200, "application/zip", bytes);
                     return;
                 }
-                ctx.Response.StatusCode = 404;
-                ctx.Response.Close();
+                WriteResponse(stream, 404, contentType: null, []);
                 return;
             }
 
-            ctx.Response.StatusCode = 404;
-            ctx.Response.Close();
+            WriteResponse(stream, 404, contentType: null, []);
         }
 
         private static string GetBuildIdFromPath(string path)
@@ -678,20 +730,10 @@ public sealed class DownloadNativeArchivesTests : IDisposable
             return slash < 0 ? rest : rest[..slash];
         }
 
-        private static int GetFreeTcpPort()
-        {
-            var l = new System.Net.Sockets.TcpListener(IPAddress.Loopback, 0);
-            l.Start();
-            var port = ((IPEndPoint)l.LocalEndpoint).Port;
-            l.Stop();
-            return port;
-        }
-
         public void Dispose()
         {
             _cts?.Cancel();
             try { _listener.Stop(); } catch { }
-            try { _listener.Close(); } catch { }
             try { _serverTask?.Wait(TimeSpan.FromSeconds(2)); } catch { }
             _cts?.Dispose();
         }

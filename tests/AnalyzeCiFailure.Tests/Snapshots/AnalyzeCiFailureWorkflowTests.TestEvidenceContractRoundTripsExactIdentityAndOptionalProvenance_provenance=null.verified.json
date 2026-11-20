@@ -1,0 +1,14 @@
+﻿[
+  {
+    "test": "Tests.Method(value: \"one/two\", framework: \"net11.0\")",
+    "display_test": "Tests.Method(value: \"one/two\", framework: \"net11.0\")",
+    "job": "Tests",
+    "job_id": 9007199254740993.0,
+    "result_file": null,
+    "result_format": null,
+    "error": "Connection timed out",
+    "stack_trace": "frame\nnext",
+    "standard_output": "stdout",
+    "standard_error": "stderr"
+  }
+]

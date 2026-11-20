@@ -2,12 +2,15 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 using Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes;
 using Aspire.Hosting.RemoteHost;
+using Aspire.TestUtilities;
 using Aspire.TypeSystem;
 
 namespace Aspire.Hosting.CodeGeneration.Go.Tests;
 
+[RequiresTools(["gofmt"])]
 public class GoApiExportTests
 {
     // The test types are compiled into this assembly via Compile Include.
@@ -115,7 +118,16 @@ public class GoApiExportTests
         // The builder entry point and the hand-written runtime belong to Aspire.Hosting, so the only kinds
         // a package that contributes handle members, options and values documents are these.
         Assert.Equal(
-            [GoApiItemKind.Interface, GoApiItemKind.Augmentation, GoApiItemKind.Dto, GoApiItemKind.Options, GoApiItemKind.Enum, GoApiItemKind.Variable],
+            [
+                GoApiItemKind.Interface,
+                GoApiItemKind.Augmentation,
+                GoApiItemKind.Dto,
+                GoApiItemKind.Options,
+                GoApiItemKind.Enum,
+                GoApiItemKind.Variable,
+                GoApiItemKind.Function,
+                GoApiItemKind.Type
+            ],
             items.Select(item => item.Kind).Distinct().Order());
         Assert.Contains(model.Declarations, declaration => declaration.Id == $"{HostingAssemblyName}:opaque:DistributedApplicationBuilder");
         Assert.Contains(model.Declarations, declaration => declaration.Id == "aspire:runtime:base");
@@ -177,33 +189,66 @@ public class GoApiExportTests
     }
 
     [Fact]
-    public void ApiExport_WithOptionalParameters_FlattensThemIntoTrailingOptions()
+    public void ApiExport_WithOptionalParameters_ProjectsFunctionalOptions()
     {
         var items = s_everything.Value.Modules.Single().Items;
 
         var persistence = FindMember(items, "TestRedisResource", "WithPersistence");
-        Assert.Equal("WithPersistence(options ...*WithPersistenceOptions) TestRedisResource", persistence.Declaration);
+        Assert.Equal("WithPersistence(options ...WithPersistenceOption) TestRedisResource", persistence.Declaration);
         Assert.Empty(persistence.Parameters);
         Assert.Equal(GoApiErrorModel.Deferred, persistence.ErrorModel);
         Assert.True(persistence.ReturnsReceiver);
         var options = Assert.IsType<GoApiOptions>(persistence.Options);
-        Assert.Equal("WithPersistenceOptions", options.TypeName);
+        Assert.Equal("WithPersistenceOption", options.TypeName);
         Assert.False(options.IsDirect);
         var mode = Assert.Single(options.Fields);
         Assert.Equal(("Mode", "*TestPersistenceMode", "mode"), (mode.Name, mode.DeclaredType, mode.JsonName));
         Assert.True(mode.IsOptional);
 
-        // A lone optional DTO named options is passed through as the variadic itself.
+        // A lone optional DTO is wrapped in a typed functional option like every other optional parameter.
         var httpCommand = FindMember(items, "ContainerResource", "WithHttpCommand");
-        Assert.Equal("WithHttpCommand(path string, displayName string, options ...*HttpCommandExportOptions) ContainerResource", httpCommand.Declaration);
-        Assert.Equal(("HttpCommandExportOptions", true), (httpCommand.Options!.TypeName, httpCommand.Options.IsDirect));
-        Assert.Empty(httpCommand.Options.Fields);
+        Assert.Equal("WithHttpCommand(path string, displayName string, options ...WithHttpCommandOption) ContainerResource", httpCommand.Declaration);
+        Assert.Equal(("WithHttpCommandOption", false), (httpCommand.Options!.TypeName, httpCommand.Options.IsDirect));
+        Assert.Contains(httpCommand.Options.Fields, field => field is { Name: "Options", DeclaredType: "*HttpCommandExportOptions", JsonName: "options" });
 
-        // Go has one trailing variadic, so an optional DTO next to another optional keeps its options struct.
         var prompt = FindMember(items, "InteractionService", "PromptInput");
-        Assert.Equal("PromptInputOptions", prompt.Options!.TypeName);
+        Assert.Equal("PromptInputOption", prompt.Options!.TypeName);
         Assert.False(prompt.Options.IsDirect);
         Assert.Contains(prompt.Options.Fields, field => field is { Name: "Options", DeclaredType: "*InteractionInputsDialogOptions", JsonName: "options" });
+
+        var optionDeclaration = Assert.Single(
+            s_everything.Value.Declarations,
+            declaration => declaration.Content.StartsWith("type WithPersistenceOption interface", StringComparison.Ordinal));
+        Assert.Equal(
+            "type WithPersistenceOption interface {\n\tapply(*WithPersistenceOptions)\n}",
+            optionDeclaration.Content);
+    }
+
+    [Fact]
+    public void ApiExport_WithEmptyGeneratedTypes_StillExportsSynthesizedApplicationInterfaces()
+    {
+        var context = new AtsContext
+        {
+            Capabilities = [],
+            HandleTypes = [],
+            DtoTypes = [],
+            EnumTypes = []
+        };
+
+        var model = new AtsGoCodeGenerator().BuildApiModel(
+            context,
+            "Test",
+            PackageVersion,
+            [HostingAssemblyName],
+            CancellationToken.None);
+
+        Assert.Contains(
+            model.Declarations,
+            declaration => declaration.Content ==
+                "type DistributedApplication interface {\n\thandleReference\n\tErr() error\n}");
+        Assert.Contains(
+            model.Modules.Single().Items,
+            item => item.Name == "DistributedApplication" && item.Kind == GoApiItemKind.Interface);
     }
 
     [Fact]
@@ -225,6 +270,86 @@ public class GoApiExportTests
         var getter = FindMember(items, "TestRedisResource", "GetTags");
         Assert.Equal("GetTags() *List[string]", getter.Declaration);
         Assert.Equal(GoApiErrorModel.None, getter.ErrorModel);
+    }
+
+    [Fact]
+    public void ApiExport_FieldsAndConstantsHaveTypesAndAtsOptionality()
+    {
+        var model = s_everything.Value;
+        var items = model.Modules.Single().Items;
+        var fields = items.SelectMany(item => item.Members)
+            .Where(member => member.Kind is GoApiMemberKind.Field or GoApiMemberKind.Constant)
+            .ToList();
+        Assert.NotEmpty(fields);
+        Assert.All(fields, member => Assert.False(string.IsNullOrEmpty(member.DeclaredType), member.Id));
+
+        var dto = Assert.Single(items, item => item.Id == "dto:TestConfigDto");
+        var name = Assert.Single(dto.Members, member => member.Name == "Name");
+        Assert.Equal("string", name.DeclaredType);
+        Assert.False(name.IsOptional);
+        var optional = Assert.Single(dto.Members, member => member.Name == "OptionalField");
+        Assert.Equal("*string", optional.DeclaredType);
+        Assert.False(optional.IsOptional);
+
+        // Both tags contain omitempty; neither the tag nor a pointer alone
+        // determines whether ATS lets a consumer omit a property.
+        Assert.Contains("omitempty", name.Declaration);
+        Assert.Contains("omitempty", optional.Declaration);
+        var options = Assert.Single(items, item => item.Id == "options:WithPersistenceOptions");
+        Assert.All(options.Members.Where(member => member.Kind == GoApiMemberKind.Field), member => Assert.True(member.IsOptional));
+        var constant = Assert.Single(items, item => item.Id == "enum:TestPersistenceMode").Members[0];
+        Assert.Equal("TestPersistenceMode", constant.DeclaredType);
+        Assert.False(constant.IsOptional);
+
+        var json = JsonNode.Parse(GoApiExportWriter.WriteToJson(model))!;
+        var jsonMembers = json["modules"]!.AsArray()
+            .SelectMany(module => module!["items"]!.AsArray())
+            .SelectMany(item => item!["members"]?.AsArray() ?? [])
+            .Where(member => (string?)member!["kind"] is "field" or "constant")
+            .ToList();
+        Assert.Equal(fields.Count, jsonMembers.Count);
+        Assert.All(jsonMembers, member =>
+        {
+            Assert.False(string.IsNullOrEmpty((string?)member!["type"]));
+            Assert.True(member["optional"] is JsonValue value && value.TryGetValue<bool>(out _));
+        });
+    }
+
+    [Fact]
+    public void ApiExport_DtoFieldOptionalityComesFromMetadata()
+    {
+        var context = new AtsContext
+        {
+            Capabilities = [],
+            HandleTypes = [],
+            EnumTypes = [],
+            DtoTypes =
+            [
+                new AtsDtoTypeInfo
+                {
+                    TypeId = "Test/Settings",
+                    Name = "Settings",
+                    Properties =
+                    [
+                        new AtsDtoPropertyInfo { Name = "Required", Type = new AtsTypeRef { TypeId = "string", Category = AtsTypeCategory.Primitive } },
+                        new AtsDtoPropertyInfo { Name = "Optional", Type = new AtsTypeRef { TypeId = "string", Category = AtsTypeCategory.Primitive }, IsOptional = true }
+                    ]
+                }
+            ]
+        };
+        var model = new AtsGoCodeGenerator().BuildApiModel(context, "Test", PackageVersion, ["Test"], CancellationToken.None);
+        var fields = Assert.Single(model.Modules.Single().Items, item => item.Kind == GoApiItemKind.Dto)
+            .Members.Where(member => member.Kind == GoApiMemberKind.Field).ToArray();
+
+        Assert.Collection(fields,
+            field =>
+            {
+                Assert.Equal(("Required", "string", false), (field.Name, field.DeclaredType, field.IsOptional));
+            },
+            field =>
+            {
+                Assert.Equal(("Optional", "*string", true), (field.Name, field.DeclaredType, field.IsOptional));
+            });
     }
 
     [Fact]
@@ -336,7 +461,11 @@ public class GoApiExportTests
 
         // Exported declarations carry no comments (documentation is exported as member summaries), so they
         // are compared with the comment lines of the generated code removed.
-        var generatedCode = string.Join('\n', generated.Split('\n').Where(line => !line.TrimStart().StartsWith("//", StringComparison.Ordinal)));
+        var generatedCode = string.Join(
+            '\n',
+            generated.Split('\n').Where(line =>
+                !string.IsNullOrWhiteSpace(line) &&
+                !line.TrimStart().StartsWith("//", StringComparison.Ordinal)));
 
         // Variables are written as `var Name = struct {` at the start of a line.
         var generatedNames = generated.Split('\n')
@@ -345,7 +474,13 @@ public class GoApiExportTests
             .Order(StringComparer.Ordinal);
 
         Assert.Equal(generatedNames, variables.Select(variable => variable.Name).Order(StringComparer.Ordinal));
-        Assert.All(variables, variable => Assert.Contains(variable.Declaration, generatedCode, StringComparison.Ordinal));
+        var normalizedGeneratedCode = Regex.Replace(generatedCode, @"\s+", " ");
+        Assert.All(
+            variables,
+            variable => Assert.Contains(
+                Regex.Replace(variable.Declaration, @"\s+", " "),
+                normalizedGeneratedCode,
+                StringComparison.Ordinal));
         Assert.All(variables, variable => Assert.NotEmpty(variable.Members));
     }
 
@@ -377,12 +512,15 @@ public class GoApiExportTests
         var sharedOptions = Assert.Single(full, item => item.Id == "options:SetCancellationTokenOptions");
         Assert.Equal(HostingAssemblyName, sharedOptions.OwningAssemblyName);
         Assert.Equal(TestTypesAssemblyName, Assert.Single(exported, item => item.Id == sharedOptions.Id).OwningAssemblyName);
+        var sharedOptionItems = full
+            .Where(item => item.Name.StartsWith("SetCancellationToken", StringComparison.Ordinal))
+            .ToList();
 
         var expected = full
             .Select(item => (Item: item, Members: item.Members.Where(member => IsOwnedByPackage(item, member)).ToList()))
             .Where(owned => owned.Item.OwningAssemblyName == TestTypesAssemblyName || owned.Members.Count > 0)
             .SelectMany(owned => DescribeDeclarations(owned.Item, owned.Members))
-            .Concat(DescribeDeclarations(sharedOptions, sharedOptions.Members));
+            .Concat(sharedOptionItems.SelectMany(item => DescribeDeclarations(item, item.Members)));
         var actual = exported.SelectMany(item => DescribeDeclarations(item, item.Members));
 
         Assert.Equal(expected.Order(StringComparer.Ordinal), actual.Order(StringComparer.Ordinal));
@@ -544,6 +682,19 @@ public class GoApiExportTests
                 (GoDeclarationKind.Function, "", "\u00DCberFunc", "func \u00DCberFunc()")
             ],
             declarations.Select(declaration => (declaration.Kind, declaration.Owner, declaration.Name, declaration.Signature)));
+    }
+
+    [Fact]
+    public void Scan_RecognizesGofmtOneLineInterfaceBodies()
+    {
+        var declarations = GoDeclarationScanner.Scan(
+            "package aspire\n\ntype DistributedApplication interface{ handleReference }\n",
+            includeBodyDocs: false);
+
+        var declaration = Assert.Single(declarations);
+        Assert.Equal(GoDeclarationKind.Type, declaration.Kind);
+        Assert.Equal("DistributedApplication", declaration.Name);
+        Assert.Equal("type DistributedApplication interface", declaration.Signature);
     }
 
     [Fact]
@@ -986,6 +1137,8 @@ public class GoApiExportTests
                                     Kind = GoApiMemberKind.Field,
                                     Name = "KeysChangedThreshold",
                                     Declaration = "KeysChangedThreshold *float64 `json:\"keysChangedThreshold,omitempty\"`",
+                                    DeclaredType = "*float64",
+                                    IsOptional = true,
                                     JsonName = "keysChangedThreshold"
                                 }
                             ]
@@ -1007,6 +1160,7 @@ public class GoApiExportTests
                                     Kind = GoApiMemberKind.Constant,
                                     Name = "RedisKindValkey",
                                     Declaration = "RedisKindValkey RedisKind = \"valkey\"",
+                                    DeclaredType = "RedisKind",
                                     Value = "valkey"
                                 }
                             ]

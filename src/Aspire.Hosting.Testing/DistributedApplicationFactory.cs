@@ -385,7 +385,8 @@ public class DistributedApplicationFactory(Type entryPoint, string[] args) : IDi
                         onConstructing: OnBuilderCreatingCore,
                         onConstructed: OnBuilderCreatedCore,
                         onBuilding: OnBuildingCore,
-                        entryPointCompleted: OnEntryPointExit);
+                        entryPointCompleted: OnEntryPointExit,
+                        onBuilt: OnApplicationBuilt);
 
                     if (factory is null)
                     {
@@ -406,10 +407,10 @@ public class DistributedApplicationFactory(Type entryPoint, string[] args) : IDi
         try
         {
             using var cts = new CancellationTokenSource(GetConfiguredTimeout());
-            var app = await factory(_args, cts.Token).ConfigureAwait(false);
-            _hostApplicationLifetime = app.Services.GetService<IHostApplicationLifetime>()
-                ?? throw new InvalidOperationException($"Application did not register an implementation of {typeof(IHostApplicationLifetime)}.");
-            OnBuiltCore(app);
+
+            // The built application is published by OnApplicationBuilt on the entry-point thread. This only observes
+            // failures to build, such as the entry point throwing before Build() or the timeout elapsing.
+            await factory(_args, cts.Token).ConfigureAwait(false);
         }
         catch (Exception exception)
         {
@@ -431,6 +432,23 @@ public class DistributedApplicationFactory(Type entryPoint, string[] args) : IDi
             }
 
             return TimeSpan.FromMinutes(5);
+        }
+    }
+
+    private void OnApplicationBuilt(DistributedApplication app)
+    {
+        // Invoked synchronously from DistributedApplicationBuilder.Build() on the entry-point thread, so the application
+        // is published before any code which follows Build() in the entry point can run (and possibly crash).
+        try
+        {
+            _hostApplicationLifetime = app.Services.GetService<IHostApplicationLifetime>()
+                ?? throw new InvalidOperationException($"Application did not register an implementation of {typeof(IHostApplicationLifetime)}.");
+            OnBuiltCore(app);
+        }
+        catch (Exception exception)
+        {
+            _exitTcs.TrySetException(exception);
+            OnException(exception);
         }
     }
 

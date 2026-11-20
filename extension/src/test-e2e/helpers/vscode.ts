@@ -1,4 +1,6 @@
-import { BottomBarPanel, By, EditorView, InputBox, ModalDialog, Notification, SideBarView, TreeItem, TreeSection, VSBrowser, WebView, Workbench } from './extester';
+import type { AspireExtensionE2EControlCommand } from '../../types/extensionApi';
+import { applyE2eControl } from './assertions';
+import { BottomBarPanel, By, ContextMenu, EditorView, InputBox, Menu, ModalDialog, Notification, SideBarView, TreeItem, TreeSection, VSBrowser, WebView, Workbench } from './extester';
 import { error as webDriverError } from 'selenium-webdriver';
 
 const escapeKey = '\uE00C';
@@ -8,6 +10,11 @@ const blockingWebDriverLifecycleErrorNames = new Set([
     'NoSuchSessionError',
     'NoSuchWindowError',
     'SessionNotCreatedError',
+]);
+const transientContextMenuErrorNames = new Set([
+    'NoSuchElementError',
+    'StaleElementReferenceError',
+    'TimeoutError',
 ]);
 const blockingWebDriverLifecycleMessageFragments = [
     'session deleted because of page crash',
@@ -95,6 +102,43 @@ export async function observeVisibleSideBarSectionTitles(durationMs = 2000): Pro
     } while (Date.now() < deadline);
 
     return [...observedTitles];
+}
+
+export async function waitForExplorerSelection(expectedPath: readonly string[], timeoutMs = 30000): Promise<void> {
+    let lastSelection: { focused: boolean; path: string[] } = { focused: false, path: [] };
+
+    try {
+        await VSBrowser.instance.driver.wait(async () => {
+            lastSelection = await VSBrowser.instance.driver.executeScript<{ focused: boolean; path: string[] }>(`
+                const explorer = document.querySelector('.explorer-folders-view');
+                const rows = [...explorer?.querySelectorAll('.monaco-list-row') ?? []]
+                    .sort((a, b) => Number(a.getAttribute('data-index')) - Number(b.getAttribute('data-index')));
+                const selectedIndex = rows.findIndex(row => row.classList.contains('selected'));
+                const labels = [];
+                let level = Infinity;
+                // Monaco recycles DOM rows; data-index preserves tree order, while aria-level identifies parents.
+                for (let index = selectedIndex; index >= 0; index--) {
+                    const row = rows[index];
+                    const rowLevel = Number(row.getAttribute('aria-level'));
+                    if (rowLevel > 0 && rowLevel < level) {
+                        const label = row.querySelector('.label-name')?.textContent?.trim();
+                        if (label) {
+                            labels.unshift(label);
+                        }
+                        level = rowLevel;
+                    }
+                }
+                return { focused: Boolean(explorer?.contains(document.activeElement)), path: labels };
+            `);
+            const selectedPath = lastSelection.path.slice(-expectedPath.length);
+            return lastSelection.focused
+                && selectedPath.length === expectedPath.length
+                && selectedPath.every((label, index) => label === expectedPath[index]);
+        }, timeoutMs, `Timed out waiting for Explorer to focus and select '${expectedPath.join('/')}'.`);
+    }
+    catch (error) {
+        throw withWaitDiagnostics(error, [`Last Explorer selection: ${JSON.stringify(lastSelection)}`]);
+    }
 }
 
 export async function waitForTreeItem(section: TreeSection, label: string, timeoutMs = 30000): Promise<TreeItem> {
@@ -253,6 +297,70 @@ export async function waitForTreeItemDescription(section: TreeSection, label: st
     }
 }
 
+// ExTester's openContextMenu() only waits for the menu on the first right-click of a session. Once
+// VS Code has created the shared `.context-view` container (it stays in the DOM after the menu closes),
+// later calls right-click and immediately look up `.monaco-menu`, so a slow render fails with:
+//   NoSuchElementError: no such element: Unable to locate element: {"method":"css selector","selector":".monaco-menu"}
+// See https://github.com/redhat-developer/vscode-extension-tester/blob/main/packages/page-objects/src/components/ElementWithContextMenu.ts
+// When that immediate lookup fails, wait for the menu to become visible within the remaining budget.
+// Only re-right-click a freshly located row when the menu never appears or the row went stale.
+export async function openTreeItemContextMenu(section: TreeSection, label: string, timeoutMs = 60000): Promise<Menu> {
+    const deadline = Date.now() + timeoutMs;
+    let lastError: unknown;
+
+    for (let attempt = 0; attempt < 3; attempt++) {
+        const item = await waitForTreeItem(section, label, Math.max(deadline - Date.now(), 1000));
+        try {
+            return await item.openContextMenu();
+        }
+        catch (error) {
+            throwIfWebDriverSessionFailure(error);
+            if (!(error instanceof Error) || !transientContextMenuErrorNames.has(error.name)) {
+                throw error;
+            }
+
+            lastError = error;
+        }
+
+        // Leave time for later attempts while still allowing a slow menu render to finish.
+        const remainingAttempts = 3 - attempt;
+        const renderWaitMs = Math.max(Math.floor((deadline - Date.now()) / remainingAttempts), 1000);
+        if (await waitForVisibleContextMenu(renderWaitMs)) {
+            return new ContextMenu(new Workbench());
+        }
+
+        // Close a partially opened menu so the next right-click starts from a dismissed state.
+        await VSBrowser.instance.driver.actions().sendKeys(escapeKey).perform();
+    }
+
+    throw new Error(`Failed to open the context menu for tree item '${label}' after 3 attempts: ${lastError instanceof Error ? lastError.message : String(lastError)}`);
+}
+
+async function waitForVisibleContextMenu(timeoutMs: number): Promise<boolean> {
+    try {
+        await VSBrowser.instance.driver.wait(async () => {
+            try {
+                const menus = await VSBrowser.instance.driver.findElements(By.css('.monaco-workbench .monaco-menu'));
+                for (const menu of menus) {
+                    if (await menu.isDisplayed()) {
+                        return true;
+                    }
+                }
+            }
+            catch (error) {
+                throwIfWebDriverSessionFailure(error);
+            }
+
+            return false;
+        }, timeoutMs);
+        return true;
+    }
+    catch (error) {
+        throwIfWebDriverSessionFailure(error);
+        return false;
+    }
+}
+
 export async function selectContextMenuItem(item: TreeItem, label: string): Promise<void> {
     const menu = await item.openContextMenu();
     try {
@@ -323,6 +431,46 @@ export async function cancelActiveInput(): Promise<void> {
 export async function answerActiveInput(value: string, expectedPlaceholder: string, timeoutMs = 30000): Promise<void> {
     const input = await waitForActiveInput(expectedPlaceholder, undefined, timeoutMs);
     await input.setText(value);
+    await input.confirm();
+}
+
+// VS Code's simple file dialog (files.simpleDialog.enable) navigates asynchronously as the path is typed. If Enter
+// arrives while that navigation is still pending, the dialog consumes Enter to refresh its listing instead of
+// resolving, leaving the prompt open. Only confirm once the dialog has settled on the typed path's parent folder.
+export async function answerActiveSimpleFileDialog(folderPath: string, timeoutMs = 30000): Promise<void> {
+    const input = await waitForActiveInput('Folder path', undefined, timeoutMs);
+    const expectedLabel = folderPath.split(/[\\/]/).filter(segment => segment.length > 0).pop() ?? folderPath;
+    let lastState = '<none>';
+    const readDialogState = async (): Promise<{ value: string; labels: string[] }> => {
+        const value = await input.getText();
+        const picks = await input.getQuickPicks();
+        const labels = await Promise.all(picks.map(pick => pick.getLabel()));
+        lastState = `value '${value}', visible labels: ${labels.join(', ') || '<none>'}`;
+        return { value, labels };
+    };
+
+    // Typing before the initial listing has loaded lets the dialog's first navigation overwrite the typed path.
+    await VSBrowser.instance.driver.wait(async () => {
+        try {
+            return (await readDialogState()).labels.length > 0;
+        }
+        catch (error) {
+            throwIfWebDriverSessionFailure(error);
+            return false;
+        }
+    }, timeoutMs, `Timed out waiting for the folder dialog listing to load. Last state: ${lastState}.`);
+
+    await input.setText(folderPath);
+    await VSBrowser.instance.driver.wait(async () => {
+        try {
+            const { value, labels } = await readDialogState();
+            return value === folderPath && labels.includes(expectedLabel);
+        }
+        catch (error) {
+            throwIfWebDriverSessionFailure(error);
+            return false;
+        }
+    }, timeoutMs, `Timed out waiting for the folder dialog to navigate to '${folderPath}'. Last state: ${lastState}.`);
     await input.confirm();
 }
 
@@ -666,7 +814,9 @@ export async function dismissAllNotifications(timeoutMs = 30000): Promise<void> 
                 return true;
             }
 
-            await notifications[0].dismiss();
+            // Clicking a toast's clear action needs the toast hovered, and toasts re-layout as others
+            // arrive or expire. VS Code's own command clears every notification without the DOM.
+            await applyE2eControl({ command: { name: 'clearAllNotifications' } satisfies AspireExtensionE2EControlCommand });
             return false;
         }
         catch (error) {

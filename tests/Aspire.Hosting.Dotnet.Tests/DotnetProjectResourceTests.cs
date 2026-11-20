@@ -11,6 +11,7 @@ using System.Globalization;
 using System.Reflection;
 using System.Text.Json;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Ats;
 using Aspire.Hosting.Dcp;
 using Aspire.Hosting.Dcp.Model;
 using Aspire.Hosting.Dcp.Process;
@@ -604,6 +605,34 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
         Assert.Contains(resource.Annotations.OfType<ResourceCommandAnnotation>(), a => a.Name == KnownResourceCommands.RebuildCommand);
     }
 
+    [Fact]
+    public async Task AddDotnetProject_GuestAppHostDoesNotApplyAppHostServerBuildConfiguration()
+    {
+        // In a guest (TypeScript, Python, ...) AppHost the entry assembly is the prebuilt AppHost server,
+        // so its build configuration must not be applied to the coordinated build or the launch.
+        Assert.False(string.IsNullOrEmpty(Assembly.GetEntryAssembly()?.GetCustomAttribute<AssemblyConfigurationAttribute>()?.Configuration));
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var projectDirectory = workspace.WorkspaceRoot.FullName;
+        var builder = DistributedApplication.CreateBuilder(new CreateBuilderOptions
+        {
+            ProjectDirectory = projectDirectory,
+            AppHostFilePath = Path.Combine(projectDirectory, "apphost.mts")
+        });
+
+        var projectPath = Path.Combine(projectDirectory, "MyService", "MyService.csproj");
+        var project = builder.AddDotnetProject("svc", projectPath, o => o.ExcludeLaunchProfile = true);
+        using var app = builder.Build();
+
+        // The configuration captured for the coordinated build and process launch.
+        Assert.Null(Assert.Single(project.Resource.Annotations.OfType<DotnetProjectMetadata>()).BuildConfiguration);
+
+        var launchConfig = Assert.IsType<ProjectLaunchConfiguration>(
+            await project.Resource.CreateLaunchConfigurationAsync(
+                LaunchConfigurationTestHelpers.CreateCallbackContext(project.Resource, ExecutableLaunchMode.NoDebug)));
+        Assert.Null(launchConfig.BuildConfiguration);
+    }
+
     [Theory]
     [InlineData(".csproj")]
     [InlineData(".fsproj")]
@@ -779,8 +808,8 @@ public class DotnetProjectResourceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AddDotnetProject_InDebugSession_OmitsDotnetRunScaffoldingWhenLegacyProjectLaunchIsSupported()
     {
-        // An IDE that supports only ordinary project launch owns both building and launching the resource. The
-        // coordinated-build path is disabled for this session, so only the user's program arguments are emitted.
+        // A legacy project-only IDE owns the launch request, so only the user's program arguments are emitted.
+        // Aspire can still prebuild the project through the build-only coordinator.
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
 
         builder.Configuration["DEBUG_SESSION_PORT"] = "5678";

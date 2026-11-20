@@ -582,6 +582,49 @@ public class GatewayConfigurationBuilderTests(ITestOutputHelper testOutputHelper
         Assert.DoesNotContain("localhost", json);
     }
 
+    [Fact]
+    public async Task BuildConfigExpression_ResolvesBrowserOrigin_WhenResolvedOnContainerNetwork()
+    {
+        var (hostEndpoint, annotation) = CreateHttpsHostEndpoint();
+        annotation.AllocatedEndpoint = new AllocatedEndpoint(annotation, "localhost", 7001);
+        annotation.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(
+            KnownNetworkIdentifiers.DefaultAspireContainerNetwork,
+            new AllocatedEndpoint(annotation, "web.dev.internal", 8443, EndpointBindingMode.SingleAddress, targetPortExpression: null, KnownNetworkIdentifiers.DefaultAspireContainerNetwork));
+
+        var expression = GatewayConfigurationBuilder.BuildConfigExpression(
+            httpEndpoint: null, hostEndpoint, prefix: null, "web",
+            [new HostedClientService("api", GatewayConfigurationBuilder.DefaultApiPrefix)],
+            proxyBlazorTelemetry: false, httpOtlpEndpoint: null);
+
+        // The origin is consumed by the browser, so a container gateway must not advertise its internal network address.
+        var json = await expression.GetValueAsync(new ValueProviderContext { Network = KnownNetworkIdentifiers.DefaultAspireContainerNetwork }, CancellationToken.None)
+            .AsTask().WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Contains("\"services__api__https__0\":\"https://localhost:7001/_api/api\"", json);
+        Assert.DoesNotContain("dev.internal", json);
+    }
+
+    [Fact]
+    public async Task BuildConfigExpression_ResolvesBrowserOrigin_WhenCallerIsContainer()
+    {
+        var (hostEndpoint, annotation) = CreateHttpsHostEndpoint();
+        annotation.AllocatedEndpoint = new AllocatedEndpoint(annotation, "localhost", 7001);
+
+        var expression = GatewayConfigurationBuilder.BuildConfigExpression(
+            httpEndpoint: null, hostEndpoint, prefix: null, "web",
+            [new HostedClientService("api", GatewayConfigurationBuilder.DefaultApiPrefix)],
+            proxyBlazorTelemetry: false, httpOtlpEndpoint: null);
+
+        var caller = new ContainerResource("gateway");
+        caller.Annotations.Add(new ContainerImageAnnotation { Image = "gateway" });
+
+        // Container callers default to the Aspire container network, where this endpoint is never allocated.
+        var json = await expression.GetValueAsync(new ValueProviderContext { Caller = caller }, CancellationToken.None)
+            .AsTask().WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Contains("\"services__api__https__0\":\"https://localhost:7001/_api/api\"", json);
+    }
+
     private static (EndpointReference Endpoint, EndpointAnnotation Annotation) CreateHttpsHostEndpoint()
     {
         var resource = new TestResource("web");

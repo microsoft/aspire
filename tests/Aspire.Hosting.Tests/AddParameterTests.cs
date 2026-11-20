@@ -14,6 +14,38 @@ namespace Aspire.Hosting.Tests;
 [Trait("Partition", "5")]
 public class AddParameterTests
 {
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task CreateParameterFromConfigurationPreservesOverridableDefault(bool overridden)
+    {
+        var configuration = new ConfigurationManager();
+        var parameter = ParameterResourceBuilderExtensions.CreateParameter(configuration, "public-origin", secret: false, "http://localhost:8080");
+
+        if (overridden)
+        {
+            configuration["Parameters:public_origin"] = "https://public.example";
+        }
+        Assert.Equal(overridden ? "https://public.example" : "http://localhost:8080", await parameter.GetValueAsync(default));
+        Assert.Equal("http://localhost:8080", parameter.Default!.GetDefaultValue());
+    }
+
+    [Fact]
+    public async Task CreateParameterFromConfigurationUsesStandardValueLookup()
+    {
+        var configuration = new ConfigurationManager();
+        var parameter = ParameterResourceBuilderExtensions.CreateParameter(configuration, "public-origin", secret: false);
+        Assert.True(parameter.Required);
+        Assert.False(parameter.Secret);
+        Assert.Null(parameter.Default);
+        Assert.Equal("Parameters:public-origin", parameter.ConfigurationKey);
+        var missing = ParameterResourceBuilderExtensions.CreateParameter(configuration, "missing", secret: false);
+        await Assert.ThrowsAsync<MissingParameterValueException>(async () => await missing.GetValueAsync(default));
+
+        configuration["Parameters:public_origin"] = "https://public.example";
+        Assert.Equal("https://public.example", await parameter.GetValueAsync(default));
+    }
+
     [Fact]
     public void ParametersAreVisibleByDefault()
     {
@@ -53,79 +85,79 @@ public class AddParameterTests
     }
 
     [Fact]
-    public void ParameterWithOptional_MarksParameterAsNotRequired()
+    public void ParameterAsOptional_MarksParameterAsNotRequired()
     {
         var appBuilder = DistributedApplication.CreateBuilder();
 
         var parameter = appBuilder.AddParameter("test")
-            .WithOptional();
+            .AsOptional();
 
         Assert.False(parameter.Resource.Required);
     }
 
     [Fact]
-    public void ParameterWithRequired_SetsRequiredFlag()
+    public void ParameterAsRequired_SetsRequiredFlag()
     {
         var appBuilder = DistributedApplication.CreateBuilder();
 
         var parameter = appBuilder.AddParameter("test")
-            .WithOptional()
-            .WithRequired();
+            .AsOptional()
+            .AsRequired();
 
         Assert.True(parameter.Resource.Required);
     }
 
     [Fact]
-    public async Task ParameterWithOptional_AfterMissingValueWasProbed_ResolvesToNull()
+    public async Task ParameterAsOptional_AfterMissingValueWasProbed_ResolvesToNull()
     {
         var appBuilder = DistributedApplication.CreateBuilder();
         var parameter = appBuilder.AddParameter("test");
 
         Assert.False(parameter.Resource.TryGetCurrentValue(out _));
 
-        parameter.WithOptional();
+        parameter.AsOptional();
 
         Assert.Null(await parameter.Resource.GetValueAsync(CancellationToken.None));
     }
 
     [Fact]
-    public async Task ParameterWithRequired_AfterOptionalMissingValueWasProbed_Throws()
+    public async Task ParameterAsRequired_AfterOptionalMissingValueWasProbed_Throws()
     {
         var appBuilder = DistributedApplication.CreateBuilder();
         var parameter = appBuilder.AddParameter("test")
-            .WithOptional();
+            .AsOptional();
 
         Assert.False(parameter.Resource.TryGetCurrentValue(out _));
 
-        parameter.WithRequired();
+        parameter.AsRequired();
 
         await Assert.ThrowsAsync<MissingParameterValueException>(
             () => parameter.Resource.GetValueAsync(CancellationToken.None).AsTask());
     }
 
     [Fact]
-    public async Task ParameterWithOptional_AfterRequiredValueTaskWasFaulted_ResolvesToNull()
+    public async Task ParameterAsOptional_AfterRequiredValueTaskWasFaulted_ResolvesToNull()
     {
         var appBuilder = DistributedApplication.CreateBuilder();
         var parameter = appBuilder.AddParameter("test");
 
         await parameter.Resource.SetValueAsync(null).DefaultTimeout();
 
-        parameter.WithOptional();
+        parameter.AsOptional();
 
         Assert.Null(await parameter.Resource.GetValueAsync(CancellationToken.None).DefaultTimeout());
     }
 
     [Fact]
-    public async Task ParameterWithRequired_AfterOptionalValueTaskResolvedToNull_Throws()
+    public async Task ParameterAsRequired_AfterOptionalValueTaskResolvedToNull_Throws()
     {
         var appBuilder = DistributedApplication.CreateBuilder();
         var parameter = appBuilder.AddParameter("test")
-            .WithOptional();
+            .AsOptional();
 
         await parameter.Resource.SetValueAsync(null).DefaultTimeout();
 
-        parameter.WithRequired();
+        parameter.AsRequired();
 
         await Assert.ThrowsAsync<MissingParameterValueException>(
             () => parameter.Resource.GetValueAsync(CancellationToken.None).AsTask()).DefaultTimeout();
@@ -137,7 +169,7 @@ public class AddParameterTests
         var appBuilder = DistributedApplication.CreateBuilder();
 
         var parameter = appBuilder.AddParameter("optional")
-            .WithOptional();
+            .AsOptional();
 
         using var app = appBuilder.Build();
         var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
@@ -401,7 +433,7 @@ public class AddParameterTests
         var appBuilder = DistributedApplication.CreateBuilder();
 
         appBuilder.AddParameter("optional")
-            .WithOptional();
+            .AsOptional();
 
         using var app = appBuilder.Build();
         var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
@@ -738,7 +770,7 @@ public class AddParameterTests
     {
         var appBuilder = DistributedApplication.CreateBuilder();
         var parameter = appBuilder.AddParameter("test")
-            .WithOptional();
+            .AsOptional();
 
         var input = parameter.Resource.CreateInput();
 
@@ -848,7 +880,7 @@ public class AddParameterTests
     {
         var appBuilder = DistributedApplication.CreateBuilder();
         var parameter = appBuilder.AddParameter("test")
-            .WithOptional()
+            .AsOptional()
             .WithCustomInput(_ => new InteractionInput
             {
                 Name = "CustomInput",
@@ -866,7 +898,7 @@ public class AddParameterTests
     {
         var appBuilder = DistributedApplication.CreateBuilder();
         var parameter = appBuilder.AddParameter("test")
-            .WithOptional()
+            .AsOptional()
             .WithCustomInput(_ => new InteractionInput
             {
                 Name = "CustomInput",

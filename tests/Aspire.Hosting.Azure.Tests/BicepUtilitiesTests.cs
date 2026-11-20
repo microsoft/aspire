@@ -14,6 +14,138 @@ namespace Aspire.Hosting.Azure.Tests;
 public class BicepUtilitiesTests(ITestOutputHelper testOutputHelper)
 {
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task SetScopeAsync_ExistingComputeEnvironmentDoesNotChangeModuleScope(bool appService)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        AzureBicepResource resource = appService
+            ? builder.AddAzureAppServiceEnvironment("env")
+                .AsExistingInResourceGroup("existing-env", "existing-rg", "existing-subscription").Resource
+            : builder.AddAzureContainerAppEnvironment("env")
+                .AsExistingInResourceGroup("existing-env", "existing-rg", "existing-subscription").Resource;
+
+        var scope = new JsonObject();
+        await BicepUtilities.SetScopeAsync(scope, resource);
+
+        Assert.Single(scope);
+        Assert.Null(scope["resourceGroup"]);
+
+        resource.Scope = new AzureBicepResourceScope("module-rg", "module-subscription");
+        await BicepUtilities.SetScopeAsync(scope, resource);
+
+        Assert.Equal("module-rg", scope["resourceGroup"]?.GetValue<string>());
+        Assert.Equal("module-subscription", scope["subscription"]?.GetValue<string>());
+
+        using var template = resource.GetBicepTemplateFile();
+        await Verify(await File.ReadAllTextAsync(template.Path), "bicep").UseParameters(appService);
+    }
+
+    [Fact]
+    public async Task SetScopeAsync_ExistingComputeRoleTargetDoesNotReenterTemplateGeneration()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var environment = builder.AddAzureContainerAppEnvironment("env")
+            .AsExistingInResourceGroup("existing-env", "existing-rg", "existing-subscription");
+        var configurationCount = 0;
+        environment.ConfigureInfrastructure(_ => configurationCount++);
+        var roles = new AzureRoleAssignmentResource("roles", environment.Resource, null, null, infrastructure =>
+            environment.Resource.AddAsExistingResource(infrastructure));
+        environment.Resource.RegisterRoleAssignmentScope(roles);
+
+        var moduleScope = new JsonObject();
+        await BicepUtilities.SetScopeAsync(moduleScope, environment.Resource);
+        await BicepUtilities.SetScopeAsync(moduleScope, environment.Resource);
+
+        Assert.Equal(1, configurationCount);
+        Assert.Single(moduleScope);
+        Assert.Null(moduleScope["resourceGroup"]);
+        Assert.Equal("existing-rg", roles.Scope!.ResourceGroup);
+        Assert.Equal("existing-subscription", roles.Scope.Subscription);
+        Assert.Contains(environment.Resource, roles.References);
+        using var template = roles.GetBicepTemplateFile();
+        await Verify(await File.ReadAllTextAsync(template.Path), "bicep");
+    }
+
+    [Fact]
+    public async Task SetScopeAsync_ExistingResourceStillUsesAnnotationScope()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var resource = builder.AddAzureStorage("storage")
+            .AsExistingInResourceGroup("existing-storage", "existing-rg", "existing-subscription").Resource;
+
+        var scope = new JsonObject();
+        await BicepUtilities.SetScopeAsync(scope, resource);
+
+        Assert.Equal("existing-rg", scope["resourceGroup"]?.GetValue<string>());
+        Assert.Equal("existing-subscription", scope["subscription"]?.GetValue<string>());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task SetScopeAsync_ExistingComputeEnvironmentWithModuleScopedReferenceUsesAnnotationScope(bool foundryProject)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        AzureBicepResource resource;
+        if (foundryProject)
+        {
+            resource = builder.AddFoundry("foundry")
+                .AsExistingInResourceGroup("existing-account", "existing-rg", "existing-subscription")
+                .AddProject("project")
+                .AsExistingInResourceGroup("existing-project", "existing-rg", "existing-subscription").Resource;
+        }
+        else
+        {
+            var identity = builder.AddAzureUserAssignedIdentity("identity")
+                .AsExistingInResourceGroup("existing-identity", "existing-rg", "existing-subscription");
+            resource = builder.AddAzureSandboxGroup("sandbox")
+                .WithAcrPullIdentity(identity)
+                .AsExistingInResourceGroup("existing-sandbox", "existing-rg", "existing-subscription").Resource;
+        }
+
+        var scope = new JsonObject();
+        await BicepUtilities.SetScopeAsync(scope, resource);
+
+        Assert.Equal("existing-rg", scope["resourceGroup"]?.GetValue<string>());
+        Assert.Equal("existing-subscription", scope["subscription"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task SetScopeAsync_ModuleScopedComputeReferencesPreserveExplicitScope()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var identity = builder.AddAzureUserAssignedIdentity("identity")
+            .AsExistingInResourceGroup("existing-identity", "existing-rg", "existing-subscription");
+        var resource = builder.AddAzureSandboxGroup("sandbox")
+            .WithAcrPullIdentity(identity)
+            .AsExistingInResourceGroup("existing-sandbox", "existing-rg", "existing-subscription").Resource;
+        var explicitScope = new AzureBicepResourceScope("module-rg", "module-subscription");
+        resource.Scope = explicitScope;
+        var roles = new AzureRoleAssignmentResource("roles", resource, null, null, infrastructure =>
+            resource.AddAsExistingResource(infrastructure));
+        resource.RegisterRoleAssignmentScope(roles);
+        var consumer = new AzureProvisioningResource("consumer", infrastructure =>
+            resource.AddAsExistingResource(infrastructure))
+        {
+            Scope = new AzureBicepResourceScope("consumer-rg", "consumer-subscription")
+        };
+
+        // Generate the consumer first so the reference cannot depend on prior source materialization.
+        var consumerBicep = consumer.GetBicepTemplateString();
+        var scope = new JsonObject();
+        await BicepUtilities.SetScopeAsync(scope, resource);
+
+        Assert.Equal("module-rg", scope["resourceGroup"]?.GetValue<string>());
+        Assert.Equal("module-subscription", scope["subscription"]?.GetValue<string>());
+        Assert.Same(explicitScope, resource.Scope);
+        Assert.Same(explicitScope, roles.Scope);
+        await Verify(resource.GetBicepTemplateString(), "bicep")
+            .AppendContentAsFile(roles.GetBicepTemplateString(), "bicep")
+            .AppendContentAsFile(consumerBicep, "bicep");
+    }
+
+    [Theory]
     [InlineData(DistributedApplicationOperation.Run, null, "", null)]
     [InlineData(DistributedApplicationOperation.Run, "dev-a", "dev-a", null)]
     [InlineData(DistributedApplicationOperation.Publish, "production", "production", null)]

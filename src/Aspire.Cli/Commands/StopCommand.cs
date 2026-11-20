@@ -473,13 +473,13 @@ internal sealed partial class StopCommand : BaseCommand
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             _logger.LogDebug(ex, "Failed to inspect AppHost project for persistent resource cleanup compatibility.");
-            InteractionService.DisplayMessage(KnownEmojis.Warning, StopCommandStrings.DcpCleanupCompatibilityCheckFailed);
+            InteractionService.DisplayMessage(KnownEmojis.PoliceCarLight, StopCommandStrings.DcpCleanupCompatibilityCheckFailed);
             return;
         }
 
         if (appHostInfo.ExitCode != 0 || !appHostInfo.IsAspireHost)
         {
-            InteractionService.DisplayMessage(KnownEmojis.Warning, StopCommandStrings.DcpCleanupCompatibilityCheckFailed);
+            InteractionService.DisplayMessage(KnownEmojis.PoliceCarLight, StopCommandStrings.DcpCleanupCompatibilityCheckFailed);
             return;
         }
 
@@ -504,7 +504,7 @@ internal sealed partial class StopCommand : BaseCommand
         var minimumVersionDisplay = deleteVolumes
             ? MinimumHostingVersionForPersistentVolumeCleanupDisplay
             : MinimumHostingVersionForPersistentResourceCleanupDisplay;
-        InteractionService.DisplayMessage(KnownEmojis.Warning, string.Format(
+        InteractionService.DisplayMessage(KnownEmojis.PoliceCarLight, string.Format(
             CultureInfo.CurrentCulture,
             unsupportedMessage,
             appHostVersion,

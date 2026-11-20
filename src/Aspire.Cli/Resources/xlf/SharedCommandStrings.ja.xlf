@@ -22,10 +22,30 @@
         <target state="translated">現在の作業ツリーに実行中の AppHost が見つかりませんでした。'--apphost &lt;path&gt;' を使用して 1 つを直接ターゲットにするか、'--all' を使用して他のワークツリーの AppHost を含めます。</target>
         <note />
       </trans-unit>
+      <trans-unit id="FetchingSource">
+        <source>Fetching {0} from {1} using Git...</source>
+        <target state="translated">Git を使用して {1} から {0} を取得しています...</target>
+        <note>{0} is the localized content being fetched, such as "configuration source" or "templates". {1} is the Git repository, optionally followed by its path and ref.</note>
+      </trans-unit>
+      <trans-unit id="FetchingSourceWithAuthentication">
+        <source>Fetching {0} from {1} using Git. Git may prompt you to authenticate.</source>
+        <target state="translated">Git を使用して {1} から {0} を取得しています。Git から認証を求められる場合があります。</target>
+        <note>{0} is the localized content being fetched, such as "configuration source" or "templates". {1} is the Git repository, optionally followed by its path and ref.</note>
+      </trans-unit>
       <trans-unit id="FormatOptionDescription">
         <source>Output format for detached AppHost results</source>
         <target state="translated">デタッチされた AppHost 結果の出力形式</target>
         <note />
+      </trans-unit>
+      <trans-unit id="GitFetchConfigurationSource">
+        <source>configuration source</source>
+        <target state="translated">構成のソース</target>
+        <note>The content inserted into the Git-fetch notice.</note>
+      </trans-unit>
+      <trans-unit id="GitFetchTemplates">
+        <source>templates</source>
+        <target state="translated">テンプレート</target>
+        <note>The content inserted into the Git-fetch notice.</note>
       </trans-unit>
       <trans-unit id="HeaderLanguage">
         <source>Language</source>
@@ -122,6 +142,16 @@
         <target state="translated">--non-interactive オプションが指定されている場合、{0} コマンドには --yes が必要です。</target>
         <note>{0} is the command name.</note>
       </trans-unit>
+      <trans-unit id="NuGetSearchLimitWarning">
+        <source>NuGet search results may be incomplete because the limit of {0} packages per feed was reached. Use narrower integration source patterns.</source>
+        <target state="translated">フィードあたりのパッケージ数の上限 {0} に達したため、NuGet の検索結果が不完全である可能性があります。統合ソース パターンをより絞り込んでください。</target>
+        <note>{0} is the maximum number of packages searched per feed.</note>
+      </trans-unit>
+      <trans-unit id="NuGetSearchSourceFailedWarning">
+        <source>Failed to search NuGet source '{0}'. Some integrations may be missing. Check the source configuration and authentication. See the CLI logs for details.</source>
+        <target state="translated">NuGet ソース '{0}' の検索に失敗しました。一部の統合が利用できない可能性があります。ソースの構成と認証を確認します。詳細については、CLI ログを参照してください。</target>
+        <note>{0} is the redacted NuGet source name or URL.</note>
+      </trans-unit>
       <trans-unit id="PipelineEnvironmentOptionDescription">
         <source>The environment to use for the operation. The default is 'Production'.</source>
         <target state="translated">操作に使用する環境です。既定値は 'Production' です。</target>
@@ -170,6 +200,66 @@
       <trans-unit id="SelectAppHost">
         <source>Select an AppHost to {0}:</source>
         <target state="translated">{0}する AppHost を以下で選択します。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SourceFeed">
+        <source>Package feed</source>
+        <target state="translated">パッケージ フィード</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SourceGitPath">
+        <source>Git path</source>
+        <target state="translated">Git パス</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SourceGitRepository">
+        <source>Git source</source>
+        <target state="translated">Git ソース</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SourceMarketplace">
+        <source>Marketplace</source>
+        <target state="translated">Marketplace</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SourceName">
+        <source>Name</source>
+        <target state="translated">名前</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SourceOpenCodeV1Catalog">
+        <source>OpenCode V1 catalog</source>
+        <target state="translated">OpenCode V1 カタログ</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SourceOpenCodeV2Catalog">
+        <source>OpenCode V2 catalog</source>
+        <target state="translated">OpenCode V2 カタログ</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SourcePath">
+        <source>Path</source>
+        <target state="translated">パス</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SourcePatterns">
+        <source>Package patterns</source>
+        <target state="translated">パッケージ パターン</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SourcePlugins">
+        <source>Plugins</source>
+        <target state="translated">プラグイン</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SourceRef">
+        <source>Git ref</source>
+        <target state="translated">Git 参照</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SourceTrustWarning">
+        <source>Only use sources you trust. Content from these sources can run code on your machine.</source>
+        <target state="translated">信頼できるソースのみを使用してください。これらのソースからのコンテンツは、コンピューター上でコードを実行できます。</target>
         <note />
       </trans-unit>
       <trans-unit id="UnrecognizedOptionDidYouMeanFormat">

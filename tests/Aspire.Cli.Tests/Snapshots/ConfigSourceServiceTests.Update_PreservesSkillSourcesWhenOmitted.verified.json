@@ -1,0 +1,15 @@
+﻿{
+  "configSource": {
+    "repository": "https://git.example/organization/config",
+    "path": "teams/platform.json",
+    "appliedVersion": "version-2"
+  },
+  "skillSources": {
+    "team": {
+      "repository": "example/local"
+    }
+  },
+  "docs": {
+    "llmsTxtUrl": "https://local.example/docs"
+  }
+}

@@ -29,6 +29,7 @@
 
   <ItemGroup>
     <Compile Include="$(SharedDir)ContainerRegistryInfrastructure.cs" LinkBase="Shared" />
+    <Compile Include="$(SharedDir)BrowserOriginHelpers.cs" LinkBase="Shared" />
     <Compile Include="$(SharedDir)ComputeEnvironmentEndpointResolver.cs" LinkBase="Shared" />
     <Compile Include="$(SharedDir)CrossScopeAcrPullIdentityPreparer.cs" LinkBase="Shared" />
     <Compile Include="$(SharedDir)AzureRoleAssignmentUtils.cs" LinkBase="Utils" />

@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.EndToEnd.Tests.Helpers;
-using Aspire.TestUtilities;
 using Hex1b.Automation;
 using Xunit;
 
@@ -13,7 +12,6 @@ public sealed class PersistentContainerEndToEndTests(ITestOutputHelper output)
     private const string ProjectName = "PersistenceE2E";
 
     [Fact]
-    [QuarantinedTest("https://github.com/microsoft/aspire/issues/17995")]
     [CaptureWorkspaceOnFailure]
     public async Task PersistentContainersPreserveDataAcrossAppHostRuns()
     {

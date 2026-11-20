@@ -584,7 +584,7 @@ public class RepositoryToolUpdaterTests(ITestOutputHelper outputHelper)
         Assert.Equal(originalContent, await File.ReadAllBytesAsync(path));
         Assert.Equal("{}", await File.ReadAllTextAsync(lockPath));
         var warning = Assert.Single(interaction.DisplayedMessages);
-        Assert.Equal(KnownEmojis.Warning, warning.Emoji);
+        Assert.Equal(KnownEmojis.PoliceCarLight, warning.Emoji);
         Assert.Contains(path, warning.Message);
         Assert.Contains(version, warning.Message);
         Assert.Empty(interaction.BooleanPromptCalls);

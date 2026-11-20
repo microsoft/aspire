@@ -10,6 +10,25 @@ namespace Aspire.Hosting.Tests;
 [Trait("Partition", "6")]
 public class ComputeEnvironmentValidationTests
 {
+    [Theory]
+    [InlineData("http", EndpointProperty.BrowserOrigins)]
+    [InlineData("tcp", EndpointProperty.BrowserOrigins)]
+    [InlineData("http", EndpointProperty.PrimaryBrowserOrigin)]
+    [InlineData("tcp", EndpointProperty.PrimaryBrowserOrigin)]
+    public void DefaultComputeEnvironmentExplainsMissingBrowserOriginSupport(string scheme, EndpointProperty property)
+    {
+        IComputeEnvironmentResource environment = new TestComputeEnvironmentResource("env");
+        var endpoint = CreateEndpointReference(scheme, port: null, targetPort: 5000);
+
+        var error = Assert.Throws<NotSupportedException>(() =>
+            environment.GetEndpointPropertyExpression(endpoint.Property(property)));
+
+        Assert.Equal(
+            $"Compute environment 'env' cannot provide browser origins for endpoint '{endpoint.EndpointName}' on resource '{endpoint.Resource.Name}' because it does not implement deployed browser-origin resolution. " +
+            "An endpoint host address alone does not establish a browser-facing origin. Use an environment that supports browser origins or supply an explicit origin parameter.",
+            error.Message);
+    }
+
     [Fact]
     public async Task MultipleComputeEnvironments_WithUnboundComputeResource_Throws()
     {
@@ -74,9 +93,7 @@ public class ComputeEnvironmentValidationTests
         IComputeEnvironmentResource environment = new TestComputeEnvironmentResource("env");
         var endpointReference = CreateEndpointReference("http", port: 8080, targetPort: 5000);
 
-#pragma warning disable ASPIRECOMPUTE002
         var expression = environment.GetEndpointPropertyExpression(endpointReference.Property(property));
-#pragma warning restore ASPIRECOMPUTE002
 
         Assert.Equal(expected, await expression.GetValueAsync(default));
     }
@@ -87,9 +104,7 @@ public class ComputeEnvironmentValidationTests
         IComputeEnvironmentResource environment = new TestComputeEnvironmentResource("env");
         var endpointReference = CreateEndpointReference("redis", port: null, targetPort: 6379);
 
-#pragma warning disable ASPIRECOMPUTE002
         var ex = Assert.Throws<InvalidOperationException>(() => environment.GetEndpointPropertyExpression(endpointReference.Property(EndpointProperty.Url)));
-#pragma warning restore ASPIRECOMPUTE002
 
         Assert.Contains("Endpoint 'redis' must specify a port for scheme 'redis'.", ex.Message);
     }
@@ -105,10 +120,8 @@ public class ComputeEnvironmentValidationTests
 
     private sealed class TestComputeEnvironmentResource(string name) : Resource(name), IComputeEnvironmentResource
     {
-#pragma warning disable ASPIRECOMPUTE002
         public ReferenceExpression GetHostAddressExpression(EndpointReference endpointReference) =>
             ReferenceExpression.Create($"{endpointReference.Resource.Name}.example.com");
-#pragma warning restore ASPIRECOMPUTE002
     }
 
     private sealed class TestComputeResource(string name) : Resource(name), IComputeResource, IResourceWithEndpoints

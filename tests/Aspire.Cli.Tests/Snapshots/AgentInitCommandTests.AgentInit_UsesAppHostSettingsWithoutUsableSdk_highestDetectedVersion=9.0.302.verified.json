@@ -1,0 +1,13 @@
+﻿{
+  "extraKnownMarketplaces": {
+    "team": {
+      "source": {
+        "source": "github",
+        "repo": "example/selected"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "deployment@team": true
+  }
+}

@@ -1,0 +1,44 @@
+@namespace Aspire.Dashboard.Components
+@using System.Globalization
+@using Aspire.Shared
+@implements IDisposable
+
+@if (_snapshot is { } snapshot)
+{
+    var activity = snapshot.Activity;
+    var context = GetContext(snapshot);
+    var traceUrl = GetTracesUrl(snapshot, failed: false);
+    var count = string.Format(CultureInfo.CurrentCulture,
+        Loc[snapshot.Sampled ? nameof(Resources.Layout.ResourcePaneActivitySampledCount) : nameof(Resources.Layout.ResourcePaneActivityCount)], activity.Count);
+    <div class="resource-row-insights">
+        <a class="resource-row-insight resource-row-insight-requests" href="@traceUrl"
+           aria-label="@($"{count}. {context}")" data-tooltip="@($"{count}. {context}")"
+           data-tooltip-positioning="above" @onclick:stopPropagation="true">
+            <FluentIcon Value="@(new Icons.Regular.Size16.DataUsage())" Width="var(--resource-insight-icon-size)" Color="Color.Custom" CustomColor="currentColor" />
+            <span>@count</span>
+        </a>
+        @if (activity.P95 is { } percentile)
+        {
+            var duration = DurationFormatter.FormatDuration(percentile, CultureInfo.CurrentCulture);
+            var p95 = string.Format(CultureInfo.CurrentCulture,
+                Loc[snapshot.Sampled ? nameof(Resources.Layout.ResourcePaneActivitySampledP95) : nameof(Resources.Layout.ResourcePaneActivityP95)], duration);
+            var conciseP95 = string.Format(CultureInfo.CurrentCulture, Loc[nameof(Resources.Layout.ResourcePaneActivityP95)], duration);
+            <a class="resource-row-insight resource-row-insight-latency" href="@traceUrl"
+               aria-label="@($"{p95}. {context}")" data-tooltip="@($"{p95}. {context}")"
+               data-tooltip-positioning="above" @onclick:stopPropagation="true">
+                <FluentIcon Value="@(new Icons.Regular.Size16.Timer())" Width="var(--resource-insight-icon-size)" Color="Color.Custom" CustomColor="currentColor" />
+                <span>@conciseP95</span>
+            </a>
+        }
+        @if (activity.FailedCount > 0)
+        {
+            var failed = string.Format(CultureInfo.CurrentCulture,
+                Loc[snapshot.Sampled ? nameof(Resources.Layout.ResourcePaneActivitySampledFailures) : nameof(Resources.Layout.ResourcePaneActivityFailures)], activity.FailedCount);
+            <a class="resource-row-insight resource-row-insight-failed" href="@GetTracesUrl(snapshot, failed: true)"
+               aria-label="@($"{failed}. {context}")" data-tooltip="@($"{failed}. {context}")"
+               data-tooltip-positioning="above" @onclick:stopPropagation="true">
+                <FluentIcon Value="@(new Icons.Regular.Size12.ErrorCircle())" Width="var(--resource-insight-icon-size)" Color="Color.Custom" CustomColor="currentColor" />
+            </a>
+        }
+    </div>
+}

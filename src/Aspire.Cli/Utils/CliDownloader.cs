@@ -32,10 +32,16 @@ internal class CliDownloader(
     {
         // Get the channel information from PackagingService
         var channels = await packagingService.GetChannelsAsync(cancellationToken, channelName);
-        var channel = channels.FirstOrDefault(c => c.Name.Equals(channelName, StringComparison.OrdinalIgnoreCase));
+        var channel = channels.FirstOrDefault(c => c.Name.Equals(channelName, StringComparisons.ChannelName));
 
         if (channel is null)
         {
+            if (string.Equals(channelName, PackageChannelNames.Staging, StringComparisons.ChannelName)
+                && packagingService.GetStagingChannelUnavailableReason() is { } stagingReason)
+            {
+                throw new InvalidOperationException(stagingReason);
+            }
+
             throw new ArgumentException($"Unsupported channel '{channelName}'. Available channels: {string.Join(", ", channels.Select(c => c.Name))}");
         }
 

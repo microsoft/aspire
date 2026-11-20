@@ -1,0 +1,19 @@
+﻿{
+  "resources": {
+    "infra": {
+      "type": "azure.bicep.v0",
+      "path": "infra.module.bicep"
+    },
+    "backend": {
+      "type": "container.v0",
+      "image": "image:latest",
+      "env": {
+        "ORIGIN": "{cond-test-condition-c9d9581a.connectionString}"
+      }
+    },
+    "cond-test-condition-c9d9581a": {
+      "type": "value.v0",
+      "connectionString": "https://{infra.outputs.publicHost}"
+    }
+  }
+}

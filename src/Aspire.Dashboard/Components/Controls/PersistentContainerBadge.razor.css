@@ -1,15 +1,28 @@
 .persistent-container-badge {
     position: absolute;
-    inset-inline-end: -4px;
-    bottom: -3px;
+    inset-inline-end: var(--persistent-badge-inline-end, 2px);
+    bottom: var(--persistent-badge-bottom, 2px);
+    z-index: 1;
+    pointer-events: none;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 14px;
-    height: 12px;
+    width: 18px;
+    height: 10px;
     box-sizing: border-box;
-    border: 1px solid var(--colorNeutralStroke2);
-    border-radius: 4px;
+    border-radius: var(--aspire-radius-small);
     background: var(--colorNeutralBackground1);
     color: var(--colorNeutralForeground1);
+}
+
+.persistent-container-badge ::deep svg {
+    width: 16px;
+    height: 10px;
+}
+
+@media (forced-colors: active) {
+    .persistent-container-badge {
+        background: Canvas;
+        color: CanvasText;
+    }
 }

@@ -1,4 +1,4 @@
-﻿::deep .unread-logs-errors-link {
+::deep .unread-logs-errors-link {
     display: inline-flex;
     flex: 0 0 auto;
     align-items: center;
@@ -208,13 +208,21 @@
 ::deep .resource-graph-container {
     grid-area: resources-tab-content;
     position: relative; /* So graph buttons are position inside the container */
+    /* Keep the graph within the 1fr tab content row. Without this the row grows to the SVG's intrinsic height and the
+       absolutely positioned controls at the bottom end up below the clipped edge of .resource-tabs. */
+    min-height: 0;
+    overflow: hidden;
+}
+
+/* Size the SVG from the layout instead of from its viewBox aspect ratio. app-resourcegraph.js derives the viewBox from
+   this element's container, so an SVG sized by its viewBox would feed its own height back into the layout. */
+::deep .resource-graph {
+    display: block;
+    width: 100%;
+    height: 100%;
 }
 
 ::deep .resource-graph-controls {
-    position: absolute;
-    right: 30px;
-    bottom: 30px;
-    display: flex;
     column-gap: 10px;
 }
 
@@ -232,11 +240,6 @@
 ::deep .resource-graph-controls fluent-button:active,
 ::deep .resource-graph-controls fluent-button:hover:active {
     background-color: var(--resource-graph-secondary-hover-background);
-}
-
-::deep .resource-graph-controls fluent-button > svg {
-    width: 24px;
-    height: 24px;
 }
 
 ::deep .resource-graph .texts {
@@ -262,7 +265,7 @@
 }
 
 ::deep .resource-node {
-    stroke: var(--aspire-page-background);
+    stroke: transparent;
     fill: var(--aspire-page-background);
 }
 
@@ -287,10 +290,6 @@
 
 ::deep .resource-group-hover .resource-node {
     fill: var(--resource-graph-hover-background) !important;
-}
-
-::deep .resource-group-selected .resource-scale {
-    transform: scale(1.2);
 }
 
 ::deep .resource-group-selected .resource-node {
@@ -329,9 +328,7 @@
     fill: var(--aspire-page-background);
 }
 
-/* Context menu affordance (cog) shown on the lower-right of a node. Hidden until the node is
-   hovered so it doesn't clutter the graph, and non-interactive while hidden (pointer-events: none)
-   so the invisible element can't intercept clicks. */
+/* Keep the cog visually hidden until needed. Its background circle still detects direct hover. */
 ::deep .resource-menu-cog {
     opacity: 0;
     pointer-events: none;
@@ -339,7 +336,7 @@
     transition: opacity 0.15s ease-in-out;
 }
 
-::deep .resource-group-hover .resource-menu-cog,
+::deep .resource-scale:hover .resource-menu-cog,
 ::deep .resource-menu-cog:focus,
 ::deep .resource-menu-cog[aria-expanded="true"] {
     opacity: 1;

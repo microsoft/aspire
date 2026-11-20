@@ -11,4 +11,5 @@ internal static class CliConfigNames
     public const string InitSourceUrl = "ASPIRE_INIT_SOURCE_URL";
     public const string InitSourcePath = "ASPIRE_INIT_SOURCE_PATH";
     public const string InitSourceRef = "ASPIRE_INIT_SOURCE_REF";
+    public const string InitSourceReadmeUrl = "ASPIRE_INIT_SOURCE_README_URL";
 }

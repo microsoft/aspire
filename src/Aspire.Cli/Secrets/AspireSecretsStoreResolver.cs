@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.Json;
 using Aspire.Cli.Projects;
 using Aspire.Shared.UserSecrets;
 
@@ -15,6 +16,34 @@ internal sealed class AspireSecretsStoreResolver(
     CliExecutionContext executionContext)
 {
     internal const string DefaultEnvironmentName = AppHostEnvironmentDefaults.DevelopmentEnvironmentName;
+
+    public async Task<string?> ResolvePathAsync(
+        FileInfo? projectFile,
+        string? environmentName,
+        CancellationToken cancellationToken)
+    {
+        var resolvedEnvironment = ResolveEnvironmentName(environmentName);
+        var searchResult = await projectLocator.UseOrFindAppHostProjectFileAsync(
+            projectFile,
+            MultipleAppHostProjectsFoundBehavior.Prompt,
+            createSettingsFile: false,
+            cancellationToken);
+
+        var appHostFile = searchResult.SelectedProjectFile;
+        if (appHostFile is null || projectFactory.TryGetProject(appHostFile) is not { } project)
+        {
+            return null;
+        }
+
+        var userSecretsId = await project.GetUserSecretsIdAsync(appHostFile, autoInit: false, cancellationToken);
+        var appHostId = string.IsNullOrWhiteSpace(userSecretsId)
+            ? AspireSecretsPathHelper.ComputeSyntheticAppHostId(appHostFile.FullName)
+            : userSecretsId;
+
+        // Path lookup must work even when a secrets file needs repair. Do not use
+        // ResolveAppHostId here: it migrates stores and therefore parses their contents.
+        return GetSecretsFilePath(executionContext.HomeDirectory, appHostId, resolvedEnvironment);
+    }
 
     /// <summary>
     /// Resolves the AppHost identity without initializing user secrets or selecting an environment.
@@ -86,7 +115,7 @@ internal sealed class AspireSecretsStoreResolver(
             appHostFile,
             resolvedEnvironment,
             filePath,
-            new SecretsStore(filePath),
+            LoadSecretsStore(filePath),
             File.Exists(filePath),
             legacyUserSecretsFilePath);
     }
@@ -150,7 +179,7 @@ internal sealed class AspireSecretsStoreResolver(
                     appHostFile,
                     environment,
                     resolvedPath,
-                    new SecretsStore(resolvedPath),
+                    LoadSecretsStore(resolvedPath),
                     aspireStoreExists: true,
                     legacyUserSecretsFilePath: IsDevelopment(environment) ? legacyUserSecretsFilePath : null));
             }
@@ -195,9 +224,9 @@ internal sealed class AspireSecretsStoreResolver(
         // after an external initialization, without initializing or editing the project here.
         foreach (var sourceFile in Directory.EnumerateFiles(sourceDirectory, "*.json", SearchOption.TopDirectoryOnly).Order(StringComparer.Ordinal))
         {
-            var sourceStore = new SecretsStore(sourceFile);
+            var sourceStore = LoadSecretsStore(sourceFile);
             var environment = Path.GetFileNameWithoutExtension(sourceFile);
-            var destinationStore = new SecretsStore(GetSecretsFilePath(executionContext.HomeDirectory, userSecretsId, environment));
+            var destinationStore = LoadSecretsStore(GetSecretsFilePath(executionContext.HomeDirectory, userSecretsId, environment));
             destinationStore.MergeFrom(sourceStore);
 
             // Save atomically before removing the source. A failure must abort resolution so
@@ -221,16 +250,28 @@ internal sealed class AspireSecretsStoreResolver(
             return;
         }
 
-        var legacyStore = new SecretsStore(legacyUserSecretsFilePath);
+        var legacyStore = LoadSecretsStore(legacyUserSecretsFilePath);
         if (legacyStore.Count == 0)
         {
             return;
         }
 
-        var aspireStore = new SecretsStore(aspireSecretsFilePath);
+        var aspireStore = LoadSecretsStore(aspireSecretsFilePath);
         aspireStore.MergeFrom(legacyStore);
 
         aspireStore.Save();
+    }
+
+    internal static SecretsStore LoadSecretsStore(string path)
+    {
+        try
+        {
+            return new SecretsStore(path);
+        }
+        catch (JsonException ex)
+        {
+            throw new InvalidSecretsFileException(path, ex);
+        }
     }
 }
 

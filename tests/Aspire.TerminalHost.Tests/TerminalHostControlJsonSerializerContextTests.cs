@@ -99,9 +99,18 @@ public class TerminalHostControlJsonSerializerContextTests
         var cancelled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         server.AddLocalRpcMethod("wait", (Func<CancellationToken, Task>)(async cancellationToken =>
         {
-            using var registration = cancellationToken.Register(() => cancelled.TrySetResult());
             started.TrySetResult();
-            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            try
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                // Signal from the method itself: a separate token registration disposed on exit can be
+                // unregistered before Cancel() reaches it, because Task.Delay's later registration runs first.
+                cancelled.TrySetResult();
+                throw;
+            }
         }));
         server.AddLocalRpcMethod("ping", (Func<bool>)(() => true));
         server.StartListening();

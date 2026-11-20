@@ -9,6 +9,7 @@ namespace Aspire.Hosting.Dashboard;
 internal sealed class GenericResourceSnapshot(CustomResourceSnapshot state) : ResourceSnapshot
 {
     public override string ResourceType => state.ResourceType;
+    public override string ResourceTypeDisplayName => state.ResourceTypeDisplayName;
 
     protected override IEnumerable<(string Key, Value Value, bool IsSensitive, string? DisplayName, bool IsHighlighted, int? SortOrder)> GetProperties()
     {

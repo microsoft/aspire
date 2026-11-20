@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Dashboard.Model;
+using Aspire.Dashboard.Utils;
 using Microsoft.Playwright;
 using Xunit;
 
@@ -27,9 +29,29 @@ public class PlaywrightTestsBase<TDashboardServerFixture> : IClassFixture<TDashb
         _ownsTestGate = true;
     }
 
-    public async Task RunTestAsync(Func<IPage, Task> test)
+    /// <summary>
+    /// Runs a test in a new page.
+    /// </summary>
+    /// <param name="test">The test.</param>
+    /// <param name="useDefaultDensity">
+    /// Whether the resource list starts in the dashboard's default density, compact. Otherwise it starts comfortable:
+    /// most tests were written for its two-line rows, with their state text, availability badges and row actions shown
+    /// at rest, and set another density when they test it. Pass <see langword="true"/> to test the defaults.
+    /// </param>
+    public async Task RunTestAsync(Func<IPage, Task> test, bool useDefaultDensity = false)
     {
         var page = await CreateNewPageAsync();
+        if (!useDefaultDensity)
+        {
+            // Only when nothing is stored, so a density the test chooses in the settings survives a reload. Stored
+            // values are JSON, so the density is a JSON string.
+            await page.AddInitScriptAsync($$"""
+                if (localStorage.getItem('{{BrowserStorageKeys.ResourceListDensity}}') === null) {
+                    localStorage.setItem('{{BrowserStorageKeys.ResourceListDensity}}', '"{{nameof(ResourceListDensity.Comfortable)}}"');
+                }
+                """);
+        }
+
         try
         {
             await test(page);
@@ -38,6 +60,22 @@ public class PlaywrightTestsBase<TDashboardServerFixture> : IClassFixture<TDashb
         {
             await page.CloseAsync();
         }
+    }
+
+    /// <summary>
+    /// Clicks a resource tab and waits until the server has rendered the tab strip for the new location.
+    /// </summary>
+    /// <remarks>
+    /// A tab click changes the URL in the browser before the server renders the destination. Until that render
+    /// reaches the browser, the tab strip on the page is the one rendered for the previous location, and
+    /// ResourcesLayout deliberately ignores changes from it. Clicking another tab in that window is dropped.
+    /// The strip is keyed by location, so the old element is removed from the DOM once the new strip is rendered.
+    /// </remarks>
+    public static async Task ClickResourceTabAndWaitForRenderAsync(IPage page, Func<Task> clickTab)
+    {
+        var tabStrip = await page.Locator(".resources-tab-header").ElementHandleAsync();
+        await clickTab();
+        await page.WaitForFunctionAsync("tabStrip => !tabStrip.isConnected", tabStrip);
     }
 
     private async Task<IPage> CreateNewPageAsync()

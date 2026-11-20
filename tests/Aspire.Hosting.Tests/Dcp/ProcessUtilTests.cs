@@ -21,7 +21,12 @@ public class ProcessUtilTests(ITestOutputHelper outputHelper)
 
         var spec = CreateSingleLineOutputProcessSpec(workspace, output =>
         {
-            Assert.Equal("final-line", output);
+            // File-based apps can emit SDK build diagnostics before their own output.
+            if (output != "final-line")
+            {
+                return;
+            }
+
             callbackStarted.TrySetResult();
             releaseCallback.Task.GetAwaiter().GetResult();
         }, pid => processStarted.TrySetResult(System.Diagnostics.Process.GetProcessById(pid)));
@@ -206,6 +211,32 @@ public class ProcessUtilTests(ITestOutputHelper outputHelper)
             Assert.DoesNotContain("line-2", outputLines);
             Assert.Contains("line-3", normalizedOutputLines);
             Assert.Contains("line-52", normalizedOutputLines);
+        }
+    }
+
+    [Fact]
+    public async Task Run_PreservesLegacyLineInputAndOutput()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var app = DotnetFileAppProcess.WriteApp(workspace.Path, "legacy-lines.cs", """
+            #:sdk Microsoft.NET.Sdk
+            var input = await Console.In.ReadToEndAsync();
+            Console.WriteLine(Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(input)));
+            Console.Write("\nfirst\r\n\nlast");
+            """);
+        var lines = new List<string>();
+        var spec = new ProcessSpec(DotnetFileAppProcess.ResolvedExecutablePath)
+        {
+            ArgumentList = DotnetFileAppProcess.CreateArguments(app),
+            OnOutputData = lines.Add,
+            StandardInputContent = "test input"
+        };
+        var (pending, disposable) = ProcessUtil.Run(spec);
+        await using (disposable)
+        {
+            var result = await pending.DefaultTimeout(TestConstants.LongTimeoutDuration);
+            Assert.Equal(0, result.ExitCode);
+            Assert.Equal(new[] { Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes("test input" + Environment.NewLine)), "first", "last" }, lines);
         }
     }
 

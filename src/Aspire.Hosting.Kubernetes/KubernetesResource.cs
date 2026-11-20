@@ -3,7 +3,6 @@
 
 #pragma warning disable ASPIRECOMPUTE002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREPROJECTS001 // ProjectLaunchDefaultsAnnotation is experimental.
-#pragma warning disable ASPIRECONNECTIONSTRINGS001 // Connection-string reference metadata is experimental.
 
 using System.Globalization;
 using System.Net.Sockets;
@@ -372,14 +371,25 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
 
             foreach (var arg in context.Args)
             {
-                var value = await ProcessValueAsync(environmentContext, executionContext, arg).ConfigureAwait(false);
+                // Args are rendered inline in the pod spec, so resolve them as embedded values. Parameters
+                // become Helm values expressions (and are allocated into values.yaml) instead of HelmValue objects.
+                var value = await ProcessValueAsync(environmentContext, executionContext, arg, embedded: true).ConfigureAwait(false);
 
-                if (value is not string str)
+                var str = value switch
                 {
-                    throw new NotSupportedException("Command line args must be strings");
+                    string s => s,
+                    HelmValue { ParameterSource: not null, Expression: { } expression } => expression,
+                    HelmValue { Expression: null, ValueString: { } literal } => literal,
+                    _ => throw new NotSupportedException("Command line args must be strings")
+                };
+
+                // Helm substitutes values without YAML escaping, so quote the complete argument after evaluation.
+                if (str.ContainsHelmExpression())
+                {
+                    str = str.ToQuotedHelmTemplateExpression();
                 }
 
-                Commands.Add(new(str));
+                Commands.Add(str);
             }
         }
     }
@@ -595,15 +605,24 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
                     continue;
                 }
 
+                // TLS state comes from the endpoint annotation; the Kubernetes endpoint mapping does not track it.
+                if (epExpr.Property == EndpointProperty.TlsEnabled)
+                {
+                    return epExpr.Endpoint.TlsEnabled ? bool.TrueString : bool.FalseString;
+                }
+
                 var referencedResource = epExpr.Endpoint.Resource == this
                     ? this
                     : await context.CreateKubernetesResourceAsync(epExpr.Endpoint.Resource, executionContext, default).ConfigureAwait(false);
 
                 var mapping = referencedResource.EndpointMappings[epExpr.Endpoint.EndpointName];
 
-                var val = GetEndpointValue(mapping, epExpr.Property, embedded && epExpr.Property is EndpointProperty.Port or EndpointProperty.TargetPort);
-
-                return val;
+                return epExpr.Property switch
+                {
+                    EndpointProperty.BrowserOrigins or EndpointProperty.PrimaryBrowserOrigin =>
+                        await ProcessValueAsync(context, executionContext, context.GetEndpointInput(epExpr, executionContext), embedded).ConfigureAwait(false),
+                    _ => GetEndpointValue(mapping, epExpr.Property, embedded && epExpr.Property is EndpointProperty.Port or EndpointProperty.TargetPort)
+                };
             }
 
             if (value is ReferenceExpression expr)
@@ -629,11 +648,11 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
 
                 if (expr is { Format: "{0}", ValueProviders.Count: 1 })
                 {
-                    var inner = await ProcessValueAsync(context, executionContext, expr.ValueProviders[0], embedded).ConfigureAwait(false);
-                    // When embedded in a larger format string, convert to string for interpolation.
-                    // When at the top level, preserve the original object (e.g., HelmValue with ValuesKey)
-                    // so ProcessEnvironmentHelmExpression handles it correctly.
-                    return embedded ? inner?.ToString() ?? string.Empty : inner;
+                    // Preserve the original object (e.g., HelmValue with ValuesKey) so callers can validate it:
+                    // ProcessEnvironmentHelmExpression needs it at the top level, and container args must reject
+                    // unsupported providers instead of emitting their placeholder. Embedded callers that
+                    // interpolate the value stringify it themselves.
+                    return await ProcessValueAsync(context, executionContext, expr.ValueProviders[0], embedded).ConfigureAwait(false);
                 }
 
                 var args = new object[expr.ValueProviders.Count];

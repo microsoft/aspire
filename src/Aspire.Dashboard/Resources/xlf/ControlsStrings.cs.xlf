@@ -79,7 +79,7 @@
       </trans-unit>
       <trans-unit id="ChartContainerShowChangePerIntervalLabel">
         <source>Show change per interval</source>
-        <target state="new">Show change per interval</target>
+        <target state="translated">Zobrazit změnu za interval</target>
         <note />
       </trans-unit>
       <trans-unit id="ChartContainerShowCountLabel">
@@ -99,7 +99,7 @@
       </trans-unit>
       <trans-unit id="ChartContainerUnitPerInterval">
         <source>{0} per interval</source>
-        <target state="new">{0} per interval</target>
+        <target state="translated">{0} za interval</target>
         <note>{0} is the instrument's unit, e.g. "Requests"</note>
       </trans-unit>
       <trans-unit id="ClearAllResources">
@@ -167,25 +167,20 @@
         <target state="translated">Exportovat .env</target>
         <note />
       </trans-unit>
-      <trans-unit id="ParameterDeleteShortAction">
-        <source>Delete</source>
-        <target state="new">Delete</target>
+      <trans-unit id="OverviewGraphAccessibleLabel">
+        <source>Resource graph. The resource list shows the same resources in an accessible format</source>
+        <target state="translated">Graf prostředků. Seznam prostředků zobrazuje stejné prostředky ve formátu pro usnadnění přístupu.</target>
         <note />
       </trans-unit>
       <trans-unit id="ParameterDeleteValueAction">
         <source>Delete value</source>
-        <target state="new">Delete value</target>
+        <target state="translated">Odstranit hodnotu</target>
         <note />
       </trans-unit>
-      <trans-unit id="ParameterEditShortAction">
-        <source>Edit</source>
-        <target state="new">Edit</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ParameterSetShortAction">
-        <source>Set</source>
-        <target state="new">Set</target>
-        <note />
+      <trans-unit id="PauseWarningText">
+        <source>{0} capture paused</source>
+        <target state="new">{0} capture paused</target>
+        <note>{0} is the type of captured data.</note>
       </trans-unit>
       <trans-unit id="ResourcesContainerGraphAccessibleLabel">
         <source>Graph. For an accessible view please navigate to the Resources tab</source>
@@ -211,6 +206,11 @@
         <source>Scroll to bottom</source>
         <target state="translated">Posunout na konec</target>
         <note>Accessible name and tooltip for the floating button that jumps a large scroll region to the bottom.</note>
+      </trans-unit>
+      <trans-unit id="SummaryDetailsViewCloseViewWithShortcut">
+        <source>Close (Esc)</source>
+        <target state="translated">Zavřít (Esc)</target>
+        <note>Tooltip of a close button that the Escape key also triggers. Esc is the label of the Escape key on keyboards.</note>
       </trans-unit>
       <trans-unit id="TextVisualizerContentLabel">
         <source>Text content</source>
@@ -430,11 +430,6 @@
       <trans-unit id="PauseButtonTitle">
         <source>Pause incoming data</source>
         <target state="translated">Obnovit příchozí data</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="PauseWarningTitle">
-        <source>Capture paused</source>
-        <target state="translated">Zachytávání pozastaveno</target>
         <note />
       </trans-unit>
       <trans-unit id="PlotlyChartCount">
@@ -734,7 +729,7 @@
       </trans-unit>
       <trans-unit id="VolumeMountTypeReadOnlyTitle">
         <source>Read-only</source>
-        <target state="new">Read-only</target>
+        <target state="translated">Jen pro čtení</target>
         <note />
       </trans-unit>
       <trans-unit id="VolumePathColumnHeader">
@@ -744,12 +739,12 @@
       </trans-unit>
       <trans-unit id="VolumeRevealFailed">
         <source>Couldn't open '{0}'. It may not exist on this machine.</source>
-        <target state="new">Couldn't open '{0}'. It may not exist on this machine.</target>
+        <target state="translated">Nepodařilo se otevřít {0}. Je možné, že na tomto počítači neexistuje.</target>
         <note />
       </trans-unit>
       <trans-unit id="VolumeRevealInFileExplorer">
         <source>Reveal in file explorer</source>
-        <target state="new">Reveal in file explorer</target>
+        <target state="translated">Zobrazit v Průzkumníkovi souborů</target>
         <note />
       </trans-unit>
     </body>

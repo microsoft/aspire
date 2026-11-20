@@ -9,6 +9,11 @@ namespace Aspire.Hosting;
 /// Wraps a gateway <see cref="EndpointReference"/> so publishers can emit a deployer-configurable
 /// placeholder (e.g., <c>${GATEWAY_BINDINGS_HTTPS_URL}</c>) while dev mode resolves the actual URL.
 /// </summary>
+/// <remarks>
+/// The origin is served to browsers, so it must never resolve to an address that is only reachable
+/// inside the local Aspire container network. Deployment networks are still honored so publishers can
+/// resolve their own browser-facing hosts.
+/// </remarks>
 internal sealed class GatewayOriginReference(EndpointReference endpoint) : IValueProvider, IManifestExpressionProvider
 {
     public string ValueExpression => $"{{{endpoint.Resource.Name}.bindings.{endpoint.EndpointName}.url}}";
@@ -21,7 +26,22 @@ internal sealed class GatewayOriginReference(EndpointReference endpoint) : IValu
 
     public async ValueTask<string?> GetValueAsync(ValueProviderContext context, CancellationToken cancellationToken = default)
     {
-        var url = await endpoint.GetValueAsync(context, cancellationToken).ConfigureAwait(false);
+        var url = await endpoint.GetValueAsync(GetBrowserContext(context), cancellationToken).ConfigureAwait(false);
         return url?.TrimEnd('/');
+    }
+
+    private static ValueProviderContext GetBrowserContext(ValueProviderContext context)
+    {
+        if (context.GetNetworkIdentifier() != KnownNetworkIdentifiers.DefaultAspireContainerNetwork)
+        {
+            return context;
+        }
+
+        return new ValueProviderContext
+        {
+            ExecutionContext = context.ExecutionContext,
+            Caller = context.Caller,
+            Network = KnownNetworkIdentifiers.LocalhostNetwork
+        };
     }
 }

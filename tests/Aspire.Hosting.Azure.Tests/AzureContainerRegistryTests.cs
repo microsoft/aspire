@@ -243,6 +243,22 @@ public class AzureContainerRegistryTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public async Task WithPurgeTask_ZeroAgo_MatchesDefaultCountRetention()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var acr = builder.AddAzureContainerRegistry("acr")
+            .WithPurgeTask("0 1 * * *", ago: TimeSpan.Zero);
+        using var defaultBuilder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var defaultAcr = defaultBuilder.AddAzureContainerRegistry("acr")
+            .WithPurgeTask("0 1 * * *");
+
+        var (_, bicep) = await GetManifestWithBicep(acr.Resource);
+        var (_, defaultBicep) = await GetManifestWithBicep(defaultAcr.Resource);
+
+        Assert.Equal(defaultBicep, bicep);
+    }
+
+    [Fact]
     public async Task WithPurgeTask_MultipleTasks_GeneratesUniqueNames()
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
@@ -314,7 +330,8 @@ public class AzureContainerRegistryTests(ITestOutputHelper testOutputHelper)
 
         var acr = builder.AddAzureContainerRegistry("acr");
 
-        Assert.Throws<ArgumentOutOfRangeException>(() => acr.WithPurgeTask("0 1 * * *", ago: TimeSpan.Parse(ago)));
+        var exception = Assert.Throws<ArgumentOutOfRangeException>(() => acr.WithPurgeTask("0 1 * * *", ago: TimeSpan.Parse(ago)));
+        Assert.Equal("ago", exception.ParamName);
     }
 
     [Fact]

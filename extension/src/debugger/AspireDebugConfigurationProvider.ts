@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { appHostLifecycleLaunchAlreadyClaimed, appHostLifecycleLaunchProfileRequiresRun, appHostOperationAlreadyInProgress, defaultConfigurationName, defaultConfigurationNameForWorkspaceFolder, selectAppHostToLaunch } from '../loc/strings';
+import { isCsharpInstalled } from '../capabilities';
+import { appHostLifecycleDisableLaunchProfileNotSupported, appHostLifecycleLaunchAlreadyClaimed, appHostLifecycleLaunchProfileRequiresRun, appHostOperationAlreadyInProgress, defaultConfigurationName, defaultConfigurationNameForWorkspaceFolder, selectAppHostToLaunch } from '../loc/strings';
 import type { AspireCommandType, AspireExtendedDebugConfiguration } from '../dcp/types';
 import { AppHostDiscoveryService, formatAppHostLanguage, getDebugTargetForCandidate, isSamePath } from '../utils/appHostDiscovery';
 import type { CandidateAppHostDisplayInfo } from '../utils/appHostDiscovery';
@@ -18,6 +19,8 @@ import { appHostLaunchReservationIdConfigKey, appHostSelectionOriginConfigKey, a
 import { getAspireDebugConfigurationCommand } from '../services/AppHostLaunchService';
 import { getAspireDebugConfigurationExternalLaunchReservation, getAspireDebugConfigurationResolvedCliPath, getAspireDebugConfigurationResolvedCliPathScope, isAspireDebugConfigurationExtensionOwned, markAspireDebugConfigurationAsExtensionOwned, markAspireDebugConfigurationWithExternalLaunchReservation, markAspireDebugConfigurationWithResolvedCliPath, markAspireDebugConfigurationWithResolvedCliPathScope, tryMarkAspireDebugConfigurationDiscoveryFailureRecorded } from './AspireDebugConfigurationProviderInternal';
 import { removeRootLaunchProfileCliArg } from '../utils/launchProfile';
+import { getDebuggerInstallHintForAppHost } from './debuggerInstallHints';
+import { appHostDebuggerSetupRequired, debuggerSetupAction } from '../loc/strings';
 
 export { stripAspireDebugConfigurationProviderInternalProperties } from './AspireDebugConfigurationProviderInternal';
 
@@ -39,6 +42,8 @@ export interface ExternalLaunchReservation {
     replaceExternalLaunchReservation(previousAppHostPath: string, previousReservationId: string, appHostPath: string, isDirectoryScope?: boolean): string | false;
     /** Marks a provider-recorded failure only when this configuration belongs to an active service-owned launch. */
     markLaunchAttemptFailureRecorded(configuration: vscode.DebugConfiguration): void;
+    /** Reports an intentional provider cancellation to its active service-owned launch. */
+    markLaunchAttemptCanceled(configuration: vscode.DebugConfiguration): void;
     /** Releases the reservation only when the path and reservation ID still identify the same launch. */
     releaseExternalLaunchReservation(appHostPath: string, reservationId: string): void;
     /** Claims a durable non-Run operation started from launch.json/F5. */
@@ -255,21 +260,56 @@ export class AspireDebugConfigurationProvider implements vscode.DebugConfigurati
             const effectiveAppHostLanguage = launchTargetPath && await isDirectory(launchTargetPath)
                 ? await classifyAppHostDirectory(launchTargetPath)
                 : classifyAppHostPath(launchTargetPath);
+            const debuggerHint = command === 'run' && aspireConfig.noDebug !== true
+                ? getDebuggerInstallHintForAppHost(effectiveAppHostLanguage)
+                : undefined;
+            if (debuggerHint) {
+                // Without the language capability the CLI runs the AppHost itself. A successful
+                // launch would then look like debugging succeeded even though no breakpoint can bind.
+                if (existingExternalReservation) {
+                    if (existingExternalReservation.kind === 'operation') {
+                        this._launchReservation.releaseExternalOperationReservation(
+                            existingExternalReservation.appHostPath, existingExternalReservation.reservationId);
+                    }
+                    else {
+                        this._launchReservation.releaseExternalLaunchReservation(
+                            existingExternalReservation.appHostPath, existingExternalReservation.reservationId);
+                    }
+                }
+                const selected = await vscode.window.showWarningMessage(
+                    appHostDebuggerSetupRequired(debuggerHint.debuggerName),
+                    debuggerSetupAction);
+                if (selected === debuggerSetupAction) {
+                    await vscode.commands.executeCommand('aspire-vscode.installDebuggerExtension', debuggerHint);
+                }
+                this._launchReservation.markLaunchAttemptCanceled(config);
+                return undefined;
+            }
+            // Only C# advertises the `project` capability that hands .NET AppHost launches
+            // to the debugger (see getSupportedCapabilities), even with noDebug.
+            // Let the CLI validate unknown directory targets it discovers recursively.
+            const cliOwnsDotnetAppHostLaunch = (effectiveAppHostLanguage === 'csharp' || effectiveAppHostLanguage === 'unknown')
+                && !isCsharpInstalled();
             const appHostDebuggerSettings = aspireConfig.debuggers?.['apphost'];
-            const projectDebuggerSettings = effectiveAppHostLanguage === 'csharp'
+            const projectDebuggerSettings = effectiveAppHostLanguage === 'csharp' || cliOwnsDotnetAppHostLaunch
                 ? aspireConfig.debuggers?.['project']
                 : undefined;
             const nestedLaunchProfile = appHostDebuggerSettings?.launchProfile
                 ?? projectDebuggerSettings?.launchProfile;
             const nestedDisableLaunchProfile = appHostDebuggerSettings?.disableLaunchProfile
                 ?? projectDebuggerSettings?.disableLaunchProfile;
-            const nestedDebuggerOwnsLaunchProfile = nestedDisableLaunchProfile === true
+            const hasNestedLaunchProfileOptions = nestedDisableLaunchProfile === true
                 || nestedLaunchProfile !== undefined;
-            const effectiveLaunchProfile = nestedDebuggerOwnsLaunchProfile
+            if (command === 'run' && cliOwnsDotnetAppHostLaunch && nestedDisableLaunchProfile === true) {
+                void vscode.window.showWarningMessage(appHostLifecycleDisableLaunchProfileNotSupported);
+            }
+            const canForwardNestedLaunchProfile = cliOwnsDotnetAppHostLaunch
+                && nestedDisableLaunchProfile !== true;
+            const effectiveLaunchProfile = hasNestedLaunchProfileOptions && !canForwardNestedLaunchProfile
                 ? undefined
-                : aspireConfig.launchProfile;
+                : nestedLaunchProfile ?? aspireConfig.launchProfile;
             const rootArguments = Array.isArray(config.args) ? [...config.args] : undefined;
-            const launchArguments = nestedDebuggerOwnsLaunchProfile
+            const launchArguments = hasNestedLaunchProfileOptions
                 ? removeRootLaunchProfileCliArg(rootArguments)
                 : rootArguments;
             if (launchArguments === undefined) {

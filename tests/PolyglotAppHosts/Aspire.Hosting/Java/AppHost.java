@@ -8,7 +8,7 @@ void main() throws Exception {
         container.withTags(new String[] { "Service" });
         container.withTrait("Owner", "Finance");
         container.withTrait("Owner", "Platform");
-        container.withDashboardPosition(-10);
+        container.withDisplayOrder(10);
         container.withOtlpExporter(OtlpProtocol.HTTP_JSON);
         var dockerContainer = builder.addDockerfile("dockerapp", "./app");
         var dockerfileFactory = (AspireFunc1<DockerfileFactoryContext, String>) (factoryContext) -> {
@@ -64,8 +64,8 @@ void main() throws Exception {
         var tool = builder.addDotnetTool("mytool", "dotnet-ef");
         var configParam = builder.addParameterFromConfiguration("myconfig", "MyConfig:Key");
         var secretParam = builder.addParameterFromConfiguration("mysecret", "MyConfig:Secret", true);
-        var optionalParam = builder.addParameter("optional-parameter").withOptional();
-        optionalParam.withRequired().withRequired(false);
+        var optionalParam = builder.addParameter("optional-parameter").asOptional();
+        optionalParam.asRequired().asOptional();
         String optionalValue = optionalParam.tryGetCurrentValue();
         if (optionalValue != null) {
             throw new IllegalStateException("Expected an unset optional parameter");
@@ -166,6 +166,7 @@ void main() throws Exception {
         container.withoutHttpsCertificate();
         container.withChildRelationship(exe);
         container.withIconName("Database", IconVariant.FILLED);
+        container.withResourceTypeDisplayName("Validation Service");
         container.withHttpProbe(ProbeType.LIVENESS, new WithHttpProbeOptions().path("/health"));
         container.withRemoteImageName("myregistry.azurecr.io/myapp");
         container.withRemoteImageTag("latest");

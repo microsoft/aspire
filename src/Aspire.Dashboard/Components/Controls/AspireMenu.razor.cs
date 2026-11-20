@@ -1,4 +1,4 @@
-﻿// Licensed to the .NET Foundation under one or more agreements.
+// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Dashboard.Model;
@@ -108,7 +108,12 @@ public partial class AspireMenu : FluentComponentBase
                     {
                         await _menu.CloseMenuAsync();
                     }
-                    await _menu.OpenMenuAsync();
+                    // Item updates must not reopen a popover that another menu just dismissed.
+                    // Its native close notification can arrive after this parent render.
+                    if (_appliedOpen is not true || _reopenInProgress)
+                    {
+                        await _menu.OpenMenuAsync();
+                    }
                 }
                 else
                 {

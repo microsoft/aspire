@@ -27,6 +27,16 @@
         <target state="translated">Aspire</target>
         <note />
       </trans-unit>
+      <trans-unit id="AspireSkillsFix">
+        <source>Run 'aspire agent init' to configure skill sources and remove these copies.</source>
+        <target state="translated">Выполните команду "aspire agent init", чтобы настроить источники навыков и удалить эти копии.</target>
+        <note>'aspire agent init' is a command and is not localizable.</note>
+      </trans-unit>
+      <trans-unit id="AspireSkillsMessage">
+        <source>Found static copies of Aspire skills.</source>
+        <target state="translated">Обнаружены статические копии навыков Aspire.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ChannelSuffixFormat">
         <source> (channel: {0})</source>
         <target state="translated"> (канал: {0})</target>
@@ -570,10 +580,8 @@ The legacy file continues to work — this is a non-blocking warning.</source>
         <note>{0} is the operating system display name and version, for example "Windows 10.0.22631", "macOS 26.0", or "Linux Ubuntu 24.04".</note>
       </trans-unit>
       <trans-unit id="PendingMigrationFix">
-        <source>Run 'aspire update --migrate' to apply the recommended migration.
-The current layout continues to work — this is a non-blocking warning.</source>
-        <target state="translated">Выполните "aspire update --migrate", чтобы применить рекомендуемую миграцию.
-Текущий макет по-прежнему работает — это неблокирующее предупреждение.</target>
+        <source>Run 'aspire update --migrate' to apply the recommended migration.</source>
+        <target state="translated">Выполните команду 'aspire update --migrate', чтобы применить рекомендуемую миграцию.</target>
         <note />
       </trans-unit>
       <trans-unit id="SdkCategoryHeader">

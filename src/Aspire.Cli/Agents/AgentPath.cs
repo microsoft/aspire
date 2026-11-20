@@ -46,6 +46,32 @@ internal static class AgentPath
         }
     }
 
+    public static string GetDisplayPath(string path, DirectoryInfo workspaceRoot, CliExecutionContext executionContext)
+    {
+        var displayPath = GetDisplayPath(path, AgentConfigurationScope.Project, workspaceRoot, executionContext);
+
+        return Path.IsPathRooted(displayPath)
+            ? GetDisplayPath(path, AgentConfigurationScope.Global, workspaceRoot, executionContext)
+            : displayPath;
+    }
+
+    public static string GetDisplayPath(string path, AgentConfigurationScope scope, DirectoryInfo workspaceRoot, CliExecutionContext executionContext)
+    {
+        var root = scope is AgentConfigurationScope.Project ? workspaceRoot : executionContext.HomeDirectory;
+        var relativePath = Path.GetRelativePath(root.FullName, path);
+        if (Path.IsPathRooted(relativePath) || relativePath == ".." ||
+            relativePath.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+        {
+            return path;
+        }
+
+        var displayRelativePath = relativePath
+            .Replace(Path.DirectorySeparatorChar, '/')
+            .Replace(Path.AltDirectorySeparatorChar, '/');
+
+        return scope is AgentConfigurationScope.Global ? $"~/{displayRelativePath}" : displayRelativePath;
+    }
+
     public static string? GetOverride(string variable, CliExecutionContext executionContext, IEnvironment environment)
         => environment.GetEnvironmentVariable(variable) is { Length: > 0 } value
             ? Expand(value, executionContext)

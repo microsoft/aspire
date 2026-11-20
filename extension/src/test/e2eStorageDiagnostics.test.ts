@@ -1,10 +1,7 @@
 import * as assert from 'assert';
-import { ChildProcess, spawn } from 'child_process';
-import { once } from 'events';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { createInterface } from 'readline';
 import * as ts from 'typescript';
 import * as vm from 'vm';
 
@@ -102,62 +99,24 @@ async function collectDiagnostics(root: string, hooks: CollectionHooks = {}, wor
     await exports.collect();
 }
 
-const lockHolders = new Set<ChildProcess>();
+// Windows-only libuv open flags (deps/uv/include/uv/win.h) that @types/node does not declare. libuv maps
+// UV_FS_O_EXLOCK to a share mode of 0 (FileShare.None) and UV_FS_O_TEMPORARY (_O_TEMPORARY) to
+// FILE_FLAG_DELETE_ON_CLOSE (FileOptions.DeleteOnClose).
+const UV_FS_O_EXLOCK = 0x10000000;
+const UV_FS_O_TEMPORARY = 0x0040;
 
 async function withExclusiveFileLock(filePath: string, action: () => Promise<void>): Promise<void> {
-    // Node's open flags cannot request Windows FileShare.None. Match Shared/FileLock.cs, including
-    // DeleteOnClose, in an owned child that releases its handle when the parent closes stdin.
-    // The holder has no lifetime timeout of its own: a cold PowerShell start on a Windows CI runner
-    // can consume most of a fixed budget, and killing a healthy holder fails the test. The Mocha test
-    // timeout bounds the test, and suite teardown terminates any holder a timed-out test leaves behind.
-    const holder = spawn('powershell.exe', ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', `
-        $ErrorActionPreference = 'Stop'
-        $lock = [System.IO.FileStream]::new(
-            $env:ASPIRE_EXTENSION_TEST_LOCK_PATH,
-            [System.IO.FileMode]::OpenOrCreate,
-            [System.IO.FileAccess]::ReadWrite,
-            [System.IO.FileShare]::None,
-            1,
-            [System.IO.FileOptions]::DeleteOnClose)
-        try {
-            [Console]::Out.WriteLine('locked')
-            [Console]::Out.Flush()
-            [Console]::In.ReadLine() | Out-Null
-        }
-        finally {
-            $lock.Dispose()
-        }
-    `], {
-        env: { ...process.env, ASPIRE_EXTENSION_TEST_LOCK_PATH: filePath },
-        windowsHide: true,
-    });
-    lockHolders.add(holder);
-    holder.on('close', () => lockHolders.delete(holder));
-    const output = createInterface({ input: holder.stdout });
-    let stderr = '';
-    holder.stderr.setEncoding('utf8').on('data', chunk => { stderr += chunk; });
-    const closed = once(holder, 'close');
-    let succeeded = false;
-
+    // Match Shared/FileLock.cs: FileShare.None plus DeleteOnClose. Windows enforces share modes per handle,
+    // so a handle held by this process blocks the collector's opens exactly like one held by the CLI.
+    // Opening it in-process avoids a cold PowerShell start, which on a slow runner can exceed the test timeout.
+    const lock = fs.openSync(
+        filePath,
+        fs.constants.O_RDWR | fs.constants.O_CREAT | UV_FS_O_TEMPORARY | UV_FS_O_EXLOCK);
     try {
-        const [line] = await Promise.race([
-            once(output, 'line'),
-            closed.then(([code, signal]) => {
-                throw new Error(`Lock holder exited before acquiring the file: code=${code}, signal=${signal}, ${stderr}`);
-            }),
-        ]);
-        assert.strictEqual(line, 'locked');
         await action();
-        succeeded = true;
     }
     finally {
-        holder.stdin.end();
-        output.close();
-        const [code, signal] = await closed;
-        // Don't replace the original failure with the holder's exit status.
-        if (succeeded) {
-            assert.strictEqual(code, 0, `Lock holder failed: signal=${signal}, ${stderr}`);
-        }
+        fs.closeSync(lock);
     }
 }
 
@@ -170,12 +129,7 @@ suite('E2E storage diagnostics', () => {
             .map(([relativePath, contents]) => [relativePath.startsWith('aspire-home/') ? relativePath : `storage/${relativePath}`, contents])));
     });
 
-    teardown(async () => {
-        await Promise.all([...lockHolders].map(async holder => {
-            const closed = once(holder, 'close');
-            holder.kill();
-            await closed;
-        }));
+    teardown(() => {
         fs.rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
     });
 

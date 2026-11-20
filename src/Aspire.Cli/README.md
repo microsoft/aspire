@@ -68,11 +68,42 @@ C# AppHosts created with Aspire 17 or later use package directives instead of th
 | Command | Description |
 |---------|-------------|
 | `config` | Manage CLI configuration including feature flags. |
+| `secret` | Manage AppHost secrets. |
 | `cache` | Manage disk cache for CLI operations. |
 | `completions script [<shell>]` | Generate a completion script for Bash, Zsh, Fish, or PowerShell 7+. |
 | `doctor` | Diagnose Aspire environment issues and verify setup. |
 | `docs` | Browse and search Aspire documentation and API reference from aspire.dev. |
 | `agent` | Manage AI agent specific setup. |
+
+### Setting secrets
+
+Set a secret using a masked interactive prompt, a positional value, or an
+environment variable already supplied to the CLI process:
+
+```bash
+aspire secret set Parameters:api_key
+aspire secret set Parameters:api_key example-value
+aspire secret set Parameters:api_key --envvar API_KEY
+aspire secret set Parameters:api_key --envvar API_KEY --apphost ./AppHost.csproj
+aspire secret set Parameters:api_key --envvar API_KEY --environment Production
+```
+
+When neither a positional value nor `--envvar` is supplied, the CLI prompts
+for the value without displaying it. Empty values are accepted, including at the
+prompt. `--non-interactive` requires a positional value or `--envvar` and
+never prompts. Canceling the prompt does not initialize or modify the secrets store.
+
+Do not combine a positional value with `--envvar`. An unset source
+variable fails without prompting, initializing, or modifying the secrets store.
+Environment values are stored verbatim, without trimming or shell expansion.
+AppHost discovery works the same for all value sources.
+All value sources support `--environment` to select the AppHost environment's
+Aspire secrets file; the default environment is `Development`.
+
+`--envvar` keeps the secret value out of the command line, shell history,
+and CLI diagnostics. Expanding a shell variable into the positional value does
+not provide that protection. The process environment may still be inspectable;
+environment-variable input is not a guarantee that the secret cannot be read.
 
 ### Updating .NET AppHosts
 
@@ -91,6 +122,24 @@ update instead of guessing which shared file to change.
 Automatic SDK rewrites are limited to unconditional declarations. Conditional
 SDK declarations that cannot be safely classified require an explicit version
 edit; source fallback does not guess whether their MSBuild conditions are active.
+
+Explicit channel updates apply confirmed changes without a validation restore.
+Use `aspire update --channel <channel> --dry-run` to validate with temporary
+NuGet caches instead, without proposing or applying changes. Configuration
+conflicts still fail in either mode. Dry runs restore source files from adjacent
+backups; leftover backups require separate consent to replace. See the
+[update validation details](../../docs/specs/polyglot-integration-restore.md#shared-policy-previews-and-net-persistence).
+
+Validation restore output is saved to the CLI log and displayed when restore
+fails. The CLI attempts to remove credentials from package source URLs, but
+redaction is best effort, not a security guarantee. Check logs and error
+messages for sensitive information before sharing them.
+
+By default, CLI logs are stored under the user's Aspire home. On Unix, the CLI
+restricts log files and the log directory to the current user; on Windows, it
+relies on inherited filesystem ACLs. Logs remain accessible to processes running
+as the same user, and custom `--log-file` locations may have different directory
+and ACL properties.
 
 ## Configured template sources
 
@@ -293,9 +342,9 @@ An unavailable stop RPC or shutdown timeout fails without escalation. `--pid`
 cannot be combined with `--all` or `--force`. Without `--pid`, existing project-level
 stop behavior is unchanged.
 
-### Experimental macOS and Windows tray companion
+### Desktop tray companion (Preview)
 
-The native macOS and Windows CLI bundles include the experimental Aspire menu
+The native macOS, Windows, and glibc Linux CLI bundles include the Aspire menu
 bar or system tray companion:
 
 ```bash
@@ -313,7 +362,8 @@ it prematurely. The command then reports the helper's result.
 
 The companion comes from the leased CLI bundle at
 `tray/Aspire Tray.app/Contents/MacOS/aspire-tray` on macOS, or
-`tray/aspire-tray.exe` alongside `tray/Aspire.ico` on Windows. Starting it passes the absolute
+`tray/aspire-tray.exe` alongside `tray/Aspire.ico` on Windows, or
+`tray/aspire-tray` alongside `tray/Aspire.png` on Linux. Starting it passes the absolute
 invoking CLI executable and the leased version directory; it never copies a
 private CLI, searches `PATH`, or falls back to a checkout-relative executable.
 The CLI holds its bundle lease until the helper exits, and the native GUI holds
@@ -321,11 +371,16 @@ its own lease for its lifetime. If readiness fails, the helper terminates and
 waits for its newly launched GUI process before releasing the launcher lease;
 an already-running companion is not terminated by a failed start.
 
-These commands are experimental and available on macOS and Windows (x64/ARM64).
+These commands are in preview and available on macOS, Windows, and glibc Linux (x64/ARM64).
 Starting the companion requires an interactive desktop and
 a native CLI, not a managed development build or `dotnet aspire.dll`. A missing
 bundle or tray payload fails explicitly; install a platform-matching bundle containing the
 companion rather than using a standalone CLI binary.
+
+Linux additionally requires GTK 3, an Ayatana/compatible AppIndicator library,
+and a StatusNotifierItem-capable panel. GNOME needs an AppIndicator extension;
+Waybar needs its `tray` module enabled. Missing desktop support is reported rather
+than installed automatically. See [Linux desktop requirements](../Aspire.Tray/README.md#linux-desktop-support).
 
 Before upgrading from an older preview, quit its running companion using its
 **Quit** action. Preview single-instance identifiers have changed, so

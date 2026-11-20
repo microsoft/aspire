@@ -3,7 +3,7 @@
 
 var builder = DistributedApplication.CreateBuilder(args);
 
-var db = builder.AddAzurePostgresFlexibleServer("pg")
+var pg = builder.AddAzurePostgresFlexibleServer("pg")
                 .WithPasswordAuthentication()
                 .RunAsContainer(c =>
                 {
@@ -11,11 +11,17 @@ var db = builder.AddAzurePostgresFlexibleServer("pg")
                     {
                         c.WithHostPort(15551);
                     });
-                })
-                .AddDatabase("db");
+                });
+
+var db = pg.AddDatabase("db");
+
+// A second database on the same server. Waiting on both databases also waits on their shared
+// parent server; that wait (and its log messages) should only happen once.
+var auditDb = pg.AddDatabase("auditdb");
 
 var dbsetup = builder.AddDotnetProject("dbsetup", "../WaitForSandbox.DbSetup/WaitForSandbox.DbSetup.csproj")
-                     .WithReference(db).WaitFor(db);
+                     .WithReference(db).WaitFor(db)
+                     .WithReference(auditDb).WaitFor(auditDb);
 
 var backend = builder.AddDotnetProject("api", "../WaitForSandbox.ApiService/WaitForSandbox.ApiService.csproj")
                      .WithExternalHttpEndpoints()

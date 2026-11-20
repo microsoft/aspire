@@ -2,7 +2,10 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.RegularExpressions;
+using Aspire.Cli.Agents.ClaudeCode;
+using Aspire.Cli.Agents.Copilot;
 using Aspire.Cli.Agents.Hooks;
+using Aspire.Cli.Mcp;
 using Aspire.Cli.Tests.Utils;
 
 namespace Aspire.Cli.Tests.Agents;
@@ -21,14 +24,34 @@ public class AgentTelemetryHookTests
     }
 
     [Theory]
-    [InlineData("toolName", "toolArgs", "skill", """{"skill":"aspire"}""")]
-    [InlineData("tool_name", "tool_input", "Skill", """{"skill":"aspire:aspire"}""")]
-    public void SkillEventsPreserveArguments(string nameProperty, string inputProperty, string tool, string input)
+    [InlineData("toolName", "toolArgs", "skill", """{"skill":"aspire"}""", "aspire")]
+    [InlineData("tool_name", "tool_input", "Skill", """{"skill":"aspire:aspire"}""", "aspire")]
+    [InlineData("toolName", "toolArgs", "skill", """{"skill":"aspire-terminals"}""", "aspire-terminals")]
+    [InlineData("tool_name", "tool_input", "Skill", """{"skill":"aspire:aspire-terminals"}""", "aspire-terminals")]
+    public void SkillEventsPreserveArguments(string nameProperty, string inputProperty, string tool, string input, string expectedSkill)
     {
         var args = AgentTelemetryHook.Classify($$"""{"{{nameProperty}}":"{{tool}}","{{inputProperty}}":{{input}}}""", new TestEnvironment(), AgentTelemetryHook.DefaultMaxPayloadCharacters);
         Assert.NotNull(args);
-        Assert.Equal("aspire", args[Array.IndexOf(args, "--skill-name") + 1]);
+        Assert.Equal(expectedSkill, args[Array.IndexOf(args, "--skill-name") + 1]);
         Assert.Equal("skill_invocation", args[Array.IndexOf(args, "--event-type") + 1]);
+    }
+
+    [Theory]
+    [InlineData("aspire-terminals/references/apphost-terminals.md")]
+    [InlineData("aspire-terminals/references/automation-and-cli.md")]
+    [InlineData("aspire-terminals/references/resource-terminals.md")]
+    [InlineData("aspire-terminals/references/tapes.md")]
+    [InlineData("aspireify/references/go-authoring.md")]
+    public void ReferenceFileEventsForwardRelativePath(string referencePath)
+    {
+        var args = AgentTelemetryHook.Classify(
+            $$$"""{"tool_name":"Read","tool_input":{"file_path":"workspace/.agents/skills/{{{referencePath}}}"}}""",
+            new TestEnvironment(),
+            AgentTelemetryHook.DefaultMaxPayloadCharacters);
+
+        Assert.NotNull(args);
+        Assert.Equal("reference_file_read", args[Array.IndexOf(args, "--event-type") + 1]);
+        Assert.Equal(referencePath, args[Array.IndexOf(args, "--file-reference") + 1]);
     }
 
     [Theory]
@@ -151,6 +174,87 @@ public class AgentTelemetryHookTests
         Assert.Equal("Agent telemetry hook failed (IOException)." + Environment.NewLine, error.ToString());
     }
 
+    [Theory]
+    [InlineData("skill", true)]
+    [InlineData("Skill", true)]
+    [InlineData("view", false)]
+    [InlineData("Read", false)]
+    [InlineData("read_file", false)]
+    [InlineData("bash", false)]
+    [InlineData("Bash", false)]
+    [InlineData("edit", false)]
+    [InlineData("Edit", false)]
+    [InlineData("grep", false)]
+    [InlineData("powershell", false)]
+    [InlineData("NotebookRead", false)]
+    [InlineData("skills", false)]
+    [InlineData("aspire-", false)]
+    [InlineData("mcp__other__list_resources", false)]
+    public void CopilotToolMatcherSelectsOnlyTrackedTools(string toolName, bool expected)
+    {
+        Assert.Equal(expected, MatchesAsCopilot(toolName));
+    }
+
+    [Theory]
+    [InlineData("Skill", true, false, false)]
+    [InlineData("mcp__aspire__list_resources", false, true, false)]
+    [InlineData("Read", false, false, true)]
+    [InlineData("skill", false, false, false)]
+    [InlineData("SkillSearch", false, false, false)]
+    [InlineData("view", false, false, false)]
+    [InlineData("Bash", false, false, false)]
+    [InlineData("NotebookRead", false, false, false)]
+    [InlineData("ReadMe", false, false, false)]
+    [InlineData("mcp__other__list_resources", false, false, false)]
+    public void ClaudeMatchersSelectOnlyTrackedTools(string toolName, bool expectedSkill, bool expectedMcp, bool expectedRead)
+    {
+        Assert.Equal(expectedSkill, MatchesAsClaude(toolName, ClaudeCodeAgentClient.TelemetryHookSkillMatcher));
+        Assert.Equal(expectedMcp, MatchesAsClaude(toolName, ClaudeCodeAgentClient.TelemetryHookMcpMatcher));
+        Assert.Equal(expectedRead, MatchesAsClaude(toolName, ClaudeCodeAgentClient.TelemetryHookReadMatcher));
+    }
+
+    [Fact]
+    public void ToolMatchersSelectEveryCanonicalMcpToolForEveryClientPrefix()
+    {
+        foreach (var prefix in new[] { "aspire-", "mcp__aspire__", "mcp_aspire_" })
+        {
+            foreach (var tool in AgentTelemetryCatalog.Canonical.Tools)
+            {
+                var toolName = prefix + tool;
+                Assert.True(MatchesAsCopilot(toolName), toolName);
+                Assert.True(MatchesAsClaude(toolName, ClaudeCodeAgentClient.TelemetryHookMcpMatcher), toolName);
+                Assert.NotNull(AgentTelemetryHook.Classify(
+                    $$$"""{"toolName":"{{{toolName}}}","toolArgs":{}}""",
+                    new TestEnvironment(),
+                    AgentTelemetryHook.DefaultMaxPayloadCharacters));
+            }
+        }
+    }
+
+    [Fact]
+    public void ClaudeReadIfSelectsEveryCanonicalSkillFile()
+    {
+        // Claude normalizes Windows paths to POSIX form before matching, so C:\Users\user becomes /c/Users/user.
+        var paths = AgentTelemetryCatalog.Canonical.Skills.Select(skill => $"/c/Users/user/.claude/skills/{skill}/SKILL.md")
+            .Concat(AgentTelemetryCatalog.Canonical.References.Select(reference => $"/home/user/.claude/plugins/cache/marketplace/aspire/1.0.0/skills/{reference}"));
+        foreach (var path in paths)
+        {
+            Assert.True(MatchesClaudeReadIf(path), path);
+            Assert.NotNull(AgentTelemetryHook.Classify(
+                $$$"""{"tool_name":"Read","tool_input":{"file_path":"{{{path}}}"}}""",
+                new TestEnvironment(),
+                AgentTelemetryHook.DefaultMaxPayloadCharacters));
+        }
+
+        Assert.False(MatchesClaudeReadIf("/home/user/repo/skills/third-party/SKILL.md"));
+    }
+
+    [Fact]
+    public void CanonicalCatalogCoversKnownMcpTools()
+    {
+        Assert.Equal(KnownMcpTools.All.Order(), AgentTelemetryCatalog.Canonical.Tools.Order());
+    }
+
     [Fact]
     public void AllowlistsMatchCanonicalPowerShellHook()
     {
@@ -163,9 +267,9 @@ public class AgentTelemetryHookTests
             var body = Regex.Match(script, $@"\${name} = @\((.*?)\)", RegexOptions.Singleline).Groups[1].Value;
             return Regex.Matches(body, "'([^']+)'").Select(match => match.Groups[1].Value).Order().ToArray();
         }
-        Assert.Equal(Values(script, "AspireSkills"), AgentTelemetryCatalog.Bundled.Skills.Order());
-        Assert.Equal(Values(script, "AspireMcpTools"), AgentTelemetryCatalog.Bundled.Tools.Order());
-        Assert.Equal(Values(script, "AspireReferenceFiles"), AgentTelemetryCatalog.Bundled.References.Order());
+        Assert.Equal(Values(script, "AspireSkills"), AgentTelemetryCatalog.Canonical.Skills.Order());
+        Assert.Equal(Values(script, "AspireMcpTools"), AgentTelemetryCatalog.Canonical.Tools.Order());
+        Assert.Equal(Values(script, "AspireReferenceFiles"), AgentTelemetryCatalog.Canonical.References.Order());
     }
 
     [Theory]
@@ -241,5 +345,32 @@ public class AgentTelemetryHookTests
         var padded = payload.PadRight(AgentTelemetryHook.DefaultMaxPayloadCharacters + 1);
         Assert.Null(AgentTelemetryHook.Classify(padded, new TestEnvironment(), AgentTelemetryHook.DefaultMaxPayloadCharacters));
         Assert.NotNull(AgentTelemetryHook.Classify(padded, new TestEnvironment(), padded.Length));
+    }
+
+    // Both clients evaluate matchers as JavaScript regular expressions. Copilot wraps the pattern as
+    // ^(?:PATTERN)$ and Claude searches unanchored, so emulate both with ECMAScript semantics.
+    // https://docs.github.com/en/copilot/reference/hooks-reference
+    // https://code.claude.com/docs/en/hooks#matcher-patterns
+    private static bool MatchesAsCopilot(string toolName) =>
+        Regex.IsMatch(toolName, $"^(?:{CopilotAgentClient.TelemetryHookMatcher})$", RegexOptions.ECMAScript);
+
+    private static bool MatchesAsClaude(string toolName, string matcher) =>
+        Regex.IsMatch(toolName, matcher, RegexOptions.ECMAScript);
+
+    // Emulates the subset of Claude permission-rule globs that TelemetryHookReadIf uses. "//" anchors the pattern at
+    // the filesystem root, "**/" spans any number of directories, and "*" stays within one path segment:
+    //   Read(//**/skills/aspire*/**) matches /c/Users/user/.claude/skills/aspire-init/SKILL.md
+    // https://code.claude.com/docs/en/permissions
+    private static bool MatchesClaudeReadIf(string path)
+    {
+        const string RulePrefix = "Read(/";
+        Assert.StartsWith(RulePrefix + "/", ClaudeCodeAgentClient.TelemetryHookReadIf);
+        Assert.EndsWith(")", ClaudeCodeAgentClient.TelemetryHookReadIf);
+        var glob = ClaudeCodeAgentClient.TelemetryHookReadIf[RulePrefix.Length..^1];
+        var pattern = Regex.Escape(glob)
+            .Replace(@"\*\*/", "(?:.*/)?")
+            .Replace(@"/\*\*", "/.*")
+            .Replace(@"\*", "[^/]*");
+        return Regex.IsMatch(path, $"^{pattern}$");
     }
 }

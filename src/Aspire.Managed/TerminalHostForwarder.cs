@@ -3,6 +3,7 @@
 
 using System.Diagnostics;
 using System.Globalization;
+using System.IO.Pipelines;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using Aspire.Hosting;
@@ -133,9 +134,28 @@ internal static partial class TerminalHostForwarder
         using var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
         await socket.ConnectAsync(new UnixDomainSocketEndPoint(args[controlPathIndex + 1]), cancellationToken).ConfigureAwait(false);
         using var stream = new NetworkStream(socket);
-        using var rpc = new JsonRpc(stream);
+
+        // new JsonRpc(stream) copies outgoing messages to the socket on a background task, so its
+        // NotifyAsync can complete before the notification is written. Writing through
+        // PipeWriter.Create makes NotifyAsync complete only after the socket accepts the message,
+        // and makes a failed write throw here.
+        var handler = new HeaderDelimitedMessageHandler(PipeWriter.Create(stream), PipeReader.Create(stream), new JsonMessageFormatter());
+        using var rpc = new JsonRpc(handler);
         rpc.StartListening();
         await rpc.NotifyAsync("shutdown").WaitAsync(cancellationToken).ConfigureAwait(false);
+
+        // Keep the connection open until the terminal host closes it while tearing down its control
+        // listener, so the host reads the notification before this side closes.
+        try
+        {
+            await rpc.Completion.WaitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (IOException ex) when (ex.InnerException is SocketException { SocketErrorCode: SocketError.ConnectionReset })
+        {
+            // The notification has already been written, and nothing else is sent, so this error can
+            // only come from reading. A reset means the host closed the connection: on Windows a Unix
+            // domain socket peer's close often arrives as a reset instead of end-of-stream.
+        }
     }
 
     [LibraryImport("libc", EntryPoint = "kill", SetLastError = true)]

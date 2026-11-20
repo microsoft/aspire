@@ -4,7 +4,6 @@
 using System.Globalization;
 using Aspire.Cli.EndToEnd.Tests.Helpers;
 using Aspire.Cli.Resources;
-using Aspire.TestUtilities;
 using Hex1b.Automation;
 using Xunit;
 
@@ -96,6 +95,7 @@ public sealed class StopNonInteractiveTests(ITestOutputHelper output)
 
         // Create second project
         await auto.AspireNewAsync("App2", counter);
+        MakeApp2PortsDistinct(workspace);
 
         // Start first AppHost in background
         await auto.TypeAsync("cd App1/App1.AppHost && aspire start");
@@ -132,7 +132,6 @@ public sealed class StopNonInteractiveTests(ITestOutputHelper output)
     }
 
     [Fact]
-    [QuarantinedTest("https://github.com/microsoft/aspire/issues/16643")]
     public async Task StopAllAppHostsFromUnrelatedDirectory()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
@@ -156,6 +155,7 @@ public sealed class StopNonInteractiveTests(ITestOutputHelper output)
 
         // Create second project
         await auto.AspireNewAsync("App2", counter);
+        MakeApp2PortsDistinct(workspace);
 
         // Start first AppHost in background
         await auto.TypeAsync("cd App1/App1.AppHost && aspire start");
@@ -197,7 +197,6 @@ public sealed class StopNonInteractiveTests(ITestOutputHelper output)
     }
 
     [Fact]
-    [QuarantinedTest("https://github.com/microsoft/aspire/issues/16643")]
     public async Task StopNonInteractiveMultipleAppHostsShowsError()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
@@ -221,6 +220,7 @@ public sealed class StopNonInteractiveTests(ITestOutputHelper output)
 
         // Create second project
         await auto.AspireNewAsync("App2", counter);
+        MakeApp2PortsDistinct(workspace);
 
         // Start first AppHost in background
         await auto.TypeAsync("cd App1/App1.AppHost && aspire start");
@@ -261,5 +261,18 @@ public sealed class StopNonInteractiveTests(ITestOutputHelper output)
         await auto.EnterAsync();
         await auto.WaitUntilAppHostStoppedSuccessfullyAsync(timeout: TimeSpan.FromMinutes(1));
         await auto.WaitForSuccessPromptAsync(counter);
+    }
+
+    // Both projects are generated before either AppHost runs, so the template can give them the same
+    // random launch settings port, and then the second AppHost fails with "address already in use".
+    private void MakeApp2PortsDistinct(TemporaryWorkspace workspace)
+    {
+        var remapped = LaunchSettingsPortHelpers.MakePortsDistinct(
+            new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "App2")),
+            new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "App1")));
+        foreach (var (oldPort, newPort) in remapped)
+        {
+            output.WriteLine($"App2 launch settings port {oldPort} collided with App1; using {newPort}.");
+        }
     }
 }

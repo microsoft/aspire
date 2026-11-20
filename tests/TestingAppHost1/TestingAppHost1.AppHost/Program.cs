@@ -82,7 +82,7 @@ if (args.Contains("--crash-before-build"))
     throw new InvalidOperationException("Crashing: before-build.");
 }
 
-var app = builder.Build();
+var app = TestingAppHostEntryPointProbe.Build(builder, args);
 
 if (args.Contains("--crash-after-build"))
 {

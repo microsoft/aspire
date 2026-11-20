@@ -101,6 +101,27 @@ public sealed class InteractionMessageBoxDialogTests : DashboardTestContext
         }
     }
 
+    [Fact]
+    public async Task MarkdownMessage_CodeBlock_RenderedInsideMarkdownContainer()
+    {
+        var getCut = SetUpDialog(out var dialogService);
+        var markdownProcessor = InteractionMarkdownHelper.CreateProcessor(new TestStringLocalizer<Aspire.Dashboard.Resources.ControlsStrings>());
+        var message = InteractionMarkdownHelper.ToHtml(markdownProcessor, """
+            Docker desktop failed to start.
+            ```
+            at Program.Main()
+            ```
+            """);
+
+        await dialogService.ShowDialogAsync<InteractionMessageBoxDialog>(
+            new InteractionMessageBoxContent { MarkupMessage = message, Intent = MessageIntent.Error },
+            new DialogParameters { UseCustomFooter = true });
+        var cut = getCut();
+
+        // Code block styles in markdown.css are scoped to .markdown-container.
+        Assert.NotNull(cut.Find(".interaction-message-box-message.markdown-container .code-block .code-title"));
+    }
+
     private Func<IRenderedComponent<IComponent>> SetUpDialog(out DashboardDialogService dialogService)
     {
         FluentUISetupHelpers.SetupDialogInfrastructure(this);

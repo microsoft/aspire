@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREDENO001 // Type is for evaluation purposes only
 #pragma warning disable ASPIREBROWSERLOGS001 // Type is for evaluation purposes only
 #pragma warning disable ASPIRECOMPUTE002
 
@@ -633,6 +632,25 @@ public class AtsTypeScriptCodeGeneratorTests
         Assert.NotNull(withOptionalString);
 
         await Verify(withOptionalString).UseFileName("WithOptionalStringCapability");
+    }
+
+    [Fact]
+    public void Scanner_HostingAssembly_BrowserUrlReferences()
+    {
+        var capabilities = ScanCapabilitiesFromHostingAssembly();
+
+        var endpointOrigins = Assert.Single(capabilities, c =>
+            c.CapabilityId == "Aspire.Hosting.ApplicationModel/EndpointReference.browserOrigins");
+        Assert.Equal("browserOrigins", endpointOrigins.MethodName);
+        Assert.Equal("Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReferenceExpression", endpointOrigins.ReturnType.TypeId);
+        Assert.IsType<EndpointReferenceExpression>(
+            new ContainerResource("frontend").GetEndpoint("https").BrowserOrigins);
+        var primaryOrigin = Assert.Single(capabilities, c =>
+            c.CapabilityId == "Aspire.Hosting.ApplicationModel/EndpointReference.primaryBrowserOrigin");
+        Assert.Equal("primaryBrowserOrigin", primaryOrigin.MethodName);
+        Assert.Equal(endpointOrigins.ReturnType.TypeId, primaryOrigin.ReturnType.TypeId);
+        Assert.IsType<EndpointReferenceExpression>(
+            new ContainerResource("frontend").GetEndpoint("https").PrimaryBrowserOrigin);
     }
 
     [Fact]
@@ -1297,6 +1315,73 @@ public class AtsTypeScriptCodeGeneratorTests
         });
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Generate_RadiusWithContainerImage_PreservesConcreteFluentMethods(bool includeDotnet)
+    {
+        const string capabilityId = "Aspire.Hosting.Radius/withContainerImage";
+        var assemblies = new List<Assembly> { typeof(DistributedApplication).Assembly, typeof(RadiusExtensions).Assembly };
+        var resourceTypes = new List<Type> { typeof(ProjectResource), typeof(CSharpAppResource) };
+        if (includeDotnet)
+        {
+            assemblies.Add(typeof(DotnetProjectHostingExtensions).Assembly);
+            resourceTypes.Add(typeof(global::Aspire.Hosting.Dotnet.DotnetProjectResource));
+        }
+
+        var result = AtsCapabilityScanner.ScanAssemblies(assemblies);
+        var capability = Assert.Single(result.Capabilities,
+            c => c.CapabilityId.StartsWith("Aspire.Hosting.Radius/", StringComparison.Ordinal) &&
+                c.MethodName == "withContainerImage");
+
+        Assert.Equal(capabilityId, capability.CapabilityId);
+        Assert.Equal(GetAtsTypeId(typeof(IDotnetProgramResource)), capability.TargetTypeId);
+        Assert.Equal(capability.TargetTypeId, capability.ReturnType.TypeId);
+        Assert.True(capability.ReturnsBuilder);
+        Assert.True(capability.IsExperimental);
+        var image = Assert.Single(capability.Parameters);
+        Assert.Equal("image", image.Name);
+        Assert.Equal(AtsConstants.String, image.Type?.TypeId);
+        Assert.False(image.IsOptional);
+        Assert.Equal(
+            resourceTypes.Select(GetAtsTypeId).Order(StringComparer.Ordinal),
+            capability.ExpandedTargetTypes.Select(t => t.TypeId).Order(StringComparer.Ordinal));
+        var diagnostic = Assert.Single(result.Diagnostics, d => d.Message.Contains(capabilityId, StringComparison.Ordinal));
+        Assert.Equal(AtsDiagnosticSeverity.Info, diagnostic.Severity);
+
+        var code = _generator.GenerateDistributedApplication(result.ToAtsContext())["aspire.mts"].ReplaceLineEndings("\n");
+        var declarations = new List<string>();
+        foreach (var resourceType in resourceTypes)
+        {
+            foreach (var suffix in new[] { "", "Promise" })
+            {
+                var name = resourceType.Name + suffix;
+                // Generated declarations have the shape:
+                // export interface ProjectResourcePromise extends PromiseLike<ProjectResource> { ... }
+                var declaration = Regex.Match(code, $@"^export interface {name}(?: extends [^\n]+)? \{{.*?^\}}",
+                    RegexOptions.Multiline | RegexOptions.Singleline);
+                Assert.True(declaration.Success, $"Missing generated interface {name}.");
+                var method = Assert.Single(declaration.Value.Split('\n'),
+                    line => line.TrimStart().StartsWith("withContainerImage(", StringComparison.Ordinal));
+                Assert.Equal($"    withContainerImage(image: string): {resourceType.Name}Promise;", method);
+                declarations.Add($"interface {name} {{\n{method}\n}}");
+            }
+
+            var implementation = Regex.Match(code, $@"^class {resourceType.Name}Impl\b.*?^\}}",
+                RegexOptions.Multiline | RegexOptions.Singleline);
+            Assert.True(implementation.Success, $"Missing generated implementation for {resourceType.Name}.");
+            var invocation = Regex.Match(implementation.Value, @"^    private async _withContainerImageInternal\(.*?^    \}",
+                RegexOptions.Multiline | RegexOptions.Singleline);
+            Assert.True(invocation.Success, $"Missing generated image invocation for {resourceType.Name}.");
+            var dispatchCall = Assert.Single(invocation.Value.Split('\n'),
+                line => line.TrimStart().StartsWith("'Aspire.Hosting.Radius/", StringComparison.Ordinal));
+            Assert.Equal($"'{capabilityId}',", dispatchCall.Trim());
+            declarations.Add(invocation.Value);
+        }
+
+        await Verify(string.Join("\n\n", declarations), "ts").UseParameters(includeDotnet);
+    }
+
     [Fact]
     public void Generate_KubernetesPersistentVolumeMount_UsesOptionsObject()
     {
@@ -1958,6 +2043,29 @@ public class AtsTypeScriptCodeGeneratorTests
         Assert.Contains("asExistingInTenant", aspireTs);
     }
 
+    [Fact]
+    public async Task GenerateDistributedApplication_InternalLoadBalancerUsesNetworkCapability()
+    {
+#pragma warning disable ASPIREAZURE003
+        var result = AtsCapabilityScanner.ScanAssemblies(
+            [.. LoadAzureAssemblies(), typeof(AzureInternalLoadBalancerExtensions).Assembly]);
+        var capability = Assert.Single(result.Capabilities,
+            c => c.CapabilityId == "Aspire.Hosting.Azure.Network/withNetworkInternalLoadBalancer");
+        Assert.Equal("withInternalLoadBalancer", capability.MethodName);
+        Assert.Equal(GetAtsTypeId(typeof(IAzureInternalIngressResource)), capability.TargetTypeId);
+#pragma warning restore ASPIREAZURE003
+
+        var files = _generator.GenerateDistributedApplication(result.ToAtsContext());
+        // Exercise Windows line endings even when this test runs on Linux.
+        var generatedCode = files["aspire.mts"].ReplaceLineEndings("\r\n");
+        // Split without retaining CR characters: a final CR becomes an extra newline in Verify on Windows.
+        var lines = generatedCode.ReplaceLineEndings("\n").Split('\n')
+            .Where(line => line.Contains("withInternalLoadBalancer", StringComparison.Ordinal) ||
+                line.Contains("withNetworkInternalLoadBalancer", StringComparison.Ordinal));
+
+        await Verify(string.Join('\n', lines), "ts");
+    }
+
     private static List<AtsCapabilityInfo> ScanCapabilitiesFromTestAssembly()
     {
         var testAssembly = LoadTestAssembly();
@@ -2480,7 +2588,7 @@ public class AtsTypeScriptCodeGeneratorTests
 
         Assert.True(capability.IsObsolete);
         Assert.False(capability.IsExperimental);
-        Assert.Equal("Use addDotnetProject from the Aspire.Hosting.Dotnet package instead.", capability.ObsoleteMessage);
+        Assert.Equal("Use addDotnetProject(name, path) from the Aspire.Hosting.Dotnet package instead.", capability.ObsoleteMessage);
         Assert.Equal("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ProjectResource", capability.ReturnType.TypeId);
         Assert.Equal(["name", "projectPath", "launchProfileOrOptions"], capability.Parameters.Select(parameter => parameter.Name));
         Assert.True(capability.Parameters[^1].IsOptional);
@@ -2517,7 +2625,7 @@ public class AtsTypeScriptCodeGeneratorTests
         var addCSharpApp = Assert.Single(context.Capabilities, capability => capability.CapabilityId == "Aspire.Hosting/addCSharpApp");
         Assert.True(addCSharpApp.IsObsolete);
         Assert.False(addCSharpApp.IsExperimental);
-        Assert.Equal("Use addDotnetProject from the Aspire.Hosting.Dotnet package instead.", addCSharpApp.ObsoleteMessage);
+        Assert.Equal("Use addDotnetProject(name, path) from the Aspire.Hosting.Dotnet package instead.", addCSharpApp.ObsoleteMessage);
         var legacyOptions = Assert.Single(addCSharpApp.Parameters, parameter => parameter.Name == "options");
         Assert.NotNull(legacyOptions.Type);
         Assert.Equal(AtsTypeCategory.Handle, legacyOptions.Type.Category);
@@ -2866,7 +2974,7 @@ public class AtsTypeScriptCodeGeneratorTests
     }
 
     [Fact]
-    public void DenoPublicApis_AreExperimental()
+    public void DenoPublicApis_AreStable()
     {
         var denoMethods = typeof(JavaScriptHostingExtensions)
             .GetMethods(BindingFlags.Public | BindingFlags.Static)
@@ -2878,11 +2986,7 @@ public class AtsTypeScriptCodeGeneratorTests
         Assert.Contains(denoMethods, method => method.Name == nameof(JavaScriptHostingExtensions.AddDenoApp));
         Assert.Contains(denoMethods, method => method.Name.StartsWith("WithDeno", StringComparison.Ordinal));
 
-        Assert.All(denoMethods, method =>
-        {
-            var experimental = Assert.Single(method.GetCustomAttributes<ExperimentalAttribute>());
-            Assert.Equal("ASPIREDENO001", experimental.DiagnosticId);
-        });
+        Assert.All(denoMethods, method => Assert.Empty(method.GetCustomAttributes<ExperimentalAttribute>()));
 
         foreach (var type in new[]
         {
@@ -2892,9 +2996,18 @@ public class AtsTypeScriptCodeGeneratorTests
             typeof(Aspire.Hosting.JavaScript.DenoPermissionKind),
         })
         {
-            var experimental = Assert.Single(type.GetCustomAttributes<ExperimentalAttribute>());
-            Assert.Equal("ASPIREDENO001", experimental.DiagnosticId);
+            Assert.Empty(type.GetCustomAttributes<ExperimentalAttribute>());
         }
+
+        var result = AtsCapabilityScanner.ScanAssemblies(
+            [typeof(DistributedApplication).Assembly, typeof(Aspire.Hosting.JavaScript.DenoAppResource).Assembly]);
+        var denoCapabilities = result.Capabilities
+            .Where(capability => capability.CapabilityId == "Aspire.Hosting.JavaScript/addDenoApp" ||
+                capability.CapabilityId.StartsWith("Aspire.Hosting.JavaScript/withDeno", StringComparison.Ordinal))
+            .ToList();
+
+        Assert.Equal(denoMethods.Count, denoCapabilities.Count);
+        Assert.All(denoCapabilities, capability => Assert.False(capability.IsExperimental));
     }
 
     private const string ApiExportPackageName = "Aspire.Hosting.CodeGeneration.TypeScript.Tests";

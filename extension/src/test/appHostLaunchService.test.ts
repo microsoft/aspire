@@ -2818,6 +2818,53 @@ suite('AppHostLaunchService', () => {
         }
     });
 
+    for (const action of ['setup', 'dismiss'] as const) {
+        test(`treats missing debugger ${action} as cancellation without a launch failure`, async () => {
+            const directory = createAppHostDirectory('apphost.go');
+            const appHostPath = path.join(directory, 'apphost.go');
+            const provider = createResolvedDebugConfigurationProvider(service);
+            failureSandbox.stub(vscode.extensions, 'getExtension').returns(undefined);
+            const warning = failureSandbox.stub(vscode.window, 'showWarningMessage').resolves(
+                action === 'setup' ? locStrings.debuggerSetupAction as never : undefined);
+            const cancellation = failureSandbox.spy(service, 'markLaunchAttemptCanceled');
+            const executeCommand = failureSandbox.stub(vscode.commands, 'executeCommand').resolves();
+            const fake = new FakeTelemetryReporter();
+            const restore = __setReporterForTests(fake as unknown as Parameters<typeof __setReporterForTests>[0]);
+            startDebuggingStub.callsFake(async (_folder, configuration) => {
+                // VS Code resolves a serialized configuration, not the original object passed
+                // to startDebugging, so cancellation must survive that boundary.
+                const resolved = await provider.resolveDebugConfigurationWithSubstitutedVariables(
+                    undefined, { ...configuration });
+                assert.strictEqual(resolved, undefined);
+                sinon.assert.calledOnce(warning);
+                sinon.assert.calledOnce(cancellation);
+                return false;
+            });
+            try {
+                await assert.rejects(service.launch(appHostPath, 'run', false), vscode.CancellationError);
+
+                assert.strictEqual(service.isLaunching(appHostPath), false);
+                assert.strictEqual(service.hasPendingOrActiveRunLaunch(appHostPath), false);
+                assert.deepStrictEqual(failureWrites.read(appHostPath), []);
+                assert.deepStrictEqual(
+                    fake.events.filter(event => event.name === 'aspire/vscode/apphost/launch/result')
+                        .map(event => [event.properties?.outcome, event.properties?.error_kind]),
+                    [['canceled', undefined]]);
+                assert.strictEqual(executeCommand.calledWith('aspire-vscode.installDebuggerExtension'), action === 'setup');
+
+                // The handled cancellation must not mask a later, genuine declined launch.
+                reuseLaunchToken(startDebuggingStub.firstCall.args[1][appHostLaunchTokenConfigKey]);
+                startDebuggingStub.resolves(false);
+                await assert.rejects(service.launch(appHostPath, 'run', false), /did not start the Aspire run session/);
+                assert.strictEqual(failureWrites.read(appHostPath).length, 1);
+            }
+            finally {
+                restore();
+                __resetCommonPropertiesForTests();
+            }
+        });
+    }
+
     test('launch cancels before starting debug session when CLI is unavailable', async () => {
         resolveCliPathStub.resolves({ cliPath: 'aspire', available: false, source: 'not-found' });
         const showErrorMessageStub = sinon.stub(vscode.window, 'showErrorMessage').resolves(undefined);

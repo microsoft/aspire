@@ -65,13 +65,18 @@ public sealed class TestDialogService : DialogService
 
 public sealed class TestJSRuntime : IJSRuntime
 {
+    /// <summary>
+    /// Handles calls and returns their result. Without it, or when it returns a value of another type, calls return the default value.
+    /// </summary>
+    public Func<(string Identifier, object?[]? Args), object?>? OnInvoke { get; set; }
+
     public ValueTask<TValue> InvokeAsync<TValue>(string identifier, object?[]? args)
     {
-        return ValueTask.FromResult(default(TValue)!);
+        return ValueTask.FromResult(OnInvoke?.Invoke((identifier, args)) is TValue result ? result : default(TValue)!);
     }
 
     public ValueTask<TValue> InvokeAsync<TValue>(string identifier, CancellationToken cancellationToken, object?[]? args)
     {
-        return ValueTask.FromResult(default(TValue)!);
+        return ValueTask.FromResult(OnInvoke?.Invoke((identifier, args)) is TValue result ? result : default(TValue)!);
     }
 }

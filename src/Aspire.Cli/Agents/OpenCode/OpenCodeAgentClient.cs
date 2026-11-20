@@ -48,79 +48,6 @@ internal sealed class OpenCodeAgentClient(CliExecutionContext context, IEnvironm
         => Path.Combine(scope is AgentConfigurationScope.Project ? workspaceRoot.FullName : context.HomeDirectory.FullName,
             AgentPath.UniversalSkillsDirectory);
 
-    public IEnumerable<string> GetLocalSkillDirectories(AgentConfigurationScope scope, DirectoryInfo workspaceRoot)
-    {
-        // https://opencode.ai/docs/skills/
-        var root = scope is AgentConfigurationScope.Project ? workspaceRoot.FullName : context.HomeDirectory.FullName;
-        yield return GetSkillBaseDirectory(scope, workspaceRoot);
-        yield return Path.Combine(root, ".claude", "skills");
-        var openCodeRoot = scope is AgentConfigurationScope.Project ? Path.Combine(root, ".opencode")
-            : OpenCodePaths.GetConfigDirectory(context, environment);
-        yield return Path.Combine(openCodeRoot, "skill");
-        yield return Path.Combine(openCodeRoot, "skills");
-        if (scope is AgentConfigurationScope.Global &&
-            OpenCodePaths.GetOverride(OpenCodePaths.ConfigDirectoryEnvironmentVariable, context, environment) is { } custom)
-        {
-            yield return Path.Combine(custom, "skill");
-            yield return Path.Combine(custom, "skills");
-        }
-
-        var settingsPaths = scope is AgentConfigurationScope.Project
-            ? OpenCodePaths.GetProjectConfigPaths(workspaceRoot)
-            : GlobalCatalogSettings();
-        foreach (var path in settingsPaths)
-        {
-            var config = AgentConfiguration.ReadObject(path, CancellationToken.None);
-            if (config is null)
-            {
-                continue;
-            }
-
-            foreach (var directory in GetConfiguredSkillDirectories(config))
-            {
-                yield return directory;
-            }
-        }
-
-        if (scope is AgentConfigurationScope.Global &&
-            environment.GetEnvironmentVariable(OpenCodePaths.ConfigContentEnvironmentVariable) is { Length: > 0 } inline)
-        {
-            foreach (var directory in GetConfiguredSkillDirectories(AgentConfiguration.ParseObject(inline)))
-            {
-                yield return directory;
-            }
-        }
-    }
-
-    private IEnumerable<string> GetConfiguredSkillDirectories(JsonObject config)
-    {
-        if (!config.TryGetPropertyValue("skills", out var skills))
-        {
-            yield break;
-        }
-
-        ArgumentNullException.ThrowIfNull(skills);
-        // V1 {"skills":{"paths":["./team-skills"]}} and V2 {"skills":["./team-skills"]}
-        // resolve local paths from the active working directory, not the config file.
-        // HTTP catalogs are not local copies. https://opencode.ai/docs/skills/#sources
-        var paths = skills is JsonObject v1
-            ? AspireSkillsRemoteConfiguration.OptionalStrings(v1, "paths")
-            : AspireSkillsRemoteConfiguration.Strings(skills.AsArray());
-        foreach (var node in paths ?? [])
-        {
-            var value = node!.GetValue<string>();
-            if (Uri.TryCreate(value, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https")
-            {
-                continue;
-            }
-
-            var expanded = value.StartsWith("~/", StringComparison.Ordinal)
-                ? Path.Combine(context.HomeDirectory.FullName, value[2..])
-                : value;
-            yield return Path.GetFullPath(expanded.Length == 0 ? "." : expanded, context.WorkingDirectory.FullName);
-        }
-    }
-
     public string GetMcpConfigPath(AgentConfigurationScope scope, DirectoryInfo workspaceRoot)
         => scope is AgentConfigurationScope.Project ? OpenCodePaths.GetProjectConfigPath(workspaceRoot)
             : OpenCodePaths.GetGlobalMcpConfigPath(context, environment);
@@ -192,9 +119,10 @@ internal sealed class OpenCodeAgentClient(CliExecutionContext context, IEnvironm
     }
 
     // OpenCode does not yet have a verified telemetry hook schema.
-    public Task<TelemetryHookConfigurationResult> ConfigureTelemetryHooksAsync(
-        AgentEnvironment detectedEnvironments, CancellationToken cancellationToken)
-        => Task.FromResult(new TelemetryHookConfigurationResult(AgentEnvironment.None, []));
+    public bool SupportsTelemetryHooks => false;
+
+    public Task<TelemetryHookStatus> ConfigureTelemetryHookAsync(CancellationToken cancellationToken)
+        => throw new NotSupportedException();
 
     public override string ToString() => Id;
 
@@ -233,18 +161,18 @@ internal sealed class OpenCodeAgentClient(CliExecutionContext context, IEnvironm
             : OpenCodePaths.GetGlobalMcpConfigPath(context, environment);
 
     public bool HasIntegrationRegistration(
-        DirectoryInfo workspaceRoot, AgentConfigurationScope scope, CancellationToken cancellationToken)
+        DirectoryInfo workspaceRoot, AgentConfigurationScope scope, IReadOnlyList<SkillSource> sources)
     {
         // Inline settings can activate skills, but are not a writable registration target.
         if (environment.GetEnvironmentVariable(OpenCodePaths.ConfigContentEnvironmentVariable) is { Length: > 0 } inline &&
-            AspireSkillsRemoteConfiguration.HasOpenCodeCatalog(AgentConfiguration.ParseObject(inline)))
+            AspireSkillsRemoteConfiguration.HasOpenCodeCatalog(AgentConfiguration.ParseObject(inline), sources))
         {
             return true;
         }
 
         foreach (var path in scope is AgentConfigurationScope.Project ? CatalogSettings(workspaceRoot) : GlobalCatalogSettings())
         {
-            if (AgentConfiguration.ReadObject(path, cancellationToken) is { } config && AspireSkillsRemoteConfiguration.HasOpenCodeCatalog(config))
+            if (AgentConfiguration.ReadObject(path) is { } config && AspireSkillsRemoteConfiguration.HasOpenCodeCatalog(config, sources))
             {
                 return true;
             }
@@ -255,8 +183,12 @@ internal sealed class OpenCodeAgentClient(CliExecutionContext context, IEnvironm
 
     public async Task UpdateIntegrationConfigAsync(
         JsonObject config, DirectoryInfo workspaceRoot, AgentConfigurationScope scope,
-        AgentConfiguration edit, CancellationToken cancellationToken)
+        AgentConfiguration edit, IReadOnlyList<SkillSource> sources, CancellationToken cancellationToken)
     {
+        if (sources.Count == 0)
+        {
+            return;
+        }
         var configs = await AspireSkillsRemoteConfiguration.ReadSettingsAsync(
             scope is AgentConfigurationScope.Project ? CatalogSettings(workspaceRoot) : GlobalCatalogSettings(),
             GetIntegrationConfigPath(scope, workspaceRoot), edit, cancellationToken);
@@ -269,7 +201,7 @@ internal sealed class OpenCodeAgentClient(CliExecutionContext context, IEnvironm
             }
         }
 
-        AspireSkillsRemoteConfiguration.ApplyOpenCodeCatalog(config, configs.Append(config));
+        AspireSkillsRemoteConfiguration.ApplyOpenCodeCatalog(config, configs.Append(config), sources);
     }
 
     private IEnumerable<string> CatalogSettings(DirectoryInfo workspaceRoot)

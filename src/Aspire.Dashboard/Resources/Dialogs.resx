@@ -184,6 +184,9 @@
   <data name="HelpDialogCategoryNavigation" xml:space="preserve">
     <value>General</value>
   </data>
+  <data name="HelpDialogCategoryResourceGraph" xml:space="preserve">
+    <value>Resource graph</value>
+  </data>
   <data name="HelpDialogCategoryTelemetry" xml:space="preserve">
     <value>Logs &amp; telemetry</value>
   </data>
@@ -453,10 +456,10 @@
     <value>Switch to previous dashboard</value>
   </data>
   <data name="DashboardFeedbackPromptTitle" xml:space="preserve">
-    <value>Help shape the new dashboard</value>
+    <value>Welcome to the new Aspire dashboard!</value>
   </data>
   <data name="DashboardFeedbackPromptMessage" xml:space="preserve">
-    <value>Share what works, what is missing, or what feels harder. Your feedback helps improve the dashboard while both experiences are available.</value>
+    <value>We'd love your feedback on the new experience.</value>
   </data>
   <data name="DashboardFeedbackPromptShare" xml:space="preserve">
     <value>Share feedback</value>
@@ -702,10 +705,7 @@
     <value>Overview layout</value>
   </data>
   <data name="SettingsDialogGroupOverviewSummary" xml:space="preserve">
-    <value>Home</value>
-  </data>
-  <data name="SettingsDialogGroupOverviewCards" xml:space="preserve">
-    <value>Cards</value>
+    <value>Summary</value>
   </data>
   <data name="SettingsDialogResourceListDensity" xml:space="preserve">
     <value>Resource list density</value>
@@ -715,9 +715,6 @@
   </data>
   <data name="SettingsDialogResourceListDensityCompact" xml:space="preserve">
     <value>Compact</value>
-  </data>
-  <data name="SettingsDialogResourceListDensitySpacious" xml:space="preserve">
-    <value>Spacious</value>
   </data>
   <data name="SettingsDialogTimeFormat" xml:space="preserve">
     <value>Time format</value>
@@ -787,6 +784,16 @@
   </data>
   <data name="HelpDialogDashboardVersion" xml:space="preserve">
     <value>Aspire dashboard version {0}</value>
+  </data>
+  <data name="HelpDialogPlayGame" xml:space="preserve">
+    <value>Play Aspire Outage, when the graph has focus</value>
+    <comment>Aspire Outage is the name of a game.</comment>
+  </data>
+  <data name="HelpDialogGameTitle" xml:space="preserve">
+    <value>Aspire Outage</value>
+  </data>
+  <data name="HelpDialogGameDescription" xml:space="preserve">
+    <value>In the resource graph, select Play Aspire Outage, or focus the graph and press O, to play a game starring your resources. Press Esc to return to the graph.</value>
   </data>
   <data name="AIAgentsDialogStandaloneDescription" xml:space="preserve">
     <value>Aspire gives AI coding agents deep observability into your app using the same information visible in the dashboard. Agents use telemetry to diagnose issues faster and verify fixes with confidence. 🚀

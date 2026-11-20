@@ -127,22 +127,25 @@ public class NuGetPackagePrefetcherTests(ITestOutputHelper outputHelper)
             stoppingCts.Cancel();
         });
 
+        // Wait on the token the prefetcher passes in, not stoppingCts.Token. Cancelling stoppingCts runs the
+        // newest registrations first, so awaiting stoppingCts.Token can resume the prefetcher before its linked
+        // stopping token is cancelled, which turns the expected cancellation into a "Non-fatal error" log.
         var packagingService = new TestPackagingService
         {
-            GetChannelsAsyncCallback = async _ =>
+            GetChannelsAsyncCallback = async cancellationToken =>
             {
                 templateArrived.SetResult();
-                await AsyncTestHelpers.WaitForCancellationAsync(stoppingCts.Token);
+                await AsyncTestHelpers.WaitForCancellationAsync(cancellationToken);
                 throw new UnreachableException();
             }
         };
 
         var updateNotifier = new TestCliUpdateNotifier
         {
-            CheckForCliUpdatesAsyncCallback = async (_, _) =>
+            CheckForCliUpdatesAsyncCallback = async (_, cancellationToken) =>
             {
                 cliArrived.SetResult();
-                await AsyncTestHelpers.WaitForCancellationAsync(stoppingCts.Token);
+                await AsyncTestHelpers.WaitForCancellationAsync(cancellationToken);
             }
         };
 

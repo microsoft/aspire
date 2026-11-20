@@ -18,6 +18,7 @@ using Aspire.Hosting.Utils;
 using Humanizer;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Routing;
+using Microsoft.AspNetCore.Components.Web;
 using Microsoft.Extensions.Options;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.JSInterop;
@@ -79,6 +80,8 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
     public required IconResolver IconResolver { get; init; }
     [Inject]
     public required ResourceMenuBuilder ResourceMenuBuilder { get; init; }
+    [Inject]
+    public required ResourceTagStore TagStore { get; init; }
 
     public string BasePath => GetRouteViewKind() == ResourceViewKind.Graph ? DashboardUrls.GraphBasePath : DashboardUrls.ParametersBasePath;
     public string SessionStorageKey => GetRouteViewKind() == ResourceViewKind.Graph ? BrowserStorageKeys.GraphPageState : BrowserStorageKeys.ParametersPageState;
@@ -90,6 +93,9 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
 
     [CascadingParameter]
     public required ViewportInformation ViewportInformation { get; set; }
+
+    [CascadingParameter]
+    public ResourcesLayout? ResourceLayout { get; set; }
 
     [Parameter]
     [SupplyParameterFromQuery]
@@ -179,7 +185,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
     private readonly EnumerableGridSort<ResourceGridViewModel> _nameSort = EnumerableGridSort<ResourceGridViewModel>.ByAscending(item => item.Resource, ResourceViewModelNameComparer.Instance);
     private readonly EnumerableGridSort<ResourceGridViewModel> _stateSort = EnumerableGridSort<ResourceGridViewModel>.ByAscending(item => item.Resource.State).ThenAscending(item => item.Resource, ResourceViewModelNameComparer.Instance);
     private readonly EnumerableGridSort<ResourceGridViewModel> _startTimeSort = EnumerableGridSort<ResourceGridViewModel>.ByDescending(item => item.Resource.StartTimeStamp).ThenAscending(item => item.Resource, ResourceViewModelNameComparer.Instance);
-    private readonly EnumerableGridSort<ResourceGridViewModel> _typeSort = EnumerableGridSort<ResourceGridViewModel>.ByAscending(item => item.Resource.ResourceType).ThenAscending(item => item.Resource, ResourceViewModelNameComparer.Instance);
+    private readonly EnumerableGridSort<ResourceGridViewModel> _typeSort = EnumerableGridSort<ResourceGridViewModel>.ByAscending(item => item.Resource.ResourceTypeDisplayName).ThenAscending(item => item.Resource, ResourceViewModelNameComparer.Instance);
 
     protected override async Task OnInitializedAsync()
     {
@@ -214,6 +220,8 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
         };
 
         NavigationManager.LocationChanged += OnLocationChanged;
+        TagStore.Changed += OnTagsChanged;
+        await TagStore.EnsureLoadedAsync();
 
         _resourceUnviewedErrorCounts = TelemetryRepository.GetResourceUnviewedErrorLogsCount();
 
@@ -399,12 +407,14 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
                     var graphIcons = new GraphIconsDto(
                         new GraphMenuIconDto(
                             Path: ResourceGraphMapper.GetIconPathData(new Icons.Regular.Size16.Settings()),
-                            LabelFormat: Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphResourceActionsButton)].Value),
+                            LabelFormat: Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphResourceActionsButton)].Value,
+                            TagLabelFormat: Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphTagActionsButton)].Value),
                         new GraphHiddenIconDto(
                             Path: ResourceGraphMapper.GetIconPathData(new Icons.Regular.Size16.EyeOff()),
-                            Tooltip: ColumnsLoc[nameof(Columns.HiddenResourceIconTooltip)].Value));
+                            Tooltip: ColumnsLoc[nameof(Columns.HiddenResourceIconTooltip)].Value),
+                        ResourceGraphMapper.GetGameStrings(Loc));
 
-                    await _jsModule.InvokeVoidAsync("initializeResourcesGraph", _resourcesInteropReference, graphIcons);
+                    await _jsModule.InvokeVoidAsync("initializeResourcesGraph", _resourcesInteropReference, graphIcons, ResourceLayout is not null);
                     _graphInitialized = true;
                     await UpdateResourceGraphResourcesAsync();
                     await UpdateResourceGraphSelectedAsync();
@@ -456,11 +466,17 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
         }
     }
 
+    private IEnumerable<ResourceViewModel> GetGraphResources() => _resourceByName.Values.Where(Filter);
+
     private List<ResourceDto> GetResourceGraphResources()
     {
-        var activeResources = _resourceByName.Values.Where(Filter).OrderBy(e => e.ResourceType).ThenBy(e => e.Name).ToList();
-        return activeResources.Select(r => ResourceGraphMapper.MapResource(r, activeResources, _resourceByName, ColumnsLoc, PageViewModel.ShowHiddenResources, IconResolver)).ToList();
+        var activeResources = ResourceGraphMapper.OrderResources(GetGraphResources());
+        var tagsByResource = TagStore.GetTagsByResource(activeResources);
+        return activeResources.Select(r => ResourceGraphMapper.MapResource(r, activeResources, _resourceByName, ColumnsLoc, PageViewModel.ShowHiddenResources, IconResolver,
+            tagsByResource.GetValueOrDefault(r.DisplayName) ?? [])).ToList();
     }
+
+    private void OnTagsChanged() => _ = InvokeAsync(UpdateResourceGraphResourcesAsync);
 
     private Task ExportResourceGraphAsync()
     {
@@ -478,6 +494,15 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
 
     private class ResourcesInterop(Resources resources)
     {
+        [JSInvokable]
+        public Task<bool> TagGroupContextMenu(string tagName, int clientX, int clientY) =>
+            resources.ShowTagGroupContextMenuAsync(tagName, clientX, clientY);
+
+        [JSInvokable]
+        public Task SelectTagGroup(string tagName, MouseEventArgs e) =>
+            (resources.ResourceLayout ?? throw new InvalidOperationException("Tag selection requires a resources layout."))
+                .SelectGraphTagGroupAsync(tagName, e, resources.GetGraphResources(), resources.PageViewModel.ShowHiddenResources);
+
         [JSInvokable]
         public async Task SelectResource(string id)
         {
@@ -502,6 +527,12 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
                 });
             }
         }
+
+        [JSInvokable]
+        public Task<bool?> ExecuteGraphGameCommand(string id, string commandName) =>
+            resources._resourceByName.TryGetValue(id, out var resource)
+                ? resources.DashboardCommandExecutor.ExecuteGraphGameCommandAsync(resource, commandName, resources.GetResourceName)
+                : Task.FromResult<bool?>(null);
     }
 
     internal IEnumerable<ResourceViewModel> GetFilteredResources()
@@ -754,6 +785,25 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
             await contextMenu.OpenAsync(clientX, clientY);
             StateHasChanged();
         }
+    }
+
+    private async Task<bool> ShowTagGroupContextMenuAsync(string tagName, int clientX, int clientY)
+    {
+        var items = ResourceMenuBuilder.CreateTagGroupMenuItems(tagName, ResourceContextMenuHeaderId,
+            () => ResourceGraphMapper.GetTagMembers(GetGraphResources(), tagName, TagStore),
+            (resource, command) => DashboardCommandExecutor.IsExecuting(resource.Name, command.Name),
+            ExecuteResourceCommandAsync);
+        if (_contextMenu is not { } contextMenu || items.Count == 0)
+        {
+            Logger.LogDebug("The graph menu for tag '{TagName}' is no longer available.", tagName);
+            return false;
+        }
+
+        _contextMenuItems.Clear();
+        _contextMenuItems.AddRange(items);
+        await contextMenu.OpenAsync(clientX, clientY);
+        StateHasChanged();
+        return true;
     }
 
     private async Task ShowResourceDetailsAsync(ResourceViewModel resource, string? focusElementId)
@@ -1168,6 +1218,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
     {
         _isDisposing = true;
         NavigationManager.LocationChanged -= OnLocationChanged;
+        TagStore.Changed -= OnTagsChanged;
         _resourcesInteropReference?.Dispose();
         _cts.Cancel();
         _logsSubscription?.Dispose();

@@ -27,6 +27,9 @@ public abstract class ChartBase : ComponentBase, IAsyncDisposable
     private DateTimeOffset _currentDataStartTime;
     private List<KeyValuePair<string, string>[]>? _renderedDimensionAttributes;
     private OtlpInstrumentKey? _renderedInstrument;
+    private string? _renderedInstrumentUnit;
+    private OtlpInstrumentType? _renderedInstrumentType;
+    private bool _renderedInstrumentIsMonotonic;
     private string? _renderedTheme;
     private bool _renderedShowCount;
     private bool _renderedShowRunningTotal;
@@ -106,7 +109,14 @@ public abstract class ChartBase : ComponentBase, IAsyncDisposable
         }
 
         var dimensionAttributes = InstrumentViewModel.MatchedDimensions.Select(d => d.Attributes).ToList();
+        // The instrument key only has the meter and instrument names. Switching resources can show an instrument
+        // with the same key and dimensions but a different unit, type or monotonicity. Trace names come from the unit
+        // and whether the instrument is a monotonic counter, and the type decides which traces are drawn. Only a full
+        // initialization replaces them in the chart.
         if (_renderedInstrument is null || _renderedInstrument != InstrumentViewModel.Instrument.GetKey() ||
+            _renderedInstrumentUnit != InstrumentViewModel.Instrument.Unit ||
+            _renderedInstrumentType != InstrumentViewModel.Instrument.Type ||
+            _renderedInstrumentIsMonotonic != InstrumentViewModel.Instrument.IsMonotonic ||
             _renderedDimensionAttributes is null || !DimensionAttributesEqual(_renderedDimensionAttributes, dimensionAttributes) ||
             _renderedTheme != InstrumentViewModel.Theme ||
             _renderedShowCount != InstrumentViewModel.ShowCount ||
@@ -114,6 +124,9 @@ public abstract class ChartBase : ComponentBase, IAsyncDisposable
         {
             // Dimensions (or entire chart) has changed. Re-render the entire chart.
             _renderedInstrument = InstrumentViewModel.Instrument.GetKey();
+            _renderedInstrumentUnit = InstrumentViewModel.Instrument.Unit;
+            _renderedInstrumentType = InstrumentViewModel.Instrument.Type;
+            _renderedInstrumentIsMonotonic = InstrumentViewModel.Instrument.IsMonotonic;
             _renderedDimensionAttributes = dimensionAttributes;
             _renderedTheme = InstrumentViewModel.Theme;
             _renderedShowCount = InstrumentViewModel.ShowCount;

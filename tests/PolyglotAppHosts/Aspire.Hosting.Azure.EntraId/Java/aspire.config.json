@@ -7,6 +7,7 @@
     "experimentalPolyglotJava": true
   },
   "packages": {
-    "Aspire.Hosting.Azure.EntraId": ""
+    "Aspire.Hosting.Azure.EntraId": "",
+    "Aspire.Hosting.Azure.Provisioning.EntraId": ""
   }
 }

@@ -1,0 +1,3 @@
+<Project>
+  <!-- Stop repository-root Arcade inheritance for trusted sparse checkouts. -->
+</Project>

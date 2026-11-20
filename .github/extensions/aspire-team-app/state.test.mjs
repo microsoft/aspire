@@ -1,7 +1,17 @@
 import assert from "node:assert/strict";
+import fs, { readFile, readdir, rm } from "node:fs/promises";
+import { syncBuiltinESMExports } from "node:module";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import test from "node:test";
+import { DEFAULT_PROXIMA_REPOS, DEFAULT_REPOS } from "./github.mjs";
 
-import {
+const artifactsRoot = fileURLToPath(new URL("../../../artifacts/copilot-extension-state-tests/", import.meta.url));
+const originalHome = process.env.COPILOT_HOME;
+process.env.COPILOT_HOME = join(artifactsRoot, "copilot-home");
+const preferencesPath = join(process.env.COPILOT_HOME, "extensions", "aspire-team-app", "artifacts", "preferences.json");
+
+const {
   accountConfig,
   activateNewProximaAccounts,
   addAzurePipeline,
@@ -9,14 +19,77 @@ import {
   normalizeHealthOrder,
   normalizeAzurePipelines,
   removeAzurePipeline,
+  loadPrefs,
+  savePrefs,
   setAccountActive,
   setAccountRepos,
   setHealthOrder,
-} from "./state.mjs";
-import { DEFAULT_PROXIMA_REPOS, DEFAULT_REPOS } from "./github.mjs";
+  updatePrefs,
+} = await import("./state.mjs");
+
+test.after(async () => {
+  if (originalHome === undefined) delete process.env.COPILOT_HOME;
+  else process.env.COPILOT_HOME = originalHome;
+  await rm(artifactsRoot, { recursive: true, force: true });
+});
+
+test("reads during a preference save see complete saved settings until replacement", async (t) => {
+  await rm(artifactsRoot, { recursive: true, force: true });
+  const before = {
+    ...DEFAULT_PREFS,
+    detachedSessions: true,
+    autoApplyUpdates: false,
+    accounts: { "acct:msft.ghe.com/octo": { repos: ["coreai/aspire-1p"], active: true } },
+  };
+  await savePrefs(before);
+  let signalEntered;
+  let releaseSave;
+  const entered = new Promise((resolve) => { signalEntered = resolve; });
+  const resume = new Promise((resolve) => { releaseSave = resolve; });
+  const writeFile = fs.writeFile;
+  const write = t.mock.method(fs, "writeFile", async (path, data, options) => {
+    await writeFile(path, data.slice(0, 20), options);
+    signalEntered();
+    await resume;
+    await writeFile(path, data, "utf8");
+  });
+  syncBuiltinESMExports();
+  t.after(() => { write.mock.restore(); syncBuiltinESMExports(); });
+
+  const saving = updatePrefs((prefs) => { prefs.showDrafts = true; });
+  try {
+    await entered;
+    assert.deepEqual(await loadPrefs(), before);
+    assert.deepEqual(JSON.parse(await readFile(preferencesPath, "utf8")), before);
+  } finally {
+    releaseSave();
+    await saving;
+  }
+
+  assert.deepEqual(await loadPrefs(), { ...before, showDrafts: true });
+  assert.deepEqual(await readdir(dirname(preferencesPath)), ["preferences.json"]);
+});
+
+test("failed preference replacement preserves saved settings and removes the pending file", async (t) => {
+  await rm(artifactsRoot, { recursive: true, force: true });
+  const before = { ...DEFAULT_PREFS, detachedSessions: true };
+  await savePrefs(before);
+  const rename = t.mock.method(fs, "rename", async () => { throw new Error("replacement failed"); });
+  syncBuiltinESMExports();
+  t.after(() => { rename.mock.restore(); syncBuiltinESMExports(); });
+
+  await assert.rejects(savePrefs({ ...before, detachedSessions: false }), /replacement failed/);
+
+  assert.deepEqual(await loadPrefs(), before);
+  assert.deepEqual(await readdir(dirname(preferencesPath)), ["preferences.json"]);
+});
 
 test("background updates apply automatically by default", () => {
   assert.equal(DEFAULT_PREFS.autoApplyUpdates, true);
+});
+
+test("new sessions remain children by default", () => {
+  assert.equal(DEFAULT_PREFS.detachedSessions, false);
 });
 
 test("accountConfig defaults unconfigured accounts to the public repos", () => {

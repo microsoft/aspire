@@ -5,28 +5,17 @@ import { setTimeout } from 'node:timers/promises';
 
 const execute = promisify(execFile);
 const [mode, target] = process.argv.slice(2);
+// Tests shorten this to exercise the timeout path; CI uses the four-minute default.
+const appHostTimeoutMs = Number(process.env.NUXT_VERIFY_APPHOST_TIMEOUT_MS ?? 240_000);
 let url;
 
 if (mode === 'apphost') {
-    const deadline = Date.now() + 240_000;
-    while (Date.now() < deadline) {
-        const { stdout } = await execute('aspire', [
-            'describe', '--apphost', target, '--format', 'Json', '--nologo',
-        ], { maxBuffer: 4 * 1024 * 1024 });
-        const { resources } = JSON.parse(stdout);
-        const workloads = resources.filter(resource => ['api', 'web'].includes(resource.displayName));
-        for (const resource of workloads) {
-            assert.ok(!['FailedToStart', 'Exited'].includes(resource.state),
-                `${resource.displayName} entered ${resource.state}`);
-        }
-        if (workloads.length === 2 && workloads.every(resource =>
-            resource.state === 'Running' && resource.healthStatus === 'Healthy')) {
-            url = workloads.find(resource => resource.displayName === 'web').urls.find(endpoint => endpoint.name === 'http').url;
-            break;
-        }
-        await setTimeout(2000);
+    try {
+        url = await waitForHealthyAppHost(target);
+    } catch (error) {
+        await writeAppHostDiagnostics(target);
+        throw error;
     }
-    assert.ok(url, 'Nuxt and the backend did not become healthy within four minutes.');
 } else if (mode === 'url' || mode === 'health') {
     url = target;
 } else {
@@ -64,4 +53,69 @@ if (mode === 'health') {
     assert.equal(page.status, 200);
     assert.match(await page.text(), /<p>Hello from the Aspire backend<\/p>/);
     console.log('Verified healthy Nuxt server, runtime service reference, and server-rendered backend response.');
+}
+
+async function waitForHealthyAppHost(apphost) {
+    const deadline = Date.now() + appHostTimeoutMs;
+    while (Date.now() < deadline) {
+        const { stdout } = await execute('aspire', [
+            'describe', '--apphost', apphost, '--format', 'Json', '--nologo',
+        ], { maxBuffer: 4 * 1024 * 1024 });
+        const { resources } = JSON.parse(stdout);
+        const workloads = resources.filter(resource => ['api', 'web'].includes(resource.displayName));
+        for (const resource of workloads) {
+            assert.ok(!['FailedToStart', 'Exited'].includes(resource.state),
+                `${resource.displayName} entered ${resource.state}`);
+        }
+        if (workloads.length === 2 && workloads.every(resource =>
+            resource.state === 'Running' && resource.healthStatus === 'Healthy')) {
+            return workloads.find(resource => resource.displayName === 'web').urls.find(endpoint => endpoint.name === 'http').url;
+        }
+        await setTimeout(2000);
+    }
+    assert.fail(`Nuxt and the backend did not become healthy within ${appHostTimeoutMs / 1000} seconds.`);
+}
+
+// The AppHost is stopped and its workspace deleted after a failure, so print the state that
+// explains why a resource never became healthy. Environment, properties and dashboard URLs
+// are omitted because they can contain secrets or login tokens.
+async function writeAppHostDiagnostics(apphost) {
+    console.error('=== AppHost resource diagnostics ===');
+    let resources;
+    try {
+        const { stdout } = await execute('aspire', [
+            'describe', '--apphost', apphost, '--format', 'Json', '--include-hidden', '--nologo',
+        ], { maxBuffer: 4 * 1024 * 1024, timeout: 60_000 });
+        resources = JSON.parse(stdout).resources;
+    } catch (error) {
+        console.error(`Could not describe AppHost resources: ${error.message}`);
+        return;
+    }
+
+    for (const resource of resources) {
+        console.error(JSON.stringify({
+            name: resource.name,
+            type: resource.resourceType,
+            state: resource.state,
+            waitingFor: resource.waitingFor,
+            exitCode: resource.exitCode,
+            health: resource.healthStatus,
+            healthReports: resource.healthReports,
+            started: resource.startTimestamp,
+            stopped: resource.stopTimestamp,
+        }));
+    }
+
+    for (const resource of resources) {
+        console.error(`=== Last 200 log lines for ${resource.name} ===`);
+        try {
+            const { stdout, stderr } = await execute('aspire', [
+                'logs', resource.name, '--apphost', apphost, '--tail', '200', '--timestamps', '--nologo',
+            ], { maxBuffer: 16 * 1024 * 1024, timeout: 60_000 });
+            process.stderr.write(stdout);
+            process.stderr.write(stderr);
+        } catch (error) {
+            console.error(`Could not read logs for ${resource.name}: ${error.message}`);
+        }
+    }
 }

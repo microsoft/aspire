@@ -5,10 +5,12 @@
     <IsPackable>true</IsPackable>
     <PackageTags>aspire integration hosting go golang framework runtime</PackageTags>
     <Description>Go support for Aspire.</Description>
-    <SuppressFinalPackageVersion>true</SuppressFinalPackageVersion>
+    <!-- No stable Aspire.Hosting.Go has shipped, so there is no baseline package to validate against. Remove this once one has. -->
+    <DisablePackageBaselineValidation>true</DisablePackageBaselineValidation>
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="$(SharedDir)PublishValidationExtensions.cs" Link="PublishValidationExtensions.cs" />
     <ProjectReference Include="..\Aspire.Hosting\Aspire.Hosting.csproj" />
   </ItemGroup>
 

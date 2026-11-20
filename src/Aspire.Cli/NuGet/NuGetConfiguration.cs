@@ -97,4 +97,7 @@ internal sealed record NuGetConfigSource(
     string Key,
     string Source,
     bool IsAmbient,
-    bool IsEnabled);
+    bool IsEnabled)
+{
+    internal bool IsExplicitlyNamed { get; init; }
+}

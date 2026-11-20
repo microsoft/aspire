@@ -8,6 +8,9 @@
     <Using Include="Aspire.Tests.Utils" />
   </ItemGroup>
   <ItemGroup>
+    <!-- These files are imported by temporary AppHost projects in the tests. -->
+    <None Include="..\..\src\Aspire.Hosting.AppHost\build\Aspire.Hosting.AppHost.props" />
+    <None Include="..\..\src\Aspire.Hosting.AppHost\build\Aspire.Hosting.AppHost.in.targets" />
     <Compile Include="$(TestsSharedDir)TemporaryWorkspace.cs" Link="shared/TemporaryWorkspace.cs" />
     <Compile Include="..\..\src\Aspire.AppHost.Sdk\Aspire.RuntimeIdentifier.Tool\NuGetUtils.cs" Link="Product\NuGetUtils.cs" />
     <None Include="$(BundledRuntimeIdentifierGraphFile)" Link="RuntimeIdentifierGraph.json" CopyToOutputDirectory="Always" />

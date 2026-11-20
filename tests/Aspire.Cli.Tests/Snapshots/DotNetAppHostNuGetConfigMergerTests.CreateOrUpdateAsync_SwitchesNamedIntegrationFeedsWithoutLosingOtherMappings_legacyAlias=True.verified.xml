@@ -1,0 +1,96 @@
+﻿<configurations>
+  <selection feed="team">
+    <configuration>
+      <packageSources>
+        <clear />
+        <add key="sdk" value="<workspace>/sdk-feed" />
+        <add key="public" value="<workspace>/public-feed" />
+        <add key="team" value="<workspace>/team-feed" />
+      </packageSources>
+      <packageSourceCredentials>
+        <team>
+          <add key="Username" value="user" />
+          <add key="ClearTextPassword" value="test-password" />
+        </team>
+      </packageSourceCredentials>
+      <packageSourceMapping>
+        <clear />
+        <packageSource key="sdk">
+          <package pattern="Aspire*" />
+        </packageSource>
+        <packageSource key="public">
+          <package pattern="*" />
+        </packageSource>
+        <packageSource key="team">
+          <package pattern="Contoso.Hosting.One" />
+          <package pattern="Contoso.Hosting.Keep" />
+          <package pattern="Contoso.Internal.*" />
+        </packageSource>
+      </packageSourceMapping>
+    </configuration>
+  </selection>
+  <selection feed="other">
+    <configuration>
+      <packageSources>
+        <clear />
+        <add key="sdk" value="<workspace>/sdk-feed" />
+        <add key="public" value="<workspace>/public-feed" />
+        <add key="team" value="<workspace>/team-feed" />
+        <add key="aspire-integration-other" value="<workspace>/other-feed" />
+      </packageSources>
+      <packageSourceCredentials>
+        <team>
+          <add key="Username" value="user" />
+          <add key="ClearTextPassword" value="test-password" />
+        </team>
+      </packageSourceCredentials>
+      <packageSourceMapping>
+        <clear />
+        <packageSource key="sdk">
+          <package pattern="Aspire*" />
+        </packageSource>
+        <packageSource key="public">
+          <package pattern="*" />
+        </packageSource>
+        <packageSource key="aspire-integration-other">
+          <package pattern="Contoso.Hosting.One" />
+        </packageSource>
+        <packageSource key="team">
+          <package pattern="Contoso.Hosting.Keep" />
+          <package pattern="Contoso.Internal.*" />
+        </packageSource>
+      </packageSourceMapping>
+    </configuration>
+  </selection>
+  <selection feed="team">
+    <configuration>
+      <packageSources>
+        <clear />
+        <add key="sdk" value="<workspace>/sdk-feed" />
+        <add key="public" value="<workspace>/public-feed" />
+        <add key="team" value="<workspace>/team-feed" />
+        <add key="aspire-integration-other" value="<workspace>/other-feed" />
+      </packageSources>
+      <packageSourceCredentials>
+        <team>
+          <add key="Username" value="user" />
+          <add key="ClearTextPassword" value="test-password" />
+        </team>
+      </packageSourceCredentials>
+      <packageSourceMapping>
+        <clear />
+        <packageSource key="sdk">
+          <package pattern="Aspire*" />
+        </packageSource>
+        <packageSource key="public">
+          <package pattern="*" />
+        </packageSource>
+        <packageSource key="team">
+          <package pattern="Contoso.Hosting.Keep" />
+          <package pattern="Contoso.Internal.*" />
+          <package pattern="Contoso.Hosting.One" />
+        </packageSource>
+      </packageSourceMapping>
+    </configuration>
+  </selection>
+</configurations>

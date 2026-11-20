@@ -12,34 +12,33 @@ func main() {
 		log.Fatal(aspire.FormatError(err))
 	}
 
-	// A Redis cache the API will use for read-through caching.
-	cache := builder.AddRedis("cache")
-
-	// The Go HTTP API. WithModTidy runs "go mod tidy" before launching so that
-	// go.sum is always up to date. Aspire injects:
-	//   - "ConnectionStrings__cache" so the API can dial Redis.
-	//   - "OTEL_EXPORTER_OTLP_*" env vars (via WithOtlpExporter) so traces,
-	//     metrics, and logs flow to the Aspire dashboard.
-	api := builder.AddGoApp("api", "./api").
+	// Keep Go modules current and send traces, metrics, and logs to the dashboard.
+	app := builder.AddGoApp("app", "./api").
 		WithModTidy().
-		WithReference(cache).
-		WaitFor(cache).
-		WithHttpEndpoint(&aspire.WithHttpEndpointOptions{Env: aspire.StringPtr("PORT")}).
+		WithHttpEndpoint(aspire.HttpEndpointEnv("PORT")).
+		WithHttpHealthCheck(aspire.HttpHealthCheckPath("/health")).
 		WithExternalHttpEndpoints().
 		WithOtlpExporter()
 
-	// Each call records its failure on the handle that it returns, so check every resource.
-	for _, resource := range []aspire.Resource{cache, api} {
-		if err := resource.Err(); err != nil {
-			log.Fatal(aspire.FormatError(err))
-		}
-	}
+	// Reference the app for Vite proxying and wait until it is healthy.
+	frontend := builder.AddViteApp("frontend", "./frontend", nil).
+		WithReference(app).
+		WaitFor(app)
 
-	app, err := builder.Build()
+	// Bundle the frontend into the app container for same-origin production serving.
+	app.PublishWithContainerFiles(frontend, "./static")
+	// {{#redis}}
+
+	// Expose cache connection properties, including CACHE_URI, to the app.
+	cache := builder.AddRedis("cache")
+	app.WithReference(cache).WaitFor(cache)
+	// {{/redis}}
+
+	application, err := builder.Build()
 	if err != nil {
 		log.Fatal(aspire.FormatError(err))
 	}
-	if err := app.Run(); err != nil {
+	if err := application.Run(); err != nil {
 		log.Fatal(aspire.FormatError(err))
 	}
 }

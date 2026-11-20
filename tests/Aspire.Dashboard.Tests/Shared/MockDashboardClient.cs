@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Runtime.CompilerServices;
+using System.Threading.Channels;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.DashboardService.Proto.V1;
@@ -34,10 +35,17 @@ public sealed class MockDashboardClient : IDashboardClient, IResourceRepositoryW
         state: KnownResourceState.Running);
 
     private readonly IReadOnlyList<ResourceViewModel>? _resources;
+    private readonly Func<Channel<IReadOnlyList<ResourceViewModelChange>>>? _resourceChannelProvider;
 
     public MockDashboardClient(IReadOnlyList<ResourceViewModel>? resources = null)
     {
         _resources = resources;
+    }
+
+    public MockDashboardClient(IReadOnlyList<ResourceViewModel> resources,
+        Func<Channel<IReadOnlyList<ResourceViewModelChange>>> resourceChannelProvider) : this(resources)
+    {
+        _resourceChannelProvider = resourceChannelProvider;
     }
 
     public bool IsEnabled => true;
@@ -79,7 +87,7 @@ public sealed class MockDashboardClient : IDashboardClient, IResourceRepositoryW
     {
         return Task.FromResult(new ResourceViewModelSubscription(
             [.. (_resources ?? [TestResource1])],
-            Test()
+            _resourceChannelProvider is { } provider ? provider().Reader.ReadAllAsync(cancellationToken) : Test()
         ));
     }
 

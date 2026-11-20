@@ -166,6 +166,23 @@ public sealed class ManageDataDialogTests : DashboardTestContext
     }
 
     [Fact]
+    public async Task IconCheckbox_CompletesKeyboardInitializationAndCleansUpOnDispose()
+    {
+        FluentUISetupHelpers.AddCommonDashboardServices(this);
+        SetupIconCheckboxJs();
+
+        Render<IconCheckbox>(parameters => parameters
+            .Add(p => p.CheckState, IconCheckboxState.Checked)
+            .Add(p => p.AccessibleLabel, "All data"));
+
+        await DisposeComponentsAsync();
+
+        // Cleanup only runs after initialization completed, so this proves the setup returns a result
+        // instead of leaving the invocation pending until bUnit faults it after DefaultWaitTimeout.
+        Assert.Contains(JSInterop.Invocations, invocation => invocation.Identifier == "disposeIconCheckboxKeyboard");
+    }
+
+    [Fact]
     public async Task IconCheckbox_DoesNotInvokeClickWhenDisabled()
     {
         var clickCount = 0;
@@ -330,8 +347,8 @@ public sealed class ManageDataDialogTests : DashboardTestContext
     private void SetupIconCheckboxJs()
     {
         var module = JSInterop.SetupModule("./Components/Controls/IconCheckbox.razor.js");
-        module.SetupVoid("initializeIconCheckboxKeyboard", _ => true);
-        module.SetupVoid("disposeIconCheckboxKeyboard", _ => true);
+        module.SetupVoid("initializeIconCheckboxKeyboard", _ => true).SetVoidResult();
+        module.SetupVoid("disposeIconCheckboxKeyboard", _ => true).SetVoidResult();
     }
 
     private static async Task ExpandResourceRowsAsync(IRenderedComponent<ManageDataDialog> cut, int expectedCount)

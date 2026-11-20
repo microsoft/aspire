@@ -7,14 +7,24 @@ using Microsoft.AspNetCore.Components;
 namespace Aspire.Dashboard.Components.Pages;
 
 /// <summary>
-/// The root URL. It redirects to the resources, with all resources selected, whose overview summarizes the app.
+/// The root URL, the dashboard's home. It shows every resource as a table that fills the page.
 /// </summary>
 /// <remarks>
-/// The root URL used to host the resources page. Links created by older tools, such as
-/// <c>/?resource=api</c> or <c>/?view=Graph</c>, are redirected to the equivalent view.
+/// <para>
+/// The table is the resource list of <see cref="Layout.ResourcesLayout"/> at full width, not a view of a
+/// selection, which is why it is its own page rather than part of the overview at <c>/resources</c>.
+/// </para>
+/// <para>
+/// Some requests for the root URL are for another page, and are redirected to it:
+/// links created by older tools, such as <c>/?resource=api</c> or <c>/?view=Graph</c>; and a dashboard without a
+/// resource service, which has no resources to list. The viewport width doesn't redirect: a narrow layout shows home
+/// as the open resource drawer, so resizing the window keeps the user on home.
+/// </para>
 /// </remarks>
 public sealed partial class Home : ComponentBase
 {
+    private string? _redirectedTo;
+
     [SupplyParameterFromQuery(Name = "resource")]
     public string? LegacyResourceName { get; set; }
 
@@ -27,10 +37,19 @@ public sealed partial class Home : ComponentBase
     [Inject]
     public required IDashboardClient DashboardClient { get; init; }
 
-    protected override void OnInitialized()
+    // Not OnInitialized: the query parameters are set again when only the query string of "/" changes.
+    protected override void OnParametersSet()
     {
         var url = TryGetLegacyRedirectUrl(LegacyResourceName, LegacyViewKind)
-            ?? (DashboardClient.IsEnabled ? DashboardUrls.ResourceListUrl() : DashboardUrls.StructuredLogsUrl());
+            ?? (!DashboardClient.IsEnabled ? DashboardUrls.StructuredLogsUrl() : null);
+
+        // The layout re-renders this page while the redirect is in flight. Ask for it once.
+        if (url is null || string.Equals(url, _redirectedTo, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _redirectedTo = url;
         NavigationManager.NavigateTo(url, new NavigationOptions { ReplaceHistoryEntry = true });
     }
 

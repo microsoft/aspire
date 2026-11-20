@@ -1,0 +1,41 @@
+﻿<configurations>
+  <preview>
+    <configuration>
+      <packageSources>
+        <add key="aspire-test" value="https://selected.example/v3/index.json" />
+      </packageSources>
+      <disabledPackageSources>
+        <clear />
+        <add key="aspire-staging" value="true" />
+      </disabledPackageSources>
+      <packageSourceMapping>
+        <clear />
+        <packageSource key="aspire-daily">
+          <package pattern="*" />
+          <package pattern="Aspire*" />
+        </packageSource>
+        <packageSource key="team-alias">
+          <package pattern="*" />
+          <package pattern="Aspire*" />
+        </packageSource>
+        <packageSource key="public">
+          <package pattern="*" />
+        </packageSource>
+        <packageSource key="aspire-test">
+          <package pattern="Aspire*" />
+        </packageSource>
+      </packageSourceMapping>
+    </configuration>
+  </preview>
+  <persisted>
+    <configuration>
+      <packageSources>
+        <clear />
+        <add key="aspire-daily" value="https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-microsoft-aspire-team/nuget/v3/index.json" />
+        <add key="team-alias" value="https://PKGS.DEV.AZURE.COM/dnceng/public/_packaging/darc-pub-microsoft-aspire-team/nuget/v3/index.json" />
+        <add key="public" value="https://api.nuget.org/v3/index.json" />
+        <add key="aspire-test" value="https://selected.example/v3/index.json" />
+      </packageSources>
+    </configuration>
+  </persisted>
+</configurations>

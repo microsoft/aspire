@@ -1,0 +1,12 @@
+﻿{
+  "appHost": {
+    "path": "apphost.cs"
+  },
+  "docs": {
+    "llmsTxtUrl": "https://local.example/llms.txt"
+  },
+  "custom": "keep",
+  "configSource": {
+    "optOut": true
+  }
+}

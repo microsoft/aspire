@@ -345,8 +345,9 @@ public partial class FilterDialog : IAsyncDisposable
         ValueChanged();
     }
 
-    private void SelectedValueChanged()
+    private void SelectedValueChanged(IEnumerable<SelectViewModel<FieldValue>> selectedValues)
     {
+        _selectedValue = selectedValues.FirstOrDefault();
         if (_selectedValue is not null)
         {
             _formModel.Value = _selectedValue.Name;

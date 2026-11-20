@@ -302,7 +302,7 @@ public partial class StructuredLogsTests : DashboardTestContext
         Services.GetRequiredService<DimensionManager>().InvokeOnViewportInformationChanged(viewport);
         var cut = Render<StructuredLogs>(builder => builder.Add(p => p.ViewportInformation, viewport));
         var grid = cut.FindComponent<AspireFluentDataGrid<LogSummary>>();
-        await grid.InvokeAsync(grid.Instance.RefreshDataAndRenderAsync);
+        await grid.InvokeAsync(() => grid.Instance.RefreshDataAsync(force: true));
 
         var result = await cut.InvokeAsync(() => grid.Instance.ItemsProvider!(new GridItemsProviderRequest<LogSummary>
         {
@@ -367,7 +367,7 @@ public partial class StructuredLogsTests : DashboardTestContext
         cut.WaitForAssertion(() =>
         {
             Assert.True(Services.GetRequiredService<PauseManager>().AreStructuredLogsPaused(out _));
-            Assert.Contains("Capture paused", cut.Markup);
+            Assert.Equal("Structured logs capture paused now", cut.Find(".pause-warning-message").TextContent.Trim());
         });
     }
 
@@ -401,7 +401,7 @@ public partial class StructuredLogsTests : DashboardTestContext
         var cut = FluentUISetupHelpers.RenderMessageBarProviderWithPage<StructuredLogs>(this, viewport);
 
         var grid = cut.FindComponent<AspireFluentDataGrid<LogSummary>>();
-        await grid.InvokeAsync(grid.Instance.RefreshDataAndRenderAsync);
+        await grid.InvokeAsync(() => grid.Instance.RefreshDataAsync(force: true));
         cut.WaitForAssertion(() => Assert.Equal(expectedMessageCount, cut.FindComponents<DashboardMessageBar>().Count));
     }
 
@@ -417,7 +417,7 @@ public partial class StructuredLogsTests : DashboardTestContext
         FluentUISetupHelpers.SetupFluentToolbar(this);
         FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
 
-        JSInterop.SetupVoid("focusElement", _ => true);
+        JSInterop.SetupVoid("focusElement", _ => true).SetVoidResult();
 
         FluentUISetupHelpers.AddCommonDashboardServices(this);
         Services.AddSingleton<ILogger<StructuredLogs>>(NullLogger<StructuredLogs>.Instance);

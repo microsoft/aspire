@@ -704,9 +704,13 @@ public sealed class RadiusDeployTests(ITestOutputHelper output)
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(6));
 
-            // MongoDB follows the legacy recipe path. Its Deployment and pods are labeled
-            // `resource=<name>`, unlike the Radius v2 recipes that use `radapp.io/resource`.
-            await auto.TypeAsync($"kubectl wait --for=condition=Available deployment -n {radiusNamespace} -l resource=docs --timeout=300s");
+            // The legacy MongoDB recipe labels only its pods with `resource=<name>`, not the
+            // Deployment metadata, so a Deployment label selector never matches this workload.
+            // https://github.com/radius-project/recipes/blob/main/local-dev/mongodatabases.bicep
+            // Legacy applications use "<environment namespace>-<application name>".
+            // RadiusInfrastructureBuilder emits the legacy application with name "app".
+            var mongoNamespace = $"{radiusNamespace}-app";
+            await auto.TypeAsync($"kubectl wait --for=condition=Ready pod -n {mongoNamespace} -l resource=docs --timeout=300s");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(6));
 
@@ -873,12 +877,12 @@ public sealed class RadiusDeployTests(ITestOutputHelper output)
             // `mongosh` runs inside the server pod and authenticates against the server's own user
             // database — the same question `rabbitmqctl authenticate_user` answers for the broker:
             // do the projected credentials actually work against what the recipe provisioned?
-            await auto.TypeAsync($"MONGO_POD=$(kubectl get pod -n {radiusNamespace} -l resource=docs -o jsonpath='{{.items[0].metadata.name}}') && echo \"Resolved mongo pod: $MONGO_POD\"");
+            await auto.TypeAsync($"MONGO_POD=$(kubectl get pod -n {mongoNamespace} -l resource=docs -o jsonpath='{{.items[0].metadata.name}}') && echo \"Resolved mongo pod: $MONGO_POD\"");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter);
 
             await auto.TypeAsync("for i in $(seq 1 12); do " +
-                $"if kubectl exec -n {radiusNamespace} \"$MONGO_POD\" -- " +
+                $"if kubectl exec -n {mongoNamespace} \"$MONGO_POD\" -- " +
                 // The recipe provisions the credentials as a root user, which lives in `admin`, not in
                 // the database mongosh connects to by default — omitting --authenticationDatabase
                 // makes a correct credential pair fail to authenticate.

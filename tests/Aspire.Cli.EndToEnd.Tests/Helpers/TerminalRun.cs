@@ -43,6 +43,19 @@ internal sealed class TerminalRun : IAsyncDisposable
         catch (Exception ex)
         {
             WriteTestOutput($"[TerminalRun] Could not capture diagnostics before shutdown: {ex.Message}");
+
+            // The usual cause is a foreground command that never returned, which also queued the capture command
+            // behind it. Suspend that command so its process tree and CLI logs are still captured.
+            try
+            {
+                WriteTestOutput("[TerminalRun] Suspending the foreground command to capture hung-command diagnostics.");
+                await _automator.SuspendHungCommandAndCaptureDiagnosticsAsync(
+                    CliE2ETestHelpers.IsRunningInCI ? CliE2EAutomatorHelpers.GetContainerWorkspacePath(_workspace) : null);
+            }
+            catch (Exception recoveryEx)
+            {
+                WriteTestOutput($"[TerminalRun] Could not capture hung-command diagnostics: {recoveryEx.Message}");
+            }
         }
 
         // Exit the terminal (best effort)

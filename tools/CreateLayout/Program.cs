@@ -4,6 +4,7 @@
 using System.CommandLine;
 using System.Diagnostics;
 using System.IO.Compression;
+using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Aspire.Shared;
@@ -57,9 +58,9 @@ public static class Program
             Description = "Create a .tar.gz archive after building on all platforms"
         };
 
-        var trayAppOption = new Option<string?>("--tray-app")
+        var trayOption = new Option<string?>("--tray-dir")
         {
-            Description = "Pre-built Aspire Tray.app directory (required for macOS; signed before layout assembly)"
+            Description = "Prepared native tray directory (.app directory on macOS; required for Windows, macOS, and glibc Linux)"
         };
 
         var verboseOption = new Option<bool>("--verbose")
@@ -67,9 +68,22 @@ public static class Program
             Description = "Enable verbose output"
         };
 
-        var windowsTrayOption = new Option<string?>("--tray-windows")
+        var dashboardOption = new Option<string?>("--dashboard")
         {
-            Description = "Pre-built Windows tray publish directory (required for Windows; signed before layout assembly)"
+            Description = "Prepared Dashboard publish directory (discovered from artifacts when omitted)"
+        };
+
+        var managedOption = new Option<string?>("--managed")
+        {
+            Description = "Prepared Aspire.Managed publish directory (discovered from artifacts when omitted)"
+        };
+        var terminalHostOption = new Option<string?>("--terminal-host")
+        {
+            Description = "Prepared TerminalHost publish directory (discovered from artifacts when omitted)"
+        };
+        var appHostServerOption = new Option<string?>("--apphost-server")
+        {
+            Description = "Prepared AppHost Server publish directory (discovered from artifacts when omitted)"
         };
 
         var rootCommand = new RootCommand("CreateLayout - Build Aspire bundle layout for distribution");
@@ -79,8 +93,11 @@ public static class Program
         rootCommand.Options.Add(configurationOption);
         rootCommand.Options.Add(bundleVersionOption);
         rootCommand.Options.Add(archiveOption);
-        rootCommand.Options.Add(trayAppOption);
-        rootCommand.Options.Add(windowsTrayOption);
+        rootCommand.Options.Add(trayOption);
+        rootCommand.Options.Add(dashboardOption);
+        rootCommand.Options.Add(managedOption);
+        rootCommand.Options.Add(terminalHostOption);
+        rootCommand.Options.Add(appHostServerOption);
         rootCommand.Options.Add(verboseOption);
 
         rootCommand.SetAction(async (parseResult, cancellationToken) =>
@@ -96,7 +113,8 @@ public static class Program
             try
             {
                 using var builder = new LayoutBuilder(outputPath, artifactsPath, rid, configuration, version, verbose,
-                    parseResult.GetValue(trayAppOption), parseResult.GetValue(windowsTrayOption));
+                    parseResult.GetValue(trayOption), parseResult.GetValue(dashboardOption), parseResult.GetValue(managedOption),
+                    parseResult.GetValue(terminalHostOption), parseResult.GetValue(appHostServerOption));
                 await builder.BuildAsync().ConfigureAwait(false);
 
                 if (createArchive)
@@ -133,10 +151,14 @@ internal sealed class LayoutBuilder : IDisposable
     private readonly string _configuration;
     private readonly string _version;
     private readonly bool _verbose;
-    private readonly string? _trayAppPath;
-    private readonly string? _windowsTrayPath;
+    private readonly string? _trayDirectory;
+    private readonly string? _dashboardPath;
+    private readonly string? _managedPath;
+    private readonly string? _terminalHostPath;
+    private readonly string? _appHostServerPath;
 
-    public LayoutBuilder(string outputPath, string artifactsPath, string rid, string configuration, string version, bool verbose, string? trayAppPath, string? windowsTrayPath)
+    public LayoutBuilder(string outputPath, string artifactsPath, string rid, string configuration, string version, bool verbose,
+        string? trayDirectory, string? dashboardPath, string? managedPath, string? terminalHostPath, string? appHostServerPath)
     {
         _outputPath = Path.GetFullPath(outputPath);
         _artifactsPath = Path.GetFullPath(artifactsPath);
@@ -144,8 +166,11 @@ internal sealed class LayoutBuilder : IDisposable
         _configuration = configuration;
         _version = version;
         _verbose = verbose;
-        _trayAppPath = trayAppPath;
-        _windowsTrayPath = windowsTrayPath;
+        _trayDirectory = trayDirectory;
+        _dashboardPath = dashboardPath;
+        _managedPath = managedPath;
+        _terminalHostPath = terminalHostPath;
+        _appHostServerPath = appHostServerPath;
     }
 
     public void Dispose()
@@ -180,20 +205,46 @@ internal sealed class LayoutBuilder : IDisposable
 
     internal void CopyTray()
     {
+        if (_rid == "linux-musl-x64")
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_trayDirectory))
+        {
+            throw new InvalidOperationException($"The {_rid} bundle requires --tray-dir pointing to the prepared native tray directory (.app directory on macOS).");
+        }
+
+        if (_rid is "linux-x64" or "linux-arm64")
+        {
+            LinuxTrayPayload.Validate(_trayDirectory, _rid);
+            if (OperatingSystem.IsWindows())
+            {
+                throw new InvalidOperationException("Linux tray bundles must be assembled on Unix to preserve executable permissions.");
+            }
+            var destination = Path.Combine(_outputPath, "tray");
+            Directory.CreateDirectory(destination);
+            foreach (var name in new[] { LinuxTrayPayload.ExecutableName, LinuxTrayPayload.IconName })
+            {
+                var source = Path.Combine(_trayDirectory, name);
+                var target = Path.Combine(destination, name);
+                File.Copy(source, target, overwrite: true);
+                File.SetUnixFileMode(target, File.GetUnixFileMode(source));
+            }
+            Log("Copied Linux tray to tray/");
+            return;
+        }
+
         if (_rid.StartsWith("win-", StringComparison.Ordinal))
         {
-            if (string.IsNullOrWhiteSpace(_windowsTrayPath))
-            {
-                throw new InvalidOperationException("The Windows bundle requires --tray-windows pointing to the pre-built native tray publish directory.");
-            }
-            WindowsTrayPayload.Validate(_windowsTrayPath, _rid);
+            WindowsTrayPayload.Validate(_trayDirectory, _rid);
             var destination = Path.Combine(_outputPath, "tray");
             Directory.CreateDirectory(destination);
             // Only the explicitly produced runtime payload is shipped, never PDBs,
             // managed build intermediates, or logs from a previous smoke run.
             foreach (var name in new[] { WindowsTrayPayload.ExecutableName, WindowsTrayPayload.IconName })
             {
-                File.Copy(Path.Combine(_windowsTrayPath, name), Path.Combine(destination, name), overwrite: true);
+                File.Copy(Path.Combine(_trayDirectory, name), Path.Combine(destination, name), overwrite: true);
             }
             Log("Copied Windows tray to tray/");
             return;
@@ -204,21 +255,16 @@ internal sealed class LayoutBuilder : IDisposable
             return;
         }
 
-        if (string.IsNullOrWhiteSpace(_trayAppPath))
-        {
-            throw new InvalidOperationException("The macOS bundle requires --tray-app pointing to the pre-built Aspire Tray.app.");
-        }
-
         foreach (var relativePath in new[] { "Contents/MacOS/aspire-tray", "Contents/Info.plist", "Contents/Resources/Aspire.icns", "Contents/_CodeSignature/CodeResources" })
         {
-            var path = Path.Combine(_trayAppPath, relativePath);
+            var path = Path.Combine(_trayDirectory, relativePath);
             if (!File.Exists(path))
             {
                 throw new InvalidOperationException($"Required macOS tray payload not found: {path}. Publish the tray app before creating the bundle.");
             }
         }
 
-        var executablePath = Path.Combine(_trayAppPath, "Contents", "MacOS", "aspire-tray");
+        var executablePath = Path.Combine(_trayDirectory, "Contents", "MacOS", "aspire-tray");
         if (OperatingSystem.IsWindows())
         {
             throw new InvalidOperationException("macOS tray bundles must be assembled on a Unix host to preserve executable permissions.");
@@ -230,15 +276,15 @@ internal sealed class LayoutBuilder : IDisposable
 
         // Copy the sealed app verbatim, including hidden files, resources and
         // _CodeSignature. Reconstructing the app from its executable invalidates signing.
-        CopyDirectory(_trayAppPath, Path.Combine(_outputPath, "tray", "Aspire Tray.app"), excludeSymbols: false);
+        CopyDirectory(_trayDirectory, Path.Combine(_outputPath, "tray", "Aspire Tray.app"), excludeSymbols: false);
         Log("Copied Aspire Tray.app to tray/");
     }
 
-    private void CopyManaged()
+    internal void CopyManaged()
     {
         Log("Copying aspire-managed...");
 
-        var managedPublishPath = FindPublishPath("Aspire.Managed", "net10.0");
+        var managedPublishPath = ResolvePublishPath("Aspire.Managed", "--managed", _managedPath, requireRidSpecific: false);
         if (managedPublishPath is null)
         {
             throw new InvalidOperationException("Aspire.Managed publish output not found.");
@@ -265,7 +311,7 @@ internal sealed class LayoutBuilder : IDisposable
 
     internal void CopyTerminalHost()
     {
-        var publishPath = FindPublishPath("Aspire.TerminalHost", "net11.0", requireRidSpecific: true)
+        var publishPath = ResolvePublishPath("Aspire.TerminalHost", "--terminal-host", _terminalHostPath, requireRidSpecific: true)
             ?? throw new InvalidOperationException("Aspire.TerminalHost RID-specific publish output not found.");
         foreach (var file in TerminalHostPayload.GetRequiredFiles(_rid))
         {
@@ -293,7 +339,7 @@ internal sealed class LayoutBuilder : IDisposable
 
     internal void CopyAppHostServer()
     {
-        var publishPath = FindPublishPath("Aspire.Hosting.Native.Server", "net11.0", requireRidSpecific: true)
+        var publishPath = ResolvePublishPath("Aspire.Hosting.Native.Server", "--apphost-server", _appHostServerPath, requireRidSpecific: true)
             ?? throw new InvalidOperationException("AppHost Server v2 publish output not found.");
         var extension = _rid.StartsWith("win-", StringComparison.Ordinal) ? ".exe" : "";
         var source = Path.Combine(publishPath, "Aspire.Hosting.Native.Server" + extension);
@@ -316,12 +362,24 @@ internal sealed class LayoutBuilder : IDisposable
     {
         Log("Copying Native AOT Dashboard...");
 
+        if (_dashboardPath is not null && string.IsNullOrWhiteSpace(_dashboardPath))
+        {
+            throw new InvalidOperationException("--dashboard requires a nonempty publish directory.");
+        }
+
         // A non-RID publish contains a framework-dependent apphost instead of the native Dashboard.
         // Only RID-specific output can be used here.
-        var dashboardPublishPath = FindPublishPath("Aspire.Dashboard", "net11.0", requireRidSpecific: true);
+        var dashboardFramework = GetComponentTargetFramework("Aspire.Dashboard");
+        var dashboardPublishPath = _dashboardPath ?? FindPublishPath("Aspire.Dashboard", dashboardFramework, requireRidSpecific: true);
         if (dashboardPublishPath is null)
         {
-            throw new InvalidOperationException("Aspire.Dashboard publish output not found.");
+            throw new InvalidOperationException(
+                $"Aspire.Dashboard publish output not found for RID '{_rid}', configuration '{_configuration}'. " +
+                $"Searched: {string.Join(", ", GetRidSpecificPublishPaths("Aspire.Dashboard", dashboardFramework))}");
+        }
+        if (!Directory.Exists(dashboardPublishPath))
+        {
+            throw new InvalidOperationException($"Dashboard publish directory not found at {dashboardPublishPath}");
         }
 
         var isWindows = _rid.StartsWith("win", StringComparison.OrdinalIgnoreCase);
@@ -455,19 +513,36 @@ internal sealed class LayoutBuilder : IDisposable
         return archivePath;
     }
 
+    // Versions.props -> SDK-generated assembly metadata -> standalone discovery.
+    // Bundle.proj passes explicit paths instead, keeping copying aligned with validation and signing.
+    internal static string GetComponentTargetFramework(string projectName) =>
+        typeof(LayoutBuilder).Assembly.GetCustomAttributes<AssemblyMetadataAttribute>()
+            .SingleOrDefault(attribute => attribute.Key == $"{projectName}.TargetFramework")?.Value
+        ?? throw new InvalidOperationException($"Missing target framework metadata for {projectName}.");
+
+    private string? ResolvePublishPath(string projectName, string option, string? selectedPath, bool requireRidSpecific)
+    {
+        if (selectedPath is null)
+        {
+            return FindPublishPath(projectName, GetComponentTargetFramework(projectName), requireRidSpecific);
+        }
+        if (string.IsNullOrWhiteSpace(selectedPath))
+        {
+            throw new InvalidOperationException($"{option} requires a nonempty publish directory.");
+        }
+        if (!Directory.Exists(selectedPath))
+        {
+            throw new InvalidOperationException($"{projectName} publish directory not found at {selectedPath}");
+        }
+
+        return selectedPath;
+    }
+
     internal string? FindPublishPath(string projectName, string targetFramework, bool requireRidSpecific = false)
     {
         // Only use the requested configuration so stale output from another build cannot be bundled.
         // Prefer RID-specific publish paths over non-RID output.
-        var ridSpecificSearchPaths = new[]
-        {
-            // PlatformName-scoped output used by RID packaging and signing.
-            Path.Combine(_artifactsPath, "bin", projectName, _rid, _configuration, targetFramework, _rid, "publish"),
-            // RID-specific self-contained publish output (preferred for Aspire.Managed)
-            Path.Combine(_artifactsPath, "bin", projectName, _configuration, targetFramework, _rid, "publish"),
-            // Native AOT output
-            Path.Combine(_artifactsPath, "bin", projectName, _configuration, targetFramework, _rid, "native"),
-        };
+        var ridSpecificSearchPaths = GetRidSpecificPublishPaths(projectName, targetFramework);
 
         var searchPaths = requireRidSpecific
             ? ridSpecificSearchPaths
@@ -488,6 +563,16 @@ internal sealed class LayoutBuilder : IDisposable
 
         return null;
     }
+
+    private string[] GetRidSpecificPublishPaths(string projectName, string targetFramework) =>
+    [
+        // PlatformName-scoped output used by RID packaging and signing.
+        Path.Combine(_artifactsPath, "bin", projectName, _rid, _configuration, targetFramework, _rid, "publish"),
+        // RID-specific self-contained publish output (preferred for Aspire.Managed).
+        Path.Combine(_artifactsPath, "bin", projectName, _configuration, targetFramework, _rid, "publish"),
+        // Native AOT output.
+        Path.Combine(_artifactsPath, "bin", projectName, _configuration, targetFramework, _rid, "native"),
+    ];
 
     private string? FindDcpPath()
     {

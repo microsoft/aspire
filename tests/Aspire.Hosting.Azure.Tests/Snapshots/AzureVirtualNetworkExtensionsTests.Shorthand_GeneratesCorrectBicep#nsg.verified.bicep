@@ -54,6 +54,36 @@ resource web_nsg_deny_inbound_Internet 'Microsoft.Network/networkSecurityGroups/
   parent: web_nsg
 }
 
+resource web_nsg_allow_inbound_10_0_2_0_24 'Microsoft.Network/networkSecurityGroups/securityRules@2025-05-01' = {
+  name: 'allow-inbound-10.0.2.0-24'
+  properties: {
+    access: 'Allow'
+    destinationAddressPrefix: '*'
+    destinationPortRange: '*'
+    direction: 'Inbound'
+    priority: 400
+    protocol: '*'
+    sourceAddressPrefix: '10.0.2.0/24'
+    sourcePortRange: '*'
+  }
+  parent: web_nsg
+}
+
+resource web_nsg_allow_outbound_2001_db8___64____0 'Microsoft.Network/networkSecurityGroups/securityRules@2025-05-01' = {
+  name: 'allow-outbound-2001-db8---64----0'
+  properties: {
+    access: 'Allow'
+    destinationAddressPrefix: '::/0'
+    destinationPortRange: '*'
+    direction: 'Outbound'
+    priority: 500
+    protocol: '*'
+    sourceAddressPrefix: '2001:db8::/64'
+    sourcePortRange: '*'
+  }
+  parent: web_nsg
+}
+
 output id string = web_nsg.id
 
 output name string = web_nsg.name

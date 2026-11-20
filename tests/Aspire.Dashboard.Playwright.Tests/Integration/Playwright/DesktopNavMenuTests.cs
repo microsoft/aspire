@@ -26,10 +26,10 @@ public sealed class DesktopNavMenuTests : PlaywrightTestsBase<DashboardServerFix
         {
             await page.GotoAsync("/");
 
-            await page.WaitForURLAsync(url => new Uri(url).AbsolutePath.StartsWith("/resources", StringComparison.Ordinal));
-            await Assertions.Expect(page.Locator(".resource-card").First).ToBeVisibleAsync();
+            // The dashboard opens on its home page: the list of all resources, filling the page, with no view selected.
+            await Assertions.Expect(page.Locator(".resources-layout.pane-full-canvas")).ToBeVisibleAsync();
             await Assertions.Expect(page.GetByRole(AriaRole.Tablist, new() { Name = Resources.Layout.ResourceTabsLandmark })).ToBeVisibleAsync();
-            await AssertActiveItemAsync(Resources.Layout.ResourceTabOverview);
+            await Assertions.Expect(page.Locator("fluent-tab[aria-selected='true']:visible")).ToHaveCountAsync(0);
 
             var navigationCount = await page.EvaluateAsync<int>("() => performance.getEntriesByType('navigation').length");
 
@@ -44,7 +44,7 @@ public sealed class DesktopNavMenuTests : PlaywrightTestsBase<DashboardServerFix
                 var tab = page.GetByRole(AriaRole.Tab, new PageGetByRoleOptions { Name = label, Exact = true });
                 var tabBounds = await tab.BoundingBoxAsync();
                 Assert.NotNull(tabBounds);
-                await page.Mouse.ClickAsync(tabBounds.X + tabBounds.Width / 2, tabBounds.Y + tabBounds.Height / 2);
+                await ClickResourceTabAndWaitForRenderAsync(page, () => page.Mouse.ClickAsync(tabBounds.X + tabBounds.Width / 2, tabBounds.Y + tabBounds.Height / 2));
                 await page.WaitForFunctionAsync(
                     "path => window.location.pathname.startsWith(path)",
                     path);
@@ -55,7 +55,7 @@ public sealed class DesktopNavMenuTests : PlaywrightTestsBase<DashboardServerFix
 
             async Task AssertActiveItemAsync(string expectedName)
             {
-                var activeItem = page.Locator("fluent-tab[aria-selected='true']");
+                var activeItem = page.Locator("fluent-tab[aria-selected='true']:visible");
                 await Assertions.Expect(activeItem).ToHaveCountAsync(1);
                 await Assertions.Expect(activeItem).ToHaveAccessibleNameAsync(expectedName);
             }
@@ -68,7 +68,8 @@ public sealed class DesktopNavMenuTests : PlaywrightTestsBase<DashboardServerFix
     {
         await RunTestAsync(async page =>
         {
-            await page.GotoAsync("/resources");
+            // A page with content: the dashboard's start page, /resources, opens on the full-page list instead.
+            await page.GotoAsync("/consolelogs");
             await page.EvaluateAsync($"localStorage.setItem('{BrowserStorageKeys.ResourcePaneCollapsed}', 'false')");
             await page.ReloadAsync();
 

@@ -133,6 +133,112 @@ test("discovery still uses environment credentials when gh is unavailable", asyn
   ]);
 });
 
+test("standalone discovery uses the login-shell executable for status and token reads", async () => {
+  for (const platform of ["darwin", "linux"]) {
+    const calls = [];
+    const env = { PATH: "/usr/bin:/bin", SHELL: "/bin/zsh", GH_TOKEN: "injected-token" };
+    const candidates = await detectCandidates({
+      env,
+      platform,
+      run: async (command, args, options) => {
+        calls.push({ command, args });
+        assert.deepEqual(options, { timeout: 8000, env: { PATH: "/usr/bin:/bin", SHELL: "/bin/zsh" } });
+        if (command === "gh") throw Object.assign(new Error("missing"), { code: "ENOENT" });
+        if (command === "/bin/zsh") return { stdout: "/Users/octo/CLI Tools/gh\n" };
+        assert.equal(command, "/Users/octo/CLI Tools/gh");
+        return { stdout: args[1] === "status"
+          ? JSON.stringify({ hosts: { "github.com": [{ host: "github.com", login: "octo", state: "success" }] } })
+          : "stored-token\n" };
+      },
+    });
+    assert.deepEqual(calls, [
+      { command: "gh", args: ["auth", "status", "--json", "hosts"] },
+      { command: "/bin/zsh", args: ["-lc", 'command -v "$1"', "canvas-cli", "gh"] },
+      { command: "/Users/octo/CLI Tools/gh", args: ["auth", "status", "--json", "hosts"] },
+      { command: "/Users/octo/CLI Tools/gh", args: ["auth", "token", "--hostname", "github.com", "--user", "octo"] },
+    ]);
+    assert.deepEqual(candidates.map(({ source, token }) => ({ source, token })), [
+      { source: "gh", token: "stored-token" },
+      { source: "env", token: "injected-token" },
+    ]);
+    assert.equal(env.GH_TOKEN, "injected-token");
+  }
+});
+
+test("login-shell discovery preserves legacy status support", async () => {
+  for (const [platform, shell] of [["darwin", "/bin/zsh"], ["linux", "/bin/sh"]]) {
+    const calls = [];
+    const candidates = await detectCandidates({
+      env: { SHELL: shell },
+      platform,
+      run: async (command, args) => {
+        calls.push({ command, args });
+        if (command === "gh") throw Object.assign(new Error("missing"), { code: "ENOENT" });
+        if (command === shell) return { stdout: "/opt/tools/gh\n" };
+        assert.equal(command, "/opt/tools/gh");
+        if (args.includes("--json")) {
+          throw Object.assign(new Error("unsupported"), { code: 1, stderr: "unknown flag: --json" });
+        }
+        return { stdout: args[1] === "status" ? "Logged in to github.com account octo (keyring)\n" : "stored-token\n" };
+      },
+    });
+    assert.equal(candidates[0].token, "stored-token");
+    assert.deepEqual(calls.map(({ command }) => command), ["gh", shell, "/opt/tools/gh", "/opt/tools/gh", "/opt/tools/gh"]);
+  }
+});
+
+test("missing gh reports executable discovery failure rather than suggesting login", async () => {
+  for (const platform of ["darwin", "linux", "win32"]) {
+    const calls = [];
+    await assert.rejects(detectCandidates({
+      env: { SHELL: "/test/login-shell" },
+      platform,
+      run: async (command) => {
+        calls.push(command);
+        throw Object.assign(new Error("private details"), { code: command === "gh" ? "ENOENT" : 1, stdout: "" });
+      },
+    }), { code: "gh_cli_missing" });
+    assert.deepEqual(calls, platform === "win32" ? ["gh"] : ["gh", "/test/login-shell"]);
+  }
+});
+
+test("login-shell lookup rejects ambiguous output and keeps independent credentials", async () => {
+  for (const stdout of ["", "gh", "gh is an alias", "/opt/bin/gh\nstartup output", "/opt/bin/gh\0"]) {
+    const diagnostics = [];
+    const candidates = await detectCandidates({
+      env: { GH_TOKEN: "env-token", SHELL: "/bin/zsh" },
+      platform: "darwin",
+      diagnostics,
+      run: async (command) => {
+        if (command === "gh") throw Object.assign(new Error("missing"), { code: "ENOENT" });
+        assert.equal(command, "/bin/zsh");
+        return { stdout };
+      },
+    });
+    assert.deepEqual(candidates.map(({ source, token }) => ({ source, token })), [{ source: "env", token: "env-token" }]);
+    assert.equal(diagnostics.length, 1);
+    assert.equal(diagnostics[0].code, "gh_cli_lookup_failed");
+  }
+});
+
+test("login-shell lookup failures surface safe diagnostics", async () => {
+  for (const shell of ["relative-shell", "/bin/zsh"]) {
+    await assert.rejects(detectCandidates({
+      env: { SHELL: shell },
+      platform: "darwin",
+      run: async (command) => {
+        if (command === "gh") throw Object.assign(new Error("missing"), { code: "ENOENT" });
+        throw Object.assign(new Error("private shell error"), { code: 2, stderr: "private details" });
+      },
+    }), (error) => {
+      assert.equal(error.code, "gh_cli_lookup_failed");
+      assert.match(error.message, /^Unable to locate GitHub CLI/);
+      assert.equal(error.message.includes("private"), false);
+      return true;
+    });
+  }
+});
+
 test("Windows sidebar discovery restores missing APPDATA for account and token reads", async () => {
   const env = { PATH: "cli-path", USERPROFILE: "C:\\Users\\octo" };
   const calls = [];
@@ -219,7 +325,7 @@ test("Windows discovery surfaces known-folder lookup failures", async () => {
         if (fail) throw new Error("Known-folder lookup failed");
         return { stdout: "\r\n" };
       },
-    }), /Unable to locate Windows application data/);
+    }), { code: "gh_cli_discovery_failed", message: /Unable to locate Windows application data/ });
   }
 });
 
@@ -325,7 +431,7 @@ test("unexpected CLI failures surface a safe diagnostic rather than using legacy
       calls.push(args);
       throw Object.assign(new Error("private error"), { code: 2, stderr: "private details" });
     },
-  }), /GitHub CLI account discovery failed/);
+  }), { code: "gh_cli_discovery_failed", message: /GitHub CLI account discovery failed/ });
   assert.deepEqual(calls, [["auth", "status", "--json", "hosts"]]);
 });
 
@@ -376,6 +482,7 @@ function resetAccountEnv(extra) {
   delete process.env.GITHUB_TOKEN;
   delete process.env.GH_HOST;
   process.env.PATH = "";
+  process.env.SHELL = "/nonexistent/aspire-team-app-test-shell";
   Object.assign(process.env, extra);
 }
 

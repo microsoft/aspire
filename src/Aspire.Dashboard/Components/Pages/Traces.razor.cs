@@ -157,7 +157,7 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
         // Updating the total item count as a field doesn't work because it isn't updated with the grid.
         // The workaround is to explicitly update and refresh the control.
         _totalItemsCount = traces.TotalItemCount;
-        _totalItemsFooter.UpdateDisplayedCount(_totalItemsCount, _displayedItemCount);
+        _totalItemsFooter?.UpdateDisplayedCount(_totalItemsCount, _displayedItemCount);
 
         return GridItemsProviderResult.From(traces.Items, virtualizedTraceCount);
     }
@@ -179,6 +179,10 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
         PageViewModel = new TracesPageViewModel { SelectedResource = _allResource, SelectedSpanType = _spanTypes[0] };
 
         UpdateResources();
+        if (ResourcesLayout is { } layout)
+        {
+            layout.ResourcesChanged += OnLayoutResourcesChanged;
+        }
         _resourcesSubscription = TelemetryRepository.OnNewResources(callback: () => InvokeAsync(workItem: () =>
         {
             UpdateResources();
@@ -263,15 +267,28 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
 
     }
 
-    private string? PauseText => PauseManager.AreTracesPaused(out var startTime)
-        ? string.Format(
-            CultureInfo.CurrentCulture,
-            Loc[nameof(Dashboard.Resources.Traces.PauseInProgressText)],
-            FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, startTime.Value))
-        : null;
+    private DateTime? PausedAt => PauseManager.AreTracesPaused(out var startTime) ? startTime : null;
+
+    private void OnLayoutResourcesChanged()
+    {
+        if (ResourcesLayout?.GetSelectionTelemetryKeys(SelectedResourceNames) is not { } resourceKeys ||
+            TracesViewModel.ResourceKeys is { } current && current.SequenceEqual(resourceKeys))
+        {
+            return;
+        }
+
+        // The layout can finish loading its resource snapshot after the grid's first query.
+        TracesViewModel.ResourceKeys = resourceKeys;
+        TracesViewModel.ClearData();
+        _ = InvokeAsync(_dataGrid.SafeRefreshDataAsync);
+    }
 
     public void Dispose()
     {
+        if (ResourcesLayout is { } layout)
+        {
+            layout.ResourcesChanged -= OnLayoutResourcesChanged;
+        }
         _cts.Cancel();
         _cts.Dispose();
         _resourcesSubscription?.Dispose();

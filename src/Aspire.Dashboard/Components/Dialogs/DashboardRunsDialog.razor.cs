@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Dashboard.Components.Controls;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
@@ -86,7 +85,12 @@ public partial class DashboardRunsDialog
 
     private string FormatRunOption(DashboardRunDescriptor run) => run.IsCurrent
         ? Loc[nameof(LayoutResources.DashboardRunSelectCurrent)]
-        : DashboardRunSelect.FormatRunAge(run.StartedAtUtc, TimeProvider.GetUtcNow(), Loc);
+        : DashboardUIHelpers.FormatTimeAgo(
+            TimeProvider.GetUtcNow() - run.StartedAtUtc,
+            Loc,
+            useShortFormat: false,
+            lessThanMinuteText: Loc[nameof(LayoutResources.DashboardRunSelectMomentAgo)]);
 
-    private string FormatRunDate(DateTimeOffset startedAtUtc) => FormatHelpers.FormatDateTime(TimeProvider, startedAtUtc.UtcDateTime);
+    // The tooltip of a recording, whose label is how long ago it started ("5 minutes ago"), so it gives only the exact time.
+    private string FormatRunTooltip(DateTimeOffset startedAtUtc) => FormatHelpers.FormatTooltipDateTime(TimeProvider, startedAtUtc);
 }

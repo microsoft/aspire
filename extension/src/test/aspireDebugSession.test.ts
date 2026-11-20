@@ -3554,6 +3554,64 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
         ]);
     });
 
+    function createParentDebugSessionForCleanup() {
+        return {
+            id: 'aspire-session',
+            type: 'aspire',
+            name: 'Aspire',
+            workspaceFolder: undefined,
+            configuration: { type: 'aspire', request: 'launch', name: 'Aspire', program: '/workspace/apphost.cs', command: 'run' },
+            customRequest: sinon.stub(),
+            getDebugProtocolBreakpoint: sinon.stub(),
+        };
+    }
+
+    test('stopDebugging waits for tracked resource cleanup before resolving', async () => {
+        sinon.stub(vscode.debug, 'stopDebugging').resolves();
+        const aspireDebugSession = new AspireDebugSession(
+            createParentDebugSessionForCleanup() as unknown as vscode.DebugSession,
+            {} as any,
+            {} as any,
+            { isDebugConfigEnvironmentLoggingEnabled: () => false } as any,
+            () => { });
+        let finishCleanup!: () => void;
+        aspireDebugSession.trackPendingResourceCleanup('deno', () => new Promise<void>(resolve => { finishCleanup = resolve; }));
+
+        let stopped = false;
+        const shutdown = aspireDebugSession.stopDebugging().then(() => { stopped = true; });
+        await new Promise(resolve => setImmediate(resolve));
+        assert.strictEqual(stopped, false, 'Shutdown resolved while resource cleanup was still running');
+
+        finishCleanup();
+        await shutdown;
+        assert.strictEqual(stopped, true);
+    });
+
+    test('stopDebugging keeps reporting and retrying resource cleanup until the process is confirmed gone', async () => {
+        sinon.stub(vscode.debug, 'stopDebugging').resolves();
+        const aspireDebugSession = new AspireDebugSession(
+            createParentDebugSessionForCleanup() as unknown as vscode.DebugSession,
+            {} as any,
+            {} as any,
+            { isDebugConfigEnvironmentLoggingEnabled: () => false } as any,
+            () => { });
+        let runtimeAlive = true;
+        const cleanup = sinon.stub().callsFake(() => runtimeAlive
+            ? Promise.reject(new Error('Deno AppHost process 21 was still running after cleanup.'))
+            : Promise.resolve());
+        aspireDebugSession.trackPendingResourceCleanup('deno', cleanup);
+        await new Promise(resolve => setImmediate(resolve));
+
+        // Two consecutive stops while the runtime stays alive: each runs the cleanup again and reports it.
+        await assert.rejects(aspireDebugSession.stopDebugging(), /Deno AppHost process 21 was still running after cleanup\./);
+        await assert.rejects(aspireDebugSession.stopDebugging(), /Deno AppHost process 21 was still running after cleanup\./);
+        assert.strictEqual(cleanup.callCount, 3);
+
+        runtimeAlive = false;
+        await aspireDebugSession.stopDebugging();
+        assert.strictEqual(cleanup.callCount, 4);
+    });
+
     test('stopDebugging cancels pending launch work before awaiting its completion', async () => {
         const parentDebugSession = {
             id: 'aspire-session',
@@ -5931,6 +5989,9 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
             markLaunchAttemptFailureRecorded: () => {
                 throw new Error('The successful restart should not record a launch failure.');
             },
+            markLaunchAttemptCanceled: () => {
+                throw new Error('The successful restart should not cancel its launch.');
+            },
             tryReserveExternalOperation: () => {
                 throw new Error('The run restart should not reserve an external operation.');
             },
@@ -6071,6 +6132,9 @@ var builder = Aspire.Hosting.DistributedApplication.CreateBuilder(args);
             },
             markLaunchAttemptFailureRecorded: () => {
                 throw new Error('The successful restart should not record a launch failure.');
+            },
+            markLaunchAttemptCanceled: () => {
+                throw new Error('The successful restart should not cancel its launch.');
             },
             tryReserveExternalOperation: () => {
                 throw new Error('The matching launch token already owns this operation.');

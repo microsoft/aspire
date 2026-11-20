@@ -233,6 +233,26 @@ public class PathNormalizerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void ResolveToFilesystemPath_ResolvesCombinedCaseAndNormalizationAlias()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var testRoot = workspace.WorkspaceRoot.CreateSubdirectory("combined-alias");
+        var onDisk = testRoot.CreateSubdirectory("Caf\u00E9");
+        var alias = Path.Combine(testRoot.FullName, "CAFE\u0301");
+        Assert.SkipUnless(
+            Directory.Exists(alias),
+            "The filesystem does not alias spellings that differ in both case and Unicode normalization.");
+
+        var enumeratedPath = Assert.Single(Directory.EnumerateDirectories(testRoot.FullName));
+        Assert.Equal(
+            PathNormalizer.ResolveSymlinks(enumeratedPath),
+            PathNormalizer.ResolveToFilesystemPath(alias));
+        Assert.True(PathNormalizer.TryResolveToFilesystemPath(alias, out var resolvedPath));
+        Assert.Equal(Path.GetFileName(enumeratedPath), Path.GetFileName(resolvedPath));
+        Assert.True(PathNormalizer.TryResolveToFilesystemPath(onDisk.FullName, out _));
+    }
+
+    [Fact]
     public void ResolveToFilesystemPath_DoesNotChooseBetweenConflictingCaseAndNormalizationMatches()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

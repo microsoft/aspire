@@ -11,13 +11,13 @@ namespace Aspire.Hosting.Azure;
 /// <remarks>
 /// When <see cref="OwnerResource"/> is non-<see langword="null"/>, the role assignments are granted to
 /// the managed identity (<see cref="IdentityResource"/>) owned by that Aspire resource. When
-/// <see cref="OwnerResource"/> is <see langword="null"/>, the role assignments are global and are
-/// granted to the deployment principal.
+/// <see cref="OwnerResource"/> is <see langword="null"/>, the principal is supplied by
+/// <paramref name="configureInfrastructure"/>, for example the deployment principal or an externally owned identity.
 /// </remarks>
 /// <param name="name">The name of the resource in the distributed application model.</param>
 /// <param name="targetAzureResource">The Azure resource that the roles are assigned on.</param>
-/// <param name="ownerResource">The Aspire resource that owns this set of role assignments, or <see langword="null"/> for global role assignments granted to the deployment principal.</param>
-/// <param name="identityResource">The user-assigned managed identity whose principal receives the role assignments, or <see langword="null"/> for global role assignments granted to the deployment principal.</param>
+/// <param name="ownerResource">The Aspire resource that owns this set of role assignments, or <see langword="null"/> when the principal is supplied by the infrastructure callback.</param>
+/// <param name="identityResource">The user-assigned managed identity whose principal receives the role assignments, or <see langword="null"/> when the principal is supplied by the infrastructure callback.</param>
 /// <param name="configureInfrastructure">Callback to configure the Azure role assignment resources.</param>
 public sealed class AzureRoleAssignmentResource(
     string name,
@@ -34,7 +34,7 @@ public sealed class AzureRoleAssignmentResource(
 
     /// <summary>
     /// Gets the Aspire resource that owns this set of role assignments,
-    /// or <see langword="null"/> for global role assignments that are granted to the deployment principal.
+    /// or <see langword="null"/> when the principal is supplied by the infrastructure callback.
     /// </summary>
     /// <remarks>
     /// This is the resource on which <c>WithRoleAssignments</c> was called. Its managed identity
@@ -46,7 +46,7 @@ public sealed class AzureRoleAssignmentResource(
 
     /// <summary>
     /// Gets the user-assigned managed identity whose principal receives the role assignments,
-    /// or <see langword="null"/> for global role assignments that are granted to the deployment principal.
+    /// or <see langword="null"/> when the principal is supplied by the infrastructure callback.
     /// </summary>
     public AzureUserAssignedIdentityResource? IdentityResource { get; } = identityResource;
 

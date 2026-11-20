@@ -181,13 +181,7 @@ public sealed class KubernetesDeployWithProjectPersistentVolumeTests(ITestOutput
             // wires through the same PVC binding as the name-match overload, and that
             // the project's StatefulSet promotion preserves the volume across restarts.
             output.WriteLine("Phase 2: delete server-statefulset-0 and wait for K8s to recreate it");
-            await auto.TypeAsync($"kubectl delete pod server-statefulset-0 -n {k8sNamespace}");
-            await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(60));
-
-            await auto.TypeAsync($"kubectl wait --for=condition=Ready pod server-statefulset-0 -n {k8sNamespace} --timeout=180s");
-            await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(4));
+            await auto.RestartStatefulSetPodAsync(counter, k8sNamespace, "server-statefulset-0");
 
             // === Phase 3: read marker — the durability proof ===
             await PortForwardServerAsync(auto, counter, k8sNamespace, LocalPort);

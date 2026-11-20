@@ -197,8 +197,7 @@ function redactE2eTeardownFailure(failure: unknown): string {
         .replace(/Last state:[\s\S]*/g, 'Last state: <redacted>');
 }
 
-export async function createEmptyAppHostProject(projectName: string): Promise<string> {
-    const outputPath = getGeneratedProjectRoot(projectName);
+export async function createEmptyAppHostProject(projectName: string, outputPath = getGeneratedProjectRoot(projectName)): Promise<string> {
     removePath(outputPath, { recursive: true, force: true });
     await runProcess(getCliPath(), [
         'new',
@@ -217,7 +216,7 @@ export async function createEmptyAppHostProject(projectName: string): Promise<st
         cwd: getWorkspaceRoot(),
         timeoutMs: 180000,
     });
-    await waitForPath(getGeneratedAppHostPath(projectName), 180000);
+    await waitForPath(path.join(outputPath, 'apphost.cs'), 180000);
     await waitForPath(path.join(outputPath, 'aspire.config.json'), 180000);
 
     return outputPath;
@@ -496,8 +495,20 @@ export function touchPrimaryAppHostProject(): void {
     fs.appendFileSync(getPrimaryAppHostProjectPath(), '\n');
 }
 
-export function writeDelayedPsCliWrapper(delayMs = 1_500): string {
-    return writeCliWrapper('aspire-delayed-ps', { psSnapshotDelayMs: delayMs });
+/**
+ * A CLI whose `ps` snapshots block until the test releases them, so a refresh stays observably in
+ * flight for as long as the test needs instead of for a fixed delay that a slow runner can outlast.
+ */
+export function writeGatedPsCliWrapper(): { cliPath: string; releasePsSnapshot: () => void } {
+    const gateDirectory = path.join(getWorkspaceRoot(), '.e2e-cli-wrappers', 'gated-ps');
+    const psSnapshotReleaseFilePath = path.join(gateDirectory, 'release-ps-snapshot');
+    removePath(gateDirectory, { recursive: true, force: true });
+    fs.mkdirSync(gateDirectory, { recursive: true });
+
+    return {
+        cliPath: writeCliWrapper('aspire-gated-ps', { psSnapshotReleaseFilePath }),
+        releasePsSnapshot: () => writeFileWithRetry(psSnapshotReleaseFilePath, ''),
+    };
 }
 
 export function writeTrackedDelayedPsCliWrapper(delayMs = 1_500): { cliPath: string; invocationLogPath: string } {

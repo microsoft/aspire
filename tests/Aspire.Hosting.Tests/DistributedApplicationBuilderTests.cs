@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREEXTENSION001
+
 using System.Reflection;
 using System.Reflection.Emit;
 using System.Security.Cryptography;
@@ -13,6 +15,7 @@ using Aspire.Hosting.Devcontainers;
 using Aspire.Hosting.Lifecycle;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Pipelines.Internal;
+using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Aspire.Shared.UserSecrets;
 using Microsoft.Extensions.Configuration;
@@ -195,6 +198,76 @@ public class DistributedApplicationBuilderTests(ITestOutputHelper outputHelper)
             filterOptions.Rules
                 .Where(rule => rule.ProviderName is null && rule.CategoryName == "Aspire.Hosting.Dcp")
                 .Select(rule => rule.LogLevel));
+    }
+
+    [Fact]
+    public async Task PolyglotBuilderDoesNotApplyAppHostServerBuildConfigurationToProjects()
+    {
+        // In a guest (TypeScript, Python, ...) AppHost, the entry assembly is the prebuilt AppHost server.
+        // Its build configuration (Release when shipped) must not be passed to the user's .NET projects.
+        var entryAssemblyConfiguration = Assembly.GetEntryAssembly()?.GetCustomAttribute<AssemblyConfigurationAttribute>()?.Configuration;
+        Assert.False(string.IsNullOrEmpty(entryAssemblyConfiguration));
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var projectDirectory = workspace.WorkspaceRoot.FullName;
+        var projectPath = Path.Combine(projectDirectory, "api", "Api.csproj");
+        Directory.CreateDirectory(Path.GetDirectoryName(projectPath)!);
+        await File.WriteAllTextAsync(projectPath, "<Project Sdk=\"Microsoft.NET.Sdk.Web\" />");
+
+        var appBuilder = DistributedApplication.CreateBuilder(new CreateBuilderOptions
+        {
+            ProjectDirectory = projectDirectory,
+            AppHostFilePath = Path.Combine(projectDirectory, "apphost.mts")
+        });
+#pragma warning disable CS0618 // AddProject is obsolete but is still the TypeScript addProject export.
+        var project = appBuilder.AddProject("api", projectPath, options => options.ExcludeLaunchProfile = true);
+#pragma warning restore CS0618
+        using var app = appBuilder.Build();
+
+        var launchConfiguration = Assert.IsType<ProjectLaunchConfiguration>(
+            await project.Resource.CreateLaunchConfigurationAsync(
+                LaunchConfigurationTestHelpers.CreateCallbackContext(project.Resource, ExecutableLaunchMode.NoDebug)));
+        Assert.Null(launchConfiguration.BuildConfiguration);
+        Assert.Null(appBuilder.Configuration["AppHost:BuildConfiguration"]);
+        Assert.Null(app.Services.GetRequiredService<DistributedApplicationOptions>().Configuration);
+    }
+
+    [Theory]
+    [InlineData("omitted")]
+    [InlineData("args")]
+    [InlineData("options")]
+    public void PolyglotCreateBuilderDoesNotApplyAppHostServerBuildConfiguration(string form)
+    {
+        // Every form accepted by the createBuilder export is a guest AppHost, whose entry assembly is the
+        // prebuilt AppHost server.
+        Assert.False(string.IsNullOrEmpty(Assembly.GetEntryAssembly()?.GetCustomAttribute<AssemblyConfigurationAttribute>()?.Configuration));
+
+        object? argsOrOptions = form switch
+        {
+            "omitted" => null,
+            "args" => Array.Empty<string>(),
+            _ => new CreateBuilderOptions()
+        };
+
+        var appBuilder = DistributedApplication.CreateBuilderForPolyglot(argsOrOptions);
+        using var app = appBuilder.Build();
+
+        Assert.Null(appBuilder.Configuration["AppHost:BuildConfiguration"]);
+        Assert.Null(app.Services.GetRequiredService<DistributedApplicationOptions>().Configuration);
+    }
+
+    [Fact]
+    public void BuilderPublishesAppHostAssemblyBuildConfiguration()
+    {
+        var appBuilder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
+        {
+            AssemblyName = typeof(DistributedApplicationBuilderTests).Assembly.GetName().Name
+        });
+        using var app = appBuilder.Build();
+
+        var expected = typeof(DistributedApplicationBuilderTests).Assembly.GetCustomAttribute<AssemblyConfigurationAttribute>()?.Configuration;
+        Assert.False(string.IsNullOrEmpty(expected));
+        Assert.Equal(expected, appBuilder.Configuration["AppHost:BuildConfiguration"]);
     }
 
     [Fact]

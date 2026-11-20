@@ -4,7 +4,6 @@
 #pragma warning disable ASPIREPROJECTS001
 
 using Aspire.Hosting.ApplicationModel;
-using Aspire.Hosting.Azure.AppContainers;
 using Azure.Provisioning;
 using Azure.Provisioning.AppContainers;
 using Azure.Provisioning.Expressions;
@@ -115,15 +114,13 @@ internal sealed class ContainerAppContext(IResource resource, ContainerAppEnviro
         };
         containerApp.Configuration = configuration;
 
-        if (_containerAppEnvironmentContext.Environment.IsExpress)
-        {
-            containerApp.ResourceVersion = AzureContainerAppExpressSupport.ResourceVersion;
-        }
         // Express does not support platform language-stack configuration.
         // Otherwise default autoConfigureDataProtection to true for .NET projects.
-        else if (Resource is IDotnetProgramResource)
+        if (!_containerAppEnvironmentContext.Environment.IsExpress && Resource is IDotnetProgramResource)
         {
-            const string latestPreview = "2025-10-02-preview"; // this property is currently only available in preview
+            // Data protection is still preview-only, including in the 2026-07-01 stable API.
+            // https://learn.microsoft.com/azure/templates/microsoft.app/2026-03-02-preview/containerapps
+            const string latestPreview = "2026-03-02-preview";
             containerApp.ResourceVersion = latestPreview;
 
             var value = new BicepValue<bool>(true);

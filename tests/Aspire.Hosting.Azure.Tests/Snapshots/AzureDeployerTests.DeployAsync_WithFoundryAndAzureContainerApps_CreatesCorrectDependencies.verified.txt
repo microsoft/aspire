@@ -15,9 +15,9 @@ EXECUTION ORDER
 This shows the order in which steps would execute, respecting all dependencies.
 Steps with no dependencies run first, followed by steps that depend on them.
 
-  1. azure-prepare-resources
-  2. validate-azure-container-apps
-  3. validate-compute-environments
+  1. validate-compute-environments
+  2. azure-prepare-resources
+  3. validate-azure-container-apps
   4. prepare-azure-container-apps-aca-env
   5. prepare-foundry-project-foundry-project
   6. before-start
@@ -66,7 +66,7 @@ Shows each step's dependencies, associated resources, tags, and descriptions.
 
 Step: azure-prepare-resources
     Description: Prepares the Azure resources.
-    Dependencies: none
+    Dependencies: ✓ validate-compute-environments
     Resource: azure-environment (AzureEnvironmentResource)
 
 Step: before-start
@@ -284,19 +284,21 @@ Shows what steps would run for each possible target step and in what order.
 Steps at the same level can run concurrently.
 ─────────────────────────────────────────────────────────────────────────────
 If targeting 'azure-prepare-resources':
-  Direct dependencies: none
-  Total steps: 1
+  Direct dependencies: validate-compute-environments
+  Total steps: 2
   Execution order:
-    [0] azure-prepare-resources
+    [0] validate-compute-environments
+    [1] azure-prepare-resources
 
 If targeting 'before-start':
   Direct dependencies: azure-prepare-resources, prepare-azure-container-apps-aca-env, prepare-foundry-project-foundry-project, validate-azure-container-apps, validate-compute-environments
   Total steps: 6
   Execution order:
-    [0] azure-prepare-resources | validate-compute-environments (parallel)
-    [1] prepare-foundry-project-foundry-project | validate-azure-container-apps (parallel)
-    [2] prepare-azure-container-apps-aca-env
-    [3] before-start
+    [0] validate-compute-environments
+    [1] azure-prepare-resources
+    [2] prepare-foundry-project-foundry-project | validate-azure-container-apps (parallel)
+    [3] prepare-azure-container-apps-aca-env
+    [4] before-start
 
 If targeting 'build':
   Direct dependencies: build-agent, build-api
@@ -470,16 +472,18 @@ If targeting 'prepare-azure-container-apps-aca-env':
   Direct dependencies: azure-prepare-resources, validate-azure-container-apps, validate-compute-environments
   Total steps: 4
   Execution order:
-    [0] azure-prepare-resources | validate-compute-environments (parallel)
-    [1] validate-azure-container-apps
-    [2] prepare-azure-container-apps-aca-env
+    [0] validate-compute-environments
+    [1] azure-prepare-resources
+    [2] validate-azure-container-apps
+    [3] prepare-azure-container-apps-aca-env
 
 If targeting 'prepare-foundry-project-foundry-project':
   Direct dependencies: azure-prepare-resources, validate-compute-environments
   Total steps: 3
   Execution order:
-    [0] azure-prepare-resources | validate-compute-environments (parallel)
-    [1] prepare-foundry-project-foundry-project
+    [0] validate-compute-environments
+    [1] azure-prepare-resources
+    [2] prepare-foundry-project-foundry-project
 
 If targeting 'print-api-summary':
   Direct dependencies: provision-api-containerapp
@@ -683,10 +687,11 @@ If targeting 'push-prereq':
 
 If targeting 'validate-azure-container-apps':
   Direct dependencies: azure-prepare-resources
-  Total steps: 2
+  Total steps: 3
   Execution order:
-    [0] azure-prepare-resources
-    [1] validate-azure-container-apps
+    [0] validate-compute-environments
+    [1] azure-prepare-resources
+    [2] validate-azure-container-apps
 
 If targeting 'validate-azure-login':
   Direct dependencies: deploy-prereq

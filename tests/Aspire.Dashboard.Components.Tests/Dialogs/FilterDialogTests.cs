@@ -486,7 +486,7 @@ public class FilterDialogTests : DashboardTestContext
 
         await cut.Find("#filter-dialog-text-value").FocusInAsync(new());
         await cut.Find("#filter-dialog-text-value").TriggerEventAsync("ontextimmediate", new ChangeEventArgs { Value = typedValue });
-        await cut.Find("#filter-dialog-text-value").TriggerEventAsync("ondropdownchange", new DropdownEventArgs { SelectedOptions = "" });
+        await cut.Find("#filter-dialog-text-value").TriggerEventAsync("ondropdownchange", new DropdownEventArgs { SelectedOptions = "", FreeformValue = typedValue });
         await cut.Find("#filter-dialog-text-value").FocusOutAsync(new());
 
         Assert.Equal(typedValue, Assert.IsType<FilterDialogFormModel>(cut.Instance.EditContext.Model).Value);

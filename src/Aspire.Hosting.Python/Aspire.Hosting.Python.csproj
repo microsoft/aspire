@@ -12,6 +12,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="$(SharedDir)PublishValidationExtensions.cs" Link="PublishValidationExtensions.cs" />
   </ItemGroup>
 
   <ItemGroup>

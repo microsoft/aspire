@@ -28,7 +28,7 @@ internal sealed class TestExtensionInteractionService(IServiceProvider servicePr
     public Action<string, bool, string?>? WriteDebugSessionMessageCallback { get; set; }
     public Action<ExtensionAppHostLogEntry>? WriteAppHostLogEntryCallback { get; set; }
     public Action<string, bool>? ConsoleDisplaySubtleMessageCallback { get; set; }
-    public Func<string?, string, string?, CancellationToken, Task<bool>>? TryDisplayCommandFailureAsyncCallback { get; set; }
+    public Func<string?, string, string?, bool, CancellationToken, Task<bool>>? TryDisplayCommandFailureAsyncCallback { get; set; }
     public Func<string, bool, bool>? ConfirmCallback { get; set; }
     public Func<string, Func<string, ValidationResult>?, bool, bool, PromptBinding<string?>?, CancellationToken, Task<string>>? PromptForStringCallback { get; set; }
     public Func<string, IReadOnlyList<string>, string>? SelectionCallback { get; set; }
@@ -171,9 +171,10 @@ internal sealed class TestExtensionInteractionService(IServiceProvider servicePr
         string? errorMessage,
         string cliLogFilePath,
         string? appHostCliLogFilePath,
+        bool allowMarkup,
         CancellationToken cancellationToken)
     {
-        return TryDisplayCommandFailureAsyncCallback?.Invoke(errorMessage, cliLogFilePath, appHostCliLogFilePath, cancellationToken)
+        return TryDisplayCommandFailureAsyncCallback?.Invoke(errorMessage, cliLogFilePath, appHostCliLogFilePath, allowMarkup, cancellationToken)
             ?? Task.FromResult(false);
     }
 

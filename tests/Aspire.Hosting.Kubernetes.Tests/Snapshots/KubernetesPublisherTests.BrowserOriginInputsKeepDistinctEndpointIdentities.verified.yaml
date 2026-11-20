@@ -1,0 +1,6 @@
+﻿parameters: {}
+secrets: {}
+config:
+  consumer:
+    a_b_c_BrowserOrigins: "http://first.example"
+    a_b_c_BrowserOrigins_2eb5787a775df1cb: "http://second.example"

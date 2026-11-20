@@ -49,6 +49,176 @@ test("render keeps the current dashboard visible and surfaces later load errors"
   assert.match(app.innerHTML, /GitHub accounts/);
 });
 
+test("Needs attention renders only its prefix and offers a collapsed, action-free remainder for position lookup", () => {
+  const { app, api } = createRendererHarness({ fetch: () => new Promise(() => {}) });
+  for (const count of [0, 4, 10, 11, 25]) {
+    api.setState(reviewDashboard(count));
+    api.render();
+    const queue = app.innerHTML.match(/<ol class="focus-queue"[^>]*>([\s\S]*?)<\/ol>/);
+    const positions = Array.from({ length: count }, (_, index) => index + 1);
+    assert.deepEqual([...queue?.[1].matchAll(/<li value="(\d+)">/g) || []].map((match) => Number(match[1])), positions.slice(0, 10));
+    const remainder = app.innerHTML.match(/<section class="sect-group collapsible collapsed" data-sect="later-in-queue">([\s\S]*?)<\/section>/);
+    assert.equal(!!remainder, count > 10);
+    if (remainder) {
+      assert.match(remainder[1], /aria-controls="later-in-queue-body" aria-expanded="false"/);
+      assert.match(remainder[1], /id="later-in-queue-body" inert/);
+      assert.match(remainder[1], new RegExp('<span class="sect-count">' + (count - 10) + "</span>"));
+      assert.match(remainder[1], /Prioritize the first 10 in Needs attention for review/);
+      assert.deepEqual([...remainder[1].matchAll(/<li value="(\d+)">/g)].map((match) => Number(match[1])), positions.slice(10));
+      assert.equal([...remainder[1].matchAll(/<a href=/g)].length, count - 10);
+      assert.equal([...remainder[1].matchAll(/class="card-actions"/g)].length, 0);
+    }
+    assert.match(app.innerHTML, /First readiness, oldest first\. Blocked PRs keep their priority when they return\./);
+  }
+  assert.match(STYLES, /\.focus-queue \{[^}]*display: grid;[^}]*grid-template-columns: repeat\(auto-fill, minmax\(min\(100%, 280px\), 1fr\)\)/);
+});
+
+test("remainder expansion and collapse survive refresh, including a remainder that arrives after initial load", () => {
+  const body = { inert: true };
+  const section = {
+    classList: classList(),
+    querySelector: (selector) => selector === ".collapse-body" ? body : null,
+  };
+  section.classList.add("collapsed");
+  const button = {
+    dataset: { collapse: "later-in-queue" },
+    listeners: {},
+    addEventListener(event, handler) { this.listeners[event] = handler; },
+    closest: () => section,
+    setAttribute(name, value) { this[name] = value; },
+  };
+  const { app, api } = createRendererHarness({
+    fetch: () => new Promise(() => {}),
+    querySelectorAll: (selector) => selector === "[data-collapse]" ? [button] : [],
+  });
+  api.setPrefs(rendererPrefs());
+  api.setState(reviewDashboard(10));
+  api.render();
+  api.applyPushedState({ dashboard: { ...reviewDashboard(12), seq: 1 }, prefs: rendererPrefs() });
+  assert.match(app.innerHTML, /collapsible collapsed" data-sect="later-in-queue"/);
+  button.listeners.click();
+  assert.equal(button["aria-expanded"], "true");
+  assert.equal(body.inert, false);
+  api.applyPushedState({ dashboard: { ...reviewDashboard(13), seq: 2 }, prefs: rendererPrefs() });
+  assert.match(app.innerHTML, /collapsible" data-sect="later-in-queue"/);
+  assert.match(app.innerHTML, /id="later-in-queue-body"><div/);
+  button.listeners.click();
+  assert.equal(button["aria-expanded"], "false");
+  assert.equal(body.inert, true);
+  api.applyPushedState({ dashboard: { ...reviewDashboard(10), seq: 3 }, prefs: rendererPrefs() });
+  api.applyPushedState({ dashboard: { ...reviewDashboard(11), seq: 4 }, prefs: rendererPrefs() });
+  assert.match(app.innerHTML, /collapsible collapsed" data-sect="later-in-queue"/);
+  assert.match(app.innerHTML, /id="later-in-queue-body" inert/);
+});
+
+test("resizing the review board cannot redistribute Needs attention into masonry columns", () => {
+  // Only legacy .grid panels participate in the JavaScript column redistribution.
+  // The ordered list keeps its DOM/tab order at every responsive width.
+  const queried = [];
+  const { app, api, document } = createRendererHarness({
+    fetch: () => new Promise(() => {}),
+    querySelectorAll: (selector) => { queried.push(selector); return []; },
+  });
+  const items = [1, 2, 3].map((position) => ({
+    queuePosition: position,
+    pr: { number: position, title: `PR ${position}`, url: `https://github.com/microsoft/aspire/pull/${position}`, repository: "microsoft/aspire", author: "davidfowl" },
+  }));
+  const markup = api.queuePanel({ id: "needs-attention", title: "Needs attention", items, numbered: true });
+  api.setState(reviewDashboard(13));
+  api.render();
+  const board = app.innerHTML;
+  for (const width of [280, 600, 900]) {
+    document.documentElement.clientWidth = width;
+    queried.length = 0;
+    api.layoutGrids();
+    assert.deepEqual(queried, [".grid"]);
+    assert.equal(api.queuePanel({ id: "needs-attention", title: "Needs attention", items, numbered: true }), markup);
+    api.render();
+    assert.equal(app.innerHTML, board);
+  }
+  const personal = api.queuePanel({ id: "for-you", title: "For you", items });
+  assert.match(personal, /<div class="grid"><div class="card">/);
+});
+
+test("remainder lookup escapes PR text and rejects non-web links", () => {
+  const { app, api } = createRendererHarness({ fetch: () => new Promise(() => {}) });
+  const dashboard = reviewDashboard(11);
+  dashboard.attention.focusRemainder[0].pr = {
+    number: 11, title: '<script>alert("PR")</script>', repository: "<repo>",
+    url: "javascript:alert(1)",
+  };
+  api.setState(dashboard);
+  api.render();
+  const remainder = app.innerHTML.match(/data-sect="later-in-queue">([\s\S]*?)<\/section>/)[1];
+  assert.match(remainder, /<a href="#"/);
+  assert.match(remainder, /&lt;script&gt;alert\(&quot;PR&quot;\)&lt;\/script&gt;/);
+  assert.match(remainder, /&lt;repo&gt; #11/);
+});
+
+test("an unauthenticated initial load keeps Settings, Accounts, and Health navigation available", async () => {
+  const message = "GitHub CLI was not found. Install gh or make it available on PATH.";
+  const dashboard = {
+    seq: 1,
+    authenticated: false,
+    mode: "review",
+    accounts: [],
+    activeAccounts: [],
+    message,
+    githubDiscoveryError: message,
+    errors: [`GitHub account discovery: ${message}`],
+  };
+  const prefs = {
+    release: "9.5",
+    showDrafts: false,
+    azurePipelines: [],
+    notifications: { reviewRequested: true, readyToMerge: true, changesRequested: true, ciFailing: true },
+  };
+  const button = (dataset = {}) => ({
+    dataset,
+    listeners: {},
+    addEventListener(event, handler) { this.listeners[event] = handler; },
+  });
+  const gear = button();
+  const account = button();
+  const back = button();
+  const health = button({ mode: "health" });
+  const { app, api } = createRendererHarness({
+    elements: { "gear-btn": gear, "acct-btn": account, "back-btn": back },
+    querySelectorAll: (selector) => selector === ".tab" ? [health] : [],
+    fetch: async (url, options = {}) => {
+      if (String(url) === "api/mode") {
+        assert.equal(JSON.parse(options.body).mode, "health");
+        return jsonResponse({
+          dashboard: { ...dashboard, seq: 2, mode: "health", health: { items: [], counts: {} } },
+          prefs,
+        });
+      }
+      assert.equal(String(url), "api/state");
+      return jsonResponse({ dashboard, prefs });
+    },
+  });
+
+  await api.load();
+  assert.equal(api.getState().authenticated, false);
+  assert.match(app.innerHTML, /GitHub credentials unavailable/);
+  assert.match(app.innerHTML, /GitHub CLI was not found/);
+  assert.match(app.innerHTML, /id="rescan-btn"/);
+  assert.match(app.innerHTML, /id="gear-btn"/);
+  assert.match(app.innerHTML, /data-mode="health"/);
+
+  account.listeners.click();
+  assert.match(app.innerHTML, /GitHub accounts/);
+  assert.match(app.innerHTML, /GitHub CLI was not found/);
+  back.listeners.click();
+  gear.listeners.click();
+  assert.match(app.innerHTML, /id="pipeline-url-input"/);
+  back.listeners.click();
+  await health.listeners.click();
+  assert.equal(api.getState().mode, "health");
+  assert.match(app.innerHTML, /Repository &amp; delivery health/);
+  assert.match(app.innerHTML, /No health sources configured/);
+});
+
 test("deleteRepo completes once when both the animation and fallback timeout fire", () => {
   const row = {
     classList: { add() {} },
@@ -236,19 +406,12 @@ test("laneCardActions keys breakdown-lane actions off the lane label", () => {
   assert.equal(unresolved[0].label, "Address feedback");
 });
 
-test("queuePanel reports an honest 'N shown' metric for a mixed (non-prefix) selection", () => {
+test("queuePanel reports the prefix count and the total queue size", () => {
   const { api } = createRendererHarness();
   const items = [1, 2, 3, 4].map((n) => ({ pr: { url: "", title: "t" + n, author: "a", repository: "o/r", number: n } }));
 
-  // A genuine prefix (top N of a larger sorted list) keeps the "top N of total" claim.
   assert.match(api.queuePanel({ id: "q", title: "Q", items, cappedTotal: 9 }), /top 4 of 9/);
-
-  // A mixed selection (review-debt cards spilled past the cap, so `items` is not a prefix of the
-  // sorted list) must NOT claim "top N of total" — non-debt cards between retained debt cards were
-  // skipped, so that would be false. It reports the honest shown count instead.
-  const mixed = api.queuePanel({ id: "q", title: "Q", items, cappedTotal: 9, exactCount: true });
-  assert.doesNotMatch(mixed, /top 4 of 9/);
-  assert.match(mixed, /4 shown/);
+  assert.match(api.queuePanel({ id: "q", title: "Q", items, cappedTotal: 4 }), /4 shown/);
 });
 
 test("cardActionBtn re-renders a disabled button while its action's POST is still in flight", () => {
@@ -273,6 +436,249 @@ test("cardActionBtn re-renders a disabled button while its action's POST is stil
   const other = api.cardActionBtn(pr, { kind: "test", label: "Test", done: "Testing requested", icon: "" });
   assert.doesNotMatch(other, /disabled/);
 });
+
+test("sidebar PR and Health actions have disabled buttons and focusable explanations", () => {
+  const reason = "Agent actions require an active repository session.";
+  const { api } = createRendererHarness({ agentActions: { available: false, reason } });
+  for (const url of ["https://github.com/o/r/pull/1", "https://ghe.example.com/o/r/pull/1"]) {
+    for (const action of [
+      { kind: "review", label: "Review" },
+      { kind: "test", label: "Test" },
+      { kind: "resolve-conflicts", label: "Resolve conflicts" },
+    ]) {
+      const html = api.cardActionBtn({ url, number: 1, repository: "o/r" }, action);
+      assert.equal(html.split(" data-kind=")[0],
+        '<div class="cb-split" role="group" tabindex="0" aria-disabled="true"' +
+        ' aria-label="' + reason + '" aria-describedby="agent-action-tooltip" data-tooltip="' + reason + '"');
+      assert.match(html, /class="card-btn cb-main"[^>]* disabled/);
+      assert.doesNotMatch(html, /cb-caret|cb-menu/);
+    }
+  }
+
+  for (const canOpenRepoSession of [true, false]) {
+    const health = api.healthCard({
+      id: "github:github.com/microsoft/aspire",
+      provider: "github",
+      repository: "microsoft/aspire",
+      state: "failing",
+      reasons: [],
+      canOpenRepoSession,
+    }, 0, 1);
+    assert.match(health, /Diagnose here/);
+    assert.match(health, canOpenRepoSession ? /Fix in repo/ : /Work fix here/);
+    assert.equal((health.match(/aria-disabled="true"/g) ?? []).length, 2);
+    assert.equal((health.match(/class="card-btn cb-main"[^>]* disabled/g) ?? []).length, 2);
+  }
+});
+
+test("sidebar action handlers never post work even when called directly", async () => {
+  const requests = [];
+  const { api } = createRendererHarness({
+    agentActions: { available: false, reason: "An active session is required." },
+    fetch: async (path) => {
+      requests.push(path);
+      return jsonResponse({ dashboard: null, prefs: null });
+    },
+  });
+  const mainBtn = { classList: classList() };
+  const split = {
+    dataset: { kind: "review", prRepo: "o/r", prNumber: "1", prUrl: "https://github.com/o/r/pull/1" },
+    querySelector(selector) { return selector === ".cb-main" ? mainBtn : null; },
+  };
+  await api.onCardAction(split, "new-session");
+  await api.onCardAction(split, "current-session");
+  split.dataset = { kind: "fix-health", sourceId: "github:github.com/o/r" };
+  await api.onCardAction(split, "new-session");
+  assert.deepEqual(requests, ["api/state"]);
+  assert.equal(api.inflightActions.size, 0);
+});
+
+test("card pills explain review debt and the review progress shown in the queue", () => {
+  const { api } = createRendererHarness();
+  const debt = "The PR is not currently approved and its relevant activity is at least 14 days old. Reviews have been waiting too long; this does not mean nobody has reviewed it. Address review to run a fresh review, or Discuss review to work through existing feedback.";
+  assert.equal(api.signalExplanation({ label: "Review debt" }), debt);
+
+  const html = api.prCard({
+    pr: { url: "https://github.com/microsoft/aspire/pull/1", title: "PR", author: "octo", repository: "microsoft/aspire", number: 1 },
+    signals: [
+      { label: "finish review", tone: "accent" },
+      { label: "newer", tone: "muted" },
+      { label: "open 7d", tone: "warning" },
+      { label: "3 reviewers · 0 approvals", tone: "accent" },
+    ],
+  });
+  assert.match(html, /tabindex="0" aria-describedby="agent-action-tooltip" data-tooltip="Review activity exists, but the PR has not reached approval\. Finish the review or clarify what is still needed\.">finish review<\/span>/);
+  assert.match(html, /data-tooltip="The PR&#39;s relevant activity is less than 12 hours old\./);
+  assert.match(html, /<span class="pill warning">open 7d<\/span>/);
+  assert.match(html, /data-tooltip="Reviewers have submitted reviews, but no approving review submissions are recorded\./);
+});
+
+test("variable signal counts retain their meaning and expected action", () => {
+  const { api } = createRendererHarness();
+  for (const [label, expected] of [
+    ["3 unresolved", /^Review conversations remain unresolved\. Address each thread/],
+    ["1 change request", /^Changes have been requested\. Address the feedback/],
+    ["2 approvals", /^Number of recorded approving review submissions, including earlier reviews from the same reviewer\. This is not a count of current approvers\. Confirm the latest reviews/],
+    ["3 review comments", /^Number of comment-only submitted reviews, not individual comments or approvals\./],
+    ["approved 3d", /^The PR is approved and its approval reference is at least 2 days old\./],
+    ["reviewed 1d", /^Time since the latest submitted review\. Check for newer commits/],
+    ["idle 7d", /^Time since the item's last update\. Follow up with the owner/],
+    ["release 13.5", /^The current release is mentioned/],
+    ["base release/13.4", /^The PR targets the named release branch\./],
+    ["2 open PRs", /^Open PRs are linked to this issue\. Track their progress/],
+  ]) {
+    assert.match(api.signalExplanation({ label }), expected, label);
+  }
+});
+
+test("PR and issue card help targets are siblings of their navigation links", () => {
+  const { api } = createRendererHarness();
+  const item = {
+    url: "https://github.com/microsoft/aspire/pull/1",
+    title: "PR",
+    author: "octo",
+    repository: "microsoft/aspire",
+    number: 1,
+  };
+  const signals = [{ label: "review debt", tone: "accent" }];
+  for (const html of [
+    api.prCard({ pr: item, signals }),
+    api.issueCard({ issue: { ...item, url: "https://github.com/microsoft/aspire/issues/1" }, signals }),
+  ]) {
+    const links = html.match(/<a\b[^>]*>[\s\S]*?<\/a>/g);
+    assert.equal(links.length, 1);
+    assert.equal((links[0].match(/tabindex=/g) || []).length, 0);
+    assert.match(html, /<\/a><div class="pills"><span class="pill accent" tabindex="0" aria-describedby="agent-action-tooltip"/);
+    assert.match(html, />review debt<\/span><\/div><\/div>$/);
+  }
+});
+
+test("open-age and CI status pills remain plain tags", () => {
+  const { api } = createRendererHarness();
+  for (const label of ["open 7d", "open 2h", "CI running", "CI failing", "CI failing · 2 checks"]) {
+    assert.equal(api.signalExplanation({ label }), null);
+    assert.equal(api.pill({ label, tone: "warning" }), '<span class="pill warning">' + label + "</span>");
+  }
+});
+
+test("raw repository labels are explained as labels and escaped in pill markup", () => {
+  const { api } = createRendererHarness();
+  assert.equal(
+    api.signalExplanation({ label: "review debt", kind: "repo-label" }),
+    'GitHub repository label: "review debt". Use the repository label guidance for meaning and follow-up; this is not a computed dashboard status.',
+  );
+  const html = api.issueCard({
+    issue: { url: "https://github.com/microsoft/aspire/issues/1", title: "Issue", author: "octo", repository: "microsoft/aspire", number: 1 },
+    signals: [{ label: 'a"><script>', kind: "repo-label", tone: "accent" }],
+  });
+  assert.match(html, /data-tooltip="GitHub repository label: &quot;a&quot;&gt;&lt;script&gt;&quot;\. Use the repository label guidance/);
+  assert.match(html, />a&quot;&gt;&lt;script&gt;<\/span>/);
+});
+
+test("agent tooltips follow pointer and focus lifecycles and dismiss stale anchors", () => {
+  assertTooltipLifecycle(".cb-split[data-tooltip]");
+});
+
+test("pill tooltips follow pointer and focus lifecycles and dismiss stale anchors", () => {
+  assertTooltipLifecycle(".pill[data-tooltip]");
+});
+
+function assertTooltipLifecycle(selector) {
+  const timers = new Map();
+  let nextTimer = 1;
+  const flushTimers = () => {
+    for (const [id, handler] of timers) {
+      timers.delete(id);
+      handler();
+    }
+  };
+  let tooltipHovered = false;
+  const tooltip = {
+    hidden: true,
+    textContent: "",
+    style: {},
+    contains(target) { return target === this; },
+    matches() { return tooltipHovered; },
+    getBoundingClientRect() { return { width: 360, height: 80 }; },
+  };
+  const owner = {
+    dataset: { tooltip: "Open this canvas from a repository session." },
+    closest(selectors) { return selectors.split(", ").includes(selector) ? this : null; },
+    contains(target) { return target === this; },
+    matches() { return false; },
+    getBoundingClientRect() { return { left: 700, top: 560, bottom: 585 }; },
+  };
+  const { api, events, document } = createRendererHarness({
+    elements: { "agent-action-tooltip": tooltip },
+    setTimeout(handler, delay) {
+      assert.equal(delay, 300);
+      const id = nextTimer++;
+      timers.set(id, handler);
+      return id;
+    },
+    clearTimeout(id) { timers.delete(id); },
+  });
+  const dispatch = (type, event = {}) => {
+    for (const handler of events[type] ?? []) handler(event);
+  };
+
+  dispatch("pointerover", { target: owner });
+  assert.equal(tooltip.hidden, false);
+  assert.equal(tooltip.textContent, owner.dataset.tooltip);
+  assert.deepEqual(tooltip.style, { left: "432px", top: "472px" });
+  dispatch("pointerout", { target: owner, relatedTarget: owner });
+  assert.equal(tooltip.hidden, false);
+  dispatch("pointerout", { target: owner, relatedTarget: null });
+  assert.equal(tooltip.hidden, false, "crossing the gap must not immediately hide the tooltip");
+  tooltipHovered = true;
+  dispatch("pointerover", { target: tooltip });
+  assert.equal(timers.size, 0, "entering the tooltip cancels its pending dismissal");
+  flushTimers();
+  assert.equal(tooltip.hidden, false);
+  tooltipHovered = false;
+  dispatch("pointerout", { target: tooltip, relatedTarget: null });
+  dispatch("pointerover", { target: owner });
+  assert.equal(timers.size, 0, "returning across the gap to the action cancels dismissal");
+  dispatch("pointerout", { target: owner, relatedTarget: tooltip });
+  assert.equal(timers.size, 0, "moving directly to the tooltip needs no dismissal");
+  dispatch("pointerout", { target: tooltip, relatedTarget: null });
+  flushTimers();
+  assert.equal(tooltip.hidden, true);
+
+  document.activeElement = owner;
+  dispatch("focusin", { target: owner });
+  assert.equal(tooltip.hidden, false);
+  dispatch("pointerout", { target: owner, relatedTarget: null });
+  flushTimers();
+  assert.equal(tooltip.hidden, false, "leaving with the pointer must preserve a focused tooltip");
+  document.activeElement = null;
+  tooltipHovered = true;
+  dispatch("focusout", { target: owner, relatedTarget: null });
+  flushTimers();
+  assert.equal(tooltip.hidden, false, "losing focus must preserve a hovered tooltip");
+  tooltipHovered = false;
+  dispatch("pointerout", { target: tooltip, relatedTarget: null });
+  flushTimers();
+  assert.equal(tooltip.hidden, true);
+
+  owner.getBoundingClientRect = () => ({ left: 20, top: 100, bottom: 130 });
+  dispatch("pointerover", { target: owner });
+  assert.deepEqual(tooltip.style, { left: "20px", top: "138px" });
+  for (const type of ["keydown", "scroll", "resize"]) {
+    dispatch("pointerover", { target: owner });
+    dispatch("pointerout", { target: owner, relatedTarget: null });
+    dispatch(type, { key: "Escape" });
+    assert.equal(tooltip.hidden, true, `${type} must dismiss the tooltip`);
+    assert.equal(timers.size, 0, `${type} must cancel delayed dismissal`);
+  }
+
+  dispatch("pointerover", { target: owner });
+  dispatch("pointerout", { target: owner, relatedTarget: null });
+  api.render();
+  assert.equal(tooltip.hidden, true, "render must not leave a tooltip anchored to a removed card");
+  assert.equal(timers.size, 0);
+  assert.match(STYLES, /\.agent-action-tooltip \{[^}]*pointer-events: auto;/);
+}
 
 test("cardActionBtn greys out and spins while refresh finalization is in progress", () => {
   const { api } = createRendererHarness();
@@ -1302,6 +1708,7 @@ test("Azure pipeline mutations preserve unsaved settings fields across renders",
   const elements = {
     "release-input": { value: "13.4-preview" },
     "s-drafts": { checked: true },
+    "s-detached": { checked: true },
     "n-review": { checked: false },
     "n-ready": { checked: true },
     "n-changes": { checked: false },
@@ -1310,6 +1717,7 @@ test("Azure pipeline mutations preserve unsaved settings fields across renders",
   const resetToPersistedValues = () => {
     elements["release-input"].value = "13.1";
     elements["s-drafts"].checked = false;
+    elements["s-detached"].checked = false;
     elements["n-review"].checked = true;
     elements["n-ready"].checked = false;
     elements["n-changes"].checked = true;
@@ -1351,10 +1759,61 @@ test("Azure pipeline mutations preserve unsaved settings fields across renders",
 
   assert.equal(elements["release-input"].value, "13.4-preview");
   assert.equal(elements["s-drafts"].checked, true);
+  assert.equal(elements["s-detached"].checked, true);
   assert.equal(elements["n-review"].checked, false);
   assert.equal(elements["n-ready"].checked, true);
   assert.equal(elements["n-changes"].checked, false);
   assert.equal(elements["n-ci"].checked, false);
+});
+
+test("settings render the detached opt-in and save its selected value", async () => {
+  let request;
+  const { app, api } = createRendererHarness({
+    elements: {
+      "release-input": { value: "13.5" },
+      "s-drafts": { checked: false },
+      "s-detached": { checked: true },
+      "n-review": { checked: true },
+      "n-ready": { checked: true },
+      "n-changes": { checked: false },
+      "n-ci": { checked: true },
+    },
+    fetch: async (path, options) => {
+      if (String(path) !== "api/prefs") return new Promise(() => {});
+      request = { path: String(path), body: JSON.parse(options.body) };
+      return jsonResponse({ dashboard: healthDashboard([], emptyHealthCounts(), true), prefs: rendererPrefs() });
+    },
+  });
+  api.setState(healthDashboard([], emptyHealthCounts(), true));
+  api.setPrefs(rendererPrefs());
+  api.setView("settings");
+  api.render();
+  assert.match(app.innerHTML, /Create detached sessions/);
+  assert.match(app.innerHTML, /id="s-detached"/);
+  for (const [id, title] of [
+    ["s-drafts", "Show draft PRs"],
+    ["s-detached", "Create detached sessions"],
+    ["n-review", "Review requested"],
+    ["n-ready", "Your PR is ready to merge"],
+    ["n-changes", "Changes requested on your PR"],
+    ["n-ci", "CI failing on your PR"],
+  ]) {
+    assert.ok(app.innerHTML.includes('<span class="tl" id="' + id + '-label">' + title + "</span>"));
+    assert.match(app.innerHTML, new RegExp('<input type="checkbox" id="' + id + '" aria-labelledby="' + id + '-label"'));
+  }
+  assert.match(app.innerHTML, /id="s-detached" aria-labelledby="s-detached-label"  \/>/);
+  assert.match(app.innerHTML, /do not report back here/);
+  assert.match(app.innerHTML, /association is not guaranteed/);
+  await api.saveSettings();
+  assert.deepEqual(request, {
+    path: "api/prefs",
+    body: {
+      release: "13.5",
+      showDrafts: false,
+      detachedSessions: true,
+      notifications: { reviewRequested: true, readyToMerge: true, changesRequested: false, ciFailing: true },
+    },
+  });
 });
 
 test("settings Enter shortcut leaves interactive controls to their native actions", () => {
@@ -1366,6 +1825,19 @@ test("settings Enter shortcut leaves interactive controls to their native action
   assert.equal(isSettingsSaveShortcut({ key: "Enter", target: { tagName: "BUTTON", className: "pipeline-remove" } }), false);
   assert.equal(isSettingsSaveShortcut({ key: "Enter", target: { tagName: "INPUT", id: "release-input" } }), true);
 });
+
+function reviewDashboard(count) {
+  const items = Array.from({ length: count }, (_, index) => ({
+    queuePosition: index + 1,
+    pr: { number: index + 1, title: `PR ${index + 1}`, url: `https://github.com/microsoft/aspire/pull/${index + 1}`, repository: "microsoft/aspire", author: "davidfowl", review: { state: "waiting" } },
+    signals: [],
+  }));
+  return {
+    authenticated: true, mode: "review", accounts: [], activeAccounts: [], notifications: [],
+    repos: ["microsoft/aspire"], counts: {}, errors: [],
+    attention: { focus: items.slice(0, 10), focusRemainder: items.slice(10), focusTotal: count, forMe: [], focusExclusions: [], buckets: [] },
+  };
+}
 
 function rendererPrefs() {
   return {
@@ -1405,12 +1877,16 @@ function healthDashboard(items, counts, authenticated) {
 }
 
 function createRendererHarness(overrides = {}) {
+  const events = {};
+  const addEventListener = (type, handler) => { (events[type] ??= []).push(handler); };
   const app = overrides.app ?? {
     innerHTML: "",
     removeAttribute() {},
     classList: classList(),
   };
   const document = {
+    documentElement: { clientWidth: 800, clientHeight: 600 },
+    activeElement: null,
     getElementById(id) {
       if (id === "app") return app;
       if (id === "loadbar") return overrides.loadbar ?? null;
@@ -1418,11 +1894,12 @@ function createRendererHarness(overrides = {}) {
     },
     querySelector: overrides.querySelector ?? (() => null),
     querySelectorAll: overrides.querySelectorAll ?? (() => []),
-    addEventListener() {},
+    addEventListener,
   };
   const sandbox = {
+    agentActions: overrides.agentActions ?? { available: true, reason: null },
     document,
-    window: { CSS: { escape: cssEscape } },
+    window: { CSS: { escape: cssEscape }, addEventListener },
     CSS: { escape: cssEscape },
     EventSource: function () { throw new Error("disabled"); },
     ResizeObserver: undefined,
@@ -1436,9 +1913,11 @@ function createRendererHarness(overrides = {}) {
     console,
   };
 
-  vm.runInNewContext(`${APP_JS}\n;globalThis.__test = {\n  render,\n  withRefresh,\n  load,\n  rescanAccounts,\n  onCardAction,\n  applyPushedState,\n  onUpdateAvailable,\n  onPreferences,\n  onSnapshot,\n  onPollSchedule,\n  applyAvailableUpdate,\n  toggleAutoApply,\n  autoApplyEnabled,\n  openLinkedPr,\n  deleteRepo,\n  persistAccountRepos,\n  draftReposByAcct,\n  editingByAcct,\n  forYouCardActions,\n  focusCardActions,\n  laneCardActions,\n  signalActions,\n  mergeActions,\n  queuePanel,\n  cardActionBtn,\n  issueCard,\n  healthCard,\n  healthView,\n  healthRepositoryGroups,\n  pipelineEditorHtml,\n  addAzurePipeline,\n  removeAzurePipeline,\n  commitHealthOrder,\n  moveHealthSource,\n  dropHealthSource,\n  setHealthDropMarker,\n  wireHealthOrdering,\n  actionKey,\n  inflightActions,\n  setProgress,\n  setState(value) { state = value; },\n  getState() { return state; },\n  getAppliedSeq() { return lastAppliedSeq; },\n  getUpdateAvailable() { return updateAvailable; },\n  setPrefs(value) { prefs = value; },\n  getPrefs() { return prefs; },\n  setHealthOrderSaving(value) { healthOrderSaving = !!value; },\n  setPipelineDrafts(url, branch) { pipelineUrlDraft = url; pipelineBranchDraft = branch; },\n  getPipelineDrafts() { return { url: pipelineUrlDraft, branch: pipelineBranchDraft, error: pipelineError }; },\n  setView(value) { view = value; },\n  setRefreshing(value) { refreshing = !!value; },\n  setRefreshInFlight(value) { refreshInFlight = value; },\n  setLoadError(value) { loadError = value; },\n  getLoadError() { return loadError; },\n};`, sandbox);
+  vm.runInNewContext(`${APP_JS}\n;globalThis.__test = {\n  render,\n  layoutGrids,\n  withRefresh,\n  load,\n  rescanAccounts,\n  onCardAction,\n  applyPushedState,\n  onUpdateAvailable,\n  onPreferences,\n  onSnapshot,\n  onPollSchedule,\n  applyAvailableUpdate,\n  toggleAutoApply,\n  autoApplyEnabled,\n  openLinkedPr,\n  deleteRepo,\n  persistAccountRepos,\n  draftReposByAcct,\n  editingByAcct,\n  forYouCardActions,\n  focusCardActions,\n  laneCardActions,\n  signalActions,\n  mergeActions,\n  queuePanel,\n  cardActionBtn,\n  issueCard,\n  healthCard,\n  healthView,\n  healthRepositoryGroups,\n  pipelineEditorHtml,\n  addAzurePipeline,\n  removeAzurePipeline,\n  commitHealthOrder,\n  moveHealthSource,\n  dropHealthSource,\n  setHealthDropMarker,\n  wireHealthOrdering,\n  actionKey,\n  inflightActions,\n  setProgress,\n  setState(value) { state = value; },\n  getState() { return state; },\n  getAppliedSeq() { return lastAppliedSeq; },\n  getUpdateAvailable() { return updateAvailable; },\n  setPrefs(value) { prefs = value; },\n  getPrefs() { return prefs; },\n  setHealthOrderSaving(value) { healthOrderSaving = !!value; },\n  setPipelineDrafts(url, branch) { pipelineUrlDraft = url; pipelineBranchDraft = branch; },\n  getPipelineDrafts() { return { url: pipelineUrlDraft, branch: pipelineBranchDraft, error: pipelineError }; },\n  setView(value) { view = value; },\n  setRefreshing(value) { refreshing = !!value; },\n  setRefreshInFlight(value) { refreshInFlight = value; },\n  setLoadError(value) { loadError = value; },\n  getLoadError() { return loadError; },\n};`, sandbox);
 
-  return { app, api: sandbox.__test };
+  sandbox.__test.saveSettings = vm.runInNewContext("saveSettings", sandbox);
+  Object.assign(sandbox.__test, vm.runInNewContext("({ signalExplanation, prCard, pill })", sandbox));
+  return { app, api: sandbox.__test, events, document };
 }
 
 function dragCard() {

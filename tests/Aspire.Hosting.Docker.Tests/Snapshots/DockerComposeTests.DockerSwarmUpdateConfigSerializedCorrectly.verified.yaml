@@ -21,7 +21,7 @@
         delay: "10s"
         failure_action: "rollback"
         monitor: "5s"
-        max_failure_ratio: "0.3"
+        max_failure_ratio: 0.3
         order: "start-first"
 networks:
   aspire:

@@ -1176,7 +1176,10 @@ class AspireClient {
         if (value instanceof String) {
             return "\"" + escapeJson((String) value) + "\"";
         }
-        if (value instanceof Number || value instanceof Boolean) {
+        if (value instanceof Number number) {
+            return toJsonNumber(number);
+        }
+        if (value instanceof Boolean) {
             return value.toString();
         }
         if (value instanceof Map) {
@@ -1219,6 +1222,32 @@ class AspireClient {
             return sb.toString();
         }
         return "\"" + escapeJson(value.toString()) + "\"";
+    }
+
+    // 2^53 (JavaScript's Number.MAX_SAFE_INTEGER + 1). Every integer with magnitude up to this bound is exactly
+    // representable as a double; above it, doubles are spaced more than 1 apart, so a parsed value may already have
+    // been rounded to a different integer. Only normalize integral doubles within this range.
+    private static final double MAX_EXACT_DOUBLE_INTEGER = 9007199254740992d;
+
+    // ATS maps every numeric type to Java double, so integral values must be written without a fractional
+    // part ("32" rather than "32.0"); otherwise the AppHost can't deserialize them into int or long members.
+    private static String toJsonNumber(Number number) {
+        if (number instanceof BigDecimal decimal) {
+            // Compare exactly: BigDecimal values parsed from JSON may not be representable as a double.
+            try {
+                return Long.toString(decimal.longValueExact());
+            } catch (ArithmeticException ignored) {
+                // Fractional or out of long range; keep the original text.
+                return decimal.toString();
+            }
+        }
+        String text = number.toString();
+        boolean hasFractionOrExponent = text.indexOf('.') >= 0 || text.indexOf('e') >= 0 || text.indexOf('E') >= 0;
+        double value = number.doubleValue();
+        if (hasFractionOrExponent && value == Math.rint(value) && Math.abs(value) <= MAX_EXACT_DOUBLE_INTEGER) {
+            return Long.toString((long) value);
+        }
+        return text;
     }
 
     private String escapeJson(String s) {

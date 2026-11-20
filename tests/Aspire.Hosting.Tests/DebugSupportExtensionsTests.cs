@@ -358,8 +358,8 @@ public class DebugSupportExtensionsTests(ITestOutputHelper outputHelper)
     [Fact]
     public void SupportsDebuggingTreatsProjectAsSupportedWhenTheIdeSendsNoCapabilityList()
     {
-        // Visual Studio does not send DEBUG_SESSION_INFO at all. It launches loaded project files natively,
-        // so "project" stays implicitly supported instead of using a plain process.
+        // An IDE session that omits DEBUG_SESSION_INFO is assumed to support project files included in the open
+        // solution, so this project uses the IDE's "project" launcher instead of a DCP-managed process.
         using var builder = TestDistributedApplicationBuilder.Create();
 #pragma warning disable CS0618 // Retain legacy ProjectResource IDE launch-configuration compatibility.
         var project = builder.AddProject<Projects.ServiceA>("proj", launchProfileName: "http");
@@ -415,6 +415,81 @@ public class DebugSupportExtensionsTests(ITestOutputHelper outputHelper)
                                 .WithDebugSupport(mode => new TestGoLaunchConfiguration { Mode = mode }, "go");
 
         Assert.False(executable.Resource.SupportsDebugging(CreateConfiguration(), out _));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("{\"protocols_supported\":[\"2025-10-01\"]}")]
+    [InlineData("{\"protocols_supported\":[\"2025-10-01\"],\"supported_launch_configurations\":null}")]
+    [InlineData("{ not json")]
+    [InlineData("{\"protocols_supported\":[\"2025-10-01\"],\"supported_launch_configurations\":[\"project\"]}")]
+    public void SupportsDebuggingReturnsEffectiveProjectAnnotationForAzureFunctionsCompatibility(string? debugSessionInfo)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+#pragma warning disable CS0618 // Retain legacy ProjectResource IDE launch-configuration compatibility.
+        var project = builder.AddProject<Projects.ServiceA>("proj", launchProfileName: "http");
+#pragma warning restore CS0618
+        var defaultAnnotation = project.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().Single();
+        project.Resource.Annotations.Remove(defaultAnnotation);
+        project.WithDebugSupport(
+            mode => new ExecutableLaunchConfiguration("azure-functions") { Mode = mode },
+            "azure-functions");
+        var declaredAnnotation = project.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().Single();
+
+        var configuration = CreateConfiguration(debugSessionInfo: debugSessionInfo);
+
+        Assert.True(project.Resource.SupportsDebugging(configuration, out var effectiveAnnotation));
+        Assert.Equal(KnownLaunchConfigurationTypes.Project, effectiveAnnotation.LaunchConfigurationType);
+        // The synthesized compatibility annotation describes the launch without being attached to the resource.
+        Assert.Same(declaredAnnotation, Assert.Single(project.Resource.Annotations.OfType<SupportsDebuggingAnnotation>()));
+    }
+
+    [Fact]
+    public void SupportsDebuggingTreatsAspireExtensionCapabilitiesAsAuthoritative()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+#pragma warning disable CS0618 // Retain legacy ProjectResource IDE launch-configuration compatibility.
+        var project = builder.AddProject<Projects.ServiceA>("proj", launchProfileName: "http");
+#pragma warning restore CS0618
+        var defaultAnnotation = project.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().Single();
+        project.Resource.Annotations.Remove(defaultAnnotation);
+        project.WithDebugSupport(
+            mode => new ExecutableLaunchConfiguration("azure-functions") { Mode = mode },
+            "azure-functions");
+        var declaredAnnotation = project.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().Single();
+
+        var configuration = CreateConfiguration(
+            debugSessionInfo: CreateDebugSessionInfo([
+                KnownLaunchConfigurationTypes.Project,
+                DebugSupportExtensions.AspireExtensionBaselineCapability
+            ]));
+
+        Assert.False(project.Resource.SupportsDebugging(configuration, out var returnedAnnotation));
+        Assert.Same(declaredAnnotation, returnedAnnotation);
+    }
+
+    [Fact]
+    public void SupportsDebuggingReturnsFalseForCompatibilityProjectLaunchWithProjectLaunchArgsOverride()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+#pragma warning disable CS0618 // Retain legacy ProjectResource IDE launch-configuration compatibility.
+        var project = builder.AddProject<Projects.ServiceA>("proj", launchProfileName: "http");
+#pragma warning restore CS0618
+        var defaultAnnotation = project.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().Single();
+        project.Resource.Annotations.Remove(defaultAnnotation);
+        project.WithDebugSupport(
+            mode => new ExecutableLaunchConfiguration("azure-functions") { Mode = mode },
+            "azure-functions");
+        var declaredAnnotation = project.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().Single();
+#pragma warning disable ASPIREPROJECTS001 // Project launch argument overrides are experimental.
+        project.Resource.Annotations.Add(new ProjectLaunchArgsOverrideAnnotation(["build", "/t:Run"]));
+#pragma warning restore ASPIREPROJECTS001
+
+        var configuration = CreateConfiguration(
+            debugSessionInfo: CreateDebugSessionInfo([KnownLaunchConfigurationTypes.Project]));
+
+        Assert.False(project.Resource.SupportsDebugging(configuration, out var returnedAnnotation));
+        Assert.Same(declaredAnnotation, returnedAnnotation);
     }
 
     [Theory]

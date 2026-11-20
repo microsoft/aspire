@@ -1,7 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Text.Json;
+using System.Globalization;
+using System.Text;
 using System.Text.RegularExpressions;
 using YamlDotNet.Core;
 
@@ -93,7 +94,43 @@ internal static partial class HelmExtensions
     /// Evaluates a string as a Helm template and quotes the complete result as a YAML scalar.
     /// </summary>
     public static string ToQuotedHelmTemplateExpression(this string value)
-        => $"{StartDelimiter} tpl {JsonSerializer.Serialize(value)} . {PipelineDelimiter} quote {EndDelimiter}";
+        => QuotedTemplateExpressionPattern().IsMatch(value)
+            ? value
+            : $"{StartDelimiter} tpl {ToGoStringLiteral(value)} . {PipelineDelimiter} quote {EndDelimiter}";
+
+    private static string ToGoStringLiteral(string value)
+    {
+        // JSON emits supplementary characters as UTF-16 surrogate escapes, e.g.
+        // "\uD83D\uDE80". Go rejects those escapes; preserve Unicode as UTF-8 instead.
+        // https://go.dev/ref/spec#String_literals
+        var builder = new StringBuilder(value.Length + 2).Append('"');
+        foreach (var ch in value)
+        {
+            var escaped = ch switch
+            {
+                '"' => "\\\"",
+                '\\' => "\\\\",
+                '\n' => "\\n",
+                '\r' => "\\r",
+                '\t' => "\\t",
+                _ => null
+            };
+            if (escaped is not null)
+            {
+                builder.Append(escaped);
+            }
+            else if (char.IsControl(ch) || ch is '\u2028' or '\u2029' or '\uFEFF')
+            {
+                builder.Append("\\u").Append(((int)ch).ToString("x4", CultureInfo.InvariantCulture));
+            }
+            else
+            {
+                builder.Append(ch);
+            }
+        }
+
+        return builder.Append('"').ToString();
+    }
 
     public static (bool, ScalarStyle?) ShouldDoubleQuoteString(string value)
     {

@@ -1,8 +1,10 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Xml.Linq;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.DotNet;
+using Aspire.Cli.Configuration;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Tests.TestServices;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -13,6 +15,194 @@ namespace Aspire.Cli.Tests.NuGet;
 
 public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
 {
+    [Theory]
+    [InlineData(false, false, false)]
+    [InlineData(false, false, true)]
+    [InlineData(false, true, false)]
+    [InlineData(false, true, true)]
+    [InlineData(true, false, false)]
+    [InlineData(true, false, true)]
+    [InlineData(true, true, false)]
+    [InlineData(true, true, true)]
+    public async Task ChannelChangesPreserveConfiguredIntegrationFeeds(bool hasMappings, bool stable, bool inherited)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var app = workspace.CreateDirectory("app");
+        const string integrationFeed = "https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-microsoft-aspire-team/nuget/v3/index.json";
+        const string selectedFeed = "https://selected.example/v3/index.json";
+        File.WriteAllText(Path.Combine(app.FullName, AspireConfigFile.FileName), $$"""
+            {
+              "integrationSources": {
+                "team": {"source":"{{integrationFeed}}","enabled":false}
+              }
+            }
+            """);
+        var configPath = Path.Combine(inherited ? workspace.Path : app.FullName, "nuget.config");
+        File.WriteAllText(configPath, $$"""
+            <configuration>
+              <packageSources>
+                <clear />
+                <add key="aspire-daily" value="{{integrationFeed}}" />
+                <add key="team-alias" value="{{integrationFeed.Replace("pkgs.dev.azure.com", "PKGS.DEV.AZURE.COM", StringComparison.Ordinal)}}" />
+                <add key="aspire-staging" value="https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-microsoft-aspire-obsolete/nuget/v3/index.json" />
+                <add key="public" value="https://api.nuget.org/v3/index.json" />
+              </packageSources>
+              {{(hasMappings ? """
+              <packageSourceMapping>
+                <clear />
+                <packageSource key="aspire-daily"><package pattern="Aspire.Hosting.Private" /></packageSource>
+                <packageSource key="team-alias"><package pattern="Contoso.*" /></packageSource>
+                <packageSource key="aspire-staging"><package pattern="Aspire*" /></packageSource>
+                <packageSource key="public"><package pattern="*" /></packageSource>
+              </packageSourceMapping>
+              """ : "")}}
+            </configuration>
+            """);
+        var original = File.ReadAllBytes(configPath);
+        var client = NuGetTestHelper.CreateClient();
+        var service = new BundleNuGetService(NullLogger<BundleNuGetService>.Instance, client,
+            new TestConfigurationService { SettingsFilePath = Path.Combine(workspace.Path, "global.json") });
+        var channel = PackageChannel.CreateExplicitChannel(
+            stable ? "stable" : "test", PackageChannelQuality.Both,
+            [new(stable ? "*" : "Aspire*", stable ? PackageSources.NuGetOrg : selectedFeed)],
+            new FakeNuGetPackageCache(), new TestFeatures(), NullLogger.Instance);
+        var configuration = service.BuildChannelConfiguration(
+            app, "test", channel, packageSourceOverride: null, nugetServiceIndexOverride: null,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(["aspire-daily", "team-alias"],
+            configuration.Settings.Sources.Where(static source => source.IsIntegrationSource).Select(static source => source.Name));
+        var overlay = Assert.IsType<NuGetConfigOverlay>(configuration.Overlay);
+        Assert.Equal(["aspire-staging"], overlay.RetiredSourceKeys);
+        var persistence = Assert.IsType<DotNetAppHostNuGetConfig>(configuration.AppHostConfig);
+        Assert.Equal(["aspire-staging"], persistence.SourceChanges.RetiredSourceKeys);
+        Assert.Empty(persistence.RemovedPackageSourceMappings);
+
+        using var preview = await service.CreateConfigurationPreviewAsync(
+            app, configuration, globalPackagesFolder: null, TestContext.Current.CancellationToken);
+        var previewSettings = client.GetSettings(preview.EffectiveWorkingDirectory.FullName, new byte[NuGetSourceIdentity.KeySizeInBytes]);
+        Assert.Equal(stable ? ["aspire-daily", "public", "team-alias"] : ["aspire-daily", "aspire-test", "public", "team-alias"],
+            previewSettings.Sources.Where(static source => source.IsEnabled).Select(static source => source.Name).Order(StringComparer.Ordinal));
+        if (hasMappings)
+        {
+            Assert.Equal(["Aspire.Hosting.Private"],
+                Assert.Single(previewSettings.PackageSourceMappings, static mapping => mapping.SourceKey == "aspire-daily").Patterns);
+        }
+
+        var candidate = await new DotNetAppHostNuGetConfigMerger(service).PrepareAsync(
+            app, configuration, createIfMissing: true, globalPackagesFolder: null, TestContext.Current.CancellationToken);
+        Assert.NotNull(candidate);
+        await DotNetAppHostNuGetConfigMerger.ApplyAsync(candidate, TestContext.Current.CancellationToken);
+        var persisted = client.GetSettings(app.FullName, new byte[NuGetSourceIdentity.KeySizeInBytes]);
+        Assert.Equal(inherited ? ["aspire-daily", "aspire-staging", "public", "team-alias"] : ["aspire-daily", "public", "team-alias"],
+            persisted.Sources.Where(static source => source.IsEnabled &&
+                source.Name != "aspire-test").Select(static source => source.Name).Order(StringComparer.Ordinal));
+        Assert.Equal(hasMappings,
+            persisted.PackageSourceMappings.Count > 0);
+        if (inherited)
+        {
+            Assert.Equal(original, File.ReadAllBytes(configPath));
+        }
+        await Verify(new XElement("configurations",
+            new XElement("preview", XDocument.Load(preview.ConfigurationFile!.FullName).Root),
+            new XElement("persisted", XDocument.Load(candidate.TargetFile.FullName).Root)).ToString(), "xml")
+            .UseParameters(hasMappings, stable, inherited);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ExplicitSourceOverrideCanReplaceConfiguredIntegrationPolicy(bool invalidConfiguration)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        File.WriteAllText(Path.Combine(workspace.Path, AspireConfigFile.FileName), invalidConfiguration ? """
+            {"integrationSources":"invalid"}
+            """ : """
+            {"integrationSources":{"team":{"source":"https://example.com/team"}}}
+            """);
+        File.WriteAllText(Path.Combine(workspace.Path, "nuget.config"), """
+            <configuration>
+              <packageSources><clear /><add key="aspire-daily" value="https://example.com/team" /></packageSources>
+              <packageSourceMapping><clear /><packageSource key="aspire-daily"><package pattern="Aspire.Hosting.Private" /></packageSource></packageSourceMapping>
+            </configuration>
+            """);
+        var service = new BundleNuGetService(NullLogger<BundleNuGetService>.Instance, NuGetTestHelper.CreateClient(),
+            new TestConfigurationService { SettingsFilePath = Path.Combine(workspace.Path, "global.json") });
+
+        var configuration = service.BuildConfiguration(
+            workspace.WorkspaceRoot, "test", [new("Aspire*", "https://example.com/override")],
+            restrictToSelectedSources: false, overrideIntegrationSources: true,
+            hasAuthoritativeAspirePolicy: true, cancellationToken: TestContext.Current.CancellationToken);
+
+        var overlay = Assert.IsType<NuGetConfigOverlay>(configuration.Overlay);
+        Assert.Equal(["aspire-daily"], overlay.RetiredSourceKeys);
+        var mapping = Assert.Single(overlay.PackageSourceMappings);
+        Assert.Equal("aspire-test", mapping.SourceKey);
+        Assert.Equal(["Aspire*"], mapping.Patterns);
+
+        var persistentConfiguration = service.BuildChannelConfiguration(
+            workspace.WorkspaceRoot, "test", channel: null,
+            packageSourceOverride: "https://example.com/override", nugetServiceIndexOverride: null,
+            TestContext.Current.CancellationToken);
+        var persistence = Assert.IsType<DotNetAppHostNuGetConfig>(persistentConfiguration.AppHostConfig);
+        Assert.Equal(["aspire-daily"], persistence.SourceChanges.RetiredSourceKeys);
+    }
+
+    [Fact]
+    public void IntegrationFeedProtectionIsFreshAndParticipatesInPolicyIdentity()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var global = new FileInfo(Path.Combine(workspace.Path, "global.json"));
+        File.WriteAllText(global.FullName, """
+            {"integrationSources":{"team":{"source":"https://example.com/team","enabled":false}}}
+            """);
+        File.WriteAllText(Path.Combine(workspace.Path, "nuget.config"), """
+            <configuration>
+              <packageSources><clear /><add key="aspire-daily" value="https://example.com/team" /></packageSources>
+            </configuration>
+            """);
+        var service = new BundleNuGetService(NullLogger<BundleNuGetService>.Instance, NuGetTestHelper.CreateClient(),
+            new TestConfigurationService { SettingsFilePath = global.FullName });
+
+        var protectedSettings = service.GetNuGetSettings(workspace.Path, TestContext.Current.CancellationToken);
+        Assert.True(Assert.Single(protectedSettings.Sources).IsIntegrationSource);
+        Assert.Equal(protectedSettings.CacheIdentity,
+            service.GetNuGetSettings(workspace.Path, TestContext.Current.CancellationToken).CacheIdentity);
+
+        File.WriteAllText(global.FullName, "{}");
+        var unprotectedSettings = service.GetNuGetSettings(workspace.Path, TestContext.Current.CancellationToken);
+
+        Assert.False(Assert.Single(unprotectedSettings.Sources).IsIntegrationSource);
+        Assert.NotEqual(protectedSettings.CacheIdentity, unprotectedSettings.CacheIdentity);
+        var channel = PackageChannel.CreateExplicitChannel(
+            "stable", PackageChannelQuality.Stable, [new("*", PackageSources.NuGetOrg)],
+            new FakeNuGetPackageCache(), new TestFeatures(), NullLogger.Instance);
+        var configuration = DotNetAppHostNuGetConfigBuilder.BuildStable(unprotectedSettings, "test", channel);
+        Assert.Equal(["aspire-daily"], configuration.AppHostConfig!.SourceChanges.RetiredSourceKeys);
+    }
+
+    [Fact]
+    public void ConfiguredLocalIntegrationFeedMatchesResolvedNuGetSource()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var app = workspace.CreateDirectory("app");
+        workspace.CreateDirectory("feed");
+        File.WriteAllText(Path.Combine(app.FullName, AspireConfigFile.FileName), """
+            {"integrationSources":{"team":{"source":"../feed","enabled":false}}}
+            """);
+        File.WriteAllText(Path.Combine(workspace.Path, "nuget.config"), """
+            <configuration>
+              <packageSources><clear /><add key="aspire-daily" value="./feed" /></packageSources>
+            </configuration>
+            """);
+        var service = new BundleNuGetService(NullLogger<BundleNuGetService>.Instance, NuGetTestHelper.CreateClient(),
+            new TestConfigurationService { SettingsFilePath = Path.Combine(workspace.Path, "global.json") });
+
+        var settings = service.GetNuGetSettings(app.FullName, TestContext.Current.CancellationToken);
+
+        Assert.True(Assert.Single(settings.Sources).IsIntegrationSource);
+    }
+
     [Fact]
     public async Task CreateConfigurationPreviewAsync_PreservesAmbientSettingsWithoutChangingOriginal()
     {
@@ -45,11 +235,12 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
             """;
         await File.WriteAllTextAsync(configPath, original);
         var client = NuGetTestHelper.CreateClient();
-        var service = new BundleNuGetService(NullLogger<BundleNuGetService>.Instance, client);
+        var service = new BundleNuGetService(NullLogger<BundleNuGetService>.Instance, client,
+            new TestConfigurationService { SettingsFilePath = Path.Combine(workspace.Path, "global.json") });
         var configuration = service.BuildConfiguration(
             appHostDirectory, "test",
             [new PackageMapping("Aspire*", "https://api.nuget.org/v3/index.json"), new PackageMapping("*", "https://api.nuget.org/v3/index.json")],
-            restrictToSelectedSources: false, hasAuthoritativeAspirePolicy: true,
+            restrictToSelectedSources: false, overrideIntegrationSources: false, hasAuthoritativeAspirePolicy: true,
             cancellationToken: TestContext.Current.CancellationToken);
         using var preview = await service.CreateConfigurationPreviewAsync(
             appHostDirectory, configuration, globalPackagesFolder: null, TestContext.Current.CancellationToken);
@@ -108,10 +299,12 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
             </configuration>
             """);
         var client = NuGetTestHelper.CreateClient();
-        var service = new BundleNuGetService(NullLogger<BundleNuGetService>.Instance, client);
+        var service = new BundleNuGetService(NullLogger<BundleNuGetService>.Instance, client,
+            new TestConfigurationService { SettingsFilePath = Path.Combine(workspace.Path, "global.json") });
         var configuration = service.BuildAppHostConfiguration(
             appHostDirectory, "test",
             [new PackageMapping("Aspire*", "https://selected.example/v3/index.json")],
+            overrideIntegrationSources: false,
             cancellationToken: TestContext.Current.CancellationToken);
         using var preview = await service.CreateConfigurationPreviewAsync(
             appHostDirectory, configuration, globalPackagesFolder: null, TestContext.Current.CancellationToken);
@@ -495,7 +688,8 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
     private static BundleNuGetService CreateService(INuGetClient nuGetClient)
         => new(
             NullLogger<BundleNuGetService>.Instance,
-            nuGetClient);
+            nuGetClient,
+            new TestConfigurationService());
 
     private static string GetRestoreDirectory(
         TemporaryWorkspace workspace,

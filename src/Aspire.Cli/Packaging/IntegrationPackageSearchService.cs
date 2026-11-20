@@ -7,6 +7,7 @@ using Aspire.Cli.Interaction;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Utils;
+using Microsoft.Extensions.Logging;
 using Semver;
 using NuGetPackage = Aspire.Shared.NuGetPackageCli;
 
@@ -20,11 +21,15 @@ internal sealed class IntegrationPackageSearchService(
     IProjectLocator projectLocator,
     IInteractionService interactionService,
     CliExecutionContext executionContext,
-    IAppHostProjectFactory projectFactory)
+    IAppHostProjectFactory projectFactory,
+    IConfigurationService configurationService,
+    INuGetPackageCache nuGetPackageCache,
+    IFeatures features,
+    ILogger<IntegrationPackageSearchService> logger)
 {
     private const double FuzzyMatchThreshold = 0.3;
 
-    public async Task<IEnumerable<(NuGetPackage Package, PackageChannel Channel)>> GetIntegrationPackagesWithChannelsAsync(DirectoryInfo workingDirectory, string? configuredChannel, CancellationToken cancellationToken)
+    public async Task<PackageSearchResult<(NuGetPackage Package, PackageChannel Channel)>> GetIntegrationPackagesWithChannelsAsync(DirectoryInfo workingDirectory, string? configuredChannel, CancellationToken cancellationToken)
     {
         return await GetIntegrationPackagesWithChannelsAsync(
             workingDirectory,
@@ -33,19 +38,21 @@ internal sealed class IntegrationPackageSearchService(
             cancellationToken);
     }
 
-    public async Task<IEnumerable<(NuGetPackage Package, PackageChannel Channel)>> GetIntegrationPackagesWithChannelsAsync(
+    public async Task<PackageSearchResult<(NuGetPackage Package, PackageChannel Channel)>> GetIntegrationPackagesWithChannelsAsync(
         DirectoryInfo workingDirectory,
         string? configuredChannel,
         string? sourceOverride,
         CancellationToken cancellationToken)
     {
-        var channels = await GetSearchChannelsAsync(configuredChannel, sourceOverride, cancellationToken);
+        var channels = await GetSearchChannelsAsync(workingDirectory, configuredChannel, sourceOverride, cancellationToken);
         var sourceMappings = string.IsNullOrWhiteSpace(sourceOverride)
             ? null
             : PackageSourceOverrideMappings.CreateForSourceOnlyOperations(sourceOverride);
 
         var packages = new List<(NuGetPackage Package, PackageChannel Channel)>();
         var packagesLock = new object();
+        var limitReached = false;
+        var failedSources = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         await Parallel.ForEachAsync(channels, cancellationToken, async (channel, ct) =>
         {
@@ -59,11 +66,13 @@ internal sealed class IntegrationPackageSearchService(
                     ct);
             lock (packagesLock)
             {
-                packages.AddRange(integrationPackages.Select(p => (p, channel)));
+                packages.AddRange(integrationPackages.Packages.Select(p => (p, channel)));
+                limitReached |= integrationPackages.LimitReached;
+                failedSources.UnionWith(integrationPackages.FailedSources);
             }
         });
 
-        return packages;
+        return new(packages, limitReached, failedSources.ToArray());
     }
 
     /// <summary>
@@ -76,7 +85,7 @@ internal sealed class IntegrationPackageSearchService(
     /// Resolving both lists together avoids re-resolving the channel set and lets each channel's integration
     /// search and its <c>tags:polyglot</c> lookup run concurrently, rather than as two serial discovery passes.
     /// </remarks>
-    public async Task<(IReadOnlyList<(NuGetPackage Package, PackageChannel Channel)> Packages, IReadOnlySet<string> PolyglotCompatibleIds)> GetIntegrationPackagesWithPolyglotCompatibilityAsync(DirectoryInfo workingDirectory, string? configuredChannel, CancellationToken cancellationToken)
+    public async Task<PolyglotPackageSearchResult> GetIntegrationPackagesWithPolyglotCompatibilityAsync(DirectoryInfo workingDirectory, string? configuredChannel, CancellationToken cancellationToken)
     {
         return await GetIntegrationPackagesWithPolyglotCompatibilityAsync(
             workingDirectory,
@@ -85,13 +94,13 @@ internal sealed class IntegrationPackageSearchService(
             cancellationToken);
     }
 
-    public async Task<(IReadOnlyList<(NuGetPackage Package, PackageChannel Channel)> Packages, IReadOnlySet<string> PolyglotCompatibleIds)> GetIntegrationPackagesWithPolyglotCompatibilityAsync(
+    public async Task<PolyglotPackageSearchResult> GetIntegrationPackagesWithPolyglotCompatibilityAsync(
         DirectoryInfo workingDirectory,
         string? configuredChannel,
         string? sourceOverride,
         CancellationToken cancellationToken)
     {
-        var channels = await GetSearchChannelsAsync(configuredChannel, sourceOverride, cancellationToken);
+        var channels = await GetSearchChannelsAsync(workingDirectory, configuredChannel, sourceOverride, cancellationToken);
         var sourceMappings = string.IsNullOrWhiteSpace(sourceOverride)
             ? null
             : PackageSourceOverrideMappings.CreateForSourceOnlyOperations(sourceOverride);
@@ -99,6 +108,8 @@ internal sealed class IntegrationPackageSearchService(
         var packages = new List<(NuGetPackage Package, PackageChannel Channel)>();
         var polyglotIds = new HashSet<string>(StringComparers.NuGetPackageId);
         var gate = new object();
+        var limitReached = false;
+        var failedSources = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         await Parallel.ForEachAsync(channels, cancellationToken, async (channel, ct) =>
         {
@@ -114,15 +125,46 @@ internal sealed class IntegrationPackageSearchService(
 
             lock (gate)
             {
-                packages.AddRange(integrationPackagesTask.Result.Select(p => (p, channel)));
-                polyglotIds.UnionWith(polyglotIdsTask.Result);
+                packages.AddRange(integrationPackagesTask.Result.Packages.Select(p => (p, channel)));
+                polyglotIds.UnionWith(polyglotIdsTask.Result.Packages);
+                limitReached |= integrationPackagesTask.Result.LimitReached || polyglotIdsTask.Result.LimitReached;
+                failedSources.UnionWith(integrationPackagesTask.Result.FailedSources);
+                failedSources.UnionWith(polyglotIdsTask.Result.FailedSources);
             }
         });
 
-        return (packages, polyglotIds);
+        return new(packages, polyglotIds, limitReached, failedSources.ToArray());
     }
 
     private async Task<IEnumerable<PackageChannel>> GetSearchChannelsAsync(
+        DirectoryInfo workingDirectory,
+        string? configuredChannel,
+        string? sourceOverride,
+        CancellationToken cancellationToken)
+    {
+        if (!string.IsNullOrWhiteSpace(sourceOverride))
+        {
+            return await GetDefaultSearchChannelsAsync(configuredChannel, sourceOverride, cancellationToken);
+        }
+
+        var sources = IntegrationSourceConfiguration.Resolve(workingDirectory, new FileInfo(configurationService.GetSettingsFilePath(isGlobal: true)));
+        var channels = sources.Any(source => source.Source is null)
+            ? (await GetDefaultSearchChannelsAsync(configuredChannel, sourceOverride: null, cancellationToken)).ToList()
+            : [];
+        channels.AddRange(sources.Where(source => source.Source is not null).Select(source =>
+            new PackageChannel(
+                $"integration:{source.Name}",
+                PackageChannelQuality.Both,
+                source.Patterns!.Select(pattern => new PackageMapping(pattern, source.Source!)).ToArray(),
+                nuGetPackageCache, features, logger)
+            {
+                IntegrationSource = source
+            }));
+
+        return channels;
+    }
+
+    private async Task<IEnumerable<PackageChannel>> GetDefaultSearchChannelsAsync(
         string? configuredChannel,
         string? sourceOverride,
         CancellationToken cancellationToken)

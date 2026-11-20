@@ -1,29 +1,27 @@
 ﻿::deep.layout > header {
-    /* The recording pill is centered on the header. */
-    position: relative;
     display: flex;
     align-items: center;
     min-width: 0;
     height: 50px;
     padding: 0 12px;
-    gap: 6px;
+    gap: var(--aspire-space-1);
     overflow: hidden;
     white-space: nowrap;
 }
 
-::deep.layout > header > a.application-name {
+::deep.layout > header .application-name {
     display: block;
     flex: 0 1 auto;
     min-width: 0;
     /* Long application names truncate with an ellipsis; the full name is in the tooltip. */
-    max-width: min(220px, 22vw);
+    max-width: min(280px, 22vw);
     height: 28px;
     padding: 0 2px;
     overflow: hidden;
     color: var(--colorNeutralForeground1);
     font-family: var(--aspire-font-display);
-    font-size: 20px;
-    font-weight: var(--fontWeightRegular);
+    font-size: var(--aspire-font-size-title);
+    font-weight: var(--aspire-font-weight-regular);
     line-height: 28px;
     text-decoration: none;
     text-overflow: ellipsis;
@@ -35,14 +33,14 @@
     min-width: 8px;
 }
 
-::deep.layout a.logo {
+::deep.layout .logo {
     display: flex;
     align-items: center;
     width: 24px;
     height: 24px;
 }
 
-::deep.layout:has(a.logo:hover, a.application-name:hover) :is(a.logo, a.application-name) {
+::deep.layout:has(a.logo:hover, a.application-name:hover, a.brand-home:hover) :is(.logo, .application-name) {
     filter: brightness(var(--aspire-brand-hover-brightness));
 }
 
@@ -59,7 +57,7 @@
     height: 32px;
     padding: 0;
     border: 0;
-    border-radius: 8px;
+    border-radius: var(--aspire-radius-medium);
     background: var(--aspire-button-background);
 }
 
@@ -68,7 +66,7 @@
     height: 32px;
     padding: 0;
     border: 0;
-    border-radius: 8px;
+    border-radius: var(--aspire-radius-medium);
     background: transparent;
 }
 
@@ -97,7 +95,7 @@
     padding: 0;
     background-color: var(--colorNeutralBackgroundInverted);
     color: var(--colorNeutralForegroundInverted);
-    font-weight: var(--fontWeightRegular);
+    font-weight: var(--aspire-font-weight-regular);
     pointer-events: none;
 }
 
@@ -109,8 +107,8 @@
 ::deep.layout > .messagebar-container > .top-messagebar {
     flex: 1 1 auto;
     min-width: 0;
-    padding: 8px;
-    gap: 6px;
+    padding: 8px 8px 4px;
+    gap: var(--aspire-space-1);
 }
 
 ::deep.layout > .messagebar-container > .top-messagebar:empty {
@@ -122,11 +120,11 @@
 }
 
 ::deep fluent-toast-b.resource-command-toast::part(dialog) {
-    font-size: 13px;
+    font-size: var(--aspire-font-size-body);
 }
 
 ::deep fluent-toast-b.resource-command-toast > [slot="title"] {
-    font-weight: var(--fontWeightSemibold);
+    font-weight: var(--aspire-font-weight-semibold);
 }
 
 ::deep.layout {
@@ -161,13 +159,59 @@
     display: none;
 }
 
-::deep .header-right {
-    margin-left: auto;
+/* When the banners don't all fit, the area scrolls. It rests on a banner's top edge rather than partway through one,
+   and fades out at the bottom while there's more to scroll to, so a banner cut off at the edge reads as "scroll for
+   more" rather than as a clipped banner. The fade follows the scroll position (a scroll-driven animation); browsers
+   without them show no fade. */
+::deep.layout > .messagebar-container {
+    scroll-snap-type: y proximity;
+}
+
+::deep.layout > .messagebar-container .dashboard-message-bar {
+    scroll-snap-align: start;
+}
+
+@supports (animation-timeline: scroll()) {
+    ::deep.layout > .messagebar-container {
+        /* No fade unless the area scrolls: without overflow the scroll timeline is inactive and this value applies. */
+        --messagebar-fade: 0px;
+        mask-image: linear-gradient(to bottom, #000 calc(100% - var(--messagebar-fade)), transparent);
+        animation: messagebar-fade-out linear both;
+        animation-timeline: scroll(self);
+    }
+}
+
+@keyframes messagebar-fade-out {
+    from {
+        --messagebar-fade: 24px;
+    }
+
+    99% {
+        --messagebar-fade: 24px;
+    }
+
+    to {
+        --messagebar-fade: 0px;
+    }
+}
+
+@property --messagebar-fade {
+    syntax: "<length>";
+    inherits: false;
+    initial-value: 0px;
+}
+
+/* The header is a band darker than the page, so the app's name and the tabs read as the frame around it. Its pieces
+   (the band, and on phones the logo's cell and the app bar) share one color. In the dark theme the shell background
+   is pure black, which is too harsh beside the page, so the band is the page's own color taken about halfway to
+   black. The light theme keeps the shell's grey. */
+::deep.layout {
+    --aspire-header-background: light-dark(var(--aspire-shell-background), color-mix(in srgb, #000 55%, var(--aspire-page-background)));
 }
 
 ::deep.layout > header {
     grid-area: head;
-    background-color: var(--colorNeutralBackground4);
+    background-color: var(--aspire-header-background);
     margin-bottom: 0;
 }
 
@@ -181,22 +225,93 @@
             "main";
     }
 
+    /* A hairline finishes the band's lower edge, across the whole header. */
     ::deep.layout > header {
-        padding-left: 12px;
+        position: relative;
+        padding-left: 0;
+        gap: 0;
     }
 
-    ::deep.layout > header > .brand-logo-container {
+    ::deep.layout > header::after {
+        content: "";
+        position: absolute;
+        inset: auto 0 0 0;
+        height: 1px;
+        background: light-dark(var(--colorNeutralStroke2), var(--colorNeutralStroke3));
+        pointer-events: none;
+    }
+
+    /* The header draws the separator; banners must not add a second line underneath it. */
+    ::deep.layout > .messagebar-container {
+        border-top: 0;
+    }
+
+    ::deep.layout > .messagebar-container > .top-messagebar {
+        padding-inline: var(--layout-left-padding) var(--layout-right-padding);
+    }
+
+    /* One link fills the brand's cell, including the padding between the logo, name and house. */
+    ::deep.layout > header .brand-home {
+        display: flex;
+        flex: 1 1 auto;
+        align-items: center;
+        min-width: 0;
+        height: 100%;
+        border-right: 1px solid light-dark(var(--colorNeutralStroke2), var(--colorNeutralStroke3));
+        color: inherit;
+        text-decoration: none;
+    }
+
+    /* Keyboard focus highlights it too. Focus left behind by a click doesn't: the highlight would stay on after
+       arriving home. */
+    ::deep.layout > header .brand-home:is(:hover, :focus-visible) {
+        background: var(--colorNeutralBackground3);
+    }
+
+    /* The name truncates in its own box, so the house after it is never the part that's cut off. */
+    ::deep.layout > header .brand-home > .application-name {
         display: flex;
         align-items: center;
-        justify-content: center;
-        flex: 0 0 24px;
-        width: 24px;
-        height: 100%;
-        margin-right: 4px;
+        padding: 0 16px 0 12px;
+        gap: 20px;
     }
 
-    ::deep.layout > header > .brand-logo-container > a.logo {
-        justify-content: center;
+    ::deep.layout > header .brand-home .application-name-text {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    ::deep.layout > header .brand-home .application-home-icon {
+        flex: 0 0 auto;
+        color: var(--colorNeutralForeground3);
+        /* The house artwork sits about 0.5px above its SVG box's center because of uneven internal whitespace. */
+        transform: translateY(0.5px);
+    }
+
+    ::deep.layout > header .brand-home:is(:hover, :focus-visible, .current) .application-home-icon {
+        color: var(--colorBrandForeground1);
+    }
+
+    ::deep.layout > header > .header-brand {
+        display: flex;
+        flex: 0 1 auto;
+        align-items: center;
+        box-sizing: border-box;
+        min-width: 0;
+        height: 100%;
+    }
+
+    ::deep.layout > header .brand-logo-container {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        flex: 0 0 36px;
+        width: 36px;
+        height: 100%;
+    }
+
+    ::deep.layout > header .brand-logo-container > .logo {
         flex: 0 0 24px;
     }
 
@@ -204,12 +319,15 @@
         display: flex;
         flex: 1 1 auto;
         align-items: center;
-        min-width: 0;
+        /* Reserve room for the compact tab picker when a long app name truncates. */
+        min-width: 170px;
         height: 100%;
-        margin-left: 16px;
         margin-right: auto;
-        padding-left: 16px;
-        border-left: 1px solid var(--colorNeutralStroke2);
+        padding-left: var(--aspire-space-2);
+    }
+
+    ::deep.layout > header > .header-context ~ * {
+        margin-left: var(--aspire-space-1);
     }
 
     ::deep.layout > header .resource-tabs-nav {
@@ -220,7 +338,7 @@
         align-self: stretch;
         align-items: center;
         min-height: 50px;
-        gap: 6px;
+        gap: var(--aspire-space-1);
         padding: 0;
         border: 0;
         border-radius: 0;
@@ -232,9 +350,9 @@
         height: 32px;
         padding: 0 10px;
         border: 0;
-        border-radius: 8px;
+        border-radius: var(--aspire-radius-medium);
         background: transparent;
-        font-weight: var(--fontWeightSemibold);
+        font-weight: var(--aspire-font-weight-semibold);
     }
 
     ::deep.layout > header .resources-tab-header fluent-tab[aria-selected="true"] {
@@ -249,7 +367,7 @@
         bottom: -9px;
         display: block;
         height: 3px;
-        border-radius: 2px 2px 0 0;
+        border-radius: var(--aspire-radius-small) var(--aspire-radius-small) 0 0;
         background: var(--colorBrandBackground);
     }
 
@@ -278,6 +396,10 @@
 }
 
 @media (max-width: 768px) {
+    ::deep.layout > header > a.application-name {
+        max-width: none;
+    }
+
     ::deep.layout {
         /* MobileNavMenu uses this same value to place its sheet directly under the header and to keep its
            scrollport within the visible viewport instead of extending underneath the header at high zoom. */
@@ -296,41 +418,10 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        background-color: var(--colorNeutralBackground4);
-    }
-
-    ::deep.layout > .fluent-appbar {
-        grid-area: nav;
-        overflow-y: auto;
-        background: var(--colorNeutralBackground4);
-    }
-
-    ::deep.layout > .aspire-icon {
         padding-left: 15px;
         padding-right: 10px;
-        background-color: var(--colorNeutralBackground4);
+        background-color: var(--aspire-header-background);
     }
-
-    ::deep.layout > .aspire-icon fluent-anchor {
-        margin-left: 5px;
-    }
-
-    ::deep .aspire-icon fluent-anchor.logo::part(control) {
-        padding: 0;
-        border: none;
-    }
-
-    ::deep .aspire-icon fluent-anchor.logo,
-    ::deep .aspire-icon fluent-anchor.logo::part(control),
-    ::deep .aspire-icon fluent-anchor.logo::part(content) {
-        height: 24px;
-        width: 24px;
-    }
-
-}
-
-::deep.layout > .aspire-icon fluent-anchor[appearance=stealth].logo::part(control) {
-    background-color: var(--colorNeutralBackground4);
 }
 
 #blazor-error-ui {

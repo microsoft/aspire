@@ -21,19 +21,31 @@ public sealed partial class ResourceOverview
         KnownProperties.Resource.DisplayName,
         KnownProperties.Resource.State,
         KnownProperties.Resource.HealthState,
-        KnownProperties.Resource.Type,
+        KnownProperties.Resource.ResourceTypeDisplayName,
         KnownProperties.Resource.StartTime,
         KnownProperties.Resource.StopTime,
         KnownProperties.Resource.ExitCode,
         KnownProperties.Resource.Source,
     };
 
+    // The status card shows the friendly type label. The technical type is only redundant when no custom label
+    // replaces it, so keep it in the properties otherwise.
+    private static bool IsDisplayedOutsideProperties(ResourceViewModel resource, string propertyName)
+    {
+        if (string.Equals(propertyName, KnownProperties.Resource.Type, StringComparisons.ResourcePropertyName))
+        {
+            return resource.ResourceTypeDisplayName == resource.ResourceType;
+        }
+
+        return s_statusCardPropertyNames.Contains(propertyName);
+    }
+
     private readonly List<DisplayedResourcePropertyViewModel> _properties = new();
     private readonly MaskState _propertiesMask = new();
     private readonly MaskState _environmentMask = new();
     private ResourceViewModel? _detailsResource;
     private Dictionary<string, ComponentMetadata>? _propertyValueComponents;
-    private bool _showAllProperties;
+    private bool _showAllProperties = true;
     private bool _showAllEnvironmentVariables;
     private string _environmentFilter = string.Empty;
     private bool _propertiesExpanded;
@@ -71,7 +83,7 @@ public sealed partial class ResourceOverview
 
         foreach (var property in resource.Properties.Values)
         {
-            if (s_statusCardPropertyNames.Contains(property.Name) || !HasValue(property.Value))
+            if (IsDisplayedOutsideProperties(resource, property.Name) || !HasValue(property.Value))
             {
                 continue;
             }
@@ -138,8 +150,8 @@ public sealed partial class ResourceOverview
     private static bool HasValue(ProtobufValue value) =>
         value is { HasNullValue: false } and not { KindCase: ProtobufValue.KindOneofCase.ListValue, ListValue.Values.Count: 0 };
 
-    // Unknown properties are custom properties published by integrations. They're hidden by default, like in the
-    // resource details panel, unless the integration marks them as highlighted. AppHost traits are always shown:
+    // The core-only filter excludes custom properties published by integrations unless they are highlighted.
+    // AppHost traits are always shown:
     // the app author declared them to describe the resource, unlike integration implementation details.
     private static bool IsCoreProperty(DisplayedResourcePropertyViewModel property) => property.KnownProperty is not null || property.IsHighlighted || property.IsTrait;
 

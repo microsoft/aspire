@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import fs, { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import http from "node:http";
+import { syncBuiltinESMExports } from "node:module";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
@@ -11,16 +12,106 @@ const preferencesPath = join(copilotHome, "extensions", "aspire-team-app", "arti
 const originalEnv = {
   GH_TOKEN: process.env.GH_TOKEN,
   GITHUB_TOKEN: process.env.GITHUB_TOKEN,
+  GH_ENTERPRISE_TOKEN: process.env.GH_ENTERPRISE_TOKEN,
+  GITHUB_ENTERPRISE_TOKEN: process.env.GITHUB_ENTERPRISE_TOKEN,
+  GH_HOST: process.env.GH_HOST,
   COPILOT_HOME: process.env.COPILOT_HOME,
   PATH: process.env.PATH,
+  SHELL: process.env.SHELL,
 };
+const originalCopilotAccounts = Object.entries(process.env)
+  .filter(([key]) => key.startsWith("COPILOT_GH_ACCOUNT_"));
 const originalFetch = globalThis.fetch;
+const githubDiscoveryMessage = process.platform === "win32"
+  ? "GitHub CLI was not found. Install gh or make it available on PATH."
+  : "Unable to locate GitHub CLI through the login shell. Check your shell startup configuration.";
 
+// Tests must not discover the developer's CLI installations or injected accounts.
+// Clearing PATH alone cannot isolate login-shell executable discovery.
+process.env.PATH = "";
+process.env.SHELL = "/nonexistent/aspire-team-app-test-shell";
+for (const key of ["GH_TOKEN", "GITHUB_TOKEN", "GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN", "GH_HOST"]) {
+  delete process.env[key];
+}
+for (const [key] of originalCopilotAccounts) delete process.env[key];
 process.env.COPILOT_HOME = copilotHome;
+const sessionContext = { workingDirectory: fileURLToPath(new URL("../../../", import.meta.url)) };
 
 test.after(async () => {
   restoreEnvironment();
   await rm(artifactsRoot, { recursive: true, force: true });
+});
+
+test("agent action availability requires host-supplied active session context", async () => {
+  const server = await import("./server.mjs");
+  for (const context of [undefined, null, {}, { workingDirectory: "" }, { workingDirectory: " " }, { workingDirectory: 42 }]) {
+    assert.equal(server.agentActionAvailability(context).available, false);
+    assert.match(server.agentActionAvailability(context).reason, /active repository session/);
+  }
+  assert.deepEqual(server.agentActionAvailability(sessionContext), { available: true, reason: null });
+  assert.deepEqual(server.agentActionAvailability(sessionContext, true), server.agentActionAvailability());
+});
+
+test("sidebar instances disable PR and Health agent actions without affecting session instances", async (t) => {
+  await resetTestHome({
+    accounts: { "acct:octo": { repos: ["microsoft/aspire"], active: true } },
+  });
+  process.env.GH_TOKEN = "test-token";
+  delete process.env.GITHUB_TOKEN;
+  process.env.PATH = "";
+  globalThis.fetch = makeGitHubMock([makePrNode()]);
+  t.after(() => { globalThis.fetch = originalFetch; });
+
+  const server = await import(`./server.mjs?test=sidebar-actions-${Date.now()}`);
+  const sidebar = await server.startInstance("sidebar-actions-test", () => {}, sessionContext, true);
+  const active = await server.startInstance("session-actions-test", () => {}, sessionContext);
+  t.after(async () => {
+    server.setAgentSend(null);
+    await server.stopInstance("sidebar-actions-test");
+    await server.stopInstance("session-actions-test");
+  });
+
+  const sent = [];
+  server.setAgentSend(async (payload) => {
+    sent.push(payload);
+    return { messageId: "m-sidebar-test", queued: false };
+  });
+  const script = await (await fetch(new URL("app.js", sidebar.url))).text();
+  const availability = JSON.parse(script.split("\n")[0].slice("const agentActions = ".length, -1));
+  assert.deepEqual(availability, server.agentActionAvailability());
+  assert.equal((await fetch(sidebar.url)).status, 200);
+  assert.equal((await fetch(new URL("styles.css", sidebar.url))).status, 200);
+  assert.equal((await fetch(new URL("api/state", sidebar.url))).status, 200);
+  assert.equal((await postJson(sidebar.url, "api/auto-apply", { enabled: false })).status, 200);
+  const savedPrefs = await postJson(sidebar.url, "api/prefs", { detachedSessions: true });
+  assert.equal(savedPrefs.status, 200);
+  assert.equal((await savedPrefs.json()).prefs.detachedSessions, true);
+
+  const pr = { repository: "microsoft/aspire", number: 1, url: "https://github.com/microsoft/aspire/pull/1" };
+  for (const target of ["new-session", "current-session"]) {
+    for (const [route, body] of [
+      ["api/agent/action", { kind: "review", target, pr }],
+      ["api/health/action", { kind: "fix-health", target, source: { id: "github:github.com/microsoft/aspire" } }],
+    ]) {
+      const response = await postJson(sidebar.url, route, body);
+      assert.equal(response.status, 409);
+      assert.deepEqual(await response.json(), { error: availability.reason, code: "agent_session_required" });
+    }
+  }
+  assert.deepEqual(sent, []);
+
+  const response = await postAction(active.url, { kind: "review", target: "new-session", pr });
+  assert.equal(response.status, 200);
+  assert.equal(sent.length, 1);
+  assert.match(sent[0].prompt, /- detached: true/);
+
+  // Rehydration must replace the context even when the loopback server already exists.
+  assert.equal(await server.startInstance("session-actions-test", () => {}, sessionContext, true), active);
+  assert.equal((await postAction(active.url, { kind: "review", pr })).status, 409);
+  assert.equal(sent.length, 1);
+  await server.startInstance("session-actions-test", () => {}, sessionContext, false);
+  assert.equal((await postAction(active.url, { kind: "review", pr })).status, 200);
+  assert.equal(sent.length, 2);
 });
 
 test("mutating POST rejects cross-site loopback requests before saving preferences", async (t) => {
@@ -93,6 +184,27 @@ test("Azure pipeline mutation routes validate input and reject stale removals", 
   assert.equal((await staleRemove.json()).code, "pipeline_not_found");
 });
 
+test("detached session preference migrates safely and persists boolean settings", async (t) => {
+  await resetTestHome({ detachedSessions: "true" });
+  delete process.env.GH_TOKEN;
+  delete process.env.GITHUB_TOKEN;
+  process.env.PATH = "";
+  const server = await import(`./server.mjs?test=detached-prefs-${Date.now()}`);
+  const entry = await server.startInstance("detached-prefs-test", () => {});
+  t.after(() => server.stopInstance("detached-prefs-test"));
+
+  const loaded = await (await fetch(new URL("api/state", entry.url))).json();
+  assert.equal(loaded.prefs.detachedSessions, false);
+  for (const value of [true, false, true]) {
+    const saved = await postJson(entry.url, "api/prefs", { detachedSessions: value });
+    assert.equal(saved.status, 200);
+    assert.equal((await saved.json()).prefs.detachedSessions, value);
+    assert.equal(JSON.parse(await readFile(preferencesPath, "utf8")).detachedSessions, value);
+  }
+  const invalid = await postJson(entry.url, "api/prefs", { detachedSessions: "false" });
+  assert.equal((await invalid.json()).prefs.detachedSessions, true);
+});
+
 test("Health source order persists and reorders the cached dashboard", async (t) => {
   const first = {
     id: "azdo:dnceng:internal:1602",
@@ -121,7 +233,14 @@ test("Health source order persists and reorders the cached dashboard", async (t)
   const entry = await server.startInstance("health-order-test", () => {});
   t.after(() => server.stopInstance("health-order-test"));
 
-  const initial = await (await fetch(new URL("api/state", entry.url))).json();
+  const initialResponse = await fetch(new URL("api/state", entry.url));
+  assert.equal(initialResponse.status, 200);
+  const initial = await initialResponse.json();
+  assert.equal(initial.dashboard.authenticated, true);
+  assert.deepEqual(initial.dashboard.accounts, []);
+  assert.deepEqual(initial.dashboard.errors, [
+    `GitHub account discovery: ${githubDiscoveryMessage}`,
+  ]);
   assert.deepEqual(
     initial.dashboard.health.items
       .map((item) => item.id)
@@ -137,6 +256,34 @@ test("Health source order persists and reorders the cached dashboard", async (t)
   assert.deepEqual(reordered.dashboard.health.items.slice(0, 2).map((item) => item.id), [second.id, first.id]);
   assert.deepEqual(reordered.prefs.healthOrder.slice(0, 2), [second.id, first.id]);
   assert.deepEqual(JSON.parse(await readFile(preferencesPath, "utf8")).healthOrder.slice(0, 2), [second.id, first.id]);
+});
+
+test("a fresh unauthenticated dashboard preserves diagnostics and navigation to Health", async (t) => {
+  await resetTestHome();
+  const server = await import(`./server.mjs?test=health-auth-error-${Date.now()}`);
+  const entry = await server.startInstance("health-auth-error-test", () => {});
+  t.after(() => server.stopInstance("health-auth-error-test"));
+
+  const initialResponse = await fetch(new URL("api/state", entry.url));
+  assert.equal(initialResponse.status, 200);
+  const initial = await initialResponse.json();
+  assert.equal(initial.dashboard.authenticated, false);
+  assert.equal(initial.dashboard.mode, "review");
+  assert.equal(initial.dashboard.message, githubDiscoveryMessage);
+  assert.deepEqual(initial.dashboard.accounts, []);
+  assert.deepEqual(initial.dashboard.errors, [
+    `GitHub account discovery: ${githubDiscoveryMessage}`,
+  ]);
+  for (const mode of ["health", "review", "issues", "ship"]) {
+    const response = await postJson(entry.url, "api/mode", { mode });
+    assert.equal(response.status, 200);
+    const result = await response.json();
+    assert.equal(result.dashboard.mode, mode);
+    assert.equal(result.dashboard.authenticated, false);
+    assert.equal(result.dashboard.githubDiscoveryError, githubDiscoveryMessage);
+    assert.deepEqual(result.dashboard.errors, [`GitHub account discovery: ${githubDiscoveryMessage}`]);
+    if (mode !== "health") assert.equal(result.dashboard.message, githubDiscoveryMessage);
+  }
 });
 
 test("applyHealthOrder keeps related provider sources contiguous", async () => {
@@ -421,7 +568,7 @@ test("a rejecting request-error logger does not become an unhandled rejection", 
   // A disconnected session makes BOTH the bridge and the error logger reject: agentSend rejects
   // into the outer request catch, whose logger (the async session log) then rejects too. The
   // logger's rejection must be swallowed, not left dangling to crash the extension host.
-  const entry = await server.startInstance("log-reject-test", () => Promise.reject(new Error("log disconnected")));
+  const entry = await server.startInstance("log-reject-test", () => Promise.reject(new Error("log disconnected")), sessionContext);
   t.after(() => {
     server.setAgentSend(null);
     return server.stopInstance("log-reject-test");
@@ -509,6 +656,73 @@ test("dashboard load retries after an inflight account probe rejection", async (
   assert.equal(payload.dashboard.authenticated, true);
 });
 
+test("PR and Health actions keep detached sessions enabled during a preference save", async (t) => {
+  for (const health of [false, true]) {
+    await t.test(health ? "Health action" : "PR action", async (t) => {
+      await resetTestHome({
+        mode: health ? "health" : "review",
+        detachedSessions: true,
+        accounts: { "acct:octo": { repos: ["microsoft/aspire"], active: true } },
+      });
+      process.env.GH_TOKEN = "test-token";
+      delete process.env.GITHUB_TOKEN;
+      process.env.PATH = "";
+      globalThis.fetch = health ? makeGitHubHealthMock() : makeGitHubMock([makePrNode()]);
+      t.after(() => { globalThis.fetch = originalFetch; });
+
+      const server = await import(`./server.mjs?test=save-race-${health}-${Date.now()}`);
+      const instanceId = `save-race-${health}`;
+      const entry = await server.startInstance(instanceId, () => {}, sessionContext);
+      t.after(() => {
+        server.setAgentSend(null);
+        return server.stopInstance(instanceId);
+      });
+      await (await fetch(new URL("api/state", entry.url))).json();
+      const sent = [];
+      server.setAgentSend(async (payload) => {
+        sent.push(payload);
+        return { messageId: "save-race-message", queued: false };
+      });
+
+      let signalEntered;
+      let releaseSave;
+      const entered = new Promise((resolve) => { signalEntered = resolve; });
+      const resume = new Promise((resolve) => { releaseSave = resolve; });
+      const originalWrite = fs.writeFile;
+      const write = t.mock.method(fs, "writeFile", async (path, data, options) => {
+        // Hold the save after only a JSON prefix has reached disk, before publication.
+        await originalWrite(path, data.slice(0, 20), options);
+        signalEntered();
+        await resume;
+        await originalWrite(path, data, "utf8");
+      });
+      syncBuiltinESMExports();
+      t.after(() => { write.mock.restore(); syncBuiltinESMExports(); });
+
+      const { updatePrefs } = await import("./state.mjs");
+      const saving = updatePrefs((prefs) => { prefs.showDrafts = true; });
+      try {
+        await entered;
+        const response = await fetch(new URL(health ? "api/health/action" : "api/agent/action", entry.url), {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(health
+            ? { kind: "fix-health", target: "new-session", source: { id: "github:github.com/microsoft/aspire" } }
+            : { kind: "review", target: "new-session", pr: { repository: "microsoft/aspire", number: 1 } }),
+          signal: AbortSignal.timeout(5000),
+        });
+        assert.equal(response.status, 200);
+        assert.equal(sent.length, 1);
+        assert.match(sent[0].prompt, /detached: true/);
+      } finally {
+        releaseSave();
+        await saving;
+      }
+      assert.equal(JSON.parse(await readFile(preferencesPath, "utf8")).showDrafts, true);
+    });
+  }
+});
+
 test("card action route bridges { prompt, log } to the session and echoes the queued flag", async (t) => {
   await resetTestHome({
     accounts: { "acct:octo": { repos: ["microsoft/aspire"], active: true } },
@@ -529,7 +743,7 @@ test("card action route bridges { prompt, log } to the session and echoes the qu
   t.after(() => { globalThis.fetch = originalFetch; });
 
   const server = await import(`./server.mjs?test=agent-${Date.now()}`);
-  const entry = await server.startInstance("agent-action-test", () => {});
+  const entry = await server.startInstance("agent-action-test", () => {}, sessionContext);
   t.after(() => {
     server.setAgentSend(null);
     return server.stopInstance("agent-action-test");
@@ -578,6 +792,14 @@ test("card action route bridges { prompt, log } to the session and echoes the qu
   // The log uses the cached canonical title ("Add widget"), never the tampered client title.
   assert.equal(received.log, 'Test PR microsoft/aspire#123 — "Add widget" in a new session');
 
+  const enabled = await postJson(entry.url, "api/prefs", { detachedSessions: true });
+  assert.equal(enabled.status, 200);
+  const detached = await postAction(entry.url, { kind: "test", pr, detachedSessions: false });
+  assert.equal(detached.status, 200);
+  assert.match(received.prompt, /Use create_session with:/);
+  assert.match(received.prompt, /- detached: true/);
+  assert.doesNotMatch(received.prompt, /evil\.example|IGNORE PREVIOUS INSTRUCTIONS|octocat/);
+
   // A current-session action routes into this session instead of a sub-session.
   received = null;
   const here = await postAction(entry.url, { kind: "test", target: "current-session", pr });
@@ -586,6 +808,12 @@ test("card action route bridges { prompt, log } to the session and echoes the qu
   assert.equal(hereBody.target, "current-session");
   assert.doesNotMatch(received.prompt, /open_pr_session/);
   assert.equal(received.log, 'Test PR microsoft/aspire#123 — "Add widget" in this session');
+
+  const disabled = await postJson(entry.url, "api/prefs", { detachedSessions: false });
+  assert.equal(disabled.status, 200);
+  const child = await postAction(entry.url, { kind: "test", pr, detachedSessions: true });
+  assert.equal(child.status, 200);
+  assert.match(received.prompt, /Use the open_pr_session tool with:/);
 
   // An unknown kind is rejected before the bridge is ever called.
   received = null;
@@ -623,7 +851,7 @@ test("health actions resolve canonical sources from the last complete snapshot",
   t.after(() => { globalThis.fetch = originalFetch; });
 
   const server = await import(`./server.mjs?test=health-agent-${Date.now()}`);
-  const entry = await server.startInstance("health-agent-test", () => {});
+  const entry = await server.startInstance("health-agent-test", () => {}, sessionContext);
   t.after(() => {
     server.setAgentSend(null);
     return server.stopInstance("health-agent-test");
@@ -654,6 +882,24 @@ test("health actions resolve canonical sources from the last complete snapshot",
   assert.equal(body.target, "new-session");
   assert.match(received.prompt, /NEW project session for microsoft\/aspire/);
   assert.doesNotMatch(received.prompt, /evil\/repo|IGNORE PREVIOUS INSTRUCTIONS/);
+
+  const enabled = await postJson(entry.url, "api/prefs", { detachedSessions: true });
+  assert.equal(enabled.status, 200);
+  const detached = await postHealthAction(entry.url, {
+    kind: "fix-health",
+    target: "new-session",
+    source: { id: sourceId },
+  });
+  assert.equal(detached.status, 200);
+  assert.match(received.prompt, /Set detached: true/);
+  const here = await postHealthAction(entry.url, {
+    kind: "diagnose-health",
+    target: "current-session",
+    source: { id: sourceId },
+  });
+  assert.equal(here.status, 200);
+  assert.match(received.prompt, /Work in THIS session/);
+  assert.doesNotMatch(received.prompt, /detached: true/);
 
   received = null;
   const stale = await postHealthAction(entry.url, {
@@ -689,7 +935,7 @@ test("a cached linked ISSUE sharing repository#number is not resolvable as a PR"
   t.after(() => { globalThis.fetch = originalFetch; });
 
   const server = await import(`./server.mjs?test=issue-collide-${Date.now()}`);
-  const entry = await server.startInstance("issue-collide-test", () => {});
+  const entry = await server.startInstance("issue-collide-test", () => {}, sessionContext);
   t.after(() => {
     server.setAgentSend(null);
     return server.stopInstance("issue-collide-test");
@@ -1189,6 +1435,7 @@ test("an in-flight refresh keeps the last complete snapshot and does not stream 
     baseRefName: "main",
     mergeable: "MERGEABLE",
     reviewDecision: null,
+    readinessTransitions: { nodes: [], pageInfo: { hasNextPage: false, endCursor: null } },
     additions: 1,
     deletions: 0,
     changedFiles: 1,
@@ -1242,7 +1489,7 @@ test("an in-flight refresh keeps the last complete snapshot and does not stream 
   t.after(() => { globalThis.fetch = originalFetch; });
 
   const server = await import(`./server.mjs?test=resolvesnap-${Date.now()}`);
-  const entry = await server.startInstance("resolve-snapshot-test", () => {});
+  const entry = await server.startInstance("resolve-snapshot-test", () => {}, sessionContext);
   t.after(() => {
     server.setAgentSend(null);
     return server.stopInstance("resolve-snapshot-test");
@@ -1324,7 +1571,7 @@ test("card actions resolve against the snapshot displayed by that canvas when an
   t.after(() => { globalThis.fetch = originalFetch; });
 
   const server = await import(`./server.mjs?test=displayed-snapshot-${Date.now()}`);
-  const entry = await server.startInstance("displayed-snapshot-test", () => {});
+  const entry = await server.startInstance("displayed-snapshot-test", () => {}, sessionContext);
   t.after(() => {
     server.setAgentSend(null);
     return server.stopInstance("displayed-snapshot-test");
@@ -1525,6 +1772,7 @@ function makePrNode(overrides = {}) {
     baseRefName: "main",
     mergeable: "MERGEABLE",
     reviewDecision: null,
+    readinessTransitions: { nodes: [], pageInfo: { hasNextPage: false, endCursor: null } },
     additions: 1,
     deletions: 0,
     changedFiles: 1,
@@ -1631,8 +1879,16 @@ function jsonResponse(body, options = {}) {
 function restoreEnvironment() {
   setOrDeleteEnv("GH_TOKEN", originalEnv.GH_TOKEN);
   setOrDeleteEnv("GITHUB_TOKEN", originalEnv.GITHUB_TOKEN);
+  setOrDeleteEnv("GH_ENTERPRISE_TOKEN", originalEnv.GH_ENTERPRISE_TOKEN);
+  setOrDeleteEnv("GITHUB_ENTERPRISE_TOKEN", originalEnv.GITHUB_ENTERPRISE_TOKEN);
+  setOrDeleteEnv("GH_HOST", originalEnv.GH_HOST);
   setOrDeleteEnv("COPILOT_HOME", originalEnv.COPILOT_HOME);
   setOrDeleteEnv("PATH", originalEnv.PATH);
+  setOrDeleteEnv("SHELL", originalEnv.SHELL);
+  for (const key of Object.keys(process.env)) {
+    if (key.startsWith("COPILOT_GH_ACCOUNT_")) delete process.env[key];
+  }
+  for (const [key, value] of originalCopilotAccounts) process.env[key] = value;
   globalThis.fetch = originalFetch;
 }
 

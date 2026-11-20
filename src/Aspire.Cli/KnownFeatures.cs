@@ -32,7 +32,6 @@ internal static class KnownFeatures
     public static string ShowAllTemplates => "showAllTemplates";
     public static string ExperimentalPolyglotRust => "experimentalPolyglotRust";
     public static string ExperimentalPolyglotJava => "experimentalPolyglotJava";
-    public static string ExperimentalPolyglotGo => "experimentalPolyglotGo";
     public static string ExperimentalPolyglotPython => "experimentalPolyglotPython";
     public static string ExperimentalHostingIntegrations => "experimentalHostingIntegrations";
     public static string AppHostServerV2 => "appHostServerV2";
@@ -42,8 +41,8 @@ internal static class KnownFeatures
     public static bool IsAppHostServerV2Enabled(AspireConfigFile? config)
         => config?.Features is { } features && features.TryGetValue(AppHostServerV2, out var enabled) && enabled;
     public static string NuGetSignatureVerificationEnabled => "nugetSignatureVerificationEnabled";
-    public static string AspireSkillsRemoteFetchEnabled => "aspireSkillsRemoteFetchEnabled";
     public static string PolyglotIntegrationFilterEnabled => "polyglotIntegrationFilterEnabled";
+    public static string GitWorktreeIsolationEnabled => "gitWorktreeIsolationEnabled";
 
     private static readonly Dictionary<string, FeatureMetadata> s_featureMetadata = new()
     {
@@ -82,11 +81,6 @@ internal static class KnownFeatures
             "Enable or disable experimental Java language support for polyglot Aspire applications",
             DefaultValue: false),
 
-        [ExperimentalPolyglotGo] = new(
-            ExperimentalPolyglotGo,
-            "Enable or disable experimental Go language support for polyglot Aspire applications",
-            DefaultValue: false),
-
         [ExperimentalPolyglotPython] = new(
             ExperimentalPolyglotPython,
             "Enable or disable experimental Python language support for polyglot Aspire applications",
@@ -108,18 +102,14 @@ internal static class KnownFeatures
             "Enable or disable defaulting the DOTNET_NUGET_SIGNATURE_VERIFICATION environment variable for NuGet operations",
             DefaultValue: true),
 
-        [AspireSkillsRemoteFetchEnabled] = new(
-            AspireSkillsRemoteFetchEnabled,
-            "(Preview) Allow the Aspire CLI to download the aspire-skills bundle from GitHub. When disabled (the 13.4 default), the CLI only uses the cached bundle and the embedded snapshot baked into the CLI; toggle on to opt in to the remote fetch path.",
-            DefaultValue: false,
-            // Hidden from discovery while the remote-fetch path is preview-only: the CLI ships with a
-            // trusted SHA-512 embedded snapshot, and the remote path stays off by default. The flag is
-            // still honored if set directly in config.
-            Hidden: true),
-
         [PolyglotIntegrationFilterEnabled] = new(
             PolyglotIntegrationFilterEnabled,
             "(Experimental) Restrict 'aspire add', 'aspire integration list', and 'aspire integration search' in non-C# AppHosts to integrations carrying the 'polyglot' NuGet tag. Disabled by default because no remote feed resolves the tag usefully today: Azure DevOps Artifacts feeds ignore 'tags:' query scoping, and nuget.org returns no first-party integrations for it. The filter fails closed, so enabling it against a remote feed hides every integration. Enable it only against a local package source or hive, where the tag is read from the nuspec.",
+            DefaultValue: false),
+
+        [GitWorktreeIsolationEnabled] = new(
+            GitWorktreeIsolationEnabled,
+            "Run AppHosts discovered in linked Git worktrees in isolated mode unless --isolated is explicitly specified",
             DefaultValue: false)
     };
 

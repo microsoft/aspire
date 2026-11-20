@@ -25,9 +25,45 @@ An **AppHost** defines your app in code: services, containers, databases, front 
 - **Monitor without leaving VS Code:** See resource health summaries and quick actions beside resource definitions in your AppHost.
 - **Move toward production.** Deploy, publish artifacts, and run pipeline steps using the Aspire view.
 
+## AppHost launch profiles
+
+Select a profile from your .NET AppHost's `Properties/launchSettings.json` (or `apphost.run.json` for a file-based AppHost) in `.vscode/launch.json`. This example selects `h2`; adjust `program` and the profile name for your AppHost:
+
+```json
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "aspire",
+      "request": "launch",
+      "name": "Nested h2",
+      "program": "${workspaceFolder}/AppHost/AppHost.csproj",
+      "dashboardBrowser": "none",
+      "debuggers": {
+        "apphost": {
+          "launchProfile": "h2"
+        }
+      }
+    }
+  ]
+}
+```
+
+For .NET AppHosts, `debuggers.apphost.launchProfile` takes precedence over `debuggers.project.launchProfile`, which takes precedence over top-level `launchProfile`.
+
+The selection works with or without the C# extension, including Run Without Debugging. When the C# extension is disabled or not installed, the CLI must support `--launch-profile`; unsupported versions report an error instead of ignoring the selection. In this mode, launch profiles require the `run` command; `publish`, `deploy`, and `do` reject the selection.
+
+Without the C# extension, `disableLaunchProfile: true` has no effect and displays a warning: the CLI still applies the default AppHost launch profile. Install or enable the C# extension to disable launch profiles.
+
 ## Bring your stack
 
 Aspire can bring together C#, TypeScript and JavaScript, Python, Go, Java, containers, databases, cloud resources, and more. Browse the [integration gallery](https://aspire.dev/integrations/gallery/) to find the pieces your app needs.
+
+### Go AppHost debugging (Preview)
+
+Go AppHosts support resource CodeLens and gutter state indicators. Debugging an `apphost.go` requires the [Go extension](https://marketplace.visualstudio.com/items?itemName=golang.Go) and [Delve](https://github.com/go-delve/delve). If Go debugger support is missing or disabled, **Debug** offers setup instead of starting the AppHost without a debugger; **Run Without Debugging** remains available. The same setup check applies to Java and Rust AppHosts.
+
+The Go extension selects the debugger's Go toolchain through its own settings (`go.goroot` and `go.alternateTools`), while Aspire CLI resolves `go` on its environment's `PATH`. Keep those selections aligned when using multiple Go installations. Aspire does not override the Go extension's toolchain settings.
 
 ## Chat tools for agents
 

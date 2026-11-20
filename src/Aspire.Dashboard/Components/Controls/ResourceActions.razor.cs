@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Concurrent;
-using Aspire.Dashboard.Extensions;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Resources;
 using Microsoft.AspNetCore.Components;
@@ -44,9 +43,6 @@ public partial class ResourceActions : ComponentBase
     [Parameter]
     public required ConcurrentDictionary<string, ResourceViewModel> ResourceByName { get; set; }
 
-    [Parameter]
-    public bool CardMode { get; set; }
-
     [CascadingParameter]
     public required ViewportInformation ViewportInformation { get; set; }
 
@@ -56,11 +52,9 @@ public partial class ResourceActions : ComponentBase
     {
         _highlightedCommands.Clear();
 
-        // Cards use labeled actions at every viewport size. Rows keep their compact desktop-only icons.
-        if (CardMode || ViewportInformation.IsDesktop)
+        if (ViewportInformation.IsDesktop)
         {
-            var maxCount = CardMode ? 2 : MaxHighlightedCount;
-            _highlightedCommands.AddRange(Resource.Commands.Where(c => c.IsHighlighted && c.State != CommandViewModelState.Hidden).Take(maxCount));
+            _highlightedCommands.AddRange(Resource.Commands.Where(c => c.IsHighlighted && c.State != CommandViewModelState.Hidden).Take(MaxHighlightedCount));
         }
     }
 
@@ -80,19 +74,5 @@ public partial class ResourceActions : ComponentBase
             showUrls: false);
 
         return menuItems;
-    }
-
-    private string GetCardCommandText(CommandViewModel command)
-    {
-        if (string.Equals(command.Name, CommandViewModel.SetParameterCommand, StringComparisons.CommandName))
-        {
-            return ControlLoc[Resource.IsRunningState()
-                ? nameof(ControlsStrings.ParameterEditShortAction)
-                : nameof(ControlsStrings.ParameterSetShortAction)];
-        }
-
-        return string.Equals(command.Name, CommandViewModel.DeleteParameterCommand, StringComparisons.CommandName)
-            ? ControlLoc[nameof(ControlsStrings.ParameterDeleteShortAction)]
-            : command.GetDisplayName();
     }
 }

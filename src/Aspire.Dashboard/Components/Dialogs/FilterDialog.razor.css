@@ -16,8 +16,8 @@
     border-color: transparent;
     background-color: var(--aspire-menu-item-hover-background);
     color: var(--aspire-dropdown-option-foreground);
-    font-size: var(--fontSizeBase200);
-    font-weight: var(--fontWeightRegular);
+    font-size: var(--aspire-font-size-secondary);
+    font-weight: var(--aspire-font-weight-regular);
     line-height: var(--lineHeightBase200);
 }
 
@@ -76,5 +76,5 @@
 }
 
 .filter-button-container ::deep .fluent-stack-horizontal {
-    column-gap: 10px;
+    column-gap: var(--aspire-space-2);
 }

@@ -42,46 +42,6 @@
         <target state="translated">tool_invocation 事件的 Aspire MCP 工具名称</target>
         <note />
       </trans-unit>
-      <trans-unit id="AspireSkillsInstaller_ArchiveHashVerificationFailed">
-        <source>Embedded Aspire skills archive failed SHA-512 verification. Expected '{0}', got '{1}'.</source>
-        <target state="translated">嵌入式 Aspire 技能存档未能通过 SHA-512 验证。应为“{0}”，但收到“{1}”。</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="AspireSkillsInstaller_GitHubUnavailable">
-        <source>Aspire skills could not be downloaded from the verified GitHub release asset, and no valid cached or embedded bundle is available.</source>
-        <target state="translated">无法从已验证的 GitHub 发布资产下载 Aspire 技能，并且没有可用的有效缓存或嵌入式捆绑包。</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="AspireSkillsInstaller_InvalidMetadata">
-        <source>Embedded Aspire skills bundle metadata is invalid: {0}</source>
-        <target state="translated">嵌入式 Aspire 技能捆绑包元数据无效: {0}</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="AspireSkillsInstaller_MetadataRepositoryMismatch">
-        <source>Embedded Aspire skills metadata repository '{0}' does not match expected repository '{1}'.</source>
-        <target state="translated">嵌入式 Aspire 技能元数据存储库“{0}”与预期的存储库“{1}”不匹配。</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="AspireSkillsInstaller_MissingMetadataAssetName">
-        <source>Embedded Aspire skills metadata must specify a release asset name.</source>
-        <target state="translated">嵌入式 Aspire 技能元数据必须指定发布资产名称。</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="AspireSkillsInstaller_MissingMetadataSha512">
-        <source>Embedded Aspire skills metadata must specify the release asset SHA-512 hash.</source>
-        <target state="translated">嵌入式 Aspire 技能元数据必须指定发布资产 SHA-512 哈希。</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="AspireSkillsInstaller_MissingMetadataTag">
-        <source>Embedded Aspire skills metadata must specify a GitHub release tag.</source>
-        <target state="translated">嵌入式 Aspire 技能元数据必须指定 GitHub 发布标记。</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="AspireSkillsInstaller_MissingMetadataVersion">
-        <source>Embedded Aspire skills metadata must specify a version.</source>
-        <target state="translated">嵌入式 Aspire 技能元数据必须指定版本。</target>
-        <note />
-      </trans-unit>
       <trans-unit id="ConfigUpdatesSelectPrompt">
         <source>The following agent configurations use the deprecated 'mcp start' command. Update them?</source>
         <target state="translated">以下智能体配置使用已弃用的 "mcp start" 命令。是否更新它们?</target>
@@ -89,7 +49,7 @@
       </trans-unit>
       <trans-unit id="ConfigurationWriteRefused">
         <source>Could not safely update '{0}'. Check for concurrent changes, links, or restrictive permissions, then retry or configure it manually.</source>
-        <target state="new">Could not safely update '{0}'. Check for concurrent changes, links, or restrictive permissions, then retry or configure it manually.</target>
+        <target state="translated">无法安全地更新 '{0}'。检查并发更改、链接或限制性权限，然后重试或手动配置。</target>
         <note />
       </trans-unit>
       <trans-unit id="DeprecatedConfigFix">
@@ -128,24 +88,14 @@
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_AspireSkillChoice">
-        <source>Agent assets from microsoft/aspire-skills</source>
-        <target state="new">Agent assets from microsoft/aspire-skills</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="InitCommand_AspireSourceOptionDescription">
-        <source>Source for Aspire agent assets from microsoft/aspire-skills: remote (plugin) or embedded (bundled skill files)</source>
-        <target state="new">Source for Aspire agent assets from microsoft/aspire-skills: remote (plugin) or embedded (bundled skill files)</target>
+        <source>Agent assets from configured skill sources</source>
+        <target state="translated">来自已配置技能源的智能体资产</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_ConfigurationTarget">
         <source>{0}: {1}</source>
-        <target state="new">{0}: {1}</target>
+        <target state="translated">{0}: {1}</target>
         <note>{0} is the agent name, and {1} lists its configuration paths separated by commas.</note>
-      </trans-unit>
-      <trans-unit id="InitCommand_ConfigureAspireSourcePrompt">
-        <source>Which source do you want to use for Aspire?</source>
-        <target state="new">Which source do you want to use for Aspire?</target>
-        <note />
       </trans-unit>
       <trans-unit id="InitCommand_ConfigureMcpServer">
         <source>Install Aspire MCP server</source>
@@ -158,20 +108,23 @@
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_ConfiguredTargets">
-        <source>Configured Aspire plugin:
-  {0}</source>
-        <target state="new">Configured Aspire plugin:
-  {0}</target>
-        <note>{0} lists one agent per line, with that agent's configuration paths comma-separated.</note>
+        <source>Configured sources in {0}</source>
+        <target state="translated">{0} 中的已配置源</target>
+        <note>{0} lists the configuration file paths with their agent names in parentheses, separated by commas.</note>
+      </trans-unit>
+      <trans-unit id="InitCommand_DeleteSkillCopiesPrompt">
+        <source>Delete {0} copied skill folders?</source>
+        <target state="translated">删除 {0} 个复制的技能文件夹?</target>
+        <note>{0} is the number of skill folders, always greater than one.</note>
+      </trans-unit>
+      <trans-unit id="InitCommand_DeleteSkillCopyPrompt">
+        <source>Delete this copied skill folder?</source>
+        <target state="translated">是否删除此复制的技能文件夹?</target>
+        <note />
       </trans-unit>
       <trans-unit id="InitCommand_Description">
         <source>Initialize configuration and skills for selected agent clients</source>
         <target state="translated">为所选智能体客户端初始化配置和技能</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="InitCommand_EmbeddedSkillsChoice">
-        <source>Embedded (bundled skill files)</source>
-        <target state="new">Embedded (bundled skill files)</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_EnvironmentLocationDescription">
@@ -186,13 +139,13 @@
       </trans-unit>
       <trans-unit id="InitCommand_ExistingConfigurationConflict">
         <source>Cannot register Aspire because '{0}' conflicts with existing settings or an override. Existing settings were left unchanged.</source>
-        <target state="new">Cannot register Aspire because '{0}' conflicts with existing settings or an override. Existing settings were left unchanged.</target>
+        <target state="translated">无法注册 Aspire，因为“{0}”与现有设置或替代项冲突。现有设置保持不变。</target>
         <note>{0} identifies the conflicting JSON setting or environment override.</note>
       </trans-unit>
       <trans-unit id="InitCommand_FailedTarget">
         <source>Failed to configure Aspire plugin:
   {0}</source>
-        <target state="new">Failed to configure Aspire plugin:
+        <target state="translated">未能配置 Aspire 插件:
   {0}</target>
         <note>{0} lists each agent's configuration path and failure details, one target per line.</note>
       </trans-unit>
@@ -202,8 +155,8 @@
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_GlobalScope">
-        <source>Global (Install in your home directory; available across all projects)</source>
-        <target state="translated">全局(安装在你的主目录中；可用于所有项目)</target>
+        <source>Global (In your home directory, available across all projects)</source>
+        <target state="translated">全局(在主目录中，可用于所有项目)</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_InstallationLocations">
@@ -217,8 +170,8 @@
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_InstalledSkillsSummary">
-        <source>Installed Aspire agent skills:</source>
-        <target state="translated">已安装 Aspire 智能体技能:</target>
+        <source>Installed skills:</source>
+        <target state="translated">已安装技能:</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_InstalledSkillsSummaryLocations">
@@ -229,11 +182,6 @@
       <trans-unit id="InitCommand_InstalledSkillsSummarySkills">
         <source>Skills: {0}</source>
         <target state="translated">技能: {0}</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="InitCommand_InvalidAspireSource">
-        <source>Invalid Aspire source '{0}'. Choose either 'remote' or 'embedded'.</source>
-        <target state="new">Invalid Aspire source '{0}'. Choose either 'remote' or 'embedded'.</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_InvalidEnvironments">
@@ -248,15 +196,18 @@
       </trans-unit>
       <trans-unit id="InitCommand_InvalidSkills">
         <source>Invalid skill/tool selection '{0}'. Use {1}, '{2}', or '{3}'.</source>
-        <target state="new">Invalid skill/tool selection '{0}'. Use {1}, '{2}', or '{3}'.</target>
+        <target state="translated">技能/工具选择“{0}”无效。请使用 {1}、“{2}”或“{3}”。</target>
         <note />
       </trans-unit>
-      <trans-unit id="InitCommand_LocalSkillsConflict">
-        <source>Local Aspire skill files may override plugin skills:
-{0}</source>
-        <target state="new">Local Aspire skill files may override plugin skills:
-{0}</target>
-        <note>{0} lists the local skill entry-point paths, one per line.</note>
+      <trans-unit id="InitCommand_KeptSkillCopies">
+        <source>Kept copied Aspire skills in {0}</source>
+        <target state="translated">已在 {0} 中保存复制的 Aspire 技能</target>
+        <note>{0} lists the copied skill folder paths, separated by commas.</note>
+      </trans-unit>
+      <trans-unit id="InitCommand_LocationWithAgents">
+        <source>{0} ({1})</source>
+        <target state="translated">{0} ({1})</target>
+        <note>{0} is a location, and {1} lists the agents that use it, separated by commas.</note>
       </trans-unit>
       <trans-unit id="InitCommand_McpConfigurationDescription">
         <source>Configure Aspire MCP for {0} at {1}</source>
@@ -283,30 +234,29 @@
         <target state="translated">Playwright CLI 需要 npm，但在路径上找不到它。正在跳过安装。</target>
         <note />
       </trans-unit>
-      <trans-unit id="InitCommand_PluginRiskWarning">
-        <source>Use the Aspire plugin at your own risk.
-Review the source before enabling it.
-
-Prefer skill files only? Choose Embedded, or install skills directly from {0}.</source>
-        <target state="new">Use the Aspire plugin at your own risk.
-Review the source before enabling it.
-
-Prefer skill files only? Choose Embedded, or install skills directly from {0}.</target>
-        <note>{0} is the official Aspire skills repository URL.</note>
-      </trans-unit>
       <trans-unit id="InitCommand_ProjectScope">
-        <source>Project (Install in your workspace root; committed with your project)</source>
-        <target state="translated">项目(安装在你的工作区根目录中；随项目一起提交)</target>
+        <source>This project (In your workspace, ready to commit with your project)</source>
+        <target state="translated">此项目(在工作区中，准备与项目一起提交)</target>
         <note />
       </trans-unit>
-      <trans-unit id="InitCommand_RemoteSkillsChoice">
-        <source>Remote (plugin)</source>
-        <target state="new">Remote (plugin)</target>
+      <trans-unit id="InitCommand_RemoveSkillCopiesOptionDescription">
+        <source>Delete copied Aspire skill folders without asking for confirmation, including all files inside them and any changes you made. Only applies when the Aspire skills plugin replaces them at the selected scope. Defaults to false</source>
+        <target state="new">Delete copied Aspire skill folders without asking for confirmation, including all files inside them and any changes you made. Only applies when the Aspire skills plugin replaces them at the selected scope. Defaults to false</target>
         <note />
       </trans-unit>
-      <trans-unit id="InitCommand_RemoteSkillsConflict">
-        <source>The Aspire plugin is already enabled. Embedded skills were not installed and no configuration was changed. Keep the plugin, or disable its Aspire registration before choosing embedded skills.</source>
-        <target state="new">The Aspire plugin is already enabled. Embedded skills were not installed and no configuration was changed. Keep the plugin, or disable its Aspire registration before choosing embedded skills.</target>
+      <trans-unit id="InitCommand_RemoveSkillCopyFailed">
+        <source>Could not remove copied Aspire skill '{0}': {1}</source>
+        <target state="translated">无法移除复制的 Aspire 技能“{0}”: {1}</target>
+        <note>{0} is the skill directory path, and {1} is the failure reason.</note>
+      </trans-unit>
+      <trans-unit id="InitCommand_RemovedSkillCopies">
+        <source>Deleted {0} copied skill folders</source>
+        <target state="new">Deleted {0} copied skill folders</target>
+        <note>{0} is the number of deleted skill folders, always greater than one.</note>
+      </trans-unit>
+      <trans-unit id="InitCommand_RemovedSkillCopy">
+        <source>Deleted 1 copied skill folder</source>
+        <target state="new">Deleted 1 copied skill folder</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_ScopeOptionDescription">
@@ -320,8 +270,8 @@ Prefer skill files only? Choose Embedded, or install skills directly from {0}.</
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_SelectScopePrompt">
-        <source>Installation scope</source>
-        <target state="translated">安装范围</target>
+        <source>Where should skills and tools be installed?</source>
+        <target state="translated">应在何处安装技能和工具?</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_SharedLocation">
@@ -334,14 +284,41 @@ Prefer skill files only? Choose Embedded, or install skills directly from {0}.</
         <target state="translated">未选中的智能体也可能发现共享文件。</target>
         <note />
       </trans-unit>
+      <trans-unit id="InitCommand_SkillCopiesFound">
+        <source>The Aspire skills plugin now provides these skills. Deleting the copied folders also deletes everything inside them, including any changes you made:</source>
+        <target state="new">The Aspire skills plugin now provides these skills. Deleting the copied folders also deletes everything inside them, including any changes you made:</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_SkillCopiesRequirePlugin">
+        <source>Copies are only removed when the Aspire skills plugin is configured and enabled at the selected scope for every selected agent.</source>
+        <target state="translated">仅当在所选范围内为每个所选智能体配置和启用 Aspire 技能插件时，才会移除副本。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_SkillCopyBehindLink">
+        <source>It is reached through a linked folder that may be shared. Remove it manually if it is no longer needed.</source>
+        <target state="translated">可通过可共享的链接文件夹访问它。如果不再需要，请手动移除它。</target>
+        <note>Failure reason shown after InitCommand_RemoveSkillCopyFailed.</note>
+      </trans-unit>
+      <trans-unit id="InitCommand_SkillSources">
+        <source>Skill sources:
+{0}</source>
+        <target state="translated">技能源:
+{0}</target>
+        <note>{0} lists the configured skill source repository and/or catalog URLs for the selected agent clients, one per line.</note>
+      </trans-unit>
+      <trans-unit id="InitCommand_SkillSourcesExplanation">
+        <source>One or more skill sources are configured. A skill source lets an organization share skills to customize your development experience.</source>
+        <target state="translated">已配置一个或多个技能源。技能源允许组织共享技能，以便定制你的开发体验。</target>
+        <note />
+      </trans-unit>
       <trans-unit id="InitCommand_SkillsLocationHint">
         <source>Skills: {0}</source>
         <target state="translated">技能: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_SkillsOptionDescription">
-        <source>Comma-separated skill/tool IDs ({0}), '{1}', or '{2}' (default: aspire)</source>
-        <target state="new">Comma-separated skill/tool IDs ({0}), '{1}', or '{2}' (default: aspire)</target>
+        <source>Comma-separated skill/tool IDs ({0}), '{1}', or '{2}' (default: aspire). The 'dotnet-inspect' skill requires a C# AppHost in the workspace</source>
+        <target state="translated">以逗号分隔的技能/工具 ID ({0})、“{1}”或“{2}”(默认值: aspire)。“dotnet-inspect” 技能需要工作区中存在 C# AppHost</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_TelemetryHookSkippedMalformedConfig">
@@ -360,28 +337,13 @@ Prefer skill files only? Choose Embedded, or install skills directly from {0}.</
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_TelemetryHooksInstalled">
-        <source>Installed Aspire agent telemetry hooks for: {0}. Only Aspire skill, MCP tool, and reference-file usage is recorded. Opt out anytime by setting ASPIRE_CLI_TELEMETRY_OPTOUT=true.</source>
-        <target state="translated">已安装以下项的 Aspire 智能体遥测挂钩: {0}。仅记录 Aspire 技能、MCP 工具和引用文件使用情况。通过设置 ASPIRE_CLI_TELEMETRY_OPTOUT=true 可随时选择退出。</target>
+        <source>Installed Aspire agent telemetry hooks in user-level configuration for: {0}. Only Aspire skill, MCP tool, and reference-file usage is recorded. Opt out anytime by setting ASPIRE_CLI_TELEMETRY_OPTOUT=true.</source>
+        <target state="translated">已在用户级配置中为 {0} 安装 Aspire 代理遥测挂钩。仅记录 Aspire 技能、MCP 工具和引用文件使用情况。通过设置 ASPIRE_CLI_TELEMETRY_OPTOUT=true 可随时选择退出。</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_WorkspaceRootOptionDescription">
         <source>Path to the workspace root directory</source>
         <target state="translated">工作区根目录的路径</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="AspireSkillsInstaller_InstallingStatus">
-        <source>Installing Aspire skills...</source>
-        <target state="translated">正在安装 Aspire 技能...</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="AspireSkillsInstaller_InvalidBundle">
-        <source>The Aspire skills bundle is invalid: {0}</source>
-        <target state="translated">Aspire 技能捆绑包无效: {0}</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="LocalSkills_ReadFailed">
-        <source>Could not check local Aspire skills at '{0}': {1}</source>
-        <target state="new">Could not check local Aspire skills at '{0}': {1}</target>
         <note />
       </trans-unit>
       <trans-unit id="McpServerContainerMustBeJsonObject">
@@ -439,21 +401,6 @@ Prefer skill files only? Choose Embedded, or install skills directly from {0}.</
         <target state="translated">{0} 的来源验证失败: {1}</target>
         <note />
       </trans-unit>
-      <trans-unit id="SkillDescription_Aspire">
-        <source>Aspire CLI commands and workflows for distributed apps</source>
-        <target state="translated">分布式应用的 Aspire CLI 命令和工作流</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="SkillDescription_AspireDeployment">
-        <source>Aspire deployment target selection, preflight, publish, and deploy workflows</source>
-        <target state="translated">Aspire 部署目标选择、预检、发布和部署工作流</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="SkillDescription_Aspireify">
-        <source>One-time setup: wire up AppHost with discovered projects</source>
-        <target state="translated">一次性设置: 连接 AppHost 与发现的项目</target>
-        <note />
-      </trans-unit>
       <trans-unit id="SkillDescription_DotnetInspect">
         <source>Query .NET API surfaces across NuGet packages and platform libraries</source>
         <target state="translated">跨 NuGet 包和平台库查询 .NET API 面</target>
@@ -466,7 +413,7 @@ Prefer skill files only? Choose Embedded, or install skills directly from {0}.</
       </trans-unit>
       <trans-unit id="InitCommand_SelectSkills">
         <source>Which skills and tools do you want to configure?</source>
-        <target state="new">Which skills and tools do you want to configure?</target>
+        <target state="translated">你想要配置哪些技能和工具?</target>
         <note />
       </trans-unit>
       <trans-unit id="MalformedConfigFileError">
@@ -493,6 +440,11 @@ Prefer skill files only? Choose Embedded, or install skills directly from {0}.</
         <source>Configuration completed with errors. Please fix the reported issues and re-run the command.</source>
         <target state="translated">配置已完成，但出现错误。请修复报告的问题，然后重新运行该命令。</target>
         <note />
+      </trans-unit>
+      <trans-unit id="TelemetryHookScriptUpdateFailed">
+        <source>Could not update the telemetry hook script '{0}': {1}</source>
+        <target state="translated">无法更新遥测挂钩脚本 '{0}': {1}</target>
+        <note>{0} is the hook script path. {1} is the underlying error message.</note>
       </trans-unit>
     </body>
   </file>

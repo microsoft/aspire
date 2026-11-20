@@ -22,10 +22,30 @@
         <target state="translated">In der aktuellen Arbeitsstruktur wurde kein ausgeführter AppHost gefunden. Verwenden Sie „--apphost &lt;path&gt;“, um direkt einen AppHost anzugeben, oder „--all“, um AppHosts aus anderen Arbeitsbäumen einzubeziehen.</target>
         <note />
       </trans-unit>
+      <trans-unit id="FetchingSource">
+        <source>Fetching {0} from {1} using Git...</source>
+        <target state="translated">Abrufen von {0} aus {1} mithilfe von Git...</target>
+        <note>{0} is the localized content being fetched, such as "configuration source" or "templates". {1} is the Git repository, optionally followed by its path and ref.</note>
+      </trans-unit>
+      <trans-unit id="FetchingSourceWithAuthentication">
+        <source>Fetching {0} from {1} using Git. Git may prompt you to authenticate.</source>
+        <target state="translated">Abrufen von {0} aus {1} mithilfe von Git. Git fordert Sie möglicherweise zur Authentifizierung auf.</target>
+        <note>{0} is the localized content being fetched, such as "configuration source" or "templates". {1} is the Git repository, optionally followed by its path and ref.</note>
+      </trans-unit>
       <trans-unit id="FormatOptionDescription">
         <source>Output format for detached AppHost results</source>
         <target state="translated">Ausgabeformat für getrennte AppHost-Ergebnisse.</target>
         <note />
+      </trans-unit>
+      <trans-unit id="GitFetchConfigurationSource">
+        <source>configuration source</source>
+        <target state="translated">Konfigurationsquelle</target>
+        <note>The content inserted into the Git-fetch notice.</note>
+      </trans-unit>
+      <trans-unit id="GitFetchTemplates">
+        <source>templates</source>
+        <target state="translated">Vorlagen</target>
+        <note>The content inserted into the Git-fetch notice.</note>
       </trans-unit>
       <trans-unit id="HeaderLanguage">
         <source>Language</source>
@@ -122,6 +142,16 @@
         <target state="translated">Der Befehl „{0}“ erfordert „--yes“, wenn die Option „--non-interactive“ angegeben ist.</target>
         <note>{0} is the command name.</note>
       </trans-unit>
+      <trans-unit id="NuGetSearchLimitWarning">
+        <source>NuGet search results may be incomplete because the limit of {0} packages per feed was reached. Use narrower integration source patterns.</source>
+        <target state="translated">Die NuGet-Suchergebnisse sind möglicherweise unvollständig, weil das Limit von {0} Paketen pro Feed erreicht wurde. Verwenden Sie engere Integrationsquellmuster.</target>
+        <note>{0} is the maximum number of packages searched per feed.</note>
+      </trans-unit>
+      <trans-unit id="NuGetSearchSourceFailedWarning">
+        <source>Failed to search NuGet source '{0}'. Some integrations may be missing. Check the source configuration and authentication. See the CLI logs for details.</source>
+        <target state="translated">Fehler beim Durchsuchen der NuGet-Quelle '{0}'. Einige Integrationen fehlen möglicherweise. Überprüfen Sie die Quellkonfiguration und die Authentifizierung. Weitere Informationen finden Sie in den CLI-Protokollen.</target>
+        <note>{0} is the redacted NuGet source name or URL.</note>
+      </trans-unit>
       <trans-unit id="PipelineEnvironmentOptionDescription">
         <source>The environment to use for the operation. The default is 'Production'.</source>
         <target state="translated">Die für den Vorgang zu verwendende Umgebung. Standardmäßig ist „Produktion“ eingestellt.</target>
@@ -170,6 +200,66 @@
       <trans-unit id="SelectAppHost">
         <source>Select an AppHost to {0}:</source>
         <target state="translated">AppHost auswählen, um {0}:</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SourceFeed">
+        <source>Package feed</source>
+        <target state="translated">Paketfeed</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SourceGitPath">
+        <source>Git path</source>
+        <target state="translated">Git-Pfad</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SourceGitRepository">
+        <source>Git source</source>
+        <target state="translated">Git-Quelle</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SourceMarketplace">
+        <source>Marketplace</source>
+        <target state="translated">Marketplace</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SourceName">
+        <source>Name</source>
+        <target state="translated">Name</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SourceOpenCodeV1Catalog">
+        <source>OpenCode V1 catalog</source>
+        <target state="translated">Katalog für OpenCode V1</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SourceOpenCodeV2Catalog">
+        <source>OpenCode V2 catalog</source>
+        <target state="translated">Katalog für OpenCode V2</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SourcePath">
+        <source>Path</source>
+        <target state="translated">Pfad</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SourcePatterns">
+        <source>Package patterns</source>
+        <target state="translated">Paketmuster</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SourcePlugins">
+        <source>Plugins</source>
+        <target state="translated">Plug-Ins</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SourceRef">
+        <source>Git ref</source>
+        <target state="translated">Git-Verweis</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SourceTrustWarning">
+        <source>Only use sources you trust. Content from these sources can run code on your machine.</source>
+        <target state="translated">Verwenden Sie nur Quellen, denen Sie vertrauen. Inhalte aus diesen Quellen können Code auf Ihrem Computer ausführen.</target>
         <note />
       </trans-unit>
       <trans-unit id="UnrecognizedOptionDidYouMeanFormat">
