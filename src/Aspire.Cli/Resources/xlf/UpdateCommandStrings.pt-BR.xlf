@@ -72,6 +72,16 @@
         <target state="translated">Verificando atualizações...</target>
         <note />
       </trans-unit>
+      <trans-unit id="CommandFailedWithExitCodeAndOutputFormat">
+        <source>Command '{0}' failed with exit code {1}:</source>
+        <target state="new">Command '{0}' failed with exit code {1}:</target>
+        <note>{0} is the command line that was run. {1} is the process exit code. The command's own output follows on indented lines.</note>
+      </trans-unit>
+      <trans-unit id="CommandFailedWithExitCodeFormat">
+        <source>Command '{0}' failed with exit code {1}.</source>
+        <target state="new">Command '{0}' failed with exit code {1}.</target>
+        <note>{0} is the command line that was run. {1} is the process exit code.</note>
+      </trans-unit>
       <trans-unit id="ConditionalSdkEvaluationRequiredFormat">
         <source>Cannot determine active conditional Aspire.AppHost.Sdk declarations for '{0}' without successful MSBuild evaluation; update the conditional SDK version explicitly.</source>
         <target state="translated">Não é possível determinar as declarações condicionais ativas do SDK Aspire.AppHost.Sdk para '{0}' sem uma avaliação bem-sucedida do MSBuild. Atualize explicitamente a versão condicional do SDK.</target>
@@ -210,8 +220,8 @@
         <note />
       </trans-unit>
       <trans-unit id="FallbackParsingWarning">
-        <source>Note: Update plan generated using fallback parsing due to unresolvable AppHost SDK. Dependency analysis may have reduced accuracy.</source>
-        <target state="translated">Observação: o plano de atualização gerado usando a análise de fallback devido ao SDK do AppHost não resolvido. A análise de dependência pode ter uma precisão reduzida.</target>
+        <source>Note: Update plan generated using fallback parsing because MSBuild could not evaluate the AppHost project. Dependency analysis may have reduced accuracy.</source>
+        <target state="needs-review-translation">Observação: o plano de atualização gerado usando a análise de fallback devido ao SDK do AppHost não resolvido. A análise de dependência pode ter uma precisão reduzida.</target>
         <note />
       </trans-unit>
       <trans-unit id="MappingAddedFormat">

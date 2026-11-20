@@ -72,6 +72,16 @@
         <target state="translated">正在检查更新...</target>
         <note />
       </trans-unit>
+      <trans-unit id="CommandFailedWithExitCodeAndOutputFormat">
+        <source>Command '{0}' failed with exit code {1}:</source>
+        <target state="new">Command '{0}' failed with exit code {1}:</target>
+        <note>{0} is the command line that was run. {1} is the process exit code. The command's own output follows on indented lines.</note>
+      </trans-unit>
+      <trans-unit id="CommandFailedWithExitCodeFormat">
+        <source>Command '{0}' failed with exit code {1}.</source>
+        <target state="new">Command '{0}' failed with exit code {1}.</target>
+        <note>{0} is the command line that was run. {1} is the process exit code.</note>
+      </trans-unit>
       <trans-unit id="ConditionalSdkEvaluationRequiredFormat">
         <source>Cannot determine active conditional Aspire.AppHost.Sdk declarations for '{0}' without successful MSBuild evaluation; update the conditional SDK version explicitly.</source>
         <target state="translated">无法确定活动条件 Aspire。没有成功进行 MSBuild 评估的 '{0}' 的 AppHost.Sdk 声明;显式更新条件 SDK 版本。</target>
@@ -210,8 +220,8 @@
         <note />
       </trans-unit>
       <trans-unit id="FallbackParsingWarning">
-        <source>Note: Update plan generated using fallback parsing due to unresolvable AppHost SDK. Dependency analysis may have reduced accuracy.</source>
-        <target state="translated">注意: 由于 AppHost SDK 无法解析，已采用回退解析生成更新计划。依赖项分析的准确性可能有所降低。</target>
+        <source>Note: Update plan generated using fallback parsing because MSBuild could not evaluate the AppHost project. Dependency analysis may have reduced accuracy.</source>
+        <target state="needs-review-translation">注意: 由于 AppHost SDK 无法解析，已采用回退解析生成更新计划。依赖项分析的准确性可能有所降低。</target>
         <note />
       </trans-unit>
       <trans-unit id="MappingAddedFormat">

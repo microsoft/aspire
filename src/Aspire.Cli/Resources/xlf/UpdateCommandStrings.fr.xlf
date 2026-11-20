@@ -72,6 +72,16 @@
         <target state="translated">Recherche de mises à jour...</target>
         <note />
       </trans-unit>
+      <trans-unit id="CommandFailedWithExitCodeAndOutputFormat">
+        <source>Command '{0}' failed with exit code {1}:</source>
+        <target state="new">Command '{0}' failed with exit code {1}:</target>
+        <note>{0} is the command line that was run. {1} is the process exit code. The command's own output follows on indented lines.</note>
+      </trans-unit>
+      <trans-unit id="CommandFailedWithExitCodeFormat">
+        <source>Command '{0}' failed with exit code {1}.</source>
+        <target state="new">Command '{0}' failed with exit code {1}.</target>
+        <note>{0} is the command line that was run. {1} is the process exit code.</note>
+      </trans-unit>
       <trans-unit id="ConditionalSdkEvaluationRequiredFormat">
         <source>Cannot determine active conditional Aspire.AppHost.Sdk declarations for '{0}' without successful MSBuild evaluation; update the conditional SDK version explicitly.</source>
         <target state="translated">Impossible de déterminer les déclarations conditionnelles actives Aspire.AppHost.Sdk pour « {0} » sans une évaluation MSBuild réussie ; mettez explicitement à jour la version conditionnelle du SDK.</target>
@@ -210,8 +220,8 @@
         <note />
       </trans-unit>
       <trans-unit id="FallbackParsingWarning">
-        <source>Note: Update plan generated using fallback parsing due to unresolvable AppHost SDK. Dependency analysis may have reduced accuracy.</source>
-        <target state="translated">Remarque : plan de mise à jour généré à l’aide de l’analyse de secours en raison d’un Kit de développement logiciel (SDK) AppHost non résolu. L’analyse des dépendances peut avoir une précision réduite.</target>
+        <source>Note: Update plan generated using fallback parsing because MSBuild could not evaluate the AppHost project. Dependency analysis may have reduced accuracy.</source>
+        <target state="needs-review-translation">Remarque : plan de mise à jour généré à l’aide de l’analyse de secours en raison d’un Kit de développement logiciel (SDK) AppHost non résolu. L’analyse des dépendances peut avoir une précision réduite.</target>
         <note />
       </trans-unit>
       <trans-unit id="MappingAddedFormat">

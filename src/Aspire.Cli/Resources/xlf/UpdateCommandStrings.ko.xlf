@@ -72,6 +72,16 @@
         <target state="translated">업데이트를 확인하는 중...</target>
         <note />
       </trans-unit>
+      <trans-unit id="CommandFailedWithExitCodeAndOutputFormat">
+        <source>Command '{0}' failed with exit code {1}:</source>
+        <target state="new">Command '{0}' failed with exit code {1}:</target>
+        <note>{0} is the command line that was run. {1} is the process exit code. The command's own output follows on indented lines.</note>
+      </trans-unit>
+      <trans-unit id="CommandFailedWithExitCodeFormat">
+        <source>Command '{0}' failed with exit code {1}.</source>
+        <target state="new">Command '{0}' failed with exit code {1}.</target>
+        <note>{0} is the command line that was run. {1} is the process exit code.</note>
+      </trans-unit>
       <trans-unit id="ConditionalSdkEvaluationRequiredFormat">
         <source>Cannot determine active conditional Aspire.AppHost.Sdk declarations for '{0}' without successful MSBuild evaluation; update the conditional SDK version explicitly.</source>
         <target state="translated">성공적인 MSBuild 평가 없이는 ‘{0}'에 대한 활성 조건부 Aspire.AppHost.Sdk 선언을 확인할 수 없습니다. 조건부 SDK 버전을 명시적으로 업데이트하세요.</target>
@@ -210,8 +220,8 @@
         <note />
       </trans-unit>
       <trans-unit id="FallbackParsingWarning">
-        <source>Note: Update plan generated using fallback parsing due to unresolvable AppHost SDK. Dependency analysis may have reduced accuracy.</source>
-        <target state="translated">참고: 해결할 수 없는 AppHost SDK 때문에 대체 구문 분석을 사용하여 업데이트 계획이 생성되었습니다. 종속성 분석의 정확도가 낮아질 수 있습니다.</target>
+        <source>Note: Update plan generated using fallback parsing because MSBuild could not evaluate the AppHost project. Dependency analysis may have reduced accuracy.</source>
+        <target state="needs-review-translation">참고: 해결할 수 없는 AppHost SDK 때문에 대체 구문 분석을 사용하여 업데이트 계획이 생성되었습니다. 종속성 분석의 정확도가 낮아질 수 있습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="MappingAddedFormat">
