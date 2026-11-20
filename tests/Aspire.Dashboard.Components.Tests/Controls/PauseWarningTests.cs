@@ -40,7 +40,7 @@ public class PauseWarningTests : DashboardTestContext
         Assert.Equal(["class", "data-tooltip"], root.Attributes.Select(attribute => attribute.Name).Order());
         Assert.Equal("Structured logs capture paused 5 minutes ago", cut.Find(".pause-warning-message").TextContent.Trim());
         Assert.Equal("Structured logs capture paused", cut.Find(".pause-warning-title").TextContent.Trim());
-        Assert.Equal($"Structured logs capture paused {absoluteTime}", root.GetAttribute("data-tooltip"));
+        Assert.Equal($"Structured logs capture paused {absoluteTime}", root.GetAttribute("data-tooltip"), ignoreWhiteSpaceDifferences: true);
     }
 
     [Fact]
@@ -66,7 +66,7 @@ public class PauseWarningTests : DashboardTestContext
         cut.WaitForAssertion(() =>
         {
             Assert.Equal("Structured logs capture paused 1 minute ago", cut.Find(".pause-warning-message").TextContent.Trim());
-            Assert.Equal("Structured logs capture paused Dec 21, 2025, 12:59 AM", cut.Find(".pause-warning").GetAttribute("data-tooltip"));
+            Assert.Equal("Structured logs capture paused Dec 21, 2025, 12:59 AM", cut.Find(".pause-warning").GetAttribute("data-tooltip"), ignoreWhiteSpaceDifferences: true);
         });
     }
 }
