@@ -171,7 +171,9 @@ public class Program
 
     /// <summary>
     /// Determines whether a successful one-shot command's automatic log can be deleted at exit.
-    /// Commands opt in through <see cref="BaseCommand.DiscardsLogOnSuccess"/>. Logs are kept when the user
+    /// Commands opt in through <see cref="BaseCommand.DiscardsLogOnSuccess"/>. <c>--version</c> runs on the root
+    /// command, which is not a <see cref="BaseCommand"/>, so its action is matched directly because tools such as
+    /// the VS Code extension poll it. Logs are kept when the user
     /// asked for diagnostics (<c>--debug</c>, <c>--log-level</c>, <c>--log-file</c>, or <c>--capture-profile</c>),
     /// when the command does not opt in, such as follow modes, or when the run was cancelled. Cancellation is
     /// checked separately so a cancelled run that still reports success keeps its log.
@@ -194,8 +196,8 @@ public class Program
             && parseResult.GetResult(RootCommand.DebugLevelOption) is not { Implicit: false }
             && parseResult.GetResult(RootCommand.s_logFileOption) is not { Implicit: false }
             && parseResult.GetResult(RootCommand.CaptureProfileOption) is not { Implicit: false }
-            && parseResult.CommandResult.Command is BaseCommand command
-            && command.DiscardsLogOnSuccess(parseResult);
+            && (parseResult.Action is IdentityVersionAction
+                || (parseResult.CommandResult.Command is BaseCommand command && command.DiscardsLogOnSuccess(parseResult)));
 
     private static async Task<string> GetGlobalSettingsPathAsync(ILogger logger, bool migrate, CancellationToken cancellationToken)
     {

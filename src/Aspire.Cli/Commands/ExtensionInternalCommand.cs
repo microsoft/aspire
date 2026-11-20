@@ -32,6 +32,8 @@ internal sealed class ExtensionInternalCommand : BaseCommand
             _projectLocator = projectLocator;
         }
 
+        internal override bool DiscardsLogOnSuccess(ParseResult parseResult) => true;
+
         protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
         {
             try
