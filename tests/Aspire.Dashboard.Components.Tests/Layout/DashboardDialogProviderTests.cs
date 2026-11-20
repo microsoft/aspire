@@ -92,12 +92,10 @@ public class DashboardDialogProviderTests : DashboardTestContext
 
         await cut.InvokeAsync(() => Services.GetRequiredService<NavigationManager>().NavigateTo("/traces"));
 
-        cut.WaitForAssertion(() =>
-        {
-            Assert.Empty(cut.FindComponents<FluentDialog>());
-            Assert.All(confirmations, confirmation => Assert.True(confirmation.IsCompletedSuccessfully));
-        });
-        Assert.All(await Task.WhenAll(confirmations), result => Assert.True(result.Cancelled));
+        // Queued confirmations can complete after the last dialog render without triggering another render.
+        var results = await Task.WhenAll(confirmations).WaitAsync(DefaultWaitTimeout);
+        Assert.All(results, result => Assert.True(result.Cancelled));
+        cut.WaitForAssertion(() => Assert.Empty(cut.FindComponents<FluentDialog>()));
 
         Task<DialogResult> newConfirmation = null!;
         await cut.InvokeAsync(() => { newConfirmation = service.ShowConfirmationAsync("Confirmation after navigation"); });
