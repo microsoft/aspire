@@ -18,6 +18,9 @@
     <TextReplacementValue Include="VERSION" NewValue="$(PackageVersion)" />
 
     <None Include="**/*.props;**/*.targets;AspireAppHostConfiguration.json" Pack="true" PackagePath="%(RecursiveDir)%(Filename)%(Extension)" />
+    <!-- Keep the unversioned props directly importable by in-repo projects. NuGet imports the stamped entry point. -->
+    <None Update="build\Aspire.Hosting.AppHost.props" PackagePath="build\Aspire.Hosting.AppHost.Common.props" />
+    <None Update="build\Aspire.Hosting.AppHost.in.props" Pack="true" PerformTextReplacement="True" PackagePath="build\Aspire.Hosting.AppHost.props" />
     <None Update="build\Aspire.Hosting.AppHost.in.targets" Pack="true" PerformTextReplacement="True" PackagePath="build\Aspire.Hosting.AppHost.targets" />
   </ItemGroup>
 
