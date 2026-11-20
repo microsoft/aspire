@@ -107,6 +107,47 @@ public class FoundryExtensionsTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public async Task RunAsFoundryLocal_ReportsModelPreparationAsActive()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var foundry = builder.AddFoundry("foundry");
+        var deployment = foundry.AddDeployment("deployment", "gpt-4", "1.0", "OpenAI");
+        foundry.RunAsFoundryLocal("http://localhost:5273");
+        using var app = builder.Build();
+        using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        await using var updates = app.ResourceNotifications.WatchAsync(cancellation.Token).GetAsyncEnumerator();
+        var next = updates.MoveNextAsync().AsTask();
+
+        await builder.Eventing.PublishAsync(new ResourceReadyEvent(foundry.Resource, app.Services), cancellation.Token);
+
+        var states = new List<ResourceStateSnapshot>();
+        while (await next)
+        {
+            if (updates.Current.ResourceId == deployment.Resource.Name && updates.Current.Snapshot.State is { } state)
+            {
+                states.Add(state);
+                if (state.Text == KnownResourceStates.Running)
+                {
+                    break;
+                }
+            }
+            next = updates.MoveNextAsync().AsTask();
+        }
+
+        Assert.Collection(states,
+            state =>
+            {
+                Assert.Equal("Using existing model gpt-4", state.Text);
+                Assert.True(state.IsInProgress);
+            },
+            state =>
+            {
+                Assert.Equal(KnownResourceStates.Running, state.Text);
+                Assert.False(state.IsInProgress);
+            });
+    }
+
+    [Fact]
     public void FoundryLocalService_TryParseModelId_ParsesModelInfoOutput()
     {
         var output = """

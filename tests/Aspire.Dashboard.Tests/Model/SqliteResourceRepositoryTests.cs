@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Tests.Shared;
 using Aspire.DashboardService.Proto.V1;
 using Google.Protobuf.WellKnownTypes;
@@ -13,6 +14,43 @@ namespace Aspire.Dashboard.Tests.Model;
 
 public sealed class SqliteResourceRepositoryTests(ITestOutputHelper testOutputHelper)
 {
+    [Fact]
+    public async Task ResourceProgress_PersistsAndClearsWithState()
+    {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var resource = CreateResource("foundry", "foundry");
+        resource.State = "Waiting for Deployment";
+        resource.StateStyle = "info";
+        resource.Properties.Add(new ResourceProperty
+        {
+            Name = KnownProperties.Resource.StateIsInProgress,
+            Value = Value.ForBool(true)
+        });
+        resource.Properties.Add(new ResourceProperty { Name = "example", Value = Value.ForString("value") });
+
+        using (var context = CreateRepository(workspace.Path))
+        {
+            await ((IResourceRepositoryWriter)context.Repository).ReplaceResourcesAsync([resource]);
+            var active = Assert.Single(context.Repository.GetResources());
+            Assert.True(active.IsStateInProgress);
+            Assert.Equal(["example"], active.Properties.Keys);
+        }
+
+        using (var context = CreateRepository(workspace.Path))
+        {
+            Assert.True(Assert.Single(context.Repository.GetResources()).IsStateInProgress);
+            resource.State = "Canceled";
+            resource.Properties.Clear();
+            await ((IResourceRepositoryWriter)context.Repository).ApplyChangesAsync([new WatchResourcesChange { Upsert = resource }]);
+            Assert.False(Assert.Single(context.Repository.GetResources()).IsStateInProgress);
+        }
+
+        using var historical = CreateRepository(workspace.Path, readOnly: true);
+        var canceled = Assert.Single(historical.Repository.GetResources());
+        Assert.Equal("Canceled", canceled.State);
+        Assert.False(canceled.IsStateInProgress);
+    }
+
     [Fact]
     public async Task Resources_PersistAndReplayWithEquivalentValues()
     {

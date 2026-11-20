@@ -26,6 +26,7 @@ using OpenTelemetry.Proto.Logs.V1;
 using OpenTelemetry.Proto.Metrics.V1;
 using OpenTelemetry.Proto.Trace.V1;
 using Xunit;
+using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 using static Aspire.Tests.Shared.Telemetry.TelemetryTestHelpers;
 
 namespace Aspire.Dashboard.Components.Tests.Layout;
@@ -33,6 +34,62 @@ namespace Aspire.Dashboard.Components.Tests.Layout;
 [UseCulture("en-US")]
 public class ResourcesLayoutTests : DashboardTestContext
 {
+    [Theory]
+    [InlineData("Waiting for Deployment", "info", true, "state-pending")]
+    [InlineData("Canceled", "info", false, "state-neutral")]
+    [InlineData("Provisioned", "success", false, "state-success")]
+    [InlineData("Failed to provision", "error", false, "state-error")]
+    [InlineData("Unsupported", "warning", false, "state-warning")]
+    public void CustomResourceState_UsesProgressAndStyle(string state, string style, bool inProgress, string expected)
+    {
+        var resource = ModelTestHelpers.CreateResource(stateText: state, stateStyle: style, isStateInProgress: inProgress);
+
+        Assert.Equal(expected, ResourcesLayout.GetStateClass(resource));
+    }
+
+    [Theory]
+    [InlineData(KnownResourceState.Building, "state-pending")]
+    [InlineData(KnownResourceState.Waiting, "state-pending")]
+    [InlineData(KnownResourceState.Running, "state-success")]
+    [InlineData(KnownResourceState.FailedToStart, "state-error")]
+    public void KnownResourceState_TakesPrecedenceOverProgress(KnownResourceState state, string expected)
+    {
+        var resource = ModelTestHelpers.CreateResource(state: state, isStateInProgress: true);
+
+        Assert.Equal(expected, ResourcesLayout.GetStateClass(resource));
+    }
+
+    [Fact]
+    public async Task ProvisioningResource_UpdatesIndicatorAndPreservesStateText()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var changes = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("foundry", stateText: "Waiting for Deployment", stateStyle: "info", isStateInProgress: true)],
+            resourceChannelProvider: () => changes));
+        Services.GetRequiredService<NavigationManager>().NavigateTo("/resources/foundry");
+        var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
+        var pendingIcon = Render<FluentIcon<Icon>>(p => p.Add(i => i.Value, new Icons.Filled.Size16.CircleHint()));
+        var infoIcon = Render<FluentIcon<Icon>>(p => p.Add(i => i.Value, new Icons.Filled.Size16.Info()));
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal("Waiting for deployment", cut.Find(".resource-footer-status .state-pill").TextContent.Trim());
+            Assert.Contains("state-pending", cut.Find("[data-resource-name='foundry'] .state-dot").ClassList);
+            Assert.Equal(pendingIcon.Find("svg").InnerHtml, cut.Find(".resource-footer-status .state-pill svg").InnerHtml);
+        });
+
+        await changes.Writer.WriteAsync([new(ResourceViewModelChangeType.Upsert,
+            ModelTestHelpers.CreateResource("foundry", stateText: "Canceled", stateStyle: "info"))]);
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal("Canceled", cut.Find(".resource-footer-status .state-pill").TextContent.Trim());
+            Assert.Contains("state-neutral", cut.Find("[data-resource-name='foundry'] .state-dot").ClassList);
+            Assert.Equal(infoIcon.Find("svg").InnerHtml, cut.Find(".resource-footer-status .state-pill svg").InnerHtml);
+        });
+    }
+
     [Theory]
     [InlineData(true, false)]
     [InlineData(true, true)]

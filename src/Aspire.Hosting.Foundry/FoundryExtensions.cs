@@ -408,7 +408,7 @@ public static class FoundryExtensions
                 {
                     await rns.PublishUpdateAsync(deployment, state => state with
                     {
-                        State = new ResourceStateSnapshot(manageModel ? $"Preparing model {model}" : $"Using existing model {model}", KnownResourceStateStyles.Info),
+                        State = new ResourceStateSnapshot(manageModel ? $"Preparing model {model}" : $"Using existing model {model}", KnownResourceStateStyles.Info) { IsInProgress = true },
                         Properties = [.. state.Properties, new(CustomResourceKnownProperties.Source, model)]
                     }).ConfigureAwait(false);
 
@@ -427,7 +427,7 @@ public static class FoundryExtensions
 
                             await rns.PublishUpdateAsync(deployment, state => state with
                             {
-                                State = new ResourceStateSnapshot("Loading model", KnownResourceStateStyles.Info)
+                                State = new ResourceStateSnapshot("Loading model", KnownResourceStateStyles.Info) { IsInProgress = true }
                             }).ConfigureAwait(false);
 
                             await FoundryLocalService.LoadModelAsync(deployment.LocalModelId, ct).ConfigureAwait(false);
@@ -464,7 +464,7 @@ public static class FoundryExtensions
                 {
                     await rns.PublishUpdateAsync(deployment, state => state with
                     {
-                        State = new ResourceStateSnapshot($"Downloading model {model}", KnownResourceStateStyles.Info)
+                        State = new ResourceStateSnapshot($"Downloading model {model}", KnownResourceStateStyles.Info) { IsInProgress = true }
                     }).ConfigureAwait(false);
 
                     var progressChannel = Channel.CreateUnbounded<float>();
@@ -475,7 +475,7 @@ public static class FoundryExtensions
                         logger.LogInformation("Downloading model {Model}: {Progress:F2}%", model, progress);
                         await rns.PublishUpdateAsync(deployment, state => state with
                         {
-                            State = new ResourceStateSnapshot($"Downloading model {model}: {progress:F2}%", KnownResourceStateStyles.Info)
+                            State = new ResourceStateSnapshot($"Downloading model {model}: {progress:F2}%", KnownResourceStateStyles.Info) { IsInProgress = true }
                         }).ConfigureAwait(false);
                     }
 

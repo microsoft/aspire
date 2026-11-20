@@ -729,4 +729,71 @@ public class PromptAgentTests(ITestOutputHelper testOutputHelper)
         // Verify the azure-prepare-resources step (the dependency) was also executed.
         Assert.Contains(AzureEnvironmentResource.PrepareResourcesStepName, activityReporter.CreatedSteps);
     }
+
+    [Fact]
+    public async Task RunModeCancellationStopsAgentAndToolboxProgress()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        var administration = new BlockingToolboxAdministration();
+        builder.Services.AddSingleton<IFoundryToolboxAdministration>(administration);
+
+        var project = builder.AddFoundry("account").AddProject("my-project");
+        var model = project.AddModelDeployment("gpt41", FoundryModel.OpenAI.Gpt41);
+        var agent = project.AddPromptAgent("my-agent", model);
+        var toolbox = project.AddToolbox("my-toolbox").WithWebSearchTool();
+        var tool = new BlockingFoundryTool("blocking-tool", project.Resource);
+        builder.AddResource(tool);
+        agent.Resource.AddTool(tool);
+        project.Resource.Outputs["endpoint"] = "https://account.services.ai.azure.com/api/projects/my-project";
+        project.Resource.ProvisioningTaskCompletionSource = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        project.Resource.ProvisioningTaskCompletionSource.SetResult();
+
+        using var app = builder.Build();
+        using var cancellation = new CancellationTokenSource();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        var pipelineContext = new PipelineContext(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run),
+            app.Services,
+            NullLogger.Instance,
+            cancellation.Token);
+        var reporter = new TestPipelineActivityReporter(testOutputHelper);
+
+        try
+        {
+            foreach (var resource in new IResource[] { agent.Resource, toolbox.Resource })
+            {
+                var annotation = Assert.Single(resource.Annotations.OfType<PipelineStepAnnotation>());
+                var steps = await annotation.CreateStepsAsync(new PipelineStepFactoryContext
+                {
+                    PipelineContext = pipelineContext,
+                    Resource = resource
+                });
+                var step = Assert.Single(steps, s => s.Name == $"deploy-{resource.Name}-before-start");
+                var reportingStep = await reporter.CreateStepAsync(step.Name);
+                await step.Action(new PipelineStepContext { PipelineContext = pipelineContext, ReportingStep = reportingStep });
+            }
+
+            await Task.WhenAll(tool.Started.Task, administration.Started.Task).WaitAsync(timeout.Token);
+            var notifications = app.Services.GetRequiredService<ResourceNotificationService>();
+            Assert.True(notifications.TryGetCurrentState(agent.Resource.Name, out var agentEvent));
+            Assert.Equal("Deploying agent", agentEvent.Snapshot.State?.Text);
+            Assert.True(agentEvent.Snapshot.State?.IsInProgress);
+            Assert.True(notifications.TryGetCurrentState(toolbox.Resource.Name, out var toolboxEvent));
+            Assert.Equal("Reconciling Toolbox", toolboxEvent.Snapshot.State?.Text);
+            Assert.True(toolboxEvent.Snapshot.State?.IsInProgress);
+
+            cancellation.Cancel();
+            await notifications.WaitForResourceAsync(agent.Resource.Name, "Canceled", timeout.Token);
+            await notifications.WaitForResourceAsync(toolbox.Resource.Name, "Canceled", timeout.Token);
+            Assert.True(notifications.TryGetCurrentState(agent.Resource.Name, out agentEvent));
+            Assert.False(agentEvent.Snapshot.State?.IsInProgress);
+            Assert.True(notifications.TryGetCurrentState(toolbox.Resource.Name, out toolboxEvent));
+            Assert.False(toolboxEvent.Snapshot.State?.IsInProgress);
+        }
+        finally
+        {
+            cancellation.Cancel();
+        }
+    }
 }
