@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREDOTNETTOOL
+#pragma warning disable CS0618 // Public EF callbacks retain the legacy tool type for compatibility.
 #pragma warning disable ASPIREPROJECTS001
 
 using Aspire.Hosting.ApplicationModel;

@@ -2751,7 +2751,7 @@ public class AtsGoCodeGeneratorTests
     }
 
     [Fact]
-    public void GeneratedCode_FiltersObsoleteSymbolsButKeepsRequiredWireTypes()
+    public void GeneratedCode_RetainsDeprecatedCallablesWhileFilteringObsoleteDataMembers()
     {
         var context = CreateContextFromTestAssembly();
         var obsoleteContext = Assert.Single(context.HandleTypes, type => type.ClrType == typeof(GoObsoleteContext));
@@ -2772,9 +2772,10 @@ public class AtsGoCodeGeneratorTests
         Assert.Contains("type GoObsoleteEnum string", aspireGo);
         Assert.Contains("GoObsoleteEnumCurrent", aspireGo);
         Assert.DoesNotContain("GoObsoleteEnumLegacy", aspireGo);
-        Assert.DoesNotContain("GetLegacyValue", aspireGo);
-        Assert.DoesNotMatch(@"type GoObsoleteContext interface \{[^}]*\bLegacy\(\)", aspireGo);
-        Assert.DoesNotContain("LegacyValue", aspireGo);
+        Assert.Contains("GetLegacyValue() (string, error)", aspireGo);
+        Assert.Contains("Legacy() (string, error)", aspireGo);
+        Assert.Contains("SetLegacy(value string) GoObsoleteContext", aspireGo);
+        Assert.Contains("// Deprecated: This API is obsolete.", aspireGo);
         Assert.DoesNotContain("type GoUnusedObsoleteDto struct", aspireGo);
 
         // These obsolete types remain because active methods still use them on the wire.
@@ -2790,9 +2791,10 @@ public class AtsGoCodeGeneratorTests
             [TestTypesAssemblyName],
             CancellationToken.None);
         var apiItems = api.Modules.Single().Items;
-        Assert.DoesNotContain(
-            apiItems.SelectMany(item => item.Members),
-            member => member.Name is "Legacy" or "GetLegacyValue" || member.Name.EndsWith("LegacyValue", StringComparison.Ordinal));
+        var exportedValues = Assert.Single(apiItems, item => item.Name == "GoObsoleteValues");
+        Assert.Equal(["CurrentValue"], exportedValues.Members.Select(member => member.Name));
+        Assert.Contains(apiItems.SelectMany(item => item.Members), member => member.Name == "GetLegacyValue" && member.DeprecationMessage is not null);
+        Assert.Contains(apiItems.SelectMany(item => item.Members), member => member.Name == "Legacy" && member.DeprecationMessage is not null);
         Assert.DoesNotContain(apiItems, item => item.Name == "GoUnusedObsoleteDto");
         Assert.Contains(apiItems, item => item.Name == "GoObsoleteWireDto");
         Assert.Contains(apiItems, item => item.Name == "GoObsoleteWireHandle");

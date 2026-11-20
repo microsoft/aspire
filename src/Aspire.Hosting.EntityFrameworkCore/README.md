@@ -68,6 +68,10 @@ The EF migration command-line tool is downloaded and executed on demand when com
 
 You can customize the migration tool version, package sources, or allow prerelease versions:
 
+`AddEFMigrations` retains its existing `DotnetToolResource` callback contract for compatibility.
+The `WithTool*` methods shown below remain supported for this callback. For tools added directly to
+the AppHost, use `AddDotnetCliTool` from `Aspire.Hosting.Dotnet` instead.
+
 ```csharp
 var api = builder.AddDotnetProject("api", "../Api/Api.csproj");
 
