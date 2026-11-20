@@ -4,6 +4,7 @@
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Xml;
+using System.Xml.Linq;
 using Aspire.TestUtilities;
 using Microsoft.Playwright;
 using Xunit;
@@ -189,6 +190,54 @@ public partial class TemplateTestsBase
 
         // basic case
         yield return "aspire";
+    }
+
+    public static void AssertSolutionFile(AspireProject project, string templateName, bool includesTests)
+    {
+        var solutionFileName = $"{project.Id}.slnx";
+        var solutionFiles = Directory.EnumerateFiles(project.RootDir, "*.sln*").Select(Path.GetFileName);
+        Assert.Equal([solutionFileName], solutionFiles);
+
+        var solution = XDocument.Load(Path.Combine(project.RootDir, solutionFileName));
+        var projectPaths = solution.Root!
+            .Elements("Project")
+            .Select(element => element.Attribute("Path")!.Value)
+            .ToArray();
+
+        var id = project.Id;
+        string[] expectedProjectPaths = templateName switch
+        {
+            "aspire" =>
+            [
+                $"{id}.AppHost/{id}.AppHost.csproj",
+                $"{id}.ServiceDefaults/{id}.ServiceDefaults.csproj",
+            ],
+            "aspire-starter" when includesTests =>
+            [
+                $"{id}.ApiService/{id}.ApiService.csproj",
+                $"{id}.AppHost/{id}.AppHost.csproj",
+                $"{id}.ServiceDefaults/{id}.ServiceDefaults.csproj",
+                $"{id}.Tests/{id}.Tests.csproj",
+                $"{id}.Web/{id}.Web.csproj",
+            ],
+            "aspire-starter" =>
+            [
+                $"{id}.ApiService/{id}.ApiService.csproj",
+                $"{id}.AppHost/{id}.AppHost.csproj",
+                $"{id}.ServiceDefaults/{id}.ServiceDefaults.csproj",
+                $"{id}.Web/{id}.Web.csproj",
+            ],
+            "aspire-ts-cs-starter" =>
+            [
+                $"{id}.AppHost/{id}.AppHost.csproj",
+                $"{id}.Server/{id}.Server.csproj",
+                "frontend/frontend.esproj",
+            ],
+            _ => throw new InvalidOperationException($"Unexpected template '{templateName}'."),
+        };
+
+        Assert.Equal(expectedProjectPaths, projectPaths);
+        Assert.All(projectPaths, projectPath => Assert.True(File.Exists(Path.Combine(project.RootDir, projectPath)), $"Solution references missing project '{projectPath}'."));
     }
 
     public static async Task AssertStarterTemplateRunAsync(IBrowserContext? context, AspireProject project, string config, ITestOutputHelper _testOutput)
