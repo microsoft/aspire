@@ -100,7 +100,7 @@ internal sealed class ExportCommand : BaseCommand
             Directory.CreateDirectory(directory);
         }
 
-        var dashboardApi = await TelemetryCommandHelpers.GetDashboardApiAsync(
+        await using var dashboardApi = await TelemetryCommandHelpers.GetDashboardApiAsync(
             _connectionResolver, InteractionService, _httpClientFactory, _logger, passedAppHostProjectFile, dashboardUrl, apiKey, requireDashboard: false, cancellationToken);
 
         if (!dashboardApi.Success)

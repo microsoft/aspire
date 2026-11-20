@@ -88,7 +88,7 @@ internal sealed class TerminalAttachCommand : BaseCommand
             return CommandResult.Failure(CliExitCodes.InvalidCommand);
         }
 
-        var connectionResult = await _connectionResolver.ResolveConnectionAsync(
+        await using var connectionResult = await _connectionResolver.ResolveConnectionAsync(
             passedAppHostProjectFile,
             SharedCommandStrings.ScanningForRunningAppHosts,
             string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.SelectAppHost, "attach a terminal"),

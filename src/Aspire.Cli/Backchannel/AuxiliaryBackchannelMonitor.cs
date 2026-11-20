@@ -26,7 +26,7 @@ internal sealed class AuxiliaryBackchannelMonitor(
     ILogger<AuxiliaryBackchannelMonitor> logger,
     CliExecutionContext executionContext,
     TimeProvider timeProvider,
-    ProfilingTelemetry profilingTelemetry) : BackgroundService, IAuxiliaryBackchannelMonitor
+    ProfilingTelemetry profilingTelemetry) : BackgroundService, IAuxiliaryBackchannelMonitor, IAsyncDisposable
 {
     /// <summary>
     /// Identifies the log written on each connect attempt, so tests can observe attempts without
@@ -39,6 +39,7 @@ internal sealed class AuxiliaryBackchannelMonitor(
     private static readonly TimeSpan s_initialUnreachableRetryDelay = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan s_maxUnreachableRetryDelay = TimeSpan.FromMinutes(5);
 
+    private Task? _shutdownCleanupTask;
     private readonly ConcurrentDictionary<string, AppHostAuxiliaryBackchannel> _connectionsBySocketPath = new(StringComparers.FileSystemPath);
     private readonly IReadOnlyList<AppHostSocketDirectory> _socketDirectories = AppHostSocketManager.GetSocketDirectories(executionContext.HomeDirectory.FullName);
 
@@ -330,9 +331,19 @@ internal sealed class AuxiliaryBackchannelMonitor(
         finally
         {
             // Clean up all connections in parallel
-            var disconnectTasks = Connections.Select(DisconnectAsync);
-            await Task.WhenAll(disconnectTasks).ConfigureAwait(false);
-            _connectionsBySocketPath.Clear();
+            var connections = new List<IAppHostAuxiliaryBackchannel>();
+            foreach (var socketPath in _connectionsBySocketPath.Keys)
+            {
+                if (_connectionsBySocketPath.TryRemove(socketPath, out var connection))
+                {
+                    connections.Add(connection);
+                }
+            }
+
+            // Retain the cleanup so DisposeAsync can still await it if the host's shutdown timeout
+            // (200 ms in Release) expires and StopAsync returns before the AppHost finishes closing.
+            _shutdownCleanupTask = Task.WhenAll(connections.Select(DisconnectAsync));
+            await _shutdownCleanupTask.ConfigureAwait(false);
         }
     }
 
@@ -375,6 +386,58 @@ internal sealed class AuxiliaryBackchannelMonitor(
         }
 
         return fileProviders;
+    }
+
+    /// <summary>
+    /// Stops monitoring and closes the connections this monitor owns.
+    /// </summary>
+    /// <remarks>
+    /// One-shot commands such as <c>aspire ps</c> borrow these connections. Closing them here, when the
+    /// CLI host is disposed, lets each AppHost observe a clean disconnect instead of a reset at process exit.
+    /// </remarks>
+    public override void Dispose()
+    {
+        base.Dispose();
+
+        foreach (var socketPath in _connectionsBySocketPath.Keys)
+        {
+            if (_connectionsBySocketPath.TryRemove(socketPath, out var connection))
+            {
+                connection.Dispose();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Stops monitoring and closes the monitor-owned connections gracefully, so AppHosts see clean
+    /// disconnects when the CLI exits.
+    /// </summary>
+    public async ValueTask DisposeAsync()
+    {
+        base.Dispose();
+
+        if (_shutdownCleanupTask is { } shutdownCleanupTask)
+        {
+            try
+            {
+                await shutdownCleanupTask.ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                logger.LogDebug(ex, "Error closing auxiliary backchannel connections during shutdown");
+            }
+        }
+
+        var connections = new List<AppHostAuxiliaryBackchannel>();
+        foreach (var socketPath in _connectionsBySocketPath.Keys)
+        {
+            if (_connectionsBySocketPath.TryRemove(socketPath, out var connection))
+            {
+                connections.Add(connection);
+            }
+        }
+
+        await Task.WhenAll(connections.Select(static connection => connection.DisposeAsync().AsTask())).ConfigureAwait(false);
     }
 
     private static void DisposeFileProviders(List<PhysicalFileProvider>? fileProviders)
@@ -751,14 +814,19 @@ internal sealed class AuxiliaryBackchannelMonitor(
     {
         try
         {
-            connection.Dispose();
+            if (connection is IAsyncDisposable asyncDisposable)
+            {
+                await asyncDisposable.DisposeAsync().ConfigureAwait(false);
+            }
+            else
+            {
+                connection.Dispose();
+            }
         }
         catch
         {
             // Ignore disposal errors
         }
-
-        await Task.CompletedTask.ConfigureAwait(false);
     }
 
     /// <summary>

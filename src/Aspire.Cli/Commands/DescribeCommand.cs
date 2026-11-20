@@ -161,7 +161,7 @@ internal sealed class DescribeCommand : BaseCommand
             return CommandResult.Failure(CliExitCodes.InvalidCommand, DescribeCommandStrings.MermaidFollowNotSupported);
         }
 
-        var result = await _connectionResolver.ResolveConnectionAsync(
+        await using var result = await _connectionResolver.ResolveConnectionAsync(
             passedAppHostProjectFile,
             SharedCommandStrings.ScanningForRunningAppHosts,
             string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.SelectAppHost, DescribeCommandStrings.SelectAppHostAction),
