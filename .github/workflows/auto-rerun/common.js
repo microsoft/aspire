@@ -2,7 +2,7 @@
 const failureConclusions = new Set(['failure', 'cancelled', 'timed_out', 'startup_failure']);
 const ignoredJobs = new Set(['Final Results', 'Tests / Final Test Results']);
 const defaultMaxRetryableJobs = 5;
-const defaultMaxRunAttempt = 3;
+const defaultMaxRunAttempt = 2;
 const defaultDelay = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
 
 const postTestCleanupFailureStepPatterns = [

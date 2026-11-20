@@ -60,7 +60,7 @@ Passes 1–2 are hardcoded because they target well-known infrastructure signatu
 
 | Trigger | Behavior |
 |---------|----------|
-| **Automatic PR rerun** (`workflow_run` on `CI` completion) | Currently reruns all failed jobs without classification when the run has an open associated PR, still matches its current head SHA, and is within the three-attempt cap. |
+| **Automatic PR rerun** (`workflow_run` on `CI` completion) | Currently reruns all failed jobs without classification when the run has an open associated PR, still matches its current head SHA, and is within the two-attempt cap. |
 | **Automatic current-main rerun** (`workflow_run` on `CI` pushes to `main`) | Selectively reruns failed jobs once from source attempt 1 when every real failed job matches the narrow current-main infrastructure allowlist and the failed run is still the latest run for the current `main` SHA. |
 | **Manual** (`workflow_dispatch`) | Enter a completed, failed PR `CI` run ID. It currently uses the same force-mode policy as automatic PR reruns; `dry_run` reports eligibility without requesting a rerun. |
 
@@ -69,7 +69,7 @@ The manual and automatic PR paths use the broad transient-failure analysis when 
 The pull request attempt cap is defined in
 [`auto-rerun/common.js`](../../.github/workflows/auto-rerun/common.js), and the
 current-main cap is defined in [`auto-rerun/rerun-main.js`](../../.github/workflows/auto-rerun/rerun-main.js).
-`defaultMaxRunAttempt` remains 3 for pull request runs. `mainMaxRunAttempt` is 1,
+`defaultMaxRunAttempt` is 2 for pull request runs. `mainMaxRunAttempt` is 1,
 so only the first failed rolling `main` attempt can request a retry.
 
 ## Current-main selective retry policy
@@ -226,7 +226,7 @@ The policies deliberately apply different rails:
 
 | Rail | Scope | Detail |
 |------|-------|--------|
-| **Attempt limit** | All paths | Pull request source attempts use `defaultMaxRunAttempt` (3), defined in [`auto-rerun/common.js`](../../.github/workflows/auto-rerun/common.js). Current-`main` source attempts use `mainMaxRunAttempt` (1), defined in [`auto-rerun/rerun-main.js`](../../.github/workflows/auto-rerun/rerun-main.js), allowing exactly one retry. |
+| **Attempt limit** | All paths | Pull request source attempts use `defaultMaxRunAttempt` (2), defined in [`auto-rerun/common.js`](../../.github/workflows/auto-rerun/common.js). Current-`main` source attempts use `mainMaxRunAttempt` (1), defined in [`auto-rerun/rerun-main.js`](../../.github/workflows/auto-rerun/rerun-main.js), allowing exactly one retry. |
 | **Open PR** | Pull request and manual paths | At least one associated pull request must still be open during analysis, including manual dry runs and force mode. Execution rechecks that an associated PR remains open immediately before requesting a rerun. |
 | **Current PR head** | Automatic pull request execution | The associated PR must still be open and point to the failed commit immediately before the rerun request, including force mode. Missing head data prevents the retry. Explicit manual dispatch can rerun a historical commit. |
 | **Live source attempt** | Pull request and manual execution | Immediately before the write, the selected run must still be a completed failure at the source attempt analyzed earlier. |
@@ -334,7 +334,7 @@ They are intentionally behavior-focused rather than regex-focused:
 - they exercise dispatcher routing, manual dry-run handling, PR force-mode job-read bypass, and main freshness checks across both phases
 
 Workflow-only safety rails such as the optional manual `dry_run` override,
-up-to-three-attempt automatic reruns, `workflow_dispatch`, and the
+up-to-two-attempt automatic reruns, `workflow_dispatch`, and the
 `rerun_execution_eligible` job gate need validation in the actual workflow.
 Source-text assertions do not establish their behavior and should not be copied
 or mechanically updated as regression coverage.
