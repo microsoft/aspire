@@ -214,7 +214,12 @@ public partial class AzureKubernetesEnvironmentResource :
     /// <summary>
     /// Gets the underlying Kubernetes environment resource used for Helm-based deployment.
     /// </summary>
-    internal KubernetesEnvironmentResource KubernetesEnvironment { get; set; } = default!;
+    /// <remarks>
+    /// This is the environment used by the AKS chart-generation pipeline, not a separate compute environment.
+    /// Its <see cref="KubernetesEnvironmentResource.HelmChartPublishingResult"/> is available after
+    /// the <c>publish-{Name}</c> pipeline step completes.
+    /// </remarks>
+    public KubernetesEnvironmentResource KubernetesEnvironment { get; internal set; } = default!;
 
     /// <summary>
     /// Gets the resource ID of the AKS cluster.

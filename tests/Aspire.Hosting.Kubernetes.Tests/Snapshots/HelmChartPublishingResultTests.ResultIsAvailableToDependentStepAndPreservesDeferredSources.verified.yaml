@@ -1,0 +1,13 @@
+﻿parameters:
+  worker:
+    worker_image: "worker:latest"
+secrets:
+  api_service:
+    password: ""
+    COMPOSITE: ""
+config:
+  api_service:
+    ordinary: ""
+    DEFERRED: ""
+  worker:
+    OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY: "in_memory"

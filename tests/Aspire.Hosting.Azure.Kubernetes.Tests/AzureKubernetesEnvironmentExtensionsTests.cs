@@ -20,6 +20,48 @@ namespace Aspire.Hosting.Azure.Tests;
 
 public class AzureKubernetesEnvironmentExtensionsTests(ITestOutputHelper outputHelper)
 {
+    [Theory]
+    [InlineData(DistributedApplicationOperation.Run)]
+    [InlineData(DistributedApplicationOperation.Publish)]
+    public void KubernetesEnvironmentExposesActualChartEnvironment(DistributedApplicationOperation operation)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace, operation);
+        var aks = builder.AddAzureKubernetesEnvironment("aks");
+        var chart = aks.AddHelmChart("sample", "oci://registry.example.com/charts/sample", "1.0.0");
+
+        Assert.Same(aks.Resource.KubernetesEnvironment, chart.Resource.Parent);
+        Assert.Same(aks.Resource, aks.Resource.KubernetesEnvironment.OwningComputeEnvironment);
+        Assert.Null(aks.Resource.KubernetesEnvironment.HelmChartPublishingResult);
+        Assert.Empty(builder.Resources.OfType<KubernetesEnvironmentResource>());
+    }
+
+    [Fact]
+    public async Task KubernetesEnvironmentExposesPublishedChartToDependentStep()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = AzureKubernetesTestBuilder.Create(outputHelper, workspace);
+        var aks = builder.AddAzureKubernetesEnvironment("aks");
+        var parameter = builder.AddParameter("setting");
+        builder.AddContainer("api", "nginx")
+            .WithEnvironment("SETTING", parameter)
+            .WithComputeEnvironment(aks);
+        HelmChartPublishingResult? observed = null;
+        builder.Pipeline.AddStep("consume-chart", _ =>
+        {
+            observed = Assert.IsType<HelmChartPublishingResult>(aks.Resource.KubernetesEnvironment.HelmChartPublishingResult);
+            Assert.True(File.Exists(Path.Combine(observed.OutputPath, "Chart.yaml")));
+            Assert.Contains(observed.Parameters, mapping => ReferenceEquals(mapping.Value, parameter.Resource));
+            return Task.CompletedTask;
+        }, dependsOn: $"publish-{aks.Resource.KubernetesEnvironment.Name}", requiredBy: WellKnownPipelineSteps.Publish);
+
+        using var app = builder.Build();
+        await app.RunAsync();
+
+        Assert.NotNull(observed);
+        Assert.Same(observed, aks.Resource.KubernetesEnvironment.HelmChartPublishingResult);
+    }
+
     [Fact]
     public async Task AddAzureKubernetesEnvironment_BasicConfiguration()
     {

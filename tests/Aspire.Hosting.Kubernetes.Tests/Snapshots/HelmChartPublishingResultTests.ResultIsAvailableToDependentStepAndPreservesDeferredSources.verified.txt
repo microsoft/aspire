@@ -1,0 +1,41 @@
+﻿{
+  Parameters: [
+    {
+      Section: config,
+      ResourceKey: api_service,
+      ValueKey: ordinary,
+      Name: ordinary,
+      Secret: false
+    },
+    {
+      Section: secrets,
+      ResourceKey: api_service,
+      ValueKey: password,
+      Name: password,
+      Secret: true
+    }
+  ],
+  ValueProviders: [
+    {
+      Section: config,
+      ResourceKey: api_service,
+      ValueKey: DEFERRED
+    }
+  ],
+  Images: [
+    {
+      Section: parameters,
+      ResourceKey: worker,
+      ValueKey: worker_image,
+      Name: worker
+    }
+  ],
+  CrossReferences: [
+    {
+      Section: secrets,
+      ResourceKey: api_service,
+      ValueKey: COMPOSITE,
+      Value: prefix-{{ .Values.config.api_service.ordinary }}-{{ .Values.secrets.api_service.password }}-suffix
+    }
+  ]
+}
