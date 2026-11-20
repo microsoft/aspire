@@ -192,21 +192,23 @@ public sealed class RadiusPublishTests(ITestOutputHelper output)
         await auto.EnterAsync();
         await auto.WaitForAspireAddCompletionAsync(counter, TimeSpan.FromSeconds(180));
 
+        // Float the template's existing reference instead of adding a second one, which NuGet
+        // would reject as a duplicate (NU1504). Keep the template's major version and include
+        // prereleases so the range restores from the same feed as the concrete version, including
+        // prerelease-only CI hives, e.g. "13.6.0-preview.1.25520.1" -> "13.*-*".
         var projectFile = Directory.EnumerateFiles(appHostDirectory, "*.csproj").Single();
         var project = XDocument.Load(projectFile);
-        var itemGroup = project.Root!.Elements("ItemGroup").FirstOrDefault() ?? new XElement("ItemGroup");
-        if (itemGroup.Parent is null)
-        {
-            project.Root.Add(itemGroup);
-        }
-
-        itemGroup.Add(new XElement(
-            "PackageReference",
-            new XAttribute("Include", "Aspire.Hosting.AppHost"),
-            new XAttribute("Version", "17.*")));
+        var appHostReference = project.Descendants("PackageReference")
+            .Single(e => string.Equals((string?)e.Attribute("Include"), "Aspire.Hosting.AppHost", StringComparison.OrdinalIgnoreCase));
+        var templateVersion = (string?)appHostReference.Attribute("Version");
+        Assert.False(string.IsNullOrEmpty(templateVersion));
+        var floatingVersion = $"{templateVersion.Split('.')[0]}.*-*";
+        appHostReference.SetAttributeValue("Version", floatingVersion);
         project.Save(projectFile);
 
-        await File.WriteAllTextAsync(Path.Combine(appHostDirectory, "Program.cs"), """
+        // Replace the template's top-level AppHost.cs rather than adding another entry point. The
+        // Radius publisher rejects project resources without images, so model only a container.
+        await File.WriteAllTextAsync(Path.Combine(appHostDirectory, "AppHost.cs"), """
             var builder = DistributedApplication.CreateBuilder(args);
             builder.AddRadiusEnvironment("radius");
             builder.AddContainer("web", "nginx:1.27.0");

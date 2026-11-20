@@ -25,7 +25,6 @@ using Aspire.Hosting.Utils;
 using Aspire.Shared;
 using Aspire.Shared.UserSecrets;
 using Microsoft.Extensions.Logging;
-using Semver;
 
 namespace Aspire.Cli.Projects;
 
@@ -1598,7 +1597,8 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         // Hosting version is available before selecting the terminal launch contract.
         var appHostInfo = await _appHostInfoResolver.GetAppHostInfoAsync(effectiveAppHostFile, cancellationToken);
         var injectDcpAndDashboard = appHostInfo.IsUsingCliBundle;
-        ConfigureCliBundleEnvironment(env, cliBundleLease, injectDcpAndDashboard, appHostInfo.AspireHostingVersion);
+        var launchHostingVersion = GetEffectiveAspireHostingVersion(appHostInfo, useBuildOutput: builtByCli || context.NoBuild);
+        ConfigureCliBundleEnvironment(env, cliBundleLease, injectDcpAndDashboard, launchHostingVersion);
 
         // RunCommand may display captured AppHost output as soon as BuildCompletionSource is signaled.
         // Store the collector first so failures that occur immediately after preparation are not lost
@@ -1795,7 +1795,14 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
                 return (buildExitCode, builtByCli, deferBuildCompletion);
             }
 
-            var compatibilityCheck = await CheckAppHostCompatibilityAsync(effectiveAppHostFile, isSingleFileAppHost, cancellationToken);
+            // The build output is what will launch when the CLI just built it or the caller
+            // explicitly reused it with --no-build. Otherwise (for example, an extension that owns
+            // the build) it may be stale, so only the declared version is trustworthy.
+            var compatibilityCheck = await CheckAppHostCompatibilityAsync(
+                effectiveAppHostFile,
+                isSingleFileAppHost,
+                useBuildOutput: builtByCli || context.NoBuild,
+                cancellationToken);
             if (!compatibilityCheck.IsCompatibleAppHost)
             {
                 context.BuildCompletionSource?.TrySetResult(false);
@@ -1869,8 +1876,8 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
     private async Task<(bool IsCompatibleAppHost, string? AspireHostingVersion)> CheckAppHostCompatibilityAsync(
         FileInfo effectiveAppHostFile,
         bool isSingleFileAppHost,
-        CancellationToken cancellationToken,
-        bool deferUnresolvedVersion = false)
+        bool useBuildOutput,
+        CancellationToken cancellationToken)
     {
         if (isSingleFileAppHost)
         {
@@ -1890,18 +1897,22 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         // Issue #17197: the legacy code path went runner → MSBuild for both validation and
         // the compatibility gate, doubling project inspection cost on every `aspire run`.
         var info = await _appHostInfoResolver.GetAppHostInfoAsync(effectiveAppHostFile, cancellationToken);
-        if (deferUnresolvedVersion &&
-            info.ExitCode == 0 &&
+        var aspireHostingVersion = GetEffectiveAspireHostingVersion(info, useBuildOutput);
+        if (info.ExitCode == 0 &&
             info.IsAspireHost &&
-            !SemVersion.TryParse(info.AspireHostingVersion, SemVersionStyles.Any, out _))
+            AppHostHelper.IsFloatingVersion(aspireHostingVersion))
         {
-            return (true, info.AspireHostingVersion);
+            // Only restore selects the package a floating range such as "9.*" represents, and its
+            // minimum is not necessarily that version. Without build output identifying the
+            // concrete package (before the build, for multi-targeted AppHosts, or when the
+            // build is owned elsewhere), do not reject the AppHost on the range's lower bound.
+            return (true, aspireHostingVersion);
         }
 
         var appHostCompatibilityCheck = AppHostHelper.EvaluateAppHostCompatibility(
             info.ExitCode,
             info.IsAspireHost,
-            info.AspireHostingVersion,
+            aspireHostingVersion,
             _interactionService,
             _fileLoggerProvider.LogFilePath);
 
@@ -1912,6 +1923,11 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
 
         return appHostCompatibilityCheck;
     }
+
+    private static string? GetEffectiveAspireHostingVersion(AppHostProjectInfo info, bool useBuildOutput)
+        => useBuildOutput
+            ? AppHostHelper.TryGetBuiltAspireHostingVersion(info.TargetPath) ?? info.AspireHostingVersion
+            : info.AspireHostingVersion;
 
     private async Task<DirectAppHostRunSpec?> TryCreateDirectRunSpecAsync(
         FileInfo effectiveAppHostFile,
@@ -2497,8 +2513,8 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
             var compatibilityCheck = await CheckAppHostCompatibilityAsync(
                 effectiveAppHostFile,
                 isSingleFileAppHost: false,
-                cancellationToken,
-                deferUnresolvedVersion: true);
+                useBuildOutput: false,
+                cancellationToken);
 
             if (!compatibilityCheck.IsCompatibleAppHost)
             {
@@ -2548,13 +2564,14 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         }
 
         // A floating PackageReference cannot identify the effective Hosting version until restore
-        // runs. Re-inspect after the optional build so project.assets.json invalidates the shared
-        // cache and compatibility/launch-contract decisions use the concrete package version.
+        // runs. Re-check against the build output that `dotnet run --no-build` will launch, which
+        // either was just built or was explicitly reused with --no-build.
         if (!isSingleFileAppHost)
         {
             var compatibilityCheck = await CheckAppHostCompatibilityAsync(
                 effectiveAppHostFile,
                 isSingleFileAppHost: false,
+                useBuildOutput: true,
                 cancellationToken);
 
             if (!compatibilityCheck.IsCompatibleAppHost)

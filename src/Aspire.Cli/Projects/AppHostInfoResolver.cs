@@ -6,7 +6,6 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Aspire.Cli.Caching;
 using Aspire.Cli.DotNet;
-using Semver;
 
 namespace Aspire.Cli.Projects;
 
@@ -17,13 +16,16 @@ internal interface IAppHostInfoResolver
 
 internal sealed class AppHostInfoResolver(IDotNetCliRunner runner, IAppHostInfoDiskCache diskCache) : IAppHostInfoResolver
 {
-    private readonly ConcurrentDictionary<string, Task<AppHostProjectInfo>> _cache = new();
+    private readonly ConcurrentDictionary<(string Path, DateTime LastWriteUtc, string Fingerprint), Task<AppHostProjectInfo>> _cache = new();
 
     public async Task<AppHostProjectInfo> GetAppHostInfoAsync(FileInfo projectFile, CancellationToken cancellationToken)
     {
         // Refresh so FileInfo reflects the on-disk mtime even when callers pass a long-lived instance.
         projectFile.Refresh();
-        var key = diskCache.GetCacheKey(projectFile);
+        // The project path and mtime keep entries isolated per project even when the disk cache is
+        // disabled and returns an empty fingerprint. The fingerprint adds the restore and
+        // Directory.* inputs that can change package versions without touching the project file.
+        var key = (projectFile.FullName, projectFile.LastWriteTimeUtc, diskCache.GetCacheKey(projectFile));
         var task = GetOrAddSharedFetch(key, projectFile);
 
         try
@@ -52,7 +54,7 @@ internal sealed class AppHostInfoResolver(IDotNetCliRunner runner, IAppHostInfoD
         }
     }
 
-    private Task<AppHostProjectInfo> GetOrAddSharedFetch(string key, FileInfo projectFile)
+    private Task<AppHostProjectInfo> GetOrAddSharedFetch((string Path, DateTime LastWriteUtc, string Fingerprint) key, FileInfo projectFile)
     {
         while (true)
         {
@@ -73,7 +75,7 @@ internal sealed class AppHostInfoResolver(IDotNetCliRunner runner, IAppHostInfoD
         }
     }
 
-    private async Task CompleteSharedFetchAsync(string key, FileInfo projectFile, TaskCompletionSource<AppHostProjectInfo> completion)
+    private async Task CompleteSharedFetchAsync((string Path, DateTime LastWriteUtc, string Fingerprint) key, FileInfo projectFile, TaskCompletionSource<AppHostProjectInfo> completion)
     {
         try
         {
@@ -138,7 +140,7 @@ internal sealed class AppHostInfoResolver(IDotNetCliRunner runner, IAppHostInfoD
         var (exitCode, jsonDocument) = await runner.GetProjectItemsAndPropertiesAsync(
             projectFile,
             items: ["PackageReference", "AspireProjectOrPackageReference", "PackageVersion"],
-            properties: ["IsAspireHost", "AspireHostingSDKVersion", "_AspireAppHostPackageVersion", "ProjectAssetsFile", "AspireUseCliBundle", "UserSecretsId", "RunCommand", "TargetPath", "RunWorkingDirectory", "RunArguments", "TargetFramework", "TargetFrameworks"],
+            properties: ["IsAspireHost", "AspireHostingSDKVersion", "AspireUseCliBundle", "UserSecretsId", "RunCommand", "TargetPath", "RunWorkingDirectory", "RunArguments", "TargetFramework", "TargetFrameworks"],
             targets: ["ComputeRunArguments"],
             new ProcessInvocationOptions(),
             cancellationToken).ConfigureAwait(false);
@@ -214,13 +216,12 @@ internal sealed class AppHostInfoResolver(IDotNetCliRunner runner, IAppHostInfoD
             return new AppHostProjectInfo(ExitCode: exitCode, IsAspireHost: false, AspireHostingVersion: null, IsUsingCliBundle: isUsingCliBundle, UserSecretsId: userSecretsId, RunCommand: runCommand, TargetPath: targetPath, RunWorkingDirectory: runWorkingDirectory, RunArguments: runArguments, TargetFramework: targetFramework, TargetFrameworks: targetFrameworks);
         }
 
-        // project.assets.json is the authoritative NuGet result for a restored project. The
-        // generated package property is the next-best source because it comes from the imported
-        // Aspire.Hosting.AppHost build targets. Both are empty before the first restore.
-        var aspireHostingVersion = GetResolvedPackageVersion(properties.ProjectAssetsFile, "Aspire.Hosting")
-            ?? GetConcreteVersion(properties.AspireAppHostPackageVersion);
-
-        if (aspireHostingVersion is null && items is not null)
+        // Report the declared reference, which may be a NuGet floating range such as "13.*".
+        // Restore output is intentionally not consulted here: project.assets.json can describe
+        // stale inputs or a different target framework than the one that will run. Callers that
+        // need the concrete version read it from the AppHost build output instead.
+        string? aspireHostingVersion = null;
+        if (items is not null)
         {
             // Preserve the effective-reference order used by NuGet: a direct Hosting reference
             // wins over the AppHost metapackage, and Central Package Management contributes only
@@ -270,48 +271,6 @@ internal sealed class AppHostInfoResolver(IDotNetCliRunner runner, IAppHostInfoD
             string.Equals(item.Identity, packageId, StringComparison.OrdinalIgnoreCase) &&
             !string.IsNullOrWhiteSpace(item.Version))?.Version;
     }
-
-    private static string? GetConcreteVersion(string? version)
-        => SemVersion.TryParse(version, SemVersionStyles.Any, out _) ? version : null;
-
-    private static string? GetResolvedPackageVersion(string? assetsFilePath, string packageId)
-    {
-        if (string.IsNullOrWhiteSpace(assetsFilePath) || !File.Exists(assetsFilePath))
-        {
-            return null;
-        }
-
-        try
-        {
-            using var stream = File.OpenRead(assetsFilePath);
-            using var document = JsonDocument.Parse(stream);
-            if (!document.RootElement.TryGetProperty("libraries", out var libraries))
-            {
-                return null;
-            }
-
-            // project.assets.json identifies resolved packages as keys such as
-            //   "Aspire.Hosting/17.1.0-preview.1"
-            // and may contain project references with the same version-shaped suffix.
-            var prefix = $"{packageId}/";
-            foreach (var library in libraries.EnumerateObject())
-            {
-                if (library.Value.TryGetProperty("type", out var type) &&
-                    string.Equals(type.GetString(), "package", StringComparison.OrdinalIgnoreCase) &&
-                    library.Name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-                {
-                    return GetConcreteVersion(library.Name[prefix.Length..]);
-                }
-            }
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
-        {
-            // A missing, transiently-written, or malformed assets file is equivalent to an
-            // unrestored project for this best-effort fallback path.
-        }
-
-        return null;
-    }
 }
 
 internal sealed record AppHostProjectInfo(
@@ -343,12 +302,6 @@ internal sealed record AppHostProjectInspectionProperties
 
     [JsonPropertyName("AspireHostingSDKVersion")]
     public string? AspireHostingSDKVersion { get; init; }
-
-    [JsonPropertyName("_AspireAppHostPackageVersion")]
-    public string? AspireAppHostPackageVersion { get; init; }
-
-    [JsonPropertyName("ProjectAssetsFile")]
-    public string? ProjectAssetsFile { get; init; }
 
     [JsonPropertyName("AspireUseCliBundle")]
     public string? AspireUseCliBundle { get; init; }

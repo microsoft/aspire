@@ -93,6 +93,54 @@ internal static class AppHostHelper
         return false;
     }
 
+    /// <summary>
+    /// Determines whether a declared Aspire.Hosting version is a NuGet floating range, such as
+    /// <c>13.*</c> or <c>13.*-*</c>, rather than the concrete version the AppHost runs with.
+    /// </summary>
+    internal static bool IsFloatingVersion(string? aspireHostingVersion)
+        => !string.IsNullOrWhiteSpace(aspireHostingVersion) &&
+            !SemVersion.TryParse(aspireHostingVersion, SemVersionStyles.Any, out _) &&
+            VersionRange.TryParse(aspireHostingVersion, out var range) &&
+            range.Float is not null;
+
+    /// <summary>
+    /// Reads the Aspire.Hosting version compiled into an AppHost's build output.
+    /// </summary>
+    /// <param name="targetPath">The AppHost <c>TargetPath</c>, for example <c>bin/Debug/net10.0/AppHost.dll</c>.</param>
+    /// <returns>The concrete package version, or <see langword="null"/> when it cannot be determined.</returns>
+    internal static string? TryGetBuiltAspireHostingVersion(string? targetPath)
+    {
+        // The build copies the restored Aspire.Hosting assembly next to the AppHost for the target
+        // framework that actually runs. Its AssemblyInformationalVersion is the package version
+        // followed by optional source revision metadata, for example:
+        //   13.6.0-preview.1.25520.1+3f1c2a0d...
+        // Unlike project.assets.json, this cannot describe stale restore inputs or another target
+        // framework, so it is the version that `--no-build` launches and capability checks must use.
+        if (string.IsNullOrWhiteSpace(targetPath) || Path.GetDirectoryName(targetPath) is not { Length: > 0 } outputDirectory)
+        {
+            return null;
+        }
+
+        var hostingAssemblyPath = Path.Combine(outputDirectory, "Aspire.Hosting.dll");
+        if (!File.Exists(hostingAssemblyPath))
+        {
+            return null;
+        }
+
+        try
+        {
+            var productVersion = FileVersionInfo.GetVersionInfo(hostingAssemblyPath).ProductVersion;
+            return SemVersion.TryParse(productVersion, SemVersionStyles.Any, out var version)
+                ? version.WithoutMetadata().ToString()
+                : null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or BadImageFormatException)
+        {
+            // Treat an unreadable assembly like missing output; callers fall back to the declared version.
+            return null;
+        }
+    }
+
     internal static async Task<(int ExitCode, bool IsAspireHost, string? AspireHostingVersion)> GetAppHostInformationAsync(IDotNetCliRunner runner, IInteractionService interactionService, FileInfo projectFile, AspireCliTelemetry telemetry, DirectoryInfo workingDirectory, CancellationToken cancellationToken)
     {
         using var activity = telemetry.StartDiagnosticActivity(kind: ActivityKind.Client);
