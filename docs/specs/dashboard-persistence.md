@@ -93,7 +93,11 @@ Resource moves and group moves are saved separately in protected browser local s
 independently of the run database. If the dashboard can no longer decrypt the saved moves, it uses the default
 order. A move stores the neighbors at the drop position. Replay places the
 item after its previous neighbor, falling back to placing it before its next neighbor if the previous
-neighbor is missing or no longer a sibling.
+neighbor is missing or no longer a sibling. Only the latest move for each resource or group is kept,
+so replacing a move can also affect other items that depended on its old position.
+The resource list and the combined group setting each retain at most 50 moves to limit the size of the
+protected values sent over the dashboard connection. Trimming drops the oldest resource moves or the
+oldest moves from the grouping mode with the most saved moves.
 
 Traits are transported as list-valued resource properties named `resource.trait.<name>`,
 including in recorded snapshots. Trait names are case-sensitive; dashboard tags are

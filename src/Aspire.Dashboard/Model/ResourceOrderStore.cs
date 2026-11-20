@@ -12,6 +12,10 @@ namespace Aspire.Dashboard.Model;
 /// </summary>
 public sealed class ResourceOrderStore
 {
+    // At 50 moves, 64-character ASCII resource names with both anchors fit under SignalR's 32 KiB receive limit.
+    // https://github.com/dotnet/aspnetcore/blob/ae89581dfd24c6277b4267a9779d05f7b9f047f1/src/SignalR/server/Core/src/HubOptionsSetup.cs#L19-L23
+    private const int MaxSavedMoves = 50;
+
     private readonly LocalStorageSetting<List<RelativeOrderMove>> _resourceOrder;
     private readonly LocalStorageSetting<Dictionary<string, List<RelativeOrderMove>>> _groupOrder;
 
@@ -19,7 +23,7 @@ public sealed class ResourceOrderStore
     {
         var applicationName = options.Value.GetApplicationNameOrDefault();
         _resourceOrder = new(localStorage, locks, timeProvider, BrowserStorageKeys.ResourceOrderKey(applicationName), logger, protect: true,
-            NormalizeMoves, (x, y) => x.SequenceEqual(y), () => Changed?.Invoke());
+            NormalizeResourceOrder, (x, y) => x.SequenceEqual(y), () => Changed?.Invoke());
         _groupOrder = new(localStorage, locks, timeProvider, BrowserStorageKeys.GroupOrderKey(applicationName), logger, protect: true,
             NormalizeGroupOrder, (x, y) => x.Count == y.Count && x.All(pair => y.TryGetValue(pair.Key, out var moves) && pair.Value.SequenceEqual(moves)),
             () => Changed?.Invoke());
@@ -61,7 +65,16 @@ public sealed class ResourceOrderStore
         var parent = GetVisibleParent(resource, names);
         var siblingKeys = ordered.Where(r => StringComparer.Ordinal.Equals(GetVisibleParent(r, names), parent)).Select(r => r.PersistentKey);
         var move = CreateMove(resource.PersistentKey, anchor.PersistentKey, after, siblingKeys);
-        return move is not null && _resourceOrder.Update(moves => AppendMove(moves, move));
+        return move is not null && _resourceOrder.Update(moves =>
+        {
+            if (!ReplaceMove(moves, move))
+            {
+                return false;
+            }
+
+            TrimResourceMoves(moves);
+            return true;
+        });
     }
 
     public bool TryMoveGroup(string grouping, string key, string anchor, bool after, IEnumerable<string> orderedGroupKeys)
@@ -79,7 +92,13 @@ public sealed class ResourceOrderStore
                 order.Add(grouping, moves = []);
             }
 
-            return AppendMove(moves, move);
+            if (!ReplaceMove(moves, move))
+            {
+                return false;
+            }
+
+            TrimGroupMoves(order);
+            return true;
         });
     }
 
@@ -138,7 +157,7 @@ public sealed class ResourceOrderStore
         }
     }
 
-    private static bool AppendMove(List<RelativeOrderMove> moves, RelativeOrderMove move)
+    private static bool ReplaceMove(List<RelativeOrderMove> moves, RelativeOrderMove move)
     {
         // A storage retry can read back a move it already saved. Replaying a duplicate could undo a later move.
         if (moves.Exists(existing => existing.Id == move.Id))
@@ -146,6 +165,7 @@ public sealed class ResourceOrderStore
             return false;
         }
 
+        moves.RemoveAll(existing => StringComparers.ResourceName.Equals(existing.Key, move.Key));
         moves.Add(move);
         return true;
     }
@@ -156,12 +176,48 @@ public sealed class ResourceOrderStore
         return moves?.Where(move => move is { Key: not null } && move.Id != Guid.Empty &&
             (move.PreviousKey is not null || move.NextKey is not null) &&
             !StringComparers.ResourceName.Equals(move.Key, move.PreviousKey) &&
-            !StringComparers.ResourceName.Equals(move.Key, move.NextKey) && ids.Add(move.Id)).ToList() ?? [];
+            !StringComparers.ResourceName.Equals(move.Key, move.NextKey) && ids.Add(move.Id))
+            .Reverse().DistinctBy(move => move.Key, StringComparers.ResourceName).Reverse().ToList() ?? [];
     }
 
-    private static Dictionary<string, List<RelativeOrderMove>> NormalizeGroupOrder(Dictionary<string, List<RelativeOrderMove>>? stored) =>
-        stored?.Select(pair => KeyValuePair.Create(pair.Key, NormalizeMoves(pair.Value)))
+    private static List<RelativeOrderMove> NormalizeResourceOrder(List<RelativeOrderMove>? stored)
+    {
+        var moves = NormalizeMoves(stored);
+        TrimResourceMoves(moves);
+        return moves;
+    }
+
+    private static Dictionary<string, List<RelativeOrderMove>> NormalizeGroupOrder(Dictionary<string, List<RelativeOrderMove>>? stored)
+    {
+        var order = stored?.Select(pair => KeyValuePair.Create(pair.Key, NormalizeMoves(pair.Value)))
             .Where(pair => pair.Value.Count > 0).ToDictionary(StringComparer.Ordinal) ?? new(StringComparer.Ordinal);
+        TrimGroupMoves(order);
+        return order;
+    }
+
+    private static void TrimResourceMoves(List<RelativeOrderMove> moves)
+    {
+        if (moves.Count > MaxSavedMoves)
+        {
+            moves.RemoveRange(0, moves.Count - MaxSavedMoves);
+        }
+    }
+
+    private static void TrimGroupMoves(Dictionary<string, List<RelativeOrderMove>> order)
+    {
+        var count = order.Values.Sum(moves => moves.Count);
+        while (count > MaxSavedMoves)
+        {
+            // Modes don't share a replay order. Evict the oldest move from the mode with the most saved moves.
+            var (grouping, moves) = order.MaxBy(pair => pair.Value.Count);
+            moves.RemoveAt(0);
+            count--;
+            if (moves.Count == 0)
+            {
+                order.Remove(grouping);
+            }
+        }
+    }
 }
 
 /// <summary>

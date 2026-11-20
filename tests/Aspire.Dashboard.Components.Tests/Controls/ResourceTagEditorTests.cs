@@ -1,11 +1,13 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Concurrent;
 using Aspire.Dashboard.Components.Controls;
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.BrowserStorage;
+using Aspire.Dashboard.Utils;
 using Bunit;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -67,13 +69,16 @@ public class ResourceTagEditorTests : DashboardTestContext
         Services.AddSingleton(_tagStore);
     }
 
-    [Fact]
-    public void UnreadableStorage_KeepsAddedTagsWithoutSavingThem()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void AddTag_SavesToProtectedStorageOnlyWhenReadable(bool readFailed)
     {
         // As while the circuit is disconnected: saving would replace stored tags that couldn't be read.
-        _localStorage.IsUnprotectedReadFailed = _ => true;
-        var savedKeys = new List<string>();
-        _localStorage.OnSetUnprotectedAsync = (key, _) => savedKeys.Add(key);
+        _localStorage.IsReadFailed = _ => readFailed;
+        var writes = new ConcurrentQueue<(string Key, bool Protected)>();
+        _localStorage.OnSetAsync = (key, _) => writes.Enqueue((key, true));
+        _localStorage.OnSetUnprotectedAsync = (key, _) => writes.Enqueue((key, false));
         var cut = Render<ResourceTagEditor>(p => p.Add(c => c.ResourceName, "api"));
 
         cut.Find(".tag-add").Click();
@@ -82,7 +87,8 @@ public class ResourceTagEditorTests : DashboardTestContext
 
         Assert.Equal(["backend"], cut.FindAll(".tag-chip-name").Select(c => c.TextContent));
         Assert.Equal(["backend"], _tagStore.GetTags("api"));
-        Assert.Empty(savedKeys);
+        var storageKey = BrowserStorageKeys.ResourceTagsKey(new DashboardOptions().GetApplicationNameOrDefault());
+        Assert.Equal(readFailed ? [] : [(storageKey, true)], writes);
     }
 
     [Fact]
