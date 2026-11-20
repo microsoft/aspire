@@ -89,7 +89,9 @@ without removing any existing entries.
 
 The dashboard applies edits to resource order, group order, user tags, and metric pins only
 after browser storage confirms the save. If the save fails, the dashboard leaves the current
-view unchanged and asks you to try again.
+view unchanged and asks you to try again. If removing a tag or pin finds nothing to
+remove, the dashboard refreshes the view without writing. If the saved value is missing
+or can no longer be decrypted, the dashboard shows the defaults.
 
 `WithDisplayOrder` stores its own annotation rather than a trait, and is transported
 as the `resource.displayOrder` resource property; repeated calls replace the previous

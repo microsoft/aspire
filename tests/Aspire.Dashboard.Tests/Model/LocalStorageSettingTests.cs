@@ -88,6 +88,36 @@ public sealed class LocalStorageSettingTests
         Assert.Equal([1, 3], reloaded.Read(value => value.ToArray()));
     }
 
+    [Theory]
+    [InlineData(null)]
+    [InlineData("invalid protected value")]
+    public async Task Update_NoOpRefreshesStaleValueWithoutWriting(string? storedValue)
+    {
+        var browser = new InMemoryBrowserLocalStorage();
+        await browser.Storage.SetAsync<List<int>>(Key, [1]);
+        var changes = 0;
+        var setting = CreateSetting(browser, protect: true, () => changes++);
+        await setting.EnsureLoadedAsync().DefaultTimeout();
+        Assert.Equal([1], setting.Read(value => value.ToArray()));
+
+        if (storedValue is null)
+        {
+            browser.Items.Remove(Key);
+        }
+        else
+        {
+            browser.Items[Key] = storedValue;
+        }
+
+        browser.FailWrites = true;
+        var result = await setting.UpdateAsync(value => value.Remove(1) ? SettingUpdateResult.Changed : SettingUpdateResult.Unchanged);
+
+        Assert.Equal(SettingUpdateResult.Unchanged, result);
+        Assert.Empty(setting.Read(value => value.ToArray()));
+        Assert.Equal(2, changes);
+        Assert.Equal(storedValue, browser.Items.GetValueOrDefault(Key));
+    }
+
     private static LocalStorageSetting<List<int>> CreateSetting(InMemoryBrowserLocalStorage browser, bool protect, Action onChanged) =>
         new(browser.Storage, new LocalStorageLocks(), Key, NullLogger.Instance, protect, stored => stored?.ToList() ?? [], (x, y) => x.SequenceEqual(y), onChanged);
 
