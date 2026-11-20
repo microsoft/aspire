@@ -552,11 +552,21 @@ public class MongoDbFunctionalTests(ITestOutputHelper testOutputHelper)
     [RequiresFeature(TestFeature.ContainerRuntime)]
     public Task MongoDB_WithPersistentLifetime_ReusesContainer()
     {
-        return PersistentContainerTestHelpers.AssertResourceReusesContainerAsync(
+        return PersistentContainerTestHelpers.AssertResourcesReuseContainersAsync(
             testOutputHelper,
-            builder => builder.AddMongoDB("resource").WithPersistentLifetime(),
-            "resource",
-            useTestContainerRegistry: true);
+            builder =>
+            {
+                var mongodb = builder.AddMongoDB("resource").WithPersistentLifetime();
+                var database = mongodb.AddDatabase("database");
+
+                builder.AddMongoDB("dependent").WaitFor(database);
+            },
+            ["resource"],
+            additionalHealthyResourceNames: ["database", "dependent"],
+            useTestContainerRegistry: true,
+            randomizePorts: false,
+            compareUrls: false,
+            timeout: null);
     }
 }
 
