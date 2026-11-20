@@ -76,7 +76,7 @@ The playground demonstrates Aspire's ability to manage MAUI apps on multiple pla
   - Requires macOS to run (iOS development is macOS-only)
   - Use `.WithOtlpDevTunnel()` to send telemetry to the dashboard (iOS devices cannot reach localhost)
 - **iOS Simulator**: Configures the MAUI app with `.AddiOSSimulator()` to run on iOS simulators
-  - Use `.AddiOSSimulator()` to target the default simulator
+  - Use `.AddiOSSimulator()` to select from available simulators when the resource starts
   - Use `.AddiOSSimulator("simulator-name", "E25BBE37-69BA-4720-B6FD-D54C97791E79")` to target a specific simulator by UDID
   - Find simulator UDIDs in Xcode under Window > Devices and Simulators > Simulators tab, or use `/Applications/Xcode.app/Contents/Developer/usr/bin/simctl list`
   - Requires macOS to run (iOS development is macOS-only)
@@ -88,10 +88,9 @@ The playground demonstrates Aspire's ability to manage MAUI apps on multiple pla
   - Get device IDs from `adb devices` command
   - Use `.WithOtlpDevTunnel()` to send telemetry to the dashboard (Android cannot reach localhost)
 - **Android Emulator**: Configures the MAUI app with `.AddAndroidEmulator()` to run on Android emulators
-  - Use `.AddAndroidEmulator()` to target the only running emulator (default)
-  - Use `.AddAndroidEmulator("emulator-name", "Pixel_5_API_33")` to target a specific emulator by AVD name
-  - Can also use emulator serial number like "emulator-5554"
-  - Get emulator names from `adb devices` or `emulator -list-avds` command
+  - Use `.AddAndroidEmulator()` to select from available Android Virtual Devices (AVDs) when the resource starts
+  - Use `.AddAndroidEmulator("emulator-name", "emulator-5554")` to target a specific running emulator by adb serial
+  - Get running emulator serials from `adb devices`
   - Use `.WithOtlpDevTunnel()` to send telemetry to the dashboard (emulators cannot reach localhost)
 - Automatically detects platform-specific target frameworks from the project file
 - Shows "Unsupported" state in dashboard when running on incompatible host OS
@@ -141,7 +140,7 @@ mauiapp.AddAndroidDevice("my-device", "abc12345")
     .WithEnvironment("API_TIMEOUT", "30")
     .WithEnvironment("LOG_LEVEL", "Debug");
 
-mauiapp.AddAndroidEmulator("my-emulator", "Pixel_5_API_33")
+mauiapp.AddAndroidEmulator("my-emulator", "emulator-5554")
     .WithEnvironment("CUSTOM_VAR", "value")
     .WithReference(weatherApi);  // Service discovery environment variables also forwarded
 
@@ -197,10 +196,10 @@ If you encounter build errors:
   3. Right-click simulator and select "Copy Identifier" for UDID
   4. Use in code: `.AddiOSSimulator(simulatorId: "E25BBE37-69BA-4720-B6FD-D54C97791E79")`
 - **Android Device**: Requires a physical Android device connected via USB/WiFi debugging. Ensure the device is visible via `adb devices`. Works on Windows, macOS, and Linux.
-- **Android Emulator**: Requires an Android emulator running and visible via `adb devices`. To target a specific emulator:
-  1. List available emulators: `adb devices` (shows emulator IDs like "emulator-5554")
-  2. Or list AVDs: `emulator -list-avds` (shows AVD names like "Pixel_5_API_33")
-  3. Use either ID format in code: `.AddAndroidEmulator(emulatorId: "Pixel_5_API_33")` or `.AddAndroidEmulator(emulatorId: "emulator-5554")`
+- **Android Emulator**: Requires Android SDK emulator tooling and at least one Android Virtual Device (AVD). To target a specific running emulator:
+  1. List running emulators: `adb devices` (shows emulator serials like "emulator-5554")
+  2. Use the adb serial in code: `.AddAndroidEmulator(emulatorId: "emulator-5554")`
+  3. To select from installed AVDs when the resource starts, omit the emulator ID.
   4. Works on Windows, macOS, and Linux.
 
 ## Current Status
