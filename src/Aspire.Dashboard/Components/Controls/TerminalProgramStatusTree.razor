@@ -1,0 +1,42 @@
+@namespace Aspire.Dashboard.Components.Controls
+@using Aspire.Dashboard.Terminal
+
+@foreach (var node in Nodes)
+{
+    <FluentTreeItem @key="node.Id"
+                    Class="@(node.Children.Count > 0 ? "terminal-status-node terminal-status-branch" : "terminal-status-node")"
+                    data-status-id="@node.Id"
+                    title="@GetDescription(node)"
+                    aria-label="@GetDescription(node)"
+                    Expanded="@(!CollapsedIds.Contains(node.Id))"
+                    ExpandedChanged="@(expanded => SetExpanded(node.Id, expanded))">
+        <div class="terminal-status-record" data-state="@node.Record?.State"
+             @onclick="@(() => ToggleExpanded(node))" @onclick:stopPropagation="true">
+            <div class="terminal-status-state" aria-hidden="true">
+                @if (node.Record is { State: "working" } or { Progress: not null } || HasGroupingProgress(node))
+                {
+                    <AspireProgressRing Width="16px" Value="@node.Record?.Progress" AriaLabel="@GetDescription(node)" />
+                }
+                else
+                {
+                    <FluentIcon Value="@GetStatusIcon(node.Record?.State)" Color="@GetStatusColor(node.Record?.State)" Width="16px" />
+                }
+                @if (node.Children.Count > 0 && CollapsedIds.Contains(node.Id))
+                {
+                    <span class="terminal-status-collapsed-indicator">
+                        <FluentIcon Icon="Icons.Regular.Size12.Add" Width="10px" />
+                    </span>
+                }
+            </div>
+            <span class="terminal-status-title">@GetTitle(node)</span>
+            @if (node.Record?.Progress is { } progress)
+            {
+                <span class="terminal-status-progress">@GetProgressLabel(progress)</span>
+            }
+        </div>
+        @if (node.Children.Count > 0)
+        {
+            <TerminalProgramStatusTree Nodes="@node.Children" CollapsedIds="@CollapsedIds" />
+        }
+    </FluentTreeItem>
+}

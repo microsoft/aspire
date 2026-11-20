@@ -1,0 +1,55 @@
+.terminal-status-record {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    width: 100%;
+    min-height: 32px;
+    color: var(--colorNeutralForeground1);
+    white-space: nowrap;
+    font-size: var(--fontSizeBase300);
+    line-height: var(--lineHeightBase300);
+}
+
+.terminal-status-title {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.terminal-status-state {
+    display: flex;
+    flex: 0 0 16px;
+    align-items: center;
+    position: relative;
+    z-index: 1;
+    background: var(--colorNeutralBackground1);
+    color: var(--colorNeutralForeground2);
+}
+
+.terminal-status-progress {
+    flex: 0 0 auto;
+    margin-inline-start: auto;
+    color: var(--colorNeutralForeground2);
+    font-size: var(--fontSizeBase200);
+    font-variant-numeric: tabular-nums;
+}
+
+.terminal-status-collapsed-indicator {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: absolute;
+    inset-inline-end: -4px;
+    bottom: -3px;
+    width: 10px;
+    height: 10px;
+    border: 1px solid var(--colorNeutralStroke1);
+    border-radius: 50%;
+    background: var(--colorNeutralBackground1);
+    color: var(--colorNeutralForeground1);
+}
+
+.terminal-status-record[data-state="blocked"] {
+    --colorBrandStroke1: var(--warning);
+}

@@ -60,6 +60,71 @@ namespace Aspire.Dashboard.Resources {
             }
         }
 
+        /// <summary>Looks up a localized string similar to Program status.</summary>
+        public static string TerminalStatusTitle {
+            get { return ResourceManager.GetString("TerminalStatusTitle", resourceCulture); }
+        }
+
+        /// <summary>Looks up a localized string similar to Toggle program status panel.</summary>
+        public static string TerminalStatusToggle {
+            get { return ResourceManager.GetString("TerminalStatusToggle", resourceCulture); }
+        }
+
+        /// <summary>Looks up a localized string similar to No program status reported.</summary>
+        public static string TerminalStatusEmpty {
+            get { return ResourceManager.GetString("TerminalStatusEmpty", resourceCulture); }
+        }
+
+        /// <summary>Looks up a localized string similar to Program.</summary>
+        public static string TerminalStatusRoot {
+            get { return ResourceManager.GetString("TerminalStatusRoot", resourceCulture); }
+        }
+
+        /// <summary>Looks up a localized string similar to Idle.</summary>
+        public static string TerminalStatusIdle {
+            get { return ResourceManager.GetString("TerminalStatusIdle", resourceCulture); }
+        }
+
+        /// <summary>Looks up a localized string similar to Working.</summary>
+        public static string TerminalStatusWorking {
+            get { return ResourceManager.GetString("TerminalStatusWorking", resourceCulture); }
+        }
+
+        /// <summary>Looks up a localized string similar to Unfinished child tasks.</summary>
+        public static string TerminalStatusUnfinishedChildren {
+            get { return ResourceManager.GetString("TerminalStatusUnfinishedChildren", resourceCulture); }
+        }
+
+        /// <summary>Looks up a localized string similar to Blocked.</summary>
+        public static string TerminalStatusBlocked {
+            get { return ResourceManager.GetString("TerminalStatusBlocked", resourceCulture); }
+        }
+
+        /// <summary>Looks up a localized string similar to Done.</summary>
+        public static string TerminalStatusDone {
+            get { return ResourceManager.GetString("TerminalStatusDone", resourceCulture); }
+        }
+
+        /// <summary>Looks up a localized string similar to Error.</summary>
+        public static string TerminalStatusError {
+            get { return ResourceManager.GetString("TerminalStatusError", resourceCulture); }
+        }
+
+        /// <summary>Looks up a localized string similar to Permission required.</summary>
+        public static string TerminalStatusPermission {
+            get { return ResourceManager.GetString("TerminalStatusPermission", resourceCulture); }
+        }
+
+        /// <summary>Looks up a localized string similar to Question.</summary>
+        public static string TerminalStatusQuestion {
+            get { return ResourceManager.GetString("TerminalStatusQuestion", resourceCulture); }
+        }
+
+        /// <summary>Looks up a localized string similar to Authentication required.</summary>
+        public static string TerminalStatusAuth {
+            get { return ResourceManager.GetString("TerminalStatusAuth", resourceCulture); }
+        }
+
         /// <summary>
         ///   Looks up a localized string similar to Toggle terminal (`).
         /// </summary>
