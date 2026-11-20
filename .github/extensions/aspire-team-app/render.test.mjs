@@ -68,7 +68,7 @@ test("Needs attention renders only its prefix and offers a collapsed, action-fre
       assert.equal([...remainder[1].matchAll(/<a href=/g)].length, count - 10);
       assert.equal([...remainder[1].matchAll(/class="card-actions"/g)].length, 0);
     }
-    assert.match(app.innerHTML, /First readiness, oldest first\. Blocked PRs keep their priority when they return\./);
+    assert.match(app.innerHTML, /fixes-ci or urgent-review labels first, then first readiness, oldest first\. Blocked PRs keep their readiness when they return\./);
   }
   assert.match(STYLES, /\.focus-queue \{[^}]*display: grid;[^}]*grid-template-columns: repeat\(auto-fill, minmax\(min\(100%, 280px\), 1fr\)\)/);
 });
