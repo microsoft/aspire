@@ -14,14 +14,25 @@ public sealed class TestLocalStorage : ILocalStorage
     public Func<string, (bool Success, object? Value)>? OnGetUnprotectedAsync { get; set; }
     public Action<string, object?>? OnSetUnprotectedAsync { get; set; }
     public Func<string, (bool Success, object? Value)>? OnGetAsync { get; set; }
+    public Action<string, object?>? OnSetAsync { get; set; }
 
     /// <summary>
-    /// Gets or sets a function that returns whether reading a key fails, as when the circuit is disconnected.
+    /// Gets or sets a function that returns whether reading a protected key fails, as when the circuit is disconnected.
+    /// </summary>
+    public Func<string, bool>? IsReadFailed { get; set; }
+
+    /// <summary>
+    /// Gets or sets a function that returns whether reading an unprotected key fails, as when the circuit is disconnected.
     /// </summary>
     public Func<string, bool>? IsUnprotectedReadFailed { get; set; }
 
     public Task<StorageResult<T>> GetAsync<T>(string key)
     {
+        if (IsReadFailed?.Invoke(key) == true)
+        {
+            return Task.FromResult(new StorageResult<T>(success: false, value: default) { ReadFailed = true });
+        }
+
         if (OnGetAsync is { } callback)
         {
             var (success, value) = callback(key);
@@ -85,6 +96,7 @@ public sealed class TestLocalStorage : ILocalStorage
             _protectedValues[key] = value;
         }
 
+        OnSetAsync?.Invoke(key, value);
         return Task.CompletedTask;
     }
 

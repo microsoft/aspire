@@ -106,7 +106,7 @@ public sealed class ResourceOrderStoreTests
     }
 
     [Fact]
-    public async Task ResourceOrder_PreservesDependentMovesFromDifferentTabs()
+    public async Task ResourceOrder_MergesLatestMovesFromDifferentTabs()
     {
         var tabA = await CreateLoadedStoreAsync();
         var tabB = await CreateLoadedStoreAsync();
@@ -118,9 +118,68 @@ public sealed class ResourceOrderStoreTests
         ResourceViewModel[] resources = [a, b, c, d];
         Assert.True(tabA.TryMoveResource(a, c, after: true, resources)); // b, c, a, d
         Assert.True(tabB.TryMoveResource(b, a, after: true, resources)); // c, a, b, d
-        Assert.True(tabA.TryMoveResource(a, d, after: true, resources)); // c, b, d, a
+        Assert.Equal(["c", "a", "b", "d"], GetNames(await CreateLoadedStoreAsync(), resources));
 
-        Assert.Equal(["c", "b", "d", "a"], GetNames(await CreateLoadedStoreAsync(), a, b, c, d));
+        Assert.True(tabA.TryMoveResource(a, d, after: true, resources));
+
+        var saved = (await _browser.Storage.GetAsync<List<RelativeOrderMove>>(s_resourceKey)).Value!;
+        Assert.Equal(["b_0", "a_0"], saved.Select(move => move.Key));
+        Assert.Equal(["b", "c", "d", "a"], GetNames(await CreateLoadedStoreAsync(), resources));
+    }
+
+    [Fact]
+    public async Task Order_RepeatedMovesReplaceThePreviousMove()
+    {
+        var store = await CreateLoadedStoreAsync();
+        var api = CreateResource("api");
+        var worker = CreateResource("worker");
+
+        for (var i = 0; i < 401; i++)
+        {
+            var after = i % 2 != 0;
+            Assert.True(store.TryMoveResource(worker, api, after, [api, worker]));
+            Assert.True(store.TryMoveGroup("Tags", "Worker", "Api", after, ["Api", "Worker"]));
+        }
+
+        var savedResources = (await _browser.Storage.GetAsync<List<RelativeOrderMove>>(s_resourceKey)).Value!;
+        var savedGroups = (await _browser.Storage.GetAsync<Dictionary<string, List<RelativeOrderMove>>>(s_groupKey)).Value!;
+        Assert.Equal("api_0", Assert.Single(savedResources).NextKey);
+        Assert.Equal("Api", Assert.Single(savedGroups["Tags"]).NextKey);
+
+        var reloaded = await CreateLoadedStoreAsync();
+        Assert.Equal(["worker", "api"], GetNames(reloaded, api, worker));
+        Assert.Equal(["Worker", "Api"], OrderGroups(reloaded, "Tags", "Api", "Worker"));
+    }
+
+    [Fact]
+    public async Task Order_EvictsOldMovesAndKeepsProtectedPayloadUnderMessageLimit()
+    {
+        var store = await CreateLoadedStoreAsync();
+        var prefix = new string('a', 61); // The three-digit suffix makes each name 64 characters.
+        var previousAnchor = CreateResource($"{prefix}000");
+        var nextAnchor = CreateResource($"{prefix}001");
+        var names = Enumerable.Range(2, 51).Select(i => prefix + i.ToString("D3", CultureInfo.InvariantCulture)).ToArray();
+
+        for (var i = 0; i < names.Length; i++)
+        {
+            var resource = CreateResource(names[i]);
+            Assert.True(store.TryMoveResource(resource, nextAnchor, after: false, [previousAnchor, nextAnchor, resource]));
+            var grouping = i % 2 == 0 ? "Tags" : "ResourceType";
+            Assert.True(store.TryMoveGroup(grouping, names[i], nextAnchor.DisplayName, after: false,
+                [previousAnchor.DisplayName, nextAnchor.DisplayName, names[i]]));
+        }
+
+        var savedResources = (await _browser.Storage.GetAsync<List<RelativeOrderMove>>(s_resourceKey)).Value!;
+        var savedGroups = (await _browser.Storage.GetAsync<Dictionary<string, List<RelativeOrderMove>>>(s_groupKey)).Value!;
+        Assert.Equal(2, savedGroups.Count);
+        Assert.Equal(previousAnchor.PersistentKey, savedResources[^1].PreviousKey);
+        Assert.Equal(nextAnchor.PersistentKey, savedResources[^1].NextKey);
+        Assert.Equal(names[1..].Select(name => $"{name}_0"), savedResources.Select(move => move.Key));
+        Assert.Equal(names[1..], savedGroups.Values.SelectMany(moves => moves).Select(move => move.Key).Order(StringComparer.Ordinal));
+
+        // The real storage implementation encrypts and base64url-encodes these values before returning them over SignalR.
+        Assert.InRange(_browser.Items[s_resourceKey].Length, 1, 31 * 1024);
+        Assert.InRange(_browser.Items[s_groupKey].Length, 1, 31 * 1024);
     }
 
     [Fact]
