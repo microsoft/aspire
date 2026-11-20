@@ -71,6 +71,8 @@ internal static class TextVisualizerFormatHelpers
             : null;
     }
 
+    public static bool HasDatabaseSystem(KeyValuePair<string, string>[] attributes) => GetDatabaseSystem(attributes) is not null;
+
     public static string? GetLogMessageFormat(string source)
     {
         // Command messages can contain metadata followed by SQL, e.g.:
