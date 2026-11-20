@@ -59,13 +59,13 @@ public sealed class ResourceOrderStoreTests
         Assert.Equal([s_resourceKey], _browser.Items.Keys);
 
         var reloaded = await CreateLoadedStoreAsync();
-        Assert.Equal(["api", "worker", "auth", "cache"], GetNames(reloaded, api, cache, worker, CreateResource("auth")));
+        Assert.Equal(["api", "auth", "worker", "cache"], GetNames(reloaded, api, cache, worker, CreateResource("auth")));
         Assert.Equal(["api", "worker"], GetNames(reloaded, api, worker));
         Assert.Equal(["api", "worker", "cache"], GetNames(reloaded, api, cache, worker));
     }
 
     [Theory]
-    [InlineData(true, true, "api,worker,auth,cache")]
+    [InlineData(true, true, "api,auth,worker,cache")]
     [InlineData(true, false, "api,worker,auth")]
     [InlineData(false, true, "auth,worker,cache")]
     [InlineData(false, false, "auth,worker")]
@@ -149,6 +149,34 @@ public sealed class ResourceOrderStoreTests
         var reloaded = await CreateLoadedStoreAsync();
         Assert.Equal(["worker", "api"], GetNames(reloaded, api, worker));
         Assert.Equal(["Worker", "Api"], OrderGroups(reloaded, "Tags", "Api", "Worker"));
+    }
+
+    [Fact]
+    public async Task Order_ReplacingAMovePreservesTheRequestedSideOfTheTarget()
+    {
+        var store = await CreateLoadedStoreAsync();
+        var a = CreateResource("a");
+        var b = CreateResource("b");
+        var c = CreateResource("c");
+        ResourceViewModel[] resources = [a, b, c];
+        string[] groups = ["a", "b", "c"];
+
+        Assert.True(store.TryMoveResource(b, a, after: false, resources));
+        Assert.True(store.TryMoveGroup("Tags", "b", "a", after: false, groups));
+        Assert.True(store.TryMoveResource(c, b, after: true, resources));
+        Assert.True(store.TryMoveGroup("Tags", "c", "b", after: true, OrderGroups(store, "Tags", groups)));
+        Assert.Equal(["b", "c", "a"], GetNames(store, resources));
+        Assert.Equal(["b", "c", "a"], OrderGroups(store, "Tags", groups));
+
+        Assert.True(store.TryMoveResource(b, a, after: false, resources));
+        Assert.True(store.TryMoveGroup("Tags", "b", "a", after: false, OrderGroups(store, "Tags", groups)));
+
+        // Replacing B's first move lets C shift, but B must still land before A.
+        Assert.Equal(["b", "a", "c"], GetNames(store, resources));
+        Assert.Equal(["b", "a", "c"], OrderGroups(store, "Tags", groups));
+        var reloaded = await CreateLoadedStoreAsync();
+        Assert.Equal(["b", "a", "c"], GetNames(reloaded, resources));
+        Assert.Equal(["b", "a", "c"], OrderGroups(reloaded, "Tags", groups));
     }
 
     [Fact]
@@ -236,7 +264,7 @@ public sealed class ResourceOrderStoreTests
     public async Task Order_UnprotectedMovesAreIgnoredAndReplacedWithoutBackup()
     {
         await _browser.Storage.SetUnprotectedAsync<List<RelativeOrderMove>>(s_resourceKey,
-            [new(Guid.NewGuid(), "worker_0", PreviousKey: null, NextKey: "api_0")]);
+            [new(Guid.NewGuid(), "worker_0", PreviousKey: null, NextKey: "api_0", PreferNext: false)]);
         var api = CreateResource("api");
         var worker = CreateResource("worker");
         var store = await CreateLoadedStoreAsync();
@@ -251,8 +279,8 @@ public sealed class ResourceOrderStoreTests
     [Fact]
     public async Task Order_DuplicateMoveIdsDoNotReplayTwice()
     {
-        var first = new RelativeOrderMove(Guid.NewGuid(), "api_0", PreviousKey: "worker_0", NextKey: null);
-        var second = new RelativeOrderMove(Guid.NewGuid(), "api_0", PreviousKey: null, NextKey: "worker_0");
+        var first = new RelativeOrderMove(Guid.NewGuid(), "api_0", PreviousKey: "worker_0", NextKey: null, PreferNext: false);
+        var second = new RelativeOrderMove(Guid.NewGuid(), "api_0", PreviousKey: null, NextKey: "worker_0", PreferNext: false);
         await _browser.Storage.SetAsync<List<RelativeOrderMove>>(s_resourceKey, [first, second, first]);
 
         Assert.Equal(["api", "worker"], GetNames(await CreateLoadedStoreAsync(), CreateResource("api"), CreateResource("worker")));
