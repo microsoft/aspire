@@ -3009,7 +3009,8 @@ public static partial class JavaScriptHostingExtensions
             var installerBuilder = resource.ApplicationBuilder.AddResource(installer)
                 .WithParentRelationship(resource.Resource)
                 .ExcludeFromManifest()
-                .WithCertificateTrustScope(CertificateTrustScope.None);
+                .WithCertificateTrustScope(CertificateTrustScope.None)
+                .WithHiddenOnCompletion();
 
             resource.ApplicationBuilder.OnBeforeStart((_, _) =>
             {
