@@ -1,19 +1,22 @@
 @if (ViewportInformation.IsDesktop)
 {
-    <label for="@_spanTypeSelectId">@Loc[nameof(Dashboard.Resources.Traces.SpanTypeLabel)]</label>
+    @* Group label + select so wrapping toolbars keep Span type together (#21866). *@
+    <div class="toolbar-labeled-control">
+        <label for="@_spanTypeSelectId">@Loc[nameof(Dashboard.Resources.Traces.SpanTypeLabel)]</label>
 
-    <DesktopToolbarDivider />
+        <DesktopToolbarDivider />
 
-    <FluentSelect TOption="SelectViewModel<SpanType>" TValue="SelectViewModel<SpanType>"
-                  Class="toolbar-select toolbar-select-compact"
-                  Id="@_spanTypeSelectId"
-                  Items="@SpanTypes"
-                  Position="SelectPosition.Below"
-                  OptionText="@(c => c?.Name)"
-                  @bind-Value="@SpanType"
-                  @bind-Value:after="@HandleSelectedSpanTypeChangedInternalAsync"
-                  AriaLabel="@Loc[nameof(Dashboard.Resources.Traces.SpanTypeSelectSpanType)]"
-                  @attributes="@AdditionalAttributes" />
+        <FluentSelect TOption="SelectViewModel<SpanType>" TValue="SelectViewModel<SpanType>"
+                      Class="toolbar-select toolbar-select-compact"
+                      Id="@_spanTypeSelectId"
+                      Items="@SpanTypes"
+                      Position="SelectPosition.Below"
+                      OptionText="@(c => c?.Name)"
+                      @bind-Value="@SpanType"
+                      @bind-Value:after="@HandleSelectedSpanTypeChangedInternalAsync"
+                      AriaLabel="@Loc[nameof(Dashboard.Resources.Traces.SpanTypeSelectSpanType)]"
+                      @attributes="@AdditionalAttributes" />
+    </div>
 }
 else
 {
