@@ -144,6 +144,7 @@ internal static class AuxiliaryBackchannelCapabilities
     public const string V2 = "aux.v2";  // 13.2+ with request objects
     public const string V3 = "aux.v3";  // 13.4+ with batched console log streaming
     public const string ResourceSnapshotVersions_V1 = "resource-snapshot-versions.v1";
+    public const string ResourceCommandFiles_V1 = "resource-command-files.v1";
 }
 ```
 
@@ -164,6 +165,10 @@ internal static class AuxiliaryBackchannelCapabilities
 When both sides advertise `resource-snapshot-versions.v1`, `ResourceSnapshot.Version` is monotonic and can order the initial GET against watch updates. The CLI starts the watch before the GET and retains the newest snapshot when the calls overlap.
 
 Older AppHosts omit `ResourceSnapshot.Version`, which deserializes as `0`. Without the capability, the CLI treats snapshot ordering as unknown and preserves the legacy GET-first behavior. A version of `0` must not participate in stale-snapshot comparisons.
+
+### Resource Command File Compatibility
+
+When both sides advertise `resource-command-files.v1`, file-type resource command arguments are transferred in `ExecuteResourceCommandRequest.Files`. A CLI connected to an older AppHost rejects file arguments with an upgrade diagnostic instead of forwarding a path as a scalar value that the command cannot read as an uploaded file.
 
 ### Compatibility Matrix
 
