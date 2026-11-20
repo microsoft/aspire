@@ -27,7 +27,7 @@ namespace Aspire.Dashboard.Model;
 /// </remarks>
 public sealed class MetricPinStore
 {
-    private const int MaxSavedPins = 50;
+    internal const int MaxSavedPins = 50;
 
     private readonly LocalStorageSetting<List<MetricPin>> _setting;
     private readonly ILogger<MetricPinStore> _logger;
@@ -80,9 +80,9 @@ public sealed class MetricPinStore
     /// Pins or unpins an instrument for each of <paramref name="resourceNames"/>. A pin operation is rejected if
     /// the new pins would exceed the saved pin limit.
     /// </summary>
-    public void SetPinned(OtlpInstrumentKey key, IReadOnlyCollection<string> resourceNames, bool pinned)
+    internal SettingUpdate SetPinned(OtlpInstrumentKey key, IReadOnlyCollection<string> resourceNames, bool pinned)
     {
-        _setting.Update(pins =>
+        return _setting.UpdateWithResult(pins =>
         {
             var originalCount = pins.Count;
             var changed = false;
@@ -96,11 +96,11 @@ public sealed class MetricPinStore
                     // Pinning a selection adds pins for all selected resources or none of them.
                     pins.RemoveRange(originalCount, pins.Count - originalCount);
                     _logger.LogWarning("Cannot pin the instrument for the selection because it would exceed the limit of {Limit} saved metric pins.", MaxSavedPins);
-                    return false;
+                    return SettingUpdateResult.LimitReached;
                 }
             }
 
-            return changed;
+            return changed ? SettingUpdateResult.Changed : SettingUpdateResult.Unchanged;
         });
     }
 

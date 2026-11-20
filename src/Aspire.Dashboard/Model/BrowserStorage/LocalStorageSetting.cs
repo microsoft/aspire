@@ -44,7 +44,7 @@ internal sealed class LocalStorageSetting<TValue> where TValue : class
     private readonly Func<TValue, TValue, bool> _equals;
     private readonly Action _onChanged;
     private readonly Lock _lock = new();
-    private readonly List<Func<TValue, bool>> _pendingChanges = [];
+    private readonly List<PendingChange> _pendingChanges = [];
     private TValue _value;
     private Task? _loadTask;
     private bool _isWriting;
@@ -124,14 +124,26 @@ internal sealed class LocalStorageSetting<TValue> where TValue : class
     /// </summary>
     /// <param name="change">Changes a value and returns whether it changed. It must be idempotent.</param>
     /// <returns><see langword="true"/> when the in-memory value changed.</returns>
-    public bool Update(Func<TValue, bool> change)
+    public bool Update(Func<TValue, bool> change) =>
+        QueueChange(new PendingChange(value => change(value) ? SettingUpdateResult.Changed : SettingUpdateResult.Unchanged, null)) == SettingUpdateResult.Changed;
+
+    public SettingUpdate UpdateWithResult(Func<TValue, SettingUpdateResult> change)
+    {
+        var completion = new TaskCompletionSource<SettingUpdateResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var result = QueueChange(new PendingChange(change, completion));
+        return new SettingUpdate(result == SettingUpdateResult.Changed,
+            result == SettingUpdateResult.Changed ? completion.Task : Task.FromResult(result));
+    }
+
+    private SettingUpdateResult QueueChange(PendingChange change)
     {
         bool startWriting;
         lock (_lock)
         {
-            if (!change(_value))
+            var result = change.Apply(_value);
+            if (result != SettingUpdateResult.Changed)
             {
-                return false;
+                return result;
             }
 
             _pendingChanges.Add(change);
@@ -144,7 +156,7 @@ internal sealed class LocalStorageSetting<TValue> where TValue : class
         {
             _ = WriteAsync();
         }
-        return true;
+        return SettingUpdateResult.Changed;
     }
 
     private async Task LoadAsync(TaskCompletionSource loaded)
@@ -190,7 +202,7 @@ internal sealed class LocalStorageSetting<TValue> where TValue : class
     {
         while (true)
         {
-            Func<TValue, bool>[] changes;
+            PendingChange[] changes;
             lock (_lock)
             {
                 if (_pendingChanges.Count == 0)
@@ -215,21 +227,29 @@ internal sealed class LocalStorageSetting<TValue> where TValue : class
             if (saved is not null)
             {
                 Adopt(saved, changes.Length, loadedAfterSaveCount: null);
-                continue;
+            }
+            else
+            {
+                _logger.LogWarning(error, "Unable to save '{Key}' to browser local storage.", Key);
+                lock (_lock)
+                {
+                    // The browser may have committed the write without acknowledging it. Never replay this batch,
+                    // but still save any new changes queued while the attempt was in flight.
+                    _pendingChanges.RemoveRange(0, changes.Length);
+                }
             }
 
-            _logger.LogWarning(error, "Unable to save '{Key}' to browser local storage.", Key);
-            lock (_lock)
+            foreach (var change in changes)
             {
-                // The browser may have committed the write without acknowledging it. Never replay this batch,
-                // but still save any new changes queued while the attempt was in flight.
-                _pendingChanges.RemoveRange(0, changes.Length);
+                change.Completion?.SetResult(saved is null && change.SaveResult != SettingUpdateResult.LimitReached
+                    ? SettingUpdateResult.NotSaved
+                    : change.SaveResult);
             }
         }
     }
 
     /// <returns>The saved value, or <see langword="null"/> when no write was attempted.</returns>
-    private async Task<TValue?> TryWriteAsync(Func<TValue, bool>[] changes)
+    private async Task<TValue?> TryWriteAsync(PendingChange[] changes)
     {
         // Another tab saving the same setting between this read and write would have its change replaced, so the whole
         // save holds the setting's lock. Other tabs stop waiting if a browser takes too long to answer.
@@ -253,7 +273,7 @@ internal sealed class LocalStorageSetting<TValue> where TValue : class
         ? _localStorage.GetAsync<TValue>(Key)
         : _localStorage.GetUnprotectedAsync<TValue>(Key);
 
-    private async Task<TValue?> TryWriteLockedAsync(Func<TValue, bool>[] changes)
+    private async Task<TValue?> TryWriteLockedAsync(PendingChange[] changes)
     {
         var result = await ReadStoredAsync().ConfigureAwait(false);
         if (result.ReadFailed)
@@ -264,7 +284,7 @@ internal sealed class LocalStorageSetting<TValue> where TValue : class
         var value = _normalize(result.Success ? result.Value : null);
         foreach (var change in changes)
         {
-            change(value);
+            change.SaveResult = change.Apply(value);
         }
 
         await (_protect ? _localStorage.SetAsync(Key, value) : _localStorage.SetUnprotectedAsync(Key, value)).ConfigureAwait(false);
@@ -297,7 +317,7 @@ internal sealed class LocalStorageSetting<TValue> where TValue : class
             var value = _normalize(stored);
             foreach (var change in _pendingChanges)
             {
-                change(value);
+                change.Apply(value);
             }
 
             changed = !_equals(_value, value);
@@ -309,4 +329,20 @@ internal sealed class LocalStorageSetting<TValue> where TValue : class
             _onChanged();
         }
     }
+
+    private sealed record PendingChange(Func<TValue, SettingUpdateResult> Apply, TaskCompletionSource<SettingUpdateResult>? Completion)
+    {
+        // Only the save merge (not a provisional replay during Adopt) can confirm a rejection based on another tab's changes.
+        public SettingUpdateResult SaveResult { get; set; } = SettingUpdateResult.Changed;
+    }
+}
+
+internal readonly record struct SettingUpdate(bool Changed, Task<SettingUpdateResult> Completion);
+
+internal enum SettingUpdateResult
+{
+    Unchanged,
+    Changed,
+    LimitReached,
+    NotSaved
 }

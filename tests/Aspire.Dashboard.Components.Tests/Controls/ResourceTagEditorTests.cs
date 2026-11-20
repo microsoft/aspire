@@ -9,6 +9,7 @@ using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.BrowserStorage;
 using Aspire.Dashboard.Utils;
 using Bunit;
+using Microsoft.AspNetCore.Components.Web;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -61,7 +62,6 @@ public class ResourceTagEditorTests : DashboardTestContext
 
     public ResourceTagEditorTests()
     {
-        // Fake time keeps saves that fail from retrying in the background after a test.
         _tagStore = new(_localStorage, new LocalStorageLocks(), Options.Create(new DashboardOptions()), NullLogger<ResourceTagStore>.Instance);
         FluentUISetupHelpers.SetupFluentUIComponents(this);
         Services.AddLocalization();
@@ -146,6 +146,37 @@ public class ResourceTagEditorTests : DashboardTestContext
         cut.Find(".tag-input").KeyDown("Enter");
 
         Assert.Equal(["new tag"], _tagStore.GetTags("api"));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Enter_AtTagLimitShowsWarningAndKeepsInput(bool filledByAnotherTab)
+    {
+        var storageKey = BrowserStorageKeys.ResourceTagsKey(new DashboardOptions().GetApplicationNameOrDefault());
+        var savedTags = Enumerable.Range(1, 50).ToDictionary(i => $"resource-{i}", _ => new List<string> { "backend" });
+        if (!filledByAnotherTab)
+        {
+            await _localStorage.SetAsync(storageKey, savedTags);
+        }
+
+        var toasts = Render<FluentToastProvider>();
+        var cut = RenderEditor("api");
+        if (filledByAnotherTab)
+        {
+            await _localStorage.SetAsync(storageKey, savedTags);
+        }
+
+        cut.Find(".tag-add").Click();
+        cut.Find(".tag-input").Input("new tag");
+        await cut.Find(".tag-input").KeyDownAsync(new KeyboardEventArgs { Key = "Enter" });
+
+        var toast = Assert.Single(toasts.FindComponents<FluentToast>()).Instance;
+        Assert.Equal(ToastIntent.Warning, toast.Intent);
+        Assert.Equal("Can't add this tag. The limit is 50 tag assignments per application. Remove an existing tag assignment first.", toast.Title);
+        Assert.Equal("new tag", cut.Find(".tag-input").GetAttribute("value"));
+        Assert.Empty(cut.FindAll(".tag-chip-name"));
+        Assert.Empty(_tagStore.GetTags("api"));
     }
 
     [Fact]

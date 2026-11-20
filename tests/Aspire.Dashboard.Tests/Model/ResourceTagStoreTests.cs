@@ -47,9 +47,9 @@ public sealed class ResourceTagStoreTests
         var changedCount = 0;
         store.Changed += () => changedCount++;
 
-        Assert.True(store.AddTag("api", "backend"));
-        Assert.True(store.AddTag("api", "core"));
-        Assert.True(store.AddTag("worker", "backend"));
+        Assert.True(store.AddTag("api", "backend").Changed);
+        Assert.True(store.AddTag("api", "core").Changed);
+        Assert.True(store.AddTag("worker", "backend").Changed);
 
         Assert.Equal(["backend", "core"], store.GetTags("api"));
         Assert.Equal(["backend"], store.GetTags("worker"));
@@ -62,9 +62,9 @@ public sealed class ResourceTagStoreTests
     {
         var store = CreateStore();
 
-        Assert.True(store.AddTag("api", "Backend"));
-        Assert.True(store.AddTag("worker", "  backend "));
-        Assert.False(store.AddTag("api", "BACKEND"));
+        Assert.True(store.AddTag("api", "Backend").Changed);
+        Assert.True(store.AddTag("worker", "  backend ").Changed);
+        Assert.False(store.AddTag("api", "BACKEND").Changed);
 
         Assert.Equal(["Backend"], store.GetTags("api"));
         Assert.Equal(["Backend"], store.GetTags("worker"));
@@ -78,7 +78,7 @@ public sealed class ResourceTagStoreTests
         var changedCount = 0;
         store.Changed += () => changedCount++;
 
-        Assert.False(store.AddTag("api", "   "));
+        Assert.False(store.AddTag("api", "   ").Changed);
 
         Assert.Equal([], store.GetTags("api"));
         Assert.Equal(0, changedCount);
@@ -170,12 +170,14 @@ public sealed class ResourceTagStoreTests
         var names = Enumerable.Range(1, 50).Select(i => FormattableString.Invariant($"resource-{i:D2}")).ToArray();
         foreach (var name in names)
         {
-            Assert.True(firstTab.AddTag(name, "backend"));
+            Assert.True(firstTab.AddTag(name, "backend").Changed);
         }
 
-        Assert.False(firstTab.AddTag(names[0], "extra"));
-        Assert.False(firstTab.AddTag("worker", "backend"));
-        Assert.True(staleTab.AddTag("worker", "backend")); // Accepted locally, then rejected when merged.
+        Assert.False(firstTab.AddTag(names[0], "extra").Changed);
+        Assert.False(firstTab.AddTag("worker", "backend").Changed);
+        var staleUpdate = staleTab.AddTag("worker", "backend");
+        Assert.True(staleUpdate.Changed);
+        Assert.Equal(SettingUpdateResult.LimitReached, await staleUpdate.Completion);
         Assert.Equal([], staleTab.GetTags("worker"));
 
         var reloaded = await CreateLoadedStoreAsync();
@@ -184,7 +186,7 @@ public sealed class ResourceTagStoreTests
         Assert.All(saved.Values, tags => Assert.Equal(["backend"], tags));
 
         Assert.True(reloaded.RemoveTag(names[0], "backend"));
-        Assert.True(reloaded.AddTag("worker", "backend"));
+        Assert.True(reloaded.AddTag("worker", "backend").Changed);
         Assert.Equal(["backend"], (await CreateLoadedStoreAsync()).GetTags("worker"));
     }
 
