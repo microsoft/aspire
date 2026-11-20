@@ -169,7 +169,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Cannot apply channel &apos;{0}&apos; for &apos;{1}&apos; because MSBuild overrides NuGet configuration: {2}. Remove these overrides to enable explicit channel updates. Updates without an explicit channel remain supported..
+        ///   Looks up a localized string similar to Cannot apply channel &apos;{0}&apos; for &apos;{1}&apos; because MSBuild overrides NuGet configuration: {2}. Remove these overrides to enable channel updates. Updates without a command-line or configured channel remain supported..
         /// </summary>
         internal static string ChannelUpdateRequiresAmbientNuGetConfigurationFormat {
             get {
@@ -183,6 +183,24 @@ namespace Aspire.Cli.Resources {
         internal static string CheckingForUpdates {
             get {
                 return ResourceManager.GetString("CheckingForUpdates", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Command &apos;{0}&apos; failed with exit code {1}:.
+        /// </summary>
+        internal static string CommandFailedWithExitCodeAndOutputFormat {
+            get {
+                return ResourceManager.GetString("CommandFailedWithExitCodeAndOutputFormat", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Command &apos;{0}&apos; failed with exit code {1}..
+        /// </summary>
+        internal static string CommandFailedWithExitCodeFormat {
+            get {
+                return ResourceManager.GetString("CommandFailedWithExitCodeFormat", resourceCulture);
             }
         }
 
@@ -201,6 +219,15 @@ namespace Aspire.Cli.Resources {
         internal static string ConditionalSdkExplicitEditRequiredFormat {
             get {
                 return ResourceManager.GetString("ConditionalSdkExplicitEditRequiredFormat", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Cannot use channel &apos;{0}&apos; from Aspire configuration. {1}.
+        /// </summary>
+        internal static string ConfiguredChannelNotFoundFormat {
+            get {
+                return ResourceManager.GetString("ConfiguredChannelNotFoundFormat", resourceCulture);
             }
         }
 
@@ -322,7 +349,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Failed to restore packages for project {0} after update..
+        ///   Looks up a localized string similar to Validation restore for {0} channel update failed for project {1}. The update was not applied. Review the restore output for details..
         /// </summary>
         internal static string FailedToRestoreAfterUpdateFormat {
             get {
@@ -340,13 +367,31 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Note: Update plan generated using fallback parsing due to unresolvable AppHost SDK. Dependency analysis may have reduced accuracy..
+        ///   Looks up a localized string similar to Note: Update plan generated using fallback parsing because MSBuild could not evaluate the AppHost project. Dependency analysis may have reduced accuracy..
         /// </summary>
         internal static string FallbackParsingWarning {
             get {
                 return ResourceManager.GetString("FallbackParsingWarning", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Validate an explicit .NET AppHost channel update using temporary NuGet caches, without proposing or applying changes..
+        /// </summary>
+        internal static string DryRunOptionDescription {
+            get {
+                return ResourceManager.GetString("DryRunOptionDescription", resourceCulture);
+            }
+        }
+
+        internal static string DryRunRequiresChannel => ResourceManager.GetString("DryRunRequiresChannel", resourceCulture);
+        internal static string DryRunRequiresDotNet => ResourceManager.GetString("DryRunRequiresDotNet", resourceCulture);
+        internal static string DryRunSuccessful => ResourceManager.GetString("DryRunSuccessful", resourceCulture);
+        internal static string DryRunValidating => ResourceManager.GetString("DryRunValidating", resourceCulture);
+        internal static string DryRunExistingBackupsFormat => ResourceManager.GetString("DryRunExistingBackupsFormat", resourceCulture);
+        internal static string DryRunReplaceBackupsPrompt => ResourceManager.GetString("DryRunReplaceBackupsPrompt", resourceCulture);
+        internal static string DryRunBackupsNotReplaced => ResourceManager.GetString("DryRunBackupsNotReplaced", resourceCulture);
+        internal static string DryRunBackupRecoveryFormat => ResourceManager.GetString("DryRunBackupRecoveryFormat", resourceCulture);
 
         /// <summary>
         ///   Looks up a localized string similar to    Mapping: {0} (added).
@@ -840,6 +885,15 @@ namespace Aspire.Cli.Resources {
         internal static string UpdateSuccessfulMessage {
             get {
                 return ResourceManager.GetString("UpdateSuccessfulMessage", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Using channel &apos;{0}&apos; from Aspire configuration. Pass --channel to override..
+        /// </summary>
+        internal static string UsingConfiguredChannelFormat {
+            get {
+                return ResourceManager.GetString("UsingConfiguredChannelFormat", resourceCulture);
             }
         }
 

@@ -83,6 +83,8 @@ internal sealed class ProcessInvocationOptions
     /// </summary>
     public FileInfo? NuGetRestoreTargetsFile { get; set; }
 
+    public DirectoryInfo? IsolatedRestorePackagesDirectory { get; set; }
+
     public string? LaunchProfile { get; set; }
     public bool StartDebugSession { get; set; }
     public bool Debug { get; set; }
@@ -191,6 +193,7 @@ internal sealed class ProcessInvocationOptions
         NoRestore = NoRestore,
         ExcludeRestorePackageImports = ExcludeRestorePackageImports,
         NuGetRestoreTargetsFile = NuGetRestoreTargetsFile,
+        IsolatedRestorePackagesDirectory = IsolatedRestorePackagesDirectory,
         LaunchProfile = LaunchProfile,
         StartDebugSession = StartDebugSession,
         Debug = Debug,
@@ -1270,6 +1273,10 @@ internal sealed class DotNetCliRunner(
             cliArgs = [.. cliArgs, "-noAutoResponse"];
         }
 
+        if (options.IsolatedRestorePackagesDirectory is { } packagesDirectory)
+        {
+            cliArgs = [.. cliArgs, "--packages", packagesDirectory.FullName, "--no-http-cache", "--force"];
+        }
         if (options.NuGetRestoreTargetsFile is { } restoreTargets)
         {
             cliArgs = [.. cliArgs, $"-property:NuGetRestoreTargets={MSBuildEscaping.Escape(restoreTargets.FullName)}"];

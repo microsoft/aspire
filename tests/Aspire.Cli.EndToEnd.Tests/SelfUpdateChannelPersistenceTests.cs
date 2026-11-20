@@ -33,9 +33,10 @@ public sealed class SelfUpdateChannelPersistenceTests(ITestOutputHelper output)
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
         await auto.InstallAspireCliAsync(strategy, counter);
 
-        if (strategy.Mode is CliInstallMode.LocalHive)
+        if (strategy.Mode is CliInstallMode.LocalHive ||
+            (strategy.Mode is CliInstallMode.LocalArchive && strategy.LocalArchiveHiveLabel == "local"))
         {
-            // LocalHive setup pins its original Aspire home to local. Remove that competing
+            // Local-hive setup pins its original Aspire home to local. Remove that competing
             // global setting before switching to the isolated script-style install.
             await auto.RunCommandAsync("aspire config delete channel -g", counter);
         }
