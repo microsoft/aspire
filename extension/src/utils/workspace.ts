@@ -1,16 +1,46 @@
 import * as vscode from 'vscode';
-import { appHostCandidateDescription, cliNotAvailable, cliFoundAtDefaultPath, dismissLabel, dontShowAgainLabel, doYouWantToSetDefaultApphost, noLabel, noWorkspaceOpen, openCliInstallInstructions, selectDefaultLaunchApphost, yesLabel } from '../loc/strings';
+import { appHostCandidateDescription, cliNotAvailable, cliFoundAtDefaultPath, dismissLabel, dontShowAgainLabel, doYouWantToSetDefaultApphost, noLabel, noWorkspaceOpen, openCliInstallInstructions, selectDefaultLaunchApphost, selectWorkspaceFolderForAspireCommand, yesLabel } from '../loc/strings';
 import path from 'path';
 import { AspireConfigFile, aspireConfigFileName, getAppHostPathFromConfig, readJsonFile } from './cliTypes';
 import { extensionLogOutputChannel } from './logging';
 import { resolveCliPath, tryExecuteCli, type CliPathResolutionResult } from './cliPath';
-import { CliPathResolutionTarget } from './cliPathVariables';
+import { CliPathResolutionTarget, windowCliPathTarget, workspaceFolderCliPathTarget } from './cliPathVariables';
 import { AppHostDiscoveryService, AppHostProjectSearchResult, formatAppHostLanguage, getWorkspaceAppHostProjectSearchResult } from './appHostDiscovery';
 import { sendTelemetryEvent } from './telemetry';
 import { getCommonExcludeGlob } from './workspaceFileSearch';
 import { reportCliResolvedForOperation } from './cliOperationResolution';
 
 export { getCommonExcludeGlob } from './workspaceFileSearch';
+
+export async function selectCommandTarget(eligibleFolders?: readonly vscode.WorkspaceFolder[]): Promise<CliPathResolutionTarget> {
+    const folders = eligibleFolders ?? vscode.workspace.workspaceFolders ?? [];
+    const activeUri = vscode.window.activeTextEditor?.document.uri;
+    const activeFolder = activeUri ? vscode.workspace.getWorkspaceFolder(activeUri) : undefined;
+    if (activeFolder && folders.some(folder => folder.uri.toString() === activeFolder.uri.toString())) {
+        return workspaceFolderCliPathTarget(activeFolder);
+    }
+
+    if (folders.length === 1) {
+        return workspaceFolderCliPathTarget(folders[0]);
+    }
+    if (folders.length > 1) {
+        const options = { placeHolder: selectWorkspaceFolderForAspireCommand };
+        const selected = eligibleFolders
+            ? (await vscode.window.showQuickPick(folders.map(folder => ({
+                label: folder.name,
+                description: folder.uri.fsPath,
+                folder,
+            })), options))?.folder
+            : await vscode.window.showWorkspaceFolderPick(options);
+        if (!selected) {
+            throw new vscode.CancellationError();
+        }
+
+        return workspaceFolderCliPathTarget(selected);
+    }
+
+    return windowCliPathTarget;
+}
 
 /**
  * Searches for Aspire configuration files in the workspace, excluding common build output

@@ -852,6 +852,7 @@ suite('configInfoProvider tests', () => {
         sinon.stub(vscode.workspace, 'workspaceFolders').value(undefined);
         const terminalProvider = {
             getAspireCliExecutablePath: async () => '/usr/bin/aspire',
+            resolveAspireCliPath: async () => ({ cliPath: '/usr/bin/aspire', available: true, source: 'path' }),
             createEnvironment: () => ({}),
         } as unknown as AspireTerminalProvider;
         let configInfoOptions: cliModule.SpawnProcessOptions | undefined;
