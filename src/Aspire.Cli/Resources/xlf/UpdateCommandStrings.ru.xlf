@@ -44,7 +44,7 @@
       </trans-unit>
       <trans-unit id="ChannelFeedAlreadyConfiguredFormat">
         <source>Cannot modify '{0}' because channel source '{1}' is disabled, or the source or its package mappings are inherited or user-owned. Update the NuGet configuration manually instead.</source>
-        <target state="new">Cannot modify '{0}' because channel source '{1}' is disabled, or the source or its package mappings are inherited or user-owned. Update the NuGet configuration manually instead.</target>
+        <target state="translated">Не удается изменить '{0}', так как источник канала '{1}' отключен либо источник или его сопоставления пакетов унаследованы или принадлежат пользователю. Обновите конфигурацию NuGet вручную.</target>
         <note />
       </trans-unit>
       <trans-unit id="ChannelNonePlaceholder">
@@ -64,7 +64,7 @@
       </trans-unit>
       <trans-unit id="ChannelUpdateRequiresAmbientNuGetConfigurationFormat">
         <source>Cannot apply channel '{0}' for '{1}' because MSBuild overrides NuGet configuration: {2}. Remove these overrides to enable channel updates. Updates without a command-line or configured channel remain supported.</source>
-        <target state="needs-review-translation">Не удается применить '{0}' канала для '{1}', так как MSBuild переопределяет конфигурацию NuGet: {2}. Удалите эти переопределения, чтобы включить явные обновления каналов. По-прежнему поддерживаются обновления без явного канала.</target>
+        <target state="translated">Не удается применить '{0}' канала для '{1}', так как MSBuild переопределяет конфигурацию NuGet: {2}. Удалите эти переопределения, чтобы включить обновления каналов. Обновления без командной строки или настроенного канала по-прежнему поддерживаются.</target>
         <note />
       </trans-unit>
       <trans-unit id="CheckingForUpdates">
@@ -84,7 +84,7 @@
       </trans-unit>
       <trans-unit id="ConfiguredChannelNotFoundFormat">
         <source>Cannot use channel '{0}' from Aspire configuration. {1}</source>
-        <target state="new">Cannot use channel '{0}' from Aspire configuration. {1}</target>
+        <target state="translated">Невозможно использовать '{0}' канала из Aspire конфигурации. {1}</target>
         <note>{0} = configured channel name. {1} = reason the channel could not be resolved.</note>
       </trans-unit>
       <trans-unit id="CouldNotFindPackageVersionInDirectoryPackagesProps">
@@ -114,49 +114,49 @@
       </trans-unit>
       <trans-unit id="DryRunBackupRecoveryFormat">
         <source>Could not restore '{0}'. Its recovery backup was preserved at '{1}'. Restore the backup manually before retrying.</source>
-        <target state="new">Could not restore '{0}'. Its recovery backup was preserved at '{1}'. Restore the backup manually before retrying.</target>
+        <target state="translated">Не удалось восстановить "{0}". Резервная копия для восстановления сохранена в "{1}". Восстановите резервную копию вручную перед повторной попыткой.</target>
         <note />
       </trans-unit>
       <trans-unit id="DryRunBackupsNotReplaced">
         <source>Dry run cancelled without replacing existing backups. Recover the originals from the listed backup files or move them aside before retrying.</source>
-        <target state="new">Dry run cancelled without replacing existing backups. Recover the originals from the listed backup files or move them aside before retrying.</target>
+        <target state="translated">Пробный прогон отменен без замены существующих резервных копий. Восстановите исходные файлы из указанных резервных копий или переместите их в другое место перед повторной попыткой.</target>
         <note />
       </trans-unit>
       <trans-unit id="DryRunExistingBackupsFormat">
         <source>Backups from an earlier dry run already exist. Preserve them for recovery if needed before replacing them:
 {0}</source>
-        <target state="new">Backups from an earlier dry run already exist. Preserve them for recovery if needed before replacing them:
+        <target state="translated">Резервные копии, созданные во время предыдущего пробного прогона, уже существуют. Перед заменой сохраните их на случай, если понадобится восстановить их:
 {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="DryRunOptionDescription">
         <source>Validate an explicit .NET AppHost channel update using temporary NuGet caches, without proposing or applying changes.</source>
-        <target state="new">Validate an explicit .NET AppHost channel update using temporary NuGet caches, without proposing or applying changes.</target>
+        <target state="translated">Проверьте явное обновление канала .NET AppHost, используя временные кэши NuGet без предложения или применения изменений.</target>
         <note />
       </trans-unit>
       <trans-unit id="DryRunReplaceBackupsPrompt">
         <source>Replace the existing backups with the current file contents? This discards the previous recovery copies.</source>
-        <target state="new">Replace the existing backups with the current file contents? This discards the previous recovery copies.</target>
+        <target state="translated">Заменить существующие резервные копии текущим содержимым файла? Предыдущие копии восстановления будут удалены.</target>
         <note />
       </trans-unit>
       <trans-unit id="DryRunRequiresChannel">
         <source>--dry-run requires an explicit --channel or --quality other than default, and cannot be combined with --self or --migrate.</source>
-        <target state="new">--dry-run requires an explicit --channel or --quality other than default, and cannot be combined with --self or --migrate.</target>
+        <target state="translated">Пробный прогон --dry-run требует явного указания параметра --channel или --quality, отличного от значения по умолчанию, и не может использоваться вместе с параметрами --self или --migrate.</target>
         <note />
       </trans-unit>
       <trans-unit id="DryRunRequiresDotNet">
         <source>--dry-run is supported only for .NET AppHosts.</source>
-        <target state="new">--dry-run is supported only for .NET AppHosts.</target>
+        <target state="translated">Пробный прогон --dry-run поддерживается только для .NET AppHost.</target>
         <note />
       </trans-unit>
       <trans-unit id="DryRunSuccessful">
         <source>Channel update validation succeeded. Original files have been restored; no update was applied.</source>
-        <target state="new">Channel update validation succeeded. Original files have been restored; no update was applied.</target>
+        <target state="translated">Проверка обновления канала завершена успешно. Исходные файлы восстановлены, обновление не применялось.</target>
         <note />
       </trans-unit>
       <trans-unit id="DryRunValidating">
         <source>Validating the channel update...</source>
-        <target state="new">Validating the channel update...</target>
+        <target state="translated">Проверка обновления канала…</target>
         <note />
       </trans-unit>
       <trans-unit id="ExecutingUpdateStepFormat">
@@ -491,7 +491,7 @@
       </trans-unit>
       <trans-unit id="UsingConfiguredChannelFormat">
         <source>Using channel '{0}' from Aspire configuration. Pass --channel to override.</source>
-        <target state="new">Using channel '{0}' from Aspire configuration. Pass --channel to override.</target>
+        <target state="translated">Используется канал "{0}" из конфигурации Aspire. Чтобы переопределить его, передайте параметр --channel.</target>
         <note>{0} = configured channel name.</note>
       </trans-unit>
       <trans-unit id="WhichDirectoryNuGetConfigPrompt">
