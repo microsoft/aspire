@@ -443,7 +443,11 @@ internal sealed class BicepProvisioner(
     {
         await notificationService.PublishUpdateAsync(resource, snapshot => snapshot with
         {
-            State = new(state, KnownResourceStateStyles.Error)
+            State = new(
+                state,
+                state == AzureProvisioningStrings.ResourceStateAzureDeploymentCanceled
+                    ? KnownResourceStateStyles.Info
+                    : KnownResourceStateStyles.Error)
         }).ConfigureAwait(false);
     }
 

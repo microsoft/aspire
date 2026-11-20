@@ -1863,6 +1863,7 @@ public class AzureBicepProvisionerTests(ITestOutputHelper testOutputHelper)
         var notificationService = services.GetRequiredService<ResourceNotificationService>();
         Assert.True(notificationService.TryGetCurrentState(resource.Name, out var resourceEvent));
         Assert.Equal("Azure deployment canceled", resourceEvent.Snapshot.State?.Text);
+        Assert.Equal(KnownResourceStateStyles.Info, resourceEvent.Snapshot.State?.Style);
     }
 
     [Fact]

@@ -1082,6 +1082,7 @@ internal sealed class AzureProvisioningController(
             cancellationToken).ConfigureAwait(false);
 
         var parentChildLookup = model.Resources.OfType<IResourceWithParent>().ToLookup(r => r.Parent);
+        var independentlyProvisionedResources = azureResources.Select(static resource => resource.Resource).ToHashSet();
         var afterProvisionTasks = new List<Task>(azureResources.Count);
 
         foreach (var resource in azureResources)
@@ -1102,9 +1103,9 @@ internal sealed class AzureProvisioningController(
             {
                 State = new(StartingState, KnownResourceStateStyles.Info),
                 Properties = state.Properties.WithoutAzureProvisioningFailureProperties()
-            }).ConfigureAwait(false);
+            }, independentlyProvisionedResources).ConfigureAwait(false);
 
-            afterProvisionTasks.Add(AfterProvisionAsync(resource, parentChildLookup));
+            afterProvisionTasks.Add(AfterProvisionAsync(resource, parentChildLookup, independentlyProvisionedResources));
         }
 
         await ProvisionAzureResourcesAsync(azureResources, parentChildLookup, cancellationToken).ConfigureAwait(false);
@@ -1896,6 +1897,14 @@ internal sealed class AzureProvisioningController(
                 cancellationToken).ConfigureAwait(false);
             throw;
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            await PublishAzureEnvironmentStateAsync(
+                model,
+                new ResourceStateSnapshot(AzureProvisioningStrings.ResourceStateCanceled, KnownResourceStateStyles.Info),
+                CancellationToken.None).ConfigureAwait(false);
+            throw;
+        }
 
         if (string.IsNullOrEmpty(resourceGroupName))
         {
@@ -2008,24 +2017,52 @@ internal sealed class AzureProvisioningController(
             }).ConfigureAwait(false);
         }
 
-        if (targetBicepResource is not null)
+        try
         {
-            // ARM rejects redeploying many resource types to a different location while the old
-            // resource still exists. Delete the cached live resource first, then save the override
-            // that the next provisioning pass will apply.
+            if (targetBicepResource is not null)
+            {
+                // ARM rejects redeploying many resource types to a different location while the old
+                // resource still exists. Delete the cached live resource first, then save the override
+                // that the next provisioning pass will apply.
+                UpdateActiveOperationPhase(
+                    intent,
+                    AzureProvisioningStrings.OperationPhaseDeletingAzureResource,
+                    FormatUserString(AzureProvisioningStrings.OperationPhaseDeletingExistingAzureResourceBeforeChangingLocationFormat, intent.Location));
+                await DeleteCachedResourceForLocationChangeAsync(targetBicepResource, intent.Location, resourceDeletion, cancellationToken).ConfigureAwait(false);
+                await SetResourceLocationOverrideAsync(targetBicepResource.Name, intent.Location, cancellationToken).ConfigureAwait(false);
+            }
+
             UpdateActiveOperationPhase(
                 intent,
-                AzureProvisioningStrings.OperationPhaseDeletingAzureResource,
-                FormatUserString(AzureProvisioningStrings.OperationPhaseDeletingExistingAzureResourceBeforeChangingLocationFormat, intent.Location));
-            await DeleteCachedResourceForLocationChangeAsync(targetBicepResource, intent.Location, resourceDeletion, cancellationToken).ConfigureAwait(false);
-            await SetResourceLocationOverrideAsync(targetBicepResource.Name, intent.Location, cancellationToken).ConfigureAwait(false);
+                AzureProvisioningStrings.OperationPhaseReprovisioning,
+                FormatUserString(AzureProvisioningStrings.OperationPhaseReprovisioningInLocationFormat, intent.Location));
+            await ResetResourcesAsync(model, targetResources, preserveOverrides: true, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            foreach (var resource in targetResources)
+            {
+                await PublishUpdateToResourceTreeAsync(resource, parentChildLookup, state => state with
+                {
+                    State = new(AzureProvisioningStrings.ResourceStateCanceled, KnownResourceStateStyles.Info)
+                }).ConfigureAwait(false);
+            }
+
+            throw;
+        }
+        catch (Exception)
+        {
+            foreach (var resource in targetResources)
+            {
+                await PublishUpdateToResourceTreeAsync(resource, parentChildLookup, state => state with
+                {
+                    State = new(AzureProvisioningStrings.ResourceStateFailedToProvision, KnownResourceStateStyles.Error)
+                }).ConfigureAwait(false);
+            }
+
+            throw;
         }
 
-        UpdateActiveOperationPhase(
-            intent,
-            AzureProvisioningStrings.OperationPhaseReprovisioning,
-            FormatUserString(AzureProvisioningStrings.OperationPhaseReprovisioningInLocationFormat, intent.Location));
-        await ResetResourcesAsync(model, targetResources, preserveOverrides: true, cancellationToken).ConfigureAwait(false);
         return await EnsureProvisionedOrThrowAsync(model, targetResources, cancellationToken).ConfigureAwait(false);
     }
 
@@ -2149,10 +2186,13 @@ internal sealed class AzureProvisioningController(
         {
             foreach (var resource in inFlightResourcesToCancel)
             {
-                await PublishUpdateToResourceTreeAsync(resource, parentChildLookup, state => state with
-                {
-                    State = new(CancelingState, KnownResourceStateStyles.Info) { IsInProgress = true }
-                }).ConfigureAwait(false);
+                await PublishUpdateToResourceTreeAsync(resource, parentChildLookup, state =>
+                    state.State?.Style == KnownResourceStateStyles.Error ||
+                    state.State?.Style == KnownResourceStateStyles.Success ||
+                    string.Equals(state.State?.Text, AzureProvisioningStrings.ResourceStateCanceled, StringComparison.Ordinal) ||
+                    string.Equals(state.State?.Text, AzureProvisioningStrings.ResourceStateAzureDeploymentCanceled, StringComparison.Ordinal)
+                        ? state
+                        : state with { State = new(CancelingState, KnownResourceStateStyles.Info) { IsInProgress = true } }).ConfigureAwait(false);
             }
         }
 
@@ -3804,7 +3844,8 @@ internal sealed class AzureProvisioningController(
     private async Task PublishUpdateToResourceTreeAsync(
         (IResource Resource, IAzureResource AzureResource) resource,
         ILookup<IResource, IResourceWithParent> parentChildLookup,
-        Func<CustomResourceSnapshot, CustomResourceSnapshot> stateFactory)
+        Func<CustomResourceSnapshot, CustomResourceSnapshot> stateFactory,
+        IReadOnlySet<IResource>? independentlyProvisionedResources = null)
     {
         async Task PublishAsync(IResource targetResource)
         {
@@ -3821,7 +3862,9 @@ internal sealed class AzureProvisioningController(
             await PublishAsync(resource.Resource).ConfigureAwait(false);
         }
 
-        var childResources = parentChildLookup[resource.Resource].ToList();
+        var childResources = parentChildLookup[resource.Resource]
+            .Where(child => independentlyProvisionedResources?.Contains(child) is not true)
+            .ToList();
 
         for (var i = 0; i < childResources.Count; i++)
         {
@@ -3829,7 +3872,7 @@ internal sealed class AzureProvisioningController(
 
             foreach (var grandChild in parentChildLookup[child])
             {
-                if (!childResources.Contains(grandChild))
+                if (independentlyProvisionedResources?.Contains(grandChild) is not true && !childResources.Contains(grandChild))
                 {
                     // Walk descendants without recursion so deeply nested resource graphs do not
                     // risk stack growth while publishing a broad parent update.
@@ -3843,7 +3886,8 @@ internal sealed class AzureProvisioningController(
 
     private async Task AfterProvisionAsync(
         (IResource Resource, IAzureResource AzureResource) resource,
-        ILookup<IResource, IResourceWithParent> parentChildLookup)
+        ILookup<IResource, IResourceWithParent> parentChildLookup,
+        IReadOnlySet<IResource> independentlyProvisionedResources)
     {
         try
         {
@@ -3852,13 +3896,13 @@ internal sealed class AzureProvisioningController(
             // ARM deployment completion only means the resources exist. Role assignment
             // propagation can lag, so do not mark the resource Running until the assigned
             // principals can actually use the provisioned resource.
-            var rolesFailed = await WaitForRoleAssignmentsAsync(resource, parentChildLookup).ConfigureAwait(false);
+            var rolesFailed = await WaitForRoleAssignmentsAsync(resource, parentChildLookup, independentlyProvisionedResources).ConfigureAwait(false);
             if (!rolesFailed)
             {
                 await PublishUpdateToResourceTreeAsync(resource, parentChildLookup, state => state with
                 {
                     State = new(KnownResourceStates.Running, KnownResourceStateStyles.Success)
-                }).ConfigureAwait(false);
+                }, independentlyProvisionedResources).ConfigureAwait(false);
             }
         }
         catch (MissingConfigurationException)
@@ -3866,18 +3910,18 @@ internal sealed class AzureProvisioningController(
             await PublishUpdateToResourceTreeAsync(resource, parentChildLookup, state => state with
             {
                 State = new(AzureProvisioningStrings.ResourceStateMissingSubscriptionConfiguration, KnownResourceStateStyles.Error)
-            }).ConfigureAwait(false);
+            }, independentlyProvisionedResources).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
             await PublishUpdateToResourceTreeAsync(resource, parentChildLookup, state => state with
             {
                 State = new(AzureProvisioningStrings.ResourceStateCanceled, KnownResourceStateStyles.Info)
-            }).ConfigureAwait(false);
+            }, independentlyProvisionedResources).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
-            if (await TryPublishTerminalDeploymentStateAsync(resource, parentChildLookup).ConfigureAwait(false))
+            if (await TryPublishTerminalDeploymentStateAsync(resource, parentChildLookup, independentlyProvisionedResources).ConfigureAwait(false))
             {
                 return;
             }
@@ -3889,7 +3933,7 @@ internal sealed class AzureProvisioningController(
                 Properties = failureDetails is null
                     ? state.Properties
                     : failureDetails.SetResourceProperties(state.Properties, AzureProvisioningFailureDetails.ProvisionOperation)
-            }).ConfigureAwait(false);
+            }, independentlyProvisionedResources).ConfigureAwait(false);
         }
     }
 
@@ -3914,7 +3958,8 @@ internal sealed class AzureProvisioningController(
 
     private async Task<bool> TryPublishTerminalDeploymentStateAsync(
         (IResource Resource, IAzureResource AzureResource) resource,
-        ILookup<IResource, IResourceWithParent> parentChildLookup)
+        ILookup<IResource, IResourceWithParent> parentChildLookup,
+        IReadOnlySet<IResource> independentlyProvisionedResources)
     {
         if (resource.AzureResource is not AzureBicepResource bicepResource)
         {
@@ -3930,7 +3975,7 @@ internal sealed class AzureProvisioningController(
             await PublishUpdateToResourceTreeAsync(resource, parentChildLookup, state => state with
             {
                 State = publishedTerminalState
-            }).ConfigureAwait(false);
+            }, independentlyProvisionedResources).ConfigureAwait(false);
 
             return true;
         }
@@ -3955,7 +4000,7 @@ internal sealed class AzureProvisioningController(
         await PublishUpdateToResourceTreeAsync(resource, parentChildLookup, state => state with
         {
             State = new(AzureProvisioningStrings.ResourceStateCanceled, KnownResourceStateStyles.Info)
-        }).ConfigureAwait(false);
+        }, independentlyProvisionedResources).ConfigureAwait(false);
 
         return true;
     }
@@ -3983,7 +4028,8 @@ internal sealed class AzureProvisioningController(
 
     private async Task<bool> WaitForRoleAssignmentsAsync(
         (IResource Resource, IAzureResource AzureResource) resource,
-        ILookup<IResource, IResourceWithParent> parentChildLookup)
+        ILookup<IResource, IResourceWithParent> parentChildLookup,
+        IReadOnlySet<IResource> independentlyProvisionedResources)
     {
         var rolesFailed = false;
         if (resource.AzureResource.TryGetAnnotationsOfType<RoleAssignmentResourceAnnotation>(out var roleAssignments))
@@ -4004,7 +4050,7 @@ internal sealed class AzureProvisioningController(
                 await PublishUpdateToResourceTreeAsync(resource, parentChildLookup, state => state with
                 {
                     State = new("Failed to Provision Roles", KnownResourceStateStyles.Error)
-                }).ConfigureAwait(false);
+                }, independentlyProvisionedResources).ConfigureAwait(false);
             }
         }
 
