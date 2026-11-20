@@ -60,7 +60,8 @@ internal sealed class ExecutableCreator(
 
         var configuration = await _configurationResolver
             .ResolveAsync(
-                renderedResource,
+                renderedResource.ModelResource,
+                renderedResource.DcpResourceName,
                 resourceLogger,
                 new PrepareExecutableConfigurationGatherer(this, context, factory),
                 cancellationToken)
@@ -75,12 +76,12 @@ internal sealed class ExecutableCreator(
         ExecutableLaunchPlan plan;
         try
         {
-            plan = await ResolveLaunchPlanAsync(
+            plan = await ExecutableLaunchPlanner.ResolveAsync(
                 renderedResource.ModelResource,
                 configuration.Configuration,
                 _configuration,
                 _distributedApplicationOptions,
-                _launchPolicy,
+                _launchPolicy.Decide(renderedResource.ModelResource),
                 resourceLogger,
                 cancellationToken).ConfigureAwait(false);
         }
@@ -114,7 +115,10 @@ internal sealed class ExecutableCreator(
             throw new FailedToApplyEnvironmentException(failureMessage, ex);
         }
 
-        Render(renderedResource, plan, configuration.PemCertificates, _logger);
+        var pemCertificates = configuration.Certificates is { } certificates
+            ? new ExecutablePemCertificates { Certificates = certificates, ContinueOnError = true }
+            : null;
+        Render(renderedResource, plan, pemCertificates, _logger);
 
         await factory
             .CreateDcpObjectsAsync([renderedResource.DcpResource], cancellationToken)
@@ -190,48 +194,6 @@ internal sealed class ExecutableCreator(
         await Task.WhenAll(allocatedEndpointTasks).ConfigureAwait(false);
     }
 
-    internal static async Task<ExecutableLaunchPlan> ResolveLaunchPlanAsync(
-        IResource resource,
-        IExecutionConfigurationResult executionConfiguration,
-        IConfiguration configuration,
-        DistributedApplicationOptions distributedApplicationOptions,
-        ExecutableLaunchPolicy launchPolicy,
-        ILogger resourceLogger,
-        CancellationToken cancellationToken)
-    {
-        var recipes = resource.Annotations.OfType<ExecutableLaunchRecipeAnnotation>().ToArray();
-        if (recipes.Length != 1)
-        {
-            throw new InvalidOperationException(
-                $"Resource '{resource.Name}' must have exactly one executable launch recipe, but {recipes.Length} were found.");
-        }
-
-        var decision = launchPolicy.Decide(resource);
-        var context = new ExecutableLaunchContext(
-            resource,
-            configuration,
-            distributedApplicationOptions,
-            executionConfiguration,
-            decision,
-            resourceLogger,
-            cancellationToken);
-        var plan = await recipes[0].Recipe.CreateLaunchPlanAsync(context).ConfigureAwait(false);
-
-        if (plan.Mechanism != decision.Mechanism)
-        {
-            throw new InvalidOperationException(
-                $"The executable launch recipe for resource '{resource.Name}' returned a {plan.Mechanism} plan after {decision.Mechanism} was selected.");
-        }
-
-        if (plan.Mechanism == ExecutableLaunchMechanism.Ide && plan.LaunchConfigurations.Count == 0)
-        {
-            throw new InvalidOperationException(
-                $"The executable launch recipe for resource '{resource.Name}' selected IDE execution without producing a launch configuration.");
-        }
-
-        return plan;
-    }
-
     internal static void Render(
         RenderedModelResource<Executable> renderedResource,
         ExecutableLaunchPlan plan,
@@ -298,7 +260,7 @@ internal sealed class ExecutableCreator(
 
             for (var i = 0; i < replicas; i++)
             {
-                var instance = DcpExecutor.GetDcpInstance(project, instanceIndex: i);
+                var instance = DcpResourceLifecycle.GetDcpInstance(project, instanceIndex: i);
                 project.TryGetLastAnnotation<ExecutableAnnotation>(out var executableAnnotation);
                 var executable = Executable.Create(instance.Name, executableAnnotation?.Command ?? "dotnet");
                 executable.Spec.WorkingDirectory =
@@ -307,7 +269,7 @@ internal sealed class ExecutableCreator(
 
                 ApplyCommonAnnotations(executable, project, instance, replicas, i);
                 ApplyExplicitStart(project, executable.Spec);
-                DcpExecutor.SetInitialResourceState(project, executable);
+                DcpModelUtilities.SetInitialResourceState(project, executable);
                 AddRenderedResource(project, executable);
             }
         }
@@ -333,7 +295,7 @@ internal sealed class ExecutableCreator(
 
                 ApplyCommonAnnotations(executable, resource, instance, instances.Length, instance.Index);
                 ApplyExplicitStart(resource, executable.Spec);
-                DcpExecutor.SetInitialResourceState(resource, executable);
+                DcpModelUtilities.SetInitialResourceState(resource, executable);
                 AddRenderedResource(resource, executable);
             }
         }
