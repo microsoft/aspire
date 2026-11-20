@@ -68,6 +68,7 @@ public class PublishCommandTests(ITestOutputHelper outputHelper)
             options.DotNetCliRunnerFactory = (sp) =>
             {
                 var runner = new TestDotNetCliRunner();
+                runner.BuildAsyncCallback = (projectFile, noRestore, options, cancellationToken) => 0;
                 runner.GetAppHostInformationAsyncCallback = (projectFile, options, cancellationToken) =>
                 {
                     return (0, false, "9.0.0"); // Simulate an incompatible app host

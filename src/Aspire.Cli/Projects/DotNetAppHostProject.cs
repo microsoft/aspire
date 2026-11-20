@@ -2530,27 +2530,6 @@ internal sealed partial class DotNetAppHostProject : IAppHostProject
         var isSingleFileAppHost = !IsProjectFile(effectiveAppHostFile) && IsValidSingleFileAppHost(effectiveAppHostFile);
         var env = new Dictionary<string, string>(context.EnvironmentVariables);
 
-        // Preserve the cheap rejection for known concrete versions, but defer ranges until
-        // restore has selected the package version they represent.
-        if (!isSingleFileAppHost)
-        {
-            var compatibilityCheck = await CheckAppHostCompatibilityAsync(
-                effectiveAppHostFile,
-                isSingleFileAppHost: false,
-                useBuildOutput: false,
-                cancellationToken);
-
-            if (!compatibilityCheck.IsCompatibleAppHost)
-            {
-                var exception = new AppHostIncompatibleException(
-                    $"The app host is not compatible. Aspire.Hosting version: {compatibilityCheck.AspireHostingVersion}",
-                    "Aspire.Hosting",
-                    compatibilityCheck.AspireHostingVersion);
-                context.BackchannelCompletionSource?.TrySetException(exception);
-                throw exception;
-            }
-        }
-
         var builtByCli = false;
 
         // Project AppHosts honor --no-build. File-based AppHosts always require a CLI-owned safety
