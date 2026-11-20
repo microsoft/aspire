@@ -1103,6 +1103,25 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
         }
     }
 
+    async collapseAll(element?: TreeElement): Promise<void> {
+        if (!this._treeView || !element) {
+            return;
+        }
+        await this._collapseSubtree(element);
+    }
+
+    // VS Code has no API to collapse a single subtree, so focus each expandable node
+    // (children first) and run the built-in `list.collapse` on it.
+    private async _collapseSubtree(element: TreeElement): Promise<void> {
+        for (const child of this.getChildren(element)) {
+            if (child.collapsibleState !== vscode.TreeItemCollapsibleState.None) {
+                await this._collapseSubtree(child);
+            }
+        }
+        await this._treeView!.reveal(element, { select: true, focus: true, expand: false });
+        await vscode.commands.executeCommand('list.collapse');
+    }
+
     async openDashboard(element?: TreeElement): Promise<void> {
         const url = await this._resolveDashboardUrl(element);
         if (url === undefined) {

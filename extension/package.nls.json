@@ -291,6 +291,7 @@
   "command.viewAppHostLogFile": "Open AppHost logs file",
   "command.copyLogFilePath": "Copy Path",
   "command.expandAll": "Expand all resources",
+  "command.collapseAll": "Collapse all resources",
   "walkthrough.getStarted.title": "Get started with Aspire",
   "walkthrough.getStarted.description": "Go from a workspace to a running, observable distributed app.",
   "walkthrough.getStarted.welcome.title": "Your whole app, one F5 away",

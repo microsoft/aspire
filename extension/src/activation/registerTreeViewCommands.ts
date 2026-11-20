@@ -33,6 +33,7 @@ const treeElementCommands: ReadonlyArray<readonly [commandId: string, invoke: Tr
   ['aspire-vscode.viewAppHostLogFile', (p, e) => p.viewAppHostLogFile(e)],
   ['aspire-vscode.copyLogFilePath', (p, e) => p.copyLogFilePath(e)],
   ['aspire-vscode.expandAll', (p, e) => p.expandAll(e)],
+  ['aspire-vscode.collapseAll', (p, e) => p.collapseAll(e)],
 ];
 
 export function registerTreeViewCommands(
