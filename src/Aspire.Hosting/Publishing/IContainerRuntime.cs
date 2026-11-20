@@ -52,6 +52,18 @@ public interface IContainerRuntime
     Task RemoveImageAsync(string imageName, CancellationToken cancellationToken);
 
     /// <summary>
+    /// Copies a directory's contents from a local container image without starting a container.
+    /// </summary>
+    /// <param name="imageName">The local image name or reference. The image is not pulled.</param>
+    /// <param name="sourcePath">The absolute directory path inside the image.</param>
+    /// <param name="destinationPath">The existing directory on the host that receives the files.</param>
+    /// <param name="cancellationToken">A token to cancel the operation.</param>
+    /// <returns>A task representing the copy operation, including cleanup of the temporary container.</returns>
+    /// <exception cref="NotSupportedException">Thrown when the runtime does not support copying image files.</exception>
+    Task CopyFilesFromImageAsync(string imageName, string sourcePath, string destinationPath, CancellationToken cancellationToken)
+        => throw new NotSupportedException($"Container runtime '{Name}' does not support copying files from images.");
+
+    /// <summary>
     /// Pushes a container image to a registry.
     /// </summary>
     /// <param name="resource">The resource containing push configuration.</param>

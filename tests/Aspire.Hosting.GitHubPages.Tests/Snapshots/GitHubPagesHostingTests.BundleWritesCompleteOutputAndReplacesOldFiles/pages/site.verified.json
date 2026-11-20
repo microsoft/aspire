@@ -1,0 +1,8 @@
+﻿{
+  "repository": "owner/repo",
+  "source": "frontend",
+  "url": "https://owner.github.io/repo/",
+  "origin": "https://owner.github.io",
+  "basePath": "/repo/",
+  "bundle": "dist"
+}
