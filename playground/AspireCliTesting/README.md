@@ -2,7 +2,7 @@
 
 This file-based AppHost is the shared, in-repository exerciser for `aspire test`.
 It uses repository hosting projects, not released packages or a private package
-hive. The foundation, MSTest, pytest and Go scenarios share the same HTTP service
+hive. The foundation, MSTest, pytest, Go and Rust scenarios share the same HTTP service
 and require no containers. The MSTest fixture registers the executable
 Microsoft.Testing.Platform runner and TRX extension explicitly.
 The pytest fixture uses Python 3.10 or later and `uv` on PATH. `WithUv()` installs
@@ -10,6 +10,9 @@ its declared pytest dependency into a local virtual environment before execution
 no global pytest installation is needed.
 The Go fixture requires Go 1.24 or later on PATH and uses only the standard library;
 no additional Go test runner or dependencies are needed.
+The Rust fixture uses only the standard library and the **built-in `cargo test`**
+runner. Only the Rust toolchain is needed on PATH; nextest is not required.
+No tools are installed globally and no Cargo configuration is rewritten.
 
 ## Run from the repository root
 
@@ -29,7 +32,7 @@ features__testCommandEnabled=true \
 The CLI builds the AppHost from the current sources. The `Aspire.Hosting.AppHost@*`
 directive makes the file discoverable; `Directory.Build.targets` removes that
 package reference and uses `AspireProjectOrPackageReference` to resolve the local
-AppHost, .NET, Python and Go hosting projects. It does not restore the wildcard package.
+AppHost, .NET, Python, Go and Rust hosting projects. It does not restore the wildcard package.
 
 Like the other playgrounds, this AppHost adds the repository dashboard with
 `AddDotnetProject` using the reserved `aspire-dashboard` resource name. Hosting
@@ -160,8 +163,25 @@ through EOF before reading the Go JSON events; it does not parse dashboard logs.
 Its collector is runtime-only and writes directly into `<run>/go-tests`; it does
 not need a temporary framework-report directory.
 
-The default combined summary contains **10 passed, 0 failed, 3 skipped**:
-one foundation result plus three passed and one skipped result from each framework.
+`rust-tests/Cargo.toml` defines a dependency-free Rust crate.
+`AddExecutable("rust-tests", "cargo", "rust-tests", "test")` with
+`WithCargoTesting()` waits for the same service and receives `serviceEndpoint`
+through `RUST_SERVICE_URL`. Tests check `/`, `/health`, an independent opt-in
+failure, an ignored example, and a documentation test. This uses finite built-in
+Cargo testing, not `AddRustApp` and its `cargo run` entrypoint.
+
+Cargo configuration, arguments, selected targets and standard failure behavior
+remain caller-owned. **Default Cargo testing includes doctests** as applicable;
+this fixture has a passing doctest. No additional runner, JUnit requirement or
+unstable test JSON is used. Cargo exit status is the authoritative Rust resource
+outcome, and no individual Rust outcomes or skipped counts are published.
+Zero published Rust results does not imply no Rust tests executed.
+Only one native invocation is supported, without terminals, replicas or restarts.
+
+The default published-result summary contains **10 passed, 0 failed, 3 skipped**:
+one foundation result plus three passed and one skipped from each of MSTest,
+pytest and Go. Rust contributes a **passing resource outcome**, not per-test
+counts; all five testing resources pass.
 Each collection has its own output directory. The foundation writes `probe.txt`;
 MSTest and pytest write into fresh temporary runner directories configured before
 launch. Their runtime `WithTesting` callbacks wait for completion and stage
@@ -174,10 +194,18 @@ reach EOF and the files close. Those Aspire-owned capture files have mode `0600`
 on Unix in the CLI-owned `0700` resource directory. Windows uses inherited access
 controls. Test-binary stderr is embedded in Go JSON, while `stderr.log` holds
 the Go command's separate stderr.
+Rust writes only `stdout.log`, `stderr.log` and `output.complete` through the same
+durable raw-output capture. These retain human Cargo/libtest diagnostics, including
+actual test execution, but are not parsed into fabricated testcase metadata.
+Its runtime `WithTesting(context => context.CaptureOutputAsync())` callback writes
+directly into `<run>/rust-tests`, with no temporary framework report directory.
+Cargo command configuration and single-invocation safeguards are independent of
+the collector. Run cancellation interrupts capture; cancelling an optional
+caller-local completion wait does not cancel the shared capture task.
 JSON exposes `outputPath`, `summaryPath`, and each `collections[].outputPath`.
 Reports and `summary.json` remain after teardown.
 Framework-staged reports use the copy writer's permissions; unlike Aspire-owned
-Go captures and the custom probe, no per-file `0600` guarantee is made for those reports.
+Go/Rust captures and the custom probe, no per-file `0600` guarantee is made for those reports.
 
 Exercise the controlled MSTest failure without changing the foundation scenario:
 
@@ -190,7 +218,7 @@ dotnet run --project src/Aspire.Cli/Aspire.Cli.csproj --no-launch-profile -- \
 
 This returns CLI exit code `23` with **9 passed, 1 failed, 3 skipped**. The MSTest
 process exits nonzero, but its collector still harvests the finalized TRX report
-and publishes all results. Foundation, pytest and Go results remain passing.
+and publishes all results. Foundation, pytest, Go and Rust resources remain passing.
 
 Exercise the independent pytest failure without changing MSTest:
 
@@ -215,9 +243,39 @@ dotnet run --project src/Aspire.Cli/Aspire.Cli.csproj --no-launch-profile -- \
 
 This returns exit code `23` with **9 passed, 1 failed, 3 skipped**. The Go process
 exits nonzero, but raw capture still drains through EOF and its collector harvests
-all four named outcomes. The other ecosystems remain passing. Failure flags are
-independent and case-insensitive; unset flags default to `false`. More than one
-flag can be enabled to demonstrate multiple failing resources.
+all four named outcomes. The other ecosystems remain passing.
+
+Exercise the independent Rust failure:
+
+```bash
+features__testCommandEnabled=true RUST_PLAYGROUND_FAIL=true \
+dotnet run --project src/Aspire.Cli/Aspire.Cli.csproj --no-launch-profile -- \
+  test --apphost playground/AspireCliTesting/apphost.cs --isolated \
+  --timeout-seconds 120 --format json --non-interactive
+```
+
+This returns exit code `23` with a **failed Rust resource** and unchanged published
+counts of **10 passed, 0 failed, 3 skipped**. This is not a contradiction: the
+resource's nonzero exit makes the whole run fail without inventing a failed
+testcase. Diagnostic capture completes normally and no JUnit is expected.
+Inspect the Rust collection's `stdout.log` and `stderr.log` for Cargo build, test
+or doctest failures. Cargo can also succeed with no selected tests; Aspire does
+not override that behavior or infer test counts.
+
+Failure flags are independent and case-insensitive; unset flags default to
+`false`. To demonstrate all four failures together:
+
+```bash
+features__testCommandEnabled=true \
+MSTEST_PLAYGROUND_FAIL=true PYTEST_PLAYGROUND_FAIL=true \
+GO_PLAYGROUND_FAIL=true RUST_PLAYGROUND_FAIL=true \
+dotnet run --project src/Aspire.Cli/Aspire.Cli.csproj --no-launch-profile -- \
+  test --apphost playground/AspireCliTesting/apphost.cs --isolated \
+  --timeout-seconds 120 --format json --non-interactive
+```
+
+This returns exit code `23` with **7 passed, 3 failed, 3 skipped** published
+results and **four failed resource outcomes**; the foundation probe still passes.
 
 There is no `--output` option; use the paths assigned
 by the CLI rather than passing reporting flags to the runner.

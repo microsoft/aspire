@@ -139,6 +139,82 @@ without a `ContainerTargetPlatform` mapping still require an authored Dockerfile
 cross-compilation tooling, so the selected build image must already support the target. It is also
 on you to keep the build image, target ABI, and runtime image compatible.
 
+### Testing with built-in Cargo
+
+The experimental `WithCargoTesting` API (`ASPIRETESTING001`) includes a finite
+[`cargo test`](https://doc.rust-lang.org/cargo/commands/cargo-test.html) executable
+in `aspire test`. It needs only the standard Rust toolchain: no nextest, nightly
+compiler, report format, or global configuration changes.
+
+The preview CLI command is disabled by default. Opt in for the invocation without
+changing saved configuration:
+
+```bash
+features__testCommandEnabled=true aspire test
+```
+
+This flag gates CLI registration only; it does not change hosting APIs or ordinary
+`aspire run` behavior.
+
+**C#**
+
+```csharp
+#pragma warning disable ASPIRETESTING001
+var tests = builder.AddExecutable("rust-tests", "cargo", "../rust-api",
+        "test", "--workspace", "--features=integration")
+    .WithCargoTesting()
+    .WithEnvironment("API_URL", rustApi.GetEndpoint("http"))
+    .WaitFor(rustApi);
+```
+
+**TypeScript**
+
+```typescript
+const tests = await builder.addExecutable("rust-tests", "cargo", "../rust-api",
+    ["test", "--workspace", "--features=integration"])
+  .withCargoTesting()
+  .withEnvironment("API_URL", await rustApi.getEndpoint("http"))
+  .waitFor(rustApi);
+```
+
+Use an explicit Cargo executable, not `AddRustApp` (which runs/debugs an application).
+Cargo workspace/package selection, features, manifest, build target, working directory,
+configuration, and environment remain intact. Cargo's `--profile` selects a build
+profile. Arguments after `--` retain their normal libtest meaning.
+
+**Resource-level outcome:** Cargo's exit status determines whether this Rust resource
+passes or fails. No per-test results or skipped counts are parsed, published, or invented.
+Zero Rust published results does **not** mean the tests did not execute. Nonzero build,
+toolchain, test, and doctest exits remain failures without a misleading missing-JUnit error.
+Successful Cargo commands with no selected tests retain Cargo's successful exit status.
+Caller options such as `--no-run` can deliberately compile without executing tests.
+
+Default Cargo semantics include unit, integration, and **documentation tests** as
+applicable to the selected targets. Aspire does not replace Cargo configuration,
+force target selection or failure behavior, or use unstable JSON test output.
+Ordinary runs retain the same command without capture; publishing excludes this
+finite testing resource.
+
+One native invocation per resource is supported, without terminals, replicas or
+restarts. The runtime `WithTesting(context => context.CaptureOutputAsync())`
+callback starts alongside resource execution only during `aspire test`, never
+during model construction. Cargo arguments, environment and launch safeguards
+are configured independently before execution.
+The callback receives a `ResourceTestingContext`: `context.OutputPath` is its
+resource artifact directory, while `context.TestingContext.OutputPath` is the
+whole run root supplied by `TestingContext`.
+The private `<run-id>/<logical-resource-name>/` output directory retains raw `stdout.log` and
+`stderr.log`, plus `output.complete` after both streams reach EOF. These
+Aspire-owned artifacts have private permissions (0600 on Unix). The diagnostic
+collector can complete successfully after a failed Cargo process; the resource
+remains failed. Actual capture I/O errors still fail collection explicitly.
+Capture observes test-run cancellation; partial files can remain after interruption.
+Repeated or concurrent captures share one task. Cancelling a caller-local
+`WaitForCompletionAsync(token)` wait does not cancel that shared capture or
+resource completion. Replacing or clearing the collector with `WithTesting`
+preserves the assigned context and directory, without changing Cargo's command
+or single-invocation safeguards.
+
 ## Additional documentation
 
 - https://aspire.dev/integrations/gallery/

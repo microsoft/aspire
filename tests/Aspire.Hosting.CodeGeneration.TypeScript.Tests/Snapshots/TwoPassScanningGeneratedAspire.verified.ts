@@ -8709,6 +8709,20 @@ export interface ResourceTestingContext {
      */
     waitForCompletionAsync(options?: WaitForCompletionAsyncOptions): Promise<boolean>;
     /**
+     * Captures the completed executable's raw standard output and standard error into this resource's output directory.
+     *
+     * Waits for authoritative process completion, including nonzero exits, then replays DCP's durable,
+     * timestamp-free stdout and stderr separately into `stdout.log` and `stderr.log`.
+     * Creates `output.complete` only after both streams drain. Partial files remain on errors or cancellation.
+     * Files are exclusively created with private permissions (0600 on Unix) in the run's private directory.
+     * Supports exactly one native executable invocation, without terminals, replicas, restarts, or retries.
+     * Integrations must prevent restarts before launch. Concurrent/repeated calls share the same task,
+     * including a faulted task; capture never reopens or overwrites the owned files.
+     * No dashboard backlog limits, timestamp formatting, or stdout/stderr merging apply.
+     * @experimental
+     */
+    captureOutputAsync(): ResourceTestingContextPromise;
+    /**
      * Publishes an observed test result for this resource.
      *
      * Results are associated with the resource by the context. Publishing does not infer any
@@ -8758,6 +8772,20 @@ export interface ResourceTestingContextPromise extends PromiseLike<ResourceTesti
      * @experimental
      */
     waitForCompletionAsync(options?: WaitForCompletionAsyncOptions): Promise<boolean>;
+    /**
+     * Captures the completed executable's raw standard output and standard error into this resource's output directory.
+     *
+     * Waits for authoritative process completion, including nonzero exits, then replays DCP's durable,
+     * timestamp-free stdout and stderr separately into `stdout.log` and `stderr.log`.
+     * Creates `output.complete` only after both streams drain. Partial files remain on errors or cancellation.
+     * Files are exclusively created with private permissions (0600 on Unix) in the run's private directory.
+     * Supports exactly one native executable invocation, without terminals, replicas, restarts, or retries.
+     * Integrations must prevent restarts before launch. Concurrent/repeated calls share the same task,
+     * including a faulted task; capture never reopens or overwrites the owned files.
+     * No dashboard backlog limits, timestamp formatting, or stdout/stderr merging apply.
+     * @experimental
+     */
+    captureOutputAsync(): ResourceTestingContextPromise;
     /**
      * Publishes an observed test result for this resource.
      *
@@ -8843,6 +8871,33 @@ class ResourceTestingContextImpl implements ResourceTestingContext {
     }
 
     /** @internal */
+    async _captureOutputAsyncInternal(): Promise<ResourceTestingContext> {
+        const rpcArgs: Record<string, unknown> = { context: this._handle };
+        await this._client.invokeCapability<void>(
+            'Aspire.Hosting.ApplicationModel/captureOutputAsync',
+            rpcArgs
+        );
+        return this;
+    }
+
+    /**
+     * Captures the completed executable's raw standard output and standard error into this resource's output directory.
+     *
+     * Waits for authoritative process completion, including nonzero exits, then replays DCP's durable,
+     * timestamp-free stdout and stderr separately into `stdout.log` and `stderr.log`.
+     * Creates `output.complete` only after both streams drain. Partial files remain on errors or cancellation.
+     * Files are exclusively created with private permissions (0600 on Unix) in the run's private directory.
+     * Supports exactly one native executable invocation, without terminals, replicas, restarts, or retries.
+     * Integrations must prevent restarts before launch. Concurrent/repeated calls share the same task,
+     * including a faulted task; capture never reopens or overwrites the owned files.
+     * No dashboard backlog limits, timestamp formatting, or stdout/stderr merging apply.
+     * @experimental
+     */
+    captureOutputAsync(): ResourceTestingContextPromise {
+        return new ResourceTestingContextPromiseImpl(this._captureOutputAsyncInternal(), this._client);
+    }
+
+    /** @internal */
     async _publishResultInternal(result: TestResult): Promise<ResourceTestingContext> {
         const rpcArgs: Record<string, unknown> = { context: this._handle, result };
         await this._client.invokeCapability<void>(
@@ -8873,6 +8928,7 @@ const ResourceTestingContextPromiseImpl = $aspireCreateFluentPromiseClass<Resour
     ["outputPath"]: null,
     ["cancellationToken"]: null,
     ["waitForCompletionAsync"]: null,
+    ["captureOutputAsync"]: () => ResourceTestingContextPromiseImpl,
     ["publishResult"]: () => ResourceTestingContextPromiseImpl,
 }));
 
