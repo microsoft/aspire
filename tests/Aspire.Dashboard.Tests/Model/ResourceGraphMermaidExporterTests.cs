@@ -56,6 +56,7 @@ public class ResourceGraphMermaidExporterTests
             ResourceType = "Project",
             Uid = name,
             IsHidden = false,
+            Tags = [],
             ResourceIcon = new IconDto { Path = "", Color = "", Tooltip = "" },
             StateIcon = new IconDto { Path = "", Color = "", Tooltip = "" },
             EndpointUrl = null,

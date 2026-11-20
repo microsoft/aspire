@@ -29,12 +29,12 @@
       </trans-unit>
       <trans-unit id="AspireSkillsFix">
         <source>Run 'aspire agent init' to configure skill sources and remove these copies.</source>
-        <target state="new">Run 'aspire agent init' to configure skill sources and remove these copies.</target>
+        <target state="translated">'aspire agent init' を実行してスキル ソースを構成して、これらのコピーを削除します。</target>
         <note>'aspire agent init' is a command and is not localizable.</note>
       </trans-unit>
       <trans-unit id="AspireSkillsMessage">
         <source>Found static copies of Aspire skills.</source>
-        <target state="new">Found static copies of Aspire skills.</target>
+        <target state="translated">Aspire スキルの静的コピーが見つかりました。</target>
         <note />
       </trans-unit>
       <trans-unit id="ChannelSuffixFormat">
@@ -591,8 +591,7 @@ The legacy file continues to work — this is a non-blocking warning.</source>
       </trans-unit>
       <trans-unit id="PendingMigrationFix">
         <source>Run 'aspire update --migrate' to apply the recommended migration.</source>
-        <target state="needs-review-translation">'aspire update --migrate' を実行して推奨される移行を適用します。
-現在のレイアウトは引き続き機能。これは非ブロッキング警告です。</target>
+        <target state="translated">'aspire update --migrate' を実行して推奨される移行を適用します。</target>
         <note />
       </trans-unit>
       <trans-unit id="SdkCategoryHeader">

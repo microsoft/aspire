@@ -1,4 +1,4 @@
-﻿/* Parameters and graph are full-width views. Keep content off the window edge. */
+/* Parameters and graph are full-width views. Keep content off the window edge. */
 .page-content-container {
     padding-inline: 12px;
 }
@@ -176,19 +176,6 @@
     height: 100%;
 }
 
-::deep .resource-graph-controls {
-    position: absolute;
-    right: 30px;
-    bottom: 30px;
-    display: flex;
-    column-gap: var(--aspire-space-2);
-}
-
-::deep .resource-graph-controls.resource-graph-game-launch {
-    left: 30px;
-    right: auto;
-}
-
 ::deep .resource-graph-controls fluent-button {
     --aspire-button-background: var(--aspire-page-background);
     --aspire-button-border-color: transparent;
@@ -203,11 +190,6 @@
 ::deep .resource-graph-controls fluent-button:active,
 ::deep .resource-graph-controls fluent-button:hover:active {
     background-color: var(--resource-graph-secondary-hover-background);
-}
-
-::deep .resource-graph-controls fluent-button > svg {
-    width: 24px;
-    height: 24px;
 }
 
 ::deep .resource-graph .texts {
@@ -233,7 +215,7 @@
 }
 
 ::deep .resource-node {
-    stroke: var(--aspire-page-background);
+    stroke: transparent;
     fill: var(--aspire-page-background);
 }
 
@@ -258,10 +240,6 @@
 
 ::deep .resource-group-hover .resource-node {
     fill: var(--resource-graph-hover-background) !important;
-}
-
-::deep .resource-group-selected .resource-scale {
-    transform: scale(1.2);
 }
 
 ::deep .resource-group-selected .resource-node {
@@ -300,9 +278,7 @@
     fill: var(--aspire-page-background);
 }
 
-/* Context menu affordance (cog) shown on the lower-right of a node. Hidden until the node is
-   hovered so it doesn't clutter the graph, and non-interactive while hidden (pointer-events: none)
-   so the invisible element can't intercept clicks. */
+/* Keep the cog visually hidden until needed. Its background circle still detects direct hover. */
 ::deep .resource-menu-cog {
     opacity: 0;
     pointer-events: none;
@@ -310,7 +286,7 @@
     transition: opacity 0.15s ease-in-out;
 }
 
-::deep .resource-group-hover .resource-menu-cog,
+::deep .resource-scale:hover .resource-menu-cog,
 ::deep .resource-menu-cog:focus,
 ::deep .resource-menu-cog[aria-expanded="true"] {
     opacity: 1;

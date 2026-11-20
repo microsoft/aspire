@@ -29,12 +29,12 @@
       </trans-unit>
       <trans-unit id="AspireSkillsFix">
         <source>Run 'aspire agent init' to configure skill sources and remove these copies.</source>
-        <target state="new">Run 'aspire agent init' to configure skill sources and remove these copies.</target>
+        <target state="translated">Führen Sie „aspire agent init“ aus, um Skillquellen zu konfigurieren und diese Kopien zu entfernen.</target>
         <note>'aspire agent init' is a command and is not localizable.</note>
       </trans-unit>
       <trans-unit id="AspireSkillsMessage">
         <source>Found static copies of Aspire skills.</source>
-        <target state="new">Found static copies of Aspire skills.</target>
+        <target state="translated">Statische Kopien von Aspire-Skills gefunden.</target>
         <note />
       </trans-unit>
       <trans-unit id="ChannelSuffixFormat">
@@ -591,8 +591,7 @@ Die Legacydatei funktioniert weiterhin. Dies ist eine nicht blockierende Warnung
       </trans-unit>
       <trans-unit id="PendingMigrationFix">
         <source>Run 'aspire update --migrate' to apply the recommended migration.</source>
-        <target state="needs-review-translation">Führen Sie „aspire update --migrate“ aus, um die empfohlene Migration anzuwenden.
-Das aktuelle Layout funktioniert weiterhin. Dies ist eine nicht blockierende Warnung.</target>
+        <target state="translated">Führen Sie „aspire update --migrate“ aus, um die empfohlene Migration anzuwenden.</target>
         <note />
       </trans-unit>
       <trans-unit id="SdkCategoryHeader">

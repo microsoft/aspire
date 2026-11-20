@@ -44,7 +44,7 @@
       </trans-unit>
       <trans-unit id="ChannelFeedAlreadyConfiguredFormat">
         <source>Cannot modify '{0}' because channel source '{1}' is disabled, or the source or its package mappings are inherited or user-owned. Update the NuGet configuration manually instead.</source>
-        <target state="new">Cannot modify '{0}' because channel source '{1}' is disabled, or the source or its package mappings are inherited or user-owned. Update the NuGet configuration manually instead.</target>
+        <target state="translated">No se puede modificar '{0}' porque el '{1}' de origen del canal está deshabilitado o el origen o sus asignaciones de paquete son heredados o propiedad del usuario. Actualice la configuración de NuGet manualmente en su lugar.</target>
         <note />
       </trans-unit>
       <trans-unit id="ChannelNonePlaceholder">
@@ -64,7 +64,7 @@
       </trans-unit>
       <trans-unit id="ChannelUpdateRequiresAmbientNuGetConfigurationFormat">
         <source>Cannot apply channel '{0}' for '{1}' because MSBuild overrides NuGet configuration: {2}. Remove these overrides to enable channel updates. Updates without a command-line or configured channel remain supported.</source>
-        <target state="needs-review-translation">No se puede aplicar el '{0}' de canal para '{1}' porque MSBuild invalida la configuración de NuGet: {2}. Quite estas invalidaciones para habilitar las actualizaciones de canal explícitas. Las novedades sin un canal explícito siguen siendo compatibles.</target>
+        <target state="translated">No se puede aplicar el '{0}' de canal para '{1}' porque MSBuild invalida la configuración de NuGet: {2}. Quite estas invalidaciones para habilitar las actualizaciones de canal. Las novedades sin una línea de comandos o un canal configurado siguen siendo compatibles.</target>
         <note />
       </trans-unit>
       <trans-unit id="CheckingForUpdates">
@@ -84,7 +84,7 @@
       </trans-unit>
       <trans-unit id="ConfiguredChannelNotFoundFormat">
         <source>Cannot use channel '{0}' from Aspire configuration. {1}</source>
-        <target state="new">Cannot use channel '{0}' from Aspire configuration. {1}</target>
+        <target state="translated">No se puede usar el '{0}' de canal de Aspire configuración. {1}</target>
         <note>{0} = configured channel name. {1} = reason the channel could not be resolved.</note>
       </trans-unit>
       <trans-unit id="CouldNotFindPackageVersionInDirectoryPackagesProps">
@@ -114,7 +114,7 @@
       </trans-unit>
       <trans-unit id="DryRunBackupRecoveryFormat">
         <source>Could not restore '{0}'. Its recovery backup was preserved at '{1}'. Restore the backup manually before retrying.</source>
-        <target state="new">Could not restore '{0}'. Its recovery backup was preserved at '{1}'. Restore the backup manually before retrying.</target>
+        <target state="translated">No se pudo restaurar '{0}'. Su copia de seguridad de recuperación se conservó en '{1}'. Restaure la copia de seguridad manualmente antes de volver a intentarlo.</target>
         <note />
       </trans-unit>
       <trans-unit id="DryRunBackupsNotReplaced">
@@ -125,7 +125,7 @@
       <trans-unit id="DryRunExistingBackupsFormat">
         <source>Backups from an earlier dry run already exist. Preserve them for recovery if needed before replacing them:
 {0}</source>
-        <target state="new">Backups from an earlier dry run already exist. Preserve them for recovery if needed before replacing them:
+        <target state="translated">Ya existen copias de seguridad de un simulacro anterior. Guárdelos para recuperarlos si es necesario antes de reemplazarlos:
 {0}</target>
         <note />
       </trans-unit>
@@ -136,7 +136,7 @@
       </trans-unit>
       <trans-unit id="DryRunReplaceBackupsPrompt">
         <source>Replace the existing backups with the current file contents? This discards the previous recovery copies.</source>
-        <target state="new">Replace the existing backups with the current file contents? This discards the previous recovery copies.</target>
+        <target state="translated">¿Desea reemplazar las copias de seguridad existentes con el contenido actual del archivo? Se descartan las copias de recuperación anteriores.</target>
         <note />
       </trans-unit>
       <trans-unit id="DryRunRequiresChannel">
@@ -491,7 +491,7 @@
       </trans-unit>
       <trans-unit id="UsingConfiguredChannelFormat">
         <source>Using channel '{0}' from Aspire configuration. Pass --channel to override.</source>
-        <target state="new">Using channel '{0}' from Aspire configuration. Pass --channel to override.</target>
+        <target state="translated">Usando '{0}' de canal de Aspire configuración. Pase --channel para invalidar.</target>
         <note>{0} = configured channel name.</note>
       </trans-unit>
       <trans-unit id="WhichDirectoryNuGetConfigPrompt">

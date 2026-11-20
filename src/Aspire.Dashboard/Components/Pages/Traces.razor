@@ -164,7 +164,8 @@
                            SingularText="@Loc[nameof(Dashboard.Resources.Traces.TotalItemsFooterSingularText)]"
                            PluralText="@Loc[nameof(Dashboard.Resources.Traces.TotalItemsFooterPluralText)]"
                            PartialText="@Loc[nameof(Dashboard.Resources.Traces.VirtualizedLimitText)]"
-                           PauseText="@PauseText" />;
+                           PausedAt="@PausedAt"
+                           PauseCaptureType="@Loc[nameof(Dashboard.Resources.Traces.TracesHeader)]" />;
 
     private RenderFragment GetFilterToolbar() => @<text>
         @if (ResourcesLayout is null)

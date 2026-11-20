@@ -2,9 +2,20 @@ import './d3.v7.min.js'
 import { attachResourceGraphGame } from './app-resourcegraph-game.js'
 
 let resourceGraph = null;
+const resourceNodeRadius = 53;
+const resourceLinkMaskRadius = resourceNodeRadius + 3;
+const selectedNodeScale = 1.2;
+const selectedResourceLinkMaskRadius = resourceLinkMaskRadius * selectedNodeScale;
+const menuCogRadius = 14;
+const tagMenuCogYOffset = -5;
+const tagMenuCogGap = 4;
+const tagMenuBridgeOverlap = 4;
+const tagBoundaryBasePadding = 24;
+const tagBoundaryPaddingPerLevel = 28;
+const tagGroupGap = 24;
 
-export function initializeResourcesGraph(resourcesInterop, graphIcons) {
-    resourceGraph = new ResourceGraph(resourcesInterop, graphIcons);
+export function initializeResourcesGraph(resourcesInterop, graphIcons, enableTagSelection) {
+    resourceGraph = new ResourceGraph(resourcesInterop, graphIcons, enableTagSelection);
     resourceGraph.resize();
     // Pages that don't offer the Aspire Outage game (the previous dashboard experience) pass no game strings. Don't
     // attach it there: besides the Play button, it would also take the O key from the dashboard's global shortcuts.
@@ -44,9 +55,10 @@ export function updateResourcesGraphContextMenu(open) {
 }
 
 class ResourceGraph {
-    constructor(resourcesInterop, graphIcons) {
+    constructor(resourcesInterop, graphIcons, enableTagSelection) {
         this.resources = [];
         this.resourcesInterop = resourcesInterop;
+        this.enableTagSelection = enableTagSelection;
 
         // Static icon (SVG path + tooltip) shared by every node's context-menu affordance (cog).
         this.menuIcon = graphIcons ? graphIcons.menu : null;
@@ -54,9 +66,14 @@ class ResourceGraph {
 
         this.nodes = [];
         this.links = [];
-        this.hasFitInitialGraph = false;
+        this.tagGroups = [];
+        this.tagLayouts = [];
+        this.tagCollisionGroups = [];
+        this.outerTagGroups = [];
+        this.hasFitGraph = false;
 
-        this.svg = d3.select('.resource-graph');
+        this.svg = d3.select('.resource-graph')
+            .style('--resource-graph-selected-scale', String(selectedNodeScale));
         this.baseGroup = this.svg.append("g");
 
         // Enable zoom + pan
@@ -86,12 +103,7 @@ class ResourceGraph {
             .forceSimulation()
             .force('link', this.linkForce)
             .force('charge', d3.forceManyBody().strength(-800))
-            .force("collide", d3.forceCollide(function (d) {
-                var degree = d.degree || 1;
-
-                // scale collide radius with degree: 90 for low degree, up to 180 for high degree
-                return Math.min(90 + (degree * 10), 180);
-            }).iterations(10))
+            .force("collide", d3.forceCollide(node => this.getCollisionRadius(node)).iterations(10))
             .force("x", d3.forceX().strength(0.2))
             .force("y", d3.forceY().strength(0.4))
             .force("center", d3.forceCenter().strength(0.01));
@@ -100,7 +112,7 @@ class ResourceGraph {
         // Only change the state of the simulation when the drag event is triggered.
         var dragActive = false;
         var dragged = false;
-        this.dragDrop = d3.drag().on('start', (event) => {
+        this.dragDrop = d3.drag().filter(event => !event.ctrlKey && !event.button && !this.draggingTagGroup).on('start', (event) => {
             dragActive = event.active;
             event.subject.fx = event.subject.x;
             event.subject.fy = event.subject.y;
@@ -121,24 +133,87 @@ class ResourceGraph {
             event.subject.fy = null;
         });
 
-        var defs = this.svg.append("defs");
-        this.createArrowMarker(defs, "arrow-normal", "arrow-normal", 10, 10, 66);
-        this.createArrowMarker(defs, "arrow-highlight", "arrow-highlight", 15, 15, 48);
-        this.createArrowMarker(defs, "arrow-highlight-expand", "arrow-highlight-expand", 15, 15, 56);
+        this.tagGroupDrag = d3.drag()
+            // The label's own container moves with the tag. Measure pointer movement in graph coordinates instead.
+            .container(() => this.baseGroup.node())
+            .subject((event, group) => {
+                // Don't let a second pointer move or release nodes already held by another drag.
+                if (this.draggingTagGroup || this.nodes.some(node => node.fx != null || node.fy != null)) {
+                    return null;
+                }
+                const { x, y } = event;
+                return { x, y, members: group.nodes.map(node => ({ node, dx: node.x - x, dy: node.y - y })) };
+            })
+            .on("start", ({ subject }) => {
+                this.draggingTagGroup = true;
+                for (const { node } of subject.members) {
+                    node.fx = node.x;
+                    node.fy = node.y;
+                }
+            })
+            .on("drag", ({ subject, x, y }) => {
+                if (!subject.dragged && x === subject.x && y === subject.y) {
+                    return;
+                }
+                if (!subject.dragged) {
+                    subject.dragged = true;
+                    this.simulation.alphaTarget(0.1).restart();
+                }
+                for (const { node, dx, dy } of subject.members) {
+                    // Set the position as well as the pin so a quick mouseup before the next tick doesn't lose the move.
+                    node.x = node.fx = x + dx;
+                    node.y = node.fy = y + dy;
+                    node.vx = node.vy = 0;
+                }
+            })
+            .on("end", ({ subject }) => {
+                this.draggingTagGroup = false;
+                for (const { node } of subject.members) {
+                    node.fx = node.fy = null;
+                }
+                if (subject.dragged) {
+                    this.simulation.alphaTarget(0);
+                }
+            });
 
+        var defs = this.svg.append("defs");
+        const highlightedArrowSize = 15;
+        this.createArrowMarker(defs, "arrow-normal", 10, resourceLinkMaskRadius, 0);
+        this.createArrowMarker(defs, "arrow-highlight", highlightedArrowSize, resourceLinkMaskRadius, 1);
+        this.createArrowMarker(defs, "arrow-highlight-expand", highlightedArrowSize, selectedResourceLinkMaskRadius, 1.8);
+
+        // Mask only links, including in the transparent gap just outside each node's border.
+        this.linkMask = defs.append("mask")
+            .attr("id", "resource-links-mask")
+            .attr("maskUnits", "userSpaceOnUse")
+            .attr("maskContentUnits", "userSpaceOnUse")
+            .attr("mask-type", "luminance");
+        this.linkMaskBackground = this.linkMask.append("rect").attr("fill", "white");
+
+        // Replay the group fills in graph coordinates to preserve partial overlaps over any node background.
+        const nodeTagTint = defs.append("pattern")
+            .attr("id", "resource-node-tag-tint")
+            .attr("patternUnits", "userSpaceOnUse")
+            .attr("x", -resourceNodeRadius)
+            .attr("y", -resourceNodeRadius)
+            .attr("width", resourceNodeRadius * 2)
+            .attr("height", resourceNodeRadius * 2);
+        this.nodeBackgroundFills = nodeTagTint.append("g").attr("opacity", 0.5);
+
+        const highlightTileSize = 17.5;
         var highlightedPattern = defs.append("pattern")
             .attr("id", "highlighted-pattern")
             .attr("patternUnits", "userSpaceOnUse")
-            .attr("width", "17.5")
-            .attr("height", "17.5")
+            .attr("width", highlightTileSize)
+            .attr("height", highlightTileSize)
             .attr("patternTransform", "rotate(45)");
 
         highlightedPattern
             .append("rect")
             .attr("x", "0")
             .attr("y", "0")
-            .attr("width", "17.5")
-            .attr("height", "17.5")
+            .attr("width", highlightTileSize)
+            .attr("height", highlightTileSize)
             .attr("fill", "var(--aspire-page-background)");
 
         highlightedPattern
@@ -146,11 +221,15 @@ class ResourceGraph {
             .attr("x1", "0")
             .attr("y", "0")
             .attr("x2", "0")
-            .attr("y2", "17.5")
+            .attr("y2", highlightTileSize)
             .attr("stroke", "var(--resource-graph-secondary-hover-background)")
             .attr("stroke-width", "15");
 
-        this.linkElementsG = this.baseGroup.append("g").attr("class", "links");
+        this.tagElementsG = this.baseGroup.append("g").attr("class", "resource-tag-groups").attr("pointer-events", "none");
+        this.linkElementsG = this.baseGroup.append("g").attr("class", "links")
+            .attr("mask", "url(#resource-links-mask)");
+        // Labels paint over links, but resource nodes still paint above both.
+        this.tagControlsG = this.baseGroup.append("g").attr("class", "resource-tag-labels").attr("pointer-events", "none");
         this.nodeElementsG = this.baseGroup.append("g").attr("class", "nodes");
         // Selection updates can arrive before the first resource snapshot.
         this.linkElements = this.linkElementsG.selectAll(".resource-link");
@@ -205,19 +284,23 @@ class ResourceGraph {
         this.svg.transition().call(this.zoom.scaleBy, 2 / 3);
     }
 
-    createArrowMarker(parent, id, className, width, height, x) {
+    createArrowMarker(parent, id, size, targetMaskRadius, tipClearance) {
+        const viewBoxSize = 10;
+        const halfViewBoxSize = viewBoxSize / 2;
+        // refX is in marker coordinates. Convert the desired distance behind the endpoint from graph units.
+        const refX = viewBoxSize + (targetMaskRadius + tipClearance) * viewBoxSize / size;
         parent.append("marker")
             .attr("id", id)
-            .attr("viewBox", "0 -5 10 10")
-            .attr("refX", x)
+            .attr("viewBox", `0 ${-halfViewBoxSize} ${viewBoxSize} ${viewBoxSize}`)
+            .attr("refX", refX)
             .attr("refY", 0)
-            .attr("markerWidth", width)
-            .attr("markerHeight", height)
+            .attr("markerWidth", size)
+            .attr("markerHeight", size)
             .attr("orient", "auto")
             .attr("markerUnits", "userSpaceOnUse")
-            .attr("class", className)
+            .attr("class", id)
             .append("path")
-            .attr("d", 'M0,-5L10,0L0,5');
+            .attr("d", `M0,${-halfViewBoxSize}L${viewBoxSize},0L0,${halfViewBoxSize}`);
     }
 
     // The element the SVG is drawn in (.resource-graph-container). Every page that hosts the graph (the overview, the
@@ -239,18 +322,22 @@ class ResourceGraph {
     }
 
     resize() {
-        // A hidden graph (another tab or overview mode is selected) has no size. Keep the last viewBox until it is shown.
+        // A hidden graph has no size. Keep the last viewBox until it is shown.
         const viewport = this.getViewportSize();
         if (!viewport) {
             return;
         }
 
         this.svg.attr("viewBox", [-viewport.width / 2, -viewport.height / 2, viewport.width, viewport.height]);
+        if (this.tagGroups.length > 0) {
+            this.measureTagControls();
+            this.measureNodeBounds();
+            this.onTick();
+        }
 
-        // Resources can arrive while the graph is hidden, when there is nothing to measure. Fit them the first time the
-        // graph has a size.
-        if (!this.hasFitInitialGraph && this.nodes.length > 0) {
-            this.hasFitInitialGraph = this.fitGraph(false);
+        // Resources can arrive while the graph is hidden. Fit the new layout once it has a size.
+        if (!this.hasFitGraph && this.nodes.length > 0) {
+            this.hasFitGraph = this.fitGraph(false);
         }
     }
 
@@ -280,6 +367,10 @@ class ResourceGraph {
                 return false;
             }
         }
+        if (r1.tags.length !== r2.tags.length ||
+            r1.tags.some((tag, index) => tag.name !== r2.tags[index].name || tag.color !== r2.tags[index].color)) {
+            return false;
+        }
 
         return true;
     }
@@ -298,56 +389,51 @@ class ResourceGraph {
         return true;
     }
 
-    resourcesChanged(existingResource, newResources) {
-        if (!existingResource || newResources.length != existingResource.length) {
+    resourcesChanged(existingResources, resourcesByName) {
+        if (existingResources.length !== resourcesByName.size) {
             return true;
         }
 
-        for (var i = 0; i < newResources.length; i++) {
-            if (!this.resourceEqual(newResources[i], existingResource[i], false)) {
-                return true;
-            }
-        }
-
-        return false;
+        return existingResources.some(resource => {
+            const updated = resourcesByName.get(resource.name);
+            return !updated || !this.resourceEqual(resource, updated);
+        });
     }
 
     updateNodes(newResources) {
         const existingNodes = this.nodes || []; // Ensure nodes is initialized
         const updatedNodes = [];
+        let hasAddedNodes = false;
 
-        // calculate degree (number of connections) for each resource
-        const degreeMap = new Map();
-        newResources.forEach(resource => {
-            degreeMap.set(resource.name, resource.referencedNames.length);
-        });
-
-        // also count incoming connections
-        newResources.forEach(resource => {
-            resource.referencedNames.forEach(refName => {
-                const currentDegree = degreeMap.get(refName) || 0;
-                degreeMap.set(refName, currentDegree + 1);
-            });
-        });
+        const degreeMap = new Map(newResources.map(resource => [resource.name, 0]));
+        for (const resource of newResources) {
+            for (const refName of resource.referencedNames) {
+                if (degreeMap.has(refName)) {
+                    degreeMap.set(resource.name, degreeMap.get(resource.name) + 1);
+                    degreeMap.set(refName, degreeMap.get(refName) + 1);
+                }
+            }
+        }
 
         newResources.forEach(resource => {
             const existingNode = existingNodes.find(node => node.id === resource.name);
-            const degree = degreeMap.get(resource.name) || 1;
+            const degree = degreeMap.get(resource.name);
 
             if (existingNode) {
-                // Update existing node without replacing it
-                updatedNodes.push({
-                    ...existingNode,
+                // D3 retains the drag subject until mouseup. Replacing it during a resource update interrupts the
+                // drag and leaves the replacement pinned because only the original subject's fx/fy are cleared.
+                updatedNodes.push(Object.assign(existingNode, {
                     label: resource.displayName,
                     endpointUrl: resource.endpointUrl,
                     endpointText: resource.endpointText,
                     resourceIcon: createIcon(resource.resourceIcon),
                     stateIcon: createIcon(resource.stateIcon),
                     isHidden: resource.isHidden,
+                    tags: resource.tags,
                     degree: degree
-                });
+                }));
             } else {
-                // Add new resource
+                hasAddedNodes = true;
                 updatedNodes.push({
                     id: resource.name,
                     label: resource.displayName,
@@ -356,12 +442,14 @@ class ResourceGraph {
                     resourceIcon: createIcon(resource.resourceIcon),
                     stateIcon: createIcon(resource.stateIcon),
                     isHidden: resource.isHidden,
+                    tags: resource.tags,
                     degree: degree
                 });
             }
         });
 
         this.nodes = updatedNodes;
+        return hasAddedNodes;
 
         function createIcon(resourceIcon) {
             return {
@@ -372,33 +460,355 @@ class ResourceGraph {
         }
     }
 
-    updateResources(newResources) {
-        // Check if the overall structure of the graph has changed. i.e. nodes or links have been added or removed.
-        var hasStructureChanged = this.resourcesChanged(this.resources, newResources);
-
-        this.resources = newResources;
-
-        this.updateNodes(newResources);
-
-        this.links = [];
-        for (var i = 0; i < newResources.length; i++) {
-            var resource = newResources[i];
-
-            var resourceLinks = resource.referencedNames
-                .filter((referencedName) => {
-                    return newResources.some(r => r.name === referencedName);
-                })
-                .map((referencedName, index) => {
-                    return {
-                        id: `${resource.name}-${referencedName}`,
-                        target: referencedName,
-                        source: resource.name,
-                        strength: 0.7
-                    };
-                });
-
-            this.links.push(...resourceLinks);
+    updateTagGroups() {
+        const groups = new Map();
+        for (const node of this.nodes) {
+            node.tagKeys = new Set(node.tags.map(tag => tag.name.toUpperCase()));
+            for (const tag of node.tags) {
+                const key = tag.name.toUpperCase();
+                if (!groups.has(key)) {
+                    groups.set(key, { key, label: tag.name, color: tag.color, nodes: [] });
+                }
+                const members = groups.get(key).nodes;
+                if (!members.includes(node)) {
+                    members.push(node);
+                }
+            }
         }
+
+        this.tagGroups = [...groups.values()].sort((a, b) => a.nodes.length - b.nodes.length || a.key.localeCompare(b.key));
+        const layouts = new Map();
+        for (let i = 0; i < this.tagGroups.length; i++) {
+            const group = this.tagGroups[i];
+            // Nested and identical memberships need separate outlines, not coincident paths.
+            group.level = 0;
+            for (const inner of this.tagGroups.slice(0, i)) {
+                if (inner.nodes.every(node => node.tagKeys.has(group.key))) {
+                    group.level = Math.max(group.level, inner.level + 1);
+                }
+            }
+            const membership = JSON.stringify(group.nodes.map(node => node.id).sort());
+            if (!layouts.has(membership)) {
+                layouts.set(membership, { nodes: group.nodes });
+            }
+            group.anchor = layouts.get(membership);
+        }
+
+        // Keep overlapping groups adjacent around the circle. An alphabetical/size-only order can put two tags
+        // of the same resource on opposite sides, stretching their boundaries across unrelated resources.
+        const remaining = [...layouts.values()].reverse();
+        const anchors = [];
+        while (remaining.length) {
+            let nextIndex = 0;
+            let bestOverlap = -1;
+            for (let i = 0; i < remaining.length; i++) {
+                const overlap = anchors.length
+                    ? remaining[i].nodes.filter(node => anchors[anchors.length - 1].nodes.includes(node)).length
+                    : remaining[i].nodes.length;
+                if (overlap > bestOverlap) {
+                    bestOverlap = overlap;
+                    nextIndex = i;
+                }
+            }
+            anchors.push(remaining.splice(nextIndex, 1)[0]);
+        }
+        // Size the ring for the resources it holds, not the number of tags. Nested and overlapping tags
+        // reuse the same space, and the hull collision force provides clearance where groups meet.
+        const taggedNodeCount = this.nodes.filter(node => node.tagKeys.size !== 0).length;
+        const radius = anchors.length <= 1 ? 0 : Math.max(200, 125 * Math.sqrt(taggedNodeCount));
+        anchors.forEach((anchor, index) => {
+            const angle = index * 2 * Math.PI / anchors.length - Math.PI / 2;
+            anchor.x = Math.cos(angle) * radius;
+            anchor.y = Math.sin(angle) * radius;
+        });
+
+        for (const node of this.nodes) {
+            // A shared resource remains a single node. Pull it between its groups and include it in every boundary.
+            // Coextensive tags share an anchor so adding an alias doesn't bias the layout.
+            const targets = [...new Set(this.tagGroups.filter(group => node.tagKeys.has(group.key)).map(group => group.anchor))];
+            node.tagAnchors = targets;
+            node.tagX = targets.length ? d3.mean(targets, anchor => anchor.x) : 0;
+            node.tagY = targets.length ? d3.mean(targets, anchor => anchor.y) : 0;
+        }
+        this.tagLayouts = [...new Set(this.tagGroups.map(group => group.anchor))];
+        // Aliases share one collision envelope, using the outermost outline and its padding.
+        const collisionLayouts = new Set();
+        this.tagCollisionGroups = [...this.tagGroups].reverse().filter(group => {
+            if (collisionLayouts.has(group.anchor)) {
+                return false;
+            }
+            collisionLayouts.add(group.anchor);
+            return true;
+        });
+        this.outerTagGroups = this.tagCollisionGroups.filter(a => !this.tagCollisionGroups.some(b =>
+            a !== b && a.nodes.length < b.nodes.length && a.nodes.every(node => node.tagKeys.has(b.key))));
+        // Isolated nodes have no links drawing them back toward the graph when tag hulls push them away.
+        const getPositionStrength = node => (node.tagKeys.size || node.degree === 0) ? 0.03 : 0.005;
+        this.simulation
+            .force("x", d3.forceX(node => node.tagX).strength(groups.size ? getPositionStrength : 0.2))
+            .force("y", d3.forceY(node => node.tagY).strength(groups.size ? getPositionStrength : 0.4))
+            .force("tagSeparation", groups.size ? this.separateTagGroups : null)
+            .force("untaggedRepulsion", groups.size ? this.repelUntaggedNodes : null)
+            .force("tagCohesion", groups.size ? this.pullTagGroupsTogether : null);
+
+        const paintOrder = [...this.tagGroups].reverse();
+        this.tagElements = this.tagElementsG.selectAll(".resource-tag-boundary")
+            .data(paintOrder, group => group.key)
+            .join("path")
+            .classed("resource-tag-boundary", true)
+            .style("--tag-color", group => group.color);
+        this.tagControls = this.tagControlsG.selectAll(".resource-tag-controls")
+            .data(paintOrder, group => group.key)
+            .join(enter => {
+                const controls = enter.append("g").attr("class", "resource-tag-controls");
+                controls.append("text").attr("class", "resource-tag-label");
+                if (this.menuIcon) {
+                    // Keep the hover bridge outside the button so it doesn't stretch the focus outline.
+                    controls.append("rect")
+                        .attr("class", "resource-tag-menu-bridge")
+                        .attr("y", tagMenuCogYOffset - menuCogRadius)
+                        .attr("width", tagMenuCogGap + tagMenuBridgeOverlap)
+                        .attr("height", menuCogRadius * 2)
+                        .attr("fill", "transparent");
+                    this.appendMenuCog(controls, this.openTagContextMenu)
+                        .classed("resource-tag-menu-cog", true);
+                }
+                return controls;
+            });
+        const tagLabels = this.tagControls.select("text")
+            .text(group => group.label)
+            .attr("pointer-events", "all")
+            .call(this.tagGroupDrag)
+            .on("mousedown touchstart", event => event.stopPropagation());
+        this.tagControls
+            .on("mouseenter", (event, group) => this.updateNodeHighlights(group.nodes, group.key))
+            .on("mouseleave", this.unHoverNode);
+        if (this.enableTagSelection) {
+            tagLabels.on("click", this.selectTagGroup);
+        }
+        if (this.menuIcon) {
+            const getTagMenuLabel = group => this.menuIcon.tagLabelFormat.split("{0}").join(group.label);
+            this.tagControls.select(".resource-tag-menu-cog")
+                .attr("aria-label", getTagMenuLabel)
+                .attr("data-tooltip", getTagMenuLabel);
+        }
+        this.measureTagControls();
+        if (this.tagGroups.length && document.fonts.status === "loading") {
+            document.fonts.ready.then(() => {
+                this.measureTagControls();
+                this.positionTagControls();
+            });
+        }
+        this.nodeTagElements = this.nodeBackgroundFills.selectAll("path")
+            .data(paintOrder, group => group.key)
+            .join("path")
+            .classed("resource-tag-fill", true)
+            .style("--tag-color", group => group.color);
+        this.nodeElements.style("--resource-node-tag-tint", node => `url(#resource-node-tag-tint-${node.id})`);
+    }
+
+    measureTagControls() {
+        const hasMenu = !!this.menuIcon;
+        this.tagControls?.each(function (group) {
+            const controls = d3.select(this);
+            if (hasMenu) {
+                const labelWidth = controls.select(".resource-tag-label").node().getComputedTextLength();
+                const cogX = labelWidth + tagMenuCogGap + menuCogRadius;
+                controls.select(".resource-tag-menu-cog").attr("transform", `translate(${cogX},${tagMenuCogYOffset})`);
+                controls.select(".resource-tag-menu-bridge").attr("x", labelWidth);
+            }
+            const bounds = this.getBBox();
+            if (bounds.width > 0 && bounds.height > 0) {
+                group.controlBounds = bounds;
+            }
+        });
+    }
+
+    positionTagControls() {
+        const placed = [];
+        const gap = 8;
+        this.tagControls?.attr("transform", group => {
+            const [x, y] = group.labelAnchor;
+            let labelY = y;
+            if (group.controlBounds) {
+                const bounds = group.controlBounds;
+                const left = x + bounds.x;
+                const right = left + bounds.width;
+                let top = y + bounds.y;
+                let bottom = top + bounds.height;
+
+                // Leave labels on their own outlines unless the overlap covers at least half the smaller span
+                // on both axes. Labels on neighboring outlines can graze without obscuring one another.
+                const needsStacking = placed.some(other =>
+                    Math.min(right, other.right) - Math.max(left, other.left) >= Math.min(bounds.width, other.right - other.left) / 2 &&
+                    Math.min(bottom, other.bottom) - Math.max(top, other.top) >= Math.min(bounds.height, other.bottom - other.top) / 2);
+                if (needsStacking) {
+                    // Check lower controls first so each upward move only needs to consider controls still above it.
+                    for (const other of placed) {
+                        if (top >= other.bottom + gap) {
+                            break;
+                        }
+                        if (right + gap > other.left && left < other.right + gap && bottom + gap > other.top) {
+                            bottom = other.top - gap;
+                            top = bottom - bounds.height;
+                        }
+                    }
+                }
+                labelY = top - bounds.y;
+                const index = placed.findIndex(other => other.bottom < bottom);
+                placed.splice(index === -1 ? placed.length : index, 0, { left, right, top, bottom });
+            }
+            return `translate(${x},${labelY})`;
+        });
+    }
+
+    getCollisionRadius(node) {
+        return Math.min(90 + ((node.degree || 1) * 10), 180);
+    }
+
+    pullTagGroupsTogether = alpha => {
+        for (const layout of this.tagLayouts) {
+            const x = d3.mean(layout.nodes, node => node.x);
+            const y = d3.mean(layout.nodes, node => node.y);
+            for (const node of layout.nodes) {
+                // Shared members target the average of their groups' actual centers, not just fixed anchors.
+                const strength = 0.6 * alpha / node.tagAnchors.length;
+                node.vx += (x - node.x) * strength;
+                node.vy += (y - node.y) * strength;
+            }
+        }
+    };
+
+    separateTagGroups = () => {
+        for (let i = 0; i < this.tagCollisionGroups.length; i++) {
+            const a = this.tagCollisionGroups[i];
+            for (let j = i + 1; j < this.tagCollisionGroups.length; j++) {
+                const b = this.tagCollisionGroups[j];
+                if (a.nodes.some(node => node.tagKeys.has(b.key))) {
+                    continue;
+                }
+                const hullA = this.getTagHull(a, true);
+                const hullB = this.getTagHull(b, true);
+                const separation = this.getHullSeparation(hullA, hullB);
+                if (!separation) {
+                    continue;
+                }
+                const x = separation.x / separation.distance;
+                const y = separation.y / separation.distance;
+                const project = point => point[0] * x + point[1] * y;
+                const [minA] = d3.extent(hullA, project);
+                const [, maxB] = d3.extent(hullB, project);
+                // Move only members on the contacting sides. Translating whole groups stretches shared
+                // memberships and displaces linked members that weren't involved in the overlap.
+                for (const node of a.nodes) {
+                    const [min] = d3.extent(this.getPredictedNodeHull(node), project);
+                    const push = Math.max(0, maxB + tagGroupGap - min + this.getTagPadding(a)) * 0.25;
+                    node.vx += x * push;
+                    node.vy += y * push;
+                }
+                for (const node of b.nodes) {
+                    const [, max] = d3.extent(this.getPredictedNodeHull(node), project);
+                    const push = Math.max(0, max + this.getTagPadding(b) - minA + tagGroupGap) * 0.25;
+                    node.vx -= x * push;
+                    node.vy -= y * push;
+                }
+            }
+        }
+    };
+
+    repelUntaggedNodes = () => {
+        for (const node of this.nodes) {
+            if (node.tagKeys.size) {
+                continue;
+            }
+            for (const group of this.outerTagGroups) {
+                const separation = this.getHullSeparation(this.getPredictedNodeHull(node), this.getTagHull(group, true));
+                if (!separation) {
+                    continue;
+                }
+                const scale = 0.5 / (group.nodes.length + 1);
+                node.vx += separation.x * scale * group.nodes.length;
+                node.vy += separation.y * scale * group.nodes.length;
+                // Let the group react too, so exclusion doesn't simply stretch the resource's links.
+                for (const member of group.nodes) {
+                    member.vx -= separation.x * scale;
+                    member.vy -= separation.y * scale;
+                }
+            }
+        }
+    };
+
+    getHullSeparation(a, b) {
+        // The separating-axis test finds the shortest translation between convex envelopes, including
+        // containment. The gap leaves room for the rendered spline to bow beyond the hull's straight edges.
+        let separation = null;
+        for (const polygon of [a, b]) {
+            for (let i = 0; i < polygon.length; i++) {
+                const p = polygon[i];
+                const q = polygon[(i + 1) % polygon.length];
+                const length = Math.hypot(q[0] - p[0], q[1] - p[1]);
+                if (!length) {
+                    continue;
+                }
+                const x = -(q[1] - p[1]) / length;
+                const y = (q[0] - p[0]) / length;
+                const project = point => point[0] * x + point[1] * y;
+                const [minA, maxA] = d3.extent(a, project);
+                const [minB, maxB] = d3.extent(b, project);
+                const positive = maxB - minA + tagGroupGap;
+                const negative = maxA - minB + tagGroupGap;
+                if (positive <= 0 || negative <= 0) {
+                    return null;
+                }
+                const distance = Math.min(positive, negative);
+                if (!separation || distance < separation.distance) {
+                    const direction = positive < negative ? 1 : -1;
+                    separation = { x: x * direction * distance, y: y * direction * distance, distance };
+                }
+            }
+        }
+        return separation;
+    }
+
+    getPredictedNodeHull(node) {
+        // Match forceCollide: anticipate motion and adjust velocities without cooling away the constraint.
+        // https://d3js.org/d3-force/collide#collide_strength
+        const left = node.x + node.vx + node.bounds.x;
+        const top = node.y + node.vy + node.bounds.y;
+        const right = left + node.bounds.width;
+        const bottom = top + node.bounds.height;
+        return [[left, top], [right, top], [right, bottom], [left, bottom]];
+    }
+
+    getTagPadding(group) {
+        return tagBoundaryBasePadding + group.level * tagBoundaryPaddingPerLevel;
+    }
+
+    getTagHull(group, anticipateMovement = false) {
+        const padding = this.getTagPadding(group);
+        const points = [];
+        for (const node of group.nodes) {
+            const bounds = node.bounds;
+            const left = node.x + (anticipateMovement ? node.vx : 0) + bounds.x;
+            const top = node.y + (anticipateMovement ? node.vy : 0) + bounds.y;
+            const right = left + bounds.width;
+            const bottom = top + bounds.height;
+            // Sample a padded rectangle, including the resource's measured label. Unlike a hull of node centers,
+            // this also encloses a single resource or two collinear resources.
+            points.push([left - padding, top], [left, top - padding], [right, top - padding], [right + padding, top],
+                [right + padding, bottom], [right, bottom + padding], [left, bottom + padding], [left - padding, bottom]);
+        }
+        // These are visual envelopes, not partitions: shared membership requires overlap, and a convex hull can
+        // also cover unrelated resources between members.
+        return d3.polygonHull(points);
+    }
+
+    updateResources(newResources) {
+        const resourcesByName = new Map(newResources.map(resource => [resource.name, resource]));
+        const hasStructureChanged = this.resourcesChanged(this.resources, resourcesByName);
+        // Preserve the simulation's node order when the incoming order changes without a structural change.
+        this.resources = hasStructureChanged ? newResources : this.resources.map(resource => resourcesByName.get(resource.name));
+        const hasAddedNodes = this.updateNodes(this.resources);
 
         // Update nodes
         this.nodeElements = this.nodeElementsG
@@ -429,18 +839,28 @@ class ResourceGraph {
             .on('mouseenter', this.hoverNode)
             .on('mouseleave', this.unHoverNode);
         newNodesContainer
-            .append("circle")
-            .attr("r", 56)
-            .attr("class", "resource-node")
-            .attr("stroke", "white")
-            .attr("stroke-width", "4");
+            .append("pattern")
+            .attr("class", "resource-node-tag-pattern")
+            .attr("id", node => `resource-node-tag-tint-${node.id}`)
+            .attr("href", "#resource-node-tag-tint");
         newNodesContainer
             .append("circle")
-            .attr("r", 53)
+            .attr("r", resourceNodeRadius)
+            .attr("class", "resource-node");
+        newNodesContainer
+            .append("circle")
+            .attr("r", resourceNodeRadius)
+            .attr("class", "resource-node-tag-tint");
+        newNodesContainer
+            .append("circle")
+            .attr("r", resourceNodeRadius)
             .attr("class", "resource-node-border");
+        const iconSize = 48;
+        const halfIconSize = iconSize / 2;
+        const iconLiftForEndpoint = 13;
         var iconTransform = newNodesContainer
             .append("g")
-            .attr("transform", n => n.endpointText ? "translate(-24,-37)" : "translate(-24,-24)")
+            .attr("transform", n => `translate(${-halfIconSize},${-halfIconSize - (n.endpointText ? iconLiftForEndpoint : 0)})`);
         var iconPath = iconTransform
             .append("path");
         iconPath
@@ -450,8 +870,6 @@ class ResourceGraph {
 
         // Icon paths could be mixed size. We need to transform icons to always be displayed at a consistent size.
         iconPath.each(function (d) {
-            const iconSize = 48;
-
             const path = d3.select(this);
             const node = path.node();
             const bbox = node.getBBox();
@@ -469,7 +887,7 @@ class ResourceGraph {
 
             // apply scaling & centering inside this group
             path.attr("transform",
-                `translate(${iconSize / 2},${iconSize / 2}) scale(${scale}) translate(${-cx},${-cy})`);
+                `translate(${halfIconSize},${halfIconSize}) scale(${scale}) translate(${-cx},${-cy})`);
         });
 
         var endpointGroup = newNodesContainer
@@ -528,49 +946,9 @@ class ResourceGraph {
         // so mirroring it vertically puts the cog at the bottom-right ~(35,43). Hidden until the node is
         // hovered (see .resource-menu-cog CSS); it makes the node's interactivity discoverable by opening
         // the same context menu as right-clicking the node.
-        var cogGroup = newNodesContainer
-            .append("g")
-            .attr("class", "resource-menu-cog")
+        this.appendMenuCog(newNodesContainer, this.openResourceContextMenu)
             .attr("id", n => `resource-menu-cog-${n.id}`)
-            .attr("transform", "translate(35,43)")
-            .attr("role", "button")
-            .attr("tabindex", 0)
-            .attr("aria-label", n => this.getResourceMenuLabel(n))
-            .attr("aria-haspopup", "menu")
-            .attr("aria-expanded", "false")
-            // D3's drag handler is attached to the ancestor resource group. Stop drag-start
-            // events here so an imprecise cog click can never move the resource node.
-            .on('mousedown touchstart', event => event.stopPropagation())
-            .on('keydown', this.cogMenuKeyDown)
-            .on('click', this.cogMenuClick);
-        cogGroup
-            .append("circle")
-            .attr("r", 14)
-            .attr("class", "resource-menu-cog-background");
-        cogGroup.attr("data-tooltip", n => this.getResourceMenuLabel(n));
-        if (this.menuIcon) {
-            var cogIcon = cogGroup
-                .append("path")
-                .attr("class", "resource-menu-cog-icon")
-                .attr("d", this.menuIcon.path);
-
-            // Scale and center the icon inside the cog background, matching how resource icons are sized.
-            cogIcon.each(function () {
-                const iconSize = 16;
-                const path = d3.select(this);
-                const bbox = this.getBBox();
-                const largestDimension = Math.max(bbox.width, bbox.height);
-                if (!Number.isFinite(largestDimension) || largestDimension <= 0) {
-                    path.attr("transform", null);
-                    return;
-                }
-                const scale = iconSize / largestDimension;
-                const cx = bbox.x + bbox.width / 2;
-                const cy = bbox.y + bbox.height / 2;
-
-                path.attr("transform", `scale(${scale}) translate(${-cx},${-cy})`);
-            });
-        }
+            .attr("transform", "translate(35,43)");
 
         newNodes.transition()
             .attr("opacity", 1);
@@ -629,34 +1007,21 @@ class ResourceGraph {
             .attr("fill", n => n.stateIcon.color)
             .attr("data-tooltip", n => n.stateIcon.tooltip);
 
-        // Update links
-        this.linkElements = this.linkElementsG
-            .selectAll("line")
-            .data(this.links, (d) => { return d.id; });
+        this.measureNodeBounds();
 
-        this.linkElements
-            .exit()
-            .transition()
-            .attr("opacity", 0)
-            .remove();
-
-        var newLinks = this.linkElements
-            .enter().append("line")
-            .attr("opacity", 0)
-            .attr("class", "resource-link");
-
-        newLinks.transition()
-            .attr("opacity", 1);
-
-        this.linkElements = newLinks.merge(this.linkElements);
-
-        this.simulation
-            .nodes(this.nodes)
-            .on('tick', this.onTick);
-
-        this.simulation.force("link").links(this.links);
         if (hasStructureChanged) {
-            this.simulation.stop();
+            if (hasAddedNodes && !this.nodes.some(node => node.fx != null || node.fy != null)) {
+                // Use D3's fresh starting positions instead of mixing the previous layout with newly placed nodes.
+                for (const node of this.nodes) {
+                    node.x = node.y = NaN;
+                    node.vx = node.vy = 0;
+                }
+                this.hasFitGraph = false;
+            }
+            this.updateTagGroups();
+            this.updateLinks(resourcesByName);
+            this.simulation.stop().nodes(this.nodes).on('tick', this.onTick);
+            this.linkForce.links(this.links);
 
             // Set alpha (give energy) and simulate the graph before rendering.
             // This prevents the graph from jumping around when loaded or changed.
@@ -664,13 +1029,14 @@ class ResourceGraph {
             for (let i = 0; i < 300; i++) {
                 this.simulation.tick();
             }
-            this.onTick();
-            if (!this.hasFitInitialGraph) {
-                this.hasFitInitialGraph = this.fitGraph(false);
-            }
+            this.simulation.restart();
         }
 
-        this.simulation.restart();
+        // Redraw measured outlines after a display update without advancing the simulation.
+        this.onTick();
+        if (hasStructureChanged && !this.hasFitGraph) {
+            this.hasFitGraph = this.fitGraph(false);
+        }
 
         function trimText(text, maxLength) {
             if (!text) {
@@ -683,7 +1049,78 @@ class ResourceGraph {
         }
     }
 
+    measureNodeBounds() {
+        this.nodeElements.each(function (node) {
+            const bounds = this.getBBox();
+            // Hidden SVG elements report empty bounds. Keep the last measurement until resize can measure again.
+            if (!node.bounds || (bounds.width > 0 && bounds.height > 0)) {
+                node.bounds = bounds;
+            }
+        });
+    }
+
+    updateLinks(resourcesByName) {
+        this.links = this.resources.flatMap(resource => resource.referencedNames
+            .filter(name => resourcesByName.has(name))
+            .map(name => ({
+                id: `${resource.name}-${name}`,
+                target: name,
+                source: resource.name,
+                strength: 0.7
+            })));
+
+        const linkElements = this.linkElementsG.selectAll("line").data(this.links, link => link.id);
+        linkElements.exit().transition().attr("opacity", 0).remove();
+
+        const newLinks = linkElements.enter().append("line")
+            .attr("opacity", 0)
+            .attr("class", "resource-link");
+        newLinks.transition().attr("opacity", 1);
+
+        this.linkElements = newLinks.merge(linkElements);
+    }
+
+    updateLinkMask() {
+        const [minX = 0, maxX = 0] = d3.extent(this.nodes, node => node.x);
+        const [minY = 0, maxY = 0] = d3.extent(this.nodes, node => node.y);
+        const padding = selectedResourceLinkMaskRadius + 4;
+        const x = minX - padding;
+        const y = minY - padding;
+        const width = maxX - minX + padding * 2;
+        const height = maxY - minY + padding * 2;
+        // Explicit graph-space bounds also work for horizontal/vertical links and nodes dragged outside the viewport.
+        for (const element of [this.linkMask, this.linkMaskBackground]) {
+            element
+                .attr("x", x)
+                .attr("y", y)
+                .attr("width", width)
+                .attr("height", height);
+        }
+        this.linkMaskNodes = this.linkMask.selectAll("circle")
+            .data(this.nodes, node => node.id)
+            .join("circle")
+            .attr("fill", "black")
+            .attr("cx", node => node.x)
+            .attr("cy", node => node.y)
+            .attr("r", node => this.nodeEquals(node, this.selectedNode) ? selectedResourceLinkMaskRadius : resourceLinkMaskRadius);
+    }
+
     onTick = () => {
+        this.updateLinkMask();
+        const outline = d3.line().curve(d3.curveCatmullRomClosed.alpha(0.5));
+        this.tagElements?.attr("d", group => {
+            const hull = this.getTagHull(group);
+            group.path = outline(hull);
+            const top = hull.reduce((a, b) => b[1] < a[1] || (b[1] === a[1] && b[0] < a[0]) ? b : a);
+            group.labelAnchor = [top[0], top[1] - 8];
+            return group.path;
+        });
+        this.positionTagControls();
+        this.nodeTagElements?.attr("d", group => group.path);
+        // Keep each pattern tile node-sized while sampling the corresponding area of the group fills.
+        this.nodeElements.select(".resource-node-tag-pattern")
+            .attr("viewBox", node => [node.x - resourceNodeRadius, node.y - resourceNodeRadius,
+                resourceNodeRadius * 2, resourceNodeRadius * 2]);
         this.nodeElements.attr("transform", function (d) { return "translate(" + d.x + "," + d.y + ")"; });
         this.linkElements
             .attr('x1', function (link) { return link.source.x })
@@ -708,6 +1145,48 @@ class ResourceGraph {
         return this.menuIcon ? this.menuIcon.labelFormat.split('{0}').join(node.label) : "";
     }
 
+    appendMenuCog(container, openMenu) {
+        const cog = container.append("g")
+            .attr("class", "resource-menu-cog")
+            .attr("role", "button")
+            .attr("tabindex", 0)
+            .attr("aria-haspopup", "menu")
+            .attr("aria-expanded", "false")
+            .on("mousedown touchstart", event => event.stopPropagation())
+            .on("click", event => {
+                event.preventDefault();
+                event.stopPropagation();
+                return openMenu(event.currentTarget.__data__, event.clientX, event.clientY, event.currentTarget, null);
+            })
+            .on("keydown", event => {
+                if (event.repeat || (event.key !== "Enter" && event.key !== " ")) {
+                    return;
+                }
+                event.preventDefault();
+                event.stopPropagation();
+                const trigger = event.currentTarget;
+                const bounds = trigger.getBoundingClientRect();
+                return openMenu(trigger.__data__, Math.round(bounds.left + bounds.width / 2),
+                    Math.round(bounds.top + bounds.height / 2), trigger, trigger.id);
+            });
+        cog.append("circle").attr("r", menuCogRadius).attr("class", "resource-menu-cog-background");
+        if (this.menuIcon) {
+            cog.append("path")
+                .attr("class", "resource-menu-cog-icon")
+                .attr("d", this.menuIcon.path)
+                .each(function () {
+                    const bbox = this.getBBox();
+                    const largestDimension = Math.max(bbox.width, bbox.height);
+                    if (Number.isFinite(largestDimension) && largestDimension > 0) {
+                        const cx = bbox.x + bbox.width / 2;
+                        const cy = bbox.y + bbox.height / 2;
+                        d3.select(this).attr("transform", `scale(${16 / largestDimension}) translate(${-cx},${-cy})`);
+                    }
+                });
+        }
+        return cog;
+    }
+
     isNeighborLink(node, link) {
         return link.target.id === node.id || link.source.id === node.id
     }
@@ -729,50 +1208,32 @@ class ResourceGraph {
         event.preventDefault();
         event.stopPropagation();
 
-        await this.openResourceContextMenu(data.id, event.clientX, event.clientY, null, null);
+        await this.openResourceContextMenu(data, event.clientX, event.clientY, null, null);
     };
 
-    cogMenuClick = async (event) => {
-        // currentTarget is the cog group the handler is attached to. Its datum is inherited from the
-        // node group (d3 propagates data to appended children).
-        var data = event.currentTarget.__data__;
+    openResourceContextMenu = (node, clientX, clientY, trigger, focusElementId) =>
+        this.openGraphContextMenu(trigger, "ResourceContextMenu", node.id, clientX, clientY, focusElementId);
 
-        // Stop the click from also reaching the node's click handler (which would select/deselect it).
-        event.preventDefault();
-        event.stopPropagation();
+    openTagContextMenu = (group, clientX, clientY, trigger) =>
+        this.openGraphContextMenu(trigger, "TagGroupContextMenu", group.label, clientX, clientY);
 
-        await this.openResourceContextMenu(data.id, event.clientX, event.clientY, event.currentTarget, null);
-    };
-
-    cogMenuKeyDown = async (event) => {
-        if (event.repeat || (event.key !== 'Enter' && event.key !== ' ')) {
-            return;
-        }
-
-        event.preventDefault();
-        event.stopPropagation();
-
-        var data = event.currentTarget.__data__;
-        var bounds = event.currentTarget.getBoundingClientRect();
-        await this.openResourceContextMenu(
-            data.id,
-            Math.round(bounds.left + bounds.width / 2),
-            Math.round(bounds.top + bounds.height / 2),
-            event.currentTarget,
-            event.currentTarget.id);
-    };
-
-    openResourceContextMenu = (id, clientX, clientY, trigger, focusElementId) => {
+    async openGraphContextMenu(trigger, method, ...args) {
         this.contextMenuTrigger?.setAttribute("aria-expanded", "false");
         this.contextMenuTrigger = trigger;
         this.contextMenuChanged(true);
 
-        return this.resourcesInterop.invokeMethodAsync('ResourceContextMenu', id, clientX, clientY, focusElementId)
-            .catch(error => {
+        try {
+            const opened = await this.resourcesInterop.invokeMethodAsync(method, ...args);
+            if (opened === false && this.contextMenuTrigger === trigger) {
                 this.contextMenuChanged(false);
-                throw error;
-            });
-    };
+            }
+        } catch (error) {
+            if (this.contextMenuTrigger === trigger) {
+                this.contextMenuChanged(false);
+            }
+            throw error;
+        }
+    }
 
     contextMenuChanged = (open) => {
         this.openContextMenu = open;
@@ -781,6 +1242,16 @@ class ResourceGraph {
             this.contextMenuTrigger = null;
             this.updateNodeHighlights(null);
         }
+    };
+
+    selectTagGroup = event => {
+        event.preventDefault();
+        event.stopPropagation();
+        return this.resourcesInterop.invokeMethodAsync('SelectTagGroup', event.currentTarget.__data__.label, {
+            ctrlKey: event.ctrlKey,
+            metaKey: event.metaKey,
+            shiftKey: event.shiftKey
+        });
     };
 
     selectNode = (event) => {
@@ -797,7 +1268,7 @@ class ResourceGraph {
         // Scale selected node if it is not the same as the previous selected node.
         var clearSelection = this.nodeEquals(data, this.selectedNode);
         if (!clearSelection) {
-            changeScale(this, data.id, 1.2);
+            changeScale(this, data.id, selectedNodeScale);
         }
 
         this.selectedNode = data;
@@ -824,7 +1295,7 @@ class ResourceGraph {
     hoverNode = (event) => {
         var mouseoverNode = event.currentTarget.__data__;
 
-        this.updateNodeHighlights(mouseoverNode);
+        this.updateNodeHighlights([mouseoverNode]);
     }
 
     unHoverNode = (event) => {
@@ -838,8 +1309,12 @@ class ResourceGraph {
         return resource1.id === resource2.id;
     }
 
-    updateNodeHighlights = (mouseoverNode) => {
-        var mouseoverNeighbors = mouseoverNode ? this.getNeighbors(mouseoverNode) : [];
+    updateNodeHighlights = (mouseoverNodes, hoveredTagKey = null) => {
+        for (const paths of [this.tagElements, this.nodeTagElements]) {
+            paths?.classed("resource-tag-fill-hover", group => group.key === hoveredTagKey);
+        }
+        mouseoverNodes = mouseoverNodes || [];
+        var mouseoverNeighbors = mouseoverNodes.flatMap(node => this.getNeighbors(node));
         var selectNeighbors = this.selectedNode ? this.getNeighbors(this.selectedNode) : [];
         var neighbors = [...mouseoverNeighbors, ...selectNeighbors];
 
@@ -849,7 +1324,7 @@ class ResourceGraph {
             if (node.isHidden) {
                 classNames.push('resource-group-hidden');
             }
-            if (this.nodeEquals(node, mouseoverNode)) {
+            if (mouseoverNodes.some(mouseoverNode => this.nodeEquals(node, mouseoverNode))) {
                 classNames.push('resource-group-hover');
             }
             if (this.nodeEquals(node, this.selectedNode)) {
@@ -860,15 +1335,8 @@ class ResourceGraph {
             }
             return classNames.join(' ');
         });
-        this.linkElements.attr('class', (link) => {
-            var nodes = [];
-            if (mouseoverNode) {
-                nodes.push(mouseoverNode);
-            }
-            if (this.selectedNode) {
-                nodes.push(this.selectedNode);
-            }
-            return this.getLinkClass(nodes, this.selectedNode, link);
-        });
+        var highlightedNodes = this.selectedNode ? [...mouseoverNodes, this.selectedNode] : mouseoverNodes;
+        this.linkElements.attr('class', link => this.getLinkClass(highlightedNodes, this.selectedNode, link));
+        this.updateLinkMask();
     };
 };

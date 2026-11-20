@@ -50,6 +50,7 @@ internal sealed partial class TemplateEngineFactory(
         ObjectDisposedException.ThrowIf(_disposed, this);
         if (source is null)
         {
+            logger.LogDebug("Skipping template-engine discovery because no template source was supplied.");
             return [];
         }
 
@@ -59,6 +60,7 @@ internal sealed partial class TemplateEngineFactory(
             : await GetRepositoryTemplateAsync(source.Repository, source.Path, source.RepositoryRef, cancellationToken);
         if (_discoveredTemplates.TryGetValue(fullPath, out var cached))
         {
+            logger.LogDebug("Reusing {TemplateCount} discovered templates from {TemplatePath}.", cached.Length, fullPath);
             return cached;
         }
 
@@ -87,9 +89,12 @@ internal sealed partial class TemplateEngineFactory(
     {
         if (!Directory.Exists(fullPath))
         {
+            logger.LogDebug("Template discovery directory {TemplatePath} does not exist.", fullPath);
             throw new TemplateDiscoveryException(CliExitCodes.InvalidCommand,
                 string.Format(CultureInfo.CurrentCulture, NewCommandStrings.TemplateDirectoryNotFound, fullPath));
         }
+
+        logger.LogDebug("Discovering templates in {TemplatePath}.", fullPath);
 
         // Register concrete built-ins instead of loading engine extensions dynamically, which
         // Native AOT cannot support. A virtual hive keeps these templates out of dotnet new's state.
@@ -107,6 +112,7 @@ internal sealed partial class TemplateEngineFactory(
         var failures = installed.Where(result => !result.Success).ToArray();
         if (failures.Length > 0)
         {
+            logger.LogDebug("Template source installation failed for {TemplatePath}; {FailureCount} install results failed.", fullPath, failures.Length);
             throw new TemplateDiscoveryException(CliExitCodes.FailedToInstallTemplates,
                 string.Format(CultureInfo.CurrentCulture, NewCommandStrings.LocalTemplateLoadFailed,
                     string.Join(", ", failures.Select(result => result.Error))));
@@ -128,12 +134,14 @@ internal sealed partial class TemplateEngineFactory(
         cancellationToken.ThrowIfCancellationRequested();
         if (templates.Length == 0)
         {
+            logger.LogDebug("No templates were discovered in {TemplatePath}.", fullPath);
             throw new TemplateDiscoveryException(CliExitCodes.InvalidCommand,
                 string.Format(CultureInfo.CurrentCulture, NewCommandStrings.NoLocalTemplatesFound, fullPath));
         }
 
         // Returned callbacks still use the engine's mounts. Keep them alive through generation;
         // immutable repository checkouts are retained in the SHA-keyed cache across invocations.
+        logger.LogDebug("Discovered {TemplateCount} templates in the configured source.", templates.Length);
         return templates;
     }
 
@@ -149,12 +157,14 @@ internal sealed partial class TemplateEngineFactory(
             // Ref resolution can authenticate even when its commit is already cached.
             // Keep Git outside animated status so authentication prompts remain visible.
             var resolveRemoteRef = reference is null || !GitClient.IsCommitSha(reference);
+            logger.LogDebug("Resolving repository template source; remote reference lookup required: {ResolveRemoteRef}.", resolveRemoteRef);
             if (resolveRemoteRef)
             {
                 interactionService.DisplayTemplateGitFetchNotice(repository, templatePath, reference, hostEnvironment.SupportsInteractiveInput);
             }
             var sha = await WithGitTimeoutAsync(
                 token => git.ResolveReferenceAsync(repository, reference, executionContext.WorkingDirectory, GitCommandMode.Captured, token), cancellationToken);
+            logger.LogDebug("Resolved repository template source to commit {Commit}.", sha);
             cancellationToken.ThrowIfCancellationRequested();
             // Different paths and refs at the same commit share the complete repository snapshot.
             // NUL separates the repository address and SHA without ambiguous delimiters.
@@ -164,9 +174,11 @@ internal sealed partial class TemplateEngineFactory(
             DirectoryHelper.CreateWithOwnerOnlyPermissions(cacheRoot);
             if (Directory.Exists(cacheDirectory))
             {
+                logger.LogDebug("Reusing cached repository template checkout at {CacheDirectory}.", cacheDirectory);
                 return GetRepositoryTemplatePath(cacheDirectory, relativePath);
             }
 
+            logger.LogDebug("Repository template checkout is not cached; fetching commit {Commit}.", sha);
             if (!resolveRemoteRef)
             {
                 interactionService.DisplayTemplateGitFetchNotice(repository, templatePath, reference, hostEnvironment.SupportsInteractiveInput);
@@ -185,21 +197,24 @@ internal sealed partial class TemplateEngineFactory(
                 // Publish only complete checkouts. Concurrent invocations can safely use the winner;
                 // the losing temporary checkout is removed by its lease owner on disposal.
                 checkout.MoveTo(cacheDirectory);
+                logger.LogDebug("Published repository template checkout at {CacheDirectory}.", cacheDirectory);
             }
             catch (IOException) when (Directory.Exists(cacheDirectory))
             {
-                logger.LogDebug("Template checkout was already cached at {Path}.", cacheDirectory);
+                logger.LogDebug("Repository template checkout was already cached at {CacheDirectory}.", cacheDirectory);
             }
 
             return GetRepositoryTemplatePath(cacheDirectory, relativePath);
         }
         catch (GitReferenceException ex)
         {
+            logger.LogDebug("Repository template reference was not found or the checkout did not match the requested commit.");
             throw new TemplateDiscoveryException(CliExitCodes.FailedToInstallTemplates,
                 string.Format(CultureInfo.CurrentCulture, NewCommandStrings.TemplateRepositoryRefNotFound, ex.Reference));
         }
         catch (GitCommandException ex)
         {
+            logger.LogDebug("Repository template acquisition failed: {Failure}, exit code {ExitCode}.", ex.Failure, ex.ExitCode);
             var message = ex.ExitCode is int exitCode
                 ? string.Format(CultureInfo.CurrentCulture, NewCommandStrings.TemplateRepositoryGitExited, exitCode, ex.Message)
                 : ex.Message;
@@ -219,6 +234,7 @@ internal sealed partial class TemplateEngineFactory(
                 var localPath = Path.GetFullPath(repository, executionContext.WorkingDirectory.FullName);
                 if (Directory.Exists(localPath))
                 {
+                    logger.LogDebug("Resolving repository template source as a local repository.");
                     repository = localPath;
                 }
             }
@@ -234,9 +250,11 @@ internal sealed partial class TemplateEngineFactory(
             var actualSha = await git.GetCommitAsync(location, "HEAD", GitCommandMode.Captured, token);
             if (!string.Equals(actualSha, commitSha, StringComparison.OrdinalIgnoreCase))
             {
+                logger.LogDebug("Repository template checkout commit {ActualCommit} does not match resolved commit {ExpectedCommit}.", actualSha, commitSha);
                 throw new GitReferenceException(commitSha);
             }
 
+            logger.LogDebug("Verified repository template checkout at commit {Commit}.", actualSha);
             return true;
         }, cancellationToken);
 
@@ -251,6 +269,7 @@ internal sealed partial class TemplateEngineFactory(
         }
         catch (OperationCanceledException) when (deadline.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
         {
+            logger.LogDebug("Repository template Git operation timed out.");
             throw new GitCommandException(GitFailure.TimedOut, null);
         }
     }
@@ -285,7 +304,7 @@ internal sealed partial class TemplateEngineFactory(
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            logger.LogWarning(ex, "Could not delete template checkout {Path}.", path);
+            logger.LogWarning("Could not delete template checkout because cleanup failed with {ExceptionType}.", ex.GetType().Name);
         }
     }
 
@@ -319,7 +338,7 @@ internal sealed partial class TemplateEngineFactory(
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            logger.LogWarning(ex, "Could not delete template checkout lease {Path}.", path);
+            logger.LogWarning("Could not delete template checkout lease because cleanup failed with {ExceptionType}.", ex.GetType().Name);
         }
     }
 

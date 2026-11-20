@@ -29,12 +29,12 @@
       </trans-unit>
       <trans-unit id="AspireSkillsFix">
         <source>Run 'aspire agent init' to configure skill sources and remove these copies.</source>
-        <target state="new">Run 'aspire agent init' to configure skill sources and remove these copies.</target>
+        <target state="translated">运行 'aspire agent init' 以配置技能源并移除这些副本。</target>
         <note>'aspire agent init' is a command and is not localizable.</note>
       </trans-unit>
       <trans-unit id="AspireSkillsMessage">
         <source>Found static copies of Aspire skills.</source>
-        <target state="new">Found static copies of Aspire skills.</target>
+        <target state="translated">找到 Aspire 技能的静态副本。</target>
         <note />
       </trans-unit>
       <trans-unit id="ChannelSuffixFormat">
@@ -591,8 +591,7 @@ The legacy file continues to work — this is a non-blocking warning.</source>
       </trans-unit>
       <trans-unit id="PendingMigrationFix">
         <source>Run 'aspire update --migrate' to apply the recommended migration.</source>
-        <target state="needs-review-translation">运行 'aspire update --migrate' 以应用建议的迁移。
-当前布局将继续工作 - 这是一个非阻塞警告。</target>
+        <target state="translated">运行 'aspire update --migrate' 以应用建议的迁移。</target>
         <note />
       </trans-unit>
       <trans-unit id="SdkCategoryHeader">

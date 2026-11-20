@@ -367,7 +367,7 @@ public partial class StructuredLogsTests : DashboardTestContext
         cut.WaitForAssertion(() =>
         {
             Assert.True(Services.GetRequiredService<PauseManager>().AreStructuredLogsPaused(out _));
-            Assert.Contains("Capture paused", cut.Markup);
+            Assert.Equal("Structured logs capture paused now", cut.Find(".pause-warning-message").TextContent.Trim());
         });
     }
 

@@ -18,6 +18,7 @@ using Google.Protobuf.WellKnownTypes;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Sections;
 using Microsoft.AspNetCore.Components.Web;
+using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.JSInterop;
@@ -931,6 +932,9 @@ public class ResourcesLayoutTests : DashboardTestContext
         cut.WaitForAssertion(() => Assert.Equal(["Tags:API", "Tags:Backend", "Tags:"],
             cut.FindAll(".resource-tag-group").Select(g => g.GetAttribute("data-resource-group-key"))));
         Assert.Equal(["api", "api", "cache"], cut.FindAll(".resource-tag-group .resource-row-name").Select(n => n.TextContent.Trim()));
+        Assert.Equal(new[] { "API", "Backend" }.Select(ColorGenerator.TagInstance.GetColorVariableByKey),
+            cut.FindComponents<FluentIcon<Microsoft.FluentUI.AspNetCore.Components.Icons.Filled.Size16.Tag>>()
+                .Select(icon => icon.Instance.CustomColor));
         Assert.Empty(Services.GetRequiredService<ResourceTagStore>().GetAllTags());
     }
 
@@ -1602,6 +1606,102 @@ public class ResourcesLayoutTests : DashboardTestContext
 
         var menuButton = cut.FindComponents<AspireMenuButton>().Single(b => b.Instance.Title == "Actions for api");
         Assert.Contains(menuButton.Instance.ItemsProvider(), item => item.Text == "Custom command");
+    }
+
+    [Fact]
+    public async Task TagActions_ExecuteOnlyEligibleResourcesFromWhenTheMenuOpened()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var executed = new ConcurrentQueue<string>();
+        static CommandViewModel Stop(CommandViewModelState state) =>
+            new(CommandViewModel.StopCommand, state, "Stop", "", confirmationMessage: "", argumentInputs: [], isHighlighted: true, iconName: "", iconVariant: IconVariant.Regular);
+        var enabled = Stop(CommandViewModelState.Enabled);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources:
+            [
+                ModelTestHelpers.CreateResource("api", commands: [enabled]),
+                ModelTestHelpers.CreateResource("worker", commands: [Stop(CommandViewModelState.Disabled)]),
+                ModelTestHelpers.CreateResource("setting", resourceType: KnownResourceTypes.Parameter, commands:
+                [
+                    new CommandViewModel(CommandViewModel.SetParameterCommand, CommandViewModelState.Enabled, "Set parameter", "",
+                        confirmationMessage: "", argumentInputs: [], isHighlighted: true, iconName: "", iconVariant: IconVariant.Regular)
+                ]),
+                ModelTestHelpers.CreateResource("cache", commands: [enabled])
+            ],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>,
+            executeResourceCommand: (resource, _, _, _, _) =>
+            {
+                executed.Enqueue(resource);
+                return Task.FromResult(new ResourceCommandResponseViewModel { Kind = ResourceCommandResponseKind.Succeeded });
+            }));
+        var storage = Assert.IsType<TestLocalStorage>(Services.GetRequiredService<ILocalStorage>());
+        storage.OnGetUnprotectedAsync = key => key == BrowserStorageKeys.ResourcePaneGrouping ? (true, "Tags") : (false, null);
+        var tags = Services.GetRequiredService<ResourceTagStore>();
+        tags.AddTag("api", "Backend");
+        tags.AddTag("worker", "Backend");
+        tags.AddTag("setting", "Backend");
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.ConsoleLogsUrl("cache"));
+        Render<FluentToastProvider>();
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
+        const string backendGroup = ".resource-tag-group[aria-label='Backend']";
+        cut.WaitForAssertion(() => Assert.Single(cut.FindAll($"{backendGroup} .resource-tag-action")));
+        Assert.Equal("1", cut.Find(".untagged .resource-tag-count").TextContent);
+        Assert.Empty(cut.FindAll(".untagged .resource-tag-action"));
+
+        var trigger = cut.Find($"{backendGroup} .resource-tag-action");
+        await trigger.ClickAsync(new MouseEventArgs());
+        var menu = cut.FindComponents<AspireMenu>().Single(m => m.Instance.Anchor == trigger.Id);
+        Assert.Equal(["cache"], cut.Instance.SelectedResourceNames);
+        var command = Assert.Single(menu.Instance.Items, item => !item.IsHeader);
+        Assert.Equal("Stop", command.Text);
+        Assert.Equal("1 of 3", command.Description);
+        Assert.False(command.IsDisabled);
+
+        await cut.InvokeAsync(() => tags.AddTag("cache", "Backend"));
+        cut.WaitForAssertion(() => Assert.Equal("4", cut.Find($"{backendGroup} .resource-tag-count").TextContent));
+        var openCommand = Assert.Single(menu.Instance.Items, item => !item.IsHeader);
+        await cut.InvokeAsync(openCommand.OnClick!);
+
+        Assert.Equal(["api"], executed);
+    }
+
+    [Fact]
+    public async Task TagActions_RowCommandIsReenabledOnCompletionWithoutResourceUpdates()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var response = new TaskCompletionSource<ResourceCommandResponseViewModel>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var command = new CommandViewModel("refresh", CommandViewModelState.Enabled, "Refresh", "",
+            confirmationMessage: "", argumentInputs: [], isHighlighted: true, iconName: "", iconVariant: IconVariant.Regular);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("api", commands: [command])],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>,
+            executeResourceCommand: (_, _, _, _, _) => response.Task));
+        var storage = Assert.IsType<TestLocalStorage>(Services.GetRequiredService<ILocalStorage>());
+        storage.OnGetUnprotectedAsync = key => key == BrowserStorageKeys.ResourcePaneGrouping ? (true, "Tags") : (false, null);
+        Services.GetRequiredService<ResourceTagStore>().AddTag("api", "Backend");
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.ConsoleLogsUrl("api"));
+        Render<FluentToastProvider>();
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
+        const string rowAction = "[data-resource-name='api'] .resource-row-actions fluent-button[aria-label='Refresh api']";
+        cut.WaitForAssertion(() => Assert.False(cut.Find(rowAction).HasAttribute("disabled")));
+
+        var trigger = cut.Find(".resource-tag-action");
+        await trigger.ClickAsync(new MouseEventArgs());
+        var menu = cut.FindComponents<AspireMenu>().Single(m => m.Instance.Anchor == trigger.Id);
+        var action = Assert.Single(menu.Instance.Items, item => !item.IsHeader);
+        Task execution = null!;
+        await cut.InvokeAsync(() => { execution = action.OnClick!(); });
+        try
+        {
+            cut.WaitForAssertion(() => Assert.True(cut.Find(rowAction).HasAttribute("disabled")));
+        }
+        finally
+        {
+            response.SetResult(new ResourceCommandResponseViewModel { Kind = ResourceCommandResponseKind.Succeeded });
+        }
+
+        await execution.DefaultTimeout();
+        cut.WaitForAssertion(() => Assert.False(cut.Find(rowAction).HasAttribute("disabled")));
     }
 
     [Fact]
@@ -2684,6 +2784,50 @@ public class ResourcesLayoutTests : DashboardTestContext
         await cut.InvokeAsync(menu.Instance.Items.Single(item => item.Id == "resource-grouping-None").OnClick!);
         Assert.Empty(cut.FindAll(".resource-tag-group"));
         Assert.Equal(["cache", "api", "worker"], cut.FindAll(".resource-row:not(.resource-row-all) .resource-row-name").Select(name => name.TextContent.Trim()));
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public async Task GraphTagSelection_MatchesSidebarIncludingParametersAndReplicas(bool ctrlKey, bool metaKey)
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var tagProperty = KnownProperties.Resource.TraitPrefix + KnownResourceTraits.Tag;
+        var resources = new[] { "api-1", "api-2" }.Select(name => ModelTestHelpers.CreateResource(name, displayName: "api", properties: new()
+        {
+            [tagProperty] = new(tagProperty, Value.ForList(Value.ForString("Backend")), false, null, 0, null, false)
+        })).ToList();
+        resources.Add(ModelTestHelpers.CreateResource("worker"));
+        resources.Add(ModelTestHelpers.CreateResource("parameter", resourceType: KnownResourceTypes.Parameter));
+        resources.Add(ModelTestHelpers.CreateResource("cache"));
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: resources, resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        var storage = Assert.IsType<TestLocalStorage>(Services.GetRequiredService<ILocalStorage>());
+        storage.OnGetUnprotectedAsync = key => key == BrowserStorageKeys.ResourcePaneGrouping ? (true, "Tags") : (false, null);
+        var tags = Services.GetRequiredService<ResourceTagStore>();
+        tags.AddTag("worker", "Backend");
+        tags.AddTag("parameter", "Backend");
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo(DashboardUrls.ResourceOverviewUrl("cache"));
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
+        var click = new MouseEventArgs { CtrlKey = ctrlKey, MetaKey = metaKey };
+
+        await cut.Find(".resource-tag-group[aria-label='Backend'] .resource-tag-link").ClickAsync(click);
+        cut.Render();
+        string[] expectedSelection = ctrlKey || metaKey
+            ? ["cache", "api-1", "api-2", "worker", "parameter"]
+            : ["api-1", "api-2", "worker", "parameter"];
+        Assert.Equal(expectedSelection, cut.Instance.SelectedResourceNames);
+        var sidebarUrl = navigation.Uri;
+
+        await cut.InvokeAsync(() => navigation.NavigateTo(DashboardUrls.ResourceOverviewUrl("cache")));
+        cut.Render();
+        await cut.Instance.SelectGraphTagGroupAsync("bAcKeNd", click, resources.Where(r => !r.IsParameter), showHiddenResources: false);
+        cut.Render();
+        cut.WaitForAssertion(() => Assert.Equal(expectedSelection, cut.Instance.SelectedResourceNames));
+        Assert.Equal(sidebarUrl, navigation.Uri);
     }
 
     [Theory]
