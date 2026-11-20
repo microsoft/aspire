@@ -217,7 +217,8 @@ internal sealed class AgentTelemetryCommand : BaseCommand
         AddIfValid(tags, TelemetryConstants.Tags.AgentClientName, parseResult.GetValue(_clientNameOption), static v => IsSafeIdentifier(v, maxLength: 64));
         // Session IDs must be GUIDs, matching the native hook. Aspire 13.5 hook scripts extract the first
         // "sessionId" anywhere in the payload, so a nested tool-input value could otherwise be forwarded.
-        AddIfValid(tags, TelemetryConstants.Tags.AgentSessionId, parseResult.GetValue(_sessionIdOption), static v => Guid.TryParseExact(v, "D", out _));
+        // The length check matters because Guid parsing trims surrounding whitespace, but the raw value is recorded.
+        AddIfValid(tags, TelemetryConstants.Tags.AgentSessionId, parseResult.GetValue(_sessionIdOption), static v => v.Length == 36 && Guid.TryParseExact(v, "D", out _));
         AddIfValid(tags, TelemetryConstants.Tags.AgentSkillName, parseResult.GetValue(_skillNameOption), v => IsSafeIdentifier(v, maxLength: 128) && catalog.IsKnownSkill(v));
         AddIfValid(tags, TelemetryConstants.Tags.AgentToolName, parseResult.GetValue(_toolNameOption), v => IsSafeIdentifier(v, maxLength: 128) && catalog.IsKnownMcpTool(v));
         AddIfValid(tags, TelemetryConstants.Tags.AgentFileReference, parseResult.GetValue(_fileReferenceOption), v => IsSafeReference(v) && catalog.IsKnownReference(v));

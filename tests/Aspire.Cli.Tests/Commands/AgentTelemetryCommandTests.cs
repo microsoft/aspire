@@ -290,8 +290,10 @@ public class AgentTelemetryCommandTests(ITestOutputHelper outputHelper)
         }
     }
 
-    [Fact]
-    public async Task AgentTelemetry_DropsNonGuidSessionId()
+    [Theory]
+    [InlineData("ExamplePrivateValue")]
+    [InlineData(" 7f0f3ad1-7a8c-4b52-9b0f-3b6a7c2f9d10 ")]
+    public async Task AgentTelemetry_DropsNonGuidSessionId(string sessionId)
     {
         // Aspire 13.5 hook scripts extract any nested "sessionId" string from the client payload,
         // so the command must reject values that are not opaque session GUIDs.
@@ -306,7 +308,7 @@ public class AgentTelemetryCommandTests(ITestOutputHelper outputHelper)
             using var provider = services.BuildServiceProvider();
 
             var command = provider.GetRequiredService<RootCommand>();
-            var result = command.Parse("agent telemetry --event-type skill_invocation --skill-name aspire --session-id ExamplePrivateValue");
+            var result = command.Parse(["agent", "telemetry", "--event-type", "skill_invocation", "--skill-name", "aspire", "--session-id", sessionId]);
 
             var exitCode = await result.InvokeAsync().DefaultTimeout();
 
