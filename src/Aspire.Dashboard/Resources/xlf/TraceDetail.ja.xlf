@@ -4,22 +4,22 @@
     <body>
       <trans-unit id="TotalItemsFooterPluralText">
         <source>Showing &lt;strong&gt;{0} spans&lt;/strong&gt;</source>
-        <target state="new">Showing &lt;strong&gt;{0} spans&lt;/strong&gt;</target>
+        <target state="translated">&lt;strong&gt;{0} 個のスパン&lt;/strong&gt;を表示しています</target>
         <note>{0} is a number. This is raw markup, so &lt;strong&gt; and &lt;/strong&gt; should not be modified</note>
       </trans-unit>
       <trans-unit id="TotalItemsFooterSingularText">
         <source>Showing &lt;strong&gt;{0} span&lt;/strong&gt;</source>
-        <target state="new">Showing &lt;strong&gt;{0} span&lt;/strong&gt;</target>
+        <target state="translated">&lt;strong&gt;{0} 個のスパン&lt;/strong&gt;を表示しています</target>
         <note>{0} is a number. This is raw markup, so &lt;strong&gt; and &lt;/strong&gt; should not be modified</note>
       </trans-unit>
       <trans-unit id="TraceDetailBackToTraces">
         <source>Back to traces</source>
-        <target state="new">Back to traces</target>
+        <target state="translated">トレースに戻る</target>
         <note />
       </trans-unit>
       <trans-unit id="TraceDetailBackToTracesButton">
         <source>Traces</source>
-        <target state="new">Traces</target>
+        <target state="translated">トレース</target>
         <note />
       </trans-unit>
       <trans-unit id="TraceDetailDepthHeader">
