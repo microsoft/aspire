@@ -2075,6 +2075,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                 options.StandardErrorCallback?.Invoke("      A compatible .NET SDK was not found.");
                 options.StandardErrorCallback?.Invoke(string.Empty);
                 options.StandardErrorCallback?.Invoke("Requested SDK version: 11.0.100   ");
+                options.StandardOutputCallback?.Invoke("10.0.401 [/usr/local/share/dotnet/sdk]");
                 return (exitCode, []);
             });
         using var provider = services.BuildServiceProvider();
@@ -2094,7 +2095,8 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
                     "dotnet nuget config paths",
                     exitCode),
                 "          A compatible .NET SDK was not found.",
-                "    Requested SDK version: 11.0.100");
+                "    Requested SDK version: 11.0.100",
+                "    10.0.401 [/usr/local/share/dotnet/sdk]");
         Assert.Equal(expected, exception.Message);
         Assert.False(File.Exists(Path.Combine(appHostProjectFile.DirectoryName!, "nuget.config")));
     }

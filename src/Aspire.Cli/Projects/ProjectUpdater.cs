@@ -187,16 +187,26 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
             // A nonzero exit means dotnet could not run the discovery command (for example, when
             // global.json requests an SDK that is not installed); it says nothing about NuGet.config.
             // Surface the command's own diagnostic instead of reporting a configuration problem.
-            var discoveryErrors = new List<string>();
+            // Both streams carry the diagnostic: the SDK-resolution failure writes its message to
+            // stderr and the installed SDK list to stdout. Callbacks run on separate reader threads.
+            var discoveryOutput = new List<string>();
+            void CaptureDiscoveryOutput(string line)
+            {
+                lock (discoveryOutput)
+                {
+                    discoveryOutput.Add(line);
+                }
+            }
             var (configPathsExitCode, configPaths) = await runner.GetNuGetConfigPathsAsync(projectFile.Directory!, new()
             {
-                StandardErrorCallback = discoveryErrors.Add
+                StandardOutputCallback = CaptureDiscoveryOutput,
+                StandardErrorCallback = CaptureDiscoveryOutput
             }, cancellationToken);
 
             if (configPathsExitCode != 0)
             {
                 throw new ProjectUpdaterException(FormatNuGetConfigDiscoveryCommandFailure(
-                    configPathsExitCode, discoveryErrors, [.. ambientSettings.SensitiveSourceValues, .. updatePlan.SensitiveSourceValues]));
+                    configPathsExitCode, discoveryOutput, [.. ambientSettings.SensitiveSourceValues, .. updatePlan.SensitiveSourceValues]));
             }
 
             if (configPaths is null || configPaths.Length == 0)
@@ -484,7 +494,7 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
     }
 
     private static string FormatNuGetConfigDiscoveryCommandFailure(
-        int exitCode, IReadOnlyList<string> standardError, IReadOnlyList<string> sensitiveSources)
+        int exitCode, IReadOnlyList<string> commandOutput, IReadOnlyList<string> sensitiveSources)
     {
         // The dotnet host reports SDK resolution failures on stderr, for example:
         //   The command could not be loaded, possibly because:
@@ -493,10 +503,15 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
         //
         //   Requested SDK version: 11.0.100
         //   global.json file: /repo/global.json
+        //
+        //   Installed SDKs:
+        // and lists the installed SDKs (for example, `10.0.401 [/usr/local/share/dotnet/sdk]`) on
+        // stdout. Lines appear in arrival order; the host buffers piped stdout until exit, so
+        // that list follows the stderr text rather than its heading.
         // That wording belongs to the host, so indent it beneath our message to show it is the
         // failed command's own output. Drop blank lines. Redaction is best effort.
         const string command = "dotnet nuget config paths";
-        var output = standardError
+        var output = commandOutput
             .Select(line => PackageSourceRedactor.RedactOccurrences(line.TrimEnd(), sensitiveSources))
             .Where(static line => line.Length > 0)
             .ToList();
