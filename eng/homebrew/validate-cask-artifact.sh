@@ -148,7 +148,9 @@ echo ""
 echo "Applying Homebrew style fixes in local tap..."
 brew style --fix "$TAPPED_CASK_PATH"
 cp "$TAPPED_CASK_PATH" "$CASK_FILE"
-brew style --cask "$TAPPED_CASK_PATH"
+# --cask bypasses local file resolution:
+# https://github.com/Homebrew/brew/blob/main/Library/Homebrew/cli/named_args.rb
+brew style "$TAPPED_CASK_PATH"
 echo "brew style --fix reported no offenses after copying aspire.rb into a temporary local tap."
 
 echo ""
