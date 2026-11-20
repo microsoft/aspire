@@ -29,10 +29,10 @@ func (d *EscapedSettings) ToMap() map[string]any {
 	m["back\\slash"] = serializeValue(d.Back_slash)
 	if d.Cal_lback != nil {
 		cb := d.Cal_lback
-		m["cal\"lback"] = func(args ...any) any {
+		m["cal\"lback"] = clientCallback(func(c *client, args ...any) any {
 			cb(callbackArg[string](args, 0))
 			return nil
-		}
+		})
 	}
 	return m
 }

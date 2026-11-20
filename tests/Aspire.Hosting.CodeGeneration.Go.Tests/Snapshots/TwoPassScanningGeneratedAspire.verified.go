@@ -979,10 +979,10 @@ func (d *InteractionInputsDialogOptions) ToMap() map[string]any {
 	}
 	if d.ValidationCallback != nil {
 		cb := d.ValidationCallback
-		m["validationCallback"] = func(args ...any) any {
-			cb(callbackArg[InputsDialogValidationContext](args, 0))
+		m["validationCallback"] = clientCallback(func(c *client, args ...any) any {
+			cb(callbackHandleArg(c, args, 0, newInputsDialogValidationContextFromHandle))
 			return nil
-		}
+		})
 	}
 	return m
 }
@@ -1015,10 +1015,10 @@ func (d *InteractionProgressOptions) ToMap() map[string]any {
 	}
 	if d.Work != nil {
 		cb := d.Work
-		m["work"] = func(args ...any) any {
-			cb(callbackArg[ProgressContext](args, 0))
+		m["work"] = clientCallback(func(c *client, args ...any) any {
+			cb(callbackHandleArg(c, args, 0, newProgressContextFromHandle))
 			return nil
-		}
+		})
 	}
 	return m
 }
@@ -1281,10 +1281,10 @@ func (d *CommandOptions) ToMap() map[string]any {
 	}
 	if d.ValidateArguments != nil {
 		cb := d.ValidateArguments
-		m["validateArguments"] = func(args ...any) any {
-			cb(callbackArg[InputsDialogValidationContext](args, 0))
+		m["validateArguments"] = clientCallback(func(c *client, args ...any) any {
+			cb(callbackHandleArg(c, args, 0, newInputsDialogValidationContextFromHandle))
 			return nil
-		}
+		})
 	}
 	m["visibility"] = serializeValue(d.Visibility)
 	if d.ConfirmationMessage != nil {
@@ -1299,9 +1299,9 @@ func (d *CommandOptions) ToMap() map[string]any {
 	m["isHighlighted"] = serializeValue(d.IsHighlighted)
 	if d.UpdateState != nil {
 		cb := d.UpdateState
-		m["updateState"] = func(args ...any) any {
-			return cb(callbackArg[UpdateCommandStateContext](args, 0))
-		}
+		m["updateState"] = clientCallback(func(c *client, args ...any) any {
+			return cb(callbackHandleArg(c, args, 0, newUpdateCommandStateContextFromHandle))
+		})
 	}
 	if d.Progress != nil {
 		m["progress"] = serializeValue(d.Progress)
@@ -1403,9 +1403,9 @@ func (d *HttpCommandExportOptions) ToMap() map[string]any {
 	}
 	if d.PrepareRequest != nil {
 		cb := d.PrepareRequest
-		m["prepareRequest"] = func(args ...any) any {
-			return cb(callbackArg[HttpCommandPrepareRequestContext](args, 0))
-		}
+		m["prepareRequest"] = clientCallback(func(c *client, args ...any) any {
+			return cb(callbackHandleArg(c, args, 0, newHttpCommandPrepareRequestContextFromHandle))
+		})
 	}
 	m["resultMode"] = serializeValue(d.ResultMode)
 	return m
@@ -1606,9 +1606,9 @@ func (d *ProcessCommandExportOptions) ToMap() map[string]any {
 	}
 	if d.CreateProcessSpec != nil {
 		cb := d.CreateProcessSpec
-		m["createProcessSpec"] = func(args ...any) any {
-			return cb(callbackArg[ExecuteCommandContext](args, 0))
-		}
+		m["createProcessSpec"] = clientCallback(func(c *client, args ...any) any {
+			return cb(callbackHandleArg(c, args, 0, newExecuteCommandContextFromHandle))
+		})
 	}
 	if d.CommandOptions != nil {
 		m["commandOptions"] = serializeValue(d.CommandOptions)
@@ -4285,6 +4285,12 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithBuildArg(n
 	if s.Err() != nil {
 		return s
 	}
+	if e, ok := value.(handleReference); ok {
+		if err := e.Err(); err != nil {
+			s.setPropagatedErr(err)
+			return s
+		}
+	}
 	switch value.(type) {
 	case string, ParameterResource:
 	default:
@@ -5028,6 +5034,12 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithEntrypoint
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithEnvironment(name string, value any) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.Err() != nil {
 		return s
+	}
+	if e, ok := value.(handleReference); ok {
+		if err := e.Err(); err != nil {
+			s.setPropagatedErr(err)
+			return s
+		}
 	}
 	switch value.(type) {
 	case string, *ReferenceExpression, EndpointReference, ParameterResource, ExternalServiceResource, ResourceWithConnectionString, ExpressionValue:
@@ -6071,6 +6083,12 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithReference(
 	if s.Err() != nil {
 		return s
 	}
+	if e, ok := source.(handleReference); ok {
+		if err := e.Err(); err != nil {
+			s.setPropagatedErr(err)
+			return s
+		}
+	}
 	switch source.(type) {
 	case Resource, EndpointReference, string:
 	default:
@@ -6388,6 +6406,12 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithUnionDepen
 	if s.Err() != nil {
 		return s
 	}
+	if e, ok := dependency.(handleReference); ok {
+		if err := e.Err(); err != nil {
+			s.setPropagatedErr(err)
+			return s
+		}
+	}
 	switch dependency.(type) {
 	case string, ResourceWithConnectionString:
 	default:
@@ -6413,6 +6437,12 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithUnionDepen
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithUrl(url any, options ...WithUrlOption) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.Err() != nil {
 		return s
+	}
+	if e, ok := url.(handleReference); ok {
+		if err := e.Err(); err != nil {
+			s.setPropagatedErr(err)
+			return s
+		}
 	}
 	switch url.(type) {
 	case string, *ReferenceExpression:
@@ -8894,6 +8924,12 @@ func (s *cSharpAppResource) WithEnvironment(name string, value any) CSharpAppRes
 	if s.Err() != nil {
 		return s
 	}
+	if e, ok := value.(handleReference); ok {
+		if err := e.Err(); err != nil {
+			s.setPropagatedErr(err)
+			return s
+		}
+	}
 	switch value.(type) {
 	case string, *ReferenceExpression, EndpointReference, ParameterResource, ExternalServiceResource, ResourceWithConnectionString, ExpressionValue:
 	default:
@@ -9829,6 +9865,12 @@ func (s *cSharpAppResource) WithReference(source any, options ...WithReferenceOp
 	if s.Err() != nil {
 		return s
 	}
+	if e, ok := source.(handleReference); ok {
+		if err := e.Err(); err != nil {
+			s.setPropagatedErr(err)
+			return s
+		}
+	}
 	switch source.(type) {
 	case Resource, EndpointReference, string:
 	default:
@@ -10163,6 +10205,12 @@ func (s *cSharpAppResource) WithUnionDependency(dependency any) CSharpAppResourc
 	if s.Err() != nil {
 		return s
 	}
+	if e, ok := dependency.(handleReference); ok {
+		if err := e.Err(); err != nil {
+			s.setPropagatedErr(err)
+			return s
+		}
+	}
 	switch dependency.(type) {
 	case string, ResourceWithConnectionString:
 	default:
@@ -10188,6 +10236,12 @@ func (s *cSharpAppResource) WithUnionDependency(dependency any) CSharpAppResourc
 func (s *cSharpAppResource) WithUrl(url any, options ...WithUrlOption) CSharpAppResource {
 	if s.Err() != nil {
 		return s
+	}
+	if e, ok := url.(handleReference); ok {
+		if err := e.Err(); err != nil {
+			s.setPropagatedErr(err)
+			return s
+		}
 	}
 	switch url.(type) {
 	case string, *ReferenceExpression:
@@ -10499,6 +10553,11 @@ func newCommandLineArgsEditorFromHandle(h *handle, c *client) CommandLineArgsEdi
 func (s *commandLineArgsEditor) Add(value any) error {
 	if err := s.Err(); err != nil {
 		return err
+	}
+	if e, ok := value.(handleReference); ok {
+		if err := e.Err(); err != nil {
+			return err
+		}
 	}
 	switch value.(type) {
 	case string, *ReferenceExpression, EndpointReference, ParameterResource, ResourceWithConnectionString, ExpressionValue:
@@ -13879,6 +13938,12 @@ func (s *containerRegistryResource) WithUnionDependency(dependency any) Containe
 	if s.Err() != nil {
 		return s
 	}
+	if e, ok := dependency.(handleReference); ok {
+		if err := e.Err(); err != nil {
+			s.setPropagatedErr(err)
+			return s
+		}
+	}
 	switch dependency.(type) {
 	case string, ResourceWithConnectionString:
 	default:
@@ -13904,6 +13969,12 @@ func (s *containerRegistryResource) WithUnionDependency(dependency any) Containe
 func (s *containerRegistryResource) WithUrl(url any, options ...WithUrlOption) ContainerRegistryResource {
 	if s.Err() != nil {
 		return s
+	}
+	if e, ok := url.(handleReference); ok {
+		if err := e.Err(); err != nil {
+			s.setPropagatedErr(err)
+			return s
+		}
 	}
 	switch url.(type) {
 	case string, *ReferenceExpression:
@@ -15843,6 +15914,12 @@ func (s *containerResource) WithBuildArg(name string, value any) ContainerResour
 	if s.Err() != nil {
 		return s
 	}
+	if e, ok := value.(handleReference); ok {
+		if err := e.Err(); err != nil {
+			s.setPropagatedErr(err)
+			return s
+		}
+	}
 	switch value.(type) {
 	case string, ParameterResource:
 	default:
@@ -16586,6 +16663,12 @@ func (s *containerResource) WithEntrypoint(entrypoint string) ContainerResource 
 func (s *containerResource) WithEnvironment(name string, value any) ContainerResource {
 	if s.Err() != nil {
 		return s
+	}
+	if e, ok := value.(handleReference); ok {
+		if err := e.Err(); err != nil {
+			s.setPropagatedErr(err)
+			return s
+		}
 	}
 	switch value.(type) {
 	case string, *ReferenceExpression, EndpointReference, ParameterResource, ExternalServiceResource, ResourceWithConnectionString, ExpressionValue:
@@ -17629,6 +17712,12 @@ func (s *containerResource) WithReference(source any, options ...WithReferenceOp
 	if s.Err() != nil {
 		return s
 	}
+	if e, ok := source.(handleReference); ok {
+		if err := e.Err(); err != nil {
+			s.setPropagatedErr(err)
+			return s
+		}
+	}
 	switch source.(type) {
 	case Resource, EndpointReference, string:
 	default:
@@ -17946,6 +18035,12 @@ func (s *containerResource) WithUnionDependency(dependency any) ContainerResourc
 	if s.Err() != nil {
 		return s
 	}
+	if e, ok := dependency.(handleReference); ok {
+		if err := e.Err(); err != nil {
+			s.setPropagatedErr(err)
+			return s
+		}
+	}
 	switch dependency.(type) {
 	case string, ResourceWithConnectionString:
 	default:
@@ -17971,6 +18066,12 @@ func (s *containerResource) WithUnionDependency(dependency any) ContainerResourc
 func (s *containerResource) WithUrl(url any, options ...WithUrlOption) ContainerResource {
 	if s.Err() != nil {
 		return s
+	}
+	if e, ok := url.(handleReference); ok {
+		if err := e.Err(); err != nil {
+			s.setPropagatedErr(err)
+			return s
+		}
 	}
 	switch url.(type) {
 	case string, *ReferenceExpression:
@@ -18562,6 +18663,11 @@ func (s *distributedApplicationBuilder) AddContainerRegistry(name string, endpoi
 	if err := s.resourceBuilderBase.Err(); err != nil {
 		return &containerRegistryResource{resourceBuilderBase: newPropagatedErroredResourceBuilder(err, s.client)}
 	}
+	if e, ok := endpoint.(handleReference); ok {
+		if err := e.Err(); err != nil {
+			return &containerRegistryResource{resourceBuilderBase: newPropagatedErroredResourceBuilder(err, s.client)}
+		}
+	}
 	switch endpoint.(type) {
 	case string, ParameterResource:
 	default:
@@ -18797,6 +18903,11 @@ func (s *distributedApplicationBuilder) AddExecutable(name string, command strin
 func (s *distributedApplicationBuilder) AddExternalService(name string, url any) ExternalServiceResource {
 	if err := s.resourceBuilderBase.Err(); err != nil {
 		return &externalServiceResource{resourceBuilderBase: newPropagatedErroredResourceBuilder(err, s.client)}
+	}
+	if e, ok := url.(handleReference); ok {
+		if err := e.Err(); err != nil {
+			return &externalServiceResource{resourceBuilderBase: newPropagatedErroredResourceBuilder(err, s.client)}
+		}
 	}
 	switch url.(type) {
 	case string, ParameterResource:
@@ -22569,6 +22680,12 @@ func (s *dotnetToolResource) WithEnvironment(name string, value any) DotnetToolR
 	if s.Err() != nil {
 		return s
 	}
+	if e, ok := value.(handleReference); ok {
+		if err := e.Err(); err != nil {
+			s.setPropagatedErr(err)
+			return s
+		}
+	}
 	switch value.(type) {
 	case string, *ReferenceExpression, EndpointReference, ParameterResource, ExternalServiceResource, ResourceWithConnectionString, ExpressionValue:
 	default:
@@ -23549,6 +23666,12 @@ func (s *dotnetToolResource) WithReference(source any, options ...WithReferenceO
 	if s.Err() != nil {
 		return s
 	}
+	if e, ok := source.(handleReference); ok {
+		if err := e.Err(); err != nil {
+			s.setPropagatedErr(err)
+			return s
+		}
+	}
 	switch source.(type) {
 	case Resource, EndpointReference, string:
 	default:
@@ -23962,6 +24085,12 @@ func (s *dotnetToolResource) WithUnionDependency(dependency any) DotnetToolResou
 	if s.Err() != nil {
 		return s
 	}
+	if e, ok := dependency.(handleReference); ok {
+		if err := e.Err(); err != nil {
+			s.setPropagatedErr(err)
+			return s
+		}
+	}
 	switch dependency.(type) {
 	case string, ResourceWithConnectionString:
 	default:
@@ -23987,6 +24116,12 @@ func (s *dotnetToolResource) WithUnionDependency(dependency any) DotnetToolResou
 func (s *dotnetToolResource) WithUrl(url any, options ...WithUrlOption) DotnetToolResource {
 	if s.Err() != nil {
 		return s
+	}
+	if e, ok := url.(handleReference); ok {
+		if err := e.Err(); err != nil {
+			s.setPropagatedErr(err)
+			return s
+		}
 	}
 	switch url.(type) {
 	case string, *ReferenceExpression:
@@ -25408,6 +25543,11 @@ func newEnvironmentEditorFromHandle(h *handle, c *client) EnvironmentEditor {
 func (s *environmentEditor) Set(name string, value any) error {
 	if err := s.Err(); err != nil {
 		return err
+	}
+	if e, ok := value.(handleReference); ok {
+		if err := e.Err(); err != nil {
+			return err
+		}
 	}
 	switch value.(type) {
 	case string, *ReferenceExpression, EndpointReference, ParameterResource, ResourceWithConnectionString, ExpressionValue:
@@ -27685,6 +27825,12 @@ func (s *executableResource) WithEnvironment(name string, value any) ExecutableR
 	if s.Err() != nil {
 		return s
 	}
+	if e, ok := value.(handleReference); ok {
+		if err := e.Err(); err != nil {
+			s.setPropagatedErr(err)
+			return s
+		}
+	}
 	switch value.(type) {
 	case string, *ReferenceExpression, EndpointReference, ParameterResource, ExternalServiceResource, ResourceWithConnectionString, ExpressionValue:
 	default:
@@ -28665,6 +28811,12 @@ func (s *executableResource) WithReference(source any, options ...WithReferenceO
 	if s.Err() != nil {
 		return s
 	}
+	if e, ok := source.(handleReference); ok {
+		if err := e.Err(); err != nil {
+			s.setPropagatedErr(err)
+			return s
+		}
+	}
 	switch source.(type) {
 	case Resource, EndpointReference, string:
 	default:
@@ -28982,6 +29134,12 @@ func (s *executableResource) WithUnionDependency(dependency any) ExecutableResou
 	if s.Err() != nil {
 		return s
 	}
+	if e, ok := dependency.(handleReference); ok {
+		if err := e.Err(); err != nil {
+			s.setPropagatedErr(err)
+			return s
+		}
+	}
 	switch dependency.(type) {
 	case string, ResourceWithConnectionString:
 	default:
@@ -29007,6 +29165,12 @@ func (s *executableResource) WithUnionDependency(dependency any) ExecutableResou
 func (s *executableResource) WithUrl(url any, options ...WithUrlOption) ExecutableResource {
 	if s.Err() != nil {
 		return s
+	}
+	if e, ok := url.(handleReference); ok {
+		if err := e.Err(); err != nil {
+			s.setPropagatedErr(err)
+			return s
+		}
 	}
 	switch url.(type) {
 	case string, *ReferenceExpression:
@@ -31444,6 +31608,12 @@ func (s *externalServiceResource) WithUnionDependency(dependency any) ExternalSe
 	if s.Err() != nil {
 		return s
 	}
+	if e, ok := dependency.(handleReference); ok {
+		if err := e.Err(); err != nil {
+			s.setPropagatedErr(err)
+			return s
+		}
+	}
 	switch dependency.(type) {
 	case string, ResourceWithConnectionString:
 	default:
@@ -31469,6 +31639,12 @@ func (s *externalServiceResource) WithUnionDependency(dependency any) ExternalSe
 func (s *externalServiceResource) WithUrl(url any, options ...WithUrlOption) ExternalServiceResource {
 	if s.Err() != nil {
 		return s
+	}
+	if e, ok := url.(handleReference); ok {
+		if err := e.Err(); err != nil {
+			s.setPropagatedErr(err)
+			return s
+		}
 	}
 	switch url.(type) {
 	case string, *ReferenceExpression:
@@ -36157,6 +36333,12 @@ func (s *parameterResource) WithUnionDependency(dependency any) ParameterResourc
 	if s.Err() != nil {
 		return s
 	}
+	if e, ok := dependency.(handleReference); ok {
+		if err := e.Err(); err != nil {
+			s.setPropagatedErr(err)
+			return s
+		}
+	}
 	switch dependency.(type) {
 	case string, ResourceWithConnectionString:
 	default:
@@ -36182,6 +36364,12 @@ func (s *parameterResource) WithUnionDependency(dependency any) ParameterResourc
 func (s *parameterResource) WithUrl(url any, options ...WithUrlOption) ParameterResource {
 	if s.Err() != nil {
 		return s
+	}
+	if e, ok := url.(handleReference); ok {
+		if err := e.Err(); err != nil {
+			s.setPropagatedErr(err)
+			return s
+		}
 	}
 	switch url.(type) {
 	case string, *ReferenceExpression:
@@ -39354,6 +39542,12 @@ func (s *projectResource) WithEnvironment(name string, value any) ProjectResourc
 	if s.Err() != nil {
 		return s
 	}
+	if e, ok := value.(handleReference); ok {
+		if err := e.Err(); err != nil {
+			s.setPropagatedErr(err)
+			return s
+		}
+	}
 	switch value.(type) {
 	case string, *ReferenceExpression, EndpointReference, ParameterResource, ExternalServiceResource, ResourceWithConnectionString, ExpressionValue:
 	default:
@@ -40289,6 +40483,12 @@ func (s *projectResource) WithReference(source any, options ...WithReferenceOpti
 	if s.Err() != nil {
 		return s
 	}
+	if e, ok := source.(handleReference); ok {
+		if err := e.Err(); err != nil {
+			s.setPropagatedErr(err)
+			return s
+		}
+	}
 	switch source.(type) {
 	case Resource, EndpointReference, string:
 	default:
@@ -40623,6 +40823,12 @@ func (s *projectResource) WithUnionDependency(dependency any) ProjectResource {
 	if s.Err() != nil {
 		return s
 	}
+	if e, ok := dependency.(handleReference); ok {
+		if err := e.Err(); err != nil {
+			s.setPropagatedErr(err)
+			return s
+		}
+	}
 	switch dependency.(type) {
 	case string, ResourceWithConnectionString:
 	default:
@@ -40648,6 +40854,12 @@ func (s *projectResource) WithUnionDependency(dependency any) ProjectResource {
 func (s *projectResource) WithUrl(url any, options ...WithUrlOption) ProjectResource {
 	if s.Err() != nil {
 		return s
+	}
+	if e, ok := url.(handleReference); ok {
+		if err := e.Err(); err != nil {
+			s.setPropagatedErr(err)
+			return s
+		}
 	}
 	switch url.(type) {
 	case string, *ReferenceExpression:
@@ -41759,6 +41971,12 @@ func (s *resourceCommandService) ExecuteCommandAsync(resource any, commandName s
 		var zero *ExecuteCommandResult
 		return zero, err
 	}
+	if e, ok := resource.(handleReference); ok {
+		if err := e.Err(); err != nil {
+			var zero *ExecuteCommandResult
+			return zero, err
+		}
+	}
 	switch resource.(type) {
 	case string, Resource:
 	default:
@@ -42452,6 +42670,11 @@ func (s *resourceUrlsEditor) Add(url any, options ...AddOption) error {
 	if err := s.Err(); err != nil {
 		return err
 	}
+	if e, ok := url.(handleReference); ok {
+		if err := e.Err(); err != nil {
+			return err
+		}
+	}
 	switch url.(type) {
 	case string, *ReferenceExpression:
 	default:
@@ -42488,6 +42711,11 @@ func (s *resourceUrlsEditor) AddForEndpoint(endpoint EndpointReference, url any,
 	}
 	if endpoint != nil {
 		if err := endpoint.Err(); err != nil {
+			return err
+		}
+	}
+	if e, ok := url.(handleReference); ok {
+		if err := e.Err(); err != nil {
 			return err
 		}
 	}
@@ -44925,6 +45153,12 @@ func (s *testDatabaseResource) WithBuildArg(name string, value any) TestDatabase
 	if s.Err() != nil {
 		return s
 	}
+	if e, ok := value.(handleReference); ok {
+		if err := e.Err(); err != nil {
+			s.setPropagatedErr(err)
+			return s
+		}
+	}
 	switch value.(type) {
 	case string, ParameterResource:
 	default:
@@ -45668,6 +45902,12 @@ func (s *testDatabaseResource) WithEntrypoint(entrypoint string) TestDatabaseRes
 func (s *testDatabaseResource) WithEnvironment(name string, value any) TestDatabaseResource {
 	if s.Err() != nil {
 		return s
+	}
+	if e, ok := value.(handleReference); ok {
+		if err := e.Err(); err != nil {
+			s.setPropagatedErr(err)
+			return s
+		}
 	}
 	switch value.(type) {
 	case string, *ReferenceExpression, EndpointReference, ParameterResource, ExternalServiceResource, ResourceWithConnectionString, ExpressionValue:
@@ -46711,6 +46951,12 @@ func (s *testDatabaseResource) WithReference(source any, options ...WithReferenc
 	if s.Err() != nil {
 		return s
 	}
+	if e, ok := source.(handleReference); ok {
+		if err := e.Err(); err != nil {
+			s.setPropagatedErr(err)
+			return s
+		}
+	}
 	switch source.(type) {
 	case Resource, EndpointReference, string:
 	default:
@@ -47028,6 +47274,12 @@ func (s *testDatabaseResource) WithUnionDependency(dependency any) TestDatabaseR
 	if s.Err() != nil {
 		return s
 	}
+	if e, ok := dependency.(handleReference); ok {
+		if err := e.Err(); err != nil {
+			s.setPropagatedErr(err)
+			return s
+		}
+	}
 	switch dependency.(type) {
 	case string, ResourceWithConnectionString:
 	default:
@@ -47053,6 +47305,12 @@ func (s *testDatabaseResource) WithUnionDependency(dependency any) TestDatabaseR
 func (s *testDatabaseResource) WithUrl(url any, options ...WithUrlOption) TestDatabaseResource {
 	if s.Err() != nil {
 		return s
+	}
+	if e, ok := url.(handleReference); ok {
+		if err := e.Err(); err != nil {
+			s.setPropagatedErr(err)
+			return s
+		}
 	}
 	switch url.(type) {
 	case string, *ReferenceExpression:
@@ -49646,6 +49904,12 @@ func (s *testRedisResource) WithBuildArg(name string, value any) TestRedisResour
 	if s.Err() != nil {
 		return s
 	}
+	if e, ok := value.(handleReference); ok {
+		if err := e.Err(); err != nil {
+			s.setPropagatedErr(err)
+			return s
+		}
+	}
 	switch value.(type) {
 	case string, ParameterResource:
 	default:
@@ -49885,6 +50149,12 @@ func (s *testRedisResource) WithConfig(config *TestConfigDto) TestRedisResource 
 func (s *testRedisResource) WithConnectionProperty(name string, value any) TestRedisResource {
 	if s.Err() != nil {
 		return s
+	}
+	if e, ok := value.(handleReference); ok {
+		if err := e.Err(); err != nil {
+			s.setPropagatedErr(err)
+			return s
+		}
 	}
 	switch value.(type) {
 	case string, *ReferenceExpression:
@@ -50507,6 +50777,12 @@ func (s *testRedisResource) WithEntrypoint(entrypoint string) TestRedisResource 
 func (s *testRedisResource) WithEnvironment(name string, value any) TestRedisResource {
 	if s.Err() != nil {
 		return s
+	}
+	if e, ok := value.(handleReference); ok {
+		if err := e.Err(); err != nil {
+			s.setPropagatedErr(err)
+			return s
+		}
 	}
 	switch value.(type) {
 	case string, *ReferenceExpression, EndpointReference, ParameterResource, ExternalServiceResource, ResourceWithConnectionString, ExpressionValue:
@@ -51675,6 +51951,12 @@ func (s *testRedisResource) WithReference(source any, options ...WithReferenceOp
 	if s.Err() != nil {
 		return s
 	}
+	if e, ok := source.(handleReference); ok {
+		if err := e.Err(); err != nil {
+			s.setPropagatedErr(err)
+			return s
+		}
+	}
 	switch source.(type) {
 	case Resource, EndpointReference, string:
 	default:
@@ -52025,6 +52307,12 @@ func (s *testRedisResource) WithUnionDependency(dependency any) TestRedisResourc
 	if s.Err() != nil {
 		return s
 	}
+	if e, ok := dependency.(handleReference); ok {
+		if err := e.Err(); err != nil {
+			s.setPropagatedErr(err)
+			return s
+		}
+	}
 	switch dependency.(type) {
 	case string, ResourceWithConnectionString:
 	default:
@@ -52050,6 +52338,12 @@ func (s *testRedisResource) WithUnionDependency(dependency any) TestRedisResourc
 func (s *testRedisResource) WithUrl(url any, options ...WithUrlOption) TestRedisResource {
 	if s.Err() != nil {
 		return s
+	}
+	if e, ok := url.(handleReference); ok {
+		if err := e.Err(); err != nil {
+			s.setPropagatedErr(err)
+			return s
+		}
 	}
 	switch url.(type) {
 	case string, *ReferenceExpression:
