@@ -427,6 +427,22 @@ public static class AzureWebPubSubExtensions
 
         var eventHandlersResource = new AzureProvisioningResource(moduleName, infrastructure =>
         {
+            // Hubs are child resources, so they must be declared in the service's scope. Generate the
+            // service's template first because customization callbacks and existing-resource
+            // annotations finalize its Scope there, then deploy this module to the same scope.
+            var parent = hubResource.Parent;
+            _ = parent.GetBicepTemplateString();
+            if (parent.Scope is { } parentScope)
+            {
+                infrastructure.AspireResource.Scope = parentScope;
+            }
+            else if (parent.TryGetLastAnnotation<ExistingAzureResourceAnnotation>(out var existing) && existing.ResourceGroup is { } resourceGroup)
+            {
+                infrastructure.AspireResource.Scope = existing.Subscription is { } subscription
+                    ? new AzureBicepResourceScope(resourceGroup, subscription)
+                    : new AzureBicepResourceScope(resourceGroup);
+            }
+
             var service = (WebPubSubService)hubResource.Parent.AddAsExistingResource(infrastructure);
             AddHubToInfrastructure(infrastructure, service, hubResource, isPublishMode: true);
         });

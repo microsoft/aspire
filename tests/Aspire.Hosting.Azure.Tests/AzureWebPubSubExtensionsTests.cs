@@ -197,6 +197,41 @@ public class AzureWebPubSubExtensionsTests(ITestOutputHelper output)
     }
 
     [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task EventHandlerHubModuleUsesServiceScope(bool existing)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.AddAzureContainerAppEnvironment("env");
+        var serviceA = builder.AddProject<ProjectA>("serviceA", o => o.ExcludeLaunchProfile = true)
+            .WithHttpsEndpoint()
+            .WithExternalHttpEndpoints();
+        var wps = builder.AddAzureWebPubSub("wps1");
+        if (existing)
+        {
+            wps.PublishAsExisting(builder.AddParameter("wpsName"), builder.AddParameter("wpsRg"));
+        }
+        else
+        {
+            wps.ConfigureInfrastructure(infrastructure => infrastructure.AspireResource.Scope = new AzureBicepResourceScope("other-rg"));
+        }
+
+        var hub = wps.AddHub("abc").AddEventHandler($"{serviceA.GetEndpoint("https")}/eventhandler/{{event}}");
+        serviceA.WithReference(hub);
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var handlers = Assert.Single(model.Resources.OfType<AzureProvisioningResource>(), r => r.Name == "wps1-abc-handlers");
+        var (manifest, bicep) = await AzureManifestUtils.GetManifestWithBicep(handlers, skipPreparer: true);
+
+        Assert.Equal(existing ? "{wpsRg.value}" : "other-rg", manifest["scope"]!["resourceGroup"]!.ToString());
+        Assert.Equal(wps.Resource.Scope, handlers.Scope);
+        Assert.DoesNotContain("scope:", bicep, StringComparison.Ordinal);
+    }
+
+    [Theory]
     [InlineData("aca", "serviceA-containerapp")]
     [InlineData("appservice", "serviceA-website")]
     public async Task EventHandlerHubModuleProvisioningDependsOnReferencedApp(string computeEnvironment, string deploymentTarget)
