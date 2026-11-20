@@ -169,32 +169,32 @@
       </trans-unit>
       <trans-unit id="GitAuthenticationFailed">
         <source>Git authentication failed. Configure Git credentials or SSH authentication before running this command; terminal credential prompts are disabled.</source>
-        <target state="new">Git authentication failed. Configure Git credentials or SSH authentication before running this command; terminal credential prompts are disabled.</target>
+        <target state="translated">Ověřování u Gitu neproběhlo úspěšně. Před spuštěním tohoto příkazu nakonfigurujte přihlašovací údaje Gitu nebo ověřování SSH; výzvy terminálu k zadání přihlašovacích údajů jsou zakázané.</target>
         <note />
       </trans-unit>
       <trans-unit id="GitCommandFailed">
         <source>The Git command failed. Check the repository and selected reference.</source>
-        <target state="new">The Git command failed. Check the repository and selected reference.</target>
+        <target state="translated">Příkaz Git selhal. Zkontrolujte úložiště a vybranou referenci.</target>
         <note />
       </trans-unit>
       <trans-unit id="GitRepositoryUnavailable">
         <source>The Git repository could not be accessed. Check its address, network connectivity, and your access permissions.</source>
-        <target state="new">The Git repository could not be accessed. Check its address, network connectivity, and your access permissions.</target>
+        <target state="translated">Úložiště Git není přístupné. Zkontrolujte jeho adresu, připojení k síti a přístupová oprávnění.</target>
         <note />
       </trans-unit>
       <trans-unit id="GitTimedOut">
         <source>The Git operation timed out after two minutes.</source>
-        <target state="new">The Git operation timed out after two minutes.</target>
+        <target state="translated">U operace Git po dvou minutách vypršel časový limit.</target>
         <note />
       </trans-unit>
       <trans-unit id="GitUnattendedSshUnsupported">
         <source>Unattended Git requires a verified OpenSSH executable, not a custom SSH command or wrapper. Run interactively, or select OpenSSH using GIT_SSH and configure keys and host options in your OpenSSH config instead of GIT_SSH_COMMAND or core.sshCommand.</source>
-        <target state="new">Unattended Git requires a verified OpenSSH executable, not a custom SSH command or wrapper. Run interactively, or select OpenSSH using GIT_SSH and configure keys and host options in your OpenSSH config instead of GIT_SSH_COMMAND or core.sshCommand.</target>
+        <target state="translated">Bezobslužný běh Gitu vyžaduje ověřený spustitelný soubor OpenSSH, nikoli vlastní příkaz SSH nebo obálku. Spusťte Git interaktivně nebo pomocí GIT_SSH vyberte OpenSSH a klíče a možnosti hostitele nakonfigurujte v konfiguraci OpenSSH místo použití GIT_SSH_COMMAND nebo core.sshCommand.</target>
         <note />
       </trans-unit>
       <trans-unit id="GitUnavailable">
         <source>Git could not be started. Install Git and ensure it is on PATH.</source>
-        <target state="new">Git could not be started. Install Git and ensure it is on PATH.</target>
+        <target state="translated">Git se nepodařilo spustit. Nainstalujte Git a zajistěte, aby byl v proměnné PATH.</target>
         <note />
       </trans-unit>
       <trans-unit id="GlobalAppHostPathCannotBeSetWithConfigCommand">
@@ -224,7 +224,7 @@
       </trans-unit>
       <trans-unit id="InvalidIntegrationSource">
         <source>Invalid integration source configuration at '{0}'. Specify a NuGet source without embedded credentials and, optionally, a non-empty list of allowed package patterns (exact IDs, prefixes ending in *, or *).</source>
-        <target state="new">Invalid integration source configuration at '{0}'. Specify a NuGet source without embedded credentials and, optionally, a non-empty list of allowed package patterns (exact IDs, prefixes ending in *, or *).</target>
+        <target state="translated">Neplatná konfigurace zdroje integrace v '{0}'. Zadejte zdroj NuGet bez vložených přihlašovacích údajů a volitelně neprázdný seznam povolených vzorů balíčků (přesná ID, předpony končící na * nebo *).</target>
         <note>{0} is the configuration key. Do not translate NuGet or *.</note>
       </trans-unit>
       <trans-unit id="InvalidJsonInConfigFile">
@@ -244,7 +244,7 @@
       </trans-unit>
       <trans-unit id="InvalidSourceName">
         <source>Invalid source name at '{0}'. Source names must be 1-64 ASCII letters, digits, dots, hyphens, or underscores, starting with a letter or digit.</source>
-        <target state="new">Invalid source name at '{0}'. Source names must be 1-64 ASCII letters, digits, dots, hyphens, or underscores, starting with a letter or digit.</target>
+        <target state="translated">Neplatný název zdroje v '{0}'. Názvy zdrojů musí tvořit 1–64 písmen ASCII, číslic, teček, spojovníků nebo podtržítek a musí začínat písmenem nebo číslicí.</target>
         <note>{0} is the configuration key. Do not translate ASCII.</note>
       </trans-unit>
       <trans-unit id="LegacyAppHostPathCannotBeSetWithConfigCommand">
@@ -279,7 +279,7 @@
       </trans-unit>
       <trans-unit id="NuGetSourceKeyAlreadyInUse">
         <source>NuGet source key '{0}' is already reserved by another source or its settings. Choose another integration source key or update the NuGet configuration manually.</source>
-        <target state="new">NuGet source key '{0}' is already reserved by another source or its settings. Choose another integration source key or update the NuGet configuration manually.</target>
+        <target state="translated">Zdrojový klíč NuGet '{0}' je už vyhrazený jiným zdrojem nebo jeho nastavením. Zvolte jiný zdrojový klíč integrace nebo aktualizujte konfiguraci NuGet ručně.</target>
         <note>{0} is the source key. Do not translate NuGet.</note>
       </trans-unit>
       <trans-unit id="ProjectCouldNotBeAnalyzed">
