@@ -6,6 +6,7 @@ using System.Globalization;
 using System.Reflection;
 using Aspire.Shared;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace Aspire.Hosting.Dcp;
@@ -238,7 +239,9 @@ internal class ValidateDcpOptions(DistributedApplicationExecutionContext executi
 
 internal class ConfigureDefaultDcpOptions(
     DistributedApplicationOptions appOptions,
-    IConfiguration configuration) : IConfigureOptions<DcpOptions>
+    IConfiguration configuration,
+    DistributedApplicationExecutionContext executionContext,
+    ILogger<ConfigureDefaultDcpOptions> logger) : IConfigureOptions<DcpOptions>
 {
     private const string DcpCliPathMetadataKey = "DcpCliPath";
     private const string DcpExtensionsPathMetadataKey = "DcpExtensionsPath";
@@ -247,6 +250,12 @@ internal class ConfigureDefaultDcpOptions(
     private const string TerminalHostInvocationArgsMetadataKey = "aspireterminalhostinvocationargs";
 
     public static string DcpPublisher = nameof(DcpPublisher);
+
+    /// <summary>
+    /// Reads environment variables for the bundle fallback. Tests replace it so the fallback cannot probe
+    /// the machine's real PATH or Aspire home.
+    /// </summary>
+    internal Func<string, string?> GetEnvironmentVariable { get; init; } = Environment.GetEnvironmentVariable;
 
     public void Configure(DcpOptions options)
     {
@@ -324,6 +333,12 @@ internal class ConfigureDefaultDcpOptions(
         else
         {
             options.TerminalHostInvocationArgs = GetMetadataValue(assemblyMetadata, TerminalHostInvocationArgsMetadataKey);
+        }
+
+        if (executionContext.IsRunMode &&
+            (string.IsNullOrWhiteSpace(options.CliPath) || string.IsNullOrWhiteSpace(options.DashboardPath)))
+        {
+            ApplyBundleLayoutFallback(options);
         }
 
         // Discovery order for the terminal host binary:
@@ -418,6 +433,60 @@ internal class ConfigureDefaultDcpOptions(
         {
             options.ContainerTunnelBaseImage = configuration[KnownConfigNames.ContainerTunnelBaseImage];
         }
+    }
+
+    /// <summary>
+    /// Fills paths the AppHost build should have embedded by resolving an Aspire CLI bundle at runtime.
+    /// </summary>
+    /// <remarks>
+    /// The Aspire.Hosting.AppHost build targets embed the bundle paths as assembly metadata, but an AppHost can still
+    /// be compiled without them, for example when the package targets were not imported or a stale generated
+    /// AssemblyInfo file was compiled. IDE fast up-to-date checks can then keep relaunching that assembly until it is
+    /// rebuilt. Launches through the Aspire CLI are unaffected because the CLI supplies the paths through environment
+    /// variables. This performs the same read-only discovery as the build's default mode; it never extracts a bundle.
+    /// </remarks>
+    private void ApplyBundleLayoutFallback(DcpOptions options)
+    {
+        var aspireHomeDirectory = AspireCliBundleLayoutResolver.GetAspireHomeDirectory(
+            GetEnvironmentVariable(AspireCliBundleLayoutResolver.AspireHomeEnvironmentVariable));
+        var hostingVersion = AssemblyVersionHelper.GetDisplayVersion(typeof(DcpOptions).Assembly);
+
+        if (!AspireCliBundleLayoutResolver.TryResolveRuntimeFallback(
+                aspireHomeDirectory,
+                hostingVersion,
+                PathLookupHelper.FindAllFullPathsFromPath("aspire", GetEnvironmentVariable("PATH"), GetEnvironmentVariable("PATHEXT")),
+                out var layout))
+        {
+            return;
+        }
+
+        var resolvedComponents = new List<string>();
+        if (string.IsNullOrWhiteSpace(options.CliPath))
+        {
+            options.CliPath = BundleDiscovery.GetDcpExecutablePath(layout.DcpDir);
+            options.ExtensionsPath = Path.Combine(layout.DcpDir, "ext");
+            resolvedComponents.Add("DCP");
+        }
+
+        if (string.IsNullOrWhiteSpace(options.DashboardPath))
+        {
+            options.DashboardPath = layout.DashboardPath;
+            resolvedComponents.Add("dashboard");
+        }
+
+        // The terminal host path and its dispatcher arguments describe one binary, so take both from this layout.
+        if (string.IsNullOrEmpty(options.TerminalHostPath))
+        {
+            options.TerminalHostPath = layout.TerminalHostPath;
+            options.TerminalHostInvocationArgs ??= layout.TerminalHostInvocationArgs;
+        }
+
+        var bundleDirectory = Path.GetDirectoryName(layout.DcpDir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+        logger.LogWarning(
+            "The AppHost assembly '{AppHostAssembly}' is missing the {Components} path metadata that the Aspire.Hosting.AppHost build targets embed. Using the Aspire CLI bundle in '{BundleDirectory}' instead. Rebuild the AppHost project to restore the embedded paths.",
+            appOptions.Assembly?.GetName().Name,
+            string.Join(" and ", resolvedComponents),
+            bundleDirectory);
     }
 
     private static void ApplyProxylessEndpointPortRangeOverride(DcpOptions options, IConfiguration configuration)
