@@ -53,7 +53,7 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
 
         ConfigurationHelper.NormalizeSettings(settings);
         var keyParts = ParseKey(key);
-        var resolvedKey = TemplateSourceConfiguration.ValidateEditKey(settings, string.Join('.', keyParts.Select(part => part.Name)));
+        var resolvedKey = TemplateSourceConfiguration.ValidateEditKey(settings, ConfigurationKey.Join(keyParts.Select(part => part.Name)));
         ResolveKeyParts(keyParts, resolvedKey);
 
         // Validate the candidate under the config lock, before writing. A rejected edit must
@@ -96,7 +96,7 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
         }
 
         ConfigurationHelper.NormalizeSettings(settings);
-        ResolveKeyParts(keyParts, TemplateSourceConfiguration.ResolveEditKey(settings, string.Join('.', keyParts.Select(part => part.Name))));
+        ResolveKeyParts(keyParts, TemplateSourceConfiguration.ResolveEditKey(settings, ConfigurationKey.Join(keyParts.Select(part => part.Name))));
         var removedFlat = settings.Remove(string.Join(':', keyParts.Select(part => part.Name)));
         var deleted = DeleteNestedValue(settings, keyParts, key, 0) || removedFlat;
 
@@ -344,8 +344,9 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
     {
         foreach (var kvp in obj)
         {
-            // Normalize colon-separated keys to dot notation for consistent display
-            var normalizedKey = kvp.Key.Replace(':', '.');
+            // Escape literal dots so listed keys can be used by config get/set/delete,
+            // while retaining the normalization of legacy colon-separated paths.
+            var normalizedKey = ConfigurationKey.Join(kvp.Key.Split(':'));
             var key = string.IsNullOrEmpty(prefix) ? normalizedKey : $"{prefix}.{normalizedKey}";
 
             FlattenJsonValue(kvp.Value, result, key);
@@ -524,7 +525,7 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
         // Paths such as "sources.team.plugins[0]" and "matrix[0][1].name" use
         // brackets only for non-negative indices. Dotted numbers remain object
         // property names unless traversal reaches an existing JSON array.
-        foreach (var segment in key.Replace(':', '.').Split('.'))
+        foreach (var segment in ConfigurationKey.Split(key))
         {
             var bracket = segment.IndexOf('[');
             var name = bracket < 0 ? segment : segment[..bracket];
@@ -559,7 +560,7 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
 
     private static void ResolveKeyParts(KeyPart[] parts, string resolvedKey)
     {
-        var names = resolvedKey.Split('.');
+        var names = ConfigurationKey.Split(resolvedKey);
         for (var i = 0; i < parts.Length; i++)
         {
             parts[i] = parts[i] with { Name = names[i] };
