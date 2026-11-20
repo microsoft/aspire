@@ -4,6 +4,7 @@
 using System.Collections.Concurrent;
 using Aspire.Dashboard.Extensions;
 using Aspire.Dashboard.Model;
+using Aspire.Dashboard.Model.ResourceGraph;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Resources;
@@ -1408,7 +1409,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         var resources = _resourceByName.Values.Where(r => !r.IsResourceHidden(_filter.ShowHiddenResources)).ToList();
         var tagsByResource = TagStore.GetTagsByResource(resources);
         var tags = TagStore.GetAllTags(resources)
-            .Where(tag => resources.Any(r => tagsByResource.TryGetValue(r.DisplayName, out var resourceTags) && resourceTags.Contains(tag, StringComparer.OrdinalIgnoreCase)))
+            .Where(tag => resources.Any(r => ResourceTagStore.HasTag(r, tag, tagsByResource)))
             .ToList();
         if (resources.Any(r => !tagsByResource.ContainsKey(r.DisplayName)))
         {
@@ -1476,12 +1477,8 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private List<ResourceGroup> GetTagGroups()
     {
         var textFilter = _filter.TextFilter;
-        var resources = _resourceByName.Values
-            .Where(r => _filter.FilterAllResourceKinds(r, textFilter: string.Empty))
-            .OrderBy(r => r.IsParameter)
-            .ThenBy(r => r.ResourceType)
-            .ThenBy(r => r, ResourceViewModelNameComparer.Instance)
-            .ToList();
+        var resources = OrderTagGroupResources(_resourceByName.Values
+            .Where(r => _filter.FilterAllResourceKinds(r, textFilter: string.Empty))).ToList();
 
         var tagsByResource = TagStore.GetTagsByResource(resources);
         var groups = new List<ResourceGroup>();
@@ -1496,7 +1493,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
             var tagMatchesFilter = textFilter.Length == 0 || tag.Contains(textFilter, StringComparisons.UserTextSearch);
             var taggedResources = resources
-                .Where(r => tagsByResource.TryGetValue(r.DisplayName, out var tags) && tags.Contains(tag, StringComparer.OrdinalIgnoreCase))
+                .Where(r => ResourceTagStore.HasTag(r, tag, tagsByResource))
                 .Where(r => tagMatchesFilter || r.MatchesFilter(textFilter))
                 .ToList();
 
@@ -1518,6 +1515,11 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
         return groups;
     }
+
+    private static IOrderedEnumerable<ResourceViewModel> OrderTagGroupResources(IEnumerable<ResourceViewModel> resources) =>
+        resources.OrderBy(r => r.IsParameter)
+            .ThenBy(r => r.ResourceType)
+            .ThenBy(r => r, ResourceViewModelNameComparer.Instance);
 
     // The tag filter keys untagged resources by the empty string, and tags missing from it are visible.
     private bool IsTagVisible(string tag) =>
@@ -1587,6 +1589,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     {
         var resources = _resourceByName.Values.ToList();
         var tagsByResource = TagStore.GetTagsByResource(resources);
+        ColorGenerator.TagInstance.ResolveAll(tagsByResource.Values.SelectMany(tags => tags));
         var filterKeys = TagStore.GetAllTags(resources).ToHashSet(StringComparer.OrdinalIgnoreCase);
         if (resources.Any(r => !tagsByResource.ContainsKey(r.DisplayName)))
         {
@@ -1954,6 +1957,12 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
     private bool IsCommandDisabled(ResourceViewModel resource, CommandViewModel command) =>
         DashboardClient.IsReadOnly || command.State == CommandViewModelState.Disabled || DashboardCommandExecutor.IsExecuting(resource.Name, command.Name);
+
+    private List<MenuButtonItem> GetTagGroupMenuItems(string tagName) =>
+        ResourceMenuBuilder.CreateTagGroupMenuItems(tagName, $"resource-pane-tag-menu-header-{Guid.NewGuid():N}",
+            () => GetTagGroups().Find(group => StringComparer.OrdinalIgnoreCase.Equals(group.Value, tagName))?.Resources ?? [],
+            (resource, command) => DashboardCommandExecutor.IsExecuting(resource.Name, command.Name),
+            (resource, command) => EventCallback.Factory.Create(this, () => ExecuteResourceCommandAsync(resource, command)).InvokeAsync());
 
     private List<MenuButtonItem> GetResourceMenuItems(ResourceViewModel resource)
     {
@@ -2649,6 +2658,28 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         groupResourceNames.Count > 1 &&
         groupResourceNames.Count == _selectedResourceNames.Count &&
         groupResourceNames.All(IsSelected);
+
+    internal Task SelectGraphTagGroupAsync(string tagName, MouseEventArgs e, IEnumerable<ResourceViewModel> graphResources, bool showHiddenResources) => InvokeAsync(async () =>
+    {
+        var graphMembers = ResourceGraphMapper.GetTagMembers(graphResources, tagName, TagStore);
+        if (graphMembers.Count == 0)
+        {
+            Logger.LogDebug("Tag group '{TagName}' is no longer available in the graph for selection.", tagName);
+            return;
+        }
+
+        // A tag applies to every replica of a displayed member. Tagged parameters belong to the group
+        // even though they never have graph nodes. Neither expansion uses the sidebar's filters.
+        var displayNames = graphMembers.Select(r => r.DisplayName).ToHashSet(StringComparers.ResourceName);
+        var visibleResources = _resourceByName.Values.Where(r => !r.IsResourceHidden(showHiddenResources));
+        var replicas = visibleResources.Where(r => !r.IsParameter && displayNames.Contains(r.DisplayName));
+        var parameters = ResourceGraphMapper.GetTagMembers(visibleResources.Where(r => r.IsParameter), tagName, TagStore);
+        var members = graphMembers.Concat(replicas).Concat(parameters)
+            .DistinctBy(r => r.Name, StringComparers.ResourceName);
+        var selection = OrderTagGroupResources(members).Select(GetResourceName).ToList();
+        await OnResourceGroupClick(e, selection);
+        StateHasChanged();
+    });
 
     private async Task OnResourceGroupClick(MouseEventArgs e, List<string> groupResourceNames)
     {

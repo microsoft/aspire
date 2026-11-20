@@ -602,6 +602,44 @@
     text-align: center;
 }
 
+.resource-tag-actions {
+    display: grid;
+    place-items: center;
+    flex: 0 0 auto;
+    margin-inline-end: 4px;
+}
+
+.resource-tag-actions > .resource-tag-count,
+.resource-tag-actions ::deep .aspire-menu-button {
+    grid-area: 1 / 1;
+}
+
+.resource-tag-actions ::deep .resource-tag-action,
+.resource-tag-actions ::deep .resource-tag-action::part(control) {
+    width: 28px;
+    height: 28px;
+    min-width: 28px;
+    min-height: 28px;
+}
+
+@media (hover: hover) {
+    /* Opacity keeps the menu button in the tab order while the count occupies the same slot. */
+    .resource-tag-header:not(:hover, :has(:focus-visible, .resource-tag-action[aria-expanded="true"])) .resource-tag-actions ::deep .aspire-menu-button {
+        opacity: 0;
+        pointer-events: none;
+    }
+
+    .resource-tag-header:is(:hover, :has(:focus-visible, .resource-tag-action[aria-expanded="true"])) .resource-tag-actions > .resource-tag-count {
+        visibility: hidden;
+    }
+}
+
+@media (hover: none) {
+    .resource-tag-actions > .resource-tag-count {
+        visibility: hidden;
+    }
+}
+
 /* Rows of a group are indented under its header so the grouping reads at a glance. */
 .resource-tag-group .resource-row-link {
     padding-inline-start: calc(var(--resource-row-icon-offset) + 8px);

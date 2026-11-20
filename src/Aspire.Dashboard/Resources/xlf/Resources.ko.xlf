@@ -927,6 +927,16 @@
         <target state="translated">{0}에 대한 리소스 작업</target>
         <note>Accessible label and tooltip for the cog affordance on a graph resource node that opens the resource actions menu. {0} is the resource display name.</note>
       </trans-unit>
+      <trans-unit id="ResourcesGraphTagActionsButton">
+        <source>Tag actions for {0}</source>
+        <target state="new">Tag actions for {0}</target>
+        <note>Accessible label and tooltip for the cog on a graph tag label. {0} is the tag name.</note>
+      </trans-unit>
+      <trans-unit id="ResourcesGraphTagNoCommands">
+        <source>No commands for this group</source>
+        <target state="new">No commands for this group</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ResourcesGraphZoomInButton">
         <source>Zoom in</source>
         <target state="translated">확대</target>

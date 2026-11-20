@@ -1,4 +1,4 @@
-﻿/* The summary is rendered inside the resource overview, which already pads and scrolls its content. Adding padding
+/* The summary is rendered inside the resource overview, which already pads and scrolls its content. Adding padding
    here would indent the summary from the tabs above it, unlike a single resource's overview. */
 .home {
     width: 100%;
@@ -99,16 +99,7 @@
 }
 
 .resource-graph-controls {
-    position: absolute;
-    right: 24px;
-    bottom: 24px;
-    display: flex;
-    column-gap: var(--aspire-space-2);
-}
-
-.resource-graph-controls.resource-graph-game-launch {
-    left: 30px;
-    right: auto;
+    --resource-graph-control-inset-override: var(--aspire-space-6);
 }
 
 .resource-graph-controls fluent-button {
@@ -125,11 +116,6 @@
 .resource-graph-controls fluent-button:active,
 .resource-graph-controls fluent-button:hover:active {
     background-color: var(--resource-graph-secondary-hover-background);
-}
-
-.resource-graph-controls fluent-button > svg {
-    width: 24px;
-    height: 24px;
 }
 
 ::deep .resource-graph .texts,
@@ -160,15 +146,11 @@
 
 ::deep .resource-node {
     fill: var(--aspire-page-background);
-    stroke: var(--aspire-page-background);
+    stroke: transparent;
 }
 
 ::deep .resource-group-hover .resource-node {
     fill: var(--resource-graph-hover-background) !important;
-}
-
-::deep .resource-group-selected .resource-scale {
-    transform: scale(1.2);
 }
 
 ::deep .resource-group-selected .resource-node {
@@ -208,7 +190,7 @@
     transition: opacity .15s ease-in-out;
 }
 
-::deep .resource-group-hover .resource-menu-cog,
+::deep .resource-scale:hover .resource-menu-cog,
 ::deep .resource-menu-cog:focus,
 ::deep .resource-menu-cog[aria-expanded="true"] {
     opacity: 1;

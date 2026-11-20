@@ -569,6 +569,7 @@ public sealed class TestTriggerMapTests
     [InlineData("tests/Aspire.Dashboard.Components.Tests/JavaScript/TerminalTitle.test.mjs")]
     [InlineData("tests/Aspire.Dashboard.Components.Tests/JavaScript/TerminalDock.test.mjs")]
     [InlineData("src/Aspire.Dashboard/wwwroot/js/app-resourcegraph.js")]
+    [InlineData("src/Aspire.Dashboard/wwwroot/js/d3.v7.min.js")]
     [InlineData("tests/Aspire.Dashboard.Components.Tests/JavaScript/ResourceGraph.test.mjs")]
     [InlineData("src/Aspire.Dashboard/wwwroot/js/app-resourcegraph-game.js")]
     [InlineData("tests/Aspire.Dashboard.Components.Tests/JavaScript/ResourceGraphGame.test.mjs")]
