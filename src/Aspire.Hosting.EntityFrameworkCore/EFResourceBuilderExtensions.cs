@@ -739,50 +739,15 @@ public static class EFResourceBuilderExtensions
             displayName: "Start",
             executeCommand: context => StartEfToolResourceAsync(context, toolResource));
 
+        // Inherit environment values before applying explicit tool configuration, so values configured
+        // specifically for dotnet-ef take precedence over the startup and migration resources.
+        toolBuilder.WithEnvironment(async context =>
+        {
+            await ForwardEnvironmentAsync(migrationResource.StartupProjectResource, context).ConfigureAwait(false);
+            await ForwardEnvironmentAsync(migrationResource, context).ConfigureAwait(false);
+        });
+
         migrationResource.ConfigureToolResource?.Invoke(toolBuilder);
-
-        // Forward the startup project's environment without sharing callback annotation instances.
-        // EnvironmentCallbackAnnotation caches its first evaluation, so attaching the same instance
-        // to both resources lets the tool and project consume each other's cached callback result.
-        toolBuilder.WithEnvironment(async context =>
-        {
-            if (migrationResource.StartupProjectResource.TryGetAnnotationsOfType<EnvironmentCallbackAnnotation>(out var projectEnvCallbacks))
-            {
-                // The tool owns the environment dictionary and the forwarding annotation's cache, but
-                // callbacks must still observe the startup project. Some callbacks derive values from
-                // the resource name or inspect its annotations, such as workload-scoped volume paths.
-                var projectContext = new EnvironmentCallbackContext(
-                    context.ExecutionContext,
-                    migrationResource.StartupProjectResource,
-                    context.EnvironmentVariables,
-                    context.CancellationToken)
-                {
-                    Logger = context.Logger,
-                };
-
-                foreach (var callback in projectEnvCallbacks)
-                {
-                    await callback.Callback(projectContext).ConfigureAwait(false);
-                }
-            }
-        });
-
-        // Forward the migration resource's own environment to the tool resource at start time.
-        // The connection string the user declares via `.WithReference(<db>)` lands on the migration
-        // resource as an EnvironmentCallbackAnnotation *after* this method runs, so the annotations
-        // cannot be copied eagerly like the project ones above. Evaluating them lazily here ensures the
-        // dotnet-ef process receives `ConnectionStrings__<db>`; without it the design-time DbContext
-        // has no connection string and fails with "The ConnectionString property has not been initialized."
-        toolBuilder.WithEnvironment(async context =>
-        {
-            if (migrationResource.TryGetAnnotationsOfType<EnvironmentCallbackAnnotation>(out var migrationEnvCallbacks))
-            {
-                foreach (var callback in migrationEnvCallbacks)
-                {
-                    await callback.Callback(context).ConfigureAwait(false);
-                }
-            }
-        });
 
         migrationResource.ToolResource = toolBuilder.Resource;
 
@@ -882,6 +847,42 @@ public static class EFResourceBuilderExtensions
                 IconVariant = IconVariant.Regular,
                 UpdateState = context => GetCommandState(context, migrationResource)
             });
+    }
+
+    private static async Task ForwardEnvironmentAsync(IResource sourceResource, EnvironmentCallbackContext targetContext)
+    {
+        if (!sourceResource.TryGetAnnotationsOfType<EnvironmentCallbackAnnotation>(out var callbacks))
+        {
+            return;
+        }
+
+        var sourceEnvironment = new Dictionary<string, object>();
+        var sourceContext = new EnvironmentCallbackContext(
+            targetContext.ExecutionContext,
+            sourceResource,
+            sourceEnvironment,
+            targetContext.CancellationToken)
+        {
+            Logger = targetContext.Logger,
+        };
+
+        foreach (var callback in callbacks)
+        {
+            var evaluatedEnvironment = await callback.AsCallbackAnnotation().EvaluateOnceAsync(sourceContext).ConfigureAwait(false);
+
+            // A cached callback result was produced with a different context dictionary. Rehydrate the
+            // source-owned context so later callbacks see the same cumulative state and removals.
+            sourceEnvironment.Clear();
+            foreach (var pair in evaluatedEnvironment)
+            {
+                sourceEnvironment[pair.Key] = pair.Value;
+            }
+        }
+
+        foreach (var pair in sourceEnvironment)
+        {
+            targetContext.EnvironmentVariables[pair.Key] = pair.Value;
+        }
     }
 
     private static ResourceCommandState GetCommandState(UpdateCommandStateContext _, EFMigrationResource migrationResource)
