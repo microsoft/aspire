@@ -14,7 +14,7 @@ namespace Aspire.Hosting.Kubernetes.Resources;
 /// of the referenced object.
 /// </remarks>
 [YamlSerializable]
-public sealed class CrossVersionObjectReferenceV1() : BaseKubernetesResource("v1", "ObjectReference")
+public sealed class CrossVersionObjectReferenceV1() : BaseKubernetesObject("v1", "ObjectReference")
 {
     /// <summary>
     /// Gets or sets the name of the Kubernetes resource being referenced.
