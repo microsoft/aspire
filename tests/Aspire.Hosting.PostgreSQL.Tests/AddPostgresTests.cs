@@ -9,6 +9,7 @@ using Aspire.Hosting.Postgres;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
+using Npgsql;
 
 namespace Aspire.Hosting.PostgreSQL.Tests;
 
@@ -20,6 +21,23 @@ public class AddPostgresTests(ITestOutputHelper outputHelper)
         var builder = DistributedApplication.CreateBuilder();
         var redis = builder.AddPostgres("postgres");
         Assert.Single(redis.Resource.Annotations, a => a is HealthCheckAnnotation hca && hca.Key == "postgres_check");
+    }
+
+    [Theory]
+    [InlineData(PostgresErrorCodes.DuplicateDatabase, null, true)]
+    [InlineData(PostgresErrorCodes.UniqueViolation, "pg_database_datname_index", true)]
+    [InlineData(PostgresErrorCodes.UniqueViolation, null, false)]
+    [InlineData(PostgresErrorCodes.UniqueViolation, "another_constraint", false)]
+    public void IsDatabaseAlreadyExists_OnlyRecognizesDatabaseDuplicates(string sqlState, string? constraintName, bool expected)
+    {
+        var exception = new PostgresException(
+            "message",
+            "ERROR",
+            "ERROR",
+            sqlState,
+            constraintName: constraintName);
+
+        Assert.Equal(expected, PostgresBuilderExtensions.IsDatabaseAlreadyExists(exception));
     }
 
     [Fact]
