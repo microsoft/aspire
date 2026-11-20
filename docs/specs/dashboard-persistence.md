@@ -57,6 +57,8 @@ docker run --rm -d \
 
 Restart the container with the same volume, application name, data directory, and persistence mode to continue using the existing database. The Dashboard can remain running through idle periods, and its data remains available after stop and restart, subject to the configured telemetry retention limits.
 
+The volume in this example preserves the database, not the [ASP.NET Core Data Protection key ring](https://learn.microsoft.com/aspnet/core/security/data-protection/configuration/default-settings). If a replacement container cannot access the keys used to protect browser preferences, the dashboard can't read saved moves, user-added tags, or metric pins.
+
 The AppHost console-log protocol does not identify the AppHost generation that produced a line. Resume prioritizes preserving logs from later AppHost generations, whose line numbers restart at 1. If the Dashboard restarts while the same AppHost remains running, console logs replayed by that AppHost can therefore be persisted again.
 
 ### AppHost resource traits and dashboard customizations
@@ -86,12 +88,12 @@ instrument. Edits that exceed either limit are rejected without removing existin
 
 `WithDisplayOrder` stores its own annotation rather than a trait, and is transported
 as the `resource.displayOrder` resource property; repeated calls replace the previous
-value. It isn't specific to the dashboard, so other UIs can use it too. Like
-`ResourceUrlAnnotation.DisplayOrder`, it's a relative sort key: higher values appear first,
-and resources without one are treated as 0, so a negative value moves a resource after them.
-Resources with the same nonzero order are displayed by name. Resources with an order of 0,
-whether declared or not, are sorted by resource type and name, including resources discovered
-after the dashboard opens. Drag-and-drop moves are replayed over that default order.
+value. Other UIs can use it too. The new dashboard resource pane uses it only when
+**Group resources** is set to **None**. Higher values appear first, and resources without
+one are treated as 0, so a negative value moves a resource after them. Resources with the
+same nonzero order are sorted by name. Resources with an order of 0 are sorted by type
+and name. The same rules apply to resources discovered after the dashboard opens.
+Drag-and-drop moves are replayed over that default order.
 Resource moves and group moves are saved separately in protected browser local storage per application,
 independently of the run database. If the dashboard can no longer decrypt the saved moves, it uses the default
 order. A move stores both neighbors at the drop position. Replay places the item before or after
