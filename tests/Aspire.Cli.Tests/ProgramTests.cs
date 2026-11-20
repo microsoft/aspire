@@ -154,6 +154,7 @@ public class ProgramTests(ITestOutputHelper outputHelper)
     [InlineData("ps -l Debug", CliExitCodes.Success, false)]
     [InlineData("ps --log-file cli.log", CliExitCodes.Success, false)]
     [InlineData("ps --log-file=cli.log", CliExitCodes.Success, false)]
+    [InlineData("ps --capture-profile", CliExitCodes.Success, false)]
     [InlineData("run", CliExitCodes.Success, false)]
     public void ShouldDiscardLogOnSuccess_OnlyForCleanOneShotQueries(string commandLine, int exitCode, bool expected)
     {

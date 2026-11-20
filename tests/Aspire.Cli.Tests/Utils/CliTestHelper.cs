@@ -129,7 +129,7 @@ internal static class CliTestHelper
         // factory callback so the DI container owns the instance and disposes it (closing
         // the log file handle) when the ServiceProvider is disposed.
         var testLogsDirectory = Path.Combine(options.WorkingDirectory.FullName, ".aspire", "logs");
-        var testLogFilePath = FileLoggerProvider.GenerateLogFilePath(testLogsDirectory, TimeProvider.System);
+        var testLogFilePath = ManagedLogFiles.GenerateLogFilePath(testLogsDirectory, TimeProvider.System);
         services.AddSingleton(sp => new FileLoggerProvider(testLogFilePath, new TestStartupErrorWriter()));
         services.AddSingleton(new Program.CliLoggingOptions(ConsoleLogLevel: null, DebugMode: false, LogsDirectory: testLogsDirectory, LogFilePath: testLogFilePath, IsManagedLogFile: false));
 

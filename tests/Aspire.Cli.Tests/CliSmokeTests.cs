@@ -232,7 +232,7 @@ public class CliSmokeTests(ITestOutputHelper outputHelper)
 
         for (var index = 0; index < 99; index++)
         {
-            var path = FileLoggerProvider.GenerateLogFilePath(logsDirectory, TimeProvider.System);
+            var path = ManagedLogFiles.GenerateLogFilePath(logsDirectory, TimeProvider.System);
             new FileLoggerProvider(path, logsDirectory: null, new TestStartupErrorWriter(), isManagedLog: true).Dispose();
         }
         new FileLoggerProvider(logsDirectory, TimeProvider.System, new TestStartupErrorWriter()).Dispose();

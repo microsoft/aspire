@@ -47,7 +47,7 @@ public class PsCommandTests(ITestOutputHelper outputHelper)
             }
         });
         var stopper = new TestAppHostStopper { DefaultResult = stopSucceeds };
-        var logFilePath = FileLoggerProvider.GenerateLogFilePath(Path.Combine(workspace.WorkspaceRoot.FullName, "logs"), TimeProvider.System);
+        var logFilePath = ManagedLogFiles.GenerateLogFilePath(Path.Combine(workspace.WorkspaceRoot.FullName, "logs"), TimeProvider.System);
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {

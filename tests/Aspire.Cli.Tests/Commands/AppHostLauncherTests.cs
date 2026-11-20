@@ -65,7 +65,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
         var fileName = Path.GetFileName(path);
 
         Assert.StartsWith(logsDirectory, path, StringComparison.OrdinalIgnoreCase);
-        Assert.Matches("^cli_20260212T180000000_detach-child_[0-9a-f]{32}_managed\\.log$", fileName);
+        Assert.Matches("^cli_20260212T180000_[0-9a-f]{8}_detach-child_managed\\.log$", fileName);
     }
 
     [Fact]

@@ -3,6 +3,7 @@
 
 using System.Diagnostics;
 using Aspire.Cli.Backchannel;
+using Aspire.Cli.Diagnostics;
 using Aspire.Cli.Tests.TestServices;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -206,7 +207,7 @@ public class OrphanedAppHostCollectorTests
             monitor.AddConnection(orphanSocket, CreateConnection(orphanSocket, appHostPid: 4242, orphaned: true));
             monitor.AddConnection(liveSocket, CreateConnection(liveSocket, appHostPid: 4343, orphaned: false));
 
-            var collector = new OrphanedAppHostCollector(monitor, stopper, NullLogger<OrphanedAppHostCollector>.Instance);
+            var collector = CreateCollector(monitor, stopper);
 
             var collected = await collector.CollectAsync(CancellationToken.None);
 
@@ -235,7 +236,7 @@ public class OrphanedAppHostCollectorTests
             var socketPath = CreateSocketFile(tempDir, "orphan.sock");
             monitor.AddConnection(socketPath, CreateConnection(socketPath, appHostPid: 4242, orphaned: true));
 
-            var collector = new OrphanedAppHostCollector(monitor, stopper, NullLogger<OrphanedAppHostCollector>.Instance);
+            var collector = CreateCollector(monitor, stopper);
 
             var collected = await collector.CollectAsync(CancellationToken.None);
 
@@ -261,7 +262,7 @@ public class OrphanedAppHostCollectorTests
             var socketPath = CreateSocketFile(tempDir, "orphan.sock");
             monitor.AddConnection(socketPath, CreateConnection(socketPath, appHostPid: 4242, orphaned: true));
 
-            var collector = new OrphanedAppHostCollector(monitor, stopper, NullLogger<OrphanedAppHostCollector>.Instance);
+            var collector = CreateCollector(monitor, stopper);
 
             var collected = await collector.CollectAsync(CancellationToken.None);
 
@@ -293,7 +294,7 @@ public class OrphanedAppHostCollectorTests
                 ThrowSelector = info => info?.ProcessId == 1 ? new InvalidOperationException("boom") : null,
             };
 
-            var collector = new OrphanedAppHostCollector(monitor, stopper, NullLogger<OrphanedAppHostCollector>.Instance);
+            var collector = CreateCollector(monitor, stopper);
 
             var collected = await collector.CollectAsync(CancellationToken.None);
 
@@ -317,7 +318,7 @@ public class OrphanedAppHostCollectorTests
         const string socketPath = "/tmp/aspire-orphan-tests-live.sock";
         monitor.AddConnection(socketPath, CreateConnection(socketPath, appHostPid: 4343, orphaned: false));
 
-        var collector = new OrphanedAppHostCollector(monitor, stopper, NullLogger<OrphanedAppHostCollector>.Instance);
+        var collector = CreateCollector(monitor, stopper);
 
         var collected = await collector.CollectAsync(CancellationToken.None);
 
@@ -340,7 +341,7 @@ public class OrphanedAppHostCollectorTests
         const string socketPath = "/tmp/aspire-orphan-tests-scan-throw.sock";
         monitor.AddConnection(socketPath, CreateConnection(socketPath, appHostPid: 4242, orphaned: true));
 
-        var collector = new OrphanedAppHostCollector(monitor, stopper, NullLogger<OrphanedAppHostCollector>.Instance);
+        var collector = CreateCollector(monitor, stopper);
 
         var collected = await collector.CollectAsync(CancellationToken.None);
 
@@ -358,11 +359,14 @@ public class OrphanedAppHostCollectorTests
         };
         var stopper = new TestAppHostStopper();
 
-        var collector = new OrphanedAppHostCollector(monitor, stopper, NullLogger<OrphanedAppHostCollector>.Instance);
+        var collector = CreateCollector(monitor, stopper);
 
         await Assert.ThrowsAsync<OperationCanceledException>(() => collector.CollectAsync(CancellationToken.None));
         Assert.Empty(stopper.StopRequests);
     }
+
+    private static OrphanedAppHostCollector CreateCollector(TestAuxiliaryBackchannelMonitor monitor, TestAppHostStopper stopper)
+        => new(monitor, stopper, FileLoggerProvider.CreateDisabled("unused.log"), NullLogger<OrphanedAppHostCollector>.Instance);
 
     private static string CreateSocketFile(DirectoryInfo directory, string name)
     {

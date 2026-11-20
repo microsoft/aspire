@@ -1028,15 +1028,10 @@ internal sealed class AppHostLauncher(
         => childExitCode == CliExitCodes.Success;
 
     /// <summary>
-    /// Generates a unique log file path for a detached child CLI process.
+    /// Generates a unique managed log file path for a detached child CLI process.
     /// </summary>
     internal static string GenerateChildLogFilePath(string logsDirectory, TimeProvider timeProvider)
-    {
-        var timestamp = timeProvider.GetUtcNow().ToString("yyyyMMddTHHmmssfff", CultureInfo.InvariantCulture);
-        var uniqueId = Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
-        var fileName = $"cli_{timestamp}_detach-child_{uniqueId}_managed.log";
-        return Path.Combine(logsDirectory, fileName);
-    }
+        => ManagedLogFiles.GenerateLogFilePath(logsDirectory, timeProvider, suffix: "detach-child");
 
     internal static IReadOnlyList<string> ReadChildLogTail(string childLogFile, int maxLines = 80)
     {

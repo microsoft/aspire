@@ -3,7 +3,6 @@
 
 using System.Globalization;
 using System.Text;
-using System.Text.RegularExpressions;
 using System.Threading.Channels;
 using Aspire.Cli.Interaction;
 using Aspire.Shared;
@@ -18,16 +17,9 @@ namespace Aspire.Cli.Diagnostics;
 /// independent of console verbosity settings.
 /// On Unix, log files are restricted to the current user, including reused files.
 /// </summary>
-internal sealed partial class FileLoggerProvider : ILoggerProvider
+internal sealed class FileLoggerProvider : ILoggerProvider
 {
     private const int MaxQueuedMessages = 1024;
-
-    // Includes the current process's file.
-    private const int RetainedLogFileCount = 100;
-
-    // Limit filesystem work on the startup path when many tracked logs have accumulated.
-    private const int MaxPrunedLogFilesPerRun = 100;
-    private const string ManagedLogHeaderPrefix = "# Aspire CLI managed diagnostic log: ";
 
     private readonly string _logFilePath;
     private readonly StreamWriter? _writer;
@@ -57,29 +49,13 @@ internal sealed partial class FileLoggerProvider : ILoggerProvider
     public string LogFilePath => _logFilePath;
 
     /// <summary>
-    /// Generates a unique, chronologically-sortable log file name.
-    /// </summary>
-    /// <param name="logsDirectory">The directory where log files will be written.</param>
-    /// <param name="timeProvider">The time provider for timestamp generation.</param>
-    /// <param name="suffix">An optional suffix inserted before <c>_managed.log</c>.</param>
-    internal static string GenerateLogFilePath(string logsDirectory, TimeProvider timeProvider, string? suffix = null)
-    {
-        var timestamp = timeProvider.GetUtcNow().ToString("yyyyMMdd'T'HHmmss", CultureInfo.InvariantCulture);
-        var id = Guid.NewGuid().ToString("N")[..8];
-        var name = suffix is null
-            ? $"cli_{timestamp}_{id}_managed.log"
-            : $"cli_{timestamp}_{id}_{suffix}_managed.log";
-        return Path.Combine(logsDirectory, name);
-    }
-
-    /// <summary>
     /// Creates a new FileLoggerProvider that writes to the specified directory.
     /// </summary>
     /// <param name="logsDirectory">The directory where log files will be written.</param>
     /// <param name="timeProvider">The time provider for timestamp generation.</param>
     /// <param name="errorWriter">Error writer for startup error messages.</param>
     public FileLoggerProvider(string logsDirectory, TimeProvider timeProvider, IStartupErrorWriter errorWriter)
-        : this(GenerateLogFilePath(logsDirectory, timeProvider), logsDirectory, errorWriter, isManagedLog: true)
+        : this(ManagedLogFiles.GenerateLogFilePath(logsDirectory, timeProvider), logsDirectory, errorWriter, isManagedLog: true)
     {
     }
 
@@ -111,7 +87,7 @@ internal sealed partial class FileLoggerProvider : ILoggerProvider
                 if (logsDirectory is not null && Path.GetRelativePath(logsDirectory, directory) == ".")
                 {
                     DirectoryHelper.CreateWithOwnerOnlyPermissions(directory);
-                    PruneOldLogFiles(directory, reserveSlot: isManagedLog);
+                    ManagedLogFiles.Prune(directory, reserveSlot: isManagedLog);
                 }
                 else if (OperatingSystem.IsWindows())
                 {
@@ -128,7 +104,7 @@ internal sealed partial class FileLoggerProvider : ILoggerProvider
             {
                 if (isManagedLog)
                 {
-                    writer.WriteLine(ManagedLogHeaderPrefix + Path.GetFileName(logFilePath));
+                    ManagedLogFiles.WriteHeader(writer, logFilePath);
                 }
             }
             catch
@@ -149,109 +125,6 @@ internal sealed partial class FileLoggerProvider : ILoggerProvider
             _writer = null;
             _channel = null;
         }
-    }
-
-    // Every CLI invocation creates a log file, and tools such as the VS Code extension poll
-    // commands like `aspire ps`, so the logs directory grows without bound unless old files are removed.
-    // Pruning is best-effort: concurrent CLI processes may prune at the same time, and any file that
-    // cannot be deleted is left for a later run.
-    private static void PruneOldLogFiles(string logsDirectory, bool reserveSlot)
-    {
-        FileInfo[] logFiles;
-        try
-        {
-            logFiles = new DirectoryInfo(logsDirectory).GetFiles("cli_*_managed.log")
-                .Where(file => GeneratedLogFileNameRegex().IsMatch(file.Name))
-                .Where(IsManagedLogFile)
-                .ToArray();
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            return;
-        }
-
-        // Only automatic logs need a slot in the tracked retention window.
-        var excessCount = Math.Min(logFiles.Length - (RetainedLogFileCount - (reserveSlot ? 1 : 0)), MaxPrunedLogFilesPerRun);
-        if (excessCount <= 0)
-        {
-            return;
-        }
-
-        // Only deleted files count toward the per-run limit. Otherwise old logs that can't be deleted, such as
-        // logs held open by long-running commands, could fill the limit on every run and keep newer inactive
-        // logs from ever being pruned.
-        var prunedCount = 0;
-        foreach (var file in logFiles.OrderBy(file => file.LastWriteTimeUtc))
-        {
-            // Do not follow links that may point outside the logs directory.
-            if (file.Attributes.HasFlag(FileAttributes.ReparsePoint))
-            {
-                continue;
-            }
-
-            if (TryDeleteInactiveLogFile(file.FullName) && ++prunedCount == excessCount)
-            {
-                break;
-            }
-        }
-    }
-
-    // The marker is also checked in the file: a custom --log-file can use a generated-looking name.
-    // Legacy files have no marker and cannot safely be distinguished from user-owned files.
-    [GeneratedRegex(@"^cli_[0-9]{8}T[0-9]{6}(?:[0-9]{3})?_.+_managed\.log$")]
-    private static partial Regex GeneratedLogFileNameRegex();
-
-    private static bool IsManagedLogFile(FileInfo file)
-    {
-        try
-        {
-            if (file.Attributes.HasFlag(FileAttributes.ReparsePoint))
-            {
-                return false;
-            }
-
-            using var stream = new FileStream(file.FullName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
-            return HasManagedLogHeader(stream, file.Name);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            return false;
-        }
-    }
-
-    private static bool TryDeleteInactiveLogFile(string path)
-    {
-        try
-        {
-            // Long-running commands such as `aspire run` keep their log open with FileShare.Read.
-            // On Unix .NET enforces exclusive access with an advisory flock, which may be unavailable.
-            // Windows must allow delete sharing so File.Delete can mark this open file for deletion.
-            var share = OperatingSystem.IsWindows() ? FileShare.Delete : FileShare.None;
-            using var stream = new FileStream(path, FileMode.Open, FileAccess.ReadWrite, share);
-            if (!HasManagedLogHeader(stream, Path.GetFileName(path)))
-            {
-                return false;
-            }
-
-            File.Delete(path);
-            return true;
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            return false;
-        }
-    }
-
-    // Managed files start with "# Aspire CLI managed diagnostic log: cli_<timestamp>_<id>_managed.log".
-    // Binding the marker to the filename keeps a renamed copy from becoming another managed log.
-    private static bool HasManagedLogHeader(Stream stream, string fileName)
-    {
-        using var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true, bufferSize: 1024, leaveOpen: true);
-        var expectedHeader = ManagedLogHeaderPrefix + fileName;
-        Span<char> header = stackalloc char[expectedHeader.Length + 1];
-        return reader.ReadBlock(header) == header.Length
-            && header[..^1].SequenceEqual(expectedHeader)
-            && header[^1] is '\r' or '\n';
     }
 
     private static StreamWriter CreateWriter(string logFilePath, bool isManagedLog)

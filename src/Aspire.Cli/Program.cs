@@ -137,7 +137,7 @@ public class Program
 
         var logsDirectory = Path.Combine(GetUsersAspirePath(processPath), "logs");
         var explicitLogFilePath = ParseLogFileOption(args);
-        var logFilePath = explicitLogFilePath ?? FileLoggerProvider.GenerateLogFilePath(logsDirectory, TimeProvider.System);
+        var logFilePath = explicitLogFilePath ?? ManagedLogFiles.GenerateLogFilePath(logsDirectory, TimeProvider.System);
 
         return new CliLoggingOptions(logLevel, debugMode, logsDirectory, logFilePath, IsManagedLogFile: explicitLogFilePath is null);
     }
@@ -172,9 +172,9 @@ public class Program
     /// <summary>
     /// Determines whether a successful one-shot command's automatic log can be deleted at exit.
     /// Commands opt in through <see cref="BaseCommand.DiscardsLogOnSuccess"/>. Logs are kept when the user
-    /// asked for diagnostics (<c>--debug</c>, <c>--log-level</c>, or <c>--log-file</c>), when the command
-    /// does not opt in, such as follow modes, or when the run was cancelled. Cancellation is checked
-    /// separately so a cancelled run that still reports success keeps its log.
+    /// asked for diagnostics (<c>--debug</c>, <c>--log-level</c>, <c>--log-file</c>, or <c>--capture-profile</c>),
+    /// when the command does not opt in, such as follow modes, or when the run was cancelled. Cancellation is
+    /// checked separately so a cancelled run that still reports success keeps its log.
     /// </summary>
     /// <remarks>
     /// The diagnostic options are checked in the parse result rather than the raw-argument pre-parse in
@@ -193,6 +193,7 @@ public class Program
             && parseResult.GetResult(RootCommand.DebugOption) is not { Implicit: false }
             && parseResult.GetResult(RootCommand.DebugLevelOption) is not { Implicit: false }
             && parseResult.GetResult(RootCommand.s_logFileOption) is not { Implicit: false }
+            && parseResult.GetResult(RootCommand.CaptureProfileOption) is not { Implicit: false }
             && parseResult.CommandResult.Command is BaseCommand command
             && command.DiscardsLogOnSuccess(parseResult);
 
@@ -1420,8 +1421,7 @@ public class Program
                 }
             }
 
-            discardLogOnSuccess = profileCaptureOptions is null
-                && ShouldDiscardLogOnSuccess(exitCode, cancellationManager.Token.IsCancellationRequested, parseResult);
+            discardLogOnSuccess = ShouldDiscardLogOnSuccess(exitCode, cancellationManager.Token.IsCancellationRequested, parseResult);
 
             return exitCode;
         }
