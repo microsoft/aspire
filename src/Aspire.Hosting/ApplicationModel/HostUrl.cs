@@ -10,7 +10,7 @@ namespace Aspire.Hosting.ApplicationModel;
 
 /// <summary>
 /// Represents a URL on the host machine. When referenced in a container resource, localhost (including
-/// <c>*.localhost</c> host names such as <c>*.dev.localhost</c>) will be replaced with the configured container host name.
+/// <c>*.localhost</c> host names such as <c>*.dev.localhost</c>) and wildcard bind addresses will be replaced with the configured container host name.
 /// </summary>
 public record HostUrl(string Url) : IExpressionValue, IValueProvider, IManifestExpressionProvider
 {
@@ -39,7 +39,7 @@ public record HostUrl(string Url) : IExpressionValue, IValueProvider, IManifestE
 
         try
         {
-            var uri = new UriBuilder(Url);
+            var uri = CreateUriBuilder(Url);
             if (IsLocalHost(uri.Host))
             {
                 if (context.ExecutionContext?.IsRunMode == true)
@@ -119,7 +119,7 @@ public record HostUrl(string Url) : IExpressionValue, IValueProvider, IManifestE
 
         try
         {
-            var uri = new UriBuilder(url);
+            var uri = CreateUriBuilder(url);
             if (!IsLocalHost(uri.Host))
             {
                 return false;
@@ -156,7 +156,26 @@ public record HostUrl(string Url) : IExpressionValue, IValueProvider, IManifestE
         return endpoint.DefaultNetworkID == KnownNetworkIdentifiers.LocalhostNetwork && endpoint.Port == port;
     }
 
-    // *.localhost names (for example *.dev.localhost) also resolve to the host's loopback address.
+    private static UriBuilder CreateUriBuilder(string url)
+    {
+        // Listen URLs such as http://*:18889 and http://+:18889 use wildcard
+        // authorities that UriBuilder cannot parse. Normalize only that authority,
+        // preserving wildcard characters in paths and query strings.
+        var schemeDelimiter = url.IndexOf("://", StringComparison.Ordinal);
+        if (schemeDelimiter >= 0)
+        {
+            var hostStart = schemeDelimiter + 3;
+            var authority = url.AsSpan(hostStart);
+            if (authority.Length > 0 && (authority[0] is '*' or '+') &&
+                (authority.Length == 1 || authority[1] is ':' or '/' or '?' or '#'))
+            {
+                url = string.Concat(url.AsSpan(0, hostStart), KnownHostNames.Localhost, url.AsSpan(hostStart + 1));
+            }
+        }
+        return new UriBuilder(url);
+    }
+
+    // Wildcard bind addresses refer to this host, just like loopback and *.localhost.
     private static bool IsLocalHost(string host) =>
-        EndpointHostHelpers.IsLocalhostOrLocalhostTld(host) || host is "127.0.0.1" or "::1" or "[::1]";
+        EndpointHostHelpers.IsLocalhostOrLocalhostTld(host) || host is "127.0.0.1" or "::1" or "[::1]" or "0.0.0.0" or "::" or "[::]";
 }
