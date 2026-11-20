@@ -1772,7 +1772,7 @@ public sealed class AutoSecWorkflowTests(ITestOutputHelper testOutput)
             ["outputLines"] = new JsonArray(
                 new JsonObject { ["type"] = "create_pull_request", ["branch"] = "auto-sec/security-updates", ["title"] = "Automated dependency updates", ["body"] = PublicTextBody.Replace("\r\n", "\n") }.ToJsonString(),
                 new JsonObject { ["type"] = "approve_dependabot_pr", ["pr_number"] = 101, ["head_sha"] = headSha, ["note"] = "fixes alert 42" }.ToJsonString(),
-                new JsonObject { ["type"] = "missing_tool", ["tool"] = "alerts", ["reason"] = "alert 42 needs a tool" }.ToJsonString(),
+                new JsonObject { ["type"] = "report_missing_tool", ["tool"] = "alerts", ["reason"] = "alert 42 needs a tool" }.ToJsonString(),
                 new JsonObject { ["type"] = "noop", ["message"] = "alerts=2 dependabot-pr=1 auto-sec-pr=1 blocked=0 code-findings-out-of-scope=5" }.ToJsonString()),
             ["patchFiles"] = new JsonObject { ["aw-auto-sec-security-updates.patch"] = PublicTextPatch.Replace("\r\n", "\n") },
             ["workFiles"] = new JsonObject

@@ -3443,7 +3443,7 @@ function collectReportCounts(alerts, codeScanning) {
 }
 
 // Safe-output types whose agent-authored text the conclusion job would publish in issues
-// (`missing_tool`, `missing_data`, `report_incomplete`) have no fixed template, so only
+// (`report_missing_tool`, `report_missing_data`, `report_incomplete`) have no fixed template, so only
 // these types survive the scrub.
 const PUBLIC_OUTPUT_TYPES = new Set(['create_pull_request', 'push_to_pull_request_branch', 'approve_dependabot_pr', 'noop']);
 
