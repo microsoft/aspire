@@ -108,9 +108,14 @@ public class Aspire8MetricsTests
         Assert.Contains(collectorNetworkReceived.LastMeasurement!.Tags, t => t.Key == "type" && t.Value!.ToString() == "producer");
 
         Assert.Equal(5, collectorMessageTx.LastMeasurement!.Value);
-        Assert.Contains(collectorMessageTx.LastMeasurement!.Tags, t => t.Key == "messaging.client_id" && t.Value!.ToString() == "rdkafka");
-        Assert.Contains(collectorMessageTx.LastMeasurement!.Tags, t => t.Key == "name" && t.Value!.ToString() == "rdkafka#producer-1");
-        Assert.Contains(collectorMessageTx.LastMeasurement!.Tags, t => t.Key == "type" && t.Value!.ToString() == "producer");
+        Assert.Null(collectorMessageTx.Instrument!.Unit);
+        var expectedMessageTags = new Dictionary<string, object?>
+        {
+            ["messaging.client_id"] = "rdkafka",
+            ["name"] = "rdkafka#producer-1",
+            ["type"] = "producer",
+        };
+        Assert.Equal(expectedMessageTags.OrderBy(tag => tag.Key), collectorMessageTx.LastMeasurement.Tags.OrderBy(tag => tag.Key));
 
         Assert.Equal(1638400, collectorMessageTransmitted.LastMeasurement!.Value);
         Assert.Contains(collectorMessageTransmitted.LastMeasurement!.Tags, t => t.Key == "messaging.client_id" && t.Value!.ToString() == "rdkafka");
@@ -118,9 +123,8 @@ public class Aspire8MetricsTests
         Assert.Contains(collectorMessageTransmitted.LastMeasurement!.Tags, t => t.Key == "type" && t.Value!.ToString() == "producer");
 
         Assert.Equal(5, collectorMessageRx.LastMeasurement!.Value);
-        Assert.Contains(collectorMessageRx.LastMeasurement!.Tags, t => t.Key == "messaging.client_id" && t.Value!.ToString() == "rdkafka");
-        Assert.Contains(collectorMessageRx.LastMeasurement!.Tags, t => t.Key == "name" && t.Value!.ToString() == "rdkafka#producer-1");
-        Assert.Contains(collectorMessageRx.LastMeasurement!.Tags, t => t.Key == "type" && t.Value!.ToString() == "producer");
+        Assert.Null(collectorMessageRx.Instrument!.Unit);
+        Assert.Equal(expectedMessageTags.OrderBy(tag => tag.Key), collectorMessageRx.LastMeasurement.Tags.OrderBy(tag => tag.Key));
 
         Assert.Equal(1638400, collectorMessageReceived.LastMeasurement!.Value);
         Assert.Contains(collectorMessageReceived.LastMeasurement!.Tags, t => t.Key == "messaging.client_id" && t.Value!.ToString() == "rdkafka");

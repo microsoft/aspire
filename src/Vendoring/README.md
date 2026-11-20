@@ -5,18 +5,24 @@
 ```console
 git clone https://github.com/open-telemetry/opentelemetry-dotnet-contrib.git
 git fetch --tags
-git checkout tags/Instrumentation.ConfluentKafka-0.1.0-alpha.2
+git checkout tags/Instrumentation.ConfluentKafka-0.3.0-alpha.4
 ```
 
 ### Instructions
 
 - Copy files from `src/OpenTelemetry.Instrumentation.ConfluentKafka` to `src/Vendoring/OpenTelemetry.Instrumentation.ConfluentKafka`:
-    - `**\*.cs` minus `AssemblyInfo.cs`, `OpenTelemetryConsumerBuilderExtensions.cs`, `OpenTelemetryProducerBuilderExtensions.cs`, `ReflectionHelpers.cs`
+    - `**\*.cs` minus `AssemblyInfo.cs`, `ConfluentKafkaInstrumentedConsumerBuilderOptions.cs`, `ConfluentKafkaInstrumentedProducerBuilderOptions.cs`, `OpenTelemetryConsumerBuilderExtensions.cs`, `OpenTelemetryProducerBuilderExtensions.cs`, `ReflectionHelpers.cs`
 - Copy files from `src/Shared` to `src/Vendoring/OpenTelemetry.Instrumentation.ConfluentKafka/Shared`:
     - `Guard.cs`
-    - `PropertyFetcher.AOT.cs`
     - `SemanticConventions.cs`
-- In `ConfluentKafkaCommon.cs` update `InstrumentationName` to `internal const string InstrumentationName = "OpenTelemetry.Instrumentation.ConfluentKafka";` and `InstrumentationVersion` to `internal static readonly Version Version = new Version(0, 1, 0, 0).ToString();`
+- Preserve the existing AOT-compatible `PropertyFetcher.AOT.cs` instead of copying the reflection-based `PropertyFetcher.cs` used upstream.
+- In `ConfluentKafkaCommon.cs`:
+    - Set `InstrumentationName` to `"OpenTelemetry.Instrumentation.ConfluentKafka"`.
+    - Set `InstrumentationVersion` to `new Version(0, 3, 0, 0).ToString()`.
+    - Construct `ActivitySource` and `Meter` directly with the instrumentation name/version and the v1.44.0 telemetry schema URL instead of copying `ActivitySourceFactory.cs`, `AssemblyVersionExtensions.cs`, `MeterFactory.cs`, and `SchemaUrls.cs`.
+- Preserve the local `InstrumentedConsumer` adaptation that records operation duration for completed empty polls (timeouts and partition EOF) without emitting message counts or spans.
+- Preserve lazy cluster-ID discovery: only start it when a span requests enrichment, including when tracing is enabled after client construction. Processing spans must respect the consumer's tracing option.
+- Remove a failed cluster-ID cache entry only if it still contains the failed task; stale waiters must not evict replacement tasks.
 
 ## OpenTelemetry.Instrumentation.StackExchangeRedis
 
