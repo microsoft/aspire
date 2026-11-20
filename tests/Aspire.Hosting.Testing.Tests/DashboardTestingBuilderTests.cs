@@ -132,7 +132,15 @@ public class DashboardTestingBuilderTests
         });
 
         await using var app = await builder.BuildAsync();
-        await app.StartAsync().DefaultTimeout(TimeSpan.FromSeconds(60));
+        try
+        {
+            await app.StartAsync().DefaultTimeout(TimeSpan.FromSeconds(60));
+        }
+        catch (TimeoutException ex) when (builder.Configuration["Aspire:Test:DcpLogBasePath"] is { Length: > 0 })
+        {
+            var completedCallbacks = Volatile.Read(ref beforeStartCount);
+            throw new TimeoutException($"AppHost startup timed out; completed test BeforeStart callbacks: {completedCallbacks}.", ex);
+        }
 
         Assert.Equal(1, beforeStartCount);
         Assert.True(app.Services.GetRequiredService<IInteractionService>().IsAvailable);
