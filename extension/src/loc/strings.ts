@@ -349,6 +349,14 @@ export const codeLensJavaAppHostAlreadyRunning = vscode.l10n.t('⚠️ Do not cl
 export const codeLensJavaAppHostAlreadyRunningTooltip = vscode.l10n.t('Use Aspire controls instead. The Java extension starts another java process outside the running Aspire session.');
 export const codeLensJavaAppHostUseAspire = vscode.l10n.t('⚠️ Do not click the Java Run or Debug actions; they bypass Aspire');
 export const codeLensJavaAppHostUseAspireTooltip = vscode.l10n.t('Use Aspire Run or Debug instead. The Java extension runs this file directly, so the AppHost starts with no Aspire session: none of its resources are launched, and the dashboard never appears.');
+export const codeLensHideGuidance = vscode.l10n.t('Hide');
+export const codeLensHideDebuggerHints = vscode.l10n.t('Hide debugger hints');
+export const codeLensHideSpringBootGuidanceTooltip = vscode.l10n.t('Hide Spring Boot Dashboard reminders in every AppHost file. The choice is saved in your User settings; turn it back on from Aspire: Extension settings.');
+export const codeLensHideJavaLaunchGuidanceTooltip = vscode.l10n.t('Hide Java Run/Debug reminders in every AppHost file. The choice is saved in your User settings; turn it back on from Aspire: Extension settings.');
+export const codeLensHideRustLaunchGuidanceTooltip = vscode.l10n.t('Hide rust-analyzer Run/Debug reminders in every AppHost file. The choice is saved in your User settings; turn it back on from Aspire: Extension settings.');
+export const codeLensHideDebuggerHintsTooltip = vscode.l10n.t('Hide all inline debugger setup suggestions. The choice is saved in your User settings; turn it back on from Aspire: Extension settings.');
+export const codeLensGuidanceWorkspaceOverride = (setting: string) => vscode.l10n.t('Your workspace settings set {0} to true, which overrides your User settings. Hide this guidance in this workspace too?', setting);
+export const codeLensHideInWorkspaceSettings = vscode.l10n.t('Hide in Workspace Settings');
 
 export const appHostLifecycleStartConfirmationTitle = vscode.l10n.t('Start Aspire AppHost');
 export const appHostLifecycleStopConfirmationTitle = vscode.l10n.t('Stop Aspire AppHost');

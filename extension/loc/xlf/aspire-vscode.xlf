@@ -547,6 +547,30 @@
     <trans-unit id="aspire-vscode.strings.goDisplayName">
       <source xml:lang="en">Go: {0}</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.codeLensHideGuidance">
+      <source xml:lang="en">Hide</source>
+    </trans-unit>
+    <trans-unit id="command.hideCodeLensGuidance">
+      <source xml:lang="en">Hide CodeLens guidance</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.codeLensHideJavaLaunchGuidanceTooltip">
+      <source xml:lang="en">Hide Java Run/Debug reminders in every AppHost file. The choice is saved in your User settings; turn it back on from Aspire: Extension settings.</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.codeLensHideSpringBootGuidanceTooltip">
+      <source xml:lang="en">Hide Spring Boot Dashboard reminders in every AppHost file. The choice is saved in your User settings; turn it back on from Aspire: Extension settings.</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.codeLensHideDebuggerHintsTooltip">
+      <source xml:lang="en">Hide all inline debugger setup suggestions. The choice is saved in your User settings; turn it back on from Aspire: Extension settings.</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.codeLensHideDebuggerHints">
+      <source xml:lang="en">Hide debugger hints</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.codeLensHideInWorkspaceSettings">
+      <source xml:lang="en">Hide in Workspace Settings</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.codeLensHideRustLaunchGuidanceTooltip">
+      <source xml:lang="en">Hide rust-analyzer Run/Debug reminders in every AppHost file. The choice is saved in your User settings; turn it back on from Aspire: Extension settings.</source>
+    </trans-unit>
     <trans-unit id="languageModelTool.aspireAppHostStart.mode.description">
       <source xml:lang="en">How to start the AppHost: &apos;run&apos; starts it without attaching the debugger, &apos;debug&apos; starts it with the debugger attached.</source>
     </trans-unit>
@@ -1030,6 +1054,18 @@
     <trans-unit id="configuration.aspire.enableGutterDecorations">
       <source xml:lang="en">Show colored status dots in the editor gutter next to resource declarations in AppHost files.</source>
     </trans-unit>
+    <trans-unit id="configuration.aspire.enableCodeLensDebuggerHints">
+      <source xml:lang="en">Show inline CodeLens suggestions to set up a debugger for running resources whose debugger extension is missing.</source>
+    </trans-unit>
+    <trans-unit id="configuration.aspire.enableCodeLensSpringBootGuidance">
+      <source xml:lang="en">Show the CodeLens reminder not to start Spring Boot resources from the Spring Boot Dashboard, which bypasses Aspire.</source>
+    </trans-unit>
+    <trans-unit id="configuration.aspire.enableCodeLensJavaLaunchGuidance">
+      <source xml:lang="en">Show the CodeLens reminder not to use the Java Run or Debug actions on a Java AppHost, including when the AppHost is already running.</source>
+    </trans-unit>
+    <trans-unit id="configuration.aspire.enableCodeLensRustLaunchGuidance">
+      <source xml:lang="en">Show the CodeLens reminder not to use the rust-analyzer Run or Debug actions on a Rust AppHost, including when the AppHost is already running.</source>
+    </trans-unit>
     <trans-unit id="command.switchToWorkspaceView">
       <source xml:lang="en">Show workspace AppHosts</source>
     </trans-unit>
@@ -1332,6 +1368,9 @@
     </trans-unit>
     <trans-unit id="walkthrough.getStarted.welcome.title">
       <source xml:lang="en">Your whole app, one F5 away</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.codeLensGuidanceWorkspaceOverride">
+      <source xml:lang="en">Your workspace settings set {0} to true, which overrides your User settings. Hide this guidance in this workspace too?</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.aspireCommandOutputTruncated">
       <source xml:lang="en">[Aspire command output truncated to {0} characters. Showing the beginning and end of the output.]</source>
