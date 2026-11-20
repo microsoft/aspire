@@ -8,7 +8,46 @@ import { getCliPath, getPrimaryAppHostProjectPath, getWorkspaceRoot } from './he
 import { assertSafeResourceDebugResult, type ResourceDebugToolResult } from './helpers/resourceDebugResult';
 import { openAspireView } from './helpers/vscode';
 import { runProcess } from './helpers/process';
+import type { ResourceJson } from '../data/appHostCliContracts';
 import type { AspireExtensionE2ECodeLensProbeResult } from '../types/extensionApi';
+
+async function reportGoAttachFailure(appHostPath: string, resourceName: string): Promise<void> {
+    async function readDiagnostics(args: string[]): Promise<string> {
+        const status = await executeE2eControlCommand({
+            name: 'runAspireCli',
+            args: [...args, resourceName, '--apphost', appHostPath, '--format', 'json', '--nologo'],
+            workingDirectory: '.',
+            timeoutMs: 10000,
+            noExtensionVariables: true,
+        }, { timeoutMs: 15000 });
+        return (status.result as { stdout: string }).stdout;
+    }
+
+    try {
+        // The CLI emits {"resources":[...]} and {"logs":[{"content":"...","isError":true}]}.
+        // Print only metadata and known signatures, not resource output or endpoint URLs.
+        const { resources } = JSON.parse(await readDiagnostics(['describe'])) as { resources: ResourceJson[] };
+        const resource = resources.find(entry => entry.name === resourceName);
+        console.info('Go attach resource snapshot:', {
+            state: resource?.state,
+            exitCode: resource?.exitCode,
+            health: resource?.healthStatus,
+            endpointCount: resource?.urls?.length,
+        });
+        const { logs } = JSON.parse(await readDiagnostics(['logs', '--tail', '20'])) as {
+            logs: { content: string; isError: boolean }[];
+        };
+        const errors = logs.filter(line => line.isError).map(line => line.content);
+        console.info('Go attach stderr summary:', {
+            lines: errors.length,
+            bindFailure: errors.some(line => /address already in use|only one usage of each socket address/i.test(line)),
+            panic: errors.some(line => /^panic:/i.test(line)),
+            goToolError: errors.some(line => /^go:/i.test(line)),
+        });
+    } catch {
+        console.warn('Go attach failure diagnostics could not be collected.');
+    }
+}
 
 interface AttachedResourceDebugProof {
     proof: 'aspire-resource-attach-breakpoint-detach';
@@ -333,7 +372,12 @@ suite('Aspire resource debug language model tool E2E', function () {
                 expectedDebugType: scenario.debugType,
                 expectedResponse: scenario.expectedResponse,
                 timeoutMs: 300000,
-            }, { timeoutMs: 360000 })).result as AttachedResourceDebugProof;
+            }, { timeoutMs: 360000 }).catch(async (error: unknown) => {
+                if (process.platform === 'win32' && scenario.debugType === 'go') {
+                    await reportGoAttachFailure(appHostPath, scenario.resourceName);
+                }
+                throw error;
+            })).result as AttachedResourceDebugProof;
 
             assert.strictEqual(proof.proof, 'aspire-resource-attach-breakpoint-detach');
             assert.strictEqual(proof.toolPayload.outcome, 'started');
