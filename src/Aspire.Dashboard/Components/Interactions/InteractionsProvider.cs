@@ -5,7 +5,9 @@ using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Net;
+using Aspire.Dashboard.Authentication;
 using Aspire.Dashboard.Components.Dialogs;
+using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.Interaction;
 using Aspire.Dashboard.Model.Markdown;
@@ -13,7 +15,9 @@ using Aspire.Dashboard.Telemetry;
 using Aspire.Dashboard.Utils;
 using Aspire.DashboardService.Proto.V1;
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.Extensions.Localization;
+using Microsoft.Extensions.Options;
 using Microsoft.FluentUI.AspNetCore.Components;
 using MessageIntentDto = Aspire.DashboardService.Proto.V1.MessageIntent;
 using MessageIntentUI = Microsoft.FluentUI.AspNetCore.Components.MessageBarIntent;
@@ -94,11 +98,19 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
     [Inject]
     public required ComponentTelemetryContextProvider TelemetryContextProvider { get; init; }
 
+    [Inject]
+    public required IOptions<DashboardOptions> DashboardOptions { get; init; }
+
     [CascadingParameter]
     public required ViewportInformation ViewportInformation { get; set; }
 
-    protected override void OnInitialized()
+    [CascadingParameter]
+    public Task<AuthenticationState>? AuthenticationState { get; set; }
+
+    protected override async Task OnInitializedAsync()
     {
+        await DashboardAuthenticationState.EnsureAuthenticatedAsync(DashboardOptions.Value, AuthenticationState);
+
         // Exit quickly if the dashboard client is not enabled. For example, the dashboard is running in the standalone container.
         if (!DashboardClient.IsEnabled)
         {
@@ -230,7 +242,7 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
 
                     var dialogParameters = CreateDialogParameters(item, intent: null);
                     dialogParameters.Id = "interactions-input-dialog";
-                    dialogParameters.Width = "min(900px, 90vw)";
+                    dialogParameters.Width = "min(650px, 75vw)";
                     // A non-cancelled result means the form submission already sent its request.
                     dialogParameters.OnDialogResult = CreateDialogResultCallback(dialogResult =>
                         dialogResult.Cancelled ? CreateCompletionRequest(item.InteractionId) : null);
@@ -359,10 +371,10 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
             }
         };
 
-    private static string GetParametersUrl(IReadOnlyList<string> parameterNames) =>
-        parameterNames.Count == 1
-            ? DashboardUrls.ResourceOverviewUrl(parameterNames[0])
-            : DashboardUrls.AddResourceSelection(DashboardUrls.ResourceListUrl(), parameterNames);
+    private static string GetRelatedResourcesUrl(IReadOnlyList<string> relatedResourceNames) =>
+        relatedResourceNames.Count == 1
+            ? DashboardUrls.ResourceOverviewUrl(relatedResourceNames[0])
+            : DashboardUrls.AddResourceSelection(DashboardUrls.ResourceListUrl(), relatedResourceNames);
 
     private void OnParameterInteractionReleased(InteractionsInputsDialogViewModel interaction)
     {
@@ -486,13 +498,14 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
                             break;
                         }
 
-                        // The AppHost names the parameters of the unresolved parameters notification. The modern dashboard
-                        // enters their values in the parameter form of the resources page: its button opens the form,
-                        // and the form accepts the notification once it shows every parameter. The legacy dashboard,
-                        // and older AppHosts that don't send the names, use the notification's button and the dialog.
-                        var parameterNames = notification.UnresolvedParameterNames.ToList();
-                        var parametersUrl = IsNewDashboard && parameterNames.Count > 0
-                            ? GetParametersUrl(parameterNames)
+                        // The AppHost names the resources a notification is about, e.g. the parameters of the unresolved
+                        // parameters notification. The modern dashboard's button shows those resources instead. Showing
+                        // them doesn't answer the notification: the parameter form accepts it once it shows every
+                        // parameter, and enters their values. The legacy dashboard, and older AppHosts that don't send the
+                        // names, use the notification's button and the dialog.
+                        var relatedResourceNames = notification.RelatedResourceNames.ToList();
+                        var relatedResourcesUrl = IsNewDashboard && relatedResourceNames.Count > 0
+                            ? GetRelatedResourcesUrl(relatedResourceNames)
                             : null;
 
                         DashboardMessageBarReference? message = null;
@@ -519,7 +532,7 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
                                     // new tab. Following it doesn't answer the notification.
                                     LinkAsAction = notification.LinkUrl?.StartsWith('/') == true,
                                     PrimaryAction = primaryButtonText,
-                                    PrimaryActionUrl = parametersUrl,
+                                    PrimaryActionUrl = relatedResourcesUrl,
                                     SecondaryAction = secondaryButtonText
                                 },
                                 MapMessageIntent(notification.Intent),
@@ -529,10 +542,10 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
                         Debug.Assert(message != null, "Message should have been created in UI thread.");
                         _openMessageBars.Add(new InteractionMessageBarReference(item.InteractionId, message, CreateTelemetryContext(TelemetryComponentIds.InteractionMessageBar)));
 
-                        if (parametersUrl is not null)
+                        if (relatedResourcesUrl is not null)
                         {
                             var parameterNotification = notification.Clone();
-                            await InvokeAsync(() => ParameterInteractionState.SetNotification(item.InteractionId, parameterNames, async () =>
+                            await InvokeAsync(() => ParameterInteractionState.SetNotification(item.InteractionId, relatedResourceNames, async () =>
                             {
                                 // The parameter form accepts the notification while it renders, so a lost connection
                                 // must not fail the page. The form still sets values with commands without it.

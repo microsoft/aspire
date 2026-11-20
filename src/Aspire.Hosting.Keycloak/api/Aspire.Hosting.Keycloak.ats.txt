@@ -7,6 +7,7 @@ Aspire.Hosting.Keycloak/Aspire.Hosting.ApplicationModel.KeycloakResource [Expose
 # Capabilities
 Aspire.Hosting.ApplicationModel/KeycloakResource.adminPasswordParameter(context: Aspire.Hosting.Keycloak/Aspire.Hosting.ApplicationModel.KeycloakResource) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource
 Aspire.Hosting.ApplicationModel/KeycloakResource.adminUserNameParameter(context: Aspire.Hosting.Keycloak/Aspire.Hosting.ApplicationModel.KeycloakResource) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource
+Aspire.Hosting.ApplicationModel/KeycloakResource.resourceTypeDisplayName(context: Aspire.Hosting.Keycloak/Aspire.Hosting.ApplicationModel.KeycloakResource) -> string
 Aspire.Hosting.Keycloak/addKeycloak(name: string, port?: number, adminUsername?: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource, adminPassword?: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource) -> Aspire.Hosting.Keycloak/Aspire.Hosting.ApplicationModel.KeycloakResource
 Aspire.Hosting.Keycloak/withDataBindMount(source: string) -> Aspire.Hosting.Keycloak/Aspire.Hosting.ApplicationModel.KeycloakResource
 Aspire.Hosting.Keycloak/withDataVolume(name?: string) -> Aspire.Hosting.Keycloak/Aspire.Hosting.ApplicationModel.KeycloakResource

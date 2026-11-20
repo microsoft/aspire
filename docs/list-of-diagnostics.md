@@ -17,18 +17,37 @@
 | `ASPIRE012` | Warning | '\[ProjectName\]' uses the Aspire.AppHost.Sdk, which is obsolete but remains available for staged migration. Switch the project's Sdk attribute to Microsoft.NET.Sdk, add explicit PackageReference items for Aspire.Hosting.AppHost and Aspire.Hosting.Dotnet, and migrate C# resource ProjectReference items to AddDotnetProject calls. Set SuppressAspireAppHostSdkObsoleteWarning=true (or add ASPIRE012 to $(NoWarn)) to suppress temporarily during migration. See https://aka.ms/aspire/diagnostics/aspire012 for migration guidance. | [src/Aspire.AppHost.Sdk/SDK/Sdk.in.targets](../src/Aspire.AppHost.Sdk/SDK/Sdk.in.targets) |
 | `ASPIRE013` | Error | '\[ProjectName\]' requires the Aspire CLI bundle. Remove AspireUseCliBundle or set it to true, and install the matching Aspire CLI from https://get.aspire.dev. ASPIRE013 cannot be suppressed to disable the bundle. See https://aka.ms/aspire/diagnostics/aspire013 for more information. | [src/Aspire.Hosting.AppHost/build/Aspire.Hosting.AppHost.in.targets](../src/Aspire.Hosting.AppHost/build/Aspire.Hosting.AppHost.in.targets) |
 | `ASPIRE014` | Warning | '\[ProjectName\]' is configured with an unsupported AspireCliInvocationMode value. Supported values are Path, Dnx, and DnxPinned. The default Path invocation mode will be used. | [src/Aspire.Hosting.AppHost/build/Aspire.Hosting.AppHost.in.targets](../src/Aspire.Hosting.AppHost/build/Aspire.Hosting.AppHost.in.targets) |
+| `ASPIRE015` | Warning | '\[ProjectName\]': AspireCliInvocationMode=\[Dnx\|DnxPinned\] is ignored because AspireCliPath is set. AspireCliPath takes precedence over AspireCliInvocationMode and may be inherited from the environment, for example from the Aspire VS Code extension. Clear it with an empty `<AspireCliPath></AspireCliPath>` property to use DNX, or add ASPIRE015 to $(NoWarn). | [src/Aspire.Hosting.AppHost/build/Aspire.Hosting.AppHost.in.targets](../src/Aspire.Hosting.AppHost/build/Aspire.Hosting.AppHost.in.targets) |
 
-The CLI bundle is required by default for C# AppHosts and cannot be disabled (`ASPIRE013`). Non-C# AppHosts retain the suppressible `ASPIRE010` warning when the bundle is disabled. `AspireCliInvocationMode=Path` uses `aspire` from `PATH`, falling back to the `Aspire.Cli` version paired with the AppHost package through DNX when a compatible command is unavailable. `AspireCliInvocationMode=Dnx` invokes the unversioned `Aspire.Cli` package through DNX so an in-scope tool manifest is honored, or the latest package is used when no manifest applies. `AspireCliInvocationMode=DnxPinned` invokes the exact `Aspire.Cli` version paired with `Aspire.Hosting.AppHost`. Any other value produces the `ASPIRE014` warning and uses the default `Path` mode. In `DnxPinned` mode, the AppHost resolves and prepares the CLI bundle in `$ASPIRE_HOME/dnx/aspire.cli/<version>` rather than reusing a shared Aspire home bundle that may belong to a different CLI and DCP version.
+The CLI bundle is required by default for C# AppHosts and cannot be disabled (`ASPIRE013`). Non-C# AppHosts retain the suppressible `ASPIRE010` warning when the bundle is disabled. `AspireCliInvocationMode=Path` uses `aspire` from `PATH`, falling back to the `Aspire.Cli` version paired with the AppHost package through DNX when a compatible command is unavailable. `AspireCliInvocationMode=Dnx` invokes the unversioned `Aspire.Cli` package through DNX so an in-scope tool manifest is honored, or the latest package is used when no manifest applies. `AspireCliInvocationMode=DnxPinned` invokes the exact `Aspire.Cli` version paired with `Aspire.Hosting.AppHost`. Any other value produces the `ASPIRE014` warning and uses the default `Path` mode. In `DnxPinned` mode, the AppHost resolves and prepares the CLI bundle in `$ASPIRE_HOME/dnx/aspire.cli/<version>` rather than reusing a shared Aspire home bundle that may belong to a different CLI and DCP version. An explicit `AspireCliPath`, including one inherited from the environment, takes precedence over `AspireCliInvocationMode`; `ASPIRE015` reports when it overrides `Dnx` or `DnxPinned`.
 
 When automatic CLI bundle setup fails, `ASPIRE009` includes the setup command's captured standard output and standard error, including DNX package acquisition errors. If a PATH CLI setup attempt falls back to DNX and neither produces a usable bundle, output from both attempts is included with the corresponding command. Successful or recovered setup attempts keep this output at diagnostic verbosity.
 
 ## Experimental API Warnings
 
+`ASPIRECOMMAND001` is no longer produced. Required-command custom validation APIs are stable.
+Failed validation remains advisory: a warning is logged, but the resource is allowed to attempt to start.
+
+`ASPIREDENO001` is no longer emitted: the Deno hosting APIs are stable. Existing
+suppressions can be removed. See [Deno runtime and publishing](../src/Aspire.Hosting.JavaScript/README.md#deno-runtime-and-publishing)
+for runtime requirements and run/publish behavior.
+
 | Diagnostic ID | Severity | Description | Location |
 | ------------- | -------- | ----------- | -------- |
 | `ASPIREAZUREPROVISIONING001` | Warning | The polyglot Azure Provisioning proxy packages are experimental and may change or be removed in future releases. | [src/Aspire.Hosting.Azure.Provisioning/ExperimentalAssemblyInfo.cs](../src/Aspire.Hosting.Azure.Provisioning/ExperimentalAssemblyInfo.cs) |
+| `ASPIRECOMPUTE002` | Warning | Kubernetes persistent-volume resources, access modes, and Kubernetes/AKS persistent-volume extension methods remain experimental. Compute-environment host-address and endpoint-property mapping contracts are stable and no longer require this suppression. | [src/Aspire.Hosting.Kubernetes/KubernetesPersistentVolumeResource.cs](../src/Aspire.Hosting.Kubernetes/KubernetesPersistentVolumeResource.cs), [KubernetesPersistentVolumeExtensions](../src/Aspire.Hosting.Kubernetes/KubernetesPersistentVolumeExtensions.cs), [AzureKubernetesPersistentVolumeExtensions](../src/Aspire.Hosting.Azure.Kubernetes/AzureKubernetesPersistentVolumeExtensions.cs) |
 | `ASPIREEXPORT018` | Warning | The source-generated Aspire export provider contract is experimental and may change or be removed in future releases. | [src/Aspire.Hosting/Ats/AspireExportProviderAttribute.cs](../src/Aspire.Hosting/Ats/AspireExportProviderAttribute.cs) |
 | `ASPIREPIPELINES005` | Warning | Pipeline output diffing APIs are experimental and may change or be removed in future releases. Suppress this diagnostic to opt in. | [src/Aspire.Hosting/PipelineOutputDiffingExtensions.cs](../src/Aspire.Hosting/PipelineOutputDiffingExtensions.cs) |
+
+Connection-string physical-name metadata (`ConnectionStringEnvironmentVariableNames` and
+`ConnectionStringReference.EnvironmentVariableNames`) is stable and no longer produces
+`ASPIRECONNECTIONSTRINGS001`. Existing suppressions of that diagnostic can be removed.
+
+### Retired Experimental API Warnings
+
+| Diagnostic ID | Description | Location |
+| ------------- | ----------- | -------- |
+| `ASPIREMCP001` | MCP endpoint declaration via `WithMcpServer` is stable and no longer requires suppression. This declares an existing server for Aspire tooling discovery and proxying; it does not implement or configure an MCP transport. | [src/Aspire.Hosting/McpServerResourceBuilderExtensions.cs](../src/Aspire.Hosting/McpServerResourceBuilderExtensions.cs) |
 
 ## Analyzer Warnings
 
@@ -46,3 +65,4 @@ When automatic CLI bundle setup fails, `ASPIRE009` includes the setup command's 
 | Diagnostic ID | Description | Location |
 | ------------- | ----------- | -------- |
 | `ASPIREAZUREFUNCTIONS001` | Directory-based Azure Functions app APIs are experimental pending API review and may change or be removed. Suppress this diagnostic to opt in. | [src/Aspire.Hosting.Azure.Functions](../src/Aspire.Hosting.Azure.Functions) |
+| `ASPIRERESOURCETRAITS001` | Resource trait and display-order APIs (`WithTrait`, `WithTags`, `WithDisplayOrder`, `TraitAnnotation`, `DisplayOrderAnnotation`) are experimental and may change or be removed. Suppress this diagnostic to opt in. | [src/Aspire.Hosting/ResourceTraitBuilderExtensions.cs](../src/Aspire.Hosting/ResourceTraitBuilderExtensions.cs) |

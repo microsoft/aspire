@@ -12,8 +12,8 @@
   <PropertyGroup>
     <MinCodeCoverage>0</MinCodeCoverage>
     <EnablePackageValidation>false</EnablePackageValidation>
-    <BlazorSdkImageTag>11.0.100-rc.1</BlazorSdkImageTag>
-    <BlazorGatewayAspNetImageTag>11.0.0-rc.1</BlazorGatewayAspNetImageTag>
+    <BlazorSdkImageTag>11.0.100</BlazorSdkImageTag>
+    <BlazorGatewayAspNetImageTag>11.0.0</BlazorGatewayAspNetImageTag>
   </PropertyGroup>
 
   <ItemGroup>

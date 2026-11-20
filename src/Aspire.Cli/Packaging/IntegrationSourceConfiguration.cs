@@ -150,6 +150,8 @@ internal sealed class IntegrationSourceConfiguration
 
     private static string ResolveSource(string? source, string key, DirectoryInfo directory)
     {
+        // Reject malformed settings and accidental credential disclosure as best-effort
+        // hygiene. This is not a trusted-host allowlist or verification of feed content.
         if (string.IsNullOrWhiteSpace(source) || PackageSourceOverrideMappings.HasCredentialMaterial(source) ||
             Uri.TryCreate(source, UriKind.Absolute, out var uri) && !uri.IsFile && uri.Scheme is not ("https" or "http"))
         {

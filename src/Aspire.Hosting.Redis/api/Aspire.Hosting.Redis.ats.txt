@@ -18,6 +18,7 @@ Aspire.Hosting.ApplicationModel/RedisResource.host(context: Aspire.Hosting.Redis
 Aspire.Hosting.ApplicationModel/RedisResource.passwordParameter(context: Aspire.Hosting.Redis/Aspire.Hosting.ApplicationModel.RedisResource) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource
 Aspire.Hosting.ApplicationModel/RedisResource.port(context: Aspire.Hosting.Redis/Aspire.Hosting.ApplicationModel.RedisResource) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReferenceExpression
 Aspire.Hosting.ApplicationModel/RedisResource.primaryEndpoint(context: Aspire.Hosting.Redis/Aspire.Hosting.ApplicationModel.RedisResource) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference
+Aspire.Hosting.ApplicationModel/RedisResource.resourceTypeDisplayName(context: Aspire.Hosting.Redis/Aspire.Hosting.ApplicationModel.RedisResource) -> string
 Aspire.Hosting.ApplicationModel/RedisResource.setPasswordParameter(context: Aspire.Hosting.Redis/Aspire.Hosting.ApplicationModel.RedisResource, value: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource) -> Aspire.Hosting.Redis/Aspire.Hosting.ApplicationModel.RedisResource
 Aspire.Hosting.ApplicationModel/RedisResource.tlsEnabled(context: Aspire.Hosting.Redis/Aspire.Hosting.ApplicationModel.RedisResource) -> boolean
 Aspire.Hosting.ApplicationModel/RedisResource.uriExpression(context: Aspire.Hosting.Redis/Aspire.Hosting.ApplicationModel.RedisResource) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression
@@ -34,3 +35,4 @@ Aspire.Hosting.Redis/withRedisInsight(configureContainer?: callback, containerNa
 Aspire.Hosting.Redis/withRedisInsightDataBindMount(source: string) -> Aspire.Hosting.Redis/Aspire.Hosting.Redis.RedisInsightResource
 Aspire.Hosting.Redis/withRedisInsightDataVolume(name?: string) -> Aspire.Hosting.Redis/Aspire.Hosting.Redis.RedisInsightResource
 Aspire.Hosting.Redis/withRedisInsightHostPort(port: number) -> Aspire.Hosting.Redis/Aspire.Hosting.Redis.RedisInsightResource
+Aspire.Hosting.Redis/withRepl() -> Aspire.Hosting.Redis/Aspire.Hosting.ApplicationModel.RedisResource

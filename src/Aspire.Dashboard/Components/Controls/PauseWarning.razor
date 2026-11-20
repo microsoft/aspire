@@ -1,19 +1,11 @@
-﻿@using Aspire.Dashboard.Resources
+﻿@namespace Aspire.Dashboard.Components.Controls
 
-@inject IStringLocalizer<ControlsStrings> Loc
-
-<div class="block-warning">
-    <div class="block-warning-icon">
-        <FluentIcon Value="new Icons.Filled.Size16.Warning()" Color="Color.Warning" />
+<div class="pause-warning" data-tooltip="@AbsoluteTooltip">
+    <div class="pause-warning-icon">
+        <FluentIcon Value="new Icons.Filled.Size16.Warning()" Width="12px" Color="Color.Custom" CustomColor="currentColor" />
     </div>
 
-    <div class="block-warning-message">
-        <span class="title">@Loc[nameof(ControlsStrings.PauseWarningTitle)]</span>
-        @PauseText
+    <div class="pause-warning-message">
+        <span class="pause-warning-title">@PauseWarningText</span> @RelativeAge
     </div>
 </div>
-
-@code {
-    [Parameter, EditorRequired]
-    public required string PauseText { get; set; }
-}

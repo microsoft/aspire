@@ -2885,15 +2885,6 @@ type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	// WithCreatedAt sets the created timestamp
 	WithCreatedAt(createdAt string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 
-	// WithDashboardPosition sets the default resource position in the dashboard.
-	// Saved dashboard ordering takes precedence.
-	//
-	// Parameters:
-	//   - position: The default position. Lower values appear first.
-	//
-	// Returns: The resource builder.
-	WithDashboardPosition(position int) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
-
 	// WithDependency adds a dependency on another resource
 	WithDependency(dependency ResourceWithConnectionString) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 
@@ -2927,6 +2918,23 @@ type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	//
 	// Returns: The resource builder.
 	WithDeveloperCertificateTrust(trust bool) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+
+	// WithDisplayOrder sets the default display order of the resource in lists of
+	// resources, such as the dashboard's. A saved ordering takes precedence.
+	// Repeated calls replace the order.
+	//
+	// Parameters:
+	//   - order: A relative sort key. Higher values appear first, consistent with
+	//     DisplayOrder. Resources without a display order are treated as having an
+	//     order of 0, so a negative value moves a resource after them.
+	//
+	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	WithDisplayOrder(order int) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 
 	// WithDockerfile - Causes Aspire to build the specified container image from a
 	// Dockerfile.
@@ -3333,16 +3341,17 @@ type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	//
 	// This method adds an McpServerEndpointAnnotation to the resource, enabling the
 	// Aspire tooling to discover and proxy the MCP server exposed by the resource.
+	// It does not create an endpoint, start an MCP server, or configure its
+	// transport or authentication. The resource must already expose an MCP server
+	// at the selected endpoint and path. Endpoint selection and URL resolution
+	// occur when tooling consumes the annotation, not when this method is called. A
+	// missing selected endpoint causes resolution to throw a
+	// DistributedApplicationException.
 	//
 	// Parameters:
 	//   - options: Optional parameters; see [WithMcpServerOption].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithMcpServer(options ...WithMcpServerOption) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 
 	// WithMergeEndpoint configures a named endpoint
@@ -3557,11 +3566,6 @@ type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	//   - options: Optional parameters; see [WithRequiredCommandValidationOption].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...WithRequiredCommandValidationOption) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 
 	// WithResourceTypeDisplayName overrides the human-readable resource type label.
@@ -3609,6 +3613,11 @@ type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	//     words.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithTags(tags []string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 
 	// WithTerminal adds an interactive terminal session to a resource with an
@@ -3629,6 +3638,11 @@ type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	//   - value: The trait value. Do not include secrets.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithTrait(name string, value string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 
 	// WithUnionDependency adds a dependency from a string or another resource
@@ -4708,23 +4722,6 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithCreatedAt(
 	return s
 }
 
-// WithDashboardPosition sets the default resource position in the dashboard.
-// Saved dashboard ordering takes precedence.
-func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithDashboardPosition(position int) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
-	if s.Err() != nil {
-		return s
-	}
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["position"] = serializeValue(position)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withDashboardPosition", reqArgs); err != nil {
-		s.setErr(err)
-	}
-	return s
-}
-
 // WithDependency adds a dependency on another resource
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithDependency(dependency ResourceWithConnectionString) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.Err() != nil {
@@ -4763,6 +4760,24 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithDeveloperC
 	}
 	reqArgs["trust"] = serializeValue(trust)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withDeveloperCertificateTrust", reqArgs); err != nil {
+		s.setErr(err)
+	}
+	return s
+}
+
+// WithDisplayOrder sets the default display order of the resource in lists of
+// resources, such as the dashboard's. A saved ordering takes precedence.
+// Repeated calls replace the order.
+func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithDisplayOrder(order int) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
+	if s.Err() != nil {
+		return s
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["order"] = serializeValue(order)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withDisplayOrder", reqArgs); err != nil {
 		s.setErr(err)
 	}
 	return s
@@ -7117,15 +7132,6 @@ type CSharpAppResource interface {
 	// WithCreatedAt sets the created timestamp
 	WithCreatedAt(createdAt string) CSharpAppResource
 
-	// WithDashboardPosition sets the default resource position in the dashboard.
-	// Saved dashboard ordering takes precedence.
-	//
-	// Parameters:
-	//   - position: The default position. Lower values appear first.
-	//
-	// Returns: The resource builder.
-	WithDashboardPosition(position int) CSharpAppResource
-
 	// WithDependency adds a dependency on another resource
 	WithDependency(dependency ResourceWithConnectionString) CSharpAppResource
 
@@ -7159,6 +7165,23 @@ type CSharpAppResource interface {
 	//
 	// Returns: The resource builder.
 	WithDeveloperCertificateTrust(trust bool) CSharpAppResource
+
+	// WithDisplayOrder sets the default display order of the resource in lists of
+	// resources, such as the dashboard's. A saved ordering takes precedence.
+	// Repeated calls replace the order.
+	//
+	// Parameters:
+	//   - order: A relative sort key. Higher values appear first, consistent with
+	//     DisplayOrder. Resources without a display order are treated as having an
+	//     order of 0, so a negative value moves a resource after them.
+	//
+	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	WithDisplayOrder(order int) CSharpAppResource
 
 	// WithDockerfileBaseImage configures custom base images for generated
 	// Dockerfiles.
@@ -7448,16 +7471,17 @@ type CSharpAppResource interface {
 	//
 	// This method adds an McpServerEndpointAnnotation to the resource, enabling the
 	// Aspire tooling to discover and proxy the MCP server exposed by the resource.
+	// It does not create an endpoint, start an MCP server, or configure its
+	// transport or authentication. The resource must already expose an MCP server
+	// at the selected endpoint and path. Endpoint selection and URL resolution
+	// occur when tooling consumes the annotation, not when this method is called. A
+	// missing selected endpoint causes resolution to throw a
+	// DistributedApplicationException.
 	//
 	// Parameters:
 	//   - options: Optional parameters; see [WithMcpServerOption].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithMcpServer(options ...WithMcpServerOption) CSharpAppResource
 
 	// WithMergeEndpoint configures a named endpoint
@@ -7681,11 +7705,6 @@ type CSharpAppResource interface {
 	//   - options: Optional parameters; see [WithRequiredCommandValidationOption].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...WithRequiredCommandValidationOption) CSharpAppResource
 
 	// WithResourceTypeDisplayName overrides the human-readable resource type label.
@@ -7733,6 +7752,11 @@ type CSharpAppResource interface {
 	//     words.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithTags(tags []string) CSharpAppResource
 
 	// WithTerminal adds an interactive terminal session to a resource with an
@@ -7753,6 +7777,11 @@ type CSharpAppResource interface {
 	//   - value: The trait value. Do not include secrets.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithTrait(name string, value string) CSharpAppResource
 
 	// WithUnionDependency adds a dependency from a string or another resource
@@ -8654,23 +8683,6 @@ func (s *cSharpAppResource) WithCreatedAt(createdAt string) CSharpAppResource {
 	return s
 }
 
-// WithDashboardPosition sets the default resource position in the dashboard.
-// Saved dashboard ordering takes precedence.
-func (s *cSharpAppResource) WithDashboardPosition(position int) CSharpAppResource {
-	if s.Err() != nil {
-		return s
-	}
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["position"] = serializeValue(position)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withDashboardPosition", reqArgs); err != nil {
-		s.setErr(err)
-	}
-	return s
-}
-
 // WithDependency adds a dependency on another resource
 func (s *cSharpAppResource) WithDependency(dependency ResourceWithConnectionString) CSharpAppResource {
 	if s.Err() != nil {
@@ -8709,6 +8721,24 @@ func (s *cSharpAppResource) WithDeveloperCertificateTrust(trust bool) CSharpAppR
 	}
 	reqArgs["trust"] = serializeValue(trust)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withDeveloperCertificateTrust", reqArgs); err != nil {
+		s.setErr(err)
+	}
+	return s
+}
+
+// WithDisplayOrder sets the default display order of the resource in lists of
+// resources, such as the dashboard's. A saved ordering takes precedence.
+// Repeated calls replace the order.
+func (s *cSharpAppResource) WithDisplayOrder(order int) CSharpAppResource {
+	if s.Err() != nil {
+		return s
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["order"] = serializeValue(order)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withDisplayOrder", reqArgs); err != nil {
 		s.setErr(err)
 	}
 	return s
@@ -12197,17 +12227,25 @@ type ContainerRegistryResource interface {
 	// WithCreatedAt sets the created timestamp
 	WithCreatedAt(createdAt string) ContainerRegistryResource
 
-	// WithDashboardPosition sets the default resource position in the dashboard.
-	// Saved dashboard ordering takes precedence.
-	//
-	// Parameters:
-	//   - position: The default position. Lower values appear first.
-	//
-	// Returns: The resource builder.
-	WithDashboardPosition(position int) ContainerRegistryResource
-
 	// WithDependency adds a dependency on another resource
 	WithDependency(dependency ResourceWithConnectionString) ContainerRegistryResource
+
+	// WithDisplayOrder sets the default display order of the resource in lists of
+	// resources, such as the dashboard's. A saved ordering takes precedence.
+	// Repeated calls replace the order.
+	//
+	// Parameters:
+	//   - order: A relative sort key. Higher values appear first, consistent with
+	//     DisplayOrder. Resources without a display order are treated as having an
+	//     order of 0, so a negative value moves a resource after them.
+	//
+	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	WithDisplayOrder(order int) ContainerRegistryResource
 
 	// WithDockerfileBaseImage configures custom base images for generated
 	// Dockerfiles.
@@ -12448,11 +12486,6 @@ type ContainerRegistryResource interface {
 	//   - options: Optional parameters; see [WithRequiredCommandValidationOption].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...WithRequiredCommandValidationOption) ContainerRegistryResource
 
 	// WithResourceTypeDisplayName overrides the human-readable resource type label.
@@ -12500,6 +12533,11 @@ type ContainerRegistryResource interface {
 	//     words.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithTags(tags []string) ContainerRegistryResource
 
 	// WithTerminal adds an interactive terminal session to a resource with an
@@ -12520,6 +12558,11 @@ type ContainerRegistryResource interface {
 	//   - value: The trait value. Do not include secrets.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithTrait(name string, value string) ContainerRegistryResource
 
 	// WithUnionDependency adds a dependency from a string or another resource
@@ -13001,23 +13044,6 @@ func (s *containerRegistryResource) WithCreatedAt(createdAt string) ContainerReg
 	return s
 }
 
-// WithDashboardPosition sets the default resource position in the dashboard.
-// Saved dashboard ordering takes precedence.
-func (s *containerRegistryResource) WithDashboardPosition(position int) ContainerRegistryResource {
-	if s.Err() != nil {
-		return s
-	}
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["position"] = serializeValue(position)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withDashboardPosition", reqArgs); err != nil {
-		s.setErr(err)
-	}
-	return s
-}
-
 // WithDependency adds a dependency on another resource
 func (s *containerRegistryResource) WithDependency(dependency ResourceWithConnectionString) ContainerRegistryResource {
 	if s.Err() != nil {
@@ -13035,6 +13061,24 @@ func (s *containerRegistryResource) WithDependency(dependency ResourceWithConnec
 	}
 	reqArgs["dependency"] = serializeValue(dependency)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withDependency", reqArgs); err != nil {
+		s.setErr(err)
+	}
+	return s
+}
+
+// WithDisplayOrder sets the default display order of the resource in lists of
+// resources, such as the dashboard's. A saved ordering takes precedence.
+// Repeated calls replace the order.
+func (s *containerRegistryResource) WithDisplayOrder(order int) ContainerRegistryResource {
+	if s.Err() != nil {
+		return s
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["order"] = serializeValue(order)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withDisplayOrder", reqArgs); err != nil {
 		s.setErr(err)
 	}
 	return s
@@ -14402,15 +14446,6 @@ type ContainerResource interface {
 	// WithCreatedAt sets the created timestamp
 	WithCreatedAt(createdAt string) ContainerResource
 
-	// WithDashboardPosition sets the default resource position in the dashboard.
-	// Saved dashboard ordering takes precedence.
-	//
-	// Parameters:
-	//   - position: The default position. Lower values appear first.
-	//
-	// Returns: The resource builder.
-	WithDashboardPosition(position int) ContainerResource
-
 	// WithDependency adds a dependency on another resource
 	WithDependency(dependency ResourceWithConnectionString) ContainerResource
 
@@ -14444,6 +14479,23 @@ type ContainerResource interface {
 	//
 	// Returns: The resource builder.
 	WithDeveloperCertificateTrust(trust bool) ContainerResource
+
+	// WithDisplayOrder sets the default display order of the resource in lists of
+	// resources, such as the dashboard's. A saved ordering takes precedence.
+	// Repeated calls replace the order.
+	//
+	// Parameters:
+	//   - order: A relative sort key. Higher values appear first, consistent with
+	//     DisplayOrder. Resources without a display order are treated as having an
+	//     order of 0, so a negative value moves a resource after them.
+	//
+	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	WithDisplayOrder(order int) ContainerResource
 
 	// WithDockerfile - Causes Aspire to build the specified container image from a
 	// Dockerfile.
@@ -14850,16 +14902,17 @@ type ContainerResource interface {
 	//
 	// This method adds an McpServerEndpointAnnotation to the resource, enabling the
 	// Aspire tooling to discover and proxy the MCP server exposed by the resource.
+	// It does not create an endpoint, start an MCP server, or configure its
+	// transport or authentication. The resource must already expose an MCP server
+	// at the selected endpoint and path. Endpoint selection and URL resolution
+	// occur when tooling consumes the annotation, not when this method is called. A
+	// missing selected endpoint causes resolution to throw a
+	// DistributedApplicationException.
 	//
 	// Parameters:
 	//   - options: Optional parameters; see [WithMcpServerOption].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithMcpServer(options ...WithMcpServerOption) ContainerResource
 
 	// WithMergeEndpoint configures a named endpoint
@@ -15074,11 +15127,6 @@ type ContainerResource interface {
 	//   - options: Optional parameters; see [WithRequiredCommandValidationOption].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...WithRequiredCommandValidationOption) ContainerResource
 
 	// WithResourceTypeDisplayName overrides the human-readable resource type label.
@@ -15126,6 +15174,11 @@ type ContainerResource interface {
 	//     words.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithTags(tags []string) ContainerResource
 
 	// WithTerminal adds an interactive terminal session to a resource with an
@@ -15146,6 +15199,11 @@ type ContainerResource interface {
 	//   - value: The trait value. Do not include secrets.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithTrait(name string, value string) ContainerResource
 
 	// WithUnionDependency adds a dependency from a string or another resource
@@ -16222,23 +16280,6 @@ func (s *containerResource) WithCreatedAt(createdAt string) ContainerResource {
 	return s
 }
 
-// WithDashboardPosition sets the default resource position in the dashboard.
-// Saved dashboard ordering takes precedence.
-func (s *containerResource) WithDashboardPosition(position int) ContainerResource {
-	if s.Err() != nil {
-		return s
-	}
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["position"] = serializeValue(position)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withDashboardPosition", reqArgs); err != nil {
-		s.setErr(err)
-	}
-	return s
-}
-
 // WithDependency adds a dependency on another resource
 func (s *containerResource) WithDependency(dependency ResourceWithConnectionString) ContainerResource {
 	if s.Err() != nil {
@@ -16277,6 +16318,24 @@ func (s *containerResource) WithDeveloperCertificateTrust(trust bool) ContainerR
 	}
 	reqArgs["trust"] = serializeValue(trust)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withDeveloperCertificateTrust", reqArgs); err != nil {
+		s.setErr(err)
+	}
+	return s
+}
+
+// WithDisplayOrder sets the default display order of the resource in lists of
+// resources, such as the dashboard's. A saved ordering takes precedence.
+// Repeated calls replace the order.
+func (s *containerResource) WithDisplayOrder(order int) ContainerResource {
+	if s.Err() != nil {
+		return s
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["order"] = serializeValue(order)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withDisplayOrder", reqArgs); err != nil {
 		s.setErr(err)
 	}
 	return s
@@ -20735,15 +20794,6 @@ type DotnetToolResource interface {
 	// WithCreatedAt sets the created timestamp
 	WithCreatedAt(createdAt string) DotnetToolResource
 
-	// WithDashboardPosition sets the default resource position in the dashboard.
-	// Saved dashboard ordering takes precedence.
-	//
-	// Parameters:
-	//   - position: The default position. Lower values appear first.
-	//
-	// Returns: The resource builder.
-	WithDashboardPosition(position int) DotnetToolResource
-
 	// WithDependency adds a dependency on another resource
 	WithDependency(dependency ResourceWithConnectionString) DotnetToolResource
 
@@ -20777,6 +20827,23 @@ type DotnetToolResource interface {
 	//
 	// Returns: The resource builder.
 	WithDeveloperCertificateTrust(trust bool) DotnetToolResource
+
+	// WithDisplayOrder sets the default display order of the resource in lists of
+	// resources, such as the dashboard's. A saved ordering takes precedence.
+	// Repeated calls replace the order.
+	//
+	// Parameters:
+	//   - order: A relative sort key. Higher values appear first, consistent with
+	//     DisplayOrder. Resources without a display order are treated as having an
+	//     order of 0, so a negative value moves a resource after them.
+	//
+	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	WithDisplayOrder(order int) DotnetToolResource
 
 	// WithDockerfileBaseImage configures custom base images for generated
 	// Dockerfiles.
@@ -21078,16 +21145,17 @@ type DotnetToolResource interface {
 	//
 	// This method adds an McpServerEndpointAnnotation to the resource, enabling the
 	// Aspire tooling to discover and proxy the MCP server exposed by the resource.
+	// It does not create an endpoint, start an MCP server, or configure its
+	// transport or authentication. The resource must already expose an MCP server
+	// at the selected endpoint and path. Endpoint selection and URL resolution
+	// occur when tooling consumes the annotation, not when this method is called. A
+	// missing selected endpoint causes resolution to throw a
+	// DistributedApplicationException.
 	//
 	// Parameters:
 	//   - options: Optional parameters; see [WithMcpServerOption].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithMcpServer(options ...WithMcpServerOption) DotnetToolResource
 
 	// WithMergeEndpoint configures a named endpoint
@@ -21302,11 +21370,6 @@ type DotnetToolResource interface {
 	//   - options: Optional parameters; see [WithRequiredCommandValidationOption].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...WithRequiredCommandValidationOption) DotnetToolResource
 
 	// WithResourceTypeDisplayName overrides the human-readable resource type label.
@@ -21354,6 +21417,11 @@ type DotnetToolResource interface {
 	//     words.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithTags(tags []string) DotnetToolResource
 
 	// WithTerminal adds an interactive terminal session to a resource with an
@@ -21447,6 +21515,11 @@ type DotnetToolResource interface {
 	//   - value: The trait value. Do not include secrets.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithTrait(name string, value string) DotnetToolResource
 
 	// WithUnionDependency adds a dependency from a string or another resource
@@ -22304,23 +22377,6 @@ func (s *dotnetToolResource) WithCreatedAt(createdAt string) DotnetToolResource 
 	return s
 }
 
-// WithDashboardPosition sets the default resource position in the dashboard.
-// Saved dashboard ordering takes precedence.
-func (s *dotnetToolResource) WithDashboardPosition(position int) DotnetToolResource {
-	if s.Err() != nil {
-		return s
-	}
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["position"] = serializeValue(position)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withDashboardPosition", reqArgs); err != nil {
-		s.setErr(err)
-	}
-	return s
-}
-
 // WithDependency adds a dependency on another resource
 func (s *dotnetToolResource) WithDependency(dependency ResourceWithConnectionString) DotnetToolResource {
 	if s.Err() != nil {
@@ -22359,6 +22415,24 @@ func (s *dotnetToolResource) WithDeveloperCertificateTrust(trust bool) DotnetToo
 	}
 	reqArgs["trust"] = serializeValue(trust)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withDeveloperCertificateTrust", reqArgs); err != nil {
+		s.setErr(err)
+	}
+	return s
+}
+
+// WithDisplayOrder sets the default display order of the resource in lists of
+// resources, such as the dashboard's. A saved ordering takes precedence.
+// Repeated calls replace the order.
+func (s *dotnetToolResource) WithDisplayOrder(order int) DotnetToolResource {
+	if s.Err() != nil {
+		return s
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["order"] = serializeValue(order)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withDisplayOrder", reqArgs); err != nil {
 		s.setErr(err)
 	}
 	return s
@@ -25909,15 +25983,6 @@ type ExecutableResource interface {
 	// WithCreatedAt sets the created timestamp
 	WithCreatedAt(createdAt string) ExecutableResource
 
-	// WithDashboardPosition sets the default resource position in the dashboard.
-	// Saved dashboard ordering takes precedence.
-	//
-	// Parameters:
-	//   - position: The default position. Lower values appear first.
-	//
-	// Returns: The resource builder.
-	WithDashboardPosition(position int) ExecutableResource
-
 	// WithDependency adds a dependency on another resource
 	WithDependency(dependency ResourceWithConnectionString) ExecutableResource
 
@@ -25951,6 +26016,23 @@ type ExecutableResource interface {
 	//
 	// Returns: The resource builder.
 	WithDeveloperCertificateTrust(trust bool) ExecutableResource
+
+	// WithDisplayOrder sets the default display order of the resource in lists of
+	// resources, such as the dashboard's. A saved ordering takes precedence.
+	// Repeated calls replace the order.
+	//
+	// Parameters:
+	//   - order: A relative sort key. Higher values appear first, consistent with
+	//     DisplayOrder. Resources without a display order are treated as having an
+	//     order of 0, so a negative value moves a resource after them.
+	//
+	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	WithDisplayOrder(order int) ExecutableResource
 
 	// WithDockerfileBaseImage configures custom base images for generated
 	// Dockerfiles.
@@ -26252,16 +26334,17 @@ type ExecutableResource interface {
 	//
 	// This method adds an McpServerEndpointAnnotation to the resource, enabling the
 	// Aspire tooling to discover and proxy the MCP server exposed by the resource.
+	// It does not create an endpoint, start an MCP server, or configure its
+	// transport or authentication. The resource must already expose an MCP server
+	// at the selected endpoint and path. Endpoint selection and URL resolution
+	// occur when tooling consumes the annotation, not when this method is called. A
+	// missing selected endpoint causes resolution to throw a
+	// DistributedApplicationException.
 	//
 	// Parameters:
 	//   - options: Optional parameters; see [WithMcpServerOption].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithMcpServer(options ...WithMcpServerOption) ExecutableResource
 
 	// WithMergeEndpoint configures a named endpoint
@@ -26476,11 +26559,6 @@ type ExecutableResource interface {
 	//   - options: Optional parameters; see [WithRequiredCommandValidationOption].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...WithRequiredCommandValidationOption) ExecutableResource
 
 	// WithResourceTypeDisplayName overrides the human-readable resource type label.
@@ -26528,6 +26606,11 @@ type ExecutableResource interface {
 	//     words.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithTags(tags []string) ExecutableResource
 
 	// WithTerminal adds an interactive terminal session to a resource with an
@@ -26548,6 +26631,11 @@ type ExecutableResource interface {
 	//   - value: The trait value. Do not include secrets.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithTrait(name string, value string) ExecutableResource
 
 	// WithUnionDependency adds a dependency from a string or another resource
@@ -27405,23 +27493,6 @@ func (s *executableResource) WithCreatedAt(createdAt string) ExecutableResource 
 	return s
 }
 
-// WithDashboardPosition sets the default resource position in the dashboard.
-// Saved dashboard ordering takes precedence.
-func (s *executableResource) WithDashboardPosition(position int) ExecutableResource {
-	if s.Err() != nil {
-		return s
-	}
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["position"] = serializeValue(position)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withDashboardPosition", reqArgs); err != nil {
-		s.setErr(err)
-	}
-	return s
-}
-
 // WithDependency adds a dependency on another resource
 func (s *executableResource) WithDependency(dependency ResourceWithConnectionString) ExecutableResource {
 	if s.Err() != nil {
@@ -27460,6 +27531,24 @@ func (s *executableResource) WithDeveloperCertificateTrust(trust bool) Executabl
 	}
 	reqArgs["trust"] = serializeValue(trust)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withDeveloperCertificateTrust", reqArgs); err != nil {
+		s.setErr(err)
+	}
+	return s
+}
+
+// WithDisplayOrder sets the default display order of the resource in lists of
+// resources, such as the dashboard's. A saved ordering takes precedence.
+// Repeated calls replace the order.
+func (s *executableResource) WithDisplayOrder(order int) ExecutableResource {
+	if s.Err() != nil {
+		return s
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["order"] = serializeValue(order)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withDisplayOrder", reqArgs); err != nil {
 		s.setErr(err)
 	}
 	return s
@@ -29669,17 +29758,25 @@ type ExternalServiceResource interface {
 	// WithCreatedAt sets the created timestamp
 	WithCreatedAt(createdAt string) ExternalServiceResource
 
-	// WithDashboardPosition sets the default resource position in the dashboard.
-	// Saved dashboard ordering takes precedence.
-	//
-	// Parameters:
-	//   - position: The default position. Lower values appear first.
-	//
-	// Returns: The resource builder.
-	WithDashboardPosition(position int) ExternalServiceResource
-
 	// WithDependency adds a dependency on another resource
 	WithDependency(dependency ResourceWithConnectionString) ExternalServiceResource
+
+	// WithDisplayOrder sets the default display order of the resource in lists of
+	// resources, such as the dashboard's. A saved ordering takes precedence.
+	// Repeated calls replace the order.
+	//
+	// Parameters:
+	//   - order: A relative sort key. Higher values appear first, consistent with
+	//     DisplayOrder. Resources without a display order are treated as having an
+	//     order of 0, so a negative value moves a resource after them.
+	//
+	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	WithDisplayOrder(order int) ExternalServiceResource
 
 	// WithDockerfileBaseImage configures custom base images for generated
 	// Dockerfiles.
@@ -29927,11 +30024,6 @@ type ExternalServiceResource interface {
 	//   - options: Optional parameters; see [WithRequiredCommandValidationOption].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...WithRequiredCommandValidationOption) ExternalServiceResource
 
 	// WithResourceTypeDisplayName overrides the human-readable resource type label.
@@ -29979,6 +30071,11 @@ type ExternalServiceResource interface {
 	//     words.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithTags(tags []string) ExternalServiceResource
 
 	// WithTerminal adds an interactive terminal session to a resource with an
@@ -29999,6 +30096,11 @@ type ExternalServiceResource interface {
 	//   - value: The trait value. Do not include secrets.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithTrait(name string, value string) ExternalServiceResource
 
 	// WithUnionDependency adds a dependency from a string or another resource
@@ -30480,23 +30582,6 @@ func (s *externalServiceResource) WithCreatedAt(createdAt string) ExternalServic
 	return s
 }
 
-// WithDashboardPosition sets the default resource position in the dashboard.
-// Saved dashboard ordering takes precedence.
-func (s *externalServiceResource) WithDashboardPosition(position int) ExternalServiceResource {
-	if s.Err() != nil {
-		return s
-	}
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["position"] = serializeValue(position)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withDashboardPosition", reqArgs); err != nil {
-		s.setErr(err)
-	}
-	return s
-}
-
 // WithDependency adds a dependency on another resource
 func (s *externalServiceResource) WithDependency(dependency ResourceWithConnectionString) ExternalServiceResource {
 	if s.Err() != nil {
@@ -30514,6 +30599,24 @@ func (s *externalServiceResource) WithDependency(dependency ResourceWithConnecti
 	}
 	reqArgs["dependency"] = serializeValue(dependency)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withDependency", reqArgs); err != nil {
+		s.setErr(err)
+	}
+	return s
+}
+
+// WithDisplayOrder sets the default display order of the resource in lists of
+// resources, such as the dashboard's. A saved ordering takes precedence.
+// Repeated calls replace the order.
+func (s *externalServiceResource) WithDisplayOrder(order int) ExternalServiceResource {
+	if s.Err() != nil {
+		return s
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["order"] = serializeValue(order)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withDisplayOrder", reqArgs); err != nil {
 		s.setErr(err)
 	}
 	return s
@@ -34038,6 +34141,25 @@ func (s *loggerFactory) CreateLogger(categoryName string) Logger {
 type ParameterResource interface {
 	handleReference
 
+	// AsOptional marks the parameter resource as optional.
+	//
+	// Optional parameters that do not have values are not prompted for during run
+	// or publish operations. When referenced as environment variables or other
+	// value providers, unset optional parameters resolve to nil. The manifest
+	// publisher does not currently support optional parameters and throws a
+	// DistributedApplicationException.
+	//
+	// Returns: The configured resource builder.
+	AsOptional() ParameterResource
+
+	// AsRequired marks the parameter resource as required.
+	//
+	// Parameters are required by default. Use this method to make a parameter
+	// required again after it was marked with AsOptional.
+	//
+	// Returns: The configured resource builder.
+	AsRequired() ParameterResource
+
 	// CreateExecutionConfiguration creates an execution configuration builder for
 	// the specified resource.
 	//
@@ -34249,15 +34371,6 @@ type ParameterResource interface {
 	// Returns: Resource builder for the parameter.
 	WithCustomInput(options *ParameterCustomInputOptions) ParameterResource
 
-	// WithDashboardPosition sets the default resource position in the dashboard.
-	// Saved dashboard ordering takes precedence.
-	//
-	// Parameters:
-	//   - position: The default position. Lower values appear first.
-	//
-	// Returns: The resource builder.
-	WithDashboardPosition(position int) ParameterResource
-
 	// WithDependency adds a dependency on another resource
 	WithDependency(dependency ResourceWithConnectionString) ParameterResource
 
@@ -34269,6 +34382,23 @@ type ParameterResource interface {
 	//
 	// Returns: Resource builder for the parameter.
 	WithDescription(description string, options ...WithDescriptionOption) ParameterResource
+
+	// WithDisplayOrder sets the default display order of the resource in lists of
+	// resources, such as the dashboard's. A saved ordering takes precedence.
+	// Repeated calls replace the order.
+	//
+	// Parameters:
+	//   - order: A relative sort key. Higher values appear first, consistent with
+	//     DisplayOrder. Resources without a display order are treated as having an
+	//     order of 0, so a negative value moves a resource after them.
+	//
+	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	WithDisplayOrder(order int) ParameterResource
 
 	// WithDockerfileBaseImage configures custom base images for generated
 	// Dockerfiles.
@@ -34389,17 +34519,6 @@ type ParameterResource interface {
 	// WithNestedConfig configures with nested DTO
 	WithNestedConfig(config *TestNestedDto) ParameterResource
 
-	// WithOptional marks the parameter resource as optional.
-	//
-	// Optional parameters that do not have values are not prompted for during run
-	// or publish operations. When referenced as environment variables or other
-	// value providers, unset optional parameters resolve to nil. The manifest
-	// publisher does not currently support optional parameters and throws a
-	// DistributedApplicationException.
-	//
-	// Returns: The configured resource builder.
-	WithOptional() ParameterResource
-
 	// WithOptionalCallback configures with optional callback
 	//
 	// Parameters:
@@ -34484,14 +34603,6 @@ type ParameterResource interface {
 	// Returns: A resource builder.
 	WithRelationship(resourceBuilder Resource, type_ string) ParameterResource
 
-	// WithRequired sets whether the parameter resource requires a value.
-	//
-	// Parameters:
-	//   - options: Optional parameters; see [WithRequiredOption].
-	//
-	// Returns: The configured resource builder.
-	WithRequired(options ...WithRequiredOption) ParameterResource
-
 	// WithRequiredCommand declares that a resource requires a specific
 	// command/executable to be available on the local machine PATH before it can
 	// start.
@@ -34528,11 +34639,6 @@ type ParameterResource interface {
 	//   - options: Optional parameters; see [WithRequiredCommandValidationOption].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...WithRequiredCommandValidationOption) ParameterResource
 
 	// WithResourceTypeDisplayName overrides the human-readable resource type label.
@@ -34580,6 +34686,11 @@ type ParameterResource interface {
 	//     words.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithTags(tags []string) ParameterResource
 
 	// WithTerminal adds an interactive terminal session to a resource with an
@@ -34600,6 +34711,11 @@ type ParameterResource interface {
 	//   - value: The trait value. Do not include secrets.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithTrait(name string, value string) ParameterResource
 
 	// WithUnionDependency adds a dependency from a string or another resource
@@ -34650,6 +34766,36 @@ type parameterResource struct {
 // newParameterResourceFromHandle wraps an existing handle as ParameterResource.
 func newParameterResourceFromHandle(h *handle, c *client) ParameterResource {
 	return &parameterResource{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// AsOptional marks the parameter resource as optional.
+func (s *parameterResource) AsOptional() ParameterResource {
+	if s.Err() != nil {
+		return s
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/asOptional", reqArgs); err != nil {
+		s.setErr(err)
+	}
+	return s
+}
+
+// AsRequired marks the parameter resource as required.
+func (s *parameterResource) AsRequired() ParameterResource {
+	if s.Err() != nil {
+		return s
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/asRequired", reqArgs); err != nil {
+		s.setErr(err)
+	}
+	return s
 }
 
 // CreateExecutionConfiguration creates an execution configuration builder for
@@ -35149,23 +35295,6 @@ func (s *parameterResource) WithCustomInput(options *ParameterCustomInputOptions
 	return s
 }
 
-// WithDashboardPosition sets the default resource position in the dashboard.
-// Saved dashboard ordering takes precedence.
-func (s *parameterResource) WithDashboardPosition(position int) ParameterResource {
-	if s.Err() != nil {
-		return s
-	}
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["position"] = serializeValue(position)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withDashboardPosition", reqArgs); err != nil {
-		s.setErr(err)
-	}
-	return s
-}
-
 // WithDependency adds a dependency on another resource
 func (s *parameterResource) WithDependency(dependency ResourceWithConnectionString) ParameterResource {
 	if s.Err() != nil {
@@ -35210,6 +35339,24 @@ func (s *parameterResource) WithDescription(description string, options ...WithD
 		}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withDescription", reqArgs); err != nil {
+		s.setErr(err)
+	}
+	return s
+}
+
+// WithDisplayOrder sets the default display order of the resource in lists of
+// resources, such as the dashboard's. A saved ordering takes precedence.
+// Repeated calls replace the order.
+func (s *parameterResource) WithDisplayOrder(order int) ParameterResource {
+	if s.Err() != nil {
+		return s
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["order"] = serializeValue(order)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withDisplayOrder", reqArgs); err != nil {
 		s.setErr(err)
 	}
 	return s
@@ -35580,21 +35727,6 @@ func (s *parameterResource) WithNestedConfig(config *TestNestedDto) ParameterRes
 	return s
 }
 
-// WithOptional marks the parameter resource as optional.
-func (s *parameterResource) WithOptional() ParameterResource {
-	if s.Err() != nil {
-		return s
-	}
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withOptional", reqArgs); err != nil {
-		s.setErr(err)
-	}
-	return s
-}
-
 // WithOptionalCallback configures with optional callback
 func (s *parameterResource) WithOptionalCallback(options ...WithOptionalCallbackOption) ParameterResource {
 	if s.Err() != nil {
@@ -35809,32 +35941,6 @@ func (s *parameterResource) WithRelationship(resourceBuilder Resource, type_ str
 	reqArgs["resourceBuilder"] = serializeValue(resourceBuilder)
 	reqArgs["type"] = serializeValue(type_)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withBuilderRelationship", reqArgs); err != nil {
-		s.setErr(err)
-	}
-	return s
-}
-
-// WithRequired sets whether the parameter resource requires a value.
-func (s *parameterResource) WithRequired(options ...WithRequiredOption) ParameterResource {
-	if s.Err() != nil {
-		return s
-	}
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	if len(options) > 0 {
-		merged := &WithRequiredOptions{}
-		for _, opt := range options {
-			if opt != nil {
-				opt.apply(merged)
-			}
-		}
-		for k, v := range merged.ToMap() {
-			reqArgs[k] = v
-		}
-	}
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withRequired", reqArgs); err != nil {
 		s.setErr(err)
 	}
 	return s
@@ -37486,15 +37592,6 @@ type ProjectResource interface {
 	// WithCreatedAt sets the created timestamp
 	WithCreatedAt(createdAt string) ProjectResource
 
-	// WithDashboardPosition sets the default resource position in the dashboard.
-	// Saved dashboard ordering takes precedence.
-	//
-	// Parameters:
-	//   - position: The default position. Lower values appear first.
-	//
-	// Returns: The resource builder.
-	WithDashboardPosition(position int) ProjectResource
-
 	// WithDependency adds a dependency on another resource
 	WithDependency(dependency ResourceWithConnectionString) ProjectResource
 
@@ -37528,6 +37625,23 @@ type ProjectResource interface {
 	//
 	// Returns: The resource builder.
 	WithDeveloperCertificateTrust(trust bool) ProjectResource
+
+	// WithDisplayOrder sets the default display order of the resource in lists of
+	// resources, such as the dashboard's. A saved ordering takes precedence.
+	// Repeated calls replace the order.
+	//
+	// Parameters:
+	//   - order: A relative sort key. Higher values appear first, consistent with
+	//     DisplayOrder. Resources without a display order are treated as having an
+	//     order of 0, so a negative value moves a resource after them.
+	//
+	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	WithDisplayOrder(order int) ProjectResource
 
 	// WithDockerfileBaseImage configures custom base images for generated
 	// Dockerfiles.
@@ -37817,16 +37931,17 @@ type ProjectResource interface {
 	//
 	// This method adds an McpServerEndpointAnnotation to the resource, enabling the
 	// Aspire tooling to discover and proxy the MCP server exposed by the resource.
+	// It does not create an endpoint, start an MCP server, or configure its
+	// transport or authentication. The resource must already expose an MCP server
+	// at the selected endpoint and path. Endpoint selection and URL resolution
+	// occur when tooling consumes the annotation, not when this method is called. A
+	// missing selected endpoint causes resolution to throw a
+	// DistributedApplicationException.
 	//
 	// Parameters:
 	//   - options: Optional parameters; see [WithMcpServerOption].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithMcpServer(options ...WithMcpServerOption) ProjectResource
 
 	// WithMergeEndpoint configures a named endpoint
@@ -38050,11 +38165,6 @@ type ProjectResource interface {
 	//   - options: Optional parameters; see [WithRequiredCommandValidationOption].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...WithRequiredCommandValidationOption) ProjectResource
 
 	// WithResourceTypeDisplayName overrides the human-readable resource type label.
@@ -38102,6 +38212,11 @@ type ProjectResource interface {
 	//     words.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithTags(tags []string) ProjectResource
 
 	// WithTerminal adds an interactive terminal session to a resource with an
@@ -38122,6 +38237,11 @@ type ProjectResource interface {
 	//   - value: The trait value. Do not include secrets.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithTrait(name string, value string) ProjectResource
 
 	// WithUnionDependency adds a dependency from a string or another resource
@@ -39023,23 +39143,6 @@ func (s *projectResource) WithCreatedAt(createdAt string) ProjectResource {
 	return s
 }
 
-// WithDashboardPosition sets the default resource position in the dashboard.
-// Saved dashboard ordering takes precedence.
-func (s *projectResource) WithDashboardPosition(position int) ProjectResource {
-	if s.Err() != nil {
-		return s
-	}
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["position"] = serializeValue(position)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withDashboardPosition", reqArgs); err != nil {
-		s.setErr(err)
-	}
-	return s
-}
-
 // WithDependency adds a dependency on another resource
 func (s *projectResource) WithDependency(dependency ResourceWithConnectionString) ProjectResource {
 	if s.Err() != nil {
@@ -39078,6 +39181,24 @@ func (s *projectResource) WithDeveloperCertificateTrust(trust bool) ProjectResou
 	}
 	reqArgs["trust"] = serializeValue(trust)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withDeveloperCertificateTrust", reqArgs); err != nil {
+		s.setErr(err)
+	}
+	return s
+}
+
+// WithDisplayOrder sets the default display order of the resource in lists of
+// resources, such as the dashboard's. A saved ordering takes precedence.
+// Repeated calls replace the order.
+func (s *projectResource) WithDisplayOrder(order int) ProjectResource {
+	if s.Err() != nil {
+		return s
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["order"] = serializeValue(order)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withDisplayOrder", reqArgs); err != nil {
 		s.setErr(err)
 	}
 	return s
@@ -41393,11 +41514,6 @@ type RequiredCommandValidationContext interface {
 
 	// CancellationToken gets a cancellation token that can be used to cancel the
 	// validation.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	CancellationToken() (*CancellationToken, error)
 
 	// Failure creates a failed validation result with the specified message.
@@ -41407,37 +41523,17 @@ type RequiredCommandValidationContext interface {
 	//
 	// Returns: A [RequiredCommandValidationResult] indicating the command is
 	// invalid.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	Failure(validationMessage string) RequiredCommandValidationResult
 
 	// ResolvedPath gets the resolved full path to the command executable.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	ResolvedPath() (string, error)
 
 	// Services gets the service provider for accessing application services.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	Services() ServiceProvider
 
 	// Success creates a successful validation result.
 	//
 	// Returns: A [RequiredCommandValidationResult] indicating the command is valid.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	Success() RequiredCommandValidationResult
 
 	// Err returns the first error recorded on this wrapper, or nil if the wrapper
@@ -41558,24 +41654,17 @@ func (s *requiredCommandValidationContext) Success() RequiredCommandValidationRe
 
 // RequiredCommandValidationResult represents the result of validating a
 // required command.
+//
+// Failed validation logs a warning but does not prevent the resource from
+// attempting to start.
 type RequiredCommandValidationResult interface {
 	handleReference
 
 	// IsValid gets a value indicating whether the command validation succeeded.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	IsValid() (bool, error)
 
 	// ValidationMessage gets an optional validation message describing why
 	// validation failed.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	ValidationMessage() (*string, error)
 
 	// Err returns the first error recorded on this wrapper, or nil if the wrapper
@@ -43439,15 +43528,6 @@ type TestDatabaseResource interface {
 	// WithCreatedAt sets the created timestamp
 	WithCreatedAt(createdAt string) TestDatabaseResource
 
-	// WithDashboardPosition sets the default resource position in the dashboard.
-	// Saved dashboard ordering takes precedence.
-	//
-	// Parameters:
-	//   - position: The default position. Lower values appear first.
-	//
-	// Returns: The resource builder.
-	WithDashboardPosition(position int) TestDatabaseResource
-
 	// WithDependency adds a dependency on another resource
 	WithDependency(dependency ResourceWithConnectionString) TestDatabaseResource
 
@@ -43481,6 +43561,23 @@ type TestDatabaseResource interface {
 	//
 	// Returns: The resource builder.
 	WithDeveloperCertificateTrust(trust bool) TestDatabaseResource
+
+	// WithDisplayOrder sets the default display order of the resource in lists of
+	// resources, such as the dashboard's. A saved ordering takes precedence.
+	// Repeated calls replace the order.
+	//
+	// Parameters:
+	//   - order: A relative sort key. Higher values appear first, consistent with
+	//     DisplayOrder. Resources without a display order are treated as having an
+	//     order of 0, so a negative value moves a resource after them.
+	//
+	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	WithDisplayOrder(order int) TestDatabaseResource
 
 	// WithDockerfile - Causes Aspire to build the specified container image from a
 	// Dockerfile.
@@ -43887,16 +43984,17 @@ type TestDatabaseResource interface {
 	//
 	// This method adds an McpServerEndpointAnnotation to the resource, enabling the
 	// Aspire tooling to discover and proxy the MCP server exposed by the resource.
+	// It does not create an endpoint, start an MCP server, or configure its
+	// transport or authentication. The resource must already expose an MCP server
+	// at the selected endpoint and path. Endpoint selection and URL resolution
+	// occur when tooling consumes the annotation, not when this method is called. A
+	// missing selected endpoint causes resolution to throw a
+	// DistributedApplicationException.
 	//
 	// Parameters:
 	//   - options: Optional parameters; see [WithMcpServerOption].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithMcpServer(options ...WithMcpServerOption) TestDatabaseResource
 
 	// WithMergeEndpoint configures a named endpoint
@@ -44111,11 +44209,6 @@ type TestDatabaseResource interface {
 	//   - options: Optional parameters; see [WithRequiredCommandValidationOption].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...WithRequiredCommandValidationOption) TestDatabaseResource
 
 	// WithResourceTypeDisplayName overrides the human-readable resource type label.
@@ -44163,6 +44256,11 @@ type TestDatabaseResource interface {
 	//     words.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithTags(tags []string) TestDatabaseResource
 
 	// WithTerminal adds an interactive terminal session to a resource with an
@@ -44183,6 +44281,11 @@ type TestDatabaseResource interface {
 	//   - value: The trait value. Do not include secrets.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithTrait(name string, value string) TestDatabaseResource
 
 	// WithUnionDependency adds a dependency from a string or another resource
@@ -45259,23 +45362,6 @@ func (s *testDatabaseResource) WithCreatedAt(createdAt string) TestDatabaseResou
 	return s
 }
 
-// WithDashboardPosition sets the default resource position in the dashboard.
-// Saved dashboard ordering takes precedence.
-func (s *testDatabaseResource) WithDashboardPosition(position int) TestDatabaseResource {
-	if s.Err() != nil {
-		return s
-	}
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["position"] = serializeValue(position)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withDashboardPosition", reqArgs); err != nil {
-		s.setErr(err)
-	}
-	return s
-}
-
 // WithDependency adds a dependency on another resource
 func (s *testDatabaseResource) WithDependency(dependency ResourceWithConnectionString) TestDatabaseResource {
 	if s.Err() != nil {
@@ -45314,6 +45400,24 @@ func (s *testDatabaseResource) WithDeveloperCertificateTrust(trust bool) TestDat
 	}
 	reqArgs["trust"] = serializeValue(trust)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withDeveloperCertificateTrust", reqArgs); err != nil {
+		s.setErr(err)
+	}
+	return s
+}
+
+// WithDisplayOrder sets the default display order of the resource in lists of
+// resources, such as the dashboard's. A saved ordering takes precedence.
+// Repeated calls replace the order.
+func (s *testDatabaseResource) WithDisplayOrder(order int) TestDatabaseResource {
+	if s.Err() != nil {
+		return s
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["order"] = serializeValue(order)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withDisplayOrder", reqArgs); err != nil {
 		s.setErr(err)
 	}
 	return s
@@ -47900,15 +48004,6 @@ type TestRedisResource interface {
 	// WithCreatedAt sets the created timestamp
 	WithCreatedAt(createdAt string) TestRedisResource
 
-	// WithDashboardPosition sets the default resource position in the dashboard.
-	// Saved dashboard ordering takes precedence.
-	//
-	// Parameters:
-	//   - position: The default position. Lower values appear first.
-	//
-	// Returns: The resource builder.
-	WithDashboardPosition(position int) TestRedisResource
-
 	// WithDataVolume adds a data volume with persistence
 	//
 	// Parameters:
@@ -47948,6 +48043,23 @@ type TestRedisResource interface {
 	//
 	// Returns: The resource builder.
 	WithDeveloperCertificateTrust(trust bool) TestRedisResource
+
+	// WithDisplayOrder sets the default display order of the resource in lists of
+	// resources, such as the dashboard's. A saved ordering takes precedence.
+	// Repeated calls replace the order.
+	//
+	// Parameters:
+	//   - order: A relative sort key. Higher values appear first, consistent with
+	//     DisplayOrder. Resources without a display order are treated as having an
+	//     order of 0, so a negative value moves a resource after them.
+	//
+	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	WithDisplayOrder(order int) TestRedisResource
 
 	// WithDockerfile - Causes Aspire to build the specified container image from a
 	// Dockerfile.
@@ -48354,16 +48466,17 @@ type TestRedisResource interface {
 	//
 	// This method adds an McpServerEndpointAnnotation to the resource, enabling the
 	// Aspire tooling to discover and proxy the MCP server exposed by the resource.
+	// It does not create an endpoint, start an MCP server, or configure its
+	// transport or authentication. The resource must already expose an MCP server
+	// at the selected endpoint and path. Endpoint selection and URL resolution
+	// occur when tooling consumes the annotation, not when this method is called. A
+	// missing selected endpoint causes resolution to throw a
+	// DistributedApplicationException.
 	//
 	// Parameters:
 	//   - options: Optional parameters; see [WithMcpServerOption].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithMcpServer(options ...WithMcpServerOption) TestRedisResource
 
 	// WithMergeEndpoint configures a named endpoint
@@ -48613,11 +48726,6 @@ type TestRedisResource interface {
 	//   - options: Optional parameters; see [WithRequiredCommandValidationOption].
 	//
 	// Returns: The resource builder.
-	//
-	// # Experimental
-	//
-	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
-	// release.
 	WithRequiredCommandValidation(command string, validationCallback func(arg RequiredCommandValidationContext) RequiredCommandValidationResult, options ...WithRequiredCommandValidationOption) TestRedisResource
 
 	// WithResourceTypeDisplayName overrides the human-readable resource type label.
@@ -48671,6 +48779,11 @@ type TestRedisResource interface {
 	//     words.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithTags(tags []string) TestRedisResource
 
 	// WithTerminal adds an interactive terminal session to a resource with an
@@ -48691,6 +48804,11 @@ type TestRedisResource interface {
 	//   - value: The trait value. Do not include secrets.
 	//
 	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
 	WithTrait(name string, value string) TestRedisResource
 
 	// WithUnionDependency adds a dependency from a string or another resource
@@ -50057,23 +50175,6 @@ func (s *testRedisResource) WithCreatedAt(createdAt string) TestRedisResource {
 	return s
 }
 
-// WithDashboardPosition sets the default resource position in the dashboard.
-// Saved dashboard ordering takes precedence.
-func (s *testRedisResource) WithDashboardPosition(position int) TestRedisResource {
-	if s.Err() != nil {
-		return s
-	}
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"builder": s.handle.ToJSON(),
-	}
-	reqArgs["position"] = serializeValue(position)
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withDashboardPosition", reqArgs); err != nil {
-		s.setErr(err)
-	}
-	return s
-}
-
 // WithDataVolume adds a data volume with persistence
 func (s *testRedisResource) WithDataVolume(options ...WithDataVolumeOption) TestRedisResource {
 	if s.Err() != nil {
@@ -50138,6 +50239,24 @@ func (s *testRedisResource) WithDeveloperCertificateTrust(trust bool) TestRedisR
 	}
 	reqArgs["trust"] = serializeValue(trust)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withDeveloperCertificateTrust", reqArgs); err != nil {
+		s.setErr(err)
+	}
+	return s
+}
+
+// WithDisplayOrder sets the default display order of the resource in lists of
+// resources, such as the dashboard's. A saved ordering takes precedence.
+// Repeated calls replace the order.
+func (s *testRedisResource) WithDisplayOrder(order int) TestRedisResource {
+	if s.Err() != nil {
+		return s
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["order"] = serializeValue(order)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withDisplayOrder", reqArgs); err != nil {
 		s.setErr(err)
 	}
 	return s
@@ -53411,10 +53530,13 @@ func (o *WithHttpHealthCheckOptions) ToMap() map[string]any {
 // WithMcpServerOptions carries optional parameters for WithMcpServer.
 type WithMcpServerOptions struct {
 	// Path is an optional path to append to the endpoint URL when forming the MCP
-	// server address. Defaults to "/mcp".
+	// server address. Defaults to "/mcp". A leading slash is added if missing. A
+	// null or empty value uses the endpoint URL without an additional path.
 	Path *string `json:"path,omitempty"`
 	// EndpointName is an optional name of the endpoint that hosts the MCP server.
-	// If not specified, defaults to the first HTTPS or HTTP endpoint.
+	// If not specified, selects the endpoint named https, falling back to the
+	// endpoint named http. Names are matched case-insensitively; endpoints with
+	// other names must be selected explicitly, regardless of their URI scheme.
 	EndpointName *string `json:"endpointName,omitempty"`
 }
 
@@ -53661,42 +53783,6 @@ func (o *WithDescriptionOptions) ToMap() map[string]any {
 	}
 	if o.EnableMarkdown != nil {
 		m["enableMarkdown"] = serializeValue(o.EnableMarkdown)
-	}
-	return m
-}
-
-// WithRequiredOptions carries optional parameters for WithRequired.
-type WithRequiredOptions struct {
-	// Required is a value indicating whether the parameter must have a value before
-	// it can be resolved.
-	Required *bool `json:"required,omitempty"`
-}
-
-// WithRequiredOption configures WithRequired.
-type WithRequiredOption interface {
-	apply(*WithRequiredOptions)
-}
-
-func (option *WithRequiredOptions) apply(options *WithRequiredOptions) {
-	if option != nil {
-		*options = *deepUpdate(options, option)
-	}
-}
-
-// RequiredRequired sets Required for WithRequired.
-type RequiredRequired bool
-
-func (value RequiredRequired) apply(options *WithRequiredOptions) {
-	options.Required = (*bool)(&value)
-}
-
-func (o *WithRequiredOptions) ToMap() map[string]any {
-	m := map[string]any{}
-	if o == nil {
-		return m
-	}
-	if o.Required != nil {
-		m["required"] = serializeValue(o.Required)
 	}
 	return m
 }

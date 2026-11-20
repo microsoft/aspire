@@ -290,6 +290,7 @@ suite('Aspire resource debug language model tool E2E', function () {
         const scenarios = [
             {
                 resourceName: worker.name,
+                displayName: worker.displayName,
                 debugType: 'coreclr' as const,
                 sourcePath: path.join(getWorkspaceRoot(), 'AspireE2E.Worker', 'Program.cs'),
                 marker: 'app.MapGet("/", () => "ok");',
@@ -297,6 +298,7 @@ suite('Aspire resource debug language model tool E2E', function () {
             },
             {
                 resourceName: customOutputWorker.name,
+                displayName: customOutputWorker.displayName,
                 debugType: 'coreclr' as const,
                 sourcePath: path.join(getWorkspaceRoot(), 'AspireE2E.CustomOutputWorker', 'Program.cs'),
                 marker: 'app.MapGet("/", () => "custom-ok");',
@@ -304,6 +306,7 @@ suite('Aspire resource debug language model tool E2E', function () {
             },
             {
                 resourceName: go.name,
+                displayName: go.displayName,
                 debugType: 'go' as const,
                 sourcePath: path.join(getWorkspaceRoot(), 'AspireE2E.Go', 'main.go'),
                 marker: 'message := "go-ok"',
@@ -312,10 +315,19 @@ suite('Aspire resource debug language model tool E2E', function () {
         ];
 
         for (const scenario of scenarios) {
+            assert.ok(scenario.displayName);
+            assert.notStrictEqual(scenario.resourceName, scenario.displayName);
+            const status = await invokeLanguageModelTool<{ success: boolean; outcome: string }>(
+                'aspire_debug_session_status',
+                { appHostPath: toWorkspaceRelativePath(appHostPath), resourceName: scenario.displayName },
+                { expectedConfirmations: 0 });
+            assert.strictEqual(status.results.length, 1);
+            assert.strictEqual(status.results[0].success, true);
+
             const proof = (await executeE2eControlCommand({
                 name: 'proveAttachedResourceDebugging',
                 appHostPath,
-                resourceName: scenario.resourceName,
+                resourceName: scenario.displayName,
                 sourcePath: scenario.sourcePath,
                 breakpointLine: findBreakpointLine(scenario.sourcePath, scenario.marker),
                 expectedDebugType: scenario.debugType,
@@ -326,8 +338,8 @@ suite('Aspire resource debug language model tool E2E', function () {
             assert.strictEqual(proof.proof, 'aspire-resource-attach-breakpoint-detach');
             assert.strictEqual(proof.toolPayload.outcome, 'started');
             assert.strictEqual(proof.toolPayload.provider, scenario.debugType === 'coreclr' ? 'dotnet' : 'go');
-            assertSafeResourceDebugResult(proof.toolPayload, scenario.resourceName);
-            assert.strictEqual(proof.resourceName, scenario.resourceName);
+            assertSafeResourceDebugResult(proof.toolPayload, scenario.displayName);
+            assert.strictEqual(proof.resourceName, scenario.displayName);
             assert.strictEqual(proof.debugType, scenario.debugType);
             assert.strictEqual(proof.breakpoint.matchingStackFrame.line, proof.breakpoint.line);
             const breakpointSourcePath = proof.breakpoint.matchingStackFrame.source?.path;

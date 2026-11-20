@@ -49,7 +49,7 @@
       </trans-unit>
       <trans-unit id="ConfigurationWriteRefused">
         <source>Could not safely update '{0}'. Check for concurrent changes, links, or restrictive permissions, then retry or configure it manually.</source>
-        <target state="new">Could not safely update '{0}'. Check for concurrent changes, links, or restrictive permissions, then retry or configure it manually.</target>
+        <target state="translated">Не удалось безопасно обновить "{0}". Проверьте наличие одновременных изменений, ссылок или ограничительных разрешений, затем повторите попытку или настройте его вручную.</target>
         <note />
       </trans-unit>
       <trans-unit id="DeprecatedConfigFix">
@@ -89,12 +89,12 @@
       </trans-unit>
       <trans-unit id="InitCommand_AspireSkillChoice">
         <source>Agent assets from configured skill sources</source>
-        <target state="new">Agent assets from configured skill sources</target>
+        <target state="translated">Ресурсы агента из настроенных источников навыков</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_ConfigurationTarget">
         <source>{0}: {1}</source>
-        <target state="new">{0}: {1}</target>
+        <target state="translated">{0}: {1}</target>
         <note>{0} is the agent name, and {1} lists its configuration paths separated by commas.</note>
       </trans-unit>
       <trans-unit id="InitCommand_ConfigureMcpServer">
@@ -109,8 +109,18 @@
       </trans-unit>
       <trans-unit id="InitCommand_ConfiguredTargets">
         <source>Configured sources in {0}</source>
-        <target state="new">Configured sources in {0}</target>
+        <target state="translated">Настроенные источники в {0}</target>
         <note>{0} lists the configuration file paths with their agent names in parentheses, separated by commas.</note>
+      </trans-unit>
+      <trans-unit id="InitCommand_DeleteSkillCopiesPrompt">
+        <source>Delete {0} copied skill folders?</source>
+        <target state="translated">Удалить папки со скопированными навыками ({0})?</target>
+        <note>{0} is the number of skill folders, always greater than one.</note>
+      </trans-unit>
+      <trans-unit id="InitCommand_DeleteSkillCopyPrompt">
+        <source>Delete this copied skill folder?</source>
+        <target state="translated">Удалить эту папку со скопированным навыком?</target>
+        <note />
       </trans-unit>
       <trans-unit id="InitCommand_Description">
         <source>Initialize configuration and skills for selected agent clients</source>
@@ -129,13 +139,13 @@
       </trans-unit>
       <trans-unit id="InitCommand_ExistingConfigurationConflict">
         <source>Cannot register Aspire because '{0}' conflicts with existing settings or an override. Existing settings were left unchanged.</source>
-        <target state="new">Cannot register Aspire because '{0}' conflicts with existing settings or an override. Existing settings were left unchanged.</target>
+        <target state="translated">Не удается зарегистрировать Aspire, потому что "{0}" конфликтует с существующими параметрами или переопределением. Существующие параметры оставлены без изменений.</target>
         <note>{0} identifies the conflicting JSON setting or environment override.</note>
       </trans-unit>
       <trans-unit id="InitCommand_FailedTarget">
         <source>Failed to configure Aspire plugin:
   {0}</source>
-        <target state="new">Failed to configure Aspire plugin:
+        <target state="translated">Не удалось настроить плагин Aspire:
   {0}</target>
         <note>{0} lists each agent's configuration path and failure details, one target per line.</note>
       </trans-unit>
@@ -146,7 +156,7 @@
       </trans-unit>
       <trans-unit id="InitCommand_GlobalScope">
         <source>Global (In your home directory, available across all projects)</source>
-        <target state="needs-review-translation">Глобально (установить в домашний каталог; доступно во всех проектах)</target>
+        <target state="translated">Глобально (в домашнем каталоге, доступно для всех проектов)</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_InstallationLocations">
@@ -161,7 +171,7 @@
       </trans-unit>
       <trans-unit id="InitCommand_InstalledSkillsSummary">
         <source>Installed skills:</source>
-        <target state="needs-review-translation">Установленные навыки агента Aspire:</target>
+        <target state="translated">Установленные навыки:</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_InstalledSkillsSummaryLocations">
@@ -186,19 +196,17 @@
       </trans-unit>
       <trans-unit id="InitCommand_InvalidSkills">
         <source>Invalid skill/tool selection '{0}'. Use {1}, '{2}', or '{3}'.</source>
-        <target state="new">Invalid skill/tool selection '{0}'. Use {1}, '{2}', or '{3}'.</target>
+        <target state="translated">Недопустимый '{0}' выбора навыка или инструмента. Используйте {1}, '{2}' или '{3}'.</target>
         <note />
       </trans-unit>
-      <trans-unit id="InitCommand_LocalSkillsConflict">
-        <source>Local Aspire skill files may override plugin skills
-{0}</source>
-        <target state="new">Local Aspire skill files may override plugin skills
-{0}</target>
-        <note>{0} lists the local skill entry-point paths, one per line.</note>
+      <trans-unit id="InitCommand_KeptSkillCopies">
+        <source>Kept copied Aspire skills in {0}</source>
+        <target state="translated">Скопированные навыки Aspire сохранены в {0}</target>
+        <note>{0} lists the copied skill folder paths, separated by commas.</note>
       </trans-unit>
       <trans-unit id="InitCommand_LocationWithAgents">
         <source>{0} ({1})</source>
-        <target state="new">{0} ({1})</target>
+        <target state="translated">{0} ({1})</target>
         <note>{0} is a location, and {1} lists the agents that use it, separated by commas.</note>
       </trans-unit>
       <trans-unit id="InitCommand_McpConfigurationDescription">
@@ -228,7 +236,27 @@
       </trans-unit>
       <trans-unit id="InitCommand_ProjectScope">
         <source>This project (In your workspace, ready to commit with your project)</source>
-        <target state="needs-review-translation">Проект (установить в корень рабочей области; изменения фиксируются вместе с проектом)</target>
+        <target state="translated">Этот проект (в рабочей области, готово к фиксации вместе с проектом)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_RemoveSkillCopiesOptionDescription">
+        <source>Delete copied Aspire skill folders without asking for confirmation, including all files inside them and any changes you made. Only applies when the Aspire skills plugin replaces them at the selected scope. Defaults to false</source>
+        <target state="new">Delete copied Aspire skill folders without asking for confirmation, including all files inside them and any changes you made. Only applies when the Aspire skills plugin replaces them at the selected scope. Defaults to false</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_RemoveSkillCopyFailed">
+        <source>Could not remove copied Aspire skill '{0}': {1}</source>
+        <target state="translated">Не удалось удалить скопированную Aspire '{0}' навыка: {1}</target>
+        <note>{0} is the skill directory path, and {1} is the failure reason.</note>
+      </trans-unit>
+      <trans-unit id="InitCommand_RemovedSkillCopies">
+        <source>Deleted {0} copied skill folders</source>
+        <target state="new">Deleted {0} copied skill folders</target>
+        <note>{0} is the number of deleted skill folders, always greater than one.</note>
+      </trans-unit>
+      <trans-unit id="InitCommand_RemovedSkillCopy">
+        <source>Deleted 1 copied skill folder</source>
+        <target state="new">Deleted 1 copied skill folder</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_ScopeOptionDescription">
@@ -243,7 +271,7 @@
       </trans-unit>
       <trans-unit id="InitCommand_SelectScopePrompt">
         <source>Where should skills and tools be installed?</source>
-        <target state="needs-review-translation">Область установки</target>
+        <target state="translated">Куда установить навыки и средства?</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_SharedLocation">
@@ -256,16 +284,31 @@
         <target state="translated">Общие файлы могут быть обнаружены невыбранными агентами.</target>
         <note />
       </trans-unit>
+      <trans-unit id="InitCommand_SkillCopiesFound">
+        <source>The Aspire skills plugin now provides these skills. Deleting the copied folders also deletes everything inside them, including any changes you made:</source>
+        <target state="new">The Aspire skills plugin now provides these skills. Deleting the copied folders also deletes everything inside them, including any changes you made:</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_SkillCopiesRequirePlugin">
+        <source>Copies are only removed when the Aspire skills plugin is configured and enabled at the selected scope for every selected agent.</source>
+        <target state="translated">Копии удаляются только в том случае, если плагин навыков Aspire настроен и включен в выбранной области для каждого выбранного агента.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_SkillCopyBehindLink">
+        <source>It is reached through a linked folder that may be shared. Remove it manually if it is no longer needed.</source>
+        <target state="translated">Доступ к нему осуществляется через связанную папку, которой можно поделиться. Если он больше не нужен, удалите его вручную.</target>
+        <note>Failure reason shown after InitCommand_RemoveSkillCopyFailed.</note>
+      </trans-unit>
       <trans-unit id="InitCommand_SkillSources">
         <source>Skill sources:
 {0}</source>
-        <target state="new">Skill sources:
+        <target state="translated">Источники навыков:
 {0}</target>
         <note>{0} lists the configured skill source repository and/or catalog URLs for the selected agent clients, one per line.</note>
       </trans-unit>
       <trans-unit id="InitCommand_SkillSourcesExplanation">
         <source>One or more skill sources are configured. A skill source lets an organization share skills to customize your development experience.</source>
-        <target state="new">One or more skill sources are configured. A skill source lets an organization share skills to customize your development experience.</target>
+        <target state="translated">Настроен один или несколько источников навыков. Источник навыков позволяет организации делиться навыками и настраивать ваш процесс разработки.</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_SkillsLocationHint">
@@ -275,7 +318,7 @@
       </trans-unit>
       <trans-unit id="InitCommand_SkillsOptionDescription">
         <source>Comma-separated skill/tool IDs ({0}), '{1}', or '{2}' (default: aspire). The 'dotnet-inspect' skill requires a C# AppHost in the workspace</source>
-        <target state="new">Comma-separated skill/tool IDs ({0}), '{1}', or '{2}' (default: aspire). The 'dotnet-inspect' skill requires a C# AppHost in the workspace</target>
+        <target state="translated">Идентификаторы навыков/инструментов, разделенные запятыми ({0}), '{1}' или '{2}' (по умолчанию: aspire). Для навыка "dotnet-inspect" требуется C# AppHost в рабочей области</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_TelemetryHookSkippedMalformedConfig">
@@ -294,18 +337,13 @@
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_TelemetryHooksInstalled">
-        <source>Installed Aspire agent telemetry hooks for: {0}. Only Aspire skill, MCP tool, and reference-file usage is recorded. Opt out anytime by setting ASPIRE_CLI_TELEMETRY_OPTOUT=true.</source>
-        <target state="translated">Телеметрические обработчики агента Aspire установлены для: {0}. Записывается только потребление навыка Aspire, инструмента MCP и справочных файлов. Отказаться можно в любое время, задав ASPIRE_CLI_TELEMETRY_OPTOUT=true.</target>
+        <source>Installed Aspire agent telemetry hooks in user-level configuration for: {0}. Only Aspire skill, MCP tool, and reference-file usage is recorded. Opt out anytime by setting ASPIRE_CLI_TELEMETRY_OPTOUT=true.</source>
+        <target state="translated">В пользовательской конфигурации установлены обработчики телеметрии агента Aspire для: {0}. Записывается только потребление навыка Aspire, инструмента MCP и справочных файлов. Отказаться можно в любой момент, задав ASPIRE_CLI_TELEMETRY_OPTOUT=true.</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_WorkspaceRootOptionDescription">
         <source>Path to the workspace root directory</source>
         <target state="translated">Путь к корневому каталогу рабочей области</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="LocalSkills_ReadFailed">
-        <source>Could not check local Aspire skills at '{0}': {1}</source>
-        <target state="new">Could not check local Aspire skills at '{0}': {1}</target>
         <note />
       </trans-unit>
       <trans-unit id="McpServerContainerMustBeJsonObject">
@@ -375,7 +413,7 @@
       </trans-unit>
       <trans-unit id="InitCommand_SelectSkills">
         <source>Which skills and tools do you want to configure?</source>
-        <target state="new">Which skills and tools do you want to configure?</target>
+        <target state="translated">Какие навыки и средства вам нужно настроить?</target>
         <note />
       </trans-unit>
       <trans-unit id="MalformedConfigFileError">
@@ -405,7 +443,7 @@
       </trans-unit>
       <trans-unit id="TelemetryHookScriptUpdateFailed">
         <source>Could not update the telemetry hook script '{0}': {1}</source>
-        <target state="new">Could not update the telemetry hook script '{0}': {1}</target>
+        <target state="translated">Не удалось обновить сценарий перехватчика телеметрии "{0}": {1}</target>
         <note>{0} is the hook script path. {1} is the underlying error message.</note>
       </trans-unit>
     </body>

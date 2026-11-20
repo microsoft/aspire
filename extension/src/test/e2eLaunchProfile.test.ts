@@ -9,6 +9,10 @@ import * as vm from 'vm';
 import { error as webDriverError, WebDriver } from 'selenium-webdriver';
 import { blazorWasmDebugProofResponseAllowanceMs, blazorWasmDebugProofTimeoutMs, getBlazorWasmDebugProofCleanupTimeoutMs, getBlazorWasmDebugProofControlTimeoutMs } from '../testing/blazorWasmDebugProofTimeouts';
 
+const { createBrowserDebuggerAppHostProject } = require(path.resolve(__dirname, '..', '..', 'scripts', 'e2e-apphost-sdk-version.js')) as {
+    createBrowserDebuggerAppHostProject(appHostSdkVersion: string): string;
+};
+
 function removeDirectorySafely(directory: string): void {
     try {
         fs.rmSync(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
@@ -722,7 +726,7 @@ suite('E2E launch profile', () => {
         assert.ok(debuggerPrerequisitesIndex < azureFunctionsPrerequisitesIndex);
         assert.ok(azureFunctionsPrerequisitesIndex < runStepIndex);
         assert.ok(workflow.includes('global-json-file: global.json'));
-        assert.deepStrictEqual(runnerTargetFrameworks, ['net11.0', 'net10.0', 'net10.0-windows10.0.19041.0', 'net10.0', 'net10.0', 'net10.0']);
+        assert.deepStrictEqual(runnerTargetFrameworks, ['net10.0', 'net10.0-windows10.0.19041.0', 'net10.0', 'net10.0', 'net10.0']);
         assert.deepStrictEqual(fixtureTargetFrameworks, ['net10.0', 'net10.0']);
         assert.ok(debuggerPrerequisiteStep.includes('if: ${{ matrix.installDotnetDebugger || matrix.installAzureFunctions || matrix.installResourceDebug }}'));
         assert.ok(debuggerPrerequisiteStep.includes('vscode-dotnet-runtime/3.1.0/vspackage'));
@@ -784,6 +788,8 @@ suite('E2E launch profile', () => {
         const compactRunner = runner.replace(/\s+/g, ' ');
         const globalJson = JSON.parse(fs.readFileSync(path.join(extensionRoot, '..', 'global.json'), 'utf8'));
         const repositoryTargetFramework = `net${globalJson.sdk.version.split('.')[0]}.0`;
+        const appHostSdkVersion = '17.0.0-ci';
+        const appHostProject = createBrowserDebuggerAppHostProject(appHostSdkVersion);
 
         assert.ok(runner.includes("const enableBrowserDebuggerE2E = shardName === 'browser-debugger';"));
         assert.ok(runner.includes(`const browserDebuggerTargetFramework = '${repositoryTargetFramework}';`));
@@ -793,19 +799,19 @@ suite('E2E launch profile', () => {
         assert.ok(compactRunner.includes("runDotnetForFixture(['new', 'blazorwasm', '--name', 'StandaloneClient', '--output', standaloneDirectory, '--framework', browserDebuggerTargetFramework, '--no-https', '--no-restore']);"));
         assert.ok(compactRunner.includes("runDotnetForFixture(['new', 'blazor', '--name', 'HostedGlobal', '--output', hostedGlobalDirectory, '--framework', browserDebuggerTargetFramework, '--interactivity', 'WebAssembly', '--all-interactive', '--no-https', '--no-restore']);"));
         assert.ok(compactRunner.includes("runDotnetForFixture(['new', 'blazor', '--name', 'HostedPerPage', '--output', hostedPerPageDirectory, '--framework', browserDebuggerTargetFramework, '--interactivity', 'WebAssembly', '--no-https', '--no-restore']);"));
-        assert.ok(runner.includes(`<TargetFramework>${repositoryTargetFramework}</TargetFramework>`));
+        assert.ok(appHostProject.includes(`<TargetFramework>${repositoryTargetFramework}</TargetFramework>`));
         assert.ok(runner.includes("process.env.ASPIRE_EXTENSION_E2E_SKIP_RESTORE_PREWARM === 'true' && !enableBrowserDebuggerE2E"));
         assert.ok(runner.includes('targetFramework !== browserDebuggerTargetFramework'));
         assert.ok(!runner.includes('addNet10WebAssemblyDiscoveryTargets'));
         assert.ok(runner.includes('currentCount = 42; // ASPIRE_E2E_MANAGED_BREAKPOINT'));
         assert.ok(runner.includes('<Routes\\s+@rendermode\\s*=\\s*["\']InteractiveWebAssembly["\']\\s*\\/>'));
         assert.ok(runner.includes('@rendermode\\s+InteractiveWebAssembly'));
-        assert.ok(runner.includes('<PackageReference Include="Aspire.Hosting.Blazor" Version="${resolvedAppHostSdkVersion}" />'));
-        assert.ok(runner.includes('<ProjectReference Include="../StandaloneClient/StandaloneClient.csproj" />'));
-        assert.ok(runner.includes('<ProjectReference Include="../HostedGlobal/HostedGlobal/HostedGlobal.csproj" />'));
-        assert.ok(runner.includes('<ProjectReference Include="../HostedGlobal/HostedGlobal.Client/HostedGlobal.Client.csproj" />'));
-        assert.ok(runner.includes('<ProjectReference Include="../HostedPerPage/HostedPerPage/HostedPerPage.csproj" />'));
-        assert.ok(runner.includes('<ProjectReference Include="../HostedPerPage/HostedPerPage.Client/HostedPerPage.Client.csproj" />'));
+        assert.ok(appHostProject.includes(`<PackageReference Include="Aspire.Hosting.Blazor" Version="${appHostSdkVersion}" />`));
+        assert.ok(appHostProject.includes('<ProjectReference Include="../StandaloneClient/StandaloneClient.csproj" />'));
+        assert.ok(appHostProject.includes('<ProjectReference Include="../HostedGlobal/HostedGlobal/HostedGlobal.csproj" />'));
+        assert.ok(appHostProject.includes('<ProjectReference Include="../HostedGlobal/HostedGlobal.Client/HostedGlobal.Client.csproj" />'));
+        assert.ok(appHostProject.includes('<ProjectReference Include="../HostedPerPage/HostedPerPage/HostedPerPage.csproj" />'));
+        assert.ok(appHostProject.includes('<ProjectReference Include="../HostedPerPage/HostedPerPage.Client/HostedPerPage.Client.csproj" />'));
         assert.ok(runner.includes('builder.AddBlazorWasmProject<Projects.StandaloneClient>("standalone")'));
         assert.ok(runner.includes('builder.AddDotnetProject("hosted-global", "../HostedGlobal/HostedGlobal/HostedGlobal.csproj")'));
         assert.ok(runner.includes('builder.AddDotnetProject("hosted-per-page", "../HostedPerPage/HostedPerPage/HostedPerPage.csproj")'));
@@ -880,6 +886,8 @@ result = resolveDebuggerVsixPaths();`, sandbox);
 writeAppHostProject('AppHost', '13.6.0-test', ${includeAzureFunctions}, ${includeWinUi}, ${includeResourceDebug});`, {
                 path,
                 workspaceRoot: 'workspace',
+                shortRunRoot: 'run-root',
+                matchedTestSpecs: [],
                 csharpFileHeader: '',
                 fs: {
                     mkdirSync: () => undefined,
@@ -1121,6 +1129,7 @@ writeAppHostProject('AppHost', '13.6.0-test', ${includeAzureFunctions}, ${includ
             path,
             workspaceRoot: '/app',
             csharpFileHeader: '',
+            createBrowserDebuggerAppHostProject,
             fs: {
                 mkdirSync: () => undefined,
                 readFileSync: (filePath: string) => files.get(filePath),
@@ -1392,6 +1401,56 @@ builder.Build().Run();
         assert.ok(spec.includes("await waitForReadyMarker(readyMarkerPath, 240000);"));
         assert.ok(spec.includes("await waitForResourceState('e2e-winui', ['Running'], 30000);"));
     });
+
+    for (const [mode, spec] of [
+        ['ordinary', 'treeActions.e2e.test.js'],
+        ['java', 'treeActions.e2e.test.js'],
+        ['ordinary', 'appHostLifecycleTools.e2e.test.js'],
+        ['ordinary', 'diagnosticLogs.e2e.test.js'],
+    ]) {
+        test(`owns resource source fixtures for ${spec} in ${mode} mode`, () => {
+            const runner = fs.readFileSync(path.resolve(__dirname, '..', '..', 'scripts', 'run-e2e.js'), 'utf8');
+            const source = ts.createSourceFile('run-e2e.js', runner, ts.ScriptTarget.Latest, true);
+            const names = new Set(['writeAppHostProject', 'cleanupTemporaryRunRoot']);
+            const declarations = source.statements.filter(statement => ts.isFunctionDeclaration(statement) && names.has(statement.name?.text ?? ''));
+            assert.strictEqual(declarations.length, names.size);
+            const shortRunRoot = path.resolve('owned-run-root');
+            const javaScratchWorkspaceRoot = path.resolve('java-e2e-workspace');
+            const workspaceRoot = mode === 'java' ? javaScratchWorkspaceRoot : path.join(shortRunRoot, 'workspace');
+            const directories: string[] = [];
+            const removed: string[] = [];
+            const files = new Map<string, string>();
+            vm.runInNewContext(`${declarations.map(declaration => declaration.getText(source)).join('\n')}
+writeAppHostProject('AspireE2E.AppHost', '13.6.0', false, false, false);
+cleanupTemporaryRunRoot();`, {
+                path, shortRunRoot, workspaceRoot, javaScratchWorkspaceRoot, Buffer,
+                matchedTestSpecs: [path.resolve(spec)],
+                process: { env: {}, platform: process.platform },
+                isWindows: process.platform === 'win32',
+                enableJavaE2E: mode === 'java',
+                csharpFileHeader: '',
+                isWorkspaceRootOwnedByRunner: () => true,
+                removePathWithoutFollowingLinks: (directory: string) => removed.push(directory),
+                fs: {
+                    mkdirSync: (directory: string) => directories.push(directory),
+                    writeFileSync: (file: string, content: string) => files.set(file, content),
+                },
+            });
+            const outsideWorkspaceSourcePath = path.join(shortRunRoot, 'e2e-outside-workspace-source');
+            assert.ok(directories.includes(outsideWorkspaceSourcePath));
+            assert.deepStrictEqual(removed, mode === 'java' ? [javaScratchWorkspaceRoot, shortRunRoot] : [shortRunRoot]);
+            const appHostSource = files.get(path.join(workspaceRoot, 'AspireE2E.AppHost', 'AppHost.cs'));
+            assert.ok(appHostSource);
+            assert.ok(appHostSource.includes(`new("project.path", ${JSON.stringify(outsideWorkspaceSourcePath)})`));
+            const includeLanguageSources = spec === 'treeActions.e2e.test.js';
+            assert.deepStrictEqual(
+                [...appHostSource.matchAll(/\("(python|java)", Path.Combine/g)].map(match => match[1]),
+                includeLanguageSources ? ['python', 'java'] : []);
+            assert.deepStrictEqual(
+                [...files.keys()].filter(file => /\.(py|java)$/.test(file)).map(file => path.basename(file)),
+                includeLanguageSources ? ['main.py', 'App.java'] : []);
+        });
+    }
 
     for (const arch of ['x64', 'arm64']) {
         test(`isolates WinUI design-time intermediates without moving restore assets on ${arch}`, () => {
@@ -1862,6 +1921,100 @@ builder.Build().Run();
             ].sort());
         });
     }
+
+    test('reports the Java debug startup timeout failure separately from its cleanup failure', async () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const specSource = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'javaAppHostDebugStartupTimeout.e2e.test.ts'), 'utf8');
+        const fixturesSource = ts.createSourceFile(
+            'fixtures.ts',
+            fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'fixtures.ts'), 'utf8'),
+            ts.ScriptTarget.Latest,
+            true);
+        const cleanupFunctionNames = new Set(['runE2eTeardown', 'formatE2eTeardownFailureMessage', 'redactE2eTeardownFailure']);
+        const cleanupDeclarations = fixturesSource.statements.filter((statement): statement is ts.FunctionDeclaration =>
+            ts.isFunctionDeclaration(statement) && statement.name !== undefined && cleanupFunctionNames.has(statement.name.text));
+        assert.strictEqual(cleanupDeclarations.length, cleanupFunctionNames.size);
+        const compilerOptions = { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 };
+        const runE2eTeardown = vm.runInNewContext(
+            `${ts.transpileModule(cleanupDeclarations.map(declaration => declaration.getText(fixturesSource)).join('\n'), { compilerOptions }).outputText}\nrunE2eTeardown;`,
+            { exports: {}, Error, AggregateError });
+
+        // Mirrors https://github.com/microsoft/aspire/issues/21411: the Java debug launch never
+        // reaches the AppHost, then stopDebugging fails because the session never started.
+        const launchFailure = new Error('Timed out waiting for Debug Console output JAVA_TIMEOUT_E2E_DELAY_START.');
+        const stopFailure = new Error('Failed to apply E2E control revision 1: E2E control command failed.');
+        const appHostSourcePath = '/workspace/JavaSpringBoot.AppHost.Java/AppHost.java';
+        const originalSource = '    var builder = DistributedApplication.CreateBuilder();\n';
+        const writes: string[] = [];
+        const cleanups: string[] = [];
+        const noOperation = () => undefined;
+        const helpers = {
+            runE2eTeardown,
+            getCommandInvocationCount: () => 0,
+            waitForCommandOutcome: noOperation,
+            waitForDebugConsoleOutput: async () => { throw launchFailure; },
+            waitForDebugSessionStartup: noOperation,
+            waitForNoDebugSessions: async () => { cleanups.push('waitForNoDebugSessions'); },
+            waitForNoRunningAppHost: async () => { cleanups.push('waitForNoRunningAppHost'); },
+            waitForRepositoryIdle: async () => { cleanups.push('waitForRepositoryIdle'); },
+            executeE2eControlCommand: async (command: { name: string }) => {
+                if (command.name === 'stopDebugging') {
+                    cleanups.push('stopDebugging');
+                    throw stopFailure;
+                }
+            },
+            writeFileWithRetry: (filePath: string, contents: string) => {
+                assert.strictEqual(filePath, appHostSourcePath);
+                writes.push(contents);
+            },
+            getJavaAppHostSourcePath: () => appHostSourcePath,
+            prepareJavaWorkspace: noOperation,
+            waitForJavaLanguageServerImport: noOperation,
+            readCliLogs: () => '',
+            readExtensionLogs: () => '',
+        };
+        const modules = new Map<string, unknown>([
+            ['assert', assert],
+            ['fs', { readFileSync: () => originalSource }],
+            ['./helpers/assertions', helpers],
+            ['./helpers/fixtures', helpers],
+            ['./helpers/java', helpers],
+            ['./helpers/logs', helpers],
+        ]);
+        const context = {
+            timeout: noOperation,
+            skip: () => assert.fail('The Java startup timeout proof must execute.'),
+        };
+        type E2eCallback = (this: typeof context) => Promise<void>;
+        const tests = new Map<string, E2eCallback>();
+        const teardowns: E2eCallback[] = [];
+        vm.runInNewContext(ts.transpileModule(specSource, { compilerOptions }).outputText, {
+            exports: {},
+            Error,
+            AggregateError,
+            process: { env: { ASPIRE_EXTENSION_E2E_UNSET_CLI_START_TIMEOUT: 'true' } },
+            require: (name: string) => {
+                assert.ok(modules.has(name), `Unexpected E2E import: ${name}`);
+                return modules.get(name);
+            },
+            suite: (_name: string, body: () => void) => body.call(context),
+            suiteSetup: noOperation,
+            test: (name: string, body: E2eCallback) => tests.set(name, body),
+            teardown: (body: E2eCallback) => teardowns.push(body),
+        });
+
+        const javaTest = tests.get('debug startup waits past the old 60 second guest backchannel timeout');
+        assert.ok(javaTest);
+        await assert.rejects(javaTest.call(context), error => error === launchFailure);
+        assert.strictEqual(teardowns.length, 1, 'Cleanup must run in a teardown hook so its failure cannot replace the test failure.');
+        await assert.rejects(teardowns[0].call(context), (error: unknown) => {
+            assert.ok(error instanceof AggregateError);
+            assert.deepStrictEqual(Array.from(error.errors), [`Error: ${stopFailure.message}`]);
+            return true;
+        });
+        assert.strictEqual(writes.at(-1), originalSource, 'Teardown must restore the original AppHost source.');
+        assert.deepStrictEqual(cleanups, ['stopDebugging', 'waitForNoDebugSessions', 'waitForNoRunningAppHost', 'waitForRepositoryIdle']);
+    });
 
     test('keeps CLI status surface coverage in the deterministic ProgressNotifier unit test', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');

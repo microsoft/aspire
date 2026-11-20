@@ -1,5 +1,3 @@
-#pragma warning disable ASPIRECONNECTIONSTRINGS001
-
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
@@ -5249,10 +5247,11 @@ public static class ResourceBuilderExtensions
     /// </para>
     /// <para>
     /// When <paramref name="ownedByLaunchConfigurationType"/> is supplied and the resource is launched by an IDE
-    /// using a launch configuration of that type (see <c>WithDebugSupport</c>), the launch configuration already
+    /// using a launch configuration of that type declared with <c>WithDebugSupport</c>, the launch configuration already
     /// carries the tool invocation, so these arguments are not passed to the launched program. In every other case
-    /// — process execution, publish, or when a launch configuration of a different type is active — they are part of
-    /// the resource's command line.
+    /// — process execution, publish, when a launch configuration of a different type is active, or when Aspire
+    /// synthesizes a compatibility project launch for a project resource that declares no launch configuration type
+    /// or one the IDE does not support — they are part of the resource's command line.
     /// </para>
     /// <para>
     /// This has no effect on a container resource, which invokes its program through the image's <c>ENTRYPOINT</c>

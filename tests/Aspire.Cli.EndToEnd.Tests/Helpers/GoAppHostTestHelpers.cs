@@ -10,8 +10,7 @@ namespace Aspire.Cli.EndToEnd.Tests.Helpers;
 /// </summary>
 internal static class GoAppHostTestHelpers
 {
-    // Both templates build the AppHost on this tab-indented line, after the resources are declared.
-    private const string BuildCall = "\tapp, err := builder.Build()";
+    private const string BuildCall = " := builder.Build()";
 
     /// <summary>
     /// Inserts Go statements right before the AppHost is built. Builder calls record their errors on the
@@ -22,8 +21,10 @@ internal static class GoAppHostTestHelpers
     internal static void InsertBeforeBuild(string appHostPath, string statements)
     {
         var content = File.ReadAllText(appHostPath);
-        Assert.True(content.Contains(BuildCall, StringComparison.Ordinal), $"Expected '{BuildCall.Trim()}' in {appHostPath}");
+        var buildCallIndex = content.IndexOf(BuildCall, StringComparison.Ordinal);
+        Assert.True(buildCallIndex >= 0, $"Expected a builder.Build() assignment in {appHostPath}");
 
-        File.WriteAllText(appHostPath, content.Replace(BuildCall, $"{statements}\n\n{BuildCall}", StringComparison.Ordinal));
+        var lineStart = content.LastIndexOf('\n', buildCallIndex) + 1;
+        File.WriteAllText(appHostPath, content.Insert(lineStart, $"{statements}\n\n"));
     }
 }

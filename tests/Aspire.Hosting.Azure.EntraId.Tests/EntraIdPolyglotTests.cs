@@ -84,7 +84,7 @@ public class EntraIdPolyglotTests
         using var builder = TestDistributedApplicationBuilder.Create();
         object tenant = tenantParameter ? builder.AddParameter("tenant", TenantId) : TenantId;
         object client = clientParameter ? builder.AddParameter("client", ClientId) : ClientId;
-        var entra = builder.AddExistingEntraApplicationForExport("entra", tenant, client);
+        var entra = builder.AddExistingEntraIdApplicationForExport("entra", tenant, client);
         var consumer = builder.AddContainer("consumer", "image");
         DispatchReference(consumer, entra);
 
@@ -109,7 +109,7 @@ public class EntraIdPolyglotTests
     public async Task GenericWithReference_UsesTheConsumersConfigurationFormat(bool dotnet, string? connectionName, string instanceKey, string tenantKey, string clientKey)
     {
         using var builder = TestDistributedApplicationBuilder.Create();
-        var entra = builder.AddExistingEntraApplicationForExport("entra", "contoso.onmicrosoft.com", ClientId);
+        var entra = builder.AddExistingEntraIdApplicationForExport("entra", "contoso.onmicrosoft.com", ClientId);
         IResource consumer;
         if (dotnet)
         {
@@ -158,7 +158,7 @@ public class EntraIdPolyglotTests
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var resources = builder.Resources.ToArray();
-        Assert.Throws<ArgumentException>(() => builder.AddExistingEntraApplicationForExport("entra", tenant, client));
+        Assert.Throws<ArgumentException>(() => builder.AddExistingEntraIdApplicationForExport("entra", tenant, client));
         Assert.Equal(resources, builder.Resources);
     }
 
@@ -166,7 +166,7 @@ public class EntraIdPolyglotTests
     public void ExistingApplication_RejectsUnsupportedAndNullValuesWithoutMutation()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
-        var entra = builder.AddExistingEntraApplicationForExport("entra", TenantId, ClientId);
+        var entra = builder.AddExistingEntraIdApplicationForExport("entra", TenantId, ClientId);
         Assert.Throws<ArgumentException>(() => entra.AsExistingApplicationForExport(42, ClientId));
         Assert.Throws<ArgumentNullException>(() => entra.AsExistingApplicationForExport(TenantId, null!));
         Assert.Equal(TenantId, entra.Resource.TenantId);
@@ -181,7 +181,7 @@ public class EntraIdPolyglotTests
         using var builder = TestDistributedApplicationBuilder.Create(operation);
         var secret = builder.AddParameter("secret", "test-secret", secret: true);
         var password = builder.AddParameter("password", "test-password", secret: true);
-        var entra = builder.AddExistingEntraApplicationForExport("entra", TenantId, ClientId)
+        var entra = builder.AddExistingEntraIdApplicationForExport("entra", TenantId, ClientId)
             .WithClientSecret(secret)
             .WithFederatedManagedIdentityCredentialForExport(ClientId, new EntraIdTokenExchangeOptions
             {
@@ -214,7 +214,7 @@ public class EntraIdPolyglotTests
     public void Credentials_RejectNonSecretParametersAndInvalidIdentity()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
-        var entra = builder.AddExistingEntraApplicationForExport("entra", TenantId, ClientId);
+        var entra = builder.AddExistingEntraIdApplicationForExport("entra", TenantId, ClientId);
         var notSecret = builder.AddParameter("not-secret");
         Assert.Throws<ArgumentException>(() => entra.WithCertificateFromFileForExport("/cert.pfx", notSecret));
         Assert.Throws<ArgumentException>(() => entra.WithClientSecret(notSecret));
@@ -229,7 +229,7 @@ public class EntraIdPolyglotTests
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var vault = builder.AddAzureKeyVault("vault");
-        var entra = builder.AddExistingEntraApplicationForExport("entra", TenantId, ClientId);
+        var entra = builder.AddExistingEntraIdApplicationForExport("entra", TenantId, ClientId);
         var method = ScanExports().Methods["Aspire.Hosting.Azure.EntraId/withCertificateFromKeyVault"];
 
         Assert.Same(entra, method.Invoke(null, [entra, "https://vault.vault.azure.net", "literal-certificate"]));
@@ -287,7 +287,7 @@ public class EntraIdPolyglotTests
     {
         var method = ScanExports().Methods[CertificateCapabilityId];
         using var builder = TestDistributedApplicationBuilder.Create();
-        var existing = builder.AddExistingEntraApplicationForExport("existing", TenantId, ClientId);
+        var existing = builder.AddExistingEntraIdApplicationForExport("existing", TenantId, ClientId);
 
         var exception = Assert.Throws<TargetInvocationException>(() => method.Invoke(null, [existing]));
 
@@ -321,7 +321,7 @@ public class EntraIdPolyglotTests
                 c => Assert.Same(identity.Resource, Assert.IsType<EntraIdFederatedIdentityCredential>(c).ManagedIdentity));
         }
 
-        var existing = builder.AddExistingEntraApplicationForExport("existing", TenantId, ClientId);
+        var existing = builder.AddExistingEntraIdApplicationForExport("existing", TenantId, ClientId);
         Assert.Throws<InvalidOperationException>(() => existing.PublishWithFederatedManagedIdentityCredentialForExport());
         Assert.Throws<InvalidOperationException>(() => existing.PublishWithFederatedManagedIdentityCredentialForExport(consumer));
         Assert.Throws<InvalidOperationException>(() => existing.PublishWithFederatedManagedIdentityCredentialForExport(identity));
@@ -396,7 +396,7 @@ public class EntraIdPolyglotTests
         Assert.Throws<ArgumentException>(() => exportedEntra.WithAppRoleForExport("Other", "Other", "Other role.", []));
         Assert.Equal(4, exportedEntra.Resource.AppRoles.Count);
 
-        var existing = exported.AddExistingEntraApplicationForExport("existing", TenantId, ClientId);
+        var existing = exported.AddExistingEntraIdApplicationForExport("existing", TenantId, ClientId);
         Assert.Throws<InvalidOperationException>(() => existing.WithAppRoleForExport("Admin", "Admin", "Admin role."));
     }
 
@@ -485,8 +485,8 @@ public class EntraIdPolyglotTests
         {
             using var builder = TestDistributedApplicationBuilder.Create(operation);
             var scopeId = new Guid("11112222-aaaa-3333-bbbb-4444cccc5555");
-            var api = builder.AddExistingEntraApplicationForExport("entra-api", TenantId, ClientId);
-            var web = builder.AddExistingEntraApplicationForExport("entra-web", TenantId, "22223333-aaaa-4444-bbbb-5555cccc6666");
+            var api = builder.AddExistingEntraIdApplicationForExport("entra-api", TenantId, ClientId);
+            var web = builder.AddExistingEntraIdApplicationForExport("entra-web", TenantId, "22223333-aaaa-4444-bbbb-5555cccc6666");
             var consumer = builder.AddContainer("consumer", "image");
             var permission = new EntraIdExternalApiPermission { Name = "User.Read" };
 
@@ -522,7 +522,7 @@ public class EntraIdPolyglotTests
     public async Task ApiExports_GetScopeUriReturnsTheDeferredScopeName()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
-        var api = builder.AddExistingEntraApplicationForExport("entra-api", TenantId, ClientId)
+        var api = builder.AddExistingEntraIdApplicationForExport("entra-api", TenantId, ClientId)
             .WithApplicationIdUriForExport("api://contoso-orders")
             .WithScopeForExport("orders.read", "Read orders.", new EntraIdScopeOptions { Id = "11112222-aaaa-3333-bbbb-4444cccc5555" });
 
@@ -586,7 +586,7 @@ public class EntraIdPolyglotTests
     public void GenericWithReference_RejectsUnsupportedOptions()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
-        var entra = builder.AddExistingEntraApplicationForExport("entra", TenantId, ClientId);
+        var entra = builder.AddExistingEntraIdApplicationForExport("entra", TenantId, ClientId);
         var consumer = builder.AddContainer("consumer", "image");
         var optional = Assert.Throws<TargetInvocationException>(() => DispatchReference(consumer, entra, optional: true));
         Assert.IsType<InvalidOperationException>(optional.GetBaseException());

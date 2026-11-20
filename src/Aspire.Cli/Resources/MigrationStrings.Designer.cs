@@ -106,6 +106,15 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to No automatic migrations apply. This AppHost still uses Aspire.AppHost.Sdk (ASPIRE012), which is obsolete. See https://aka.ms/aspire/diagnostics/aspire012 for how to migrate..
+        /// </summary>
+        internal static string NoAutomaticMigrationsAppHostSdkObsolete {
+            get {
+                return ResourceManager.GetString("NoAutomaticMigrationsAppHostSdkObsolete", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Nothing to migrate. The current project is already using the latest recommended Aspire conventions..
         /// </summary>
         internal static string NothingToMigrate {

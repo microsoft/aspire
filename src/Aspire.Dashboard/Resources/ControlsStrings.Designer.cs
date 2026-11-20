@@ -142,15 +142,6 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Resource graph. The resource list shows the same resources in an accessible format.
-        /// </summary>
-        public static string OverviewGraphAccessibleLabel {
-            get {
-                return ResourceManager.GetString("OverviewGraphAccessibleLabel", resourceCulture);
-            }
-        }
-
-        /// <summary>
         ///   Looks up a localized string similar to Graph.
         /// </summary>
         public static string ChartContainerGraphTab {
@@ -709,6 +700,15 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Resource graph. The resource list shows the same resources in an accessible format.
+        /// </summary>
+        public static string OverviewGraphAccessibleLabel {
+            get {
+                return ResourceManager.GetString("OverviewGraphAccessibleLabel", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Page toolbar.
         /// </summary>
         public static string PageToolbarLandmark {
@@ -754,11 +754,11 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Capture paused.
+        ///   Looks up a localized string similar to {0} capture paused.
         /// </summary>
-        public static string PauseWarningTitle {
+        public static string PauseWarningText {
             get {
-                return ResourceManager.GetString("PauseWarningTitle", resourceCulture);
+                return ResourceManager.GetString("PauseWarningText", resourceCulture);
             }
         }
         

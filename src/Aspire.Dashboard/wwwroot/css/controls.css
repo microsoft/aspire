@@ -129,8 +129,7 @@ fluent-dropdown > [slot="control"] {
 }
 
 fluent-dropdown > button[slot="control"] {
-    /* Prevent the selected text from expanding a FluentField grid track past the dropdown width. */
-    width: 0;
+    width: auto;
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -362,6 +361,11 @@ fluent-field.aspire-checkbox {
     row-gap: 0;
 }
 
+/* Keep the spacing inside the clickable label rather than in the checkbox's margin. */
+fluent-field.aspire-checkbox > label {
+    padding-inline-start: var(--aspire-space-2);
+}
+
 fluent-field.aspire-checkbox:has(> fluent-checkbox[disabled]) {
     color: var(--colorNeutralForegroundDisabled);
 }
@@ -385,6 +389,7 @@ fluent-field.aspire-checkbox > fluent-checkbox {
     min-width: 18px;
     height: 18px;
     min-height: 18px;
+    margin-inline-end: 0;
     --borderRadiusSmall: 6px;
 }
 
@@ -657,6 +662,34 @@ fluent-popover-b::part(dialog)::-webkit-scrollbar-corner {
 .block-warning-message .title {
     font-weight: var(--aspire-font-weight-semibold);
     padding: 0 4px 0 0;
+}
+
+.pause-warning {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--aspire-space-1);
+    min-width: 0;
+    padding: 1px 9px;
+    border-radius: var(--aspire-radius-medium);
+    background: color-mix(in srgb, var(--warning) 14%, transparent);
+    color: var(--colorNeutralForeground1);
+    font-size: var(--aspire-font-size-secondary);
+    font-weight: var(--aspire-font-weight-regular);
+}
+
+.pause-warning-icon {
+    display: flex;
+    flex: 0 0 auto;
+    color: var(--warning);
+}
+
+.pause-warning-message {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.pause-warning-title {
+    font-weight: var(--aspire-font-weight-semibold);
 }
 
 html,
@@ -1294,6 +1327,12 @@ fluent-badge.property-details-accordion-badge {
    descriptions and wrap long URLs rather than overflowing the tooltip's default max width. */
 .dashboard-tooltip {
     width: max-content;
+    /* Chromium caps tooltip text at 800px or half the display, not half the browser viewport.
+       Fluent popups must also fit the viewport and the available anchor area. Floor the
+       area cap at Fluent's usual 240px (less on small screens) so a cramped side triggers
+       flipping rather than wrapping to just a few characters.
+       https://source.chromium.org/chromium/chromium/src/+/main:ui/views/corewm/tooltip_aura.cc */
+    max-width: min(800px, calc(100vw - 16px), max(min(240px, calc(50vw - 16px)), calc(100% - 16px)));
     overflow-wrap: anywhere;
     pointer-events: none;
 }
@@ -1301,6 +1340,57 @@ fluent-badge.property-details-accordion-badge {
 /* Preserve description newlines only in content, not Fluent's shadow-template whitespace. */
 .dashboard-tooltip > span {
     white-space: pre-wrap;
+}
+
+/* Log previews retain their compact layout instead of the viewport-sized text tooltip. */
+.log-tooltip {
+    width: auto;
+    max-width: 350px;
+    flex-direction: column;
+    overflow-wrap: normal;
+}
+
+.log-tooltip .log-tooltip-title {
+    font-weight: bold;
+    font-size: 15px;
+}
+
+.log-tooltip .log-tooltip-subtitle {
+    color: var(--colorNeutralForeground3);
+    font-size: 12px;
+    padding-left: 0.5rem;
+}
+
+.log-tooltip .log-tooltip-title-container {
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow: hidden;
+    margin-bottom: 4px;
+    margin-top: 4px;
+}
+
+.log-tooltip .log-tooltip-table {
+    margin-bottom: 0;
+    width: 100%;
+    font-size: 12px;
+}
+
+.log-tooltip .log-tooltip-table td.label-column {
+    white-space: nowrap;
+    padding-right: var(--spacingHorizontalL);
+    width: 20%;
+}
+
+.log-tooltip .log-tooltip-table td {
+    padding: 3.5px 0;
+    border-bottom: var(--strokeWidthThin) solid var(--colorNeutralStroke3);
+    align-content: start;
+    word-break: break-word;
+}
+
+.log-tooltip .log-tooltip-table tr:last-child td {
+    border-bottom: none;
+    padding-bottom: var(--spacingVerticalXXS);
 }
 
 .resource-hidden-icon {

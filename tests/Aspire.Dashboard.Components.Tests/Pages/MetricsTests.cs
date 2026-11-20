@@ -26,7 +26,6 @@ using Google.Protobuf.Collections;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Time.Testing;
 using Microsoft.FluentUI.AspNetCore.Components;
 using OpenTelemetry.Proto.Metrics.V1;
@@ -1081,8 +1080,6 @@ public partial class MetricsTests : DashboardTestContext
         cut.WaitForState(() => cut.Instance.PageViewModel.SelectedInstrument is not null);
 
         var pauseManager = Services.GetRequiredService<PauseManager>();
-        var timeProvider = Services.GetRequiredService<BrowserTimeProvider>();
-        var loc = Services.GetRequiredService<IStringLocalizer<Resources.Metrics>>();
 
         cut.FindComponent<PauseIncomingDataSwitch>().WaitForElement("fluent-button").Click();
 
@@ -1090,13 +1087,9 @@ public partial class MetricsTests : DashboardTestContext
         {
             Assert.True(pauseManager.AreMetricsPaused(out var pausedAt));
             var pauseWarning = cut.FindComponent<PauseWarning>();
-            Assert.Equal(
-                string.Format(
-                    CultureInfo.CurrentCulture,
-                    loc[nameof(Resources.Metrics.PauseInProgressText)],
-                    FormatHelpers.FormatTimeWithOptionalDate(timeProvider, pausedAt.Value)),
-                pauseWarning.Instance.PauseText);
-            Assert.Single(cut.Find("footer").QuerySelectorAll(".block-warning"));
+            Assert.Equal(pausedAt.Value, pauseWarning.Instance.PausedAt);
+            Assert.Equal("Metrics capture paused now", pauseWarning.Find(".pause-warning-message").TextContent.Trim());
+            Assert.Single(cut.Find("footer").QuerySelectorAll(".pause-warning"));
         });
 
         cut.FindComponent<PauseIncomingDataSwitch>().WaitForElement("fluent-button").Click();
@@ -1629,6 +1622,61 @@ public partial class MetricsTests : DashboardTestContext
     }
 
     [Fact]
+    public async Task LiveMetricTiles_DeltaCounter_ShowsTotalChangeOfLatestInterval()
+    {
+        MetricsSetupHelpers.SetupMetricsPage(this);
+        var end = s_testTime.AddMinutes(1);
+
+        // A five minute sparkline has 10s intervals and 1s rollups, so these exports stay separate rows in its last interval.
+        await FluentUISetupHelpers.ConfigureTelemetryRepository(this, readOnly: true, telemetryRepository => telemetryRepository.AddMetricsAsync(new AddContext(), new RepeatedField<ResourceMetrics>
+        {
+            new ResourceMetrics
+            {
+                Resource = CreateResource(name: "TestApp"),
+                ScopeMetrics =
+                {
+                    new ScopeMetrics
+                    {
+                        Scope = CreateScope(name: "test-meter"),
+                        Metrics =
+                        {
+                            new Metric
+                            {
+                                Name = "test-instrument",
+                                Unit = "widget",
+                                Sum = new Sum
+                                {
+                                    AggregationTemporality = AggregationTemporality.Delta,
+                                    IsMonotonic = true,
+                                    DataPoints =
+                                    {
+                                        new NumberDataPoint { AsInt = 4, StartTimeUnixNano = DateTimeToUnixNanoseconds(end.AddSeconds(-8)), TimeUnixNano = DateTimeToUnixNanoseconds(end.AddSeconds(-4)) },
+                                        new NumberDataPoint { AsInt = 6, StartTimeUnixNano = DateTimeToUnixNanoseconds(end.AddSeconds(-4)), TimeUnixNano = DateTimeToUnixNanoseconds(end) }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }));
+
+        var repository = Services.GetRequiredService<DashboardDataSource>().TelemetryRepository;
+        var resource = Assert.Single(repository.GetResources());
+
+        var cut = Render<LiveMetricTiles>(builder =>
+        {
+            builder.Add(c => c.ResourceKey, resource.ResourceKey);
+            builder.Add(c => c.Instruments, repository.GetInstrumentSummaries(resource.ResourceKey));
+            builder.Add(c => c.Duration, TimeSpan.FromMinutes(5));
+            builder.Add(c => c.GetInstrumentUrl, instrument => $"/metrics/{instrument.Name}");
+        });
+
+        // The change in the interval is both exports, not the larger one that the chart value would be.
+        cut.WaitForAssertion(() => Assert.Equal("10", Assert.Single(cut.FindAll(".live-metric-tile-number")).TextContent));
+    }
+
+    [Fact]
     public async Task MeterOverview_VisibleCardsReported_RefreshesOnlyVisibleCardsUntilOthersAreShown()
     {
         MetricsSetupHelpers.SetupMetricsPage(this);
@@ -1725,7 +1773,7 @@ public partial class MetricsTests : DashboardTestContext
         cut.WaitForAssertion(() => Assert.Single(import.Invocations));
 
         // The removal runs on the dispatcher: from another thread, DisposeComponentsAsync can find nothing to remove
-        // while the dispatcher is busy (see DisposalSafeFluentDataGridTests).
+        // while the dispatcher is busy (see FluentDataGridLifecycleTests).
         await Renderer.Dispatcher.InvokeAsync(DisposeComponentsAsync);
         import.SetResult(module);
         await Renderer.Dispatcher.InvokeAsync(() => { });

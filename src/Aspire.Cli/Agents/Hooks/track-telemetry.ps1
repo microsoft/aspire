@@ -78,6 +78,7 @@ $AspireReferenceFiles = @(
     'aspireify/references/csharp-authoring.md',
     'aspireify/references/docker-compose.md',
     'aspireify/references/full-solution-apphosts.md',
+    'aspireify/references/go-authoring.md',
     'aspireify/references/javascript-apps.md',
     'aspireify/references/opentelemetry.md',
     'aspireify/references/scan-and-propose.md',

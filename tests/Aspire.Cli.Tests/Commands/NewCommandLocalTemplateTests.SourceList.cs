@@ -204,7 +204,7 @@ public partial class NewCommandLocalTemplateTests
             ConfirmCallback = (prompt, defaultValue) =>
             {
                 prompts++;
-                Assert.Equal(ConfigSourceStrings.UseSourcePrompt, prompt);
+                Assert.Equal(ConfigSourceStrings.TemplateSourceListUseSourcePrompt, prompt);
                 Assert.True(defaultValue);
                 return accept;
             }

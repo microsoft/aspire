@@ -161,8 +161,16 @@ internal static class FluentUISetupHelpers
         bool readOnly,
         Func<ITelemetryRepositoryWriter, Task> seed)
     {
-        context.Services.AddSingleton(new TelemetryRepositoryConfiguration(readOnly));
+        AddTelemetryRepositoryConfiguration(context.Services, readOnly);
+        await SeedTelemetryRepositoryAsync(context, seed);
+    }
 
+    // For setups that build the service provider before seeding, which is too late to add services.
+    public static void AddTelemetryRepositoryConfiguration(IServiceCollection services, bool readOnly) =>
+        services.AddSingleton(new TelemetryRepositoryConfiguration(readOnly));
+
+    public static async Task SeedTelemetryRepositoryAsync(BunitContext context, Func<ITelemetryRepositoryWriter, Task> seed)
+    {
         var databasePath = Path.Combine(context.Services.GetRequiredService<TemporaryWorkspace>().Path, "dashboard.db");
         var loggerFactory = context.Services.GetRequiredService<ILoggerFactory>();
         var options = context.Services.GetRequiredService<IOptions<DashboardOptions>>();
@@ -189,6 +197,7 @@ internal static class FluentUISetupHelpers
         IDashboardRunStore? dashboardRunStore = null)
     {
         context.Services.AddFluentUIComponents();
+        context.JSInterop.SetupVoid("Microsoft.FluentUI.Blazor.Utilities.DomFunctions.focus", _ => true).SetVoidResult();
         context.JSInterop.SetupVoid("Microsoft.FluentUI.Blazor.Utilities.Attributes.observeAttributeChange", _ => true).SetVoidResult();
         context.JSInterop.SetupVoid("Microsoft.FluentUI.Blazor.Components.TextInput.attachImmediateEvent", _ => true).SetVoidResult();
         context.JSInterop.SetupVoid("Microsoft.FluentUI.Blazor.Components.TextMasked.applyNumberMask", _ => true).SetVoidResult();

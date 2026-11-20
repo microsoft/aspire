@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.BrowserStorage;
@@ -25,36 +26,75 @@ public sealed class ResourceOrderStoreTests
     private readonly LocalStorageLocks _locks = new();
 
     [Fact]
-    public async Task AppHostDefaultsSeedOrderingAndSavedMovesTakePrecedence()
+    public async Task AppHostDisplayOrdersSeedOrderingAndSavedMovesTakePrecedence()
     {
         var store = await CreateLoadedStoreAsync();
-        var name = KnownProperties.Resource.TraitPrefix + KnownResourceTraits.DashboardPosition;
-        var api = ModelTestHelpers.CreateResource("api", properties: new()
-        {
-            [name] = new(name, Value.ForList(Value.ForString("20")), false, null, 0, null, false)
-        });
-        var cache = ModelTestHelpers.CreateResource("cache", properties: new()
-        {
-            [name] = new(name, Value.ForList(Value.ForString("-10")), false, null, 0, null, false)
-        });
+        var api = CreateResourceWithDisplayOrder("api", 10);
+        var cache = CreateResourceWithDisplayOrder("cache", 20);
         var worker = ModelTestHelpers.CreateResource("worker");
-        store.EnsureResources([api, cache, worker]);
+        ResourceViewModel[] resources = [api, cache, worker];
+        store.EnsureResources(resources.Select(r => r.PersistentKey));
 
-        Assert.Equal([cache.PersistentKey, api.PersistentKey, worker.PersistentKey],
-            store.GetPositions().OrderBy(p => p.Value).Select(p => p.Key));
+        Assert.Equal([cache.PersistentKey, api.PersistentKey, worker.PersistentKey], GetOrderedKeys(store, resources));
 
-        // A restart must not turn inferred order into a user customization.
+        // A restart must not turn inferred order into a user customization. Higher orders come first and resources
+        // without one count as 0, so a negative order moves cache after worker.
         store = await CreateLoadedStoreAsync();
-        cache.Properties[name].Value.ListValue.Values[0].StringValue = "30";
-        store.EnsureResources([api, cache, worker]);
-        Assert.Equal([api.PersistentKey, cache.PersistentKey, worker.PersistentKey],
-            store.GetPositions().OrderBy(p => p.Value).Select(p => p.Key));
-        Assert.True(store.TryMove(cache.PersistentKey, api.PersistentKey, false));
+        resources = [api, CreateResourceWithDisplayOrder("cache", -10), worker];
+        store.EnsureResources(resources.Select(r => r.PersistentKey));
+        Assert.Equal([api.PersistentKey, worker.PersistentKey, cache.PersistentKey], GetOrderedKeys(store, resources));
+        Assert.True(store.TryMove(cache.PersistentKey, api.PersistentKey, false, resources));
 
         store = await CreateLoadedStoreAsync();
-        store.EnsureResources([api, cache, worker]);
-        Assert.Equal([cache.PersistentKey, api.PersistentKey, worker.PersistentKey],
-            store.GetPositions().OrderBy(p => p.Value).Select(p => p.Key));
+        store.EnsureResources(resources.Select(r => r.PersistentKey));
+        Assert.Equal([cache.PersistentKey, api.PersistentKey, worker.PersistentKey], GetOrderedKeys(store, resources));
+    }
+
+    [Fact]
+    public async Task DisplayOrdersAreScopedToTheRequestingRun()
+    {
+        var store = await CreateLoadedStoreAsync();
+        ResourceViewModel[] liveRun = [CreateResourceWithDisplayOrder("api", 0), CreateResourceWithDisplayOrder("cache", 10)];
+        ResourceViewModel[] recordedRun = [CreateResourceWithDisplayOrder("api", 10), CreateResourceWithDisplayOrder("cache", 0)];
+        store.EnsureResources(liveRun.Select(r => r.PersistentKey));
+
+        Assert.Equal(["api_0", "cache_0"], GetOrderedKeys(store, recordedRun));
+        Assert.Equal(["cache_0", "api_0"], GetOrderedKeys(store, liveRun));
+    }
+
+    [Fact]
+    public async Task ExplicitZeroDisplayOrder_KeepsStoredOrderLikeUnsetOrder()
+    {
+        var store = await CreateLoadedStoreAsync();
+        // worker is stored after api. Treating its explicit 0 differently from api's unset order would move it first.
+        ResourceViewModel[] resources =
+        [
+            ModelTestHelpers.CreateResource("api"),
+            CreateResourceWithDisplayOrder("worker", 0),
+            CreateResourceWithDisplayOrder("cache", 10),
+            CreateResourceWithDisplayOrder("db", -10)
+        ];
+        store.EnsureResources(resources.Select(r => r.PersistentKey));
+
+        Assert.Equal(["cache_0", "api_0", "worker_0", "db_0"], GetOrderedKeys(store, resources));
+    }
+
+    [Fact]
+    public async Task TryMove_EqualDisplayOrders_UsesDisplayedOrder()
+    {
+        var store = await CreateLoadedStoreAsync();
+        // Inserted out of name order, with b and a sharing a position. The pane displays a, b, c.
+        ResourceViewModel[] resources =
+        [
+            CreateResourceWithDisplayOrder("b", 5, "Container"),
+            CreateResourceWithDisplayOrder("a", 5, "Project"),
+            CreateResourceWithDisplayOrder("c", -10, "Project")
+        ];
+        store.EnsureResources(resources.Select(r => r.PersistentKey));
+
+        Assert.True(store.TryMove("c_0", "a_0", after: true, resources));
+
+        Assert.Equal(["a_0", "c_0", "b_0"], GetOrderedKeys(store));
     }
 
     [Fact]
@@ -216,6 +256,15 @@ public sealed class ResourceOrderStoreTests
         Assert.False(store.TryMove("missing_0", "api_0", after: false));
         Assert.Equal(["api_0"], GetOrderedKeys(store));
     }
+
+    private static ResourceViewModel CreateResourceWithDisplayOrder(string name, int order, string resourceType = "Container") =>
+        ModelTestHelpers.CreateResource(name, resourceType: resourceType, properties: new()
+        {
+            [KnownProperties.Resource.DisplayOrder] = new(KnownProperties.Resource.DisplayOrder, Value.ForString(order.ToString(CultureInfo.InvariantCulture)), false, null, 0, null, false)
+        });
+
+    private static string[] GetOrderedKeys(ResourceOrderStore store, IEnumerable<ResourceViewModel> resources) =>
+        store.GetPositions(resources).OrderBy(pair => pair.Value).Select(pair => pair.Key).ToArray();
 
     private static string[] GetOrderedKeys(ResourceOrderStore store) =>
         store.GetPositions().OrderBy(pair => pair.Value).Select(pair => pair.Key).ToArray();

@@ -110,7 +110,7 @@ internal sealed class TemplateNuGetConfigService(
 
         var channels = await packagingService.GetChannelsAsync(cancellationToken, channelName);
         var matchingChannel = channels.FirstOrDefault(c =>
-            string.Equals(c.Name, channelName, StringComparison.OrdinalIgnoreCase));
+            string.Equals(c.Name, channelName, StringComparisons.ChannelName));
 
         if (matchingChannel is null)
         {
@@ -132,7 +132,7 @@ internal sealed class TemplateNuGetConfigService(
 
         var channels = await packagingService.GetChannelsAsync(cancellationToken, channelName);
         var matchingChannel = channels.FirstOrDefault(c =>
-            string.Equals(c.Name, channelName, StringComparison.OrdinalIgnoreCase));
+            string.Equals(c.Name, channelName, StringComparisons.ChannelName));
 
         if (matchingChannel is null)
         {
@@ -195,7 +195,7 @@ internal sealed class TemplateNuGetConfigService(
         {
             var channels = await packagingService.GetChannelsAsync(cancellationToken, channelName);
             matchingChannel = channels.FirstOrDefault(c =>
-                string.Equals(c.Name, channelName, StringComparison.OrdinalIgnoreCase));
+                string.Equals(c.Name, channelName, StringComparisons.ChannelName));
         }
 
         return await CreateNuGetConfigForSourceOverrideAsync(sourceOverride, matchingChannel, outputPath, cancellationToken);
@@ -271,7 +271,7 @@ internal sealed class TemplateNuGetConfigService(
         var allChannels = await packagingService.GetChannelsAsync(cancellationToken, query.RequestedChannel);
         var isUnqualifiedLocalResolution =
             query.IncludePrHives &&
-            string.Equals(executionContext.IdentityChannel, PackageChannelNames.Local, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(executionContext.IdentityChannel, PackageChannelNames.Local, StringComparisons.ChannelName) &&
             string.IsNullOrWhiteSpace(query.RequestedChannel) &&
             string.IsNullOrWhiteSpace(query.VersionOverride) &&
             string.IsNullOrWhiteSpace(query.SourceOverride);
@@ -298,12 +298,12 @@ internal sealed class TemplateNuGetConfigService(
         {
             channels = allChannels.Where(c =>
                 c.IsBackedByLocalPackageDirectory &&
-                string.Equals(c.Name, executionContext.IdentityChannel, StringComparison.OrdinalIgnoreCase));
+                string.Equals(c.Name, executionContext.IdentityChannel, StringComparisons.ChannelName));
         }
         else if (!string.IsNullOrEmpty(query.RequestedChannel))
         {
             var matchingChannel = allChannels.FirstOrDefault(c =>
-                    string.Equals(c.Name, query.RequestedChannel, StringComparison.OrdinalIgnoreCase))
+                    string.Equals(c.Name, query.RequestedChannel, StringComparisons.ChannelName))
                 ?? throw new ChannelNotFoundException(
                     $"No channel found matching '{query.RequestedChannel}'. Valid options are: " +
                     $"{string.Join(", ", allChannels.Select(c => c.Name))}");

@@ -114,6 +114,10 @@
   <data name="ReadmeLink" xml:space="preserve">
     <value>Read more about this configuration source</value>
   </data>
+  <data name="AccessHelp" xml:space="preserve">
+    <value>For help accessing this configuration source, see {0}.</value>
+    <comment>{0} is a hyperlink to the configuration source README.</comment>
+  </data>
   <data name="InvalidReadmeUrl" xml:space="preserve">
     <value>{0} must be a nonempty absolute HTTP or HTTPS URL without control characters.</value>
     <comment>{0} is the environment variable name.</comment>
@@ -124,11 +128,20 @@
   <data name="EmployeeOrigin" xml:space="preserve">
     <value>Microsoft employee default</value>
   </data>
-  <data name="UseSourcePrompt" xml:space="preserve">
-    <value>Use configuration from this source?</value>
+  <data name="NewUseSourcePrompt" xml:space="preserve">
+    <value>Create app using configuration from this source?</value>
+  </data>
+  <data name="InitUseSourcePrompt" xml:space="preserve">
+    <value>Initialize Aspire using configuration from this source?</value>
+  </data>
+  <data name="UpdateUseSourcePrompt" xml:space="preserve">
+    <value>Update app to use configuration from this source?</value>
+  </data>
+  <data name="TemplateSourceListUseSourcePrompt" xml:space="preserve">
+    <value>Include template sources from this configuration source?</value>
   </data>
   <data name="ConsentRequired" xml:space="preserve">
-    <value>A configuration source is available. Specify --use-config-source to accept it or --use-config-source false to use standard Aspire configuration in non-interactive mode.</value>
+    <value>A configuration source is available, but confirmation can't be requested in non-interactive mode. Specify --use-config-source to use it, or --use-config-source false to use the standard Aspire configuration.</value>
     <comment>Do not translate "--use-config-source" or "false".</comment>
   </data>
   <data name="NoBinding" xml:space="preserve">
@@ -144,6 +157,12 @@
   <data name="UpdateAvailable" xml:space="preserve">
     <value>A new version of the configuration source is available. Run `aspire update --config-source` to apply it.</value>
     <comment>Do not translate "aspire update --config-source".</comment>
+  </data>
+  <data name="Updated" xml:space="preserve">
+    <value>Configuration updated to the latest version from its source.</value>
+  </data>
+  <data name="AlreadyUpToDate" xml:space="preserve">
+    <value>Configuration is already up to date with its source.</value>
   </data>
   <data name="AppliedVersionMissing" xml:space="preserve">
     <value>A saved configuration source has no recorded applied version. Run `aspire update --config-source` to save its allowed settings and establish the applied version.</value>
@@ -163,7 +182,7 @@
     <value>The saved configuration source changed while fetching. No source settings were applied. Retry using the saved source binding.</value>
   </data>
   <data name="IncompatibleOptions" xml:space="preserve">
-    <value>--config-source cannot be combined with --self, --migrate, --channel, --quality, or --nuget-config-dir.</value>
+    <value>--config-source cannot be combined with --self, --migrate, --dry-run, --channel, --quality, or --nuget-config-dir.</value>
     <comment>Do not translate the command-line option names.</comment>
   </data>
 </root>

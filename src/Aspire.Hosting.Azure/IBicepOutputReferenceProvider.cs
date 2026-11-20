@@ -14,7 +14,7 @@ namespace Aspire.Hosting.Azure;
 /// <see cref="BicepOutputReference"/> itself. This lets a value, such as a client ID of an identity that is created while
 /// the application model is prepared for publishing, be handed out before the output exists.
 /// </remarks>
-[Experimental("ASPIREAZURE003", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+[Experimental("ASPIREAZURE005", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public interface IBicepOutputReferenceProvider
 {
     /// <summary>

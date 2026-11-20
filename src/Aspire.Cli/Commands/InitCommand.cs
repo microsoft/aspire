@@ -119,6 +119,7 @@ internal sealed class InitCommand : BaseCommand
         Options.Add(_agentInitCommand.AgentsOption);
         Options.Add(AgentInitCommand.s_scopeOption);
         Options.Add(AgentInitCommand.s_skillsOption);
+        Options.Add(AgentInitCommand.s_removeSkillCopiesOption);
     }
 
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
@@ -217,6 +218,7 @@ internal sealed class InitCommand : BaseCommand
             PromptBinding.Create(parseResult, _agentInitCommand.AgentsOption),
             PromptBinding.Create(parseResult, AgentInitCommand.s_skillsOption, CommonAgentApplicators.AspireSkillName),
             PromptBinding.Create(parseResult, AgentInitCommand.s_scopeOption, AgentConfigurationScope.Project),
+            PromptBinding.CreateBoolConfirm(parseResult, AgentInitCommand.s_removeSkillCopiesOption, defaultValue: false),
             cancellationToken);
 
         if (agentInitResult.ExitCode == CliExitCodes.Success)
@@ -361,7 +363,6 @@ internal sealed class InitCommand : BaseCommand
         var aspireVersion = _executionContext.IdentitySdkVersion;
         var appHostContent = $$"""
             {{CliTemplateFactory.GetCSharpAppHostDirectives(aspireVersion)}}
-            #:property AspireUseCliBundle=true
 
             var builder = DistributedApplication.CreateBuilder(args);
 
@@ -468,7 +469,7 @@ internal sealed class InitCommand : BaseCommand
             selection = await _templateNuGetConfigService.ResolveTemplatePackageAsync(query, cancellationToken);
         }
         catch (ChannelNotFoundException) when
-            (string.Equals(_executionContext.IdentityChannel, PackageChannelNames.Local, StringComparison.OrdinalIgnoreCase))
+            (string.Equals(_executionContext.IdentityChannel, PackageChannelNames.Local, StringComparisons.ChannelName))
         {
             // Locally-built CLI (identity=local) on a machine where ~/.aspire/hives/local
             // isn't installed. The PackagingService produces no "local" channel in that

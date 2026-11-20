@@ -3,6 +3,7 @@
 
 #pragma warning disable AZPROVISION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
+using System.Net;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
 using Azure.Provisioning;
@@ -318,11 +319,19 @@ public static class AzureKustoBuilderExtensions
         }
     }
 
-    private static KustoConnectionStringBuilder GetConnectionStringBuilder(AzureKustoClusterResource resource, string connectionString)
+    internal static KustoConnectionStringBuilder GetConnectionStringBuilder(AzureKustoClusterResource resource, string connectionString)
     {
         var builder = new KustoConnectionStringBuilder(connectionString);
 
-        if (!resource.IsEmulator)
+        if (resource.IsEmulator)
+        {
+            // Kusto.Data connects with a single socket via Socket.ConnectAsync(IPAddress[]). On Linux a socket can't be
+            // reused after a failed connection attempt, so when "localhost" resolves to [::1, 127.0.0.1] and the emulator
+            // endpoint isn't listening on ::1, every request fails with PlatformNotSupportedException and 127.0.0.1 is
+            // never tried. Target the IPv4 loopback directly for the clients used by the health checks and database setup.
+            builder.DataSource = UseIPv4LoopbackForLocalhost(builder.DataSource);
+        }
+        else
         {
             // When running against Azure, we use the DefaultAzureCredential to authenticate
             // with the Kusto server.
@@ -330,6 +339,18 @@ public static class AzureKustoBuilderExtensions
         }
 
         return builder;
+    }
+
+    private static string UseIPv4LoopbackForLocalhost(string dataSource)
+    {
+        if (!Uri.TryCreate(dataSource, UriKind.Absolute, out var uri) ||
+            !string.Equals(uri.Host, KnownHostNames.Localhost, StringComparison.OrdinalIgnoreCase))
+        {
+            return dataSource;
+        }
+
+        var ipv4Uri = new UriBuilder(uri) { Host = IPAddress.Loopback.ToString() }.Uri;
+        return ipv4Uri.GetLeftPart(UriPartial.Path).TrimEnd('/');
     }
 
     private static void AddKustoCustomCommands(IResourceBuilder<AzureKustoClusterResource> resourceBuilder)

@@ -6,6 +6,10 @@ const os = require('os');
 const path = require('path');
 const { spawn, spawnSync } = require('child_process');
 const {
+  createBrowserDebuggerAppHostProject,
+  resolveAppHostSdkVersion: resolveAppHostSdkVersionFromResult,
+} = require('./e2e-apphost-sdk-version');
+const {
   ensureDownloadCache,
   projectDownloadCache,
   removePathWithoutFollowingLinks,
@@ -1735,27 +1739,7 @@ function writeBrowserDebuggerAppHostProject(projectName, resolvedAppHostSdkVersi
   fs.mkdirSync(projectDirectory, { recursive: true });
   // The standalone client still consumes generated Projects metadata. Keep that SDK and
   // the browser fixtures' project-reference graph for restore/build prewarming.
-  fs.writeFileSync(path.join(projectDirectory, `${projectName}.csproj`), `<Project Sdk="Aspire.AppHost.Sdk/${resolvedAppHostSdkVersion}">
-
-  <PropertyGroup>
-    <OutputType>Exe</OutputType>
-    <TargetFramework>net11.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-  </PropertyGroup>
-
-  <ItemGroup>
-    <ProjectReference Include="../StandaloneClient/StandaloneClient.csproj" />
-    <ProjectReference Include="../HostedGlobal/HostedGlobal/HostedGlobal.csproj" />
-    <ProjectReference Include="../HostedGlobal/HostedGlobal.Client/HostedGlobal.Client.csproj" />
-    <ProjectReference Include="../HostedPerPage/HostedPerPage/HostedPerPage.csproj" />
-    <ProjectReference Include="../HostedPerPage/HostedPerPage.Client/HostedPerPage.Client.csproj" />
-    <PackageReference Include="Aspire.Hosting.Blazor" Version="${resolvedAppHostSdkVersion}" />
-    <PackageReference Include="Aspire.Hosting.Dotnet" Version="${resolvedAppHostSdkVersion}" />
-  </ItemGroup>
-
-</Project>
-`);
+  fs.writeFileSync(path.join(projectDirectory, `${projectName}.csproj`), createBrowserDebuggerAppHostProject(resolvedAppHostSdkVersion));
 
   fs.writeFileSync(path.join(projectDirectory, 'AppHost.cs'), `${csharpFileHeader}#pragma warning disable ASPIREBLAZOR001
 using Aspire.Hosting.ApplicationModel;
@@ -1784,7 +1768,25 @@ builder.Build().Run();
 
 function writeAppHostProject(projectName, resolvedAppHostSdkVersion, includeAzureFunctions, includeWinUi, includeResourceDebug) {
   const projectDirectory = path.join(workspaceRoot, projectName);
+  const includeLanguageSources = matchedTestSpecs.some(specPath => path.basename(specPath) === 'treeActions.e2e.test.js');
   fs.mkdirSync(projectDirectory, { recursive: true });
+  fs.mkdirSync(path.join(projectDirectory, 'e2e-source-image'), { recursive: true });
+  fs.writeFileSync(path.join(projectDirectory, 'e2e-source-tool'), 'Non-filesystem source collision fixture.');
+  if (includeLanguageSources) {
+    const pythonDirectory = path.join(projectDirectory, 'e2e-python-source');
+    const pythonInterpreter = path.join(pythonDirectory, '.venv', isWindows ? 'Scripts' : 'bin', isWindows ? 'python.exe' : 'python');
+    fs.mkdirSync(path.dirname(pythonInterpreter), { recursive: true });
+    fs.writeFileSync(pythonInterpreter, Buffer.from([0x4d, 0x5a, 0, 0]));
+    fs.writeFileSync(path.join(pythonDirectory, 'main.py'), 'print("Python source navigation fixture")\n');
+    const javaDirectory = path.join(projectDirectory, 'e2e-java-source');
+    const javaLauncher = path.join(projectDirectory, 'e2e-java-launcher', 'cmd.exe');
+    fs.mkdirSync(javaDirectory, { recursive: true });
+    fs.mkdirSync(path.dirname(javaLauncher), { recursive: true });
+    fs.writeFileSync(javaLauncher, Buffer.from([0x4d, 0x5a, 0, 0]));
+    fs.writeFileSync(path.join(javaDirectory, 'App.java'), 'class App {}\n');
+  }
+  const outsideWorkspaceSourcePath = path.join(shortRunRoot, 'e2e-outside-workspace-source');
+  fs.mkdirSync(outsideWorkspaceSourcePath, { recursive: true });
   // Keep the Functions lane's SDK machinery; ordinary V2 resources no longer need generated metadata.
   const projectSdk = includeAzureFunctions ? `Aspire.AppHost.Sdk/${resolvedAppHostSdkVersion}` : 'Microsoft.NET.Sdk';
   const appHostPackageReference = includeAzureFunctions
@@ -1831,16 +1833,40 @@ ${goPackageReference}  </ItemGroup>
   const winUiResource = includeWinUi
     ? 'builder.AddDotnetProject("e2e-winui", "../AspireE2E.WinUI/AspireE2E.WinUI.csproj", options => options.LaunchProfileName = "E2E");\n\n'
     : '';
+  const languageSourceResources = includeLanguageSources
+    ? `// Match source metadata with existing binaries without installing or launching Python or Java.
+foreach (var (language, launcher) in new[]
+{
+    ("python", Path.Combine(builder.AppHostDirectory, "e2e-python-source", ".venv", ${isWindows ? '"Scripts", "python.exe"' : '"bin", "python"'})),
+    ("java", Path.Combine(builder.AppHostDirectory, "e2e-java-launcher", "cmd.exe"))
+})
+{
+    builder.AddResource(new NoCommandsResource($"e2e-{language}-source"))
+        .WithInitialState(new CustomResourceSnapshot
+        {
+            ResourceType = "Executable",
+            State = KnownResourceStates.Running,
+            Properties = [
+                new("resource.sourcePath", Path.Combine(builder.AppHostDirectory, $"e2e-{language}-source")),
+                new("executable.path", launcher),
+                new("executable.workDir", Path.Combine(builder.AppHostDirectory, $"e2e-{language}-source"))
+            ]
+        });
+}
+
+`
+    : '';
   fs.writeFileSync(path.join(projectDirectory, 'AppHost.cs'), `${csharpFileHeader}#pragma warning disable ASPIREINTERACTION001
 #pragma warning disable ASPIREPIPELINES001 // Older published SDKs still mark pipeline APIs experimental.
 #pragma warning disable ASPIRETERMINAL001
 
+using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Pipelines;
 
 // The E2E fixture intentionally covers interaction command arguments and terminal metadata while those APIs are still experimental.
 var builder = DistributedApplication.CreateBuilder(args);
 
-builder.AddDotnetProject("e2e-worker", "../AspireE2E.Worker/AspireE2E.Worker.csproj")
+var worker = builder.AddDotnetProject("e2e-worker", "../AspireE2E.Worker/AspireE2E.Worker.csproj")
     .WithHttpEndpoint(name: "http")
     .WithCommand(
         "echo-arguments",
@@ -1905,6 +1931,84 @@ builder.AddDotnetProject("e2e-worker", "../AspireE2E.Worker/AspireE2E.Worker.csp
         });
 
 builder.AddResource(new NoCommandsResource("e2e-no-commands"));
+
+var workerProjectPath = worker.Resource.GetProjectMetadata().ProjectPath;
+
+// Metadata-only resources cover image/package source collisions without downloading containers or tools.
+builder.AddResource(new NoCommandsResource("e2e-image-source"))
+    .WithInitialState(new CustomResourceSnapshot
+    {
+        ResourceType = "Container",
+        State = KnownResourceStates.Running,
+        Properties = [
+            new("container.image", "e2e-source-image"),
+            new(CustomResourceKnownProperties.Source, "e2e-source-image")
+        ]
+    });
+
+builder.AddResource(new NoCommandsResource("e2e-tool-source"))
+    .WithInitialState(new CustomResourceSnapshot
+    {
+        ResourceType = "Tool",
+        State = KnownResourceStates.Running,
+        Properties = [
+            new("tool.package", "e2e-source-tool"),
+            new("executable.path", Path.Combine(builder.AppHostDirectory, "e2e-source-tool")),
+            new(CustomResourceKnownProperties.Source, "e2e-source-tool")
+        ]
+    });
+
+builder.AddResource(new NoCommandsResource("e2e-suppressed-source"))
+    .WithInitialState(new CustomResourceSnapshot
+    {
+        ResourceType = "Project",
+        State = KnownResourceStates.Running,
+        Properties = [
+            new("project.path", workerProjectPath),
+            new(CustomResourceKnownProperties.Source, string.Empty)
+        ]
+    });
+
+builder.AddResource(new NoCommandsResource("e2e-directory-source"))
+    .WithInitialState(new CustomResourceSnapshot
+    {
+        ResourceType = "Executable",
+        State = KnownResourceStates.Running,
+        Properties = [
+            new("executable.path", "dotnet"),
+            new("executable.workDir", Path.GetDirectoryName(workerProjectPath))
+        ]
+    });
+
+${languageSourceResources}builder.AddResource(new NoCommandsResource("e2e-display-source"))
+    .WithInitialState(new CustomResourceSnapshot
+    {
+        ResourceType = "Custom",
+        State = KnownResourceStates.Running,
+        Properties = [
+            new(CustomResourceKnownProperties.Source, workerProjectPath)
+        ]
+    });
+
+builder.AddResource(new NoCommandsResource("e2e-missing-source"))
+    .WithInitialState(new CustomResourceSnapshot
+    {
+        ResourceType = "Project",
+        State = KnownResourceStates.Running,
+        Properties = [
+            new("project.path", Path.ChangeExtension(workerProjectPath, ".missing.csproj"))
+        ]
+    });
+
+builder.AddResource(new NoCommandsResource("e2e-outside-workspace-source"))
+    .WithInitialState(new CustomResourceSnapshot
+    {
+        ResourceType = "Project",
+        State = KnownResourceStates.Running,
+        Properties = [
+            new("project.path", ${JSON.stringify(outsideWorkspaceSourcePath)})
+        ]
+    });
 
 // e2e-terminal opts into WithTerminal so the real CLI surfaces terminal.enabled and
 // terminal.replicaIndex over the backchannel. The extension's Open terminal action reads
@@ -2215,40 +2319,26 @@ func main() {
 }
 
 function resolveAppHostSdkVersion(resolvedCliPath) {
-  if (process.env.ASPIRE_EXTENSION_E2E_APPHOST_SDK_VERSION) {
-    return process.env.ASPIRE_EXTENSION_E2E_APPHOST_SDK_VERSION;
-  }
-
-  const availablePackageVersions = getAvailableAppHostSdkVersions();
   const versionResult = spawnSync(resolvedCliPath, ['--version'], {
     cwd: extensionRoot,
     env: getAspireCliEnvironment(),
     shell: false,
     encoding: 'utf8',
   });
-  if (versionResult.status === 0) {
-    const version = versionResult.stdout.trim().split('+')[0];
-    if (/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version)) {
-      if (availablePackageVersions.includes(version) || process.env.CI) {
-        return version;
-      }
-
-      const localVersion = availablePackageVersions[0];
-      if (localVersion) {
-        console.warn(`Using local Aspire.AppHost.Sdk ${localVersion} for E2E fixture restore because ${version} is not available in local package sources.`);
-        return localVersion;
-      }
-
-      return version;
-    }
+  const resolution = resolveAppHostSdkVersionFromResult(versionResult, getAvailableAppHostSdkVersions, () => {
+    const versionsProps = fs.readFileSync(path.join(repoRoot, 'eng', 'Versions.props'), 'utf8');
+    const major = getXmlProperty(versionsProps, 'MajorVersion');
+    const minor = getXmlProperty(versionsProps, 'MinorVersion');
+    const patch = getXmlProperty(versionsProps, 'PatchVersion');
+    const prerelease = getXmlProperty(versionsProps, 'PreReleaseVersionLabel');
+    return `${major}.${minor}.${patch}-${prerelease}`;
+  }, process.env);
+  if (resolution.usedLocalVersion) {
+    const cliVersion = versionResult.stdout.trim().split('+')[0];
+    console.warn(`Using local Aspire.AppHost.Sdk ${resolution.version} for E2E fixture restore because ${cliVersion} is not available in local package sources.`);
   }
 
-  const versionsProps = fs.readFileSync(path.join(repoRoot, 'eng', 'Versions.props'), 'utf8');
-  const major = getXmlProperty(versionsProps, 'MajorVersion');
-  const minor = getXmlProperty(versionsProps, 'MinorVersion');
-  const patch = getXmlProperty(versionsProps, 'PatchVersion');
-  const prerelease = getXmlProperty(versionsProps, 'PreReleaseVersionLabel');
-  return `${major}.${minor}.${patch}-${prerelease}`;
+  return resolution.version;
 }
 
 /**

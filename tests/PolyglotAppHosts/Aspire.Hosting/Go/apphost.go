@@ -43,7 +43,7 @@ func main() {
 	container := builder.AddContainer("mycontainer", "nginx")
 	container.WithTags([]string{"Backend", "API"}).WithTags([]string{"Service"}).
 		WithTrait("Owner", "Finance").WithTrait("Owner", "Platform").
-		WithDashboardPosition(-10)
+		WithDisplayOrder(10)
 	if err = container.Err(); err != nil {
 		log.Fatal(aspire.FormatError(err))
 	}
@@ -141,8 +141,8 @@ ENTRYPOINT ["dotnet", "App.dll"]
 	configParam := builder.AddParameterFromConfiguration("myconfig", "MyConfig:Key")
 	secretParam := builder.AddParameterFromConfiguration("mysecret", "MyConfig:Secret",
 		&aspire.AddParameterFromConfigurationOptions{Secret: aspire.BoolPtr(true)})
-	optionalParam := builder.AddParameter("optional-parameter").WithOptional()
-	optionalParam.WithRequired().WithRequired(&aspire.WithRequiredOptions{Required: aspire.BoolPtr(false)})
+	optionalParam := builder.AddParameter("optional-parameter").AsOptional()
+	optionalParam.AsRequired().AsOptional()
 	if err = optionalParam.Err(); err != nil {
 		log.Fatal(aspire.FormatError(err))
 	}

@@ -33,17 +33,16 @@ internal sealed class ConfigSourceService(
     ILogger<ConfigSourceService> logger) : IDisposable
 {
     internal const string MicrosoftRepository = "https://msft.ghe.com/coreai/aspire-1p-init";
-    internal const string MicrosoftReadmeUrl = $"{MicrosoftRepository}/blob/HEAD/README.md";
+    internal const string MicrosoftReadmeUrl = MicrosoftRepository;
     private static readonly string[] s_allowedSettings = [SkillSource.SectionName, IntegrationSourceConfiguration.SectionName];
-    private static readonly TimeSpan s_gitTimeout = TimeSpan.FromSeconds(30);
     private readonly Dictionary<ConfigSourceIdentity, ConfigSourceSnapshot> _snapshots = [];
     private string? _projectDirectory;
     private bool _projectChecked;
-    private readonly List<(string? Message, string? GitOutput)> _notifications = [];
+    private readonly List<(KnownEmoji Emoji, string? Message, string? GitOutput)> _notifications = [];
     private readonly Lock _checksLock = new();
     private readonly CancellationTokenSource _stopping = new();
     private Task? _check;
-    private bool _sourceDeclined;
+    private ConfigSource? _creationSource;
 
     internal static readonly Option<bool?> s_useSourceOption = new("--use-config-source")
     {
@@ -69,9 +68,12 @@ internal sealed class ConfigSourceService(
             // performs its own forced refresh and must not start a competing advisory check.
             if (_check is not null || _stopping.IsCancellationRequested || executionContext.Command is UpdateCommand { IsConfigSourceRefresh: true })
             {
+                logger.LogDebug("Skipping configuration source advisory scheduling: already scheduled {AlreadyScheduled}, stopping {Stopping}, explicit refresh {ExplicitRefresh}.",
+                    _check is not null, _stopping.IsCancellationRequested, executionContext.Command is UpdateCommand { IsConfigSourceRefresh: true });
                 return;
             }
 
+            logger.LogDebug("Scheduling configuration source advisory check for {ProjectDirectory}.", projectDirectory.FullName);
             _check = Task.Run(async () =>
             {
                 using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _stopping.Token);
@@ -114,7 +116,7 @@ internal sealed class ConfigSourceService(
 
     public void NotifyIfUpdateAvailable()
     {
-        (string? Message, string? GitOutput)[] notifications;
+        (KnownEmoji Emoji, string? Message, string? GitOutput)[] notifications;
         lock (_checksLock)
         {
             notifications = _notifications.ToArray();
@@ -124,7 +126,7 @@ internal sealed class ConfigSourceService(
         {
             if (pending.Message is { } message)
             {
-                interaction.DisplayMessage(KnownEmojis.PoliceCarLight, message, consoleOverride: ConsoleOutput.Error);
+                interaction.DisplayMessage(pending.Emoji, message, consoleOverride: ConsoleOutput.Error);
             }
             DisplayGitOutput(interaction, pending.GitOutput);
         }
@@ -149,19 +151,24 @@ internal sealed class ConfigSourceService(
     /// Resolves an optional configuration source from the environment or employee detection,
     /// obtains consent, and acquires the accepted source.
     /// </summary>
-    public Task<ConfigSource?> ResolveAndAcquireConfigSourceAsync(ParseResult parseResult, CancellationToken cancellationToken) =>
-        ResolveAndAcquireConfigSourceAsync(parseResult, allowInteractiveInput: true, cancellationToken);
+    /// <param name="parseResult">The command parse result containing the optional consent option.</param>
+    /// <param name="consentPrompt">The confirmation prompt describing what accepting the source does for the current command.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    public Task<ConfigSource?> ResolveAndAcquireConfigSourceAsync(ParseResult parseResult, string consentPrompt, CancellationToken cancellationToken) =>
+        ResolveAndAcquireConfigSourceAsync(parseResult, consentPrompt, allowInteractiveInput: true, cancellationToken);
 
     internal async Task<ConfigSource?> ResolveAndAcquireConfigSourceAsync(
-        ParseResult parseResult, bool allowInteractiveInput, CancellationToken cancellationToken)
+        ParseResult parseResult, string consentPrompt, bool allowInteractiveInput, CancellationToken cancellationToken)
     {
         var repository = environment.GetEnvironmentVariable(CliConfigNames.InitSourceUrl);
         var explicitSource = repository is not null;
         if (!explicitSource)
         {
+            logger.LogDebug("No explicit configuration source URL is set; checking Microsoft machine detection.");
             var detection = await detector.IsInternalMicrosoftMachineAsync(cancellationToken);
             if (!detection.IsInternalMicrosoft || detection.Outcome != InternalMicrosoftDetectorOutcome.Detected)
             {
+                logger.LogDebug("No configuration source candidate was selected. Microsoft machine detection outcome: {Outcome}.", detection.Outcome);
                 if (parseResult.GetValue(s_useSourceOption) is true)
                 {
                     throw new ConfigSourceException(string.Format(CultureInfo.CurrentCulture,
@@ -172,6 +179,8 @@ internal sealed class ConfigSourceService(
             repository = MicrosoftRepository;
         }
 
+        logger.LogDebug("Selecting configuration source from {Origin}.",
+            explicitSource ? CliConfigNames.InitSourceUrl : "Microsoft machine detection");
         var source = new ConfigSource
         {
             Repository = repository!,
@@ -179,8 +188,7 @@ internal sealed class ConfigSourceService(
             Ref = explicitSource ? environment.GetEnvironmentVariable(CliConfigNames.InitSourceRef) : null
         };
         source.Validate();
-        var readmeUrl = environment.GetEnvironmentVariable(CliConfigNames.InitSourceReadmeUrl)
-            ?? (source.Repository == MicrosoftRepository ? MicrosoftReadmeUrl : null);
+        var readmeUrl = GetReadmeUrl(source);
         if (readmeUrl is not null && (!UrlHelper.IsHttpUrl(readmeUrl) || readmeUrl.Any(char.IsControl)))
         {
             throw new ConfigSourceException(string.Format(CultureInfo.CurrentCulture,
@@ -188,21 +196,7 @@ internal sealed class ConfigSourceService(
         }
 
         interaction.DisplayMessage(KnownEmojis.Information, ConfigSourceStrings.Explanation);
-        List<(string Label, string Value)> details =
-        [
-            (SharedCommandStrings.SourceGitRepository, source.Repository)
-        ];
-        if (source.Path != AspireConfigFile.FileName)
-        {
-            details.Add((ConfigSourceStrings.ConfigurationFile, source.Path));
-        }
-        if (source.Ref is not null)
-        {
-            details.Add((SharedCommandStrings.SourceRef, source.Ref));
-        }
-        details.Add((ConfigSourceStrings.SourceOrigin, explicitSource ? CliConfigNames.InitSourceUrl : ConfigSourceStrings.EmployeeOrigin));
-
-        interaction.DisplaySourceDetails([details]);
+        DisplayConfigSourceDetails(source, explicitSource ? CliConfigNames.InitSourceUrl : ConfigSourceStrings.EmployeeOrigin);
         if (readmeUrl is not null)
         {
             interaction.DisplayMessage(KnownEmojis.Information,
@@ -218,21 +212,47 @@ internal sealed class ConfigSourceService(
         {
             if (!allowInteractiveInput || !hostEnvironment.SupportsInteractiveInput)
             {
+                logger.LogDebug("Configuration source consent is required, but interactive input is disabled.");
                 throw new ConfigSourceException(ConfigSourceStrings.ConsentRequired);
             }
-            accepted = await interaction.PromptConfirmAsync(ConfigSourceStrings.UseSourcePrompt,
+            logger.LogDebug("Prompting for configuration source consent.");
+            accepted = await interaction.PromptConfirmAsync(consentPrompt,
                 binding: PromptBinding.CreateDefault(true),
                 cancellationToken: cancellationToken);
         }
-        _sourceDeclined = !accepted.Value;
-        if (_sourceDeclined)
+        logger.LogDebug("Configuration source consent: {Accepted}; supplied by command option: {ExplicitConsent}.",
+            accepted.Value, parseResult.GetValue(s_useSourceOption) is not null);
+        if (!accepted.Value)
         {
-            return new ConfigSource { OptOut = true };
+            return _creationSource = new ConfigSource { OptOut = true };
         }
 
         await AcquireAsync(source, force: false, allowInteractiveInput, cancellationToken);
-        return source;
+        return _creationSource = source;
     }
+
+    private void DisplayConfigSourceDetails(ConfigSource source, string origin)
+    {
+        List<(string Label, string Value)> details =
+        [
+            (SharedCommandStrings.SourceGitRepository, source.Repository)
+        ];
+        if (source.Path != AspireConfigFile.FileName)
+        {
+            details.Add((ConfigSourceStrings.ConfigurationFile, source.Path));
+        }
+        if (source.Ref is not null)
+        {
+            details.Add((SharedCommandStrings.SourceRef, source.Ref));
+        }
+        details.Add((ConfigSourceStrings.SourceOrigin, origin));
+
+        interaction.DisplaySourceDetails([details]);
+    }
+
+    private string? GetReadmeUrl(ConfigSource source) =>
+        environment.GetEnvironmentVariable(CliConfigNames.InitSourceReadmeUrl)
+            ?? (source.Repository == MicrosoftRepository ? MicrosoftReadmeUrl : null);
 
     public async Task<ConfigSource?> SelectForInitializationAsync(
         DirectoryInfo projectDirectory, ParseResult parseResult, CancellationToken cancellationToken)
@@ -242,11 +262,12 @@ internal sealed class ConfigSourceService(
         var configuration = await ReadProjectConfigurationAsync(path, cancellationToken);
         if (configuration is not null && configuration.ContainsKey(GetKey(configuration, ConfigSource.SectionName)))
         {
+            logger.LogDebug("Preserving existing configuration source binding during initialization in {ConfigPath}.", path);
             CheckForConfigSourceUpdates(projectDirectory, cancellationToken);
             return null;
         }
 
-        return await ResolveAndAcquireConfigSourceAsync(parseResult, cancellationToken);
+        return await ResolveAndAcquireConfigSourceAsync(parseResult, ConfigSourceStrings.InitUseSourcePrompt, cancellationToken);
     }
 
     public async Task MaterializeAsync(ConfigSource source, DirectoryInfo projectDirectory, CancellationToken cancellationToken)
@@ -263,6 +284,7 @@ internal sealed class ConfigSourceService(
         var configuration = await ReadProjectConfigurationAsync(path, cancellationToken);
         if (configuration is not null && configuration.ContainsKey(GetKey(configuration, ConfigSource.SectionName)))
         {
+            logger.LogDebug("Preserving existing configuration source binding during package update in {ConfigPath}.", path);
             return;
         }
 
@@ -270,10 +292,11 @@ internal sealed class ConfigSourceService(
         // --yes authorizes package updates, not adoption of organization configuration.
         if (!hostEnvironment.SupportsInteractiveInput && parseResult.GetValue(s_useSourceOption) is null)
         {
+            logger.LogDebug("Skipping configuration source adoption during unattended package update without explicit consent.");
             return;
         }
 
-        var source = await ResolveAndAcquireConfigSourceAsync(parseResult, cancellationToken);
+        var source = await ResolveAndAcquireConfigSourceAsync(parseResult, ConfigSourceStrings.UpdateUseSourcePrompt, cancellationToken);
         if (source is not null)
         {
             await ApplySourceAsync(source, path, cancellationToken);
@@ -294,6 +317,7 @@ internal sealed class ConfigSourceService(
             }
             configuration[GetKey(configuration, ConfigSource.SectionName)] = new JsonObject { ["optOut"] = true };
             await ConfigurationHelper.WriteSettingsFileAtomicallyAsync(path, configuration, cancellationToken);
+            logger.LogDebug("Saved configuration source opt-out in {ConfigPath}.", path);
             return;
         }
 
@@ -303,17 +327,20 @@ internal sealed class ConfigSourceService(
 
     internal async Task<JsonObject> GetTemplateSourcesAsync(CancellationToken cancellationToken)
     {
-        // Discovery runs after creation consent and must not re-enable a declined source.
-        if (_sourceDeclined)
+        // Creation consent controls discovery for both explicit and employee-detected sources.
+        // Reuse the selected identity and snapshot, and do not re-enable a declined source.
+        if (_creationSource is not null)
         {
-            return new JsonObject();
+            logger.LogDebug("Using the creation-time configuration source selection for template discovery.");
+            return await GetTemplateSourcesAsync(_creationSource, cancellationToken);
         }
 
-        // An explicitly configured URL opts into optional runtime template-source inheritance,
-        // not project-file materialization. Employee detection alone does not opt in.
+        // Outside creation, an explicit URL opts into runtime discovery without materializing
+        // project settings. Employee detection without consent does not opt in.
         var repository = environment.GetEnvironmentVariable(CliConfigNames.InitSourceUrl);
         if (repository is null)
         {
+            logger.LogDebug("Skipping configuration source template inheritance because no explicit source URL is set.");
             return new JsonObject();
         }
 
@@ -330,6 +357,7 @@ internal sealed class ConfigSourceService(
     {
         if (source.OptOut)
         {
+            logger.LogDebug("Skipping configuration source template inheritance because the source was declined.");
             return new JsonObject();
         }
 
@@ -351,10 +379,12 @@ internal sealed class ConfigSourceService(
                 TemplateSourceConfiguration.ValidateName(name);
                 using var document = JsonDocument.Parse(definition?.ToJsonString() ?? "null");
                 TemplateSourceConfiguration.Parse(document.RootElement, $"{AspireConfigFile.TemplateSourcesSectionName}.{name}", requireComplete: true);
+                logger.LogDebug("Inheriting template source {SourceName} from the configuration source.", name);
                 sources.Add(name, definition?.DeepClone());
             }
         }
 
+        logger.LogDebug("Loaded {SourceCount} inherited template sources from the configuration source.", sources.Count);
         return sources;
     }
 
@@ -363,7 +393,7 @@ internal sealed class ConfigSourceService(
             ? environment.GetEnvironmentVariable(CliConfigNames.InitSourcePath) ?? AspireConfigFile.FileName
             : AspireConfigFile.FileName;
 
-    private async Task ApplySnapshotAsync(ConfigSource source, ConfigSourceSnapshot snapshot, string path, CancellationToken cancellationToken)
+    private async Task<bool> ApplySnapshotAsync(ConfigSource source, ConfigSourceSnapshot snapshot, string path, CancellationToken cancellationToken)
     {
         using var configLock = await ConfigurationHelper.TryAcquireWorkspaceConfigLockAsync(
             executionContext, new FileInfo(path), logger, cancellationToken)
@@ -376,6 +406,7 @@ internal sealed class ConfigSourceService(
         var configuration = await ReadConfigurationFileAsync(path, cancellationToken) ?? new JsonObject();
         if (ReadBinding(configuration) is { } current && !ConfigSource.HasSameIdentity(current, source))
         {
+            logger.LogDebug("Cannot apply configuration source because the binding changed in {ConfigPath}.", path);
             throw new ConfigSourceException(ConfigSourceStrings.BindingChanged);
         }
         var previous = configuration.ToJsonString();
@@ -385,9 +416,11 @@ internal sealed class ConfigSourceService(
                 .Where(property => property.Key.Equals(setting, StringComparison.OrdinalIgnoreCase)).ToArray();
             if (supplied.Length == 0)
             {
+                logger.LogDebug("Configuration source does not supply {Section}; preserving the local section.", setting);
                 continue;
             }
 
+            logger.LogDebug("Replacing local {Section} with the configuration source section.", setting);
             // Replace all case-equivalent local sections, preserving every source section
             // that IConfiguration combines (for example {"SKILLSOURCES":{...},"skillSources":{...}}).
             // Keep the original position so an unchanged section does not reorder the file
@@ -427,10 +460,13 @@ internal sealed class ConfigSourceService(
             }
             await ConfigurationHelper.WriteSettingsFileAtomicallyAsync(path, configuration, cancellationToken);
         }
+        logger.LogDebug("Configuration source application completed for {ConfigPath}; settings changed: {Changed}.", path, changed);
         lock (_checksLock)
         {
             _projectChecked = true;
         }
+
+        return changed;
     }
 
     public async Task CheckProjectAsync(DirectoryInfo directory, bool force, CancellationToken cancellationToken)
@@ -440,6 +476,7 @@ internal sealed class ConfigSourceService(
         {
             // Project selection must not perform an automatic fetch immediately before
             // refresh-only mode makes its one unconditional fetch.
+            logger.LogDebug("Skipping automatic configuration source check because an explicit refresh was requested.");
             return;
         }
         try
@@ -448,6 +485,7 @@ internal sealed class ConfigSourceService(
             {
                 if (!force && _projectChecked)
                 {
+                    logger.LogDebug("Skipping configuration source check because this project was already checked.");
                     return;
                 }
                 _projectChecked = true;
@@ -455,6 +493,8 @@ internal sealed class ConfigSourceService(
             cancellationToken.ThrowIfCancellationRequested();
             var configPath = ConfigurationHelper.FindNearestConfigFilePath(directory);
             var source = configPath is null ? null : await ReadBindingAsync(configPath, cancellationToken);
+            logger.LogDebug("Checking configuration source: config file found {ConfigFound}, binding found {BindingFound}, opted out {OptOut}, forced refresh {Force}.",
+                configPath is not null, source is not null, source?.OptOut is true, force);
             if (configPath is null || source is null || source.OptOut)
             {
                 if (force)
@@ -465,19 +505,27 @@ internal sealed class ConfigSourceService(
             }
             if (force)
             {
+                DisplayConfigSourceDetails(source, Path.GetRelativePath(executionContext.WorkingDirectory.FullName, configPath));
                 var snapshot = await AcquireAsync(source, force: true, cancellationToken);
-                await ApplySnapshotAsync(source, snapshot, configPath, cancellationToken);
+                var changed = await ApplySnapshotAsync(source, snapshot, configPath, cancellationToken);
+                interaction.DisplayMessage(
+                    changed ? KnownEmojis.CheckMarkButton : KnownEmojis.Information,
+                    changed ? ConfigSourceStrings.Updated : ConfigSourceStrings.AlreadyUpToDate,
+                    consoleOverride: ConsoleOutput.Error);
             }
             else if (string.IsNullOrEmpty(source.AppliedVersion))
             {
+                logger.LogDebug("Skipping configuration source version comparison because the binding has no applied version.");
                 ReportOnce(ConfigSourceStrings.AppliedVersionMissing);
             }
             else
             {
                 var observed = await CheckVersionAsync(source, cancellationToken);
+                logger.LogDebug("Configuration source version comparison completed; update available: {UpdateAvailable}.",
+                    observed.Version != source.AppliedVersion);
                 if (observed.Version != source.AppliedVersion)
                 {
-                    ReportOnce(ConfigSourceStrings.UpdateAvailable);
+                    ReportOnce(ConfigSourceStrings.UpdateAvailable, emoji: KnownEmojis.Information);
                 }
             }
         }
@@ -575,12 +623,15 @@ internal sealed class ConfigSourceService(
         {
             if (!force && _snapshots.TryGetValue(key, out var existing))
             {
+                logger.LogDebug("Reusing the in-memory configuration source snapshot.");
                 return existing;
             }
         }
 
         interaction.DisplaySourceTrustWarning(executionContext);
         var cacheDirectory = GetCacheDirectory(source);
+        logger.LogDebug("Acquiring configuration source into {CacheDirectory}; forced refresh: {Force}, interactive input allowed: {Interactive}.",
+            cacheDirectory, force, allowInteractiveInput && hostEnvironment.SupportsInteractiveInput);
         DirectoryHelper.CreateWithOwnerOnlyPermissions(Path.GetDirectoryName(cacheDirectory)!);
         DirectoryHelper.CreateWithOwnerOnlyPermissions(cacheDirectory);
         using var cacheLock = await FileLock.AcquireAsync(Path.Combine(cacheDirectory, "cache.lock"), cancellationToken);
@@ -621,6 +672,8 @@ internal sealed class ConfigSourceService(
             {
                 _snapshots[key] = snapshot;
             }
+            logger.LogDebug("Published configuration source snapshot in {CacheDirectory} at commit {Commit}, version {Version}.",
+                cacheDirectory, commit, version);
             // Callers retain configuration in memory. After publication, older snapshots
             // can be removed while the cache lock excludes other acquisitions.
             try
@@ -638,6 +691,20 @@ internal sealed class ConfigSourceService(
                 logger.LogDebug("Configuration source snapshot cleanup failed ({FailureType}).", ex.GetType().Name);
             }
             return snapshot;
+        }
+        catch (ConfigSourceException ex)
+        {
+            logger.LogDebug("Configuration source acquisition failed ({FailureType}); no new snapshot was published.", ex.GetType().Name);
+            var readmeUrl = GetReadmeUrl(source);
+            if (readmeUrl is not null && UrlHelper.IsHttpUrl(readmeUrl) && !readmeUrl.Any(char.IsControl))
+            {
+                ex.ReadmeUrl = readmeUrl;
+            }
+            else if (readmeUrl is not null)
+            {
+                logger.LogDebug("The configuration source README URL is invalid; access help is unavailable.");
+            }
+            throw;
         }
         finally
         {
@@ -671,6 +738,7 @@ internal sealed class ConfigSourceService(
             if (previous is null || previous.Source is null || !ConfigSource.HasSameIdentity(previous.Source, source)
                 || string.IsNullOrEmpty(previous.Commit) || string.IsNullOrEmpty(previous.Version))
             {
+                logger.LogDebug("Configuration source version-check cache metadata is invalid.");
                 throw new ConfigSourceException(ConfigSourceStrings.InvalidCache);
             }
             var age = timeProvider.GetUtcNow() - previous.CheckedAt;
@@ -681,9 +749,17 @@ internal sealed class ConfigSourceService(
                 && (previous.Version == source.AppliedVersion
                     || previous.ComparedAppliedVersion == source.AppliedVersion))
             {
+                logger.LogDebug("Reusing cached configuration source version check from {CheckedAt}.", previous.CheckedAt);
                 return previous;
             }
+            logger.LogDebug("Revalidating configuration source version: cache age {CacheAge}, applied version matches cached version {MatchesVersion}, applied version previously compared {PreviouslyCompared}.",
+                age, previous.Version == source.AppliedVersion, previous.ComparedAppliedVersion == source.AppliedVersion);
         }
+        else
+        {
+            logger.LogDebug("No cached configuration source version check was found.");
+        }
+        logger.LogDebug("Checking configuration source repository version without interactive input.");
         var temporaryDirectory = Directory.CreateTempSubdirectory("aspire-config-source-check-");
         try
         {
@@ -697,6 +773,7 @@ internal sealed class ConfigSourceService(
             var metadata = new ConfigSourceCheckMetadata(identity, commit, version, timeProvider.GetUtcNow(),
                 source.AppliedVersion);
             await WriteCheckMetadataAsync(cacheDirectory, metadata, cancellationToken);
+            logger.LogDebug("Saved configuration source version check at commit {Commit}, version {Version}.", commit, version);
             return metadata;
         }
         finally
@@ -708,7 +785,7 @@ internal sealed class ConfigSourceService(
     private async Task<(string Commit, string Version, JsonObject Configuration)> AcquireRepositoryAsync(
         ConfigSource source, string directory, bool allowInteractiveInput, CancellationToken cancellationToken)
     {
-        using var deadline = new CancellationTokenSource(s_gitTimeout, timeProvider);
+        using var deadline = new CancellationTokenSource(GitClient.OperationTimeout, timeProvider);
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token);
         try
         {
@@ -744,10 +821,12 @@ internal sealed class ConfigSourceService(
         }
         catch (GitCommandException ex)
         {
+            logger.LogDebug("Configuration source repository acquisition failed: {Failure}, exit code {ExitCode}.", ex.Failure, ex.ExitCode);
             throw TranslateGitFailure(ex);
         }
         catch (OperationCanceledException ex) when (!cancellationToken.IsCancellationRequested)
         {
+            logger.LogDebug("Configuration source repository acquisition timed out.");
             throw new ConfigSourceException(ConfigSourceStrings.GitTimeout)
             {
                 GitOutput = (ex as GitProcessCanceledException)?.Output
@@ -757,7 +836,7 @@ internal sealed class ConfigSourceService(
 
     private async Task<(string Commit, string Version)> CheckRepositoryAsync(ConfigSource source, string directory, CancellationToken cancellationToken)
     {
-        using var deadline = new CancellationTokenSource(s_gitTimeout, timeProvider);
+        using var deadline = new CancellationTokenSource(GitClient.OperationTimeout, timeProvider);
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token);
         try
         {
@@ -769,10 +848,12 @@ internal sealed class ConfigSourceService(
         }
         catch (GitCommandException ex)
         {
+            logger.LogDebug("Configuration source repository version check failed: {Failure}, exit code {ExitCode}.", ex.Failure, ex.ExitCode);
             throw TranslateGitFailure(ex);
         }
         catch (OperationCanceledException ex) when (!cancellationToken.IsCancellationRequested)
         {
+            logger.LogDebug("Configuration source repository version check timed out.");
             throw new ConfigSourceException(ConfigSourceStrings.GitTimeout)
             {
                 GitOutput = (ex as GitProcessCanceledException)?.Output
@@ -780,11 +861,13 @@ internal sealed class ConfigSourceService(
         }
     }
 
-    private static async Task<(GitRepositoryLocation Directory, string Commit, string Version)> FetchVersionAsync(
+    private async Task<(GitRepositoryLocation Directory, string Commit, string Version)> FetchVersionAsync(
         IGitClient client, ConfigSource source, string directory, bool allowInteractive, CancellationToken cancellationToken)
     {
         var workingDirectory = new DirectoryInfo(directory);
         var mode = allowInteractive ? GitCommandMode.Interactive : GitCommandMode.Unattended;
+        logger.LogDebug("Resolving configuration source repository reference; Git mode: {Mode}, selector: {Selector}.",
+            mode, source.Ref is null ? "default branch" : GitClient.IsCommitSha(source.Ref) ? "commit" : "branch");
         string resolvedCommit;
         try
         {
@@ -792,8 +875,10 @@ internal sealed class ConfigSourceService(
         }
         catch (GitReferenceException)
         {
+            logger.LogDebug("Configuration source repository reference could not be resolved.");
             throw new ConfigSourceException(ConfigSourceStrings.RepositoryUnavailable);
         }
+        logger.LogDebug("Resolved configuration source repository reference to commit {Commit}.", resolvedCommit);
         // Git cannot fetch between SHA-1 and SHA-256 repositories. Resolve the selector
         // before initialization so branch/default selectors also choose the source format.
         // https://git-scm.com/docs/git-init#Documentation/git-init.txt---object-formatltformatgt
@@ -806,10 +891,12 @@ internal sealed class ConfigSourceService(
         await client.FetchAsync(repositoryDirectory, source.Repository, source.GetGitRef(),
             allowInteractive ? GitCommandMode.Interactive : GitCommandMode.Unattended, cancellationToken);
         var commit = await client.GetCommitAsync(repositoryDirectory, "FETCH_HEAD^{commit}", GitCommandMode.Interactive, cancellationToken);
+        logger.LogDebug("Fetched configuration source repository at commit {Commit}.", commit);
         var entry = await client.GetFileAsync(repositoryDirectory, commit, source.Path, GitCommandMode.Interactive, cancellationToken);
         // Read blob contents directly, without interpreting file modes or creating filesystem links.
         if (entry is not { Type: "blob" })
         {
+            logger.LogDebug("Configuration source file is missing or is not a blob.");
             throw new ConfigSourceException(ConfigSourceStrings.MissingFile);
         }
 
@@ -831,13 +918,14 @@ internal sealed class ConfigSourceService(
         return ConfigurationHelper.WriteSettingsFileAtomicallyAsync(Path.Combine(directory, "check.json"), json, cancellationToken);
     }
 
-    private void ReportOnce(string? message, string? gitOutput = null)
+    private void ReportOnce(string? message, string? gitOutput = null, KnownEmoji? emoji = null)
     {
+        var notification = (emoji ?? KnownEmojis.PoliceCarLight, message, gitOutput);
         lock (_checksLock)
         {
-            if (!_notifications.Contains((message, gitOutput)))
+            if (!_notifications.Contains(notification))
             {
-                _notifications.Add((message, gitOutput));
+                _notifications.Add(notification);
             }
         }
     }

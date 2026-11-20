@@ -16,6 +16,7 @@ using Aspire.Cli.Resources;
 using Aspire.Cli.Templating;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Spectre.Console;
 using NuGetPackage = Aspire.Shared.NuGetPackageCli;
 
@@ -37,6 +38,7 @@ internal sealed class NewCommand : BaseCommand
     private readonly AgentInitCommand _agentInitCommand;
     private readonly ICliHostEnvironment _hostEnvironment;
     private readonly ConfiguredTemplateSourceService _configuredTemplateSources;
+    private readonly ILogger<NewCommand> _logger;
 
     internal static readonly Option<string?> s_nameOption = new("--name", "-n")
     {
@@ -99,6 +101,7 @@ internal sealed class NewCommand : BaseCommand
         _agentInitCommand = agentInitCommand;
         _hostEnvironment = hostEnvironment;
         _configuredTemplateSources = configuredTemplateSources;
+        _logger = services.LoggerFactory.CreateLogger<NewCommand>();
 
         Options.Add(s_nameOption);
         Options.Add(s_outputOption);
@@ -112,6 +115,7 @@ internal sealed class NewCommand : BaseCommand
         Options.Add(_agentInitCommand.AgentsOption);
         Options.Add(AgentInitCommand.s_scopeOption);
         Options.Add(AgentInitCommand.s_skillsOption);
+        Options.Add(AgentInitCommand.s_removeSkillCopiesOption);
 
         // Customize description based on whether staging channel is enabled
         var isStagingEnabled = KnownFeatures.IsStagingChannelEnabled(services.Features, configuration)
@@ -353,11 +357,16 @@ internal sealed class NewCommand : BaseCommand
         var templatesForPrompt = GetTemplatesForPrompt(availableTemplates, parseResult);
         var configuredTemplatesAllowed = !new[] { s_sourceOption, s_versionOption, _channelOption, _languageOption }
             .Any(option => parseResult.GetResult(option) is { Implicit: false });
+        if (!configuredTemplatesAllowed)
+        {
+            _logger.LogDebug("Skipping configured template sources because an explicit package source, version, channel, or language option was specified.");
+        }
         var configuredSources = configuredTemplatesAllowed
             ? await _configuredTemplateSources.GetSourcesAsync(cancellationToken)
             : [];
         if (configuredSources.Count == 0)
         {
+            _logger.LogDebug("Prompting with {BuiltInTemplateCount} built-in templates only; no configured template sources are in use.", templatesForPrompt.Length);
             if (templatesForPrompt.Length == 0)
             {
                 InteractionService.DisplayError("No templates are available for the current environment.");
@@ -381,6 +390,8 @@ internal sealed class NewCommand : BaseCommand
             choices.Add(new(ConsoleHelpers.GetUniqueSelectionLabel(template.Description, labels), template, false, builtInGroup));
         }
         AddConfiguredTemplateChoices(choices, labels, configuredTemplates);
+        _logger.LogDebug("Prompting with {BuiltInTemplateCount} built-in templates and {ConfiguredTemplateCount} templates from {ConfiguredSourceCount} configured template sources.",
+            templatesForPrompt.Length, configuredTemplates.Count, configuredSources.Count);
         if (choices.Count == 0)
         {
             InteractionService.DisplayError("No templates are available for the current environment.");
@@ -392,6 +403,18 @@ internal sealed class NewCommand : BaseCommand
             NewCommandStrings.SelectAProjectTemplate, choices, choice => choice.Label.EscapeMarkup(),
             choice => showGroups ? choice.Group : null, choice => FormatTemplateDisplayLabel(choice.Template).EscapeMarkup(),
             cancellationToken: cancellationToken);
+        if (selection.IsConfigured &&
+            configuredTemplates.FirstOrDefault(t =>
+                ReferenceEquals(t.Template, selection.Template) &&
+                CreateTemplateSourceGroup(t).Id == selection.Group.Id) is { } selectedConfigured)
+        {
+            _logger.LogDebug("Selected template {TemplateName} from configured template source {SourceName}.",
+                selectedConfigured.Template.Name, selectedConfigured.SourceName);
+        }
+        else
+        {
+            _logger.LogDebug("Selected built-in template {TemplateName}.", selection.Template.Name);
+        }
         return (selection.Template, selection.IsConfigured);
     }
 
@@ -586,7 +609,7 @@ internal sealed class NewCommand : BaseCommand
 
         // Obtain consent and acquire the source before creating project files so acquisition
         // failures or missing non-interactive consent do not leave a partial project.
-        var configSource = await ConfigSources.ResolveAndAcquireConfigSourceAsync(parseResult, cancellationToken);
+        var configSource = await ConfigSources.ResolveAndAcquireConfigSourceAsync(parseResult, ConfigSourceStrings.NewUseSourcePrompt, cancellationToken);
         var templatePath = parseResult.GetValue(s_templatePathOption);
         var templateRepository = parseResult.GetValue(s_templateRepositoryOption);
         var templateRepositoryRef = parseResult.GetValue(s_templateRepositoryRefOption);
@@ -747,6 +770,8 @@ internal sealed class NewCommand : BaseCommand
             var template = templates.Length == 1
                 ? templates[0]
                 : await _prompter.PromptForTemplateAsync(templates, cancellationToken);
+            _logger.LogDebug("Selected template {TemplateName} from the explicit template source ({TemplateCount} discovered, repository: {IsRepository}, auto-selected: {AutoSelected}).",
+                template.Name, templates.Length, source.Repository is not null, templates.Length == 1);
 
             return await CreateFromSelectedSourceTemplateAsync(template, configSource, parseResult, cancellationToken);
         }
@@ -766,11 +791,13 @@ internal sealed class NewCommand : BaseCommand
     {
         try
         {
+            _logger.LogDebug("Applying source template {TemplateName}.", template.Name);
             var result = await template.ApplyTemplateAsync(new TemplateInputs
             {
                 Name = parseResult.GetValue(s_nameOption),
                 Output = parseResult.GetValue(s_outputOption)
             }, parseResult, cancellationToken);
+            _logger.LogDebug("Source template {TemplateName} completed with exit code {ExitCode}.", template.Name, result.ExitCode);
 
             return await CompleteTemplateAsync(result, configSource, parseResult, cancellationToken);
         }
@@ -818,6 +845,7 @@ internal sealed class NewCommand : BaseCommand
             PromptBinding.Create(parseResult, _agentInitCommand.AgentsOption),
             PromptBinding.Create(parseResult, AgentInitCommand.s_skillsOption, CommonAgentApplicators.AspireSkillName),
             PromptBinding.Create(parseResult, AgentInitCommand.s_scopeOption, AgentConfigurationScope.Project),
+            PromptBinding.CreateBoolConfirm(parseResult, AgentInitCommand.s_removeSkillCopiesOption, defaultValue: false),
             cancellationToken);
 
         if (templateResult.OutputPath is not null && ExtensionHelper.IsExtensionHost(InteractionService, out var extensionInteractionService, out _))

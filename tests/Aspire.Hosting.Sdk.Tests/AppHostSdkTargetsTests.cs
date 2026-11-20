@@ -318,19 +318,23 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
         AssertDashboardAndOrchestrationReferences(packageReferences);
     }
 
-    [Fact]
-    public async Task ComputeRunArgumentsUsesAspireCliWhenCliBundleIsEnabled()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(null)]
+    public async Task ComputeRunArgumentsUsesAspireCliWhenCliBundleIsEnabledOrDefaulted(bool? aspireUseCliBundle)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var project = await CreateRunHookProjectAsync(workspace.Path, aspireUseCliBundle: true);
+        var project = await CreateRunHookProjectAsync(workspace.Path, aspireUseCliBundle);
         var fakeCliDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "fake-cli"));
         var aspireCliPath = await CreateFakeAspireCliAsync(fakeCliDirectory.FullName);
         await CreateFakeDnxAsync(fakeCliDirectory.FullName);
+        var environment = CreatePathEnvironment(fakeCliDirectory.FullName);
+        environment["AspireUseCliBundle"] = string.Empty;
 
         var properties = await GetComputeRunArgumentsPropertiesAsync(
             project,
             ["-p:RunArguments=--custom foo"],
-            CreatePathEnvironment(fakeCliDirectory.FullName));
+            environment);
 
         Assert.Equal("Aspire", properties["_AspireResolvedCliInvocationMode"]);
         Assert.Equal("13.5.0", properties["_AspireResolvedCliVersion"]);
@@ -643,8 +647,84 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
         AssertUsesExplicitAspireCli(properties, project, aspireCliPath);
     }
 
-    [Fact]
-    public async Task ComputeRunArgumentsUsesFileBasedAppHostPathWhenCliBundleIsEnabled()
+    [Theory]
+    [InlineData("Dnx")]
+    [InlineData("DnxPinned")]
+    [InlineData("dNxPiNnEd")]
+    public async Task ComputeRunArgumentsWarnsWhenAmbientAspireCliPathOverridesDnxMode(string invocationMode)
+    {
+        // Regression test for https://github.com/microsoft/aspire/issues/19713: tooling such as the
+        // VS Code extension can set AspireCliPath in the environment, which silently overrode an
+        // explicitly configured DNX invocation mode.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var fakeCliDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "fake-cli"));
+        var aspireCliPath = await CreateFakeAspireCliAsync(fakeCliDirectory.FullName);
+        await CreateFakeDnxAsync(fakeCliDirectory.FullName);
+        var project = await CreateRunHookProjectAsync(workspace.Path, aspireUseCliBundle: true,
+            $$"""
+              <PropertyGroup>
+                <AspireCliInvocationMode>{{invocationMode}}</AspireCliInvocationMode>
+              </PropertyGroup>
+            """);
+
+        var result = await RunDotNetWithArgumentsAsync(
+            project.ProjectDirectory,
+            ["msbuild", "-nologo", "-restore", "-t:ComputeRunArguments", "-getProperty:_AspireResolvedCliInvocationMode,RunCommand,RunArguments", project.ProjectFile],
+            new Dictionary<string, string>
+            {
+                ["AspireCliPath"] = aspireCliPath,
+                [GetPathEnvironmentVariableName()] = CreatePathWithoutAspire(fakeCliDirectory.FullName)
+            });
+
+        Assert.True(result.ExitCode == 0, result.Output);
+        Assert.Contains("warning ASPIRE015", result.Output);
+        Assert.Contains($"AspireCliInvocationMode={invocationMode} is ignored because AspireCliPath is set to '{aspireCliPath}'", result.Output);
+
+        // AspireCliPath remains authoritative; the warning only makes the override visible.
+        var jsonStart = result.StandardOutput.IndexOf('{');
+        var jsonEnd = result.StandardOutput.LastIndexOf('}');
+        Assert.True(jsonStart >= 0 && jsonEnd > jsonStart, result.Output);
+        using var document = JsonDocument.Parse(result.StandardOutput[jsonStart..(jsonEnd + 1)]);
+        var properties = document.RootElement.GetProperty("Properties")
+            .EnumerateObject()
+            .ToDictionary(property => property.Name, property => property.Value.GetString() ?? string.Empty);
+        Assert.Equal("Aspire", properties["_AspireResolvedCliInvocationMode"]);
+        AssertUsesExplicitAspireCli(properties, project, aspireCliPath);
+    }
+
+    [Theory]
+    [InlineData("Path", null)]
+    [InlineData("DnxPinned", "ASPIRE015")]
+    public async Task ComputeRunArgumentsDoesNotWarnWhenAspireCliPathDoesNotOverrideDnxMode(string invocationMode, string? noWarn)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var fakeCliDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "fake-cli"));
+        var aspireCliPath = await CreateFakeAspireCliAsync(fakeCliDirectory.FullName);
+        var project = await CreateRunHookProjectAsync(workspace.Path, aspireUseCliBundle: true,
+            $$"""
+              <PropertyGroup>
+                <AspireCliInvocationMode>{{invocationMode}}</AspireCliInvocationMode>
+                <NoWarn>$(NoWarn);{{noWarn}}</NoWarn>
+              </PropertyGroup>
+            """);
+
+        var result = await RunDotNetWithArgumentsAsync(
+            project.ProjectDirectory,
+            ["msbuild", "-nologo", "-restore", "-t:ComputeRunArguments", project.ProjectFile],
+            new Dictionary<string, string>
+            {
+                ["AspireCliPath"] = aspireCliPath,
+                [GetPathEnvironmentVariableName()] = CreatePathWithoutAspire(fakeCliDirectory.FullName)
+            });
+
+        Assert.True(result.ExitCode == 0, result.Output);
+        Assert.DoesNotContain("ASPIRE015", result.Output);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(null)]
+    public async Task ComputeRunArgumentsUsesFileBasedAppHostPathWhenCliBundleIsEnabledOrDefaulted(bool? aspireUseCliBundle)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var appHostDirectory = Path.Combine(workspace.Path, "FileApp");
@@ -669,14 +749,16 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
                 </RuntimeHostConfigurationOption>
               </ItemGroup>
             """;
-        var project = await CreateRunHookProjectAsync(workspace.Path, aspireUseCliBundle: true, extraProjectXml: extraProjectXml);
+        var project = await CreateRunHookProjectAsync(workspace.Path, aspireUseCliBundle, extraProjectXml: extraProjectXml);
         var fakeCliDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "fake-cli"));
         var aspireCliPath = await CreateFakeAspireCliAsync(fakeCliDirectory.FullName);
+        var environment = CreatePathEnvironment(fakeCliDirectory.FullName);
+        environment["AspireUseCliBundle"] = string.Empty;
 
         var properties = await GetComputeRunArgumentsPropertiesAsync(
             project,
             ["-p:RunArguments=--custom foo"],
-            CreatePathEnvironment(fakeCliDirectory.FullName));
+            environment);
 
         Assert.Equal(GetExpectedAspireRunCommand(aspireCliPath), properties["RunCommand"]);
         Assert.Equal(GetExpectedAspireRunArguments(aspireCliPath, appHostFile, "--custom foo"), properties["RunArguments"]);
@@ -728,6 +810,37 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
         {
             Assert.Contains("AppHost requires the Aspire CLI bundle. Remove AspireUseCliBundle or set it to true, and install the matching Aspire CLI from https://get.aspire.dev. ASPIRE013 cannot be suppressed to disable the bundle. See https://aka.ms/aspire/diagnostics/aspire013 for more information.", result.Output);
         }
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task CSharpAppHostRespectsInheritedDisabledCliBundle(bool useEnvironmentVariable)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        if (!useEnvironmentVariable)
+        {
+            await File.WriteAllTextAsync(Path.Combine(workspace.Path, "Directory.Build.props"), """
+                <Project>
+                  <PropertyGroup>
+                    <AspireUseCliBundle>false</AspireUseCliBundle>
+                  </PropertyGroup>
+                </Project>
+                """);
+        }
+
+        var project = await CreateRunHookProjectAsync(workspace.Path, aspireUseCliBundle: null);
+        var environment = new Dictionary<string, string>
+        {
+            ["AspireUseCliBundle"] = useEnvironmentVariable ? "false" : string.Empty
+        };
+        var result = await RunDotNetWithArgumentsAsync(
+            project.ProjectDirectory,
+            ["msbuild", "-nologo", "-restore", "-t:PrepareForBuild"],
+            environment);
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Equal(["error ASPIRE013"], Regex.Matches(result.Output, @"\b(?:warning|error) ASPIRE\d+:").Select(match => match.Value.TrimEnd(':')));
     }
 
     [Theory]
@@ -789,6 +902,28 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
             : [];
 
         var properties = await GetComputeRunArgumentsPropertiesAsync(project, extraArguments, environment);
+
+        AssertUsesDotNetRun(properties, project);
+    }
+
+    [Fact]
+    public async Task ComputeRunArgumentsDoesNotUseAspireCliForMtpTestApplications()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var project = await CreateRunHookProjectAsync(
+            workspace.Path,
+            aspireUseCliBundle: true,
+            extraProjectXml: """
+              <PropertyGroup>
+                <IsTestingPlatformApplication>true</IsTestingPlatformApplication>
+              </PropertyGroup>
+            """);
+        var fakeCliDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "fake-cli"));
+        var aspireCliPath = await CreateFakeAspireCliAsync(fakeCliDirectory.FullName);
+
+        var properties = await GetComputeRunArgumentsPropertiesAsync(
+            project,
+            [$"-p:AspireCliPath={aspireCliPath}", "-p:_AspireSuppressCliRunHook=false", $"-p:{SuppressCliRunHookEnvironmentVariable}=false"]);
 
         AssertUsesDotNetRun(properties, project);
     }

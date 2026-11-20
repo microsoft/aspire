@@ -13,6 +13,7 @@ using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Web;
 using Microsoft.Extensions.Localization;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.JSInterop;
@@ -46,6 +47,7 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
     private readonly ConcurrentDictionary<string, ResourceViewModel> _resourceByName = new(StringComparers.ResourceName);
     private readonly CancellationTokenSource _cts = new();
     private Task? _resourceSubscriptionTask;
+    private Task? _activityRefreshTask;
     private Subscription? _logsSubscription;
     private Subscription? _tracesSubscription;
     private Subscription? _metricsSubscription;
@@ -99,6 +101,9 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
     public required DashboardViewPreferences ViewPreferences { get; init; }
 
     [Inject]
+    public required ResourceTagStore TagStore { get; init; }
+
+    [Inject]
     public required NavigationManager NavigationManager { get; init; }
 
     [Inject]
@@ -115,6 +120,9 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
 
     [CascadingParameter]
     public required ViewportInformation ViewportInformation { get; init; }
+
+    [CascadingParameter]
+    public ResourcesLayout? ResourceLayout { get; set; }
 
     private ITelemetryRepository TelemetryRepository => DataSource.TelemetryRepository;
     private IReadOnlyList<IconToggleOption<GroupOverview>> OverviewOptions =>
@@ -137,10 +145,14 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
                 .OrderBy(resource => resource.DisplayName, StringComparers.ResourceName)
                 .Select(resource => resource.Name));
 
+    private bool ShowsMovingActivityWindow => ViewPreferences.GroupOverview == GroupOverview.Summary && !TelemetryRepository.IsReadOnly;
+
     protected override async Task OnInitializedAsync()
     {
         ViewPreferences.Changed += OnViewPreferencesChanged;
         await ViewPreferences.EnsureLoadedAsync();
+        TagStore.Changed += OnTagsChanged;
+        await TagStore.EnsureLoadedAsync();
 
         if (!DashboardClient.IsEnabled)
         {
@@ -152,6 +164,7 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
         _tracesSubscription = TelemetryRepository.OnNewTraces(null, SubscriptionType.Other, OnTelemetryChanged);
         _metricsSubscription = TelemetryRepository.OnNewMetrics(null, SubscriptionType.Other, OnTelemetryChanged);
         QueueTelemetryRefresh();
+        _activityRefreshTask = RefreshActivityPeriodicallyAsync(_cts.Token);
 
         var (snapshot, subscription) = await DataSource.ResourceRepository.SubscribeResourcesAsync(_cts.Token);
         foreach (var resource in snapshot)
@@ -201,13 +214,14 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
             var graphIcons = new GraphIconsDto(
                 new GraphMenuIconDto(
                     Path: ResourceGraphMapper.GetIconPathData(new Icons.Regular.Size16.Settings()),
-                    LabelFormat: Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphResourceActionsButton)].Value),
+                    LabelFormat: Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphResourceActionsButton)].Value,
+                    TagLabelFormat: Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphTagActionsButton)].Value),
                 new GraphHiddenIconDto(
                     Path: ResourceGraphMapper.GetIconPathData(new Icons.Regular.Size16.EyeOff()),
                     Tooltip: ColumnsLoc[nameof(Dashboard.Resources.Columns.HiddenResourceIconTooltip)].Value),
                 ResourceGraphMapper.GetGameStrings(Loc));
 
-            await _jsModule.InvokeVoidAsync("initializeResourcesGraph", _resourcesInteropReference, graphIcons);
+            await _jsModule.InvokeVoidAsync("initializeResourcesGraph", _resourcesInteropReference, graphIcons, ResourceLayout is not null);
             _graphInitialized = true;
             await UpdateResourceGraphResourcesAsync();
         }
@@ -225,7 +239,7 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
         }
     }
 
-    protected override void OnParametersSet()
+    protected override async Task OnParametersSetAsync()
     {
         // The overview passes the current selection. When it changes, the telemetry shown is for other resources.
         if (_scopedResourceNames is null != ResourceNames is null ||
@@ -237,6 +251,7 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
             {
                 _telemetry = null;
                 QueueTelemetryRefresh();
+                await UpdateResourceGraphResourcesAsync();
             }
         }
     }
@@ -371,7 +386,7 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
     private async Task<HomeActivity> LoadActivityAsync(ITelemetryRepository repository, List<OtlpResource> telemetryResources, List<ResourceKey> resourceKeys, int errorLogCount, CancellationToken cancellationToken)
     {
         // Align the window to bucket boundaries so bars don't shift between refreshes.
-        var now = TimeProvider.GetUtcNow().UtcDateTime;
+        var now = await GetActivityTimeAsync(repository, resourceKeys, errorLogCount, cancellationToken).ConfigureAwait(false);
         var windowEnd = new DateTime(((now.Ticks / s_activityBucketSize.Ticks) + 1) * s_activityBucketSize.Ticks, DateTimeKind.Utc);
         var windowStart = windowEnd - (s_activityBucketSize * ActivityBucketCount);
 
@@ -432,18 +447,26 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
             endpointDurations.Add(durationMs);
         }
 
-        // Error logs count toward a resource's hotspot score alongside failed requests.
-        var logCount = Math.Min(errorLogCount, MaxActivityErrorLogs);
-        if (logCount > 0)
+        // Error logs count toward a resource's hotspot score alongside failed requests. The query filters by the window
+        // before limiting the count: a recording's window can end before its last error logs, which would otherwise use
+        // up the limit and hide the ones in the window.
+        if (errorLogCount > 0)
         {
-            var errorLogs = await repository.GetLogSummariesAsync(new GetLogsContext { ResourceKeys = resourceKeys, StartIndex = errorLogCount - logCount, Count = logCount, Filters = s_errorLogFilters }, cancellationToken).ConfigureAwait(false);
+            var errorLogs = await repository.GetLogSummariesAsync(new GetLogsContext
+            {
+                ResourceKeys = resourceKeys,
+                StartIndex = 0,
+                Count = MaxActivityErrorLogs,
+                LatestItemCount = MaxActivityErrorLogs,
+                Filters =
+                [
+                    .. s_errorLogFilters,
+                    CreateLogTimeFilter(FilterCondition.GreaterThanOrEqual, windowStart),
+                    CreateLogTimeFilter(FilterCondition.LessThan, windowEnd)
+                ]
+            }, cancellationToken).ConfigureAwait(false);
             foreach (var log in errorLogs.Items)
             {
-                if (log.TimeStamp < windowStart)
-                {
-                    continue;
-                }
-
                 if (!byResource.TryGetValue(log.Resource.ResourceKey, out var resourceActivity))
                 {
                     resourceActivity = new ResourceActivity(GetName(log.Resource));
@@ -493,6 +516,55 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
                 .Take(InsightItemCount)
                 .ToList()
         };
+    }
+
+    // The value is parsed without converting between time zones, so it keeps the UTC time of the stored ticks.
+    private static FieldTelemetryFilter CreateLogTimeFilter(FilterCondition condition, DateTime time) => new()
+    {
+        Field = nameof(OtlpLogEntry.TimeStamp),
+        Condition = condition,
+        Value = time.ToString("yyyy-MM-ddTHH:mm:ss.fffffff", CultureInfo.InvariantCulture)
+    };
+
+    // A recording ended some time ago, so a window ending at the current time would show it as empty. Its activity window
+    // ends at its last request instead, or at its last error log when it has no requests, so error hotspots still show.
+    // Only that one item needs to be read, and a recording doesn't get new ones.
+    private async Task<DateTime> GetActivityTimeAsync(ITelemetryRepository repository, List<ResourceKey> resourceKeys, int errorLogCount, CancellationToken cancellationToken)
+    {
+        var now = TimeProvider.GetUtcNow().UtcDateTime;
+        if (!repository.IsReadOnly)
+        {
+            return now;
+        }
+
+        var latest = await repository.GetRequestSpansAsync(new GetRequestSpansRequest
+        {
+            ResourceKeys = resourceKeys,
+            StartTime = DateTime.MinValue,
+            EndTime = DateTime.MaxValue,
+            MaxCount = 1
+        }, cancellationToken).ConfigureAwait(false);
+
+        if (latest.Items is [var span, ..])
+        {
+            return span.StartTime;
+        }
+
+        if (errorLogCount == 0)
+        {
+            return now;
+        }
+
+        // Results are ordered oldest first.
+        var latestError = await repository.GetLogSummariesAsync(new GetLogsContext
+        {
+            ResourceKeys = resourceKeys,
+            StartIndex = errorLogCount - 1,
+            Count = 1,
+            Filters = s_errorLogFilters
+        }, cancellationToken).ConfigureAwait(false);
+
+        return latestError.Items is [var log, ..] ? log.TimeStamp : now;
     }
 
     // Prefer the low-cardinality route template ("GET /api/catalog/{id}") over the span name.
@@ -587,6 +659,25 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
         StateHasChanged();
     }
 
+    private async Task<bool> ShowTagGroupContextMenuAsync(string tagName, int clientX, int clientY)
+    {
+        var items = ResourceMenuBuilder.CreateTagGroupMenuItems(tagName, ResourceContextMenuHeaderId,
+            () => ResourceGraphMapper.GetTagMembers(GetResources(), tagName, TagStore),
+            (resource, command) => DashboardCommandExecutor.IsExecuting(resource.Name, command.Name),
+            ExecuteCommandAsync);
+        if (_contextMenu is not { } contextMenu || items.Count == 0)
+        {
+            Logger.LogDebug("The graph menu for tag '{TagName}' is no longer available.", tagName);
+            return false;
+        }
+
+        _contextMenuItems.Clear();
+        _contextMenuItems.AddRange(items);
+        await contextMenu.OpenAsync(clientX, clientY);
+        StateHasChanged();
+        return true;
+    }
+
     private async Task ContextMenuOpenChangedAsync(bool open)
     {
         _contextMenuOpen = open;
@@ -598,10 +689,12 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
         await InvokeAsync(StateHasChanged);
     }
 
+    private IEnumerable<ResourceViewModel> GetResourcesInScope() =>
+        _resourceByName.Values.Where(r => !r.IsParameter && !r.IsResourceHidden(showHiddenResources: false) && IsInScope(r));
+
     private List<ResourceViewModel> GetResources()
     {
-        return _resourceByName.Values
-            .Where(r => !r.IsParameter && !r.IsResourceHidden(showHiddenResources: false) && IsInScope(r))
+        return GetResourcesInScope()
             .OrderBy(r => NeedsAttention(r) ? 0 : 1)
             .ThenBy(r => r.ResourceType)
             .ThenBy(r => r, ResourceViewModelNameComparer.Instance)
@@ -631,9 +724,11 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
 
     private List<ResourceDto> GetResourceGraphResources()
     {
-        var resources = GetResources();
+        var resources = ResourceGraphMapper.OrderResources(GetResourcesInScope());
+        var tagsByResource = TagStore.GetTagsByResource(resources);
         return resources
-            .Select(resource => ResourceGraphMapper.MapResource(resource, resources, _resourceByName, ColumnsLoc, showHiddenResources: false, IconResolver))
+            .Select(resource => ResourceGraphMapper.MapResource(resource, resources, _resourceByName, ColumnsLoc, showHiddenResources: false, IconResolver,
+                tagsByResource.GetValueOrDefault(resource.DisplayName) ?? []))
             .ToList();
     }
 
@@ -780,22 +875,53 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
 
     private string GetLogResourceName(OtlpResource resource) => OtlpHelpers.GetResourceName(resource, TelemetryRepository.GetResources());
 
+    private void OnTagsChanged() => _ = InvokeAsync(UpdateResourceGraphResourcesAsync);
+
     // The settings panel changes what the overview shows while it's displayed.
     private void OnViewPreferencesChanged() => _ = InvokeAsync(async () =>
     {
+        // The window isn't refreshed while another layout is showing.
+        if (ShowsMovingActivityWindow)
+        {
+            QueueTelemetryRefresh();
+        }
+
         StateHasChanged();
         await UpdateResourceGraphResourcesAsync();
     });
+
+    // The activity window moves with time: once telemetry stops nothing else queues a refresh, and old requests would stay
+    // "last 15 min" indefinitely. The interval matches the window's bucket size, so each refresh can move it by a bucket.
+    // Only the summary layout shows the window, and a recording's window doesn't move, so the others skip these queries.
+    private async Task RefreshActivityPeriodicallyAsync(CancellationToken cancellationToken)
+    {
+        using var timer = new PeriodicTimer(s_activityBucketSize, TimeProvider);
+        try
+        {
+            while (await timer.WaitForNextTickAsync(cancellationToken).ConfigureAwait(false))
+            {
+                if (ShowsMovingActivityWindow)
+                {
+                    QueueTelemetryRefresh();
+                }
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
+    }
 
     public async ValueTask DisposeAsync()
     {
         _isDisposing = true;
         ViewPreferences.Changed -= OnViewPreferencesChanged;
+        TagStore.Changed -= OnTagsChanged;
         _cts.Cancel();
         _logsSubscription?.Dispose();
         _tracesSubscription?.Dispose();
         _metricsSubscription?.Dispose();
         await TaskHelpers.WaitIgnoreCancelAsync(_resourceSubscriptionTask);
+        await TaskHelpers.WaitIgnoreCancelAsync(_activityRefreshTask);
         _resourcesInteropReference?.Dispose();
         if (_jsModule is not null)
         {
@@ -804,14 +930,23 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
         _cts.Dispose();
     }
 
-    private sealed class ApplicationSummaryInterop(ApplicationSummary summary)
+    internal sealed class ApplicationSummaryInterop(ApplicationSummary summary)
     {
         [JSInvokable]
         public Task SelectResource(string id) => summary.SelectResourceAsync(id);
 
         [JSInvokable]
+        public Task SelectTagGroup(string tagName, MouseEventArgs e) =>
+            (summary.ResourceLayout ?? throw new InvalidOperationException("Tag selection requires a resources layout."))
+                .SelectGraphTagGroupAsync(tagName, e, summary.GetResourcesInScope(), showHiddenResources: false);
+
+        [JSInvokable]
         public Task ResourceContextMenu(string id, int clientX, int clientY, string? _) =>
             summary.ShowContextMenuAsync(id, clientX, clientY);
+
+        [JSInvokable]
+        public Task<bool> TagGroupContextMenu(string tagName, int clientX, int clientY) =>
+            summary.ShowTagGroupContextMenuAsync(tagName, clientX, clientY);
 
         [JSInvokable]
         public Task<bool?> ExecuteGraphGameCommand(string id, string commandName) =>
@@ -843,6 +978,7 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
     private sealed class HomeActivity
     {
         public required DateTime WindowStart { get; init; }
+        public DateTime WindowEnd => WindowStart + (s_activityBucketSize * ActivityBucketCount);
         public required int[] OkBuckets { get; init; }
         public required int[] ErrorBuckets { get; init; }
         public required int TotalRequests { get; init; }

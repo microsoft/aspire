@@ -40,6 +40,8 @@ namespace Aspire.Hosting.OpenAI
 
         public OpenAIResource Parent { get { throw null; } }
 
+        public override string ResourceTypeDisplayName { get { throw null; } }
+
         System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, ApplicationModel.ReferenceExpression>> ApplicationModel.IResourceWithConnectionString.GetConnectionProperties() { throw null; }
     }
 
@@ -52,6 +54,8 @@ namespace Aspire.Hosting.OpenAI
         public string Endpoint { get { throw null; } }
 
         public ApplicationModel.ParameterResource Key { get { throw null; } }
+
+        public override string ResourceTypeDisplayName { get { throw null; } }
 
         public ApplicationModel.ReferenceExpression UriExpression { get { throw null; } }
 

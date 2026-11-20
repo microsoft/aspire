@@ -3,6 +3,7 @@
 
 using Aspire.Dashboard.Components.Controls;
 using Aspire.Dashboard.Components.Controls.Grid;
+using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Components.Pages;
 using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Components.Tests.Shared;
@@ -10,8 +11,10 @@ using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
+using Aspire.Dashboard.Tests.Shared;
 using Bunit;
 using Google.Protobuf.Collections;
+using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web.Virtualization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Localization;
@@ -28,6 +31,34 @@ namespace Aspire.Dashboard.Components.Tests.Pages;
 [UseCulture("en-US")]
 public class TracesTests : DashboardTestContext
 {
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Render_FooterShowsCountAndPauseWarningInCorrectLocation(bool isDesktop)
+    {
+        SetupTracesServices();
+        var viewport = new ViewportInformation(IsDesktop: isDesktop, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: false));
+        Services.GetRequiredService<NavigationManager>().NavigateTo("/traces");
+        Services.GetRequiredService<PauseManager>().SetTracesPaused(true);
+
+        var cut = Render<ResourcesLayout>(parameters => parameters
+            .AddCascadingValue(viewport)
+            .Add(p => p.Body, builder =>
+            {
+                builder.OpenComponent<Traces>(0);
+                builder.CloseComponent();
+            }));
+
+        cut.WaitForAssertion(() =>
+        {
+            var footer = cut.Find(isDesktop ? ".resource-footer-page-status" : "footer[style='grid-area: footer']");
+            Assert.Equal("Showing 0 traces", footer.QuerySelector(".result-count")!.TextContent.Trim());
+            Assert.Single(footer.QuerySelectorAll(".pause-warning"));
+            Assert.Single(cut.FindComponents<TotalItemsFooter>());
+        });
+    }
+
     [Theory]
     [InlineData(AspireDataType.StructuredLogs)]
     [InlineData(AspireDataType.Traces)]
@@ -126,7 +157,7 @@ public class TracesTests : DashboardTestContext
         Services.GetRequiredService<DimensionManager>().InvokeOnViewportInformationChanged(viewport);
         var cut = Render<Traces>(builder => builder.AddCascadingValue(viewport));
         var grid = cut.FindComponent<AspireFluentDataGrid<TraceSummary>>();
-        await grid.InvokeAsync(grid.Instance.RefreshDataAndRenderAsync);
+        await grid.InvokeAsync(() => grid.Instance.RefreshDataAsync(force: true));
 
         cut.WaitForAssertion(() => Assert.All(cut.FindAll(".trace-service-tag"), element => Assert.Contains("(1)", element.TextContent, StringComparison.Ordinal)));
 
@@ -152,7 +183,7 @@ public class TracesTests : DashboardTestContext
                 }
             }
         });
-        await grid.InvokeAsync(grid.Instance.RefreshDataAndRenderAsync);
+        await grid.InvokeAsync(() => grid.Instance.RefreshDataAsync(force: true));
 
         var refreshedResult = await cut.InvokeAsync(() => grid.Instance.ItemsProvider!(new GridItemsProviderRequest<TraceSummary>
         {
@@ -205,7 +236,7 @@ public class TracesTests : DashboardTestContext
         Services.GetRequiredService<DimensionManager>().InvokeOnViewportInformationChanged(viewport);
         var cut = Render<Traces>(builder => builder.AddCascadingValue(viewport));
         var grid = cut.FindComponent<AspireFluentDataGrid<TraceSummary>>();
-        await grid.InvokeAsync(grid.Instance.RefreshDataAndRenderAsync);
+        await grid.InvokeAsync(() => grid.Instance.RefreshDataAsync(force: true));
         var result = await cut.InvokeAsync(() => grid.Instance.ItemsProvider!(new GridItemsProviderRequest<TraceSummary>
         {
             StartIndex = 0,
@@ -281,7 +312,7 @@ public class TracesTests : DashboardTestContext
         var cut = FluentUISetupHelpers.RenderMessageBarProviderWithPage<Traces>(this, viewport);
 
         var grid = cut.FindComponent<AspireFluentDataGrid<TraceSummary>>();
-        await grid.InvokeAsync(grid.Instance.RefreshDataAndRenderAsync);
+        await grid.InvokeAsync(() => grid.Instance.RefreshDataAsync(force: true));
         cut.WaitForAssertion(() => Assert.Equal(expectedMessageCount, cut.FindComponents<DashboardMessageBar>().Count));
     }
 

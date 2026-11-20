@@ -4,6 +4,7 @@ using Microsoft.Extensions.Hosting;
 
 #pragma warning disable ASPIREPERSISTENCE001 // Resource lifetime APIs are experimental.
 #pragma warning disable ASPIRETERMINAL001 // Terminal APIs are experimental.
+#pragma warning disable ASPIRERESOURCETRAITS001 // Resource tag APIs are experimental.
 
 var builder = DistributedApplication.CreateBuilder(args);
 
@@ -138,7 +139,7 @@ var catalogService = builder.AddDotnetProject("catalogservice", "../CatalogServi
                             .WithTrait("Owner", "Finance")
                             .WithTrait("Owner", "Platform")
                             .WithEnvironment("Inventory__LowStockThreshold", lowStockThreshold)
-                            .WithDashboardPosition(10)
+                            .WithDisplayOrder(20)
                             .WithReference(catalogDb)
                             .WaitFor(catalogDb)
                             .WaitFor(catalogDbApp)
@@ -168,7 +169,7 @@ var messaging = builder.AddRabbitMQ("messaging")
 var basketService = builder.AddDotnetProject("basketservice", "../BasketService/BasketService.csproj")
                            .WithTags("Backend", "Checkout")
                            .WithEnvironment("Checkout__SigningKey", checkoutSigningKey)
-                           .WithDashboardPosition(20)
+                           .WithDisplayOrder(10)
                            .WithReference(basketCache)
                            .WaitFor(basketCache)
                            .WithReference(messaging)
@@ -177,7 +178,7 @@ var basketService = builder.AddDotnetProject("basketservice", "../BasketService/
 var frontend = builder.AddDotnetProject("frontend", "../MyFrontend/MyFrontend.csproj")
     .WithTags("Frontend", "Storefront")
     .WithEnvironment("Storefront__Promotion", storefrontPromotion)
-    .WithDashboardPosition(0)
+    .WithDisplayOrder(30)
     .WithExternalHttpEndpoints()
     .WithReference(basketService)
     .WaitFor(basketService)

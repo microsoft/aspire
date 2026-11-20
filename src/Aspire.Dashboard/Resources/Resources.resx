@@ -371,6 +371,13 @@
     <value>Resource actions for {0}</value>
     <comment>Accessible label and tooltip for the cog affordance on a graph resource node that opens the resource actions menu. {0} is the resource display name.</comment>
   </data>
+  <data name="ResourcesGraphTagActionsButton" xml:space="preserve">
+    <value>Tag actions for {0}</value>
+    <comment>Accessible label and tooltip for the cog on a graph tag label. {0} is the tag name.</comment>
+  </data>
+  <data name="ResourcesGraphTagNoCommands" xml:space="preserve">
+    <value>No commands for this group</value>
+  </data>
   <data name="ResourcesHideTypes" xml:space="preserve">
     <value>Hide resource types</value>
   </data>
@@ -728,9 +735,9 @@
     <value>Dashboard tags</value>
     <comment>Name of the property listing the tags a resource declares in the AppHost.</comment>
   </data>
-  <data name="ResourceTraitDashboardPosition" xml:space="preserve">
-    <value>Dashboard position</value>
-    <comment>Name of the property holding the default position a resource declares in the AppHost.</comment>
+  <data name="ResourceDisplayOrder" xml:space="preserve">
+    <value>Display order</value>
+    <comment>Name of the property holding the default display order a resource declares in the AppHost.</comment>
   </data>
   <data name="ResourceTagsCreate" xml:space="preserve">
     <value>Create tag "{0}"</value>
@@ -773,5 +780,14 @@
   </data>
   <data name="MissingParametersSetValues" xml:space="preserve">
     <value>Set parameter values</value>
+  </data>
+  <data name="HomeActivityHistoricalTitle" xml:space="preserve">
+    <value>Activity</value>
+  </data>
+  <data name="HomeActivityHistoricalCaption" xml:space="preserve">
+    <value>Incoming requests · last 15 min of this run</value>
+  </data>
+  <data name="HomeActivityNoRecordedRequests" xml:space="preserve">
+    <value>No requests were recorded in this run.</value>
   </data>
 </root>

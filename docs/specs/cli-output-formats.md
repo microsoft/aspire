@@ -304,6 +304,13 @@ Resources without a specific label, and older AppHosts that do not supply this m
 fall back to the technical resource type. This is presentation metadata only: it does not
 change resource identity, service discovery, or OpenTelemetry's `service.name`.
 
+For `Finished` and `Exited` resources with a known exit code, the snapshot table's
+**State** cell includes the code, for example `Finished (exit code: -532462766)`.
+Nonzero exits are highlighted red; zero exits remain neutral. When no exit code
+is available, the cell shows only the state. This presentation applies only to
+the table without `--follow`; JSON and NDJSON retain the separate `state` and
+numeric `exitCode` fields.
+
 `aspire resources` is an alias for `aspire describe`. Use `--format mermaid` to export a resource graph snapshot directly to stdout:
 
 ```bash
@@ -786,6 +793,8 @@ The `agent-mcp.v1` capability indicates that `aspire agent mcp` is supported. To
 ```
 
 ### `aspire sdk dump`
+
+The SDK commands (`sdk generate`, `sdk dump`, and `sdk export`) create their scanner working directories under `<ASPIRE_HOME>/tmp/sdk/<unique-id>`, not the OS temporary directory. Scanner configuration and build artifacts stay inside that directory, isolated from ancestor workspace settings. Each invocation removes its working directory on completion, including preparation failures. Normal AppHost integration caches remain workspace-local.
 
 `aspire sdk dump --format json` is a hidden SDK-generation command that emits Aspire type-system capabilities:
 

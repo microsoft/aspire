@@ -394,6 +394,9 @@
   <data name="ResourcePaneFilterReset" xml:space="preserve">
     <value>Reset</value>
   </data>
+  <data name="ResourceTabHome" xml:space="preserve">
+    <value>Home</value>
+  </data>
   <data name="ResourceTabsMore" xml:space="preserve">
     <value>More views</value>
   </data>

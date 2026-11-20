@@ -2,6 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable CS0618 // Retain legacy project launch, watch, custom-debug, and subtype compatibility.
+#pragma warning disable ASPIREAZUREFUNCTIONS001 // Azure Functions hosting APIs are experimental.
+#pragma warning disable ASPIRECOMMAND001 // Required-command annotations are removed to keep these launch-policy tests hermetic.
 #pragma warning disable ASPIREEXTENSION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIRECERTIFICATES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREPERSISTENCE001 // Resource lifetime APIs are experimental.
@@ -17,6 +19,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Channels;
 using Aspire.Dashboard.Model;
+using Aspire.Hosting.Azure;
 using Aspire.Hosting.Dcp;
 using Aspire.Hosting.Dcp.Model;
 using Aspire.Hosting.DevTunnels;
@@ -415,6 +418,49 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         // Assert
         var container = Assert.Single(kubernetesService.CreatedResources.OfType<Container>());
         Assert.Equal("CustomName", container.Metadata.Annotations["otel-service-name"]);
+    }
+
+    [Fact]
+    public async Task RunApplicationAsync_WithoutContainers_DoesNotProbeContainerRuntime()
+    {
+        // 'dcp info' probes the container runtime CLI, which can hang on busy Windows runners (microsoft/aspire#21771).
+        var builder = DistributedApplication.CreateBuilder();
+        builder.AddExecutable("app", "app", ".");
+
+        var kubernetesService = new TestKubernetesService();
+        var dcpDependencyCheckService = new TestDcpDependencyCheckService();
+
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, dcpDependencyCheckService: dcpDependencyCheckService);
+
+        await appExecutor.RunApplicationAsync();
+
+        Assert.Single(kubernetesService.CreatedResources.OfType<Executable>());
+        Assert.Equal(0, dcpDependencyCheckService.GetDcpInfoCallCount);
+        Assert.Equal(1, dcpDependencyCheckService.GetDcpVersionCallCount);
+    }
+
+    [Fact]
+    public async Task RunApplicationAsync_WithContainers_ProbesContainerRuntime()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        builder.AddContainer("container", "image");
+
+        var kubernetesService = new TestKubernetesService();
+        var dcpDependencyCheckService = new TestDcpDependencyCheckService();
+
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, dcpDependencyCheckService: dcpDependencyCheckService);
+
+        await appExecutor.RunApplicationAsync();
+
+        Assert.Single(kubernetesService.CreatedResources.OfType<Container>());
+        Assert.NotEqual(0, dcpDependencyCheckService.GetDcpInfoCallCount);
+        Assert.Equal(0, dcpDependencyCheckService.GetDcpVersionCallCount);
     }
 
     [Fact]
@@ -7473,11 +7519,64 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task ProjectWithNonProjectAnnotation_VSCodeExplicitlyUnsupported_RunsInProcess()
+    public async Task ProjectWithNonProjectAnnotation_VisualStudioProjectCapability_UsesProjectIdeExecution()
     {
-        // Guard: When VS Code extension sends DEBUG_SESSION_INFO with SupportedLaunchConfigurations
-        // that do NOT include the custom type, the resource should fall to Process mode. This ensures
-        // the else-if branch doesn't over-capture VS Code scenarios.
+        // Visual Studio advertises its native "project" launcher but not extension-specific types such as
+        // "azure-functions". Its capability list does not carry the Aspire extension baseline marker, so use
+        // the native project launcher and let Visual Studio own the process and load its symbols.
+        var builder = DistributedApplication.CreateBuilder();
+
+        var projectBuilder = builder.AddProject<TestProject>("proj", launchProfileName: null);
+        var annotationToRemove = projectBuilder.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().FirstOrDefault();
+        if (annotationToRemove is not null)
+        {
+            projectBuilder.Resource.Annotations.Remove(annotationToRemove);
+        }
+        projectBuilder
+            .WithArgs("app-arg")
+            .WithDebugSupport(mode => new ExecutableLaunchConfiguration("azure-functions") { Mode = mode }, "azure-functions");
+
+        var runSessionInfo = new RunSessionInfo
+        {
+            ProtocolsSupported = ["coreclr"],
+            SupportedLaunchConfigurations = ["project", "browser"]
+        };
+
+        var configDict = new Dictionary<string, string?>
+        {
+            [DcpExecutor.DebugSessionPortVar] = "12345",
+            [KnownConfigNames.DebugSessionInfo] = JsonSerializer.Serialize(runSessionInfo)
+        };
+
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(configDict).Build();
+
+        Assert.True(projectBuilder.Resource.SupportsDebugging(configuration, out var effectiveIdeLaunchAnnotation));
+        Assert.Equal(KnownLaunchConfigurationTypes.Project, effectiveIdeLaunchAnnotation.LaunchConfigurationType);
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, configuration: configuration);
+
+        await appExecutor.RunApplicationAsync();
+
+        var exe = GetCreatedExecutableForResource(kubernetesService, "proj");
+        Assert.Equal(ExecutionType.IDE, exe.Spec.ExecutionType);
+        Assert.Equal(["app-arg"], exe.Spec.Args);
+        Assert.Null(exe.Spec.FallbackExecutionTypes);
+
+        Assert.True(exe.TryGetAnnotationAsObjectList<ProjectLaunchConfiguration>(Executable.LaunchConfigurationsAnnotation, out var launchConfigs));
+        var launchConfig = Assert.Single(launchConfigs);
+        Assert.Equal(KnownLaunchConfigurationTypes.Project, launchConfig.Type);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("http://localhost:1234")]
+    public async Task ProjectWithNonProjectAnnotation_AspireExtensionExplicitlyUnsupported_RunsInProcess(string? extensionEndpoint)
+    {
+        // Aspire extension sessions can omit the RPC endpoint in leased tests and detached CLI children. The
+        // baseline capability survives in DEBUG_SESSION_INFO, so the launch-type list remains authoritative.
         var builder = DistributedApplication.CreateBuilder();
 
         var projectBuilder = builder.AddProject<TestProject>("proj", launchProfileName: null);
@@ -7491,14 +7590,116 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         var runSessionInfo = new RunSessionInfo
         {
             ProtocolsSupported = ["coreclr"],
-            SupportedLaunchConfigurations = ["project"]
+            SupportedLaunchConfigurations = [
+                KnownLaunchConfigurationTypes.Project,
+                DebugSupportExtensions.AspireExtensionBaselineCapability
+            ]
         };
 
         var configDict = new Dictionary<string, string?>
         {
             [DcpExecutor.DebugSessionPortVar] = "12345",
             [KnownConfigNames.DebugSessionInfo] = JsonSerializer.Serialize(runSessionInfo),
-            [KnownConfigNames.ExtensionEndpoint] = "http://localhost:1234"
+            [KnownConfigNames.ExtensionEndpoint] = extensionEndpoint
+        };
+
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(configDict).Build();
+
+        Assert.False(projectBuilder.Resource.SupportsDebugging(configuration, out var declaredIdeLaunchAnnotation));
+        Assert.Equal("azure-functions", Assert.IsType<SupportsDebuggingAnnotation>(declaredIdeLaunchAnnotation).LaunchConfigurationType);
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, configuration: configuration);
+
+        await appExecutor.RunApplicationAsync();
+
+        var exe = GetCreatedExecutableForResource(kubernetesService, "proj");
+        Assert.Equal(ExecutionType.Process, exe.Spec.ExecutionType);
+    }
+
+    [Fact]
+    public async Task AzureFunctionsProjectWithFixedHttpsPort_VisualStudioProjectCapability_UsesLaunchProfile()
+    {
+        var exe = await CreateAzureFunctionsProjectExecutableAsync<TestAzureFunctionsProjectWithFixedHttpsPort>(
+            7071,
+            sendDebugSessionInfo: true);
+
+        Assert.Equal(ExecutionType.IDE, exe.Spec.ExecutionType);
+        Assert.Null(exe.Spec.Args);
+
+        Assert.True(exe.TryGetAnnotationAsObjectList<ProjectLaunchConfiguration>(Executable.LaunchConfigurationsAnnotation, out var launchConfigs));
+        var launchConfig = Assert.Single(launchConfigs);
+        Assert.Equal(KnownLaunchConfigurationTypes.Project, launchConfig.Type);
+        Assert.Equal("func", launchConfig.LaunchProfile);
+    }
+
+    [Fact]
+    public async Task AzureFunctionsProjectWithFixedHttpsPortAndRetainedLaunchToolPrefix_VisualStudioProjectCapability_PreservesLaunchProfileArguments()
+    {
+        var exe = await CreateAzureFunctionsProjectExecutableAsync<TestAzureFunctionsProjectWithFixedHttpsPort>(
+            7071,
+            sendDebugSessionInfo: true,
+            static functions => functions.WithLaunchToolArgs(
+                static context => context.Args.Add("launch-tool"),
+                ownedByLaunchConfigurationType: "azure-functions"));
+
+        Assert.Equal(ExecutionType.IDE, exe.Spec.ExecutionType);
+        Assert.Equal(["launch-tool", "--port", "7071", "--useHttps"], exe.Spec.Args);
+
+        Assert.True(exe.TryGetAnnotationAsObjectList<ProjectLaunchConfiguration>(Executable.LaunchConfigurationsAnnotation, out var launchConfigs));
+        var launchConfig = Assert.Single(launchConfigs);
+        Assert.Equal(KnownLaunchConfigurationTypes.Project, launchConfig.Type);
+        Assert.Equal("func", launchConfig.LaunchProfile);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("{\"protocols_supported\":[\"2025-10-01\"]}")]
+    [InlineData("{\"protocols_supported\":[\"2025-10-01\"],\"supported_launch_configurations\":null}")]
+    [InlineData("{invalid json}")]
+    [InlineData("{\"protocols_supported\":[\"coreclr\"],\"supported_launch_configurations\":[\"project\"]}")]
+    public async Task AzureFunctionsProjectWithDynamicHttpsPort_ProjectCompatibilityLaunch_PreservesLaunchProfileArguments(string? debugSessionInfo)
+    {
+        var exe = await CreateAzureFunctionsProjectExecutableAsync<TestAzureFunctionsProjectWithDynamicHttpsPort>(
+            9876,
+            debugSessionInfo,
+            static _ => { });
+
+        Assert.Equal(ExecutionType.IDE, exe.Spec.ExecutionType);
+        Assert.Equal(["--useHttps", "--verbose", "--port", "9876"], exe.Spec.Args);
+
+        Assert.True(exe.TryGetAnnotationAsObjectList<ProjectLaunchConfiguration>(Executable.LaunchConfigurationsAnnotation, out var launchConfigs));
+        var launchConfig = Assert.Single(launchConfigs);
+        Assert.Equal(KnownLaunchConfigurationTypes.Project, launchConfig.Type);
+        Assert.Equal("func", launchConfig.LaunchProfile);
+    }
+
+    [Fact]
+    public async Task ProjectWithNonProjectAnnotation_NativeIdeWithoutProjectSupport_RunsInProcess()
+    {
+        // A native IDE must explicitly advertise "project" before Aspire can use the compatibility launcher.
+        var builder = DistributedApplication.CreateBuilder();
+
+        var projectBuilder = builder.AddProject<TestProject>("proj", launchProfileName: null);
+        var annotationToRemove = projectBuilder.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().FirstOrDefault();
+        if (annotationToRemove is not null)
+        {
+            projectBuilder.Resource.Annotations.Remove(annotationToRemove);
+        }
+        projectBuilder.WithDebugSupport(mode => new ExecutableLaunchConfiguration("azure-functions") { Mode = mode }, "azure-functions");
+
+        var runSessionInfo = new RunSessionInfo
+        {
+            ProtocolsSupported = ["coreclr"],
+            SupportedLaunchConfigurations = ["browser"]
+        };
+
+        var configDict = new Dictionary<string, string?>
+        {
+            [DcpExecutor.DebugSessionPortVar] = "12345",
+            [KnownConfigNames.DebugSessionInfo] = JsonSerializer.Serialize(runSessionInfo)
         };
 
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(configDict).Build();
@@ -7512,6 +7713,123 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
 
         var exe = GetCreatedExecutableForResource(kubernetesService, "proj");
         Assert.Equal(ExecutionType.Process, exe.Spec.ExecutionType);
+    }
+
+    [Fact]
+    public async Task ProjectWithOtherCustomAnnotation_VisualStudioProjectCapability_RunsInProcess()
+    {
+        // The native project fallback is an Azure Functions compatibility contract, not a general fallback for
+        // every custom launch configuration type.
+        var builder = DistributedApplication.CreateBuilder();
+
+        var projectBuilder = builder.AddProject<TestProject>("proj", launchProfileName: null);
+        var annotationToRemove = projectBuilder.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().FirstOrDefault();
+        if (annotationToRemove is not null)
+        {
+            projectBuilder.Resource.Annotations.Remove(annotationToRemove);
+        }
+        projectBuilder.WithDebugSupport(mode => new ExecutableLaunchConfiguration("custom-debug") { Mode = mode }, "custom-debug");
+
+        var runSessionInfo = new RunSessionInfo
+        {
+            ProtocolsSupported = ["coreclr"],
+            SupportedLaunchConfigurations = ["project", "browser"]
+        };
+
+        var configDict = new Dictionary<string, string?>
+        {
+            [DcpExecutor.DebugSessionPortVar] = "12345",
+            [KnownConfigNames.DebugSessionInfo] = JsonSerializer.Serialize(runSessionInfo)
+        };
+
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(configDict).Build();
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, configuration: configuration);
+
+        await appExecutor.RunApplicationAsync();
+
+        var exe = GetCreatedExecutableForResource(kubernetesService, "proj");
+        Assert.Equal(ExecutionType.Process, exe.Spec.ExecutionType);
+    }
+
+    private static Task<Executable> CreateAzureFunctionsProjectExecutableAsync<TProject>(int targetPort, bool sendDebugSessionInfo)
+        where TProject : IProjectMetadata, new()
+    {
+        return CreateAzureFunctionsProjectExecutableAsync<TProject>(targetPort, sendDebugSessionInfo, static _ => { });
+    }
+
+    private static Task<Executable> CreateAzureFunctionsProjectExecutableAsync<TProject>(
+        int targetPort,
+        bool sendDebugSessionInfo,
+        Action<IResourceBuilder<AzureFunctionsProjectResource>> configureResource)
+        where TProject : IProjectMetadata, new()
+    {
+        var debugSessionInfo = sendDebugSessionInfo
+            ? JsonSerializer.Serialize(new RunSessionInfo
+            {
+                ProtocolsSupported = ["coreclr"],
+                SupportedLaunchConfigurations = [KnownLaunchConfigurationTypes.Project]
+            })
+            : null;
+
+        return CreateAzureFunctionsProjectExecutableAsync<TProject>(
+            targetPort,
+            debugSessionInfo,
+            configureResource);
+    }
+
+    private static async Task<Executable> CreateAzureFunctionsProjectExecutableAsync<TProject>(
+        int targetPort,
+        string? debugSessionInfo,
+        Action<IResourceBuilder<AzureFunctionsProjectResource>> configureResource)
+        where TProject : IProjectMetadata, new()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var functions = builder.AddAzureFunctionsProject<TProject>("func")
+            .WithEndpoint("https", endpoint =>
+            {
+                endpoint.AllocatedEndpoint = new(endpoint, "localhost", targetPort);
+                endpoint.TargetPort = targetPort;
+            });
+
+        configureResource(functions);
+
+        foreach (var annotation in functions.Resource.Annotations.OfType<RequiredCommandAnnotation>().ToArray())
+        {
+            functions.Resource.Annotations.Remove(annotation);
+        }
+
+        // Compatibility project launches apply both when Visual Studio 2026 advertises "project" without
+        // "azure-functions" and when an IDE session omits a usable supported_launch_configurations list.
+        var configurationValues = new Dictionary<string, string?>
+        {
+            [DcpExecutor.DebugSessionPortVar] = "12345"
+        };
+        if (debugSessionInfo is not null)
+        {
+            configurationValues[KnownConfigNames.DebugSessionInfo] = debugSessionInfo;
+        }
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(configurationValues)
+            .Build();
+
+        Assert.True(functions.Resource.SupportsDebugging(configuration, out var effectiveIdeLaunchAnnotation));
+        Assert.Equal(KnownLaunchConfigurationTypes.Project, effectiveIdeLaunchAnnotation.LaunchConfigurationType);
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        await using var appExecutor = CreateAppExecutor(
+            distributedAppModel,
+            kubernetesService: kubernetesService,
+            configuration: configuration);
+
+        await appExecutor.RunApplicationAsync();
+
+        return GetCreatedExecutableForResource(kubernetesService, "func");
     }
 
     public static TheoryData<string, string[]> MauiProjectLaunchConfigurationsForProcessExecution => new()
@@ -8687,6 +9005,47 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         Assert.Equal("project", launchConfigs[0].Type);
     }
 
+    [Fact]
+    public async Task ProjectExecutable_NoSupportsDebuggingAnnotation_CapabilityListOmitsProject_RunsInProcessMode()
+    {
+        // An advertised capability list is authoritative even for a project that declares no launch configuration
+        // type. The VS Code extension omits "project" without the C# extension and rejects a "project" run session,
+        // so Aspire must start the resource as a process. Inspection must report the same ownership decision.
+        var builder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
+        {
+            AssemblyName = typeof(DistributedApplicationTests).Assembly.FullName
+        });
+
+        var projectBuilder = builder.AddProject<Projects.ServiceA>("ServiceA", launchProfileName: null);
+        var annotationToRemove = projectBuilder.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().Single();
+        projectBuilder.Resource.Annotations.Remove(annotationToRemove);
+
+        var configDict = new Dictionary<string, string?>
+        {
+            [DcpExecutor.DebugSessionPortVar] = "12345",
+            [KnownConfigNames.DebugSessionInfo] = JsonSerializer.Serialize(new RunSessionInfo
+            {
+                ProtocolsSupported = ["2025-10-01"],
+                SupportedLaunchConfigurations = ["go", "python"]
+            })
+        };
+
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(configDict).Build();
+
+        Assert.False(projectBuilder.Resource.SupportsDebugging(configuration, out var returnedAnnotation));
+        Assert.Null(returnedAnnotation);
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, configuration: configuration);
+
+        await appExecutor.RunApplicationAsync();
+
+        var exe = GetCreatedExecutableForResource(kubernetesService, "ServiceA");
+        Assert.Equal(ExecutionType.Process, exe.Spec.ExecutionType);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -8948,6 +9307,85 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
             arg => Assert.EndsWith("ServiceA.csproj", arg, StringComparison.Ordinal),
             arg => Assert.Equal("--configuration", arg),
             arg => Assert.Equal(GetTestAssemblyConfiguration(), arg));
+    }
+
+    [Fact]
+    public async Task ProjectExecutable_WithLaunchArgsOverride_UsesProcessArgumentsAndPreservesSupportedCustomMetadata()
+    {
+        var builder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
+        {
+            AssemblyName = typeof(DistributedApplicationTests).Assembly.FullName
+        });
+
+        var projectBuilder = builder.AddProject<Projects.ServiceA>("ServiceA", launchProfileName: null);
+        var defaultDebugSupport = projectBuilder.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().Single();
+        projectBuilder.Resource.Annotations.Remove(defaultDebugSupport);
+        projectBuilder.WithDebugSupport(
+            mode => new ExecutableLaunchConfiguration("custom") { Mode = mode },
+            "custom");
+#pragma warning disable ASPIREPROJECTS001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+        projectBuilder.Resource.Annotations.Add(new ProjectLaunchArgsOverrideAnnotation(["build", "/t:Run"]));
+#pragma warning restore ASPIREPROJECTS001
+
+        var debugSessionInfo = JsonSerializer.Serialize(new RunSessionInfo
+        {
+            ProtocolsSupported = ["coreclr"],
+            SupportedLaunchConfigurations = ["custom"]
+        });
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [DcpExecutor.DebugSessionPortVar] = "12345",
+                [KnownConfigNames.DebugSessionInfo] = debugSessionInfo,
+                [KnownConfigNames.DebugSessionRunMode] = ExecutableLaunchMode.Debug
+            })
+            .Build();
+        projectBuilder.WithArgs(context =>
+        {
+            if (!context.Resource.SupportsDebugging(configuration, out _))
+            {
+                context.Args.Add("process-arg");
+            }
+        });
+
+        Assert.False(projectBuilder.Resource.SupportsDebugging(configuration, out var declaredIdeLaunchAnnotation));
+        Assert.Equal("custom", Assert.IsType<SupportsDebuggingAnnotation>(declaredIdeLaunchAnnotation).LaunchConfigurationType);
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var appExecutor = CreateAppExecutor(
+            distributedAppModel,
+            kubernetesService: kubernetesService,
+            configuration: configuration);
+
+        await appExecutor.RunApplicationAsync();
+
+        var exe = GetCreatedExecutableForResource(kubernetesService, "ServiceA");
+        Assert.Equal(ExecutionType.Process, exe.Spec.ExecutionType);
+        var expectedArgs = new List<string>
+        {
+            "build",
+            "/t:Run",
+            projectBuilder.Resource.GetProjectMetadata().ProjectPath
+        };
+        if (GetTestAssemblyConfiguration() is { } configurationName)
+        {
+            expectedArgs.AddRange(["--configuration", configurationName]);
+        }
+        expectedArgs.Add("process-arg");
+        Assert.Equal(expectedArgs, exe.Spec.Args);
+
+        Assert.True(exe.Metadata.Annotations.TryGetValue(
+            Executable.LaunchConfigurationsAnnotation,
+            out var launchConfigurationsJson));
+        using var launchConfigurations = JsonDocument.Parse(launchConfigurationsJson);
+        Assert.Collection(
+            launchConfigurations.RootElement.EnumerateArray(),
+            projectLaunchConfiguration =>
+                Assert.Equal(KnownLaunchConfigurationTypes.Project, projectLaunchConfiguration.GetProperty("type").GetString()),
+            customLaunchConfiguration =>
+                Assert.Equal("custom", customLaunchConfiguration.GetProperty("type").GetString()));
     }
 
     [Fact]
@@ -10347,6 +10785,362 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
+    [InlineData(true, false, false, "aspire-dashboard", OtlpProtocol.Grpc)]
+    [InlineData(false, true, false, "aspire-dashboard", OtlpProtocol.HttpProtobuf)]
+    [InlineData(true, true, false, "aspire-dashboard", OtlpProtocol.Grpc)]
+    [InlineData(true, true, false, "aspire-dashboard", OtlpProtocol.HttpProtobuf)]
+    [InlineData(true, true, true, "aspire-dashboard", OtlpProtocol.Grpc)]
+    [InlineData(true, true, false, "ASPIRE-DASHBOARD", OtlpProtocol.Grpc)]
+    public async Task DashboardTunnelAutomaticallyExposesOnlyOtlpEndpoints(bool includeGrpc, bool includeHttp, bool useProject, string dashboardName, OtlpProtocol protocol)
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        IResourceBuilder<IResourceWithEndpoints> dashboard = useProject
+            ? builder.AddProject<Projects.ServiceA>(dashboardName, launchProfileName: null)
+            : builder.AddExecutable(dashboardName, "command", "");
+        AddDashboardTunnelEndpoints(dashboard, includeGrpc, includeHttp);
+        builder.AddContainer("telemetry", "image").WithOtlpExporter(protocol);
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        await using var executor = CreateAppExecutor(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            kubernetesService: kubernetesService);
+        await executor.RunApplicationAsync().DefaultTimeout();
+
+        var expectedEndpoints = new List<string>();
+        if (includeGrpc)
+        {
+            expectedEndpoints.Add(KnownEndpointNames.OtlpGrpcEndpointName);
+        }
+        if (includeHttp)
+        {
+            expectedEndpoints.Add(KnownEndpointNames.OtlpHttpEndpointName);
+        }
+
+        var tunnelServices = AssertTunnelEndpoints(kubernetesService, dashboard.Resource.Name, [.. expectedEndpoints]);
+        var exporterEndpointName = protocol == OtlpProtocol.Grpc
+            ? KnownEndpointNames.OtlpGrpcEndpointName
+            : KnownEndpointNames.OtlpHttpEndpointName;
+        var exporterService = Assert.Single(tunnelServices, service => service.EndpointName == exporterEndpointName);
+        var container = Assert.Single(kubernetesService.CreatedResources.OfType<Container>());
+        Assert.NotNull(container.Spec.Env);
+        Assert.Equal(
+            $"http://{KnownHostNames.DefaultContainerTunnelHostName}:{exporterService.AllocatedPort}",
+            Assert.Single(container.Spec.Env, variable => variable.Name == KnownOtelConfigNames.ExporterOtlpEndpoint).Value);
+        Assert.Equal(
+            protocol == OtlpProtocol.Grpc ? "grpc" : "http/protobuf",
+            Assert.Single(container.Spec.Env, variable => variable.Name == KnownOtelConfigNames.ExporterOtlpProtocol).Value);
+
+        var frontendUrl = await dashboard.GetEndpoint("http").GetValueAsync().DefaultTimeout();
+        Assert.Equal("http://localhost:18888", frontendUrl);
+    }
+
+    [Theory]
+    [InlineData("environment", false)]
+    [InlineData("environment", true)]
+    [InlineData("arguments", true)]
+    [InlineData("expression", true)]
+    [InlineData("property", true)]
+    [InlineData("reference", true)]
+    [InlineData("all-references", true)]
+    [InlineData("excluded-reference", true)]
+    [InlineData("host-url", true)]
+    public async Task DashboardTunnelPreservesExplicitReferences(string referenceKind, bool withExporter)
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        IResourceBuilder<IResourceWithEndpoints> dashboard = referenceKind == "all-references"
+            ? builder.AddProject<Projects.ServiceA>(KnownResourceNames.AspireDashboard, launchProfileName: null)
+            : builder.AddExecutable(KnownResourceNames.AspireDashboard, "command", "");
+        AddDashboardTunnelEndpoints(dashboard, includeGrpc: true, includeHttp: true);
+        var container = builder.AddContainer("consumer", "image");
+        if (withExporter)
+        {
+            container.WithOtlpExporter();
+        }
+
+        switch (referenceKind)
+        {
+            case "environment":
+                container.WithEnvironment("DASHBOARD_UI", dashboard.GetEndpoint("http"));
+                break;
+            case "arguments":
+                container.WithArgs(dashboard.GetEndpoint("http"));
+                break;
+            case "expression":
+                container.WithEnvironment("DASHBOARD_UI", ReferenceExpression.Create($"{dashboard.GetEndpoint("http")}/path"));
+                break;
+            case "property":
+                container.WithEnvironment("DASHBOARD_PORT", dashboard.GetEndpoint("http").Property(EndpointProperty.Port));
+                break;
+            case "reference":
+                container.WithReference(dashboard.GetEndpoint("http"));
+                break;
+            case "all-references":
+                container.WithReference(dashboard);
+                break;
+            case "excluded-reference":
+                container.WithReference(dashboard.GetEndpoint("diagnostics"));
+                break;
+            case "host-url":
+                container.WithEnvironment("DASHBOARD_UI", new HostUrl("http://localhost:18888/path"));
+                break;
+            default:
+                throw new InvalidOperationException($"Unexpected reference kind '{referenceKind}'.");
+        }
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        await using var executor = CreateAppExecutor(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            kubernetesService: kubernetesService);
+        await executor.RunApplicationAsync().DefaultTimeout();
+
+        var expectedEndpoints = new List<string>
+        {
+            KnownEndpointNames.OtlpGrpcEndpointName,
+            KnownEndpointNames.OtlpHttpEndpointName,
+            referenceKind == "excluded-reference" ? "diagnostics" : "http"
+        };
+        if (referenceKind == "all-references")
+        {
+            expectedEndpoints.Add("https");
+        }
+
+        var tunnelServices = AssertTunnelEndpoints(kubernetesService, dashboard.Resource.Name, [.. expectedEndpoints]);
+        var referencedEndpointName = referenceKind == "excluded-reference" ? "diagnostics" : "http";
+        var referencedService = Assert.Single(tunnelServices, service => service.EndpointName == referencedEndpointName);
+        var expectedUrl = $"http://{KnownHostNames.DefaultContainerTunnelHostName}:{referencedService.AllocatedPort}";
+        var dcpContainer = Assert.Single(kubernetesService.CreatedResources.OfType<Container>());
+        Assert.NotNull(dcpContainer.Spec.Env);
+
+        switch (referenceKind)
+        {
+            case "environment":
+                Assert.Equal(expectedUrl, Assert.Single(dcpContainer.Spec.Env, variable => variable.Name == "DASHBOARD_UI").Value);
+                break;
+            case "arguments":
+                Assert.Equal([expectedUrl], dcpContainer.Spec.Args);
+                break;
+            case "expression":
+            case "host-url":
+                Assert.Equal($"{expectedUrl}/path", Assert.Single(dcpContainer.Spec.Env, variable => variable.Name == "DASHBOARD_UI").Value);
+                break;
+            case "property":
+                Assert.Equal(referencedService.AllocatedPort.ToString(), Assert.Single(dcpContainer.Spec.Env, variable => variable.Name == "DASHBOARD_PORT").Value);
+                break;
+            case "reference":
+            case "all-references":
+            case "excluded-reference":
+                Assert.Equal(
+                    expectedUrl,
+                    Assert.Single(dcpContainer.Spec.Env, variable => variable.Name == $"services__{dashboard.Resource.Name}__{referencedEndpointName}__0").Value);
+                break;
+        }
+    }
+
+    [Fact]
+    public async Task DashboardTunnelUsesEffectiveCachedConfiguration()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var dashboard = builder.AddExecutable(KnownResourceNames.AspireDashboard, "command", "");
+        AddDashboardTunnelEndpoints(dashboard, includeGrpc: true, includeHttp: true);
+        var environmentCalls = 0;
+        var argumentCalls = 0;
+        builder.AddContainer("telemetry", "image")
+            .WithOtlpExporter()
+            .WithEnvironment(context =>
+            {
+                Interlocked.Increment(ref environmentCalls);
+                context.EnvironmentVariables["DASHBOARD_UI"] = dashboard.GetEndpoint("http");
+                context.EnvironmentVariables["DASHBOARD_STATE"] = "enabled";
+            })
+            .WithEnvironment(context => context.EnvironmentVariables.Remove("DASHBOARD_UI"))
+            .WithArgs(context =>
+            {
+                Interlocked.Increment(ref argumentCalls);
+                context.Args.Add(dashboard.GetEndpoint("https"));
+            })
+            .WithArgs(context => context.Args.Clear());
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        await using var executor = CreateAppExecutor(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            kubernetesService: kubernetesService);
+        await executor.RunApplicationAsync().DefaultTimeout();
+
+        AssertTunnelEndpoints(kubernetesService, dashboard.Resource.Name, KnownEndpointNames.OtlpGrpcEndpointName, KnownEndpointNames.OtlpHttpEndpointName);
+        Assert.Equal(1, environmentCalls);
+        Assert.Equal(1, argumentCalls);
+        var container = Assert.Single(kubernetesService.CreatedResources.OfType<Container>());
+        Assert.NotNull(container.Spec.Env);
+        Assert.Equal(
+            [("DASHBOARD_STATE", "enabled")],
+            container.Spec.Env
+                .Where(variable => variable.Name is { } name && name.StartsWith("DASHBOARD_", StringComparison.Ordinal))
+                .Select(variable => (variable.Name, variable.Value)));
+        Assert.Empty(container.Spec.Args ?? []);
+    }
+
+    [Fact]
+    public async Task DashboardTunnelPreservesExplicitLocalhostReferenceWithoutTunnelingIt()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var dashboard = builder.AddExecutable(KnownResourceNames.AspireDashboard, "command", "");
+        AddDashboardTunnelEndpoints(dashboard, includeGrpc: true, includeHttp: true);
+        builder.AddContainer("telemetry", "image")
+            .WithOtlpExporter()
+            .WithEnvironment("DASHBOARD_UI", dashboard.GetEndpoint("http", KnownNetworkIdentifiers.LocalhostNetwork));
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        await using var executor = CreateAppExecutor(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            kubernetesService: kubernetesService);
+        await executor.RunApplicationAsync().DefaultTimeout();
+
+        AssertTunnelEndpoints(kubernetesService, dashboard.Resource.Name, KnownEndpointNames.OtlpGrpcEndpointName, KnownEndpointNames.OtlpHttpEndpointName);
+        var container = Assert.Single(kubernetesService.CreatedResources.OfType<Container>());
+        Assert.NotNull(container.Spec.Env);
+        Assert.Equal("http://localhost:18888", Assert.Single(container.Spec.Env, variable => variable.Name == "DASHBOARD_UI").Value);
+    }
+
+    [Fact]
+    public async Task DashboardTunnelAccumulatesExplicitEndpointsAcrossConsumers()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var dashboard = builder.AddExecutable(KnownResourceNames.AspireDashboard, "command", "");
+        AddDashboardTunnelEndpoints(dashboard, includeGrpc: true, includeHttp: true);
+        builder.AddContainer("telemetry", "image").WithOtlpExporter();
+        var consumer = builder.AddContainer("consumer", "image")
+            .WithExplicitStart()
+            .WithEnvironment("DASHBOARD_UI", dashboard.GetEndpoint("http"));
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        await using var executor = CreateAppExecutor(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            kubernetesService: kubernetesService);
+        await executor.RunApplicationAsync().DefaultTimeout();
+
+        AssertTunnelEndpoints(kubernetesService, dashboard.Resource.Name, KnownEndpointNames.OtlpGrpcEndpointName, KnownEndpointNames.OtlpHttpEndpointName);
+
+        var reference = executor.GetResource(DcpExecutor.GetDcpInstance(consumer.Resource, instanceIndex: 0).Name);
+        await executor.StartResourceAsync(reference, CancellationToken.None).DefaultTimeout();
+
+        var tunnelServices = AssertTunnelEndpoints(
+            kubernetesService,
+            dashboard.Resource.Name,
+            KnownEndpointNames.OtlpGrpcEndpointName,
+            KnownEndpointNames.OtlpHttpEndpointName,
+            "http");
+        var uiService = Assert.Single(tunnelServices, service => service.EndpointName == "http");
+        var dcpConsumer = Assert.Single(kubernetesService.CreatedResources.OfType<Container>(), container => container.AppModelResourceName == consumer.Resource.Name);
+        Assert.NotNull(dcpConsumer.Spec.Env);
+        Assert.Equal(
+            $"http://{KnownHostNames.DefaultContainerTunnelHostName}:{uiService.AllocatedPort}",
+            Assert.Single(dcpConsumer.Spec.Env, variable => variable.Name == "DASHBOARD_UI").Value);
+    }
+
+    [Fact]
+    public async Task DashboardTunnelPreservesExplicitExecutableReference()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var dashboard = builder.AddExecutable(KnownResourceNames.AspireDashboard, "command", "");
+        AddDashboardTunnelEndpoints(dashboard, includeGrpc: true, includeHttp: true);
+        builder.AddContainer("container", "image");
+        var consumer = builder.AddExecutable("consumer", "command", "")
+            .WithEnvironment("DASHBOARD_UI", dashboard.GetEndpoint("http", KnownNetworkIdentifiers.DefaultAspireContainerNetwork));
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        await using var executor = CreateAppExecutor(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            kubernetesService: kubernetesService);
+        await executor.RunApplicationAsync().DefaultTimeout();
+
+        var tunnelService = Assert.Single(AssertTunnelEndpoints(kubernetesService, dashboard.Resource.Name, "http"));
+        var executable = Assert.Single(kubernetesService.CreatedResources.OfType<Executable>(), resource => resource.AppModelResourceName == consumer.Resource.Name);
+        Assert.NotNull(executable.Spec.Env);
+        Assert.Equal(
+            $"http://{KnownHostNames.DefaultContainerTunnelHostName}:{tunnelService.AllocatedPort}",
+            Assert.Single(executable.Spec.Env, variable => variable.Name == "DASHBOARD_UI").Value);
+    }
+
+    [Fact]
+    public async Task DashboardTunnelDoesNotCreateTunnelWhenNoEndpointsAreSelected()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var dashboard = builder.AddExecutable(KnownResourceNames.AspireDashboard, "command", "");
+        AddDashboardTunnelEndpoints(dashboard, includeGrpc: false, includeHttp: false);
+        builder.AddContainer("container", "image").WaitFor(dashboard);
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        await using var executor = CreateAppExecutor(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            kubernetesService: kubernetesService);
+        await executor.RunApplicationAsync().DefaultTimeout();
+
+        Assert.Empty(kubernetesService.CreatedResources.OfType<ContainerNetworkTunnelProxy>());
+        Assert.Equal(
+            ["diagnostics", "http", "https"],
+            kubernetesService.CreatedResources.OfType<Service>()
+                .Select(service => service.EndpointName)
+                .Order(StringComparers.EndpointAnnotationName));
+        Assert.Single(kubernetesService.CreatedResources.OfType<Container>());
+    }
+
+    [Fact]
+    public async Task DashboardTunnelPreservesLegacyMode()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var dashboard = builder.AddExecutable(KnownResourceNames.AspireDashboard, "command", "");
+        AddDashboardTunnelEndpoints(dashboard, includeGrpc: true, includeHttp: true);
+        builder.AddContainer("telemetry", "image").WithOtlpExporter();
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        await using var executor = CreateAppExecutor(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            kubernetesService: kubernetesService,
+            dcpOptions: new DcpOptions { EnableAspireContainerTunnel = false });
+        await executor.RunApplicationAsync().DefaultTimeout();
+
+        Assert.Empty(kubernetesService.CreatedResources.OfType<ContainerNetworkTunnelProxy>());
+        var containerNetworkServices = kubernetesService.CreatedResources.OfType<Service>()
+            .Where(service => service.AppModelResourceName == dashboard.Resource.Name &&
+                service.Metadata.Annotations.ContainsKey(CustomResource.ContainerNetworkAnnotation));
+        Assert.Equal(
+            new[] { "diagnostics", "http", "https", KnownEndpointNames.OtlpGrpcEndpointName, KnownEndpointNames.OtlpHttpEndpointName }.Order(StringComparers.EndpointAnnotationName),
+            containerNetworkServices.Select(service => service.EndpointName).Order(StringComparers.EndpointAnnotationName));
+        Assert.Equal(
+            "http://host.docker.internal:18888",
+            await dashboard.GetEndpoint("http", KnownNetworkIdentifiers.DefaultAspireContainerNetwork).GetValueAsync().DefaultTimeout());
+    }
+
+    [Fact]
+    public async Task ContainerTunnelPreservesAllNonDashboardHostEndpoints()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var executable = builder.AddExecutable("program", "command", "")
+            .WithEndpoint(name: "http", scheme: "http", port: 18888, targetPort: 11888, isProxied: true)
+            .WithEndpoint(name: "admin", port: 18889, targetPort: 11889, isProxied: true)
+            .WithEndpoint(name: KnownEndpointNames.OtlpGrpcEndpointName, port: 4317, targetPort: 14317, isProxied: true);
+        builder.AddContainer("consumer", "image")
+            .WithEnvironment("PROGRAM_URL", executable.GetEndpoint("http"));
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        await using var executor = CreateAppExecutor(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            kubernetesService: kubernetesService);
+        await executor.RunApplicationAsync().DefaultTimeout();
+
+        AssertTunnelEndpoints(kubernetesService, executable.Resource.Name, "http", "admin", KnownEndpointNames.OtlpGrpcEndpointName);
+    }
+
+    [Theory]
     [InlineData("localhost")]
     [InlineData("frontend.dev.localhost")]
     [InlineData("Frontend.Dev.Localhost")]
@@ -11719,11 +12513,19 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         }
         projectBuilder.WithDebugSupport(mode => new ExecutableLaunchConfiguration("azure-functions") { Mode = mode }, "azure-functions");
 
-        // Extension does NOT list "azure-functions" in SupportedLaunchConfigurations
+        // The Aspire extension does NOT list "azure-functions" in SupportedLaunchConfigurations.
+        // Its baseline capability makes the advertised launch types authoritative.
         var configDict = new Dictionary<string, string?>
         {
             [DcpExecutor.DebugSessionPortVar] = "12345",
-            [KnownConfigNames.DebugSessionInfo] = JsonSerializer.Serialize(new RunSessionInfo { ProtocolsSupported = ["coreclr"], SupportedLaunchConfigurations = ["project"] }),
+            [KnownConfigNames.DebugSessionInfo] = JsonSerializer.Serialize(new RunSessionInfo
+            {
+                ProtocolsSupported = ["coreclr"],
+                SupportedLaunchConfigurations = [
+                    KnownLaunchConfigurationTypes.Project,
+                    DebugSupportExtensions.AspireExtensionBaselineCapability
+                ]
+            }),
             [KnownConfigNames.ExtensionEndpoint] = "http://localhost:1234"
         };
 
@@ -12025,6 +12827,48 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         return new PersistentPortAllocationStore(stateStore, NullLogger<PersistentPortAllocationStore>.Instance);
     }
 
+    private static void AddDashboardTunnelEndpoints<T>(IResourceBuilder<T> dashboard, bool includeGrpc, bool includeHttp) where T : IResourceWithEndpoints
+    {
+        dashboard
+            .WithEndpoint(name: "http", scheme: "http", port: 18888, targetPort: 11888, isProxied: true)
+            .WithEndpoint(name: "https", scheme: "https", port: 18889, targetPort: 11889, isProxied: true)
+            .WithEndpoint(name: "diagnostics", scheme: "http", port: 18890, targetPort: 11890, isProxied: true)
+            .WithEndpoint("diagnostics", endpoint => endpoint.ExcludeReferenceEndpoint = true);
+        if (includeGrpc)
+        {
+            dashboard.WithEndpoint(name: KnownEndpointNames.OtlpGrpcEndpointName, scheme: "http", port: 4317, targetPort: 14317, isProxied: true);
+        }
+        if (includeHttp)
+        {
+            dashboard.WithEndpoint(name: KnownEndpointNames.OtlpHttpEndpointName, scheme: "http", port: 4318, targetPort: 14318, isProxied: true);
+        }
+    }
+
+    private static Service[] AssertTunnelEndpoints(TestKubernetesService kubernetesService, string resourceName, params string[] expectedEndpoints)
+    {
+        var services = kubernetesService.CreatedResources.OfType<Service>()
+            .Where(service => StringComparers.ResourceName.Equals(service.AppModelResourceName, resourceName) &&
+                service.Metadata.Annotations.ContainsKey(CustomResource.ContainerTunnelInstanceName))
+            .ToArray();
+        Assert.Equal(
+            expectedEndpoints.Order(StringComparers.EndpointAnnotationName),
+            services.Select(service => service.EndpointName).Order(StringComparers.EndpointAnnotationName));
+
+        var proxy = Assert.Single(kubernetesService.CreatedResources.OfType<ContainerNetworkTunnelProxy>());
+        Assert.NotNull(proxy.Spec.Tunnels);
+        Assert.Equal(
+            services.Select(service => service.Metadata.Name).Order(StringComparer.Ordinal),
+            proxy.Spec.Tunnels.Select(tunnel => tunnel.ClientServiceName).Order(StringComparer.Ordinal));
+        foreach (var service in services)
+        {
+            var tunnel = Assert.Single(proxy.Spec.Tunnels, tunnel => tunnel.ClientServiceName == service.Metadata.Name);
+            Assert.Equal(service.Metadata.Name, tunnel.Name);
+            Assert.Equal(service.Metadata.Annotations[CustomResource.PrimaryServiceNameAnnotation], tunnel.ServerServiceName);
+        }
+
+        return services;
+    }
+
     private static DcpExecutor CreateAppExecutor(
         DistributedApplicationModel distributedAppModel,
         IHostEnvironment? hostEnvironment = null,
@@ -12037,7 +12881,8 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         ILogger<ContainerCreator>? containerCreatorLogger = null,
         ILogger<DcpExecutor>? logger = null,
         DistributedApplicationOptions? distributedApplicationOptions = null,
-        ProxylessEndpointPortAllocator? proxylessEndpointPortAllocator = null)
+        ProxylessEndpointPortAllocator? proxylessEndpointPortAllocator = null,
+        IDcpDependencyCheckService? dcpDependencyCheckService = null)
     {
         if (configuration == null)
         {
@@ -12078,7 +12923,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
 
         var aspireStore = new AspireStore(Path.Join(aspireStoreDirectory, ".aspire"), fileSystemService);
         var hostEnv = hostEnvironment ?? new TestHostEnvironment();
-        var dcpDependencyCheckService = new TestDcpDependencyCheckService();
+        dcpDependencyCheckService ??= new TestDcpDependencyCheckService();
 
         var appResources = new DcpAppResourceStore();
         // These executors are never disposed, so keep their reservations out of the process-wide registry.
@@ -12319,6 +13164,33 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     {
         public string ProjectPath => "TestProject";
         public LaunchSettings LaunchSettings { get; } = new();
+    }
+
+    private sealed class TestAzureFunctionsProjectWithFixedHttpsPort : IProjectMetadata
+    {
+        public string ProjectPath => "TestAzureFunctionsProjectWithFixedHttpsPort";
+        public LaunchSettings LaunchSettings { get; } = CreateAzureFunctionsLaunchSettings("--port 7071 --useHttps");
+    }
+
+    private sealed class TestAzureFunctionsProjectWithDynamicHttpsPort : IProjectMetadata
+    {
+        public string ProjectPath => "TestAzureFunctionsProjectWithDynamicHttpsPort";
+        public LaunchSettings LaunchSettings { get; } = CreateAzureFunctionsLaunchSettings("--useHttps --verbose");
+    }
+
+    private static LaunchSettings CreateAzureFunctionsLaunchSettings(string commandLineArgs)
+    {
+        return new()
+        {
+            Profiles = new Dictionary<string, LaunchProfile>
+            {
+                ["func"] = new()
+                {
+                    CommandLineArgs = commandLineArgs,
+                    LaunchBrowser = false
+                }
+            }
+        };
     }
 
     private sealed class TestFileBasedProject(string projectPath) : IProjectMetadata
