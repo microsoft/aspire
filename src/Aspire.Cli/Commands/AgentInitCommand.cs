@@ -505,10 +505,15 @@ internal sealed class AgentInitCommand : BaseCommand
         {
             // Nothing is installed, so scope is not prompted for. The re-run still refreshes hooks for
             // clients whose Aspire setup already exists at the resolved scope.
-            await ConfigureTelemetryHooksForAspireSetupAsync(selectedClients, [], workspaceRoot, scope, cancellationToken);
+            var hooksConfigured = await ConfigureTelemetryHooksForAspireSetupAsync(selectedClients, [], workspaceRoot, scope, cancellationToken);
 
             DisplayRequestedSkillCopiesKept(selectedClients, workspaceRoot, scope, removeSkillCopiesBinding, cancellationToken);
-            InteractionService.DisplaySubtleMessage(AgentCommandStrings.InitCommand_NoConfigurationSelected);
+
+            // A refreshed hook already reported what changed, so claiming nothing changed would contradict it.
+            if (!hooksConfigured)
+            {
+                InteractionService.DisplaySubtleMessage(AgentCommandStrings.InitCommand_NoConfigurationSelected);
+            }
             return new(CliExitCodes.Success, selectedClients, []);
         }
 
@@ -757,7 +762,8 @@ internal sealed class AgentInitCommand : BaseCommand
         };
     }
 
-    private async Task ConfigureTelemetryHooksForAspireSetupAsync(
+    /// <returns><see langword="true"/> when at least one client's hook was written.</returns>
+    private async Task<bool> ConfigureTelemetryHooksForAspireSetupAsync(
         IReadOnlyList<IAgentClient> selectedClients,
         ICollection<IAgentClient> aspireConfiguredClients,
         DirectoryInfo workspaceRoot,
@@ -777,10 +783,8 @@ internal sealed class AgentInitCommand : BaseCommand
             }
         }
 
-        if (telemetryHookClients.Count > 0)
-        {
+        return telemetryHookClients.Count > 0 &&
             await ConfigureTelemetryHooksAsync(telemetryHookClients, cancellationToken);
-        }
     }
 
     private static IEnumerable<IAgentClient> GetAspireSkillsRegisteredClients(
@@ -876,7 +880,7 @@ internal sealed class AgentInitCommand : BaseCommand
             ex is InvalidOperationException or IOException or UnauthorizedAccessException;
     }
 
-    private async Task ConfigureTelemetryHooksAsync(
+    private async Task<bool> ConfigureTelemetryHooksAsync(
         IReadOnlyList<IAgentClient> clients,
         CancellationToken cancellationToken)
     {
@@ -891,7 +895,7 @@ internal sealed class AgentInitCommand : BaseCommand
             // This deliberately catches everything except cancellation, including unexpected
             // non-IO failures, so they cannot abort the whole command.
             InteractionService.DisplaySubtleMessage(ex.Message);
-            return;
+            return false;
         }
 
         var configuredNames = results
@@ -920,6 +924,8 @@ internal sealed class AgentInitCommand : BaseCommand
             // config we can't safely modify must not break `agent init`.
             InteractionService.DisplaySubtleMessage(message);
         }
+
+        return configuredNames.Count > 0;
     }
 
     /// <summary>

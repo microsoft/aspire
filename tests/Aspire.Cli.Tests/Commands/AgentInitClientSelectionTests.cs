@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Text.Json;
 using Aspire.Cli.Agents;
 using Aspire.Cli.Agents.AspireSkills;
+using Aspire.Cli.Agents.Hooks;
 using Aspire.Cli.Agents.OpenCode;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Interaction;
@@ -1520,19 +1521,28 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public async Task AgentInit_NothingSelectedWithExistingAspireSetup_RefreshesHook(bool global)
+    [InlineData(true, true)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(false, false)]
+    public async Task AgentInit_NothingSelectedWithExistingAspireSetup_RefreshesHook(bool global, bool hookConfigured)
     {
         var scope = global ? AgentConfigurationScope.Global : AgentConfigurationScope.Project;
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var homeDirectory = workspace.CreateDirectory("fake-home");
         var executionContext = TestExecutionContextHelper.CreateExecutionContext(workspace.WorkspaceRoot, homeDirectory: homeDirectory);
-        var hooks = new TestTelemetryHookConfigurator();
+        var hooks = new TestTelemetryHookConfigurator
+        {
+            ResultFactory = selected => [new TelemetryHookResult(
+                selected[0], hookConfigured ? TelemetryHookStatus.Configured : TelemetryHookStatus.MalformedConfig)]
+        };
+        var subtleMessages = new List<string>();
+        var interaction = new TestInteractionService { DisplaySubtleMessageCallback = subtleMessages.Add };
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.CliExecutionContextFactory = _ => executionContext;
             options.TelemetryHookConfiguratorFactory = _ => hooks;
+            options.InteractionServiceFactory = _ => interaction;
         });
         services.AddSingleton<IEnvironment>(new TestEnvironment());
         using var provider = services.BuildServiceProvider();
@@ -1545,6 +1555,7 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
             $"agent init --agents claude --scope {scope.ToString().ToLowerInvariant()} --skills none --mcp=false");
         Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
         Assert.Equal(["claude"], hooks.SelectedClientIds);
+        Assert.Equal(!hookConfigured, subtleMessages.Contains(AgentCommandStrings.InitCommand_NoConfigurationSelected));
     }
 
     [Theory]

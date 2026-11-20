@@ -107,11 +107,12 @@ internal sealed class ClaudeCodeAgentClient(
 
     public bool SupportsTelemetryHooks => true;
 
-    // ConfigureTelemetryHookAsync replaces only hooks nested in PostToolUse groups.
+    // ConfigureTelemetryHookAsync replaces only hooks nested in PostToolUse groups. Detection parses as strictly
+    // as that writer, so `aspire doctor` does not report a registration `aspire agent init` would skip as malformed.
     public async Task<string?> FindLegacyTelemetryHookAsync(CancellationToken cancellationToken)
     {
         var path = GetTelemetryHookConfigPath();
-        return await LegacyTelemetryHook.IsRegisteredAsync(path, "PostToolUse", nestedHooks: true, cancellationToken) ? path : null;
+        return await LegacyTelemetryHook.IsRegisteredAsync(path, "PostToolUse", nestedHooks: true, allowDuplicateProperties: false, cancellationToken) ? path : null;
     }
 
     private string GetTelemetryHookConfigPath()

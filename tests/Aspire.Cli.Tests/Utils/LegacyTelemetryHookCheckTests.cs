@@ -59,6 +59,8 @@ public class LegacyTelemetryHookCheckTests(ITestOutputHelper outputHelper)
     [InlineData("claude", """{"hooks":{"PostToolUse":[{"hooks":[{"command":"bash '/home/user/.aspire/hooks/track-telemetry.sh'"}]}]}}""")]
     [InlineData("claude", """{"hooks":{"PostToolUse":[{"hooks":[{"command":"pwsh -File 'C:\\Users\\user\\.aspire\\hooks\\track-telemetry.ps1'"}]}]}}""")]
     [InlineData("copilot", """{"hooks":{"postToolUse":[{"powershell":"pwsh -File 'C:\\Users\\user\\.aspire\\hooks\\track-telemetry.ps1'"}]}}""")]
+    // Copilot keeps the last repeated property, so the legacy script still runs.
+    [InlineData("copilot", """{"hooks":{},"hooks":{"postToolUse":[{"bash":"bash '/home/user/.aspire/hooks/track-telemetry.sh'"}]}}""")]
     public async Task CheckAsync_LegacyHookVariantsWarnUntilAgentInitRefreshesThem(string clientId, string config)
     {
         using var context = new AgentConfigurationTestContext(outputHelper);
@@ -97,6 +99,10 @@ public class LegacyTelemetryHookCheckTests(ITestOutputHelper outputHelper)
     [InlineData("""{"hooks":{"postToolUse":[{"exec":"aspire","args":["agent","telemetry","--hook"]}],"PostToolUse":[{"hooks":[{"command":"aspire","args":["agent","telemetry","--hook"]}]}]}}""")]
     [InlineData("""{"hooks":{"postToolUse":[{"bash":"bash '/custom/track-telemetry.sh'"}],"PostToolUse":[{"hooks":[{"command":"bash","args":["/custom/track-telemetry.sh"]}]}]}}""")]
     [InlineData("""{"hooks":{"postToolUse":[{"bash":"bash '/home/user/.aspire/hooks/track-telemetry.sh.backup'"}],"PostToolUse":[{"hooks":[{"command":"pwsh","args":["-File","C:\\Users\\user\\.aspire\\hooks\\track-telemetry.ps1.old"]}]}]}}""")]
+    // A later repeated property replaces the legacy registration for Copilot. The Claude hook writer rejects
+    // repeated properties, so `aspire agent init` could not replace a Claude registration in such a file.
+    [InlineData("""{"hooks":{"postToolUse":[{"bash":"bash '/home/user/.aspire/hooks/track-telemetry.sh'"}]},"hooks":{}}""")]
+    [InlineData("""{"hooks":{},"hooks":{"PostToolUse":[{"hooks":[{"command":"bash '/home/user/.aspire/hooks/track-telemetry.sh'"}]}]}}""")]
     public async Task CheckAsync_DoesNotWarnWithoutLegacyRegistrations(string config)
     {
         using var context = new AgentConfigurationTestContext(outputHelper);
@@ -107,14 +113,12 @@ public class LegacyTelemetryHookCheckTests(ITestOutputHelper outputHelper)
         Assert.Empty(await CreateCheck(context).CheckAsync(TestContext.Current.CancellationToken));
     }
 
-    [Theory]
-    [InlineData("{malformed")]
-    [InlineData("""{"hooks":{},"hooks":{}}""")]
-    public async Task CheckAsync_UnreadableCopilotConfigurationDoesNotHideClaudeWarning(string copilotConfig)
+    [Fact]
+    public async Task CheckAsync_UnreadableCopilotConfigurationDoesNotHideClaudeWarning()
     {
         using var context = new AgentConfigurationTestContext(outputHelper);
         await AgentConfigurationTestContext.WriteAsync(
-            Path.Combine(context.CopilotDirectory, "hooks", "aspire-telemetry.json"), copilotConfig);
+            Path.Combine(context.CopilotDirectory, "hooks", "aspire-telemetry.json"), "{malformed");
         await AgentConfigurationTestContext.WriteAsync(Path.Combine(context.ClaudeDirectory, "settings.json"),
             """{"hooks":{"PostToolUse":[{"hooks":[{"command":"bash","args":["/home/user/.aspire/hooks/track-telemetry.sh"]}]}]}}""");
 

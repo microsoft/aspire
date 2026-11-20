@@ -137,11 +137,12 @@ internal sealed class CopilotAgentClient(
     public bool SupportsTelemetryHooks => true;
 
     // Aspire 13.5 and 13.6 wrote each postToolUse entry as a hook, and ConfigureTelemetryHookAsync
-    // replaces the whole file.
+    // replaces the whole file without parsing it, so a repeated property name never blocks the refresh.
+    // Copilot CLI's hook loader uses the last occurrence of a repeated property, so detection does the same.
     public async Task<string?> FindLegacyTelemetryHookAsync(CancellationToken cancellationToken)
     {
         var path = GetTelemetryHookConfigPath();
-        return await LegacyTelemetryHook.IsRegisteredAsync(path, "postToolUse", nestedHooks: false, cancellationToken) ? path : null;
+        return await LegacyTelemetryHook.IsRegisteredAsync(path, "postToolUse", nestedHooks: false, allowDuplicateProperties: true, cancellationToken) ? path : null;
     }
 
     private string GetTelemetryHookConfigPath()
