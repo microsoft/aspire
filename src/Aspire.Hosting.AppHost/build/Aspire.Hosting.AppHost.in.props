@@ -1,0 +1,9 @@
+<Project>
+  <Import Project="Aspire.Hosting.AppHost.Common.props" />
+
+  <PropertyGroup>
+    <_AspireAppHostPackageVersion Condition="'$(_AspireAppHostPackageVersion)' == ''">@VERSION@</_AspireAppHostPackageVersion>
+    <!-- Make the version available to properties evaluated in the AppHost project body. -->
+    <AspireHostingSDKVersion Condition="'$(IsAspireHost)' == 'true' and '$(AspireHostingSDKVersion)' == '' and '$(_UsingAspireAppHostSdk)' != 'true'">$(_AspireAppHostPackageVersion)</AspireHostingSDKVersion>
+  </PropertyGroup>
+</Project>

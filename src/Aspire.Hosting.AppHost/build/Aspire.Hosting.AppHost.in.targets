@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <_AspireAppHostPackageVersion Condition="'$(_AspireAppHostPackageVersion)' == ''">@VERSION@</_AspireAppHostPackageVersion>
-    <!-- The .NET SDK workload check requires a version >= 9 for package-only AppHosts.
+    <!-- Preserve the default for projects that import only these targets or opt in after package props.
          Do not hide a missing SDK version when the obsolete SDK marker is present. -->
     <AspireHostingSDKVersion Condition="'$(IsAspireHost)' == 'true' and '$(AspireHostingSDKVersion)' == '' and '$(_UsingAspireAppHostSdk)' != 'true'">$(_AspireAppHostPackageVersion)</AspireHostingSDKVersion>
   </PropertyGroup>
