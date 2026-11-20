@@ -220,11 +220,12 @@ public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
         var launchOverride = resource.Annotations.OfType<ProjectLaunchArgsOverrideAnnotation>().FirstOrDefault();
         Assert.NotNull(launchOverride);
         var expectedLaunchArgs = config.PlatformIdentifier == "android"
-            ? new List<string> { "build", "--no-restore", "/t:Run" }
+            ? new List<string> { "run", "--no-restore", "--no-launch-profile", "--project" }
             : new List<string> { "build", "--no-restore", "/t:Run", "-p:BuildDependsOn=", "-p:NoBuild=true" };
 
         Assert.Equal(expectedLaunchArgs, launchOverride.Arguments);
         Assert.Equal("run", launchOverride.LeadingResourceArgumentToRemove);
+        Assert.Equal(config.PlatformIdentifier == "android", resource.Annotations.OfType<MauiAndroidLaunchSignalAnnotation>().Any());
     }
 
     [Theory]
