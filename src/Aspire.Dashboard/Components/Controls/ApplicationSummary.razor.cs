@@ -54,6 +54,8 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
     private Dictionary<ResourceKey, int>? _unviewedErrorCounts;
     private HomeTelemetry? _telemetry;
     private int _telemetryRefreshPending;
+    // Completed when the summary has nothing to show, so a refresh waiting in its delay loads immediately.
+    private TaskCompletionSource _skipTelemetryRefreshDelay = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private bool _isLoaded;
     private IReadOnlyList<string>? _scopedResourceNames;
     private DotNetObjectReference<ApplicationSummaryInterop>? _resourcesInteropReference;
@@ -124,6 +126,8 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
     [CascadingParameter]
     public ResourcesLayout? ResourceLayout { get; set; }
 
+    internal Func<TimeSpan, CancellationToken, Task> TelemetryRefreshDelayAsync { get; set; } = Task.Delay;
+
     private ITelemetryRepository TelemetryRepository => DataSource.TelemetryRepository;
     private IReadOnlyList<IconToggleOption<GroupOverview>> OverviewOptions =>
         new IconToggleOption<GroupOverview>[]
@@ -163,7 +167,6 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
         _logsSubscription = TelemetryRepository.OnNewLogs(null, SubscriptionType.Other, OnTelemetryChanged);
         _tracesSubscription = TelemetryRepository.OnNewTraces(null, SubscriptionType.Other, OnTelemetryChanged);
         _metricsSubscription = TelemetryRepository.OnNewMetrics(null, SubscriptionType.Other, OnTelemetryChanged);
-        QueueTelemetryRefresh();
         _activityRefreshTask = RefreshActivityPeriodicallyAsync(_cts.Token);
 
         var (snapshot, subscription) = await DataSource.ResourceRepository.SubscribeResourcesAsync(_cts.Token);
@@ -200,6 +203,12 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        // The first load starts once the page has rendered its loading state, so its result is always a later render.
+        if (firstRender && DashboardClient.IsEnabled)
+        {
+            QueueTelemetryRefresh();
+        }
+
         if (_isDisposing || ViewPreferences.GroupOverview != GroupOverview.Graph || _graphInitialized || _graphInitializing)
         {
             return;
@@ -264,6 +273,13 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
 
     private void QueueTelemetryRefresh()
     {
+        // The delay only coalesces updates to telemetry that's already shown. When nothing is shown (the first load
+        // or a new selection), end a delay that's in progress so the summary doesn't wait on it.
+        if (Volatile.Read(ref _telemetry) is null)
+        {
+            Volatile.Read(ref _skipTelemetryRefreshDelay).TrySetResult();
+        }
+
         // Single-flight: the gate (1) is held through delay, load and publish. Notifications that
         // arrive while a refresh is running set the dirty flag (2) so exactly one trailing refresh runs.
         if (Interlocked.CompareExchange(ref _telemetryRefreshPending, 1, 0) != 0)
@@ -278,13 +294,33 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
             {
                 do
                 {
-                    await Task.Delay(s_telemetryRefreshDelay, _cts.Token).ConfigureAwait(false);
+                    // Reset a skip signal from an earlier load before deciding whether to wait.
+                    var skipDelay = Volatile.Read(ref _skipTelemetryRefreshDelay);
+                    if (skipDelay.Task.IsCompleted)
+                    {
+                        Interlocked.CompareExchange(ref _skipTelemetryRefreshDelay, new(TaskCreationOptions.RunContinuationsAsynchronously), skipDelay);
+                        skipDelay = Volatile.Read(ref _skipTelemetryRefreshDelay);
+                    }
+
+                    if (Volatile.Read(ref _telemetry) is not null)
+                    {
+                        await Task.WhenAny(TelemetryRefreshDelayAsync(s_telemetryRefreshDelay, _cts.Token), skipDelay.Task).ConfigureAwait(false);
+                        _cts.Token.ThrowIfCancellationRequested();
+                    }
                     Interlocked.Exchange(ref _telemetryRefreshPending, 1);
 
+                    var scope = _scopedResourceNames;
                     var telemetry = await LoadTelemetryAsync(_cts.Token).ConfigureAwait(false);
                     var unviewedErrorCounts = TelemetryRepository.GetResourceUnviewedErrorLogsCount();
                     await InvokeAsync(() =>
                     {
+                        // A selection change while loading queued another refresh. Keep showing the loading state
+                        // instead of the previous selection's telemetry so that refresh doesn't wait on a delay.
+                        if (!ReferenceEquals(scope, _scopedResourceNames))
+                        {
+                            return;
+                        }
+
                         _telemetry = telemetry;
                         _unviewedErrorCounts = unviewedErrorCounts;
                         StateHasChanged();

@@ -137,6 +137,22 @@ public class ApplicationSummaryTests : DashboardTestContext
     }
 
     [Fact]
+    public async Task Render_SelectionChanges_LoadsTelemetryWithoutWaitingForRefreshDelay()
+    {
+        var cut = RenderSummary();
+        cut.WaitForAssertion(() => Assert.Equal("0", GetLogCount(cut)));
+
+        // The delay only coalesces updates to telemetry that's already shown, so a delay that never ends must not
+        // hold back the load for a new selection.
+        var neverEnds = new TaskCompletionSource();
+        cut.Instance.TelemetryRefreshDelayAsync = (_, _) => neverEnds.Task;
+
+        await cut.InvokeAsync(() => cut.Render(builder => builder.Add(p => p.ResourceNames, ["api"])));
+
+        cut.WaitForAssertion(() => Assert.Equal("0", GetLogCount(cut)));
+    }
+
+    [Fact]
     public async Task Render_ActivityAndInsights_UseLocalizedText()
     {
         var loc = new TestStringLocalizer<ResourceStrings>();
@@ -336,7 +352,7 @@ public class ApplicationSummaryTests : DashboardTestContext
     [InlineData(false, false)]
     [InlineData(true, true)]
     [InlineData(false, true)]
-    public void Render_LayoutToggleChangesViewsWithMissingParameters(bool isDesktop, bool missingParameters)
+    public async Task Render_LayoutToggleChangesViewsWithMissingParameters(bool isDesktop, bool missingParameters)
     {
         var viewport = new ViewportInformation(IsDesktop: isDesktop, IsUltraLowHeight: false, IsUltraLowWidth: !isDesktop);
         JSInterop.SetupModule("/js/app-resourcegraph.js").Mode = JSRuntimeMode.Loose;
@@ -356,12 +372,13 @@ public class ApplicationSummaryTests : DashboardTestContext
             Assert.Contains("parameter", outlet.Find(".missing-parameters-link").GetAttribute("href"));
         }
 
-        outlet.Find("[aria-label='Graph']").Click();
+        // Telemetry loads re-render the summary in the background, so find and click in one dispatcher turn.
+        await outlet.InvokeAsync(() => outlet.Find("[aria-label='Graph']").Click());
         cut.WaitForAssertion(() => Assert.False(cut.Find(".home-resource-graph-layout").HasAttribute("hidden")));
         Assert.Equal(GroupOverview.Graph, preferences.GroupOverview);
         Assert.Equal("true", outlet.Find("[aria-label='Graph']").GetAttribute("aria-pressed"));
 
-        outlet.Find("[aria-label='Summary']").Click();
+        await outlet.InvokeAsync(() => outlet.Find("[aria-label='Summary']").Click());
         cut.WaitForAssertion(() => Assert.Single(cut.FindAll(".home-hero")));
         Assert.Equal(GroupOverview.Summary, preferences.GroupOverview);
         Assert.Equal("true", outlet.Find("[aria-label='Summary']").GetAttribute("aria-pressed"));
@@ -597,6 +614,9 @@ public class ApplicationSummaryTests : DashboardTestContext
 
         return Render<ApplicationSummary>(builder => builder.AddCascadingValue(viewport));
     }
+
+    private static string GetLogCount(IRenderedComponent<ApplicationSummary> cut) =>
+        cut.Find(".home-activity-totals a strong").TextContent;
 
     private sealed class QueryCounter
     {

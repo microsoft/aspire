@@ -275,8 +275,16 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
     private void QueueTelemetryRefresh()
     {
         var refresh = _telemetryRefresh;
-        if (_telemetryKey is null || Interlocked.Exchange(ref refresh.Pending, 1) == 1)
+        if (_telemetryKey is null)
         {
+            return;
+        }
+
+        // Single-flight per resource: the gate (1) is held through delay, load and publish. Notifications that
+        // arrive while a refresh is loading set the dirty flag (2) so exactly one trailing refresh runs.
+        if (Interlocked.CompareExchange(ref refresh.Pending, 1, 0) != 0)
+        {
+            Interlocked.CompareExchange(ref refresh.Pending, 2, 1);
             return;
         }
 
@@ -285,25 +293,35 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
         {
             try
             {
-                await TelemetryRefreshDelayAsync(s_telemetryRefreshDelay, cancellationToken).ConfigureAwait(false);
-                Interlocked.Exchange(ref refresh.Pending, 0);
-
-                if (_telemetryKey is not { } key)
+                do
                 {
-                    return;
-                }
-
-                var telemetry = await LoadTelemetryAsync(key, cancellationToken).ConfigureAwait(false);
-                await InvokeAsync(() =>
-                {
-                    // Ignore results for a resource that is no longer selected.
-                    if (Equals(_telemetryKey, key))
+                    // The delay only coalesces updates to telemetry that's already shown. The first load for a
+                    // resource runs immediately so its cards don't wait on the delay.
+                    if (Volatile.Read(ref _telemetryLoaded))
                     {
-                        _telemetry = telemetry;
-                        _telemetryLoaded = true;
-                        StateHasChanged();
+                        await TelemetryRefreshDelayAsync(s_telemetryRefreshDelay, cancellationToken).ConfigureAwait(false);
                     }
-                }).ConfigureAwait(false);
+                    Interlocked.Exchange(ref refresh.Pending, 1);
+
+                    if (_telemetryKey is not { } key)
+                    {
+                        Interlocked.Exchange(ref refresh.Pending, 0);
+                        return;
+                    }
+
+                    var telemetry = await LoadTelemetryAsync(key, cancellationToken).ConfigureAwait(false);
+                    await InvokeAsync(() =>
+                    {
+                        // Ignore results for a resource that is no longer selected.
+                        if (Equals(_telemetryKey, key))
+                        {
+                            _telemetry = telemetry;
+                            _telemetryLoaded = true;
+                            StateHasChanged();
+                        }
+                    }).ConfigureAwait(false);
+                }
+                while (Interlocked.CompareExchange(ref refresh.Pending, 0, 1) == 2);
             }
             catch (OperationCanceledException)
             {

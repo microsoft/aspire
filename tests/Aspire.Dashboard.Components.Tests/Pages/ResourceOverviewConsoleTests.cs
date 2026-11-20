@@ -130,6 +130,27 @@ public class ResourceOverviewConsoleTests : DashboardTestContext
     }
 
     [Fact]
+    public async Task Selection_LoadsTelemetryWithoutWaitingForRefreshDelay()
+    {
+        var (cut, navigation) = await RenderOverviewWithTelemetryAsync();
+        cut.WaitForAssertion(() => AssertTelemetryLoaded(cut), DefaultWaitTimeout);
+
+        // The delay only coalesces updates to telemetry that's already shown, so a delay that never ends must not
+        // hold back the first load for another resource.
+        var neverEnds = new TaskCompletionSource();
+        cut.FindComponent<ResourceOverview>().Instance.TelemetryRefreshDelayAsync = (_, _) => neverEnds.Task;
+
+        navigation.NavigateTo("/resources/cache-TestId");
+        cut.Render();
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal("cache-TestId", cut.Find(".resource-overview").GetAttribute("data-resource-subscription"));
+            AssertTelemetryLoaded(cut);
+        }, DefaultWaitTimeout);
+    }
+
+    [Fact]
     public async Task ConsoleFilterChange_DoesNotLoseWaitingTelemetryRefresh()
     {
         var (cut, _) = await RenderOverviewWithTelemetryAsync();
