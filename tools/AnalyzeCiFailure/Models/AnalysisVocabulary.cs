@@ -36,6 +36,7 @@ internal enum AnalysisVerdict
     [JsonStringEnumMemberName("code-issue")] CodeIssue,
     [JsonStringEnumMemberName("main-repository-breakage")] MainRepositoryBreakage,
     [JsonStringEnumMemberName("mixed")] Mixed,
+    [JsonStringEnumMemberName("unresolved")] Unresolved,
 }
 
 /// <summary>Defines the classifications permitted for failed or interrupted workflow jobs.</summary>
@@ -45,6 +46,7 @@ internal enum JobClassification
     [JsonStringEnumMemberName("flaky-test")] FlakyTest,
     [JsonStringEnumMemberName("code-issue")] CodeIssue,
     [JsonStringEnumMemberName("main-repository-breakage")] MainRepositoryBreakage,
+    [JsonStringEnumMemberName("unresolved")] Unresolved,
 }
 
 /// <summary>Defines the classifications permitted for individual structured test observations.</summary>
@@ -53,6 +55,7 @@ internal enum TestClassification
     [JsonStringEnumMemberName("flaky")] Flaky = 1,
     [JsonStringEnumMemberName("code-issue")] CodeIssue,
     [JsonStringEnumMemberName("transient-infra")] TransientInfrastructure,
+    [JsonStringEnumMemberName("unresolved")] Unresolved,
 }
 
 /// <summary>Defines the durable recurring-cause categories supported by history and issue publication.</summary>
@@ -61,4 +64,5 @@ internal enum CauseType
     [JsonStringEnumMemberName("infra-failure")] InfrastructureFailure = 1,
     [JsonStringEnumMemberName("flaky-test")] FlakyTest,
     [JsonStringEnumMemberName("main-repository-breakage")] MainRepositoryBreakage,
+    [JsonStringEnumMemberName("unresolved")] Unresolved,
 }

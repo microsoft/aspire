@@ -27,6 +27,7 @@ public sealed partial class AnalyzeCiFailureWorkflowTests
     [InlineData("9007199254740993", "unavailable", false)]
     [InlineData("9007199254740993", "infrastructure-tests", false)]
     [InlineData("9007199254740993", "code-issue", false)]
+    [InlineData("9007199254740993", "unresolved", false)]
     [InlineData("9007199254740993", "closed", false)]
     [InlineData("9007199254740993", "locked", false)]
     [InlineData("9007199254740993", "unknown-pr", false)]
@@ -82,6 +83,15 @@ public sealed partial class AnalyzeCiFailureWorkflowTests
         if (scenario == "code-issue")
         {
             proposal = proposal with { Jobs = [proposal.Jobs[0] with { Classification = JobClassification.CodeIssue }], Causes = [] };
+        }
+        if (scenario == "unresolved")
+        {
+            var cause = (NewCauseProposal)proposal.Causes[0];
+            proposal = proposal with
+            {
+                Jobs = [proposal.Jobs[0] with { Classification = JobClassification.Unresolved, Reason = "Test host exit 3; mechanism unknown" }],
+                Causes = [cause with { Definition = cause.Definition with { Id = "host-exit-unresolved", Type = CauseType.Unresolved } }],
+            };
         }
         var data = Directory.CreateDirectory(EvidenceDirectory).FullName;
         var analysis = Directory.CreateDirectory(Path.Combine(_workspace.Path, "proposal")).FullName;

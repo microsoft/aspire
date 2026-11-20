@@ -23,7 +23,7 @@ public sealed class AnalyzeCiFailureVerdictMatrixTests
             {
                 foreach (var second in Enum.GetValues<JobClassification>().Select(value => (JobClassification?)value).Prepend(element: null))
                 {
-                    foreach (var testClass in new[] { (TestClassification?)null, TestClassification.Flaky, TestClassification.CodeIssue })
+                    foreach (var testClass in new[] { (TestClassification?)null, TestClassification.Flaky, TestClassification.CodeIssue, TestClassification.Unresolved })
                     {
                         foreach (var overlap in new[] { false, true })
                         {
@@ -49,6 +49,7 @@ public sealed class AnalyzeCiFailureVerdictMatrixTests
                                     {
                                         JobClassification.TransientInfrastructure => CauseType.InfrastructureFailure,
                                         JobClassification.FlakyTest => CauseType.FlakyTest,
+                                        JobClassification.Unresolved => CauseType.Unresolved,
                                         _ => CauseType.MainRepositoryBreakage,
                                     },
                                     [jobs[item.index].Id],
@@ -123,6 +124,7 @@ public sealed class AnalyzeCiFailureVerdictMatrixTests
         Assert.Contains(results.Values, values => values.SequenceEqual(["flaky-test"]));
         Assert.Contains(results.Values, values => values.SequenceEqual(["code-issue"]));
         Assert.Contains(results.Values, values => values.SequenceEqual(["main-repository-breakage"]));
+        Assert.Contains(results.Values, values => values.SequenceEqual(["unresolved"]));
         await Verifier.Verify(JsonSerializer.Serialize(results, new JsonSerializerOptions { WriteIndented = true }), "json")
             .UseDirectory("Snapshots");
     }

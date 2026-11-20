@@ -12,9 +12,12 @@ internal static class PrCommentRenderer
     {
         if (ValidationRules.UsesAggregatePublication(analysis.Causes.Length))
         {
+            var records = analysis.Verdict == AnalysisVerdict.Unresolved
+                ? " failure records, including unresolved symptoms. They are tracked together in one aggregate issue. The CI will not be automatically rerun."
+                : " independent causes. They are tracked together in one aggregate issue.";
             return "<!-- analyze-ci-failure -->\n[automated] CI analysis identified " +
                 analysis.Causes.Length.ToString(System.Globalization.CultureInfo.InvariantCulture) +
-                $" independent causes. They are tracked together in one aggregate issue.\n\n[Source CI run]({runUrl})\n";
+                $"{records}\n\n[Source CI run]({runUrl})\n";
         }
         var jobs = collectedJobs.Select(job => job with { Name = DiagnosticTextSanitizer.Sanitize(job.Name!, limit: 500) }).ToArray();
         var classified = analysis.Jobs.ToDictionary(job => job.Id?.GetRawText() ?? "null");
@@ -26,7 +29,7 @@ internal static class PrCommentRenderer
             var classification = proposal.Classification is { } value ? EnumText(value) : "";
             return $"- {MarkdownFormatting.CodeSpan(job.Name!)} — {MarkdownFormatting.CodeSpan(DiagnosticTextSanitizer.Sanitize(proposal.Reason ?? "", limit: 500))} ({classification})";
         }));
-        var tests = analysis.Tests.Where(test => test.Classification == TestClassification.Flaky).Select(test =>
+        var tests = analysis.Tests.Where(test => test.Classification == TestClassification.Flaky || analysis.Verdict == AnalysisVerdict.Unresolved).Select(test =>
         {
             var job = jobs.FirstOrDefault(j => j.Name == DiagnosticTextSanitizer.Sanitize(test.Job ?? "", limit: 500));
             var text = $"- {MarkdownFormatting.CodeSpan(DiagnosticTextSanitizer.Sanitize(test.Name ?? "", limit: 500))}" +
@@ -46,12 +49,21 @@ internal static class PrCommentRenderer
                 }
             }
 
-            return text + "  - **Why likely flaky**: " + MarkdownFormatting.CodeSpan(DiagnosticTextSanitizer.Sanitize(test.Reason ?? "", limit: 500));
+            var assessment = analysis.Verdict == AnalysisVerdict.Unresolved
+                ? $"Assessment ({EnumText(test.Classification!.Value)})" : "Why likely flaky";
+            return text + $"  - **{assessment}**: " + MarkdownFormatting.CodeSpan(DiagnosticTextSanitizer.Sanitize(test.Reason ?? "", limit: 500));
         });
         var testList = string.Join('\n', tests);
-        var testSection = testList.Length == 0 ? "" : "\n\n**Suspected flaky test(s):**\n" + testList;
+        var testSection = testList.Length == 0 ? "" : analysis.Verdict == AnalysisVerdict.Unresolved
+            ? "\n\n**Observed failed test(s) (not causal attribution):**\n" + testList
+            : "\n\n**Suspected flaky test(s):**\n" + testList;
         var body = analysis.Verdict switch
         {
+            AnalysisVerdict.Unresolved => MarkdownTemplate.Render(
+                "CommentUnresolved",
+                ("FAILED_JOBS", jobList),
+                ("TEST_SECTION", testSection),
+                ("RUN_URL", runUrl)),
             AnalysisVerdict.TransientInfrastructure => MarkdownTemplate.Render(
                 "CommentTransientInfrastructure",
                 ("FAILED_JOBS", jobList),

@@ -396,6 +396,30 @@ failures, optionally with infrastructure jobs, have `flaky-test`. PR
 deterministic-only failures have `code-issue`, main deterministic-only failures
 have `main-repository-breakage`, and deterministic plus transient evidence is
 `mixed`, including mixed observations within one deterministic-classified job.
+`unresolved` job and test classifications retain failures whose mechanism is
+not established. An unexplained test-host exit or no observed failed tests is
+not positive evidence of infrastructure, flakiness or deterministic breakage.
+Concrete runner-loss annotations and feed HTTP 429 diagnostics remain positive
+infrastructure evidence. Focused logs retain aborted-session and missing
+in-flight-results warnings so an incomplete session is not mistaken for a
+clean run with zero failures.
+
+An unresolved job requires a job-level `unresolved` cause with empty test refs;
+unresolved test observations require a covering unresolved job and cause.
+Any unresolved observation derives verdict `unresolved`, even alongside other
+diagnosed failures. Run history and cause issues retain symptoms and diagnostic
+patterns without causal PR/test attribution, and unresolved verdicts never
+authorize reruns. Actual captured failed-test observations remain in run history,
+the unresolved occurrence's managed observed-tests section, and PR reports;
+an observed failure is not an assertion that the test caused a host crash.
+Aggregate reports retain each unresolved observation as well.
+Existing cause types and definitions are immutable; this
+additive vocabulary does not relabel old issues or rewrite historical records.
+
+Validation enforces vocabulary, coverage, category compatibility and rerun
+eligibility. It cannot prove a natural-language infrastructure diagnosis:
+the agent must identify positive evidence rather than treating absence of a
+deterministic failure as evidence of infrastructure.
 Unavailable structured evidence cannot authorize publication or reruns.
 
 ## Preparation outcomes and failure handling
@@ -484,6 +508,19 @@ writes. Main breaks use cause issues, not comments on a triggering merge PR.
 PR-directed effects check fresh open/unlocked state. Rendering retains the
 65,000-byte comment budget, issue-body budgets, Markdown inertness, Unicode
 handling and secret redaction.
+Main-breakage issue titles still derive from trusted failed commit context.
+Their bodies retain the sanitized diagnostic summary and error pattern rather
+than replacing them with generic failure text; these are quoted observations,
+not independent proof of a causal merge or test. Main unresolved issues also
+show trusted successful/failed commit context without the main-breakage label.
+Like other recurring symptom records, their initial title/build context stays
+anchored to the first publication; later occurrences link their own run and
+retain current commit context in run history.
+
+The `rerun_failed_jobs` tool description and workflow instructions both make
+requests conditional on `ENABLE_RERUN=true`, a pure infrastructure verdict and
+zero structured failed tests. Disabled mode must not request the tool; the
+deterministic dry-run guard still prevents effects if an agent calls it anyway.
 
 Structured fixture failures caused by runner infrastructure remain in the exact
 test inventory with classification `transient-infra`; they are not omitted or

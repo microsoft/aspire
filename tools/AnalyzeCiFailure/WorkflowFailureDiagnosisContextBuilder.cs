@@ -24,7 +24,7 @@ internal static partial class WorkflowFailureDiagnosisContextBuilder
             summary.Append("\nCaptured upstream run metadata (diagnostic-only):\n\n");
             AppendJson(summary, runMetadata);
         }
-        var focused = prior.Where(cause => IsMatch(cause) || cause.Type is CauseType.InfrastructureFailure or CauseType.MainRepositoryBreakage)
+        var focused = prior.Where(cause => IsMatch(cause) || cause.Type is CauseType.InfrastructureFailure or CauseType.MainRepositoryBreakage or CauseType.Unresolved)
             .OrderByDescending(IsMatch).Take(12).ToArray();
         summary.Append(MarkdownTemplate.Render(
             "PriorCauseContext",

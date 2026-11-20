@@ -481,6 +481,8 @@ public sealed partial class AnalyzeCiFailureWorkflowTests
         {
             Assert.Contains("Failed main SHA: `failed-sha`", updated, StringComparison.Ordinal);
             Assert.Contains("Last successful main SHA: `last-successful-sha`", updated, StringComparison.Ordinal);
+            Assert.Contains(cause["title"]!.GetValue<string>(), updated, StringComparison.Ordinal);
+            Assert.Contains(cause["error_pattern"]!.GetValue<string>(), updated, StringComparison.Ordinal);
         }
         if (shape == "custom-history")
         {

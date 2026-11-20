@@ -3,6 +3,7 @@
 
 using AnalyzeCiFailure;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using VerifyXunit;
 using Xunit;
 
@@ -16,6 +17,7 @@ public sealed class AnalyzeCiFailureTemplateTests
     [InlineData("FlakyTest")]
     [InlineData("CodeIssue")]
     [InlineData("Mixed")]
+    [InlineData("Unresolved")]
     public async Task VerdictCommentsRetainTheirPublishedLayout(string verdict)
     {
         var id = JsonSerializer.SerializeToElement(value: 123);
@@ -23,6 +25,7 @@ public sealed class AnalyzeCiFailureTemplateTests
         {
             "TransientInfrastructure" => JobClassification.TransientInfrastructure,
             "CodeIssue" => JobClassification.CodeIssue,
+            "Unresolved" => JobClassification.Unresolved,
             _ => JobClassification.FlakyTest,
         };
         var report = new AnalysisReport
@@ -36,6 +39,26 @@ public sealed class AnalyzeCiFailureTemplateTests
             "https://github.com/microsoft/aspire/actions/runs/123");
 
         await Verifier.Verify(body, "md").UseDirectory("Snapshots").UseParameters(verdict);
+    }
+
+    [Fact]
+    public async Task MainIssueRetainsSanitizedDiagnosisAndErrorWithoutReplacingTrustedCommitTitle()
+    {
+        var cause = new JsonObject
+        {
+            ["id"] = "host-crash", ["type"] = "main-repository-breakage",
+            ["title"] = "Test host crashed during resource startup @reviewers [details](https://example.invalid)",
+            ["error_pattern"] = "Test host exited with exit code 3\nConnectionString=Server=private;Password=secret",
+        };
+        var draft = CauseIssueRenderer.RenderCanonicalIssue(
+            cause,
+            new RunContext { HeadSha = JsonSerializer.SerializeToElement("trusted-failure") },
+            new PublicationEvidence(null, new WorkflowRun { HeadSha = JsonSerializer.SerializeToElement("trusted-success") },
+                null, CandidateHistoryState.Unavailable, null),
+            "https://github.com/microsoft/aspire/actions/runs/123", "main", "0", "Tests",
+            "| 2026-11-04 | [123](https://github.com/microsoft/aspire/actions/runs/123) | ` Tests ` | main |");
+
+        await Verifier.Verify(CiFailureJson.Serialize(draft), "json").UseDirectory("Snapshots");
     }
 
     [Fact]
