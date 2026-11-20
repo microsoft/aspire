@@ -35,6 +35,7 @@ import type { BlazorWasmDebuggerStatus } from './blazorWasmDebuggerSetup';
 import { getPsFollowProcessLogPath, type PsFollowProcessEvent } from './psFollowProcessLog';
 import { proveDotnetResourceLaunch } from './dotnetResourceLaunchProof';
 import { attachWhenResourceResponds, runAttachedResourceDetachSequence } from './attachedResourceDetachSequence';
+import { ResumeInterruptedInspectionRequests, type ResumeInterruptionClassification } from './resumeInterruptedInspectionRequests';
 
 let atomicWriteSequence = 0;
 
@@ -1365,6 +1366,8 @@ async function proveAttachedResourceDebugging(
   const terminatedSessionIds = new Set<string>();
   const attachRequests: DebugAdapterMessageSummary[] = [];
   const debugAdapterResponses: DebugAdapterMessageSummary[] = [];
+  const resumeInterruptedInspectionResponses: Array<DebugAdapterMessageSummary & { classification: ResumeInterruptionClassification }> = [];
+  const resumeInterruptedInspectionRequests = new ResumeInterruptedInspectionRequests();
   const breakpointResponses: DebugAdapterMessageSummary[] = [];
   const stoppedEvents: DebugAdapterStoppedEvent[] = [];
   const pendingBreakpointRequests = new Map<string, { sourcePath?: string; lines: number[]; afterRemoval: boolean }>();
@@ -1382,6 +1385,7 @@ async function proveAttachedResourceDebugging(
     createDebugAdapterTracker(session) {
       return {
         onWillReceiveMessage(message) {
+          resumeInterruptedInspectionRequests.onRequest(session.id, message);
           if (message?.type === 'request' && message.command === 'attach') {
             attachRequests.push({
               sessionId: session.id,
@@ -1403,15 +1407,23 @@ async function proveAttachedResourceDebugging(
           }
         },
         onDidSendMessage(message) {
+          resumeInterruptedInspectionRequests.onEvent(session.id, message);
+          const resumeInterruption = resumeInterruptedInspectionRequests.onResponse(session.id, message);
           if (message?.type === 'response' && message.success === false) {
-            debugAdapterResponses.push({
+            const failedResponse: DebugAdapterMessageSummary = {
               sessionId: session.id,
               sessionType: session.type,
               sessionName: session.name,
               command: message.command,
               success: false,
               body: redactDebugAdapterArguments(message),
-            });
+            };
+            if (resumeInterruption) {
+              resumeInterruptedInspectionResponses.push({ ...failedResponse, classification: resumeInterruption });
+            }
+            else {
+              debugAdapterResponses.push(failedResponse);
+            }
           }
           if (message?.type === 'response' && message.command === 'setBreakpoints') {
             const breakpointResponse = {
@@ -1589,6 +1601,7 @@ async function proveAttachedResourceDebugging(
         extensionLogOutputChannel.info(`Resource debug E2E ${expectedDebugType} adapter acknowledged breakpoint removal.`);
       },
       continueExecution: async () => {
+        resumeInterruptedInspectionRequests.expectProofResume(attachedSessionForDetach.id);
         await attachedSessionForDetach.customRequest('continue', { threadId: breakpointHit.stoppedEvent.threadId });
       },
       waitForResourceResponse: async phase => {
@@ -1635,6 +1648,7 @@ async function proveAttachedResourceDebugging(
       attachRequests,
       breakpointResponses,
       debugAdapterResponses,
+      resumeInterruptedInspectionResponses,
       resourceResponseAfterDetach: responseBody,
       sessionTerminated: true,
     };
@@ -1645,6 +1659,7 @@ async function proveAttachedResourceDebugging(
       attachRequests,
       breakpointResponses,
       debugAdapterResponses,
+      resumeInterruptedInspectionResponses,
       stoppedEvents,
       terminatedSessionIds: [...terminatedSessionIds],
       toolPayload,
