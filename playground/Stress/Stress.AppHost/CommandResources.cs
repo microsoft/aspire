@@ -7,8 +7,6 @@ using System.Text.Json;
 using Aspire.Hosting.Dotnet;
 using Microsoft.Extensions.DependencyInjection;
 
-#pragma warning disable ASPIREPROCESSCOMMAND001 // Process command APIs are experimental.
-
 internal static class CommandResources
 {
     // AppHost project references identify orchestrated projects without exposing their runtime assemblies.
@@ -32,7 +30,6 @@ internal static class CommandResources
         AddServiceCommands(builder, serviceBuilder);
         AddTelemetryCommands(builder, telemetryBuilder);
     }
-
     private static void AddServiceCommands(IDistributedApplicationBuilder builder, IResourceBuilder<DotnetProjectResource> serviceBuilder)
     {
         var iconCommands = builder.AddCommandGroup("icon-commands", serviceBuilder.Resource);
@@ -1535,5 +1532,3 @@ internal static class CommandResources
         public int MetricDimensionCount { get; init; }
     }
 }
-
-#pragma warning restore ASPIREPROCESSCOMMAND001
