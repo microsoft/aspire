@@ -555,6 +555,15 @@ internal sealed class LinuxTrayPanel : IDisposable
                     return 1;
                 }
                 LinuxPanelNative.gdk_event_get_button(nativeEvent, out var button);
+                if (button == 3)
+                {
+                    // The secondary button opens the row's action list on press, as GTK context menus do.
+                    if (LinuxPanelNative.gdk_event_get_event_type(nativeEvent) == 4)
+                    {
+                        Apply(_panel.SecondaryClick(x, y));
+                    }
+                    return 1;
+                }
                 if (button != 1)
                 {
                     return 0;

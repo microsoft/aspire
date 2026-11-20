@@ -154,6 +154,45 @@ internal sealed partial class MacTrayApplication
     internal void PressPanelForSmoke(PanelTargetKind kind, AppHostId? host = null)
         => OnPanelElementPressed(PanelAccessibleKey.For(FindPanelTargetForSmoke(kind, host).Key));
 
+    /// <summary>
+    /// Sends a real right-click, then a Control-click, to a row through the panel window, so AppKit's
+    /// own routing (rightMouseDown:, and mouseDown: with the Control modifier) is exercised. Each must
+    /// open the row's action list without activating the row; Escape closes it again.
+    /// </summary>
+    internal void VerifySecondaryClickForSmoke(AppHostId host)
+    {
+        const nuint LeftMouseDown = 1, LeftMouseUp = 2, RightMouseDown = 3, RightMouseUp = 4;
+        var panel = _panel!;
+        var row = FindPanelTargetForSmoke(PanelTargetKind.Row, host);
+        // Panel points are in the flipped view; events carry window coordinates.
+        var location = AppKit.ConvertPoint(_panelView, AppKit.Selector("convertPoint:toView:"),
+            new(row.HitBounds.X + 10, row.HitBounds.CenterY), 0);
+        var windowNumber = AppKit.Get(_panelWindow, "windowNumber");
+        foreach (var (down, up, modifiers, name) in new[]
+        {
+            (RightMouseDown, RightMouseUp, (nuint)0, "A right-click"),
+            (LeftMouseDown, LeftMouseUp, (nuint)ControlKeyMask, "A Control-click")
+        })
+        {
+            foreach (var type in new[] { down, up })
+            {
+                var mouseEvent = AppKit.CreateMouseEvent(AppKit.Class("NSEvent"),
+                    AppKit.Selector("mouseEventWithType:location:modifierFlags:timestamp:windowNumber:context:eventNumber:clickCount:pressure:"),
+                    type, location, modifiers, 0, windowNumber, 0, 0, 1, type == down ? 1 : 0);
+                AppKit.Set(_panelWindow, "sendEvent:", mouseEvent);
+            }
+            if (!_panelVisible || panel.ActionsRow != (row.Key.Section, host))
+            {
+                throw new InvalidOperationException($"{name} on a row must open its action list and keep the panel open.");
+            }
+            ApplyPanelResponse(panel.Key(PanelKey.Escape));
+            if (panel.ActionsRow is not null)
+            {
+                throw new InvalidOperationException("Escape must close an action list opened by a right-click.");
+            }
+        }
+    }
+
     /// <summary>Opens a row's action list and picks one of its items.</summary>
     internal void PickRowActionForSmoke(AppHostId host, PanelTargetKind kind, int item = 0)
     {
