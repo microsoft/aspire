@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREPROJECTS001
+#pragma warning disable ASPIREAZURE003
 
 using Aspire.Hosting.ApplicationModel;
 using Azure.Provisioning;
@@ -98,6 +99,42 @@ internal sealed class ContainerAppContext(IResource resource, ContainerAppEnviro
             {
                 a.Configure(infra, containerAppResource);
             }
+        }
+
+        AddDeployedEndpointUrlOutputs(infra, containerAppResource);
+    }
+
+    // Emits the address Azure actually assigns to requested endpoints so other modules can depend on
+    // the deployed app instead of predicting its host name. The ingress FQDN reflects customized app
+    // names and internal ingress ("<app>.internal.<domain>").
+    private void AddDeployedEndpointUrlOutputs(AzureResourceInfrastructure infra, ContainerApp containerApp)
+    {
+        if (!Resource.TryGetAnnotationsOfType<AzureDeployedEndpointUrlAnnotation>(out var requests))
+        {
+            return;
+        }
+
+        foreach (var endpointName in requests.Where(r => r.Url?.Resource == infra.AspireResource).Select(r => r.EndpointName).Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            if (!_endpointMapping.TryGetValue(endpointName, out var mapping))
+            {
+                throw new InvalidOperationException($"Resource '{Resource.Name}' does not have an endpoint named '{endpointName}'.");
+            }
+
+            if (!mapping.IsHttpIngress)
+            {
+                throw new NotSupportedException($"The deployed URL of endpoint '{endpointName}' on resource '{Resource.Name}' is only available for HTTP ingress endpoints.");
+            }
+
+            var isDefaultPort = (mapping.Scheme, mapping.Port) is ("https", 443) or ("http", 80);
+            var url = isDefaultPort
+                ? BicepFunction.Interpolate($"{mapping.Scheme}://{containerApp.Configuration.Ingress.Fqdn}")
+                : BicepFunction.Interpolate($"{mapping.Scheme}://{containerApp.Configuration.Ingress.Fqdn}:{mapping.Port}");
+
+            infra.Add(new ProvisioningOutput(AzureDeployedEndpointUrlAnnotation.GetOutputName(endpointName), typeof(string))
+            {
+                Value = url
+            });
         }
     }
 

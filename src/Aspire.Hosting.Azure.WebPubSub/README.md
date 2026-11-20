@@ -77,6 +77,34 @@ var wps = builder.AddAzureWebPubSub("wps1")
                  .RunAsEmulator(emulator => emulator.WithEndpoint("emulator", endpoint => endpoint.Port = 8080));
 ```
 
+## Deploy event handlers
+
+For callbacks to an app, keep the endpoint reference structured and append the handler path:
+
+```csharp
+var wps = builder.AddAzureWebPubSub("wps1");
+var chat = wps.AddHub("chat");
+var web = builder.AddDotnetProject("web", "../Web/Web.csproj")
+                 .WithExternalHttpEndpoints()
+                 .WithReference(chat);
+
+chat.AddEventHandler($"{web.GetEndpoint("http")}/callbacks/{{hub}}/{{event}}",
+                     systemEvents: ["connected"]);
+```
+
+When publishing to Azure Container Apps or App Service, Aspire provisions the Web PubSub service first, then the app, and finally the hub with its handlers. The callback uses the app's deployed URL; appended paths, query strings, and Web PubSub placeholders are preserved. The app can receive the service endpoint and hub name before the hub is created.
+
+If Azure Front Door fronts the referenced endpoint, the callback uses its URL instead. To choose a particular Front Door origin or a different public path explicitly, use its output:
+
+```csharp
+chat.AddEventHandler($"{frontDoor.Resource.GetEndpointUrl(web.Resource.Name)}/public/callbacks/{{event}}",
+                     systemEvents: ["connected"]);
+```
+
+Explicit output references also defer hub provisioning until the referenced infrastructure is deployed. Aspire does not infer path rewrites. A Kubernetes service name is not a public callback address; Kubernetes deployments need an explicitly reachable ingress URL.
+
+Hubs provisioned separately are not part of the parent service's `ConfigureInfrastructure` callback.
+
 ## Connection Properties
 
 When you reference an Azure Web PubSub resource using `WithReference`, the following connection properties are made available to the consuming project:

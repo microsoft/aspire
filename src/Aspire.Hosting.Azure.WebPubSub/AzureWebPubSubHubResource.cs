@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using Aspire.Hosting.Azure;
 using Azure.Provisioning.WebPubSub;
 
 namespace Aspire.Hosting.ApplicationModel;
@@ -44,6 +45,9 @@ public class AzureWebPubSubHubResource(string name, AzureWebPubSubResource webpu
     /// Gets the connection string template for the manifest for Azure Web PubSub.
     /// </summary>
     public ReferenceExpression ConnectionStringExpression => ReferenceExpression.Create($"{Parent.ServiceConnectionStringExpression};Hub={HubName}");
+
+    // The module that provisions this hub after the apps its event handlers call are deployed.
+    internal AzureProvisioningResource? EventHandlersResource { get; set; }
 
     internal List<(ReferenceExpression url, string userEvents, string[]? systemEvents, UpstreamAuthSettings? auth)> EventHandlers { get; } = new();
 

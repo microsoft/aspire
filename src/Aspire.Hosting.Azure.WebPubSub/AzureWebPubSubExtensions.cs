@@ -3,10 +3,13 @@
 
 #pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
+using System.Globalization;
+using System.Text;
 using System.Text.Json.Nodes;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
 using Aspire.Hosting.Azure.WebPubSub;
+using Aspire.Hosting.Pipelines;
 using Azure.Provisioning;
 using Azure.Provisioning.Expressions;
 using Azure.Provisioning.WebPubSub;
@@ -42,6 +45,8 @@ public static class AzureWebPubSubExtensions
         ArgumentException.ThrowIfNullOrEmpty(name);
 
         builder.AddAzureProvisioning();
+
+        var isPublishMode = builder.ExecutionContext.IsPublishMode;
 
         var configureInfrastructure = (AzureResourceInfrastructure infrastructure) =>
         {
@@ -103,51 +108,13 @@ public static class AzureWebPubSubExtensions
             infrastructure.Add(new ProvisioningOutput("id", typeof(string)) { Value = service.Id.ToBicepExpression() });
 
             var resource = (AzureWebPubSubResource)infrastructure.AspireResource;
-            foreach (var setting in resource.Hubs)
+            foreach (var hubResource in resource.Hubs.Values)
             {
-                var hubName = setting.Key;
-
-                var hubBuilder = setting.Value;
-                var hubResource = hubBuilder;
-                var hub = new WebPubSubHub(Infrastructure.NormalizeBicepIdentifier(hubResource.Name))
+                // Hubs whose event handlers call back into deployed apps are provisioned by their own module.
+                if (hubResource.EventHandlersResource is null)
                 {
-                    Name = setting.Key,
-                    Parent = service,
-                    Properties = new WebPubSubHubProperties()
-                };
-
-                var hubProperties = hub.Properties;
-
-                // invoke the configure from AddEventHandler
-                for (var i = 0; i < hubResource.EventHandlers.Count; i++)
-                {
-                    var (url, userEvents, systemEvents, auth) = hubResource.EventHandlers[i];
-                    var urlExpression = url;
-
-                    BicepValue<string> urlParameter;
-                    // A conditional expression has no manifest expressions but is not a literal.
-                    if (!urlExpression.IsConditional && urlExpression.ManifestExpressions.Count == 0)
-                    {
-                        // when urlExpression is literal string, simply add. Format escapes braces for string.Format
-                        // ({{event}}); ValueExpression is the URL template as written ({event}).
-                        urlParameter = urlExpression.ValueExpression;
-                    }
-                    else
-                    {
-                        // otherwise add parameter to the construct
-                        var parameter = new ProvisioningParameter($"{hubName}_url_{i}", typeof(string));
-                        infrastructure.Add(parameter);
-                        resource.Parameters[parameter.BicepIdentifier] = urlExpression;
-                        urlParameter = parameter;
-                    }
-
-                    var eventHandler = GetWebPubSubEventHandler(urlParameter, userEvents, systemEvents, auth);
-
-                    hubProperties.EventHandlers.Add(eventHandler);
+                    AddHubToInfrastructure(infrastructure, service, hubResource, isPublishMode);
                 }
-
-                // add to construct
-                infrastructure.Add(hub);
             }
         };
 
@@ -349,6 +316,12 @@ public static class AzureWebPubSubExtensions
         ArgumentException.ThrowIfNullOrEmpty(userEventPattern);
 
         builder.Resource.EventHandlers.Add((urlExpression, userEventPattern, systemEvents, authSettings));
+
+        if (builder.ApplicationBuilder.ExecutionContext.IsPublishMode)
+        {
+            EnsureEventHandlersResource(builder, urlExpression);
+        }
+
         return builder;
     }
 
@@ -369,6 +342,288 @@ public static class AzureWebPubSubExtensions
         string[]? systemEvents = null)
     {
         return AddEventHandler(builder, urlExpression, userEventPattern, systemEvents, authSettings: null);
+    }
+
+    private static void AddHubToInfrastructure(AzureResourceInfrastructure infrastructure, WebPubSubService service, AzureWebPubSubHubResource hubResource, bool isPublishMode)
+    {
+        var hubName = hubResource.HubName;
+        var hub = new WebPubSubHub(Infrastructure.NormalizeBicepIdentifier(hubResource.Name))
+        {
+            Name = hubName,
+            Parent = service,
+            Properties = new WebPubSubHubProperties()
+        };
+
+        for (var i = 0; i < hubResource.EventHandlers.Count; i++)
+        {
+            var (urlExpression, userEvents, systemEvents, auth) = hubResource.EventHandlers[i];
+
+            BicepValue<string> urlParameter;
+            // A conditional expression has no manifest expressions but is not a literal.
+            if (!urlExpression.IsConditional && urlExpression.ManifestExpressions.Count == 0)
+            {
+                // when urlExpression is literal string, simply add. Format escapes braces for string.Format
+                // ({{event}}); ValueExpression is the URL template as written ({event}).
+                urlParameter = urlExpression.ValueExpression;
+            }
+            else
+            {
+                var parameter = new ProvisioningParameter($"{hubName}_url_{i}", typeof(string));
+                infrastructure.Add(parameter);
+                infrastructure.AspireResource.Parameters[parameter.BicepIdentifier] = isPublishMode
+                    ? ResolveDeployedEndpoints(urlExpression)
+                    : urlExpression;
+                urlParameter = parameter;
+            }
+
+            hub.Properties.EventHandlers.Add(GetWebPubSubEventHandler(urlParameter, userEvents, systemEvents, auth));
+        }
+
+        infrastructure.Add(hub);
+    }
+
+    // In publish mode the Web PubSub service is provisioned before compute so apps can receive its
+    // endpoint, but a hub whose event handlers call an app needs that app's deployed address. Such a
+    // hub is provisioned by a separate module that references the existing service and the app's
+    // deployment outputs, so it is deployed after both:
+    //
+    //   webpubsub (service) -> app (receives service endpoint + hub name) -> hub module (handler URLs)
+    //
+    // Apps only depend on the service, never on the hub module, so this does not create a cycle.
+    private static void EnsureEventHandlersResource(IResourceBuilder<AzureWebPubSubHubResource> builder, ReferenceExpression urlExpression)
+    {
+        var endpoints = new List<EndpointReference>();
+        if (!CollectEndpointReferences(urlExpression, endpoints))
+        {
+            return;
+        }
+
+        foreach (var endpoint in endpoints)
+        {
+            // Requested now because each module's Bicep is generated once and cached; a request made
+            // while generating the hub module could arrive after the app module was generated.
+            var alreadyRequested = endpoint.Resource.Annotations.OfType<AzureDeployedEndpointUrlAnnotation>()
+                .Any(a => string.Equals(a.EndpointName, endpoint.EndpointName, StringComparison.OrdinalIgnoreCase));
+            if (!alreadyRequested)
+            {
+                endpoint.Resource.Annotations.Add(new AzureDeployedEndpointUrlAnnotation(endpoint.EndpointName));
+            }
+        }
+
+        var hubResource = builder.Resource;
+        if (hubResource.EventHandlersResource is not null)
+        {
+            return;
+        }
+
+        // Hubs are not resources in the app model, so hubs with the same name on different Web PubSub
+        // services (or an unrelated resource) could otherwise claim the same module name.
+        var baseName = $"{hubResource.Parent.Name}-{hubResource.Name}-handlers";
+        var moduleName = baseName;
+        for (var suffix = 2; builder.ApplicationBuilder.Resources.Any(r => string.Equals(r.Name, moduleName, StringComparison.OrdinalIgnoreCase)); suffix++)
+        {
+            moduleName = $"{baseName}-{suffix.ToString(CultureInfo.InvariantCulture)}";
+        }
+
+        var eventHandlersResource = new AzureProvisioningResource(moduleName, infrastructure =>
+        {
+            // Hubs are child resources, so they must be declared in the service's scope. Generate the
+            // service's template first because customization callbacks and existing-resource
+            // annotations finalize its Scope there, then deploy this module to the same scope.
+            var parent = hubResource.Parent;
+            _ = parent.GetBicepTemplateString();
+            if (parent.Scope is { } parentScope)
+            {
+                infrastructure.AspireResource.Scope = parentScope;
+            }
+            else if (parent.TryGetLastAnnotation<ExistingAzureResourceAnnotation>(out var existing) && existing.ResourceGroup is { } resourceGroup)
+            {
+                infrastructure.AspireResource.Scope = existing.Subscription is { } subscription
+                    ? new AzureBicepResourceScope(resourceGroup, subscription)
+                    : new AzureBicepResourceScope(resourceGroup);
+            }
+
+            var service = (WebPubSubService)hubResource.Parent.AddAsExistingResource(infrastructure);
+            AddHubToInfrastructure(infrastructure, service, hubResource, isPublishMode: true);
+        });
+
+        // Provisioning dependencies are normally discovered from the module's Bicep parameters, but
+        // that template is generated and cached before deployment targets are prepared, when handler
+        // URLs still resolve through the compute environment. Depend explicitly on each referenced
+        // app's deployment target (and any ingress resource that supplies its URL) so the module waits
+        // for, and fails with, the app's provisioning step instead of an implicit wait inside it.
+        eventHandlersResource.Annotations.Add(new PipelineConfigurationAnnotation(context =>
+        {
+            var provisionSteps = context.GetSteps(eventHandlersResource, WellKnownPipelineTags.ProvisionInfrastructure);
+            var handlerEndpoints = new List<EndpointReference>();
+            foreach (var handler in hubResource.EventHandlers)
+            {
+                CollectEndpointReferences(handler.url, handlerEndpoints);
+            }
+
+            foreach (var endpoint in handlerEndpoints)
+            {
+                if (endpoint.Resource.GetDeploymentTargetAnnotation()?.DeploymentTarget is { } deploymentTarget)
+                {
+                    provisionSteps.DependsOn(context.GetSteps(deploymentTarget, WellKnownPipelineTags.ProvisionInfrastructure));
+                }
+
+                foreach (var annotation in endpoint.Resource.Annotations.OfType<AzureDeployedEndpointUrlAnnotation>())
+                {
+                    if (annotation.Url is { } url && string.Equals(annotation.EndpointName, endpoint.EndpointName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        provisionSteps.DependsOn(context.GetSteps(url.Resource, WellKnownPipelineTags.ProvisionInfrastructure));
+                    }
+                }
+            }
+        }));
+
+        hubResource.EventHandlersResource = eventHandlersResource;
+        builder.ApplicationBuilder.AddResource(eventHandlersResource);
+    }
+
+    private static bool CollectEndpointReferences(ReferenceExpression expression, List<EndpointReference> endpoints)
+    {
+        if (expression.IsConditional)
+        {
+            var whenTrue = CollectEndpointReferences(expression.WhenTrue!, endpoints);
+            var whenFalse = CollectEndpointReferences(expression.WhenFalse!, endpoints);
+            return whenTrue || whenFalse;
+        }
+
+        var requiresDeployment = false;
+        foreach (var valueProvider in expression.ValueProviders)
+        {
+            switch (valueProvider)
+            {
+                case EndpointReference endpoint:
+                    endpoints.Add(endpoint);
+                    requiresDeployment = true;
+                    break;
+                case EndpointReferenceExpression endpointExpression:
+                    endpoints.Add(endpointExpression.Endpoint);
+                    requiresDeployment = true;
+                    break;
+                case BicepOutputReference:
+                    requiresDeployment = true;
+                    break;
+                case ReferenceExpression nested:
+                    requiresDeployment |= CollectEndpointReferences(nested, endpoints);
+                    break;
+            }
+        }
+
+        return requiresDeployment;
+    }
+
+    // In publish mode an endpoint reference to a compute resource is only resolved by its
+    // compute environment's publisher, so evaluating it here would wait for a local endpoint
+    // allocation that never happens and deployment would hang. Substitute the URL output by the
+    // endpoint's annotation when it provides one, otherwise the address the compute
+    // environment predicts for the deployed resource (the same expression API Management uses for
+    // compute backends).
+    private static ReferenceExpression ResolveDeployedEndpoints(ReferenceExpression expression)
+    {
+        if (expression.IsConditional)
+        {
+            return ReferenceExpression.CreateConditional(
+                expression.Condition!,
+                expression.MatchValue!,
+                ResolveDeployedEndpoints(expression.WhenTrue!),
+                ResolveDeployedEndpoints(expression.WhenFalse!));
+        }
+
+        var changed = false;
+        var valueProviders = new object[expression.ValueProviders.Count];
+        for (var i = 0; i < valueProviders.Length; i++)
+        {
+            var original = expression.ValueProviders[i];
+            var resolved = ResolveDeployedEndpoint(original);
+            changed |= !ReferenceEquals(original, resolved);
+            valueProviders[i] = resolved;
+        }
+
+        if (!changed)
+        {
+            return expression;
+        }
+
+        // Format is a composite format string with indexed placeholders and doubled literal braces:
+        //   "{0}/api/{{event}}"  =>  value provider 0, then the literal "/api/{event}"
+        // Placeholders never carry alignment or format specifiers; those live in StringFormats.
+        var builder = new ReferenceExpressionBuilder();
+        var format = expression.Format;
+        var literal = new StringBuilder();
+        for (var i = 0; i < format.Length; i++)
+        {
+            var c = format[i];
+            if ((c is '{' or '}') && i + 1 < format.Length && format[i + 1] == c)
+            {
+                literal.Append(c);
+                i++;
+            }
+            else if (c == '{')
+            {
+                var end = format.IndexOf('}', i);
+                var index = int.Parse(format.AsSpan(i + 1, end - i - 1), CultureInfo.InvariantCulture);
+                if (literal.Length > 0)
+                {
+                    builder.AppendLiteral(literal.ToString());
+                    literal.Clear();
+                }
+                builder.AppendValueProvider(valueProviders[index], expression.StringFormats[index]);
+                i = end;
+            }
+            else
+            {
+                literal.Append(c);
+            }
+        }
+
+        if (literal.Length > 0)
+        {
+            builder.AppendLiteral(literal.ToString());
+        }
+
+        return builder.Build();
+    }
+
+    private static object ResolveDeployedEndpoint(IValueProvider valueProvider)
+    {
+        var endpointProperty = valueProvider switch
+        {
+            EndpointReference endpoint => endpoint.Property(EndpointProperty.Url),
+            EndpointReferenceExpression endpointExpression => endpointExpression,
+            _ => null
+        };
+
+        if (endpointProperty is not null)
+        {
+            if (endpointProperty.Property == EndpointProperty.Url)
+            {
+                var endpoint = endpointProperty.Endpoint;
+                var annotation = endpoint.Resource.Annotations.OfType<AzureDeployedEndpointUrlAnnotation>()
+                    .SingleOrDefault(a => string.Equals(a.EndpointName, endpoint.EndpointName, StringComparison.OrdinalIgnoreCase));
+                if (annotation?.Url is { } url)
+                {
+                    return url;
+                }
+            }
+
+            // Resources without a compute environment keep their original reference.
+            if (!ComputeEnvironmentEndpointResolver.TryGetEffectiveComputeEnvironment(endpointProperty.Endpoint.Resource, out var computeEnvironment))
+            {
+                return valueProvider;
+            }
+
+#pragma warning disable ASPIRECOMPUTE002 // Experimental: compute environment endpoint expression
+            return computeEnvironment.GetEndpointPropertyExpression(endpointProperty);
+#pragma warning restore ASPIRECOMPUTE002
+        }
+
+        return valueProvider is ReferenceExpression nested
+            ? ResolveDeployedEndpoints(nested)
+            : valueProvider;
     }
 
     private static WebPubSubEventHandler GetWebPubSubEventHandler(BicepValue<string> urlValue, string userEventPattern, string[]? systemEvents, UpstreamAuthSettings? authSettings)
