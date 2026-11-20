@@ -73,6 +73,13 @@ internal sealed class DcpEndpointAllocator(
             : endpoint.TargetPort;
     }
 
+    public int? AllocateExecutableTargetPort(IResource resource, EndpointAnnotation endpoint)
+    {
+        return resource.HasPersistentLifetime() && endpoint.IsProxied && EndpointAnnotation.NormalizePort(endpoint.TargetPort) is null
+            ? portAllocator.GetOrAllocatePersistentPort(PersistentPortAllocator.GetTargetPortKey(resource, endpoint), endpoint.Protocol)
+            : AllocateExecutableTargetPort(endpoint);
+    }
+
     internal static bool TryAllocateLocalhostEndpoint(
         EndpointAnnotation endpoint,
         string serviceName,

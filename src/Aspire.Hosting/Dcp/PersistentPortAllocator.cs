@@ -145,6 +145,11 @@ internal sealed class PersistentPortAllocator
                         resource.HasPersistentLifetime() && !endpoint.IsProxied,
                         GetLegacyPort(publicPortKey));
                 }
+                if (_options.UseV2 && resource is IComputeResource && !resource.IsContainer() &&
+                    resource.HasPersistentLifetime() && endpoint.IsProxied && EndpointAnnotation.NormalizePort(endpoint.TargetPort) is null)
+                {
+                    activePortKeys[GetTargetPortKey(resource, endpoint)] = new(endpoint.Protocol, AllowInUse: true, LegacyPort: null);
+                }
             }
         }
 
@@ -180,6 +185,10 @@ internal sealed class PersistentPortAllocator
 
         _initialized = true;
     }
+
+    internal static PersistentPortAllocationKey GetTargetPortKey(IResource resource, EndpointAnnotation endpoint) =>
+        // '$' is not a valid endpoint-name character, so serving-port keys cannot collide with public endpoints.
+        new(resource.Name, $"$target:{endpoint.Name}");
 
     private bool TryReservePort(int port, ActivePort activePort, bool allowInUse)
     {
