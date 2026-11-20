@@ -9,7 +9,7 @@ The Aspire release process uses these main automation components:
 1. **Azure DevOps pipeline** ([`release-publish-nuget`](https://dev.azure.com/dnceng/internal/_build?definitionId=1600&_a=summary), source: `eng/pipelines/release-publish-nuget.yml`)
    - Downloads signed artifacts from a selected official source build.
    - Re-publishes NuGet, npm, and WinGet release inputs so 1ES can generate release SBOMs.
-   - Publishes NuGet packages to NuGet.org.
+   - Submits NuGet packages to NuGet.org through ESRP/MicroBuild and waits for release completion.
    - Publishes Aspire CLI npm packages through ESRP/MicroBuild.
    - Promotes the build to the GA channel via darc.
    - Submits WinGet manifest PRs.
@@ -67,10 +67,10 @@ Aspire ships through several channels. The release pipeline either submits the b
 
 | Channel | Who submits the version bump | Per-channel docs |
 |---------|------------------------------|------------------|
-| **NuGet** (libraries, AppHost SDK, `Aspire.Cli` tool packages) | `release-publish-nuget` pushes to NuGet.org | This document |
+| **NuGet** (libraries, AppHost SDK, `Aspire.Cli` tool packages) | `release-publish-nuget` submits to ESRP/MicroBuild for NuGet.org publication | This document |
 | **WinGet** (`winget install Microsoft.Aspire`) | `release-publish-nuget` submits manifest PRs to `microsoft/winget-pkgs` via `wingetcreate` | [`eng/winget/README.md`](../eng/winget/README.md) |
 | **Homebrew cask** (`brew install --cask aspire`) | Upstream Homebrew/homebrew-cask's [autobump workflow](https://github.com/Homebrew/homebrew-cask/blob/master/.github/workflows/autobump.yml) opens the bump PR on a 3-hour schedule, detecting the new version via the cask's `livecheck` block. `homebrew-validate-release.yml` validates the cask against the live GitHub release after the release manager publishes it. | [`eng/homebrew/README.md`](../eng/homebrew/README.md) |
-| **`dotnet tool install -g Aspire.Cli`** | `release-publish-nuget` pushes the per-RID `Aspire.Cli.*.nupkg` packages to NuGet.org alongside the libraries | [`docs/specs/install-routes.md`](specs/install-routes.md) |
+| **`dotnet tool install -g Aspire.Cli`** | `release-publish-nuget` submits the per-RID `Aspire.Cli.*.nupkg` packages to ESRP alongside the libraries | [`docs/specs/install-routes.md`](specs/install-routes.md) |
 | **Install script** (`get-aspire-cli.sh` / `.ps1`) | No separate publication — the script downloads directly from the GitHub release assets attached in Step 1 | [`docs/specs/install-routes.md`](specs/install-routes.md), `eng/scripts/get-aspire-cli.*` |
 | **Nix flake** (`nix run github:microsoft/aspire#aspire-cli`) | `release-publish-nuget` dispatches `.github/workflows/update-nix-cli-flake.yml`, passing the CLI `.sha512` checksums from the source build; the workflow adds the manifest update to the baseline version branch and creates or updates the PR | [`eng/nix/README.md`](../eng/nix/README.md), [`docs/ci/native-cli-packaging.md`](ci/native-cli-packaging.md) |
 
@@ -93,10 +93,10 @@ Before starting a release:
    - Do not leave the branch on a published version. A PR build such as `X.Y.Z-pr.*` has lower SemVer precedence than stable `X.Y.Z`, which can make release-branch CI and CLI update scenarios incorrectly treat the published release as an available update.
 3. **Permissions and approvals**:
    - Access to run Azure DevOps pipelines with the publishing pool.
-   - Permission to use the NuGet.org service connection.
+   - Confirmed ESRP NuGet onboarding for the `aspire` NuGet organization and authorization for the shared MicroBuild publisher identity (see [NuGet ESRP cutover checklist](#nuget-esrp-cutover-checklist)).
    - Permission to use the `AspireSecurePublishPipelineMarketplaceConnectionWithManagedIdentity` service connection if publishing the VS Code extension.
-   - Approval to use the DevDiv ESRP service connection for MicroBuild npm publishing.
-   - Valid ESRP owner and approver aliases for npm publishing.
+   - Permission for the release definition to use `EsrpThirdPartyPackageManager`, the ESRP service connection used by the MicroBuild publishing wrapper for NuGet and npm.
+   - Confirmed ESRP owner and approver aliases for each enabled registry. NuGet defaults are proposed release contacts, not evidence that those contacts are onboarded.
    - GitHub write access for creating tags, releases, and PRs if you need to run the GitHub workflow manually.
 4. **AzDO secrets** (already configured for chained dispatch):
    - `aspire-bot-app-id` — `aspire-repo-bot` GitHub App ID.
@@ -109,7 +109,7 @@ Before starting a release:
 ### Step 1: Run the AzDO release pipeline
 
 1. Navigate to the Azure DevOps pipeline: [release-publish-nuget](https://dev.azure.com/dnceng/internal/_build?definitionId=1600&_a=summary) (definition `1600` in `dnceng/internal`).
-2. Click **Run pipeline**.
+2. Click **Run pipeline** and select the **Branch/tag** containing the intended release pipeline YAML. The definition defaults to `main`; selecting a `release/17.0` source build does not select `release/17.0` YAML. A release-branch YAML change requires that branch to exist in the internal mirror and be selected here, or an equivalent change on the YAML branch actually used.
 3. Fill in the parameters. Most should stay at their defaults; the ones flagged `[Advanced]` in the run-pipeline form are for re-running after a partial failure, opting in to currently-disabled release legs, or testing pipeline changes on a topic branch.
 
    **Common (you may set these every release):**
@@ -125,7 +125,9 @@ Before starting a release:
 
    | Parameter | Description | Default |
    |-----------|-------------|---------|
-   | `SkipNuGetPublish` | Set `true` if re-running after NuGet success. | `false` |
+   | `SkipNuGetPublish` | Set `true` only after verifying the complete selected package set is published; not a partial-publication recovery switch. | `false` |
+   | `NuGetPublishOwners` | Single NuGet ESRP owner alias or Microsoft email. Confirm this contact during NuGet onboarding. | `joperezr` |
+   | `NuGetPublishApprovers` | Single NuGet ESRP approver alias or Microsoft email, distinct from the owner. Confirm approval eligibility during onboarding. | `adamratzman` |
    | `SkipNpmRidPublish` | Set `true` if npm RID packages published but the pointer package did not. | `false` |
    | `SkipNpmPointerPublish` | Set `true` if the pointer package published but a later validation or promotion step failed. Registry validation still runs. | `false` |
    | `SkipChannelPromotion` | Set `true` if re-running after darc success. | `false` |
@@ -168,9 +170,38 @@ For a full Aspire release that should also publish the extension, keep the norma
 
 The npm release path validates Windows, Linux, and macOS install summaries, publishes the seven RID packages first, waits for ESRP completion, waits for the configured propagation delay, and then publishes the top-level `@microsoft/aspire-cli` pointer package. After the pointer package publishes, the pipeline installs it from the live npm registry and runs `aspire --version` before channel promotion. This avoids installing a pointer package whose optional RID dependencies are not visible yet and catches registry propagation issues before the release is promoted. For prereleases, set `SkipNpmRidPublish=true` and `SkipNpmPointerPublish=true` unless the npm publishing path has gained explicit non-`latest` dist-tag support.
 
+NuGet publishing remains available for prereleases when npm publishing is skipped. The pipeline stages only the flattened artifact's root-level `.nupkg` files in a clean `nuget-esrp-submission` directory, verifies their signatures, and submits that directory without rebuilding or repacking.
+
+SBOMs, manifests, and `.snupkg` files are not submitted. Source `.nupkg` files are gathered recursively and flattened into the prepared artifact; duplicate filenames fail validation. Legacy `.symbols.nupkg` files, nested packages in the prepared artifact, and empty selections also fail validation.
+
+NuGet submission waits for ESRP completion before npm and channel promotion. The release job has a shared **360-minute timeout**, including NuGet and both npm approval/completion waits; arrange approver availability before starting.
+
+ESRP completion is not an automated NuGet.org visibility check. Use this two-run plan for the first cutover; `SkipChannelPromotion=true` alone does **not** suppress the other publish legs or downstream actions.
+
+1. **First explicitly authorized live run — NuGet only:** select the intended signed source build and set:
+
+   ```yaml
+   DryRun: false
+   SkipNuGetPublish: false
+   SkipNpmRidPublish: true
+   SkipNpmPointerPublish: true
+   SkipChannelPromotion: true
+   SkipWinGetPublish: true
+   SkipGitHubTasks: true
+   SkipReleaseAssets: true
+   SkipNixPackageUpdate: true
+   SkipVSCodeExtensionPublish: true
+   ```
+
+   Set `IsPrerelease=true` for a preview or `false` for stable. NuGet supports previews; the live prerelease block applies separately to npm.
+2. **Second run — only after ESRP is complete and every expected NuGet package ID/version is visible on NuGet.org:** select the **same signed source build**, keep `DryRun=false`, and set `SkipNuGetPublish=true`. Start with the other skip settings above, changing a flag to `false` only for an action still intended and not already completed: npm RID/pointer publishing, channel promotion, WinGet, GitHub Tasks, release assets, Nix, or optional VS Code Marketplace publishing. Do not enable every action by default or rerun npm/other legs already completed. Keep both npm skip flags `true` for prereleases; WinGet and Nix are stable-only.
+3. **Partial or uncertain NuGet publication:** do not run phase two or blindly retry publishing. Retain the package inventory and ESRP status, and coordinate recovery with the ESRP service owners; see [NuGet publish failures](#nuget-publish-failures).
+
 `commit_sha` and `release_branch` for the GitHub workflow are derived automatically from the source build resource, so there is no need to copy them by hand.
 
-> **Tip**: Use `DryRun: true` to test end-to-end without publishing, promoting, tagging, creating PRs, or uploading release assets. The dry-run state is propagated to the GitHub workflow as `dry_run: true`.
+> **Tip**: Use `DryRun: true` to exercise preparation, package-only staging, signature verification, and contact validation without publishing, promoting, tagging, creating PRs, or uploading release assets. The dry-run state is propagated to the GitHub workflow as `dry_run: true`. `DryRun` defaults to `false`; always set it explicitly for validation.
+
+A dry run excludes ESRP submission. It does **not** validate NuGet onboarding, service-connection authorization, approver eligibility, upload/completion, duplicate handling, or registry visibility.
 
 ### Step 2: Prepare a VS Code extension release PR
 
@@ -252,7 +283,7 @@ If either downstream workflow fails, the release itself is fine — the release 
 
 ## Handling failures
 
-These automations are designed to be idempotent and safe to re-run.
+Use the per-step recovery instructions before rerunning. NuGet ESRP submissions must not be blindly repeated after partial publication.
 
 ### Azure DevOps pipeline failures
 
@@ -261,9 +292,9 @@ These automations are designed to be idempotent and safe to re-run.
 | Validate Parameters | Fix the input parameters and re-run. |
 | Derive ReleaseVersion | Check that the build has a `release-version - X.Y.Z` tag, or pass `ReleaseVersion` explicitly. |
 | Extract BAR Build ID | Check that the build has a `BAR ID - NNNNNN` tag. |
-| Prepare/List/Verify NuGet Packages | Check that the selected source build produced `PackageArtifacts`. |
+| Prepare/Stage/Verify NuGet Packages | Check that the selected source build produced nonempty `PackageArtifacts`, with unique package filenames and no symbol packages. |
 | Prepare/List npm Packages | Check that the selected source build produced all eight `microsoft-aspire-cli*.tgz` tarballs and matching `.tgz.sig` sidecars in `BlobArtifacts`. |
-| Push Packages to NuGet.org | Check NuGet.org for partial success, then re-run with already-completed steps skipped as needed. |
+| MicroBuild NuGet Publish | Inspect the ESRP release ID/status and every expected package ID/version on NuGet.org. Follow [NuGet publish failures](#nuget-publish-failures) before any resubmission. |
 | MicroBuild npm Publish | Check the ESRP release result. If RID packages published but the pointer package did not, re-run with `SkipNuGetPublish: true`, `SkipNpmRidPublish: true`, `SkipNpmPointerPublish: false`, and `SkipChannelPromotion: true`; do not set `SkipNpmPointerPublish` until the pointer package is published. |
 | Validate Published npm Package from Registry | Confirm the pointer package is visible on npm and that `npm install -g @microsoft/aspire-cli@<version>` works. If registry propagation is slow, re-run with completed publish steps skipped after the package is visible. |
 | Promote Build to Channel | Re-run with completed publish steps skipped. |
@@ -292,7 +323,9 @@ Re-run with the corresponding `skip_*` input set to `true` to skip steps that ha
 
 ### 1ES and MicroBuild compliance
 
-The AzDO pipeline extends the MicroBuild publish-enabled 1ES template (`azure-pipelines/MicroBuild.1ES.Official.Publish.yml@MicroBuildTemplate`) to be compliant with Microsoft organization requirements and to grant `MicroBuild.Publish.yml@MicroBuildTemplate` access to the DevDiv ESRP service connection for npm submissions. The source build creates, signs where platform signing applies, verifies, and stages the package artifacts; the release pipeline consumes those pre-built artifacts and does not rebuild or re-pack the CLI.
+The AzDO pipeline extends the MicroBuild publish-enabled 1ES template (`azure-pipelines/MicroBuild.1ES.Official.Publish.yml@MicroBuildTemplate`). `MicroBuild.Publish.yml@MicroBuildTemplate` submits NuGet and npm through `EsrpThirdPartyPackageManager`. The source build creates, signs where platform signing applies, verifies, and stages the package artifacts; the release pipeline consumes those pre-built artifacts and does not rebuild or re-pack the CLI.
+
+The network isolation policy remains `Permissive,CFSClean2`. Public registry checks still need network access; replacing the direct NuGet push does not establish that a stricter policy supports the remaining release steps.
 
 ### Variable groups
 
@@ -309,12 +342,23 @@ The legacy `VscePublishToken` PAT must not be retained as a fallback after the M
 
 | Connection name | Purpose |
 |-----------------|---------|
-| `NuGet.org - dotnet/aspire` | NuGet service connection for publishing packages to NuGet.org. |
+| `EsrpThirdPartyPackageManager` | Shared publishing service connection used by the MicroBuild wrapper for NuGet and npm ESRP submissions. NuGet organization authorization must be confirmed separately. |
 | `AspireSecurePublishPipelineMarketplaceConnectionWithManagedIdentity` | Azure Resource Manager workload-identity service connection used by `vsce --azure-credential` to publish the signed VS Code extension to the Visual Studio Marketplace. Its managed identity must be a Contributor on the `microsoft-aspire` Marketplace publisher. |
-| `DevDivEsrpAzDoSrvConn` | ESRP service connection used by the MicroBuild publish template for npm publishing. |
 | `Darc: Maestro Production` | Used for darc channel promotion. |
 
-The release definition must be approved for the 1ES and MicroBuild publishing templates and must have permission to use `DevDivEsrpAzDoSrvConn`.
+The release definition must be approved for the 1ES and MicroBuild publishing templates and must have permission to use `EsrpThirdPartyPackageManager`.
+
+#### NuGet ESRP cutover checklist
+
+**Live cutover is blocked until onboarding and authorization are confirmed.** The YAML configures `organizationName: aspire`; neither existing npm publishing nor package ownership proves NuGet ESRP Trusted Publishing readiness.
+
+- Confirm ESRP NuGet onboarding for `aspire` and authorization of the shared publisher behind `EsrpThirdPartyPackageManager` for definition `1600`. Do not substitute another repository's publisher identity.
+- Inventory every package ID/version from the selected signed build. Confirm organization ownership and publication rights, including all new IDs with no existing NuGet.org package page.
+- Confirm the NuGet owner, approver, and requester/approver eligibility rules with the service owners. Local validation accepts exactly one Microsoft alias/email per role and rejects overlap; it cannot establish service-side eligibility.
+- Confirm which internal mirror branch supplies the YAML. In particular, ensure `release/17.0` exists there before selecting it; the source-build resource and `GitHubTasksWorkflowRef` do not control the release pipeline's YAML.
+- Preview the expanded YAML for dry-run, skip, and live configurations without queuing a live run. With authorization, run `DryRun=true` against the intended source build and inspect the staging/signature logs and excluded publish steps. These checks do not prove the live route.
+- Follow the NuGet-only first run and conditional second run above, not just `SkipChannelPromotion=true`. Retain the source build/revision, package inventory, ESRP release ID/status, approval result, and visibility evidence for every expected NuGet.org package ID/version before enabling any intended remaining actions. This is the end-to-end evidence still required for the migration.
+- After successful cutover, check for other consumers, revoke the old direct-push credential, and retire `NuGet.org - dotnet/aspire`. Do not keep an automatic direct-push fallback.
 
 #### Marketplace publishing identity
 
@@ -377,12 +421,13 @@ This indicates a mismatch between the expected release commit and an existing ta
 
 ### NuGet publish failures
 
-The `1ES.PublishNuget@1` task is configured with `allowPackageConflicts: true`, which means it skips packages that already exist on NuGet.org. If publishing fails:
+ESRP duplicate-package behavior is not assumed to be idempotent. There is no automatic already-published-package filtering or direct-push fallback.
 
-1. Check the pipeline logs for specific error messages.
-2. Verify the service connection `NuGet.org - dotnet/aspire` is properly configured.
-3. Ensure the service connection has push permissions for the package IDs.
-4. Re-run the pipeline with skip flags for work that already completed.
+1. Retain the failed run's source build/revision, complete package inventory, ESRP release ID/status, and task diagnostics. Confirm whether ESRP is still processing before taking further action.
+2. Check **every** expected package ID/version on NuGet.org, allowing for indexing delay. A successful ESRP submission is not proof of registry visibility; do not promote while packages are missing.
+3. If all packages are available, rerun with `SkipNuGetPublish=true` and skip other completed work. Use the same signed source build.
+4. If publication is partial or uncertain, stop automatic retries and coordinate recovery of the existing ESRP release with the service owners. The pipeline resubmits the entire selection, not just missing packages; do not rerun it with NuGet publishing enabled or set `SkipNuGetPublish=true` to bypass missing packages.
+5. If ESRP confirms that no packages were published and the submission is no longer active, resolve the reported onboarding, authorization, approval, or upload failure before an explicitly authorized retry.
 
 ### PR creation fails
 
@@ -408,8 +453,10 @@ Azure DevOps release-publish-nuget.yml
      -> split npm RID and pointer artifacts with SBOM
      -> republish WinGet artifacts with SBOM when selected
   -> ReleaseJob
+     -> stage only flattened .nupkg files in clean nuget-esrp-submission
      -> verify NuGet signatures
-     -> publish NuGet through 1ES.PublishNuget@1
+     -> submit NuGet through MicroBuild.Publish (aspire organization)
+     -> wait for NuGet ESRP approval/completion
      -> publish npm RID packages through MicroBuild.Publish
      -> wait for npm propagation
      -> publish npm pointer package through MicroBuild.Publish
