@@ -101,23 +101,16 @@ jobs:
           "EXTENSION_VERSION_OVERRIDE=$EXTENSION_VERSION" | Out-File -FilePath $Env:GITHUB_OUTPUT -Append -Encoding utf8
 
   tests:
-    uses: ./.github/workflows/tests.yml
+    uses: ./.github/workflows/build-cli-native-archives.yml
     name: Tests
     needs: [prepare_for_ci]
-    # actions:read lets the reusable workflow download build artifacts via gh/actions APIs (for example
-    # get-aspire-cli-pr.ps1 -> gh run download). issues:write + pull-requests:write are used only by
-    # tests.yml's isolated comment_selection job (which runs no PR code) to post the "selected tests"
-    # issue comment. Reusable-workflow tokens are capped by the caller, so every needed scope must be
-    # granted here.
     permissions:
-      actions: read
       contents: read
-      issues: write
-      pull-requests: write
-    if: ${{ github.repository == 'microsoft/aspire' && needs.prepare_for_ci.outputs.skip_workflow != 'true' }}
+    # Investigation only: reuse the exact Windows x64 archive and desktop smoke route.
+    if: ${{ github.repository == 'microsoft/aspire' && github.event_name == 'pull_request' && github.head_ref == 'ci-health/22204-r1-main-diagnostic' && needs.prepare_for_ci.outputs.skip_workflow != 'true' }}
     with:
       versionOverrideArg: ${{ needs.prepare_for_ci.outputs.VERSION_SUFFIX_OVERRIDE }}
-      extensionVersionOverride: ${{ needs.prepare_for_ci.outputs.EXTENSION_VERSION_OVERRIDE }}
+      targets: '[{"os": "windows-latest", "runner": "windows-latest", "rids": "win-x64"}]'
 
   # Stabilization gate.
   #
@@ -211,6 +204,12 @@ jobs:
     needs: [actionlint, prepare_for_ci, tests, stabilization_check]
 
     steps:
+      - name: Block merging the diagnostic PR
+        if: ${{ always() && github.head_ref == 'ci-health/22204-r1-main-diagnostic' }}
+        run: |
+          echo "This diagnostic run does not include required CI coverage."
+          exit 1
+
       - name: Fail if any of the dependent jobs failed
         # Build and test jobs may be skipped, but handwritten workflow lint remains required.
         if: >-
