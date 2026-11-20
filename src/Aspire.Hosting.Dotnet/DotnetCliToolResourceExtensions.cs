@@ -152,12 +152,10 @@ public static class DotnetCliToolResourceExtensions
         return builder;
     }
 
-#pragma warning disable ASPIRECOMMAND001 // Preserve the existing tool SDK-validation policy.
     private static async Task<RequiredCommandValidationResult> ValidateSdkAsync(RequiredCommandValidationContext context, string workingDirectory)
     {
         var version = await context.Services.GetRequiredService<DotnetCliToolSdkVersionProvider>()
             .TryGetVersionAsync(workingDirectory, context.CancellationToken).ConfigureAwait(false);
         return DotnetToolHelpers.ValidateSdkVersion(version, nameof(DotnetCliToolResource));
     }
-#pragma warning restore ASPIRECOMMAND001
 }
