@@ -79,7 +79,7 @@
       </trans-unit>
       <trans-unit id="IncompatibleOptions">
         <source>--config-source cannot be combined with --self, --migrate, --dry-run, --channel, --quality, or --nuget-config-dir.</source>
-        <target state="new">--config-source cannot be combined with --self, --migrate, --dry-run, --channel, --quality, or --nuget-config-dir.</target>
+        <target state="translated">--config-source no se puede combinar con --self, --migrate, --dry-run, --channel, --quality, ni --nuget-config-dir.</target>
         <note>Do not translate the command-line option names.</note>
       </trans-unit>
       <trans-unit id="InitUseSourcePrompt">
