@@ -31,10 +31,173 @@ aspire <command> [options]
 | `add [<integration>]` | Add a hosting integration to the apphost. |
 | `update` | Update integrations in the Aspire project. |
 | `run` | Run an apphost in development mode. |
+| `test` | Run an apphost until all test resources finish, then shut it down. |
 | `stop` | Stop a running apphost or the specified resource. |
 | `ps` | List running apphosts. |
 
 C# AppHosts created with Aspire 17 or later use package directives instead of the obsolete AppHost SDK. When targeting an earlier Aspire release, the empty template retains its SDK directive so it does not require the newer `Aspire.Hosting.Dotnet` package.
+
+### Running test resources
+
+Mark any resource with `WithTesting()` to include it in `aspire test`. The public
+testing APIs are experimental (`ASPIRETESTING001`):
+
+```csharp
+#pragma warning disable ASPIRETESTING001
+var api = builder.AddProject<Projects.Api>("api");
+builder.AddExecutable("tests", "test-runner", ".")
+    .WithReference(api)
+    .WaitFor(api)
+    .WithTesting();
+```
+
+```bash
+aspire test --apphost ./AppHost/AppHost.csproj
+```
+
+The independent command shares AppHost build, launch, and shutdown infrastructure
+with `aspire run`, but disables hot reload and waits for every annotated resource
+(including replicas) and every collector, even after another test fails.
+Unannotated services remain available until both execution and collection finish.
+The annotation does not change the lifetime of `aspire run`.
+
+A terminal resource state with exit code `0` passes. Nonzero exit codes, failure
+to start, and an unhealthy runtime fail the run. If a terminal snapshot has no
+exit code, Aspire waits up to five seconds for a later exit-code notification;
+an exit code that remains unknown fails rather than passing or waiting forever.
+Custom resources must publish a terminal state and exit code through
+`ResourceNotificationService`.
+
+Testing has its own command orchestration and localized output, using the existing
+AppHost project and backchannel services. Normal `aspire run` keeps its existing
+implementation, presentation, and lifetime.
+
+The command returns `0` when all tests pass, `23` when any test fails, and `130`
+when cancelled. Missing test annotations, an incompatible AppHost, startup
+failure, premature AppHost exit, or shutdown failure also return a nonzero code
+with diagnostics. A test that never reaches a terminal state continues running
+until cancelled or an explicitly supplied command deadline expires. Detached execution, profile capture, and
+extension-managed debug sessions are not supported. Framework-specific result parsers and resource helpers are not provided.
+
+Each invocation creates a unique directory under `~/.aspire/testruns` (or the
+configured Aspire home) before the AppHost starts.
+`WithTesting(Func<ResourceTestingContext, Task>)` registers one asynchronous
+runtime collector. `WithTesting()` marks a resource without result collection:
+
+```csharp
+#pragma warning disable ASPIRETESTING001
+var tests = builder.AddExecutable("tests", "test-runner", ".");
+tests.WithTesting(async context =>
+{
+    await context.WaitForCompletionAsync();
+    // Read your framework's reports from its independently configured location,
+    // stage artifacts into context.OutputPath, then publish observed results.
+    context.PublishResult(new TestResult { Name = "example", Outcome = TestOutcome.Passed });
+});
+```
+
+The callback does not run during model definition or ordinary run/publish.
+It is not a prelaunch configuration hook: framework helpers must coordinate their
+runner's arguments/environment and report location independently, without
+depending on callback execution before its first await.
+During testing, `ResourceTestingContext.OutputPath` is an existing private
+`<run-id>/<logical-resource-name>` directory shared by that resource's replicas;
+`ResourceTestingContext.TestingContext.OutputPath` identifies the containing
+invocation through its `TestingContext`. Repeated `WithTesting`
+calls replace the collector while retaining the same run context and output
+destination. A marker-only call clears the collector. No testing directory is
+invented outside testing.
+
+Collectors start alongside resource execution, before the CLI connects.
+`ResourceTestingContext` provides the logical resource name, isolated output
+path, containing run context, and collection cancellation token. Its
+`WaitForCompletionAsync()` helper shares authoritative resource/replica tracking,
+including already-finished resources and late exit codes. It returns resource
+execution success, not collection success. Its optional cancellation token adds
+caller-local cancellation; the default still observes run cancellation, including
+`--timeout-seconds` and Ctrl+C. A supplied token cannot disable that bound, and
+cancelling one wait does not cancel shared completion tracking or other waiters.
+Collectors may publish results live
+without waiting, or await completion before harvesting artifacts. Each resource's
+collector runs concurrently with the others and is awaited before final output and teardown;
+an early-returning collector does not end resource execution.
+
+Use `PublishResult(TestResult)` to report an observed name, outcome, optional
+duration, and optional framework message. `TestOutcome` uses the implicit order
+`Failed`, `Passed`, `Skipped`, `Inconclusive`, `Error`, `TimedOut`, `Cancelled`;
+its default is `Failed`, and the `Outcome` property remains required.
+Only `Passed` and `Skipped` are non-failing. All other outcomes, including
+`Inconclusive`, make testing unsuccessful even when the process exits zero.
+Published `TimedOut`/`Cancelled` outcomes are ordinary test failures (exit `23`),
+not command deadline expiry (`17`) or user cancellation (`130`). They do not
+cancel other resources, change the run's deadline, or fabricate unobserved tests.
+Resource identity is assigned by the context. Unsuccessful results and collector exceptions fail the
+run without discarding earlier results or stopping other tests. Results cannot
+be published after a collector returns or is cancelled. Marker-only
+`WithTesting()` remains usable without individual-result collection. Containers
+must explicitly mount the host output path and configure their in-container
+destination; their process identity must have access to the mount.
+
+Interactive runs show a **Tests are running** header, print AppHost, dashboard,
+and log locations as append-only labeled lines, stream the annotated
+resources' state changes and individual results, and show per-resource result totals
+after collection followed by an overall verdict without a duplicate resource table.
+The CLI prints the output directory and a clickable `summary.json` path, falling
+back to a plain path when terminal hyperlinks are unavailable.
+
+`summary.json` is updated during execution and finalized after shutdown. Its
+versioned JSON includes the run ID, output path, start/completion timestamps,
+summary-file path, overall status, CLI exit code, diagnostic, and each observed resource's name,
+instance ID, state, exit code, expected replica count, and outcome. It also
+contains `testResults`, resource `collections` with output paths/errors/status,
+and `publishedResults` totals derived only from actual published results.
+Individual outcomes are preserved as `failed`, `passed`, `skipped`, `inconclusive`,
+`error`, `timedOut`, or `cancelled`. The `failed` total includes all five
+unsuccessful outcomes; `passed` and `skipped` count only their named outcomes.
+Text resource summaries use that same failure count and classify only skips as
+`other`. No published result is omitted from the aggregate counts.
+Resource execution outcomes remain separate from individual test results; an
+exit code never fabricates individual test counts. Cancelled and failed
+runs retain observed outcomes and mark unfinished resources `incomplete`; an
+artifact write failure is reported and cannot turn a failed run into success.
+
+Use `aspire test --keep-alive` to inspect the dashboard after tests finish,
+whether they passed or failed. The summary is written and shown once at resource
+and collector completion; both the CLI and AppHost remain in the foreground, with supporting
+services available until stopped. Tests are not rerun. Ctrl+C performs normal
+teardown and returns `130`, preserving resource outcomes in the final file.
+AppHost/RPC failures still terminate the session with diagnostics.
+
+Use `aspire test --timeout-seconds 120` to bound the whole command in CI. The
+monotonic deadline starts before AppHost discovery/build, includes startup,
+resource execution and collectors, and also limits `--keep-alive` inspection.
+It does not replace the separate AppHost startup timeout and has no default.
+Acceptable values are integers from `1` through `4294967` seconds (the timer's
+supported range); invalid values are rejected before creating artifacts.
+On expiry, the CLI cancels execution, allows up to five additional seconds for
+bounded teardown, and returns `17`. Unfinished runs have JSON status `timedOut`
+and an explicit deadline diagnostic, retaining published results and marking
+unfinished resources/collections `incomplete`. If inspection expires after
+collection completed, the completed `passed`/`failed` status and completion time
+are preserved while the final file records exit `17` and the timeout diagnostic.
+Explicit user cancellation takes precedence and still returns `130`.
+
+Use `aspire test --format json` for a single summary object on stdout, matching
+the persisted `summary.json` after shutdown. Diagnostics go to stderr; stdout
+contains no interactive header, status lines, tables, or hyperlinks. Unsupported
+options produce a failure object with null run/output paths before creating
+artifacts. With `--keep-alive --format json`, stdout is emitted once when tests
+complete, with `cliExitCode: null` because the CLI is still running. The persisted
+file is updated with the final CLI exit code and any inspection/shutdown errors
+when the session ends; no second JSON object is emitted.
+
+On Unix, the dedicated test-run directories are created with mode `0700` and
+CLI-owned files with mode `0600`. On Windows, directories use protected
+current-user-only ACLs and files inherit those permissions, rather than Unix
+modes. Unsafe symbolic-link paths and writable Unix ancestors below the trusted
+home/temp roots are rejected. Existing dedicated `testruns` permissions are
+hardened without changing the Aspire home directory's permissions. These
+permissions do not configure files written by test frameworks.
 
 ### Resource Management
 

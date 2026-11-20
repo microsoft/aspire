@@ -1,0 +1,86 @@
+﻿{
+  "schemaVersion": 1,
+  "runId": "run-id",
+  "outputPath": "output-directory",
+  "summaryPath": "summary-file",
+  "startedAt": "2000-01-01T00:00:00\u002B00:00",
+  "completedAt": "2000-01-01T00:00:00\u002B00:00",
+  "status": "failed",
+  "cliExitCode": 23,
+  "error": null,
+  "resources": [
+    {
+      "resourceName": "tests",
+      "resourceId": "tests-1",
+      "state": "Finished",
+      "exitCode": 0,
+      "expectedReplicas": 1,
+      "outcome": "passed"
+    }
+  ],
+  "testResults": [
+    {
+      "resourceName": "tests",
+      "name": "fixture-failed",
+      "outcome": "failed",
+      "durationMilliseconds": null,
+      "message": null
+    },
+    {
+      "resourceName": "tests",
+      "name": "fixture-passed",
+      "outcome": "passed",
+      "durationMilliseconds": null,
+      "message": null
+    },
+    {
+      "resourceName": "tests",
+      "name": "fixture-skipped",
+      "outcome": "skipped",
+      "durationMilliseconds": null,
+      "message": null
+    },
+    {
+      "resourceName": "tests",
+      "name": "fixture-inconclusive",
+      "outcome": "inconclusive",
+      "durationMilliseconds": null,
+      "message": null
+    },
+    {
+      "resourceName": "tests",
+      "name": "fixture-error",
+      "outcome": "error",
+      "durationMilliseconds": null,
+      "message": null
+    },
+    {
+      "resourceName": "tests",
+      "name": "fixture-timedOut",
+      "outcome": "timedOut",
+      "durationMilliseconds": null,
+      "message": null
+    },
+    {
+      "resourceName": "tests",
+      "name": "fixture-cancelled",
+      "outcome": "cancelled",
+      "durationMilliseconds": null,
+      "message": null
+    }
+  ],
+  "collections": [
+    {
+      "resourceName": "tests",
+      "outputPath": null,
+      "collectorCount": 1,
+      "status": "completed",
+      "error": null
+    }
+  ],
+  "publishedResults": {
+    "passed": 1,
+    "failed": 5,
+    "skipped": 1
+  }
+}

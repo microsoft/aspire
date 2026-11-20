@@ -1,0 +1,36 @@
+﻿{
+  "schemaVersion": 1,
+  "runId": "run-id",
+  "outputPath": "output-directory",
+  "summaryPath": "summary-file",
+  "startedAt": "2026-10-31T06:00:00\u002B00:00",
+  "completedAt": "2026-10-31T06:00:00\u002B00:00",
+  "status": "failed",
+  "cliExitCode": 23,
+  "error": null,
+  "resources": [
+    {
+      "resourceName": "tests",
+      "resourceId": "tests-1",
+      "state": "Exited",
+      "exitCode": 1,
+      "expectedReplicas": 2,
+      "outcome": "failed"
+    },
+    {
+      "resourceName": "tests",
+      "resourceId": "tests-2",
+      "state": "Finished",
+      "exitCode": 0,
+      "expectedReplicas": 2,
+      "outcome": "passed"
+    }
+  ],
+  "testResults": [],
+  "collections": [],
+  "publishedResults": {
+    "passed": 0,
+    "failed": 0,
+    "skipped": 0
+  }
+}

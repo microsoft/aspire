@@ -338,7 +338,8 @@ internal sealed class CapabilityDispatcher
                     var context = new AtsMarshaller.UnmarshalContext
                     {
                         CapabilityId = capabilityId,
-                        ParameterName = paramName
+                        ParameterName = paramName,
+                        CallbackTimeout = AttributeDataReader.GetAspireCallbackTimeout(param)
                     };
                     methodArgs[i] = UnmarshalArgument(
                         capability,
@@ -435,7 +436,8 @@ internal sealed class CapabilityDispatcher
                     var context = new AtsMarshaller.UnmarshalContext
                     {
                         CapabilityId = capabilityId,
-                        ParameterName = paramName
+                        ParameterName = paramName,
+                        CallbackTimeout = AttributeDataReader.GetAspireCallbackTimeout(param)
                     };
                     methodArgs[i] = UnmarshalArgument(
                         capability,
