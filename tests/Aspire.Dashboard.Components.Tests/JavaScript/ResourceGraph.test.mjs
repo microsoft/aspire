@@ -97,6 +97,7 @@ function createGraph(environment = null, enableTagSelection = true) {
     const ResourceGraph = runInNewContext(
         source.replace(/^import .*\r?$/gm, "").replace(/^export /gm, "") + "\nResourceGraph;",
         {
+            document: { fonts: { status: "loaded" } },
             d3: {
                 curveCatmullRomClosed: geometry.curveCatmullRomClosed,
                 extent: geometry.extent,
@@ -409,6 +410,47 @@ test("overlapping groups get nearby anchors rather than being separated by unrel
 function createPhysicsNode(id, tags, x, y) {
     return { id, tags: createTags(...tags), x, y, vx: 0, vy: 0, bounds: { x: -56, y: -70, width: 112, height: 150 } };
 }
+
+test("overlapping tag groups keep labels and their action buttons clear as resources move", () => {
+    const graph = createGraph();
+    const shared = createPhysicsNode("shared", ["A", "B", "C"], 100, -200);
+    const left = createPhysicsNode("left", ["A"], 0, 0);
+    graph.nodes = [shared, left, createPhysicsNode("right", ["B"], 240, 0), createPhysicsNode("bottom", ["C"], 100, 240)];
+    graph.updateTagGroups();
+
+    graph.tagElements.attr = function (name, value) {
+        this.values.forEach(value);
+        return this;
+    };
+    for (const group of graph.tagGroups) {
+        // A 40-unit text label followed by its action button.
+        group.controlBounds = { x: 0, y: -19, width: 72, height: 28 };
+    }
+
+    function positions() {
+        graph.onTick();
+        const transform = graph.tagControls.attributes.get("transform");
+        return new Map(graph.tagControls.values.map(group => {
+            const [x, y] = transform(group).slice("translate(".length, -1).split(",").map(Number);
+            return [group.key, { x, y }];
+        }));
+    }
+
+    const stacked = positions();
+    const rows = [...stacked.values()].sort((a, b) => a.y - b.y);
+    assert.ok(rows.every(row => row.x === rows[0].x));
+    assert.ok(rows[1].y - rows[0].y >= 28);
+    assert.ok(rows[2].y - rows[1].y >= 28);
+
+    left.y = shared.y;
+    left.x = shared.x - 55;
+    const withButtonCollision = positions();
+    assert.equal(withButtonCollision.get("B").x - withButtonCollision.get("A").x, 55);
+    assert.ok(Math.abs(withButtonCollision.get("B").y - withButtonCollision.get("A").y) >= 28);
+
+    left.x = shared.x - 120;
+    assert.equal(positions().get("A").y, stacked.get("C").y);
+});
 
 test("group cohesion pulls unlinked members together, cools and does not double count aliases", () => {
     const graph = createGraph();

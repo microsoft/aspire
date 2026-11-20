@@ -315,8 +315,8 @@ class ResourceGraph {
         }
 
         this.svg.attr("viewBox", [-viewport.width / 2, -viewport.height / 2, viewport.width, viewport.height]);
-        this.positionTagMenuCogs();
         if (this.tagGroups.length > 0) {
+            this.measureTagControls();
             this.measureNodeBounds();
             this.onTick();
         }
@@ -470,7 +470,7 @@ class ResourceGraph {
         const layouts = new Map();
         for (let i = 0; i < this.tagGroups.length; i++) {
             const group = this.tagGroups[i];
-            // Nested and identical memberships need separate outlines and label lanes, not coincident paths.
+            // Nested and identical memberships need separate outlines, not coincident paths.
             group.level = 0;
             for (const inner of this.tagGroups.slice(0, i)) {
                 if (inner.nodes.every(node => node.tagKeys.has(group.key))) {
@@ -575,10 +575,13 @@ class ResourceGraph {
             this.tagControls.select(".resource-tag-menu-cog")
                 .attr("aria-label", getTagMenuLabel)
                 .attr("data-tooltip", getTagMenuLabel);
-            this.positionTagMenuCogs();
-            if (document.fonts.status === "loading") {
-                document.fonts.ready.then(() => this.positionTagMenuCogs());
-            }
+        }
+        this.measureTagControls();
+        if (this.tagGroups.length && document.fonts.status === "loading") {
+            document.fonts.ready.then(() => {
+                this.measureTagControls();
+                this.positionTagControls();
+            });
         }
         this.nodeTagElements = this.nodeBackgroundFills.selectAll("path")
             .data(paintOrder, group => group.key)
@@ -588,15 +591,52 @@ class ResourceGraph {
         this.nodeElements.style("--resource-node-tag-tint", node => `url(#resource-node-tag-tint-${node.id})`);
     }
 
-    positionTagMenuCogs() {
-        if (this.menuIcon) {
-            this.tagControls?.each(function () {
-                const controls = d3.select(this);
+    measureTagControls() {
+        const hasMenu = !!this.menuIcon;
+        this.tagControls?.each(function (group) {
+            const controls = d3.select(this);
+            if (hasMenu) {
                 const labelWidth = controls.select(".resource-tag-label").node().getComputedTextLength();
                 controls.select(".resource-tag-menu-cog").attr("transform", `translate(${labelWidth + 18},-5)`);
                 controls.select(".resource-tag-menu-bridge").attr("x", labelWidth);
-            });
-        }
+            }
+            const bounds = this.getBBox();
+            if (bounds.width > 0 && bounds.height > 0) {
+                group.controlBounds = bounds;
+            }
+        });
+    }
+
+    positionTagControls() {
+        const placed = [];
+        const gap = 8;
+        this.tagControls?.attr("transform", group => {
+            const [x, y] = group.labelAnchor;
+            let labelY = y;
+            if (group.controlBounds) {
+                const bounds = group.controlBounds;
+                const left = x + bounds.x;
+                const right = left + bounds.width;
+                let top = y + bounds.y;
+                let bottom = top + bounds.height;
+
+                // Keep the label aligned with its hull. Check lower controls first so each upward move
+                // only needs to consider controls still above it.
+                for (const other of placed) {
+                    if (top >= other.bottom + gap) {
+                        break;
+                    }
+                    if (right + gap > other.left && left < other.right + gap && bottom + gap > other.top) {
+                        bottom = other.top - gap;
+                        top = bottom - bounds.height;
+                    }
+                }
+                labelY = top - bounds.y;
+                const index = placed.findIndex(other => other.bottom < bottom);
+                placed.splice(index === -1 ? placed.length : index, 0, { left, right, top, bottom });
+            }
+            return `translate(${x},${labelY})`;
+        });
     }
 
     getCollisionRadius(node) {
@@ -1048,10 +1088,10 @@ class ResourceGraph {
             const hull = this.getTagHull(group);
             group.path = outline(hull);
             const top = hull.reduce((a, b) => b[1] < a[1] || (b[1] === a[1] && b[0] < a[0]) ? b : a);
-            group.labelTransform = `translate(${top[0]},${top[1] - 8})`;
+            group.labelAnchor = [top[0], top[1] - 8];
             return group.path;
         });
-        this.tagControls?.attr("transform", group => group.labelTransform);
+        this.positionTagControls();
         this.nodeTagElements?.attr("d", group => group.path);
         // Keep each pattern tile node-sized while sampling the corresponding area of the group fills.
         this.nodeElements.select(".resource-node-tag-pattern")
