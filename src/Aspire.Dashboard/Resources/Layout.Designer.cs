@@ -1159,6 +1159,15 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Telemetry sources do not produce console logs. Select to view this telemetry source&apos;s overview..
+        /// </summary>
+        public static string ResourcePaneTelemetrySourceNoConsoleLogs {
+            get {
+                return ResourceManager.GetString("ResourcePaneTelemetrySourceNoConsoleLogs", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Untagged.
         /// </summary>
         public static string ResourcePaneUntaggedGroup {

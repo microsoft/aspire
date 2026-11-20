@@ -56,7 +56,8 @@ public class ResourcesLayoutHomeTests : DashboardTestContext
     }
 
     // Escape goes home only where there's a table to go to and it isn't already showing or loading. On a narrow layout
-    // "/" redirects to the overview, and without the resource service it redirects to the structured logs (see Home).
+    // "/" redirects to the overview, and without the resource service it redirects to the overview of the telemetry
+    // sources (see Home).
     [Theory]
     [InlineData("home")]
     [InlineData("narrow")]
@@ -73,7 +74,7 @@ public class ResourcesLayoutHomeTests : DashboardTestContext
         Services.GetRequiredService<NavigationManager>().NavigateTo(scenario switch
         {
             "home" => "/",
-            "no-resource-service" => "/structuredlogs",
+            "no-resource-service" => "/resources",
             _ => "/resources/api"
         });
         var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));

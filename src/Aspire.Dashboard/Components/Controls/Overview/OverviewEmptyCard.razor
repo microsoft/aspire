@@ -1,0 +1,10 @@
+@* Keep empty placeholders mounted so switching panel modes does not disturb neighboring component state. *@
+<section class="overview-card overview-card-empty" style="@Layout.Style(Card)" aria-labelledby="@TitleId" hidden="@Hidden">
+    <div class="overview-card-header">
+        <span class="card-header-icon" aria-hidden="true">
+            <FluentIcon Value="@Icon" Width="16px" Color="Color.Custom" CustomColor="currentColor" />
+        </span>
+        <h2 id="@TitleId">@Title</h2>
+    </div>
+    <div class="overview-empty">@Message</div>
+</section>

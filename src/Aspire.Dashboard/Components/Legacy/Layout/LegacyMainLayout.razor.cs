@@ -150,18 +150,27 @@ public partial class LegacyMainLayout : IGlobalKeydownListener, IAsyncDisposable
 
         _locationChangingRegistration = NavigationManager.RegisterLocationChangingHandler((context) =>
         {
-            var targetLocation = context.TargetLocation;
+            string? standaloneTarget = null;
             if (!DashboardClient.IsEnabled &&
-                TargetLocationInterceptor.InterceptTargetLocation(NavigationManager.BaseUri, targetLocation, out var standaloneTarget))
+                TargetLocationInterceptor.InterceptTargetLocation(NavigationManager.BaseUri, context.TargetLocation, out var interceptedTarget))
             {
-                targetLocation = standaloneTarget;
+                standaloneTarget = interceptedTarget;
             }
 
+            var targetLocation = standaloneTarget ?? context.TargetLocation;
             var relativePath = NavigationManager.ToBaseRelativePath(NavigationManager.ToAbsoluteUri(targetLocation).ToString());
             if (LegacyNavUrls.ShouldRewriteToLegacy(relativePath))
             {
                 context.PreventNavigation();
                 NavigationManager.NavigateTo($"/legacy/{relativePath.TrimStart('/')}");
+            }
+            else if (standaloneTarget is not null)
+            {
+                // A standalone target that is already a legacy page, such as /legacy/resources going to
+                // /legacy/structuredlogs, must still replace the original target. Otherwise the legacy resources page,
+                // which requires the resource service, is shown.
+                context.PreventNavigation();
+                NavigationManager.NavigateTo(targetLocation);
             }
 
             return ValueTask.CompletedTask;

@@ -127,7 +127,7 @@ public partial class DesktopNavMenu : ComponentBase, IDisposable
         }
 
         var url = ResourcesLayout.GetTabUrl(tab, resourceNames, routeResourceName);
-        return ResourcesLayout.ParsePaneMode(path) == ResourcePaneMode.Telemetry && tab is not (ResourceTab.Overview or ResourceTab.Console)
+        return ResourcesLayout.ParsePaneMode(path) == ResourcePaneMode.Telemetry
             ? DashboardUrls.AddTelemetryPane(url)
             : url;
     }
@@ -166,6 +166,9 @@ public partial class DesktopNavMenu : ComponentBase, IDisposable
         {
             return firstSegment switch
             {
+                // The root URL redirects to the overview, which summarizes the telemetry sources.
+                "" or
+                DashboardUrls.ResourceOverviewBasePath or
                 DashboardUrls.StructuredLogsBasePath or
                 DashboardUrls.TracesBasePath or
                 DashboardUrls.MetricsBasePath => NavSection.Telemetry,

@@ -1,0 +1,8 @@
+@if (Shown < Total)
+{
+    <span class="overview-card-count">@string.Format(CultureInfo.CurrentCulture, Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewCountOfTotal)], Shown, Total)</span>
+}
+else
+{
+    <span class="overview-card-count">@Total</span>
+}

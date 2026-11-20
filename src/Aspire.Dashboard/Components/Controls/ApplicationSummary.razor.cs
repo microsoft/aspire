@@ -69,6 +69,14 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
     [Parameter]
     public IReadOnlyList<string>? ResourceNames { get; set; }
 
+    /// <summary>
+    /// Gets or sets whether the summarized resources are telemetry sources rather than resources of the app model,
+    /// as they are without an app host. Telemetry sources have no state or relationships, so the header counts the
+    /// sources instead of summarizing resource health, and there's no graph.
+    /// </summary>
+    [Parameter]
+    public bool IsTelemetrySourceSummary { get; set; }
+
     [Inject]
     public required IDashboardClient DashboardClient { get; init; }
 
@@ -109,6 +117,9 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
     public required IStringLocalizer<Dashboard.Resources.Dialogs> DialogsLoc { get; init; }
 
     [Inject]
+    public required IStringLocalizer<Dashboard.Resources.Layout> LayoutLoc { get; init; }
+
+    [Inject]
     public required IJSRuntime JS { get; init; }
 
     [Inject]
@@ -138,17 +149,16 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
                 .OrderBy(resource => resource.DisplayName, StringComparers.ResourceName)
                 .Select(resource => resource.Name));
 
-    private bool ShowsMovingActivityWindow => ViewPreferences.GroupOverview == GroupOverview.Summary && !TelemetryRepository.IsReadOnly;
+    private bool ShowsMovingActivityWindow => CurrentGroupOverview == GroupOverview.Summary && !TelemetryRepository.IsReadOnly;
+
+    // Telemetry sources have no relationships to draw, so their summary never shows the graph, whatever was chosen
+    // for the app's resources.
+    private GroupOverview CurrentGroupOverview => IsTelemetrySourceSummary ? GroupOverview.Summary : ViewPreferences.GroupOverview;
 
     protected override async Task OnInitializedAsync()
     {
         ViewPreferences.Changed += OnViewPreferencesChanged;
         await ViewPreferences.EnsureLoadedAsync();
-
-        if (!DashboardClient.IsEnabled)
-        {
-            return;
-        }
 
         _unviewedErrorCounts = TelemetryRepository.GetResourceUnviewedErrorLogsCount();
         _logsSubscription = TelemetryRepository.OnNewLogs(null, SubscriptionType.Other, OnTelemetryChanged);
@@ -156,6 +166,13 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
         _metricsSubscription = TelemetryRepository.OnNewMetrics(null, SubscriptionType.Other, OnTelemetryChanged);
         QueueTelemetryRefresh();
         _activityRefreshTask = RefreshActivityPeriodicallyAsync(_cts.Token);
+
+        // Without an app host, every resource is a telemetry source and there's no resource service to subscribe to.
+        if (!DashboardClient.IsEnabled)
+        {
+            _isLoaded = true;
+            return;
+        }
 
         var (snapshot, subscription) = await DataSource.ResourceRepository.SubscribeResourcesAsync(_cts.Token);
         foreach (var resource in snapshot)
@@ -191,7 +208,7 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (_isDisposing || ViewPreferences.GroupOverview != GroupOverview.Graph || _graphInitialized || _graphInitializing)
+        if (_isDisposing || CurrentGroupOverview != GroupOverview.Graph || _graphInitialized || _graphInitializing)
         {
             return;
         }
@@ -237,7 +254,7 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
         {
             var isFirstSet = _scopedResourceNames is null && !_isLoaded;
             _scopedResourceNames = ResourceNames?.ToList();
-            if (!isFirstSet && DashboardClient.IsEnabled)
+            if (!isFirstSet)
             {
                 _telemetry = null;
                 QueueTelemetryRefresh();
@@ -588,6 +605,7 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
         }
 
         var keys = new List<ResourceKey>();
+        List<OtlpResource>? telemetryResources = null;
         foreach (var name in names)
         {
             // Selections name resources as the resource list shows them, which can be a display name or a replica's name.
@@ -595,6 +613,17 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
             if (TelemetryRepository.GetResourceByCompositeName(resourceName) is { } telemetryResource)
             {
                 keys.Add(telemetryResource.ResourceKey);
+            }
+            else if (resource is null)
+            {
+                // Telemetry sources are listed by their telemetry name, which only includes the instance ID when
+                // several sources share a name. For example, a single "browser" source with instance ID "abc" is
+                // listed as "browser", while its composite name is "browser-abc".
+                telemetryResources ??= TelemetryRepository.GetResources();
+                if (telemetryResources.FirstOrDefault(r => string.Equals(OtlpHelpers.GetResourceName(r, telemetryResources), name, StringComparisons.ResourceName)) is { } source)
+                {
+                    keys.Add(source.ResourceKey);
+                }
             }
         }
 
@@ -604,6 +633,28 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
     private bool IsInScope(ResourceViewModel resource) => _scopedResourceNames is not { } names ||
         names.Contains(GetResourceName(resource), StringComparers.ResourceName) ||
         names.Contains(resource.Name, StringComparers.ResourceName);
+
+    /// <summary>
+    /// Gets the telemetry sources the summary covers. Uninstrumented peers, such as a database that only appears in
+    /// other resources' traces, don't send telemetry, so they aren't sources.
+    /// </summary>
+    private List<OtlpResource> GetTelemetrySources()
+    {
+        var sources = TelemetryRepository.GetResources();
+        if (GetScopedResourceKeys() is not { } keys)
+        {
+            return sources;
+        }
+
+        return sources.Where(source => keys.Contains(source.ResourceKey)).ToList();
+    }
+
+    private string GetTelemetrySourcesHeadline(int count) => count switch
+    {
+        0 => Loc[nameof(Dashboard.Resources.Resources.HomeNoTelemetry)],
+        1 => LayoutLoc[nameof(Dashboard.Resources.Layout.TelemetryPaneCountSingular), count],
+        _ => LayoutLoc[nameof(Dashboard.Resources.Layout.TelemetryPaneCountPlural), count]
+    };
 
     private string GetResourceName(ResourceViewModel resource) => ResourceViewModel.GetResourceName(resource, _resourceByName);
 
@@ -671,7 +722,7 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
 
     private async Task UpdateResourceGraphResourcesAsync()
     {
-        if (ViewPreferences.GroupOverview != GroupOverview.Graph || !_graphInitialized || _jsModule is null)
+        if (CurrentGroupOverview != GroupOverview.Graph || !_graphInitialized || _jsModule is null)
         {
             return;
         }

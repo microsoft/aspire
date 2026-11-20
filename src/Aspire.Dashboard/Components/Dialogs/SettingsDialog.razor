@@ -30,16 +30,20 @@
                                  ShowOptionText="true" />
             </div>
 
-            <div class="input-container setting-row">
-                <span class="setting-title aspire-field-label">@Loc[nameof(Dialogs.SettingsDialogGroupOverview)]</span>
-                <IconToggleGroup TValue="GroupOverview"
-                                 Label="@Loc[nameof(Dialogs.SettingsDialogGroupOverview)]"
-                                 Options="@_groupOverviewOptions"
-                                 Value="@ViewPreferences.GroupOverview"
-                                 ValueChanged="@(groupOverview => ViewPreferences.SetGroupOverviewAsync(groupOverview))"
-                                 ShowCurrentLabel="false"
-                                 ShowOptionText="true" />
-            </div>
+            @* The standalone dashboard always shows the telemetry summary because the graph needs resources from a resource service. *@
+            @if (DashboardClient.IsEnabled)
+            {
+                <div class="input-container setting-row">
+                    <span class="setting-title aspire-field-label">@Loc[nameof(Dialogs.SettingsDialogGroupOverview)]</span>
+                    <IconToggleGroup TValue="GroupOverview"
+                                     Label="@Loc[nameof(Dialogs.SettingsDialogGroupOverview)]"
+                                     Options="@_groupOverviewOptions"
+                                     Value="@ViewPreferences.GroupOverview"
+                                     ValueChanged="@(groupOverview => ViewPreferences.SetGroupOverviewAsync(groupOverview))"
+                                     ShowCurrentLabel="false"
+                                     ShowOptionText="true" />
+                </div>
+            }
         </section>
 
         <section class="settings-group" aria-labelledby="settings-language-time-title">
