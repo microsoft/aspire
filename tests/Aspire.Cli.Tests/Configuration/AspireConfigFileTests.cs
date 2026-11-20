@@ -87,6 +87,35 @@ public class AspireConfigFileTests(ITestOutputHelper outputHelper)
         await Verify(await File.ReadAllTextAsync(path), "json");
     }
 
+    [Fact]
+    public async Task LoadAndSave_PreservesUnmodeledNestedSettings()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var path = Path.Combine(workspace.Path, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(path, """
+            {
+              "configSource": { "repository": "example/config", "path": "app.json", "custom": "keep" },
+              "appHost": { "path": "apphost.cs", "custom": "keep" },
+              "sdk": { "version": "17.0.0", "custom": "keep" },
+              "docs": { "llmsTxtUrl": "https://docs.example/llms.txt", "custom": "keep", "api": { "sitemapUrl": "https://docs.example/sitemap.xml", "custom": { "nested": [1, true] } } },
+              "skillSources": { "team": { "repository": "example/skills", "custom": "keep" } },
+              "integrationSources": { "team": { "source": "https://feed.example/index.json", "custom": "keep" } },
+              "certificates": { "nssDbPaths": "/nss", "custom": "keep" },
+              "containerTunnel": { "baseImage": "example/tunnel", "custom": "keep" },
+              "portAllocation": { "persistInIsolatedMode": true, "custom": "keep" },
+              "profiles": { "default": { "applicationUrl": "https://localhost:17000", "custom": "keep" } },
+              "templateSources": { "local": { "path": "/templates", "custom": "keep" } }
+            }
+            """);
+
+        var config = AspireConfigFile.Load(workspace.Path);
+        Assert.NotNull(config);
+        config.SdkVersion = "17.0.1";
+        config.Save(workspace.Path);
+
+        await Verify(await File.ReadAllTextAsync(path), "json");
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
