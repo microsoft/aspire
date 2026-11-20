@@ -5,9 +5,9 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Hosting;
 using Xunit;
 
-namespace Aspire.Pomelo.EntityFrameworkCore.MySql.Tests;
+namespace Aspire.Microting.EntityFrameworkCore.MySql.Tests;
 
-public class PomeloEntityFrameworkCoreMySqlPublicApiTests
+public class MicrotingEntityFrameworkCoreMySqlPublicApiTests
 {
     [Fact]
     public void AddMySqlDbContextShouldThrowWhenBuilderIsNull()

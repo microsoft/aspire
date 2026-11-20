@@ -282,7 +282,7 @@ This is especially common with:
 
 **Important:** Do NOT blindly bump transitive pinned versions of `Microsoft.Extensions.*` or `System.*` packages. These affect the shared framework surface area and could force customers onto versions that break their applications. Always flag these for human review.
 
-Package major versions do not have to match the target framework: a compatible dependency can lift to 11.x even for `net10.0`. Prefer framework-provided assemblies over explicit package references, including `System.Text.Json` and the `Microsoft.Extensions.*` abstractions now provided by .NET 11's `Microsoft.NETCore.App`. Keep references where an older supported target still needs them. EF providers can impose narrower constraints; Pomelo currently remains on EF Core 9 with project-local health-check pins. Inspect the provider's dependency ranges rather than assuming its major version follows the project's TFM.
+Package major versions do not have to match the target framework: a compatible dependency can lift to 11.x even for `net10.0`. Prefer framework-provided assemblies over explicit package references, including `System.Text.Json` and the `Microsoft.Extensions.*` abstractions now provided by .NET 11's `Microsoft.NETCore.App`. Keep references where an older supported target still needs them. EF providers can impose narrower constraints; Microting currently remains on EF Core 10. Inspect the provider's dependency ranges rather than assuming its major version follows the project's TFM.
 
 ### 4. Watch for broken transitive dependency metadata (NU1603)
 
@@ -306,7 +306,7 @@ After all pipelines complete, clear the NuGet cache again and re-run restore to 
 
 Some external dependencies have known constraints:
 
-- **`Pomelo.EntityFrameworkCore.MySql`** — The net10 integration currently retains the EF Core 9 provider and matching project-local health-check pins. Revisit those pins together when upgrading the provider.
+- **`Microting.EntityFrameworkCore.MySql`** — The net10 integration uses the EF Core 10 provider. Move it to EF Core 11 once a stable release is available.
 - **`Microsoft.AI.Foundry.Local`** — Has historically had broken transitive dependency metadata (NU1603). Check if the issue is resolved before updating.
 - **`Spectre.Console`** — Currently on pre-release. Always update to the latest pre-release, not the latest stable. Verify hyperlink rendering behavior hasn't changed (test: `ConsoleActivityLoggerTests`).
 - **`Milvus.Client`** — No stable release exists. Always stays on pre-release.
