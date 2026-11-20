@@ -87,6 +87,10 @@ assigned to multiple resources counts once per resource. A pin counts once per r
 instrument. If an edit would exceed either limit, the dashboard shows a warning toast
 without removing any existing entries.
 
+The dashboard applies edits to resource order, group order, user tags, and metric pins only
+after browser storage confirms the save. If the save fails, the dashboard leaves the current
+view unchanged and asks you to try again.
+
 `WithDisplayOrder` stores its own annotation rather than a trait, and is transported
 as the `resource.displayOrder` resource property; repeated calls replace the previous
 value. Other UIs can use it too. The new dashboard resource pane uses it only when

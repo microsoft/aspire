@@ -10,6 +10,7 @@
    bordered button that turns primary while active. Cards use the quieter transparent variant. *@
 <FluentButton Appearance="@(Bordered ? (_isPinned ? ButtonAppearance.Primary : ButtonAppearance.Default) : ButtonAppearance.Transparent)"
               IconOnly="true"
+              Disabled="@_saving"
               Class="@($"metric-pin-button{(Bordered ? " aspire-button" : null)}{(_isPinned ? " pinned" : null)} {Class}")"
               data-tooltip="@label"
               aria-label="@label"

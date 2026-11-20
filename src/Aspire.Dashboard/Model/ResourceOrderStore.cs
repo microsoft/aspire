@@ -58,7 +58,7 @@ public sealed class ResourceOrderStore
         return groups;
     }
 
-    internal ResourceOrderMoveResult MoveResource(ResourceViewModel resource, ResourceViewModel anchor, bool after, IEnumerable<ResourceViewModel> resources)
+    internal async Task<ResourceOrderMoveResult> MoveResourceAsync(ResourceViewModel resource, ResourceViewModel anchor, bool after, IEnumerable<ResourceViewModel> resources)
     {
         var ordered = OrderResources(resources);
         var names = GetResourceNames(ordered);
@@ -70,19 +70,16 @@ public sealed class ResourceOrderStore
             return result;
         }
 
-        return _resourceOrder.Update(moves =>
+        var saved = await _resourceOrder.UpdateAsync(moves =>
         {
-            if (!ReplaceMove(moves, move))
-            {
-                return false;
-            }
-
+            ReplaceMove(moves, move);
             TrimResourceMoves(moves);
-            return true;
-        }) ? ResourceOrderMoveResult.Moved : ResourceOrderMoveResult.Unchanged;
+            return SettingUpdateResult.Changed;
+        }).ConfigureAwait(false);
+        return GetMoveResult(saved);
     }
 
-    internal ResourceOrderMoveResult MoveGroup(string grouping, string key, string anchor, bool after, IEnumerable<string> orderedGroupKeys)
+    internal async Task<ResourceOrderMoveResult> MoveGroupAsync(string grouping, string key, string anchor, bool after, IEnumerable<string> orderedGroupKeys)
     {
         var result = CreateMove(key, anchor, after, orderedGroupKeys, out var move);
         if (move is null)
@@ -90,22 +87,26 @@ public sealed class ResourceOrderStore
             return result;
         }
 
-        return _groupOrder.Update(order =>
+        var saved = await _groupOrder.UpdateAsync(order =>
         {
             if (!order.TryGetValue(grouping, out var moves))
             {
                 order.Add(grouping, moves = []);
             }
 
-            if (!ReplaceMove(moves, move))
-            {
-                return false;
-            }
-
+            ReplaceMove(moves, move);
             TrimGroupMoves(order);
-            return true;
-        }) ? ResourceOrderMoveResult.Moved : ResourceOrderMoveResult.Unchanged;
+            return SettingUpdateResult.Changed;
+        }).ConfigureAwait(false);
+        return GetMoveResult(saved);
     }
+
+    private static ResourceOrderMoveResult GetMoveResult(SettingUpdateResult result) => result switch
+    {
+        SettingUpdateResult.Changed => ResourceOrderMoveResult.Moved,
+        SettingUpdateResult.NotSaved => ResourceOrderMoveResult.NotSaved,
+        _ => throw new ArgumentOutOfRangeException(nameof(result))
+    };
 
     private static HashSet<string> GetResourceNames(IEnumerable<ResourceViewModel> resources) =>
         resources.Select(r => r.Name).ToHashSet(StringComparer.Ordinal);
@@ -175,17 +176,10 @@ public sealed class ResourceOrderStore
         }
     }
 
-    private static bool ReplaceMove(List<RelativeOrderMove> moves, RelativeOrderMove move)
+    private static void ReplaceMove(List<RelativeOrderMove> moves, RelativeOrderMove move)
     {
-        // A load can read back a move before the writer has removed it from the in-memory queue.
-        if (moves.Exists(existing => existing.Id == move.Id))
-        {
-            return false;
-        }
-
         moves.RemoveAll(existing => StringComparers.ResourceName.Equals(existing.Key, move.Key));
         moves.Add(move);
-        return true;
     }
 
     private static List<RelativeOrderMove> NormalizeMoves(List<RelativeOrderMove>? moves)
@@ -255,5 +249,6 @@ internal enum ResourceOrderMoveResult
 {
     Invalid,
     Unchanged,
-    Moved
+    Moved,
+    NotSaved
 }

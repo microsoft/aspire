@@ -1662,9 +1662,12 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             _resourceByName.TryGetValue(targetName, out var target) &&
             _filter.Filter(resource) && _filter.Filter(target))
         {
-            switch (OrderStore.MoveResource(resource, target, after, GetOrderableResources()))
+            switch (await OrderStore.MoveResourceAsync(resource, target, after, GetOrderableResources()))
             {
                 case ResourceOrderMoveResult.Unchanged:
+                    return false;
+                case ResourceOrderMoveResult.NotSaved:
+                    await ToastService.ShowWarningToastAsync(Loc[nameof(Resources.Layout.BrowserStorageSaveFailed)]);
                     return false;
                 case ResourceOrderMoveResult.Moved:
                     _orderStatus = string.Format(CultureInfo.CurrentCulture,
@@ -1691,9 +1694,12 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         var target = groups.Find(group => StringComparers.ResourceName.Equals(GetGroupKey(group), targetKey));
         if (group is not null && target is not null)
         {
-            switch (OrderStore.MoveGroup(grouping, GetGroupOrderKey(group), GetGroupOrderKey(target), after, groups.Select(GetGroupOrderKey)))
+            switch (await OrderStore.MoveGroupAsync(grouping, GetGroupOrderKey(group), GetGroupOrderKey(target), after, groups.Select(GetGroupOrderKey)))
             {
                 case ResourceOrderMoveResult.Unchanged:
+                    return false;
+                case ResourceOrderMoveResult.NotSaved:
+                    await ToastService.ShowWarningToastAsync(Loc[nameof(Resources.Layout.BrowserStorageSaveFailed)]);
                     return false;
                 case ResourceOrderMoveResult.Moved:
                     _orderStatus = string.Format(CultureInfo.CurrentCulture,

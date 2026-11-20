@@ -11,42 +11,90 @@ namespace Aspire.Dashboard.Tests.Model;
 
 public sealed class LocalStorageSettingTests
 {
+    private const string Key = "Setting";
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public async Task LoadAndUpdate_UseSelectedProtectionMode(bool protect)
+    public async Task LoadAndUpdate_PublishesOnlyAfterStorageConfirmsSave(bool protect)
     {
-        const string key = "Setting";
         var browser = new InMemoryBrowserLocalStorage();
         if (protect)
         {
-            await browser.Storage.SetAsync<List<int>>(key, [1]);
+            await browser.Storage.SetAsync<List<int>>(Key, [1]);
         }
         else
         {
-            await browser.Storage.SetUnprotectedAsync<List<int>>(key, [1]);
+            await browser.Storage.SetUnprotectedAsync<List<int>>(Key, [1]);
         }
 
-        var setting = new LocalStorageSetting<List<int>>(browser.Storage, new LocalStorageLocks(),
-            key, NullLogger.Instance, protect, stored => stored ?? [], (x, y) => x.SequenceEqual(y), () => { });
+        var changes = 0;
+        var setting = CreateSetting(browser, protect, () => changes++);
         await setting.EnsureLoadedAsync().DefaultTimeout();
         Assert.Equal([1], setting.Read(value => value.ToArray()));
 
-        Assert.True(setting.Update(value =>
+        var writeCompleted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var acknowledgeWrite = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        browser.OnAfterWriteAsync = () =>
         {
-            if (value.Contains(2))
-            {
-                return false;
-            }
+            writeCompleted.SetResult();
+            return acknowledgeWrite.Task;
+        };
+        var save = AddAsync(setting, 2);
+        try
+        {
+            await writeCompleted.Task.DefaultTimeout();
+            Assert.False(save.IsCompleted);
+            Assert.Equal([1], setting.Read(value => value.ToArray()));
+            Assert.Equal(1, changes);
+        }
+        finally
+        {
+            acknowledgeWrite.SetResult();
+        }
 
-            value.Add(2);
-            return true;
-        }));
-
+        Assert.Equal(SettingUpdateResult.Changed, await save.DefaultTimeout());
+        Assert.Equal([1, 2], setting.Read(value => value.ToArray()));
+        Assert.Equal(2, changes);
         var saved = protect
-            ? await browser.Storage.GetAsync<List<int>>(key)
-            : await browser.Storage.GetUnprotectedAsync<List<int>>(key);
+            ? await browser.Storage.GetAsync<List<int>>(Key)
+            : await browser.Storage.GetUnprotectedAsync<List<int>>(Key);
         Assert.True(saved.Success);
         Assert.Equal([1, 2], saved.Value);
     }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Update_FailedWriteDoesNotPublishOrCarryOverToTheNextSave(bool protect)
+    {
+        var browser = new InMemoryBrowserLocalStorage();
+        var changes = 0;
+        var setting = CreateSetting(browser, protect, () => changes++);
+        Assert.Equal(SettingUpdateResult.Changed, await AddAsync(setting, 1));
+        var saved = browser.Items[Key];
+
+        browser.FailWrites = true;
+        Assert.Equal(SettingUpdateResult.NotSaved, await AddAsync(setting, 2));
+        Assert.Equal([1], setting.Read(value => value.ToArray()));
+        Assert.Equal(saved, browser.Items[Key]);
+        Assert.Equal(1, changes);
+
+        browser.FailWrites = false;
+        Assert.Equal(SettingUpdateResult.Changed, await AddAsync(setting, 3));
+        Assert.Equal([1, 3], setting.Read(value => value.ToArray()));
+        var reloaded = CreateSetting(browser, protect, () => { });
+        await reloaded.EnsureLoadedAsync().DefaultTimeout();
+        Assert.Equal([1, 3], reloaded.Read(value => value.ToArray()));
+    }
+
+    private static LocalStorageSetting<List<int>> CreateSetting(InMemoryBrowserLocalStorage browser, bool protect, Action onChanged) =>
+        new(browser.Storage, new LocalStorageLocks(), Key, NullLogger.Instance, protect, stored => stored?.ToList() ?? [], (x, y) => x.SequenceEqual(y), onChanged);
+
+    private static Task<SettingUpdateResult> AddAsync(LocalStorageSetting<List<int>> setting, int item) =>
+        setting.UpdateAsync(value =>
+        {
+            value.Add(item);
+            return SettingUpdateResult.Changed;
+        });
 }

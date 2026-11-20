@@ -1,37 +1,18 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Microsoft.JSInterop;
+
 namespace Aspire.Dashboard.Model.BrowserStorage;
 
 /// <summary>
-/// Keeps one setting that describes the application, such as resource tags, in memory for a circuit and saves it to
-/// browser local storage.
+/// Keeps one application preference in memory for a circuit, publishing edits only after they are saved to browser storage.
 /// </summary>
 /// <remarks>
-/// <para>
-/// Every tab of the dashboard has its own circuit, and so its own copy of the setting, but they share local storage.
-/// Writing a tab's copy would replace changes another tab saved since this tab read the setting. Instead, each change
-/// is a function that's applied to the in-memory value right away and queued. Writes read the latest stored value,
-/// apply the queued changes to it and save the result, which then becomes the in-memory value, so a tab also picks up
-/// what other tabs saved. Changes must be idempotent, such as "tag api with backend", because they're applied again
-/// to every value read before they're saved.
-/// </para>
-/// <para>
-/// When storage can't be read, for example while the circuit is disconnected, nothing is written: writing then would
-/// replace the stored value with one missing everything it contained. A failed save is not retried. The changes stay
-/// visible in memory until a load or a later successful save adopts the stored value.
-/// </para>
-/// <para>
-/// If the stored value is invalid for the selected mode, the default is used until the next change replaces it.
-/// Reads do not fall back to the other mode.
-/// </para>
-/// <para>
-/// Changes can happen on any thread, including resource subscription threads, so writes don't wait for the browser.
-/// Writes run one at a time, each saving every change queued when it starts, and saves of the same setting from
-/// different tabs run one at a time too; see <see cref="LocalStorageLocks"/>.
-/// </para>
+/// Each edit reads the latest stored value under a per-key lock to preserve edits saved by other tabs.
+/// A failed read prevents writing a partial value. Failed saves are not retried.
+/// If the stored value is invalid for the selected protection mode, the next successful edit replaces it.
 /// </remarks>
-/// <typeparam name="TValue">The stored value. It must be registered with the dashboard's JSON serializer context.</typeparam>
 internal sealed class LocalStorageSetting<TValue> where TValue : class
 {
     private static readonly TimeSpan s_saveLockTimeout = TimeSpan.FromSeconds(10);
@@ -44,26 +25,10 @@ internal sealed class LocalStorageSetting<TValue> where TValue : class
     private readonly Func<TValue, TValue, bool> _equals;
     private readonly Action _onChanged;
     private readonly Lock _lock = new();
-    private readonly List<PendingChange> _pendingChanges = [];
     private TValue _value;
     private Task? _loadTask;
-    private bool _isWriting;
+    private long _storageVersion;
 
-    // Incremented after each save. A load that read storage before a save completed has an older value than the one
-    // the save adopted, so it must not replace it.
-    private long _saveCount;
-
-    /// <param name="localStorage">The browser's local storage.</param>
-    /// <param name="locks">Makes saves of the setting from different tabs run one at a time.</param>
-    /// <param name="key">The local storage key.</param>
-    /// <param name="logger">Logs values that can't be read or saved.</param>
-    /// <param name="protect">Whether to use data protection. Use <see langword="false"/> only for non-sensitive values.</param>
-    /// <param name="normalize">
-    /// Creates a value that changes can be applied to from a stored value, or from <see langword="null"/> when nothing
-    /// is stored. This also drops entries that are no longer valid.
-    /// </param>
-    /// <param name="equals">Returns whether two normalized values have the same content, to only notify real changes.</param>
-    /// <param name="onChanged">Invoked, on any thread, after the in-memory value changes.</param>
     public LocalStorageSetting(ILocalStorage localStorage, LocalStorageLocks locks, string key, ILogger logger, bool protect, Func<TValue?, TValue> normalize, Func<TValue, TValue, bool> equals, Action onChanged)
     {
         _localStorage = localStorage;
@@ -90,9 +55,6 @@ internal sealed class LocalStorageSetting<TValue> where TValue : class
         }
     }
 
-    /// <summary>
-    /// Reads the stored value into memory, once per circuit, or again after storage couldn't be read.
-    /// </summary>
     public Task EnsureLoadedAsync()
     {
         TaskCompletionSource? loaded = null;
@@ -101,16 +63,13 @@ internal sealed class LocalStorageSetting<TValue> where TValue : class
         {
             if (_loadTask is null)
             {
-                // Continuations can run inline: the task is completed outside the lock, and when storage answers
-                // synchronously the task is already complete when it's returned, so callers don't yield.
-                loaded = new TaskCompletionSource();
+                loaded = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
                 _loadTask = loaded.Task;
             }
             loadTask = _loadTask;
         }
 
-        // Started outside the lock: with storage that completes synchronously, loading would otherwise raise
-        // change notifications while holding it.
+        // Even when the browser answers synchronously, notify listeners outside the state lock.
         if (loaded is not null)
         {
             _ = LoadAsync(loaded);
@@ -119,54 +78,68 @@ internal sealed class LocalStorageSetting<TValue> where TValue : class
         return loadTask;
     }
 
-    /// <summary>
-    /// Applies a change to the in-memory value and saves it in the background.
-    /// </summary>
-    /// <param name="change">Changes a value and returns whether it changed. It must be idempotent.</param>
-    /// <returns><see langword="true"/> when the in-memory value changed.</returns>
-    public bool Update(Func<TValue, bool> change) =>
-        QueueChange(new PendingChange(value => change(value) ? SettingUpdateResult.Changed : SettingUpdateResult.Unchanged, null)) == SettingUpdateResult.Changed;
-
-    public SettingUpdate UpdateWithResult(Func<TValue, SettingUpdateResult> change)
+    // The change operates on a fresh copy. An Unchanged result must leave that copy unmodified.
+    public async Task<SettingUpdateResult> UpdateAsync(Func<TValue, SettingUpdateResult> change)
     {
-        var completion = new TaskCompletionSource<SettingUpdateResult>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var result = QueueChange(new PendingChange(change, completion));
-        return new SettingUpdate(result == SettingUpdateResult.Changed,
-            result == SettingUpdateResult.Changed ? completion.Task : Task.FromResult(result));
-    }
-
-    private SettingUpdateResult QueueChange(PendingChange change)
-    {
-        bool startWriting;
-        lock (_lock)
+        // Hold the lock across both browser operations so another tab can't write between the read and write.
+        var saveLock = _locks.GetLock(Key);
+        if (!await saveLock.WaitAsync(s_saveLockTimeout).ConfigureAwait(false))
         {
-            var result = change.Apply(_value);
-            if (result != SettingUpdateResult.Changed)
+            _logger.LogWarning("Unable to save '{Key}' because the browser storage lock timed out.", Key);
+            return SettingUpdateResult.NotSaved;
+        }
+
+        bool changed;
+        SettingUpdateResult result;
+        try
+        {
+            var stored = await ReadStoredAsync().ConfigureAwait(false);
+            if (stored.ReadFailed)
+            {
+                _logger.LogWarning("Unable to save '{Key}' because browser local storage could not be read.", Key);
+                return SettingUpdateResult.NotSaved;
+            }
+
+            var value = _normalize(stored.Success ? stored.Value : null);
+            result = change(value);
+            if (result == SettingUpdateResult.Changed)
+            {
+                await (_protect ? _localStorage.SetAsync(Key, value) : _localStorage.SetUnprotectedAsync(Key, value)).ConfigureAwait(false);
+            }
+            else if (result != SettingUpdateResult.Unchanged || !stored.Success)
             {
                 return result;
             }
 
-            _pendingChanges.Add(change);
-            startWriting = !_isWriting;
-            _isWriting = true;
+            // A no-op can refresh a stale tab with the confirmed value that another tab already saved.
+            changed = Adopt(value, loadVersion: null);
+        }
+        catch (Exception ex) when (ex is JSDisconnectedException or JSException or OperationCanceledException)
+        {
+            _logger.LogWarning(ex, "Unable to save '{Key}' to browser local storage.", Key);
+            return SettingUpdateResult.NotSaved;
+        }
+        finally
+        {
+            saveLock.Release();
         }
 
-        _onChanged();
-        if (startWriting)
+        if (changed)
         {
-            _ = WriteAsync();
+            _onChanged();
         }
-        return SettingUpdateResult.Changed;
+
+        return result;
     }
 
     private async Task LoadAsync(TaskCompletionSource loaded)
     {
         try
         {
-            long saveCount;
+            long loadVersion;
             lock (_lock)
             {
-                saveCount = _saveCount;
+                loadVersion = _storageVersion;
             }
 
             var result = await ReadStoredAsync().ConfigureAwait(false);
@@ -184,88 +157,21 @@ internal sealed class LocalStorageSetting<TValue> where TValue : class
                 _logger.LogWarning("'{Key}' in browser local storage can't be read. It's replaced with the next change.", Key);
             }
 
-            Adopt(result.Success ? result.Value : null, savedChangeCount: 0, loadedAfterSaveCount: saveCount);
+            if (Adopt(_normalize(result.Success ? result.Value : null), loadVersion))
+            {
+                _onChanged();
+            }
         }
         catch (Exception ex)
         {
-            // The setting stays as it is in memory. Not retried: an error here comes from the stored value, which
-            // would fail the same way again.
-            _logger.LogWarning(ex, "Unable to load '{Key}' from browser local storage.", Key);
+            loaded.SetException(ex);
+            return;
         }
+
+        // Read failures also complete the load attempt so the view can render.
         finally
         {
-            loaded.SetResult();
-        }
-    }
-
-    private async Task WriteAsync()
-    {
-        while (true)
-        {
-            PendingChange[] changes;
-            lock (_lock)
-            {
-                if (_pendingChanges.Count == 0)
-                {
-                    _isWriting = false;
-                    return;
-                }
-                changes = [.. _pendingChanges];
-            }
-
-            TValue? saved = null;
-            Exception? error = null;
-            try
-            {
-                saved = await TryWriteAsync(changes).ConfigureAwait(false);
-            }
-            catch (Exception ex)
-            {
-                error = ex;
-            }
-
-            if (saved is not null)
-            {
-                Adopt(saved, changes.Length, loadedAfterSaveCount: null);
-            }
-            else
-            {
-                _logger.LogWarning(error, "Unable to save '{Key}' to browser local storage.", Key);
-                lock (_lock)
-                {
-                    // The browser may have committed the write without acknowledging it. Never replay this batch,
-                    // but still save any new changes queued while the attempt was in flight.
-                    _pendingChanges.RemoveRange(0, changes.Length);
-                }
-            }
-
-            foreach (var change in changes)
-            {
-                change.Completion?.SetResult(saved is null && change.SaveResult != SettingUpdateResult.LimitReached
-                    ? SettingUpdateResult.NotSaved
-                    : change.SaveResult);
-            }
-        }
-    }
-
-    /// <returns>The saved value, or <see langword="null"/> when no write was attempted.</returns>
-    private async Task<TValue?> TryWriteAsync(PendingChange[] changes)
-    {
-        // Another tab saving the same setting between this read and write would have its change replaced, so the whole
-        // save holds the setting's lock. Other tabs stop waiting if a browser takes too long to answer.
-        var saveLock = _locks.GetLock(Key);
-        if (!await saveLock.WaitAsync(s_saveLockTimeout).ConfigureAwait(false))
-        {
-            return null;
-        }
-
-        try
-        {
-            return await TryWriteLockedAsync(changes).ConfigureAwait(false);
-        }
-        finally
-        {
-            saveLock.Release();
+            loaded.TrySetResult();
         }
     }
 
@@ -273,71 +179,26 @@ internal sealed class LocalStorageSetting<TValue> where TValue : class
         ? _localStorage.GetAsync<TValue>(Key)
         : _localStorage.GetUnprotectedAsync<TValue>(Key);
 
-    private async Task<TValue?> TryWriteLockedAsync(PendingChange[] changes)
+    private bool Adopt(TValue value, long? loadVersion)
     {
-        var result = await ReadStoredAsync().ConfigureAwait(false);
-        if (result.ReadFailed)
-        {
-            return null;
-        }
-
-        var value = _normalize(result.Success ? result.Value : null);
-        foreach (var change in changes)
-        {
-            change.SaveResult = change.Apply(value);
-        }
-
-        await (_protect ? _localStorage.SetAsync(Key, value) : _localStorage.SetUnprotectedAsync(Key, value)).ConfigureAwait(false);
-        return value;
-    }
-
-    /// <summary>
-    /// Makes a value read from storage, or just saved, the in-memory value, with changes that aren't saved yet applied.
-    /// </summary>
-    /// <param name="stored">The stored value, or <see langword="null"/> when nothing is stored.</param>
-    /// <param name="savedChangeCount">The number of queued changes that <paramref name="stored"/> includes.</param>
-    /// <param name="loadedAfterSaveCount">For a load, the number of saves completed when it read storage.</param>
-    private void Adopt(TValue? stored, int savedChangeCount, long? loadedAfterSaveCount)
-    {
-        bool changed;
         lock (_lock)
         {
-            if (loadedAfterSaveCount is { } count && count != _saveCount)
+            if (loadVersion is { } version && version != _storageVersion)
             {
-                // A save completed after this load read storage, and adopted a value read later.
-                return;
+                // An older load must not overwrite a value confirmed while it was waiting on storage.
+                return false;
             }
-            if (loadedAfterSaveCount is null)
+            if (loadVersion is null)
             {
-                _saveCount++;
-            }
-
-            // Only the writer removes changes, and they're always the oldest ones, so the first ones are those it saved.
-            _pendingChanges.RemoveRange(0, savedChangeCount);
-            var value = _normalize(stored);
-            foreach (var change in _pendingChanges)
-            {
-                change.Apply(value);
+                _storageVersion++;
             }
 
-            changed = !_equals(_value, value);
+            var changed = !_equals(_value, value);
             _value = value;
+            return changed;
         }
-
-        if (changed)
-        {
-            _onChanged();
-        }
-    }
-
-    private sealed record PendingChange(Func<TValue, SettingUpdateResult> Apply, TaskCompletionSource<SettingUpdateResult>? Completion)
-    {
-        // Only the save merge (not a provisional replay during Adopt) can confirm a rejection based on another tab's changes.
-        public SettingUpdateResult SaveResult { get; set; } = SettingUpdateResult.Changed;
     }
 }
-
-internal readonly record struct SettingUpdate(bool Changed, Task<SettingUpdateResult> Completion);
 
 internal enum SettingUpdateResult
 {

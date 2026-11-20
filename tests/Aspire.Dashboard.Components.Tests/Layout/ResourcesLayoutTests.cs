@@ -1,4 +1,4 @@
-﻿// Licensed to the .NET Foundation under one or more agreements.
+// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Concurrent;
@@ -699,8 +699,8 @@ public class ResourcesLayoutTests : DashboardTestContext
         var storage = Assert.IsType<TestLocalStorage>(Services.GetRequiredService<ILocalStorage>());
         storage.OnGetUnprotectedAsync = key => key == BrowserStorageKeys.ResourcePaneGrouping ? (true, "Tags") : (false, null);
         var tags = Services.GetRequiredService<ResourceTagStore>();
-        tags.AddTag("api", "Backend");
-        tags.AddTag("api", "Public");
+        await tags.AddTagAsync("api", "Backend");
+        await tags.AddTagAsync("api", "Public");
         var navigation = Services.GetRequiredService<NavigationManager>();
         navigation.NavigateTo("/resources/cache");
         var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
@@ -1130,9 +1130,9 @@ public class ResourcesLayoutTests : DashboardTestContext
         var storage = Assert.IsType<TestLocalStorage>(Services.GetRequiredService<ILocalStorage>());
         storage.OnGetUnprotectedAsync = key => key == BrowserStorageKeys.ResourcePaneGrouping ? (true, grouping) : (false, null);
         var tags = Services.GetRequiredService<ResourceTagStore>();
-        tags.AddTag("api", "Alpha");
-        tags.AddTag("cache", "Beta");
-        tags.AddTag("api", "Untagged");
+        await tags.AddTagAsync("api", "Alpha");
+        await tags.AddTagAsync("cache", "Beta");
+        await tags.AddTagAsync("api", "Untagged");
         // The docked list beside the overview of all resources. The default URL, "/", is the full-page table.
         Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.ResourceListUrl());
         Render<FluentToastProvider>();
@@ -1167,7 +1167,7 @@ public class ResourcesLayoutTests : DashboardTestContext
         await cut.InvokeAsync(() => search.Instance.ValueChanged.InvokeAsync("api"));
         if (grouping == "Tags")
         {
-            tags.AddTag("api", "A new group");
+            await tags.AddTagAsync("api", "A new group");
         }
         else
         {
@@ -1840,9 +1840,9 @@ public class ResourcesLayoutTests : DashboardTestContext
         var storage = Assert.IsType<TestLocalStorage>(Services.GetRequiredService<ILocalStorage>());
         storage.OnGetUnprotectedAsync = key => key == BrowserStorageKeys.ResourcePaneGrouping ? (true, "Tags") : (false, null);
         var tags = Services.GetRequiredService<ResourceTagStore>();
-        tags.AddTag("api", "Backend");
-        tags.AddTag("worker", "Backend");
-        tags.AddTag("setting", "Backend");
+        await tags.AddTagAsync("api", "Backend");
+        await tags.AddTagAsync("worker", "Backend");
+        await tags.AddTagAsync("setting", "Backend");
         Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.ConsoleLogsUrl("cache"));
         Render<FluentToastProvider>();
         var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
@@ -1860,7 +1860,7 @@ public class ResourcesLayoutTests : DashboardTestContext
         Assert.Equal("1 of 3", command.Description);
         Assert.False(command.IsDisabled);
 
-        await cut.InvokeAsync(() => tags.AddTag("cache", "Backend"));
+        await cut.InvokeAsync(() => tags.AddTagAsync("cache", "Backend"));
         cut.WaitForAssertion(() => Assert.Equal("4", cut.Find($"{backendGroup} .resource-tag-count").TextContent));
         var openCommand = Assert.Single(menu.Instance.Items, item => !item.IsHeader);
         await cut.InvokeAsync(openCommand.OnClick!);
@@ -1921,7 +1921,7 @@ public class ResourcesLayoutTests : DashboardTestContext
             executeResourceCommand: (_, _, _, _, _) => response.Task));
         var storage = Assert.IsType<TestLocalStorage>(Services.GetRequiredService<ILocalStorage>());
         storage.OnGetUnprotectedAsync = key => key == BrowserStorageKeys.ResourcePaneGrouping ? (true, "Tags") : (false, null);
-        Services.GetRequiredService<ResourceTagStore>().AddTag("api", "Backend");
+        await Services.GetRequiredService<ResourceTagStore>().AddTagAsync("api", "Backend");
         Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.ConsoleLogsUrl("api"));
         Render<FluentToastProvider>();
         var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
@@ -2397,9 +2397,9 @@ public class ResourcesLayoutTests : DashboardTestContext
             ],
             resourceChannelProvider: () => channel));
         var tags = Services.GetRequiredService<ResourceTagStore>();
-        tags.AddTag("api", "Backend");
-        tags.AddTag("worker", "Backend");
-        tags.AddTag("worker", "Shared");
+        await tags.AddTagAsync("api", "Backend");
+        await tags.AddTagAsync("worker", "Backend");
+        await tags.AddTagAsync("worker", "Shared");
 
         // The docked list beside the overview of all resources. The default URL, "/", is the full-page table.
         Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.ResourceListUrl());
@@ -2443,9 +2443,9 @@ public class ResourcesLayoutTests : DashboardTestContext
         var storage = Assert.IsType<TestLocalStorage>(Services.GetRequiredService<ILocalStorage>());
         storage.OnGetUnprotectedAsync = key => key == BrowserStorageKeys.ResourcePaneGrouping ? (true, "Tags") : (false, null);
         var tags = Services.GetRequiredService<ResourceTagStore>();
-        tags.AddTag("api", "Backend");
-        tags.AddTag("api", "API");
-        tags.AddTag("worker", "Backend");
+        await tags.AddTagAsync("api", "Backend");
+        await tags.AddTagAsync("api", "API");
+        await tags.AddTagAsync("worker", "Backend");
 
         // The docked list beside the overview of all resources. The default URL, "/", is the full-page table.
         Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.ResourceListUrl());
@@ -2993,9 +2993,9 @@ public class ResourcesLayoutTests : DashboardTestContext
                 ModelTestHelpers.CreateResource("cache", resourceType: "Container")
             ], resourceChannelProvider: () => channel));
         var tags = Services.GetRequiredService<ResourceTagStore>();
-        tags.AddTag("api", "Backend");
-        tags.AddTag("worker", "Backend");
-        tags.AddTag("api", "Shared");
+        await tags.AddTagAsync("api", "Backend");
+        await tags.AddTagAsync("worker", "Backend");
+        await tags.AddTagAsync("api", "Shared");
         var navigation = Services.GetRequiredService<NavigationManager>();
         navigation.NavigateTo(DashboardUrls.StructuredLogsUrl("api"));
         var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
@@ -3051,8 +3051,8 @@ public class ResourcesLayoutTests : DashboardTestContext
         var storage = Assert.IsType<TestLocalStorage>(Services.GetRequiredService<ILocalStorage>());
         storage.OnGetUnprotectedAsync = key => key == BrowserStorageKeys.ResourcePaneGrouping ? (true, "Tags") : (false, null);
         var tags = Services.GetRequiredService<ResourceTagStore>();
-        tags.AddTag("worker", "Backend");
-        tags.AddTag("parameter", "Backend");
+        await tags.AddTagAsync("worker", "Backend");
+        await tags.AddTagAsync("parameter", "Backend");
         var navigation = Services.GetRequiredService<NavigationManager>();
         navigation.NavigateTo(DashboardUrls.ResourceOverviewUrl("cache"));
         var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
@@ -3117,7 +3117,7 @@ public class ResourcesLayoutTests : DashboardTestContext
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public void AppHost_LegacyTagsViewSelectsAndPersistsTagGrouping(bool fromStorage)
+    public async Task AppHost_LegacyTagsViewSelectsAndPersistsTagGrouping(bool fromStorage)
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
@@ -3133,7 +3133,7 @@ public class ResourcesLayoutTests : DashboardTestContext
                 storedGrouping = Assert.IsType<string>(value);
             }
         };
-        Services.GetRequiredService<ResourceTagStore>().AddTag("api", "Backend");
+        await Services.GetRequiredService<ResourceTagStore>().AddTagAsync("api", "Backend");
         Services.GetRequiredService<NavigationManager>().NavigateTo(fromStorage ? DashboardUrls.ResourceListUrl() : DashboardUrls.TagsUrl());
         var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
         cut.WaitForAssertion(() =>

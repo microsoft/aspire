@@ -61,6 +61,15 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Couldn&apos;t save the change. Check that browser storage is available and try again..
+        /// </summary>
+        public static string BrowserStorageSaveFailed {
+            get {
+                return ResourceManager.GetString("BrowserStorageSaveFailed", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Select run: {0}.
         /// </summary>
         public static string DashboardRunMenuAccessibleLabel {

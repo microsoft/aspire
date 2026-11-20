@@ -101,16 +101,16 @@ public sealed class ResourceTagStore
     /// </summary>
     /// <param name="resourceName">The display name of the resource.</param>
     /// <param name="tag">The tag to add.</param>
-    internal SettingUpdate AddTag(string resourceName, string tag)
+    internal Task<SettingUpdateResult> AddTagAsync(string resourceName, string tag)
     {
         ArgumentException.ThrowIfNullOrEmpty(resourceName);
 
         if (NormalizeTag(tag) is not { } normalizedTag)
         {
-            return new SettingUpdate(false, Task.FromResult(SettingUpdateResult.Unchanged));
+            return Task.FromResult(SettingUpdateResult.Unchanged);
         }
 
-        return _setting.UpdateWithResult(tagsByResource =>
+        return _setting.UpdateAsync(tagsByResource =>
         {
             if (tagsByResource.Values.Sum(tags => tags.Count) >= MaxSavedTagAssignments)
             {
@@ -132,22 +132,21 @@ public sealed class ResourceTagStore
     /// </summary>
     /// <param name="resourceName">The display name of the resource.</param>
     /// <param name="tag">The tag to remove.</param>
-    /// <returns><see langword="true"/> when the tag was removed; otherwise, <see langword="false"/>.</returns>
-    public bool RemoveTag(string resourceName, string tag)
+    internal Task<SettingUpdateResult> RemoveTagAsync(string resourceName, string tag)
     {
-        return _setting.Update(tagsByResource =>
+        return _setting.UpdateAsync(tagsByResource =>
         {
             if (!tagsByResource.TryGetValue(resourceName, out var tags) ||
                 tags.RemoveAll(t => string.Equals(t, tag, StringComparison.OrdinalIgnoreCase)) == 0)
             {
-                return false;
+                return SettingUpdateResult.Unchanged;
             }
 
             if (tags.Count == 0)
             {
                 tagsByResource.Remove(resourceName);
             }
-            return true;
+            return SettingUpdateResult.Changed;
         });
     }
 

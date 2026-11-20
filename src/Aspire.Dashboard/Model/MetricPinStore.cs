@@ -80,11 +80,10 @@ public sealed class MetricPinStore
     /// Pins or unpins an instrument for each of <paramref name="resourceNames"/>. A pin operation is rejected if
     /// the new pins would exceed the saved pin limit.
     /// </summary>
-    internal SettingUpdate SetPinned(OtlpInstrumentKey key, IReadOnlyCollection<string> resourceNames, bool pinned)
+    internal Task<SettingUpdateResult> SetPinnedAsync(OtlpInstrumentKey key, IReadOnlyCollection<string> resourceNames, bool pinned)
     {
-        return _setting.UpdateWithResult(pins =>
+        return _setting.UpdateAsync(pins =>
         {
-            var originalCount = pins.Count;
             var changed = false;
             foreach (var name in resourceNames)
             {
@@ -93,8 +92,7 @@ public sealed class MetricPinStore
                     : pins.RemoveAll(pin => pin.Matches(name, key)) > 0;
                 if (pinned && pins.Count > MaxSavedPins)
                 {
-                    // Pinning a selection adds pins for all selected resources or none of them.
-                    pins.RemoveRange(originalCount, pins.Count - originalCount);
+                    // The candidate value is discarded, so none of the pins in this selection are saved.
                     _logger.LogWarning("Cannot pin the instrument for the selection because it would exceed the limit of {Limit} saved metric pins.", MaxSavedPins);
                     return SettingUpdateResult.LimitReached;
                 }

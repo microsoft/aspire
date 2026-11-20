@@ -388,14 +388,16 @@ public partial class MetricsTests : DashboardTestContext
         var toasts = Render<FluentToastProvider>();
         var resources = Enumerable.Range(1, filledByAnotherTab ? 2 : 51).Select(i => $"resource-{i}").ToArray();
         var savedPins = new List<MetricPin>();
+        var storage = Services.GetRequiredService<ILocalStorage>();
+        var applicationName = Services.GetRequiredService<IOptions<DashboardOptions>>().Value.GetApplicationNameOrDefault();
+        var storageKey = BrowserStorageKeys.MetricPinsKey(applicationName);
         var cut = Render<MetricPinButton>(builder => builder
             .Add(button => button.InstrumentKey, new OtlpInstrumentKey("test-meter", "requests"))
             .Add(button => button.ResourceNames, resources));
         if (filledByAnotherTab)
         {
             savedPins.AddRange(Enumerable.Range(1, 49).Select(i => new MetricPin($"other-{i}", "test-meter", "requests")));
-            var applicationName = Services.GetRequiredService<IOptions<DashboardOptions>>().Value.GetApplicationNameOrDefault();
-            await Services.GetRequiredService<ILocalStorage>().SetAsync(BrowserStorageKeys.MetricPinsKey(applicationName), savedPins);
+            await storage.SetAsync(storageKey, savedPins);
         }
 
         await cut.Find("fluent-button").ClickAsync(new MouseEventArgs());
@@ -404,7 +406,10 @@ public partial class MetricsTests : DashboardTestContext
         Assert.Equal(ToastIntent.Warning, toast.Intent);
         Assert.Equal("Can't pin this metric. The limit is 50 pins per application. Select fewer resources or unpin existing metrics.", toast.Title);
         Assert.Equal("false", cut.Find("fluent-button").GetAttribute("aria-pressed"));
-        Assert.Equal(savedPins, Services.GetRequiredService<MetricPinStore>().GetPins());
+        Assert.Empty(Services.GetRequiredService<MetricPinStore>().GetPins());
+        var stored = await storage.GetAsync<List<MetricPin>>(storageKey);
+        Assert.Equal(filledByAnotherTab, stored.Success);
+        Assert.Equal(savedPins, stored.Value ?? []);
     }
 
     [Fact]
@@ -614,7 +619,7 @@ public partial class MetricsTests : DashboardTestContext
         Assert.Equal([new MetricPin("app1", "test-meter", "requests"), new MetricPin("app2", "test-meter", "requests")], store.GetPins());
 
         // It shows pinned while any of the selected resources has it pinned, and unpinning unpins it for all of them.
-        store.SetPinned(requests, ["app1"], pinned: false);
+        await store.SetPinnedAsync(requests, ["app1"], pinned: false);
         cut.WaitForAssertion(() => Assert.Equal(["true", "true"], GetPinStates()));
         cut.FindComponents<MetricPinButton>()[1].Find("fluent-button").Click();
         cut.WaitForAssertion(() => Assert.Equal(["false", "false"], GetPinStates()));
@@ -1728,7 +1733,7 @@ public partial class MetricsTests : DashboardTestContext
     public async Task InitialLoad_WithPinnedInstruments_ShowsPinnedGroup()
     {
         MetricsSetupHelpers.SetupMetricsPage(this);
-        Services.GetRequiredService<MetricPinStore>().SetPinned(new OtlpInstrumentKey("test-meter", "test-instrument-b"), ["TestApp"], pinned: true);
+        await Services.GetRequiredService<MetricPinStore>().SetPinnedAsync(new OtlpInstrumentKey("test-meter", "test-instrument-b"), ["TestApp"], pinned: true);
 
         var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
         await telemetryRepository.AddMetricsAsync(new AddContext(), new RepeatedField<ResourceMetrics>
@@ -2229,7 +2234,7 @@ public partial class MetricsTests : DashboardTestContext
     public async Task InstrumentChart_Back_ReturnsToGroupItWasOpenedFrom()
     {
         MetricsSetupHelpers.SetupMetricsPage(this);
-        Services.GetRequiredService<MetricPinStore>().SetPinned(new OtlpInstrumentKey("test-meter2", "queue.length"), ["TestApp"], pinned: true);
+        await Services.GetRequiredService<MetricPinStore>().SetPinnedAsync(new OtlpInstrumentKey("test-meter2", "queue.length"), ["TestApp"], pinned: true);
         await AddTwoMetersAsync();
 
         var navigationManager = Services.GetRequiredService<NavigationManager>();
