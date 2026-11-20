@@ -160,12 +160,12 @@
         </section>
     };
 
-    // Telemetry sources have no state to summarize, so the header says whether the dashboard has received telemetry.
-    // Until it has, the header explains how to send it, like the empty telemetry pages.
+    // Telemetry sources have no resource health to summarize, so the header reports the current source count.
+    // Until the dashboard receives telemetry, the header explains how to send it, like the empty telemetry pages.
     private RenderFragment TelemetrySourcesSection(int sourceCount, DateTime startedAt) => __builder =>
     {
         var hasReceivedTelemetry = TelemetryRepository.HasReceivedTelemetry;
-        var heroState = hasReceivedTelemetry ? "state-success" : "state-warning";
+        var heroState = sourceCount > 0 ? "state-success" : "state-warning";
         <section class="home-hero home-telemetry-sources @heroState" aria-label="@Loc[nameof(Dashboard.Resources.Resources.HomeSummaryLandmark)]">
             <div class="home-hero-main">
                 <span class="home-hero-icon" aria-hidden="true">

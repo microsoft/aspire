@@ -2467,7 +2467,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         }
 
         // Console logs come from the app host.
-        if (!DashboardClient.IsEnabled && tab is ResourceTab.Console)
+        if ((IsTelemetryPane || !DashboardClient.IsEnabled) && tab is ResourceTab.Console)
         {
             return false;
         }

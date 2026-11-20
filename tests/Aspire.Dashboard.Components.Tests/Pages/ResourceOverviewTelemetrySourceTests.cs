@@ -101,6 +101,28 @@ public class ResourceOverviewTelemetrySourceTests : DashboardTestContext
         Assert.Equal(GroupOverview.Graph, Services.GetRequiredService<DashboardViewPreferences>().GroupOverview);
     }
 
+    [Fact]
+    public async Task Standalone_SummaryHeaderAfterClearingTelemetryShowsNoSources()
+    {
+        Setup(hasAppHost: false);
+        var repository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        await AddLogAsync("browser", []);
+        var resourceKey = new ResourceKey("browser", "TestId");
+        await repository.ClearSelectedSignalsAsync(new() { [resourceKey.GetCompositeName()] = [AspireDataType.Resource] });
+        Assert.True(repository.HasReceivedTelemetry);
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.ResourceListUrl());
+
+        var cut = RenderOverview(resourceName: null);
+
+        cut.WaitForAssertion(() =>
+        {
+            var header = cut.Find(".home-telemetry-sources");
+            Assert.Equal("No telemetry", header.QuerySelector(".home-hero-headline")!.TextContent);
+            Assert.Contains("state-warning", header.ClassList);
+            Assert.Empty(header.QuerySelectorAll(".telemetry-help-message"));
+        });
+    }
+
     // With an app host, the overview without a selection summarizes the app's resources, even in the telemetry pane.
     [Fact]
     public async Task AppHost_TelemetryPaneSummaryIsTheResourceSummary()
@@ -113,6 +135,7 @@ public class ResourceOverviewTelemetrySourceTests : DashboardTestContext
 
         cut.WaitForAssertion(() => Assert.Equal("No resources need attention", cut.Find(".home-hero-headline").TextContent));
         Assert.True(cut.Instance.IsTelemetryPane);
+        Assert.False(cut.Instance.IsTabAvailable(ResourceTab.Console));
         Assert.Empty(cut.FindAll(".home-telemetry-sources"));
         Assert.Single(cut.FindComponents<IconToggleGroup<GroupOverview>>());
     }
