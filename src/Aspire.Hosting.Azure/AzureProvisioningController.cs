@@ -1078,7 +1078,7 @@ internal sealed class AzureProvisioningController(
 
         await PublishAzureEnvironmentStateAsync(
             model,
-            new ResourceStateSnapshot(StartingState, KnownResourceStateStyles.Info),
+            new ResourceStateSnapshot(StartingState, KnownResourceStateStyles.Info) { IsInProgress = true },
             cancellationToken).ConfigureAwait(false);
 
         var parentChildLookup = model.Resources.OfType<IResourceWithParent>().ToLookup(r => r.Parent);
@@ -1866,7 +1866,7 @@ internal sealed class AzureProvisioningController(
         // instead, since individual Azure resources may not map one-to-one to a resource group.
         await PublishAzureEnvironmentStateAsync(
             model,
-            new ResourceStateSnapshot(DeletingState, KnownResourceStateStyles.Info),
+            new ResourceStateSnapshot(DeletingState, KnownResourceStateStyles.Info) { IsInProgress = true },
             cancellationToken).ConfigureAwait(false);
 
         foreach (var resource in remainingResources)
@@ -2004,7 +2004,7 @@ internal sealed class AzureProvisioningController(
         {
             await PublishUpdateToResourceTreeAsync(resource, parentChildLookup, state => state with
             {
-                State = new(ChangingLocationState, KnownResourceStateStyles.Info)
+                State = new(ChangingLocationState, KnownResourceStateStyles.Info) { IsInProgress = true }
             }).ConfigureAwait(false);
         }
 
@@ -2151,7 +2151,7 @@ internal sealed class AzureProvisioningController(
             {
                 await PublishUpdateToResourceTreeAsync(resource, parentChildLookup, state => state with
                 {
-                    State = new(CancelingState, KnownResourceStateStyles.Info)
+                    State = new(CancelingState, KnownResourceStateStyles.Info) { IsInProgress = true }
                 }).ConfigureAwait(false);
             }
         }
@@ -2193,7 +2193,7 @@ internal sealed class AzureProvisioningController(
             // dashboard reflects that child resources/role assignments are part of the operation.
             await PublishUpdateToResourceTreeAsync(resource, parentChildLookup, state => state with
             {
-                State = new(DeletingState, KnownResourceStateStyles.Info)
+                State = new(DeletingState, KnownResourceStateStyles.Info) { IsInProgress = true }
             }).ConfigureAwait(false);
         }
 
@@ -4023,10 +4023,11 @@ internal sealed class AzureProvisioningController(
         // without forcing Azure authentication.
         var provisioningContextLazy = new Lazy<Task<ProvisioningContext>>(() => provisioningContextProvider.CreateProvisioningContextAsync(cancellationToken));
         var tasks = new List<Task>(azureResources.Count);
+        var independentlyProvisionedResources = azureResources.Select(static resource => resource.Resource).ToHashSet();
 
         foreach (var resource in azureResources)
         {
-            tasks.Add(ProcessResourceAsync(provisioningContextLazy, resource, parentChildLookup, cancellationToken));
+            tasks.Add(ProcessResourceAsync(provisioningContextLazy, resource, parentChildLookup, independentlyProvisionedResources, cancellationToken));
         }
 
         var task = Task.WhenAll(tasks);
@@ -4037,6 +4038,7 @@ internal sealed class AzureProvisioningController(
         Lazy<Task<ProvisioningContext>> provisioningContextLazy,
         (IResource Resource, IAzureResource AzureResource) resource,
         ILookup<IResource, IResourceWithParent> parentChildLookup,
+        IReadOnlySet<IResource> independentlyProvisionedResources,
         CancellationToken cancellationToken)
     {
         // This method owns the lifecycle for a single Azure resource within a batch. It is also responsible for
@@ -4069,6 +4071,7 @@ internal sealed class AzureProvisioningController(
             {
                 var executionContext = serviceProvider.GetRequiredService<DistributedApplicationExecutionContext>();
                 await WaitForProvisioningDependenciesAsync(bicepResource, executionContext, cancellationToken).ConfigureAwait(false);
+                await MarkActiveProvisioningAsync(resource.Resource, parentChildLookup, independentlyProvisionedResources).ConfigureAwait(false);
 
                 if (await IsMissingCachedResourceAsync(bicepResource, cancellationToken).ConfigureAwait(false))
                 {
@@ -4141,6 +4144,31 @@ internal sealed class AzureProvisioningController(
         {
             resourceLogger.LogError(ex, "Error provisioning {ResourceName}.", resource.AzureResource.Name);
             FailProvisioning(resource.AzureResource, new InvalidOperationException($"Unable to provision {resource.AzureResource.Name}.", ex));
+        }
+    }
+
+    private async Task MarkActiveProvisioningAsync(
+        IResource resource,
+        ILookup<IResource, IResourceWithParent> parentChildLookup,
+        IReadOnlySet<IResource> independentlyProvisionedResources)
+    {
+        var resources = new List<IResource> { resource };
+        for (var i = 0; i < resources.Count; i++)
+        {
+            var current = resources[i];
+            await notificationService.PublishUpdateAsync(current, state =>
+                state.State is { Text: var text } startingState && text == StartingState
+                    ? state with { State = startingState with { IsInProgress = true } }
+                    : state).ConfigureAwait(false);
+
+            foreach (var child in parentChildLookup[current])
+            {
+                // A separately provisioned child may still be waiting for its own dependencies.
+                if (!independentlyProvisionedResources.Contains(child) && !resources.Contains(child))
+                {
+                    resources.Add(child);
+                }
+            }
         }
     }
 

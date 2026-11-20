@@ -329,7 +329,7 @@ internal sealed class BicepProvisioner(
         // metadata before publishing more detailed operation progress.
         await notificationService.PublishUpdateAsync(resource, state => state with
         {
-            State = new(AzureProvisioningController.WaitingForDeploymentState, KnownResourceStateStyles.Info),
+            State = new(AzureProvisioningController.WaitingForDeploymentState, KnownResourceStateStyles.Info) { IsInProgress = true },
             Urls = [.. state.Urls.Where(static url => !string.Equals(url.Name, DeploymentUrlName, StringComparison.Ordinal)), new(Name: DeploymentUrlName, Url: deploymentUrl, IsInternal: false)],
             Properties = state.Properties
                 .WithoutAzureProvisioningFailureProperties()
@@ -530,7 +530,7 @@ internal sealed class BicepProvisioner(
         await notificationService.PublishUpdateAsync(resource, state => state with
         {
             ResourceType = resource.GetType().Name,
-            State = new(AzureProvisioningController.StartingState, KnownResourceStateStyles.Info),
+            State = new(AzureProvisioningController.StartingState, KnownResourceStateStyles.Info) { IsInProgress = true },
             Properties = WithoutDeploymentOperationProperties(state.Properties.WithoutAzureProvisioningFailureProperties()).SetResourcePropertyRange(
                 AzureResourceProperties.CreateContextProperties(
                     subscription.Id.Name,
@@ -553,7 +553,7 @@ internal sealed class BicepProvisioner(
         {
             return state with
             {
-                State = new(AzureProvisioningController.CompilingArmTemplateState, KnownResourceStateStyles.Info)
+                State = new(AzureProvisioningController.CompilingArmTemplateState, KnownResourceStateStyles.Info) { IsInProgress = true }
             };
         })
         .ConfigureAwait(false);
@@ -587,7 +587,7 @@ internal sealed class BicepProvisioner(
         {
             return state with
             {
-                State = new(AzureProvisioningController.CreatingArmDeploymentState, KnownResourceStateStyles.Info),
+                State = new(AzureProvisioningController.CreatingArmDeploymentState, KnownResourceStateStyles.Info) { IsInProgress = true },
                 Properties = state.Properties.SetResourceProperty(CustomResourceKnownProperties.Source, deploymentId.ToString()),
             };
         })
@@ -691,7 +691,7 @@ internal sealed class BicepProvisioner(
         {
             return state with
             {
-                State = new(AzureProvisioningController.WaitingForDeploymentState, KnownResourceStateStyles.Info),
+                State = new(AzureProvisioningController.WaitingForDeploymentState, KnownResourceStateStyles.Info) { IsInProgress = true },
                 Urls = [.. state.Urls, new(Name: DeploymentUrlName, Url: url, IsInternal: false)],
                 Properties = state.Properties.SetResourceProperty(CustomResourceKnownProperties.Source, deploymentId.ToString()),
             };
@@ -1241,17 +1241,17 @@ internal sealed class BicepProvisioner(
                 ? string.Format(CultureInfo.CurrentCulture, AzureProvisioningStrings.ResourceStateProvisioningResourceFormat, runningLabels[0])
                 : string.Format(CultureInfo.CurrentCulture, AzureProvisioningStrings.ResourceStateProvisioningMultipleAzureResourcesFormat, runningLabels.Length);
 
-            return new(runningText, KnownResourceStateStyles.Info);
+            return new(runningText, KnownResourceStateStyles.Info) { IsInProgress = true };
         }
 
         if (summary.SucceededOperations.Length > 0)
         {
             return new(
                 string.Format(CultureInfo.CurrentCulture, AzureProvisioningStrings.ResourceStateProvisionedMultipleAzureResourcesFormat, summary.SucceededOperations.Length),
-                KnownResourceStateStyles.Info);
+                KnownResourceStateStyles.Info) { IsInProgress = true };
         }
 
-        return new(AzureProvisioningController.WaitingForDeploymentState, KnownResourceStateStyles.Info);
+        return new(AzureProvisioningController.WaitingForDeploymentState, KnownResourceStateStyles.Info) { IsInProgress = true };
     }
 
     private static void LogProvisioningFailure(ILogger resourceLogger, AzureProvisioningFailureDetails failureDetails)

@@ -25,6 +25,42 @@ namespace Aspire.Hosting.Azure.Tests;
 public class AzureBicepProvisionerTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
+    public async Task GetOrCreateResourceAsync_PublishesActiveDeploymentStates()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        builder.Services.AddSingleton<IDeploymentStateManager>(new MockDeploymentStateManager());
+        using var services = builder.Services.BuildServiceProvider();
+        var resource = new AzureBicepResource("storage", templateString: "output name string = 'storage'");
+        var notifications = services.GetRequiredService<ResourceNotificationService>();
+        await using var updates = notifications.WatchAsync().GetAsyncEnumerator();
+        var next = updates.MoveNextAsync().AsTask();
+
+        var context = ProvisioningTestHelpers.CreateTestProvisioningContext(
+            executionContext: new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run));
+        var operation = CreateProvisioner(services, DistributedApplicationOperation.Run)
+            .GetOrCreateResourceAsync(resource, context, CancellationToken.None);
+        var states = new List<ResourceStateSnapshot>();
+        while (await next.WaitAsync(TimeSpan.FromSeconds(30)))
+        {
+            if (updates.Current.Snapshot.State is { } state)
+            {
+                states.Add(state);
+                if (state.Text == AzureProvisioningController.ProvisionedState)
+                {
+                    break;
+                }
+            }
+            next = updates.MoveNextAsync().AsTask();
+        }
+        await operation;
+
+        Assert.Contains(states, s => s.Text == AzureProvisioningController.CompilingArmTemplateState && s.IsInProgress);
+        Assert.Contains(states, s => s.Text == AzureProvisioningController.CreatingArmDeploymentState && s.IsInProgress);
+        Assert.Contains(states, s => s.Text == AzureProvisioningController.WaitingForDeploymentState && s.IsInProgress);
+        Assert.Equal(new ResourceStateSnapshot(AzureProvisioningController.ProvisionedState, KnownResourceStateStyles.Success), states[^1]);
+    }
+
+    [Fact]
     public async Task ConfigureResourceAsync_RejectsCachedOutputsWhenTenantResourceSuffixChanges()
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);

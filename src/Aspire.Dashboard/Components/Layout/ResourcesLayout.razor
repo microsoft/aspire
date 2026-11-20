@@ -793,10 +793,14 @@
     private void RenderSelectedResourceMeta(RenderTreeBuilder __builder, ResourceViewModel resource)
     {
         var selectedState = ResourceStateViewModel.GetStateViewModel(resource, ColumnsLoc);
+        var stateClass = GetStateClass(resource);
+        var stateIcon = resource.KnownState is null && resource.IsStateInProgress && stateClass == "state-pending"
+            ? new Icons.Filled.Size16.CircleHint()
+            : selectedState.Icon;
         var urls = ResourceUrlHelpers.GetUrls(resource, includeInternalUrls: false, includeNonEndpointUrls: true);
 
-        <span class="state-pill @GetStateClass(resource)">
-            <FluentIcon Value="@selectedState.Icon" Width="12px" Color="Color.Custom" CustomColor="currentColor" />
+        <span class="state-pill @stateClass">
+            <FluentIcon Value="@stateIcon" Width="12px" Color="Color.Custom" CustomColor="currentColor" />
             @selectedState.Text
         </span>
         <span class="resource-status-type">@GetResourceTypeLabel(resource)</span>

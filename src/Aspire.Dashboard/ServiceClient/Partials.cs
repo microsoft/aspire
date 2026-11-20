@@ -32,7 +32,8 @@ partial class Resource
                 CreationTimeStamp = ValidateNotNull(CreatedAt).ToDateTime(),
                 StartTimeStamp = StartedAt?.ToDateTime(),
                 StopTimeStamp = StoppedAt?.ToDateTime(),
-                Properties = CreatePropertyViewModels(resourceType, Properties, knownPropertyLookup, logger),
+                Properties = CreatePropertyViewModels(resourceType, Properties, knownPropertyLookup, logger)
+                    .Remove(KnownProperties.Resource.StateIsInProgress),
                 Environment = GetEnvironment(),
                 Urls = GetUrls(),
                 Volumes = GetVolumes(),
@@ -40,6 +41,9 @@ partial class Resource
                 State = HasState ? State : null,
                 KnownState = HasState ? Enum.TryParse(State, out KnownResourceState knownState) ? knownState : null : null,
                 StateStyle = HasStateStyle ? StateStyle : null,
+                IsStateInProgress = Properties.Any(p =>
+                    StringComparers.ResourcePropertyName.Equals(p.Name, KnownProperties.Resource.StateIsInProgress) &&
+                    p.Value is { HasBoolValue: true, BoolValue: true }),
                 Commands = GetCommands(),
                 HealthReports = HealthReports.Select(ToHealthReportViewModel).OrderBy(vm => vm.Name).ToImmutableArray(),
                 IsHidden = IsHidden,

@@ -36,6 +36,7 @@ public sealed class ResourceViewModel
     public required int ReplicaIndex { get; init; }
     public required string? State { get; init; }
     public required string? StateStyle { get; init; }
+    public bool IsStateInProgress { get; init; }
     public required DateTime? CreationTimeStamp { get; init; }
     public required DateTime? StartTimeStamp { get; init; }
     public required DateTime? StopTimeStamp { get; init; }

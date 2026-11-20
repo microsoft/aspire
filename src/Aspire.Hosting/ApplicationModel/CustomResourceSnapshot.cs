@@ -347,6 +347,14 @@ internal record EventSnapshot(Task EventTask);
 public sealed record ResourceStateSnapshot(string Text, string? Style)
 {
     /// <summary>
+    /// Gets or sets whether this state represents work currently in progress.
+    /// </summary>
+    /// <remarks>
+    /// This is presentation metadata and does not change resource readiness or dependency behavior.
+    /// </remarks>
+    public bool IsInProgress { get; init; }
+
+    /// <summary>
     /// Convert text to state snapshot. The style will be null by default
     /// </summary>
     /// <param name="s"></param>

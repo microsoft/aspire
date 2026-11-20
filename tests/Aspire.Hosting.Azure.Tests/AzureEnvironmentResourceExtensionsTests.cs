@@ -798,7 +798,8 @@ public class AzureEnvironmentResourceExtensionsTests(ITestOutputHelper testOutpu
     public async Task EnsureProvisionedAsync_UpdatesNestedChildResources()
     {
         var builder = CreateBuilder(isRunMode: true);
-        AddTestAzureProvisioning(builder);
+        var testBicepProvisioner = new BlockingTestBicepProvisioner();
+        AddTestAzureProvisioning(builder, bicepProvisioner: testBicepProvisioner);
 
         var cosmos = builder.AddAzureCosmosDB("cosmosdb");
         var db = cosmos.AddCosmosDatabase("db");
@@ -810,13 +811,115 @@ public class AzureEnvironmentResourceExtensionsTests(ITestOutputHelper testOutpu
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
         var notifications = app.Services.GetRequiredService<ResourceNotificationService>();
 
-        await controller.EnsureProvisionedAsync(model);
+        var provisioningTask = controller.EnsureProvisionedAsync(model);
+        try
+        {
+            await WaitForSignalBeforeOperationCompletesAsync(
+                testBicepProvisioner.FirstProvisionStarted.Task,
+                provisioningTask,
+                "Provisioning completed before the resource started provisioning.");
+
+            foreach (var resource in new IResource[] { cosmos.Resource, db.Resource, entries.Resource })
+            {
+                Assert.True(notifications.TryGetCurrentState(resource.Name, out var resourceEvent), $"No state was published for '{resource.Name}'.");
+                Assert.True(resourceEvent.Snapshot.State?.IsInProgress);
+            }
+        }
+        finally
+        {
+            testBicepProvisioner.AllowFirstProvisionToComplete.TrySetResult();
+        }
+
+        await provisioningTask;
 
         foreach (var resource in new IResource[] { cosmos.Resource, db.Resource, entries.Resource })
         {
             Assert.True(notifications.TryGetCurrentState(resource.Name, out var resourceEvent), $"No state was published for '{resource.Name}'.");
             Assert.Equal(KnownResourceStates.Running, resourceEvent.Snapshot.State?.Text);
+            Assert.False(resourceEvent.Snapshot.State?.IsInProgress);
         }
+    }
+
+    [Fact]
+    public async Task EnsureProvisionedAsync_MarksVisibleResourceWithProvisioningSurrogate()
+    {
+        var builder = CreateBuilder(isRunMode: true);
+        var testBicepProvisioner = new BlockingTestBicepProvisioner();
+        AddTestAzureProvisioning(builder, bicepProvisioner: testBicepProvisioner);
+
+        var visibleResource = new AnnotatedAzureResource("storage");
+        var bicepResource = new AzureBicepResource("storage-deployment", templateString: "output name string = 'storage'");
+        visibleResource.Annotations.Add(new AzureBicepResourceAnnotation(bicepResource));
+        builder.AddResource(visibleResource);
+
+        using var app = builder.Build();
+        var controller = app.Services.GetRequiredService<AzureProvisioningController>();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var notifications = app.Services.GetRequiredService<ResourceNotificationService>();
+        var provisioningTask = controller.EnsureProvisionedAsync(model);
+
+        try
+        {
+            await WaitForSignalBeforeOperationCompletesAsync(
+                testBicepProvisioner.FirstProvisionStarted.Task,
+                provisioningTask,
+                "Provisioning completed before the resource started provisioning.");
+            Assert.True(notifications.TryGetCurrentState(visibleResource.Name, out var active));
+            Assert.True(active.Snapshot.State?.IsInProgress);
+        }
+        finally
+        {
+            testBicepProvisioner.AllowFirstProvisionToComplete.TrySetResult();
+        }
+
+        await provisioningTask;
+        Assert.True(notifications.TryGetCurrentState(visibleResource.Name, out var completed));
+        Assert.Equal(KnownResourceStates.Running, completed.Snapshot.State?.Text);
+        Assert.False(completed.Snapshot.State?.IsInProgress);
+    }
+
+    [Fact]
+    public async Task EnsureProvisionedAsync_DoesNotMarkIndependentlyProvisionedChildWhileWaiting()
+    {
+        var builder = CreateBuilder(isRunMode: true);
+        var testBicepProvisioner = new BlockingTestBicepProvisioner();
+        AddTestAzureProvisioning(builder, bicepProvisioner: testBicepProvisioner);
+
+        var cosmos = builder.AddAzureCosmosDB("cosmosdb");
+        cosmos.Resource.Outputs["name"] = "cosmosdb";
+        var db = cosmos.AddCosmosDatabase("db");
+        var deployment = new AzureProvisioningResource("db-deployment", infra =>
+        {
+            new BicepOutputReference("name", cosmos.Resource).AsProvisioningParameter(infra);
+        });
+        db.Resource.Annotations.Add(new AzureBicepResourceAnnotation(deployment));
+
+        using var app = builder.Build();
+        var controller = app.Services.GetRequiredService<AzureProvisioningController>();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var notifications = app.Services.GetRequiredService<ResourceNotificationService>();
+        var provisioningTask = controller.EnsureProvisionedAsync(model);
+
+        try
+        {
+            await WaitForSignalBeforeOperationCompletesAsync(
+                testBicepProvisioner.FirstProvisionStarted.Task,
+                provisioningTask,
+                "Provisioning completed before the resource started provisioning.");
+            Assert.True(notifications.TryGetCurrentState(cosmos.Resource.Name, out var parent));
+            Assert.True(parent.Snapshot.State?.IsInProgress);
+            Assert.True(notifications.TryGetCurrentState(db.Resource.Name, out var child));
+            Assert.False(child.Snapshot.State?.IsInProgress);
+        }
+        finally
+        {
+            testBicepProvisioner.AllowFirstProvisionToComplete.TrySetResult();
+        }
+
+        await provisioningTask;
+        Assert.True(notifications.TryGetCurrentState(db.Resource.Name, out var completed));
+        Assert.Equal(KnownResourceStates.Running, completed.Snapshot.State?.Text);
+        Assert.False(completed.Snapshot.State?.IsInProgress);
     }
 
     [Fact]
@@ -5052,19 +5155,33 @@ public class AzureEnvironmentResourceExtensionsTests(ITestOutputHelper testOutpu
 
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
         var controller = app.Services.GetRequiredService<AzureProvisioningController>();
+        var notifications = app.Services.GetRequiredService<ResourceNotificationService>();
 
         var reprovisionTask = controller.EnsureProvisionedAsync(model, CancellationToken.None);
 
-        await WaitForSignalBeforeOperationCompletesAsync(
-            testBicepProvisioner.FirstProvisionStarted.Task,
-            reprovisionTask,
-            "Provisioning completed before the first resource started provisioning.");
-        Assert.Equal(["storage"], testBicepProvisioner.ProvisionedResources);
+        try
+        {
+            await WaitForSignalBeforeOperationCompletesAsync(
+                testBicepProvisioner.FirstProvisionStarted.Task,
+                reprovisionTask,
+                "Provisioning completed before the first resource started provisioning.");
+            Assert.Equal(["storage"], testBicepProvisioner.ProvisionedResources);
+            Assert.True(notifications.TryGetCurrentState(storage.Name, out var storageEvent));
+            Assert.True(storageEvent.Snapshot.State?.IsInProgress);
+            Assert.True(notifications.TryGetCurrentState(storageRoles.Name, out var dependentEvent));
+            Assert.False(dependentEvent.Snapshot.State?.IsInProgress);
+        }
+        finally
+        {
+            testBicepProvisioner.AllowFirstProvisionToComplete.TrySetResult();
+        }
 
-        testBicepProvisioner.AllowFirstProvisionToComplete.TrySetResult();
         await reprovisionTask;
 
         Assert.Equal(["storage", "storage-roles"], testBicepProvisioner.ProvisionedResources);
+        Assert.True(notifications.TryGetCurrentState(storageRoles.Name, out var completedEvent));
+        Assert.Equal(KnownResourceStates.Running, completedEvent.Snapshot.State?.Text);
+        Assert.False(completedEvent.Snapshot.State?.IsInProgress);
     }
 
     [Fact]

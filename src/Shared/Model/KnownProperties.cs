@@ -20,6 +20,7 @@ internal static class KnownProperties
         public const string ResourceTypeDisplayName = "resource.resourceTypeDisplayName";
         public const string DisplayName = "resource.displayName";
         public const string State = "resource.state";
+        public const string StateIsInProgress = "resource.stateIsInProgress";
         public const string ExitCode = "resource.exitCode";
         public const string CreateTime = "resource.createTime";
         public const string StartTime = "resource.startTime";

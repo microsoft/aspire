@@ -344,7 +344,7 @@ public sealed class FoundryToolboxResource : Resource, IResourceWithConnectionSt
             {
                 State = new(
                     IsExisting ? "Validating existing Toolbox" : "Reconciling Toolbox",
-                    KnownResourceStateStyles.Info)
+                    KnownResourceStateStyles.Info) { IsInProgress = true }
             }).ConfigureAwait(false);
 
             var result = await DeployAsync(

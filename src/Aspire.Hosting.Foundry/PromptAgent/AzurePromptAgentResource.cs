@@ -343,7 +343,7 @@ public class AzurePromptAgentResource : Resource, IResourceWithEnvironment, IRes
 
             await notificationService.PublishUpdateAsync(this, s => s with
             {
-                State = new("Deploying agent", KnownResourceStateStyles.Info)
+                State = new("Deploying agent", KnownResourceStateStyles.Info) { IsInProgress = true }
             }).ConfigureAwait(false);
 
             logger.LogInformation("Deploying prompt agent '{AgentName}' to Foundry project '{ProjectName}'...", Name, Project.Name);
