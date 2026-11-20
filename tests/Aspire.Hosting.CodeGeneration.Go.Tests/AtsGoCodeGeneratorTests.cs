@@ -639,6 +639,60 @@ public class AtsGoCodeGeneratorTests
                     wg.Wait()
                 }
 
+                func TestCollectionGetterHandles(t *testing.T) {
+                    for _, wrapped := range []bool{false, true} {
+                        for _, kind := range []string{"list", "dict"} {
+                            t.Run(fmt.Sprintf("%s/wrapped=%v", kind, wrapped), func(t *testing.T) {
+                                c, host := newFakeHost(t)
+                                if wrapped {
+                                    c.registerHandleWrapper("Test/Collection", func(h *handle, c *client) any {
+                                        return newHandleWrapperBase(h, c)
+                                    })
+                                }
+                                parent := newHandleWrapperBase(&handle{HandleID: "parent", TypeID: "Test/Parent"}, c)
+                                var count func() (int, error)
+                                if kind == "list" {
+                                    count = newListWithGetter[string](parent, "Test/getCollection").Count
+                                } else {
+                                    count = newDictWithGetter[string, string](parent, "Test/getCollection").Count
+                                }
+                                done := make(chan error, 1)
+                                go func() {
+                                    for range 2 {
+                                        n, err := count()
+                                        if err != nil {
+                                            done <- err
+                                            return
+                                        }
+                                        if n != 3 {
+                                            done <- fmt.Errorf("count = %d, want 3", n)
+                                            return
+                                        }
+                                    }
+                                    done <- nil
+                                }()
+                                getter := host.read()
+                                host.write(map[string]any{"jsonrpc": "2.0", "id": getter["id"], "result": map[string]any{
+                                    "$handle": "collection", "$type": "Test/Collection",
+                                }})
+                                for range 2 {
+                                    request := host.read()
+                                    params := request["params"].([]any)
+                                    args := params[1].(map[string]any)
+                                    collection := args[kind].(map[string]any)
+                                    if collection["$handle"] != "collection" || collection["$type"] != "Test/Collection" {
+                                        t.Fatalf("wrong collection handle: %v", collection)
+                                    }
+                                    host.write(map[string]any{"jsonrpc": "2.0", "id": request["id"], "result": 3})
+                                }
+                                if err := <-done; err != nil {
+                                    t.Fatal(err)
+                                }
+                            })
+                        }
+                    }
+                }
+
                 func TestCollectionToJSONKeepsResolutionError(t *testing.T) {
                     want := errors.New("getter failed")
                     parent := newErroredHandleWrapperBase(want, nil)
