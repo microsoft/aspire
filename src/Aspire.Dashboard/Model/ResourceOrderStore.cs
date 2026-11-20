@@ -128,7 +128,8 @@ public sealed class ResourceOrderStore
         var insertionIndex = anchorIndex + (after ? 1 : 0);
         return new RelativeOrderMove(Guid.NewGuid(), key,
             PreviousKey: insertionIndex > 0 ? keys[insertionIndex - 1] : null,
-            NextKey: insertionIndex < keys.Count ? keys[insertionIndex] : null);
+            NextKey: insertionIndex < keys.Count ? keys[insertionIndex] : null,
+            PreferNext: !after);
     }
 
     private static void ReplayMoves<T>(List<T> items, RelativeOrderMove[] moves, Func<T, string> getKey, Func<T, T, bool>? canMove)
@@ -141,16 +142,21 @@ public sealed class ResourceOrderStore
                 continue;
             }
 
-            var previous = FindAnchor(move.PreviousKey);
-            var anchor = previous >= 0 ? previous : FindAnchor(move.NextKey);
+            var after = !move.PreferNext;
+            var anchor = FindAnchor(after ? move.PreviousKey : move.NextKey);
             if (anchor < 0)
             {
-                continue;
+                after = !after;
+                anchor = FindAnchor(after ? move.PreviousKey : move.NextKey);
+                if (anchor < 0)
+                {
+                    continue;
+                }
             }
 
             var item = items[source];
             items.RemoveAt(source);
-            items.Insert(anchor - (source < anchor ? 1 : 0) + (previous >= 0 ? 1 : 0), item);
+            items.Insert(anchor - (source < anchor ? 1 : 0) + (after ? 1 : 0), item);
 
             int FindAnchor(string? key) => key is null ? -1 : items.FindIndex(candidate =>
                 StringComparers.ResourceName.Equals(getKey(candidate), key) && (canMove is null || canMove(items[source], candidate)));
@@ -228,6 +234,7 @@ public sealed class ResourceOrderStore
 /// The item to move: a resource's <see cref="ResourceViewModel.PersistentKey"/> or a key within the grouping mode.
 /// An empty group key represents the untagged group.
 /// </param>
-/// <param name="PreviousKey">The preferred anchor: place the item after it. <see langword="null"/> for a drop at the start.</param>
-/// <param name="NextKey">The fallback anchor: place the item before it. <see langword="null"/> for a drop at the end.</param>
-internal sealed record RelativeOrderMove(Guid Id, string Key, string? PreviousKey, string? NextKey);
+/// <param name="PreviousKey">The neighbor to place the item after. <see langword="null"/> for a drop at the start.</param>
+/// <param name="NextKey">The neighbor to place the item before. <see langword="null"/> for a drop at the end.</param>
+/// <param name="PreferNext">Whether the next neighbor was the drop target and should be tried first.</param>
+internal sealed record RelativeOrderMove(Guid Id, string Key, string? PreviousKey, string? NextKey, bool PreferNext);
