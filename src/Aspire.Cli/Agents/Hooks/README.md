@@ -22,8 +22,8 @@ CLI and read by `AgentTelemetryCatalog`:
 Each property is required exactly once and must be a non-empty, ordinally
 sorted array of unique strings. References are skill-relative paths under a
 listed skill's `references/` directory. Both the hook classifier and
-`aspire agent telemetry` check values against the catalog, so hook scripts
-installed by older CLIs cannot report unlisted values.
+`aspire agent telemetry` check values against the catalog, so legacy hook
+scripts installed by older CLIs cannot report unlisted values.
 `AgentTelemetryCatalogTests` validate parsing, and `AgentTelemetryHookTests`
 exercise the embedded catalog.
 

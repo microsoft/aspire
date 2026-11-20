@@ -8,8 +8,8 @@
         <note />
       </trans-unit>
       <trans-unit id="AgentTelemetryCommand_Description">
-        <source>Record AI agent skill and tool usage telemetry. Invoked by the Aspire agent telemetry hook scripts; not intended to be run directly.</source>
-        <target state="translated">Registra la telemetria sull'utilizzo delle competenze e degli strumenti dell'agente IA. Viene richiamato dagli script dell'hook di telemetria dell'agente di Aspire e non è destinato all'esecuzione diretta.</target>
+        <source>Record AI agent skill and tool usage telemetry. Invoked by Aspire agent telemetry hooks; not intended to be run directly.</source>
+        <target state="needs-review-translation">Registra la telemetria sull'utilizzo delle competenze e degli strumenti dell'agente IA. Viene richiamato dagli script dell'hook di telemetria dell'agente di Aspire e non è destinato all'esecuzione diretta.</target>
         <note />
       </trans-unit>
       <trans-unit id="AgentTelemetryCommand_EventTypeDescription">
@@ -23,8 +23,8 @@
         <note />
       </trans-unit>
       <trans-unit id="AgentTelemetryCommand_SessionIdDescription">
-        <source>The opaque AI agent session identifier</source>
-        <target state="translated">L'identificatore opaco della sessione dell'agente IA</target>
+        <source>The AI agent session identifier, which must be a GUID</source>
+        <target state="needs-review-translation">L'identificatore opaco della sessione dell'agente IA</target>
         <note />
       </trans-unit>
       <trans-unit id="AgentTelemetryCommand_SkillNameDescription">

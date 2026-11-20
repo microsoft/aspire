@@ -95,8 +95,8 @@ internal sealed partial class AgentTelemetryCatalog
     ///   "references": [ "aspire-init/references/templates.md" ]
     /// }
     /// </code>
-    /// The file is regenerated deterministically from Aspire skills and references, so the strict shape
-    /// catches malformed edits at test time instead of silently dropping telemetry.
+    /// The file lists Aspire skills and references, so the strict shape catches malformed edits at test
+    /// time instead of silently dropping telemetry.
     /// </remarks>
     internal static AgentTelemetryCatalog Parse(string json)
     {

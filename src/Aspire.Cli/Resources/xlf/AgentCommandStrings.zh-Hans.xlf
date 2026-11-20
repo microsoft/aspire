@@ -8,8 +8,8 @@
         <note />
       </trans-unit>
       <trans-unit id="AgentTelemetryCommand_Description">
-        <source>Record AI agent skill and tool usage telemetry. Invoked by the Aspire agent telemetry hook scripts; not intended to be run directly.</source>
-        <target state="translated">记录 AI 智能体技能和工具使用情况遥测。由 Aspire 智能体遥测挂钩脚本调用；不应直接运行。</target>
+        <source>Record AI agent skill and tool usage telemetry. Invoked by Aspire agent telemetry hooks; not intended to be run directly.</source>
+        <target state="needs-review-translation">记录 AI 智能体技能和工具使用情况遥测。由 Aspire 智能体遥测挂钩脚本调用；不应直接运行。</target>
         <note />
       </trans-unit>
       <trans-unit id="AgentTelemetryCommand_EventTypeDescription">
@@ -23,8 +23,8 @@
         <note />
       </trans-unit>
       <trans-unit id="AgentTelemetryCommand_SessionIdDescription">
-        <source>The opaque AI agent session identifier</source>
-        <target state="translated">不透明 AI 智能体会话标识符</target>
+        <source>The AI agent session identifier, which must be a GUID</source>
+        <target state="needs-review-translation">不透明 AI 智能体会话标识符</target>
         <note />
       </trans-unit>
       <trans-unit id="AgentTelemetryCommand_SkillNameDescription">

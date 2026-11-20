@@ -727,8 +727,8 @@ internal sealed class AgentInitCommand : BaseCommand
         // the hook and the `aspire agent telemetry` command path re-check at runtime.
         // The hooks only report aspire@aspire-skills skills and Aspire MCP tool usage, so a client gets a
         // hook only when this run registered that plugin or configured the Aspire MCP server for it at the
-        // requested scope, or either is already set up there. The latter keeps re-runs that skip both
-        // choices refreshing the hook. Selecting the aspire skill choice is not enough: skill sources can
+        // requested scope, either is already set up there, or the client has a user-level legacy script
+        // registration to replace. The latter cases keep re-runs that skip both choices refreshing the hook. Selecting the aspire skill choice is not enough: skill sources can
         // disable the default source or replace its plugins.
         await ConfigureTelemetryHooksForAspireSetupAsync(
             selectedClients,
@@ -802,8 +802,9 @@ internal sealed class AgentInitCommand : BaseCommand
     {
         // A user-level 13.5 script registration proves Aspire was set up for this client at some scope.
         // `aspire doctor` points users here to replace it, so refresh it even when the selected scope
-        // has no MCP server or skills registration of its own. An unreadable file falls through to the
-        // existing setup probe, and the hook configurator reports its own read failures.
+        // has no MCP server or skills registration of its own. An unreadable or malformed file falls
+        // through to the existing setup probe; if that selects the client, the hook configurator then
+        // reports the file problem.
         try
         {
             return await LegacyTelemetryHook.IsRegisteredAsync(client.GetTelemetryHookConfigPath(), cancellationToken);

@@ -8,8 +8,8 @@
         <note />
       </trans-unit>
       <trans-unit id="AgentTelemetryCommand_Description">
-        <source>Record AI agent skill and tool usage telemetry. Invoked by the Aspire agent telemetry hook scripts; not intended to be run directly.</source>
-        <target state="translated">Zaznamenává telemetrii používání dovedností a nástrojů agenty AI. Volá se ze skriptů háčků telemetrie agentů Aspire a není určený k přímému spouštění.</target>
+        <source>Record AI agent skill and tool usage telemetry. Invoked by Aspire agent telemetry hooks; not intended to be run directly.</source>
+        <target state="needs-review-translation">Zaznamenává telemetrii používání dovedností a nástrojů agenty AI. Volá se ze skriptů háčků telemetrie agentů Aspire a není určený k přímému spouštění.</target>
         <note />
       </trans-unit>
       <trans-unit id="AgentTelemetryCommand_EventTypeDescription">
@@ -23,8 +23,8 @@
         <note />
       </trans-unit>
       <trans-unit id="AgentTelemetryCommand_SessionIdDescription">
-        <source>The opaque AI agent session identifier</source>
-        <target state="translated">Neprůhledný identifikátor relace agenta AI</target>
+        <source>The AI agent session identifier, which must be a GUID</source>
+        <target state="needs-review-translation">Neprůhledný identifikátor relace agenta AI</target>
         <note />
       </trans-unit>
       <trans-unit id="AgentTelemetryCommand_SkillNameDescription">

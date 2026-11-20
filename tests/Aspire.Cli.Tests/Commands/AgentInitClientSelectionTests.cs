@@ -1548,6 +1548,35 @@ public class AgentInitClientSelectionTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
+    [InlineData("claude", "{broken")]
+    [InlineData("claude", """{"hooks":{},"hooks":{}}""")]
+    [InlineData("copilot", "{broken")]
+    public async Task AgentInit_MalformedUserHookConfigWithoutAspireSetup_SkipsHook(string clientId, string hookConfig)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var homeDirectory = workspace.CreateDirectory("fake-home");
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(workspace.WorkspaceRoot, homeDirectory: homeDirectory);
+        var hooks = new TestTelemetryHookConfigurator();
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ => executionContext;
+            options.TelemetryHookConfiguratorFactory = _ => hooks;
+        });
+        services.AddSingleton<IEnvironment>(new TestEnvironment());
+        using var provider = services.BuildServiceProvider();
+        var client = provider.GetServices<IAgentClient>().Single(client => string.Equals(client.Id, clientId, StringComparisons.AgentClientId));
+        var hookConfigPath = client.GetTelemetryHookConfigPath();
+        Directory.CreateDirectory(Path.GetDirectoryName(hookConfigPath)!);
+        await File.WriteAllTextAsync(hookConfigPath, hookConfig);
+
+        var result = provider.GetRequiredService<RootCommand>().Parse(
+            $"agent init --agents {clientId} --scope project --skills none --mcp=false");
+        Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
+        Assert.Empty(hooks.SelectedClientIds);
+        Assert.Equal(hookConfig, await File.ReadAllTextAsync(hookConfigPath));
+    }
+
+    [Theory]
     [InlineData("global", true)]
     [InlineData("project", false)]
     public async Task AgentInit_NothingSelectedWithVsCodeUserMcp_RespectsScope(string scope, bool expectHook)

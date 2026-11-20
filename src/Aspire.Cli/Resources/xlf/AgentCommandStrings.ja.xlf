@@ -8,8 +8,8 @@
         <note />
       </trans-unit>
       <trans-unit id="AgentTelemetryCommand_Description">
-        <source>Record AI agent skill and tool usage telemetry. Invoked by the Aspire agent telemetry hook scripts; not intended to be run directly.</source>
-        <target state="translated">AI エージェントのスキルとツールの使用状況テレメトリを記録します。Aspire エージェン トテレメトリ フック スクリプトによって呼び出されます。直接実行することを意図していません。</target>
+        <source>Record AI agent skill and tool usage telemetry. Invoked by Aspire agent telemetry hooks; not intended to be run directly.</source>
+        <target state="needs-review-translation">AI エージェントのスキルとツールの使用状況テレメトリを記録します。Aspire エージェン トテレメトリ フック スクリプトによって呼び出されます。直接実行することを意図していません。</target>
         <note />
       </trans-unit>
       <trans-unit id="AgentTelemetryCommand_EventTypeDescription">
@@ -23,8 +23,8 @@
         <note />
       </trans-unit>
       <trans-unit id="AgentTelemetryCommand_SessionIdDescription">
-        <source>The opaque AI agent session identifier</source>
-        <target state="translated">不透明な AI エージェント セッション識別子</target>
+        <source>The AI agent session identifier, which must be a GUID</source>
+        <target state="needs-review-translation">不透明な AI エージェント セッション識別子</target>
         <note />
       </trans-unit>
       <trans-unit id="AgentTelemetryCommand_SkillNameDescription">

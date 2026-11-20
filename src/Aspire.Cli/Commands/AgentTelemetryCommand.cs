@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Frozen;
 using System.CommandLine;
 using System.Globalization;
 using Aspire.Cli.Agents.Hooks;
@@ -20,7 +21,7 @@ namespace Aspire.Cli.Commands;
 /// or writes unexpected output can break the host agent's tool loop, so every operation is wrapped
 /// so that any failure degrades to a successful no-op. All options are optional and unvalidated,
 /// and unmatched tokens are ignored, so option binding can never fail before the handler runs and a
-/// newer hook script passing an unknown flag cannot break an older CLI.
+/// hook registered by a newer CLI and passing an unknown flag cannot break an older CLI.
 ///
 /// The opt-out (<c>ASPIRE_CLI_TELEMETRY_OPTOUT</c>) and the suppression of the generic
 /// <c>aspire/cli/main</c> span for this command path are handled in
@@ -45,14 +46,15 @@ internal sealed class AgentTelemetryCommand : BaseCommand
     // skills-relative reference paths) are well under this length.
     private const int MaxTagValueLength = 256;
 
-    // The only event types the hook scripts emit. Anything else is dropped so a script bug or a
-    // crafted argument cannot introduce arbitrary, high-cardinality event categories.
-    private static readonly string[] s_knownEventTypes =
-    [
-        AgentTelemetryProtocol.SkillInvocationEventType,
-        AgentTelemetryProtocol.ToolInvocationEventType,
-        AgentTelemetryProtocol.ReferenceFileReadEventType
-    ];
+    // The only event types agent telemetry hooks emit, each mapped to the tag that identifies it. Anything
+    // else is dropped so a legacy script bug or a crafted argument cannot introduce arbitrary,
+    // high-cardinality event categories.
+    private static readonly FrozenDictionary<string, string> s_requiredTagByEventType = new Dictionary<string, string>(StringComparer.Ordinal)
+    {
+        [AgentTelemetryProtocol.SkillInvocationEventType] = TelemetryConstants.Tags.AgentSkillName,
+        [AgentTelemetryProtocol.ToolInvocationEventType] = TelemetryConstants.Tags.AgentToolName,
+        [AgentTelemetryProtocol.ReferenceFileReadEventType] = TelemetryConstants.Tags.AgentFileReference
+    }.ToFrozenDictionary(StringComparer.Ordinal);
 
     private readonly Option<string?> _eventTypeOption = new(AgentTelemetryProtocol.EventTypeOptionName)
     {
@@ -99,11 +101,11 @@ internal sealed class AgentTelemetryCommand : BaseCommand
         _console = console;
         _logger = services.LoggerFactory.CreateLogger<AgentTelemetryCommand>();
 
-        // This command is an implementation detail of the agent hook scripts, not a user-facing
+        // This command is an implementation detail of agent telemetry hooks, not a user-facing
         // command, so keep it out of help output.
         Hidden = true;
 
-        // Never fail the hook because a newer script passes a flag this CLI version does not know.
+        // Never fail the hook because a newer registration passes a flag this CLI version does not know.
         TreatUnmatchedTokensAsErrors = false;
 
         Options.Add(_eventTypeOption);
@@ -168,7 +170,7 @@ internal sealed class AgentTelemetryCommand : BaseCommand
         }
 
         // Validate every value up front. Invalid or oversized values are dropped (never recorded),
-        // so a parser bug in a hook script cannot leak an absolute path, user name, or other
+        // so a parser bug in a legacy hook script cannot leak an absolute path, user name, or other
         // sensitive/high-cardinality data into telemetry.
         var tags = CollectValidTags(parseResult);
 
@@ -213,10 +215,10 @@ internal sealed class AgentTelemetryCommand : BaseCommand
         // catalog, but hook scripts installed by older CLIs forward their own values: Aspire 13.5 scripts
         // reported any path under a recognized skill directory and any tool with an Aspire MCP prefix.
         var catalog = AgentTelemetryCatalog.Canonical;
-        AddIfValid(tags, TelemetryConstants.Tags.AgentEventType, parseResult.GetValue(_eventTypeOption), static v => s_knownEventTypes.Contains(v, StringComparer.Ordinal));
+        AddIfValid(tags, TelemetryConstants.Tags.AgentEventType, parseResult.GetValue(_eventTypeOption), static v => s_requiredTagByEventType.ContainsKey(v));
         AddIfValid(tags, TelemetryConstants.Tags.AgentClientName, parseResult.GetValue(_clientNameOption), static v => IsSafeIdentifier(v, maxLength: 64));
-        // Session IDs must be GUIDs, matching the native hook. Aspire 13.5 hook scripts extract the first
-        // "sessionId" anywhere in the payload, so a nested tool-input value could otherwise be forwarded.
+        // Session IDs must be GUIDs, matching the native hook. The Aspire 13.5 bash hook script can extract a
+        // "sessionId" from anywhere in the payload, so a nested tool-input value could otherwise be forwarded.
         // The length check matters because Guid parsing trims surrounding whitespace, but the raw value is recorded.
         AddIfValid(tags, TelemetryConstants.Tags.AgentSessionId, parseResult.GetValue(_sessionIdOption), static v => v.Length == 36 && Guid.TryParseExact(v, "D", out _));
         AddIfValid(tags, TelemetryConstants.Tags.AgentSkillName, parseResult.GetValue(_skillNameOption), v => IsSafeIdentifier(v, maxLength: 128) && catalog.IsKnownSkill(v));
@@ -230,15 +232,10 @@ internal sealed class AgentTelemetryCommand : BaseCommand
     private static bool HasIdentifyingDimension(List<(string Name, string Value)> tags)
     {
         var eventType = tags.FirstOrDefault(static tag => tag.Name == TelemetryConstants.Tags.AgentEventType).Value;
-        var requiredTag = eventType switch
-        {
-            AgentTelemetryProtocol.SkillInvocationEventType => TelemetryConstants.Tags.AgentSkillName,
-            AgentTelemetryProtocol.ToolInvocationEventType => TelemetryConstants.Tags.AgentToolName,
-            AgentTelemetryProtocol.ReferenceFileReadEventType => TelemetryConstants.Tags.AgentFileReference,
-            _ => null
-        };
 
-        return requiredTag is not null && tags.Exists(tag => tag.Name == requiredTag);
+        return eventType is not null &&
+            s_requiredTagByEventType.TryGetValue(eventType, out var requiredTag) &&
+            tags.Exists(tag => tag.Name == requiredTag);
     }
 
     private static void AddIfValid(List<(string Name, string Value)> tags, string name, string? value, Func<string, bool> isValid)

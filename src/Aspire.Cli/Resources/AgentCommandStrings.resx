@@ -245,7 +245,7 @@
     <value>Configure the Aspire MCP server for selected agent environments. Omit to leave MCP unconfigured, pass '--mcp' to opt in, or pass '--mcp=false' to explicitly opt out</value>
   </data>
   <data name="AgentTelemetryCommand_Description" xml:space="preserve">
-    <value>Record AI agent skill and tool usage telemetry. Invoked by the Aspire agent telemetry hook scripts; not intended to be run directly.</value>
+    <value>Record AI agent skill and tool usage telemetry. Invoked by Aspire agent telemetry hooks; not intended to be run directly.</value>
   </data>
   <data name="AgentTelemetryCommand_EventTypeDescription" xml:space="preserve">
     <value>The telemetry event type (skill_invocation, tool_invocation, or reference_file_read)</value>
@@ -254,7 +254,7 @@
     <value>The AI agent client that produced the event (for example copilot-cli, claude-code, or vscode)</value>
   </data>
   <data name="AgentTelemetryCommand_SessionIdDescription" xml:space="preserve">
-    <value>The opaque AI agent session identifier</value>
+    <value>The AI agent session identifier, which must be a GUID</value>
   </data>
   <data name="AgentTelemetryCommand_SkillNameDescription" xml:space="preserve">
     <value>The Aspire skill name for a skill_invocation event</value>

@@ -8,8 +8,8 @@
         <note />
       </trans-unit>
       <trans-unit id="AgentTelemetryCommand_Description">
-        <source>Record AI agent skill and tool usage telemetry. Invoked by the Aspire agent telemetry hook scripts; not intended to be run directly.</source>
-        <target state="translated">AI 에이전트 기술 및 도구 사용 원격 분석을 기록합니다. Aspire 에이전트 원격 분석 후크 스크립트에서 호출되며, 직접 실행하도록 설계되지 않았습니다.</target>
+        <source>Record AI agent skill and tool usage telemetry. Invoked by Aspire agent telemetry hooks; not intended to be run directly.</source>
+        <target state="needs-review-translation">AI 에이전트 기술 및 도구 사용 원격 분석을 기록합니다. Aspire 에이전트 원격 분석 후크 스크립트에서 호출되며, 직접 실행하도록 설계되지 않았습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="AgentTelemetryCommand_EventTypeDescription">
@@ -23,8 +23,8 @@
         <note />
       </trans-unit>
       <trans-unit id="AgentTelemetryCommand_SessionIdDescription">
-        <source>The opaque AI agent session identifier</source>
-        <target state="translated">불투명한 AI 에이전트 세션 식별자</target>
+        <source>The AI agent session identifier, which must be a GUID</source>
+        <target state="needs-review-translation">불투명한 AI 에이전트 세션 식별자</target>
         <note />
       </trans-unit>
       <trans-unit id="AgentTelemetryCommand_SkillNameDescription">

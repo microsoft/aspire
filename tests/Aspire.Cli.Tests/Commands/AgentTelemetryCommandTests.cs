@@ -295,7 +295,7 @@ public class AgentTelemetryCommandTests(ITestOutputHelper outputHelper)
     [InlineData(" 7f0f3ad1-7a8c-4b52-9b0f-3b6a7c2f9d10 ")]
     public async Task AgentTelemetry_DropsNonGuidSessionId(string sessionId)
     {
-        // Aspire 13.5 hook scripts extract any nested "sessionId" string from the client payload,
+        // The Aspire 13.5 bash hook script can extract a nested "sessionId" string from the client payload,
         // so the command must reject values that are not opaque session GUIDs.
         var (capturedActivities, listener) = CreateCapturingListener(out var reportedSourceName);
         using (listener)
@@ -421,11 +421,14 @@ public class AgentTelemetryCommandTests(ITestOutputHelper outputHelper)
     [InlineData("tool_invocation", "--tool-name list_resources")]
     [InlineData("reference_file_read", "--file-reference aspire/private-notes.md")]
     [InlineData("reference_file_read", "--file-reference aspire-init/references/private-notes.md")]
-    public async Task AgentTelemetry_DropsValuesOutsideCatalog(string eventType, string option)
+    [InlineData("skill_invocation", "--tool-name aspire-list_resources")]
+    [InlineData("tool_invocation", "--skill-name aspire")]
+    public async Task AgentTelemetry_DropsEventsWithoutMatchingCatalogValue(string eventType, string option)
     {
         // Hook scripts installed by Aspire 13.5 forward any path under a skill directory and any
-        // Aspire-prefixed tool name, so the command must apply the catalog itself. Dropping the only
-        // identifying value leaves nothing worth recording.
+        // Aspire-prefixed tool name, so the command must apply the catalog itself. An event is kept only
+        // when the value that identifies its event type survives; a catalog value for another event type
+        // does not count.
         var (capturedActivities, listener) = CreateCapturingListener(out var reportedSourceName);
         using (listener)
         {
