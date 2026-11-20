@@ -1076,6 +1076,24 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("LegacySettingsDetectedMessageFormat", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Run 'aspire agent init --agents {0}' to update the hook to use the Aspire CLI directly..
+        /// </summary>
+        internal static string LegacyTelemetryHookFixFormat {
+            get {
+                return ResourceManager.GetString("LegacyTelemetryHookFixFormat", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The {0} telemetry hook is out of date and still runs a legacy script..
+        /// </summary>
+        internal static string LegacyTelemetryHookMessageFormat {
+            get {
+                return ResourceManager.GetString("LegacyTelemetryHookMessageFormat", resourceCulture);
+            }
+        }
         
         /// <summary>
         ///   Looks up a localized string similar to Legacy &apos;apphost.ts&apos; layout detected at {0}.

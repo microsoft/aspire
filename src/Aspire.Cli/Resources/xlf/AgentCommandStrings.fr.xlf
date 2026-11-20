@@ -8,8 +8,8 @@
         <note />
       </trans-unit>
       <trans-unit id="AgentTelemetryCommand_Description">
-        <source>Record AI agent skill and tool usage telemetry. Invoked by the Aspire agent telemetry hook scripts; not intended to be run directly.</source>
-        <target state="translated">Enregistrez la télémétrie relative à l’utilisation des compétences et des outils de l’assistant IA. Appelé par des scripts de hook de télémétrie de l’assistant Aspire, vous ne devez pas l’exécuter directement.</target>
+        <source>Record AI agent skill and tool usage telemetry. Invoked by Aspire agent telemetry hooks; not intended to be run directly.</source>
+        <target state="needs-review-translation">Enregistrez la télémétrie relative à l’utilisation des compétences et des outils de l’assistant IA. Appelé par des scripts de hook de télémétrie de l’assistant Aspire, vous ne devez pas l’exécuter directement.</target>
         <note />
       </trans-unit>
       <trans-unit id="AgentTelemetryCommand_EventTypeDescription">
@@ -23,8 +23,8 @@
         <note />
       </trans-unit>
       <trans-unit id="AgentTelemetryCommand_SessionIdDescription">
-        <source>The opaque AI agent session identifier</source>
-        <target state="translated">Identificateur opaque de session de l’assistant IA</target>
+        <source>The AI agent session identifier, which must be a GUID</source>
+        <target state="needs-review-translation">Identificateur opaque de session de l’assistant IA</target>
         <note />
       </trans-unit>
       <trans-unit id="AgentTelemetryCommand_SkillNameDescription">
@@ -440,11 +440,6 @@
         <source>Configuration completed with errors. Please fix the reported issues and re-run the command.</source>
         <target state="translated">La configuration s’est terminée avec des erreurs. Veuillez corriger les problèmes signalés puis relancer la commande.</target>
         <note />
-      </trans-unit>
-      <trans-unit id="TelemetryHookScriptUpdateFailed">
-        <source>Could not update the telemetry hook script '{0}': {1}</source>
-        <target state="translated">Impossible de mettre à jour le script de hook de télémétrie '{0}' : {1}</target>
-        <note>{0} is the hook script path. {1} is the underlying error message.</note>
       </trans-unit>
     </body>
   </file>

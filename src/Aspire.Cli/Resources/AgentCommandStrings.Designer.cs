@@ -70,7 +70,7 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Record AI agent skill and tool usage telemetry. Invoked by the Aspire agent telemetry hook scripts; not intended to be run directly..
+        ///   Looks up a localized string similar to Record AI agent skill and tool usage telemetry. Invoked by Aspire agent telemetry hooks; not intended to be run directly..
         /// </summary>
         internal static string AgentTelemetryCommand_Description {
             get {
@@ -97,7 +97,7 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to The opaque AI agent session identifier.
+        ///   Looks up a localized string similar to The AI agent session identifier, which must be a GUID.
         /// </summary>
         internal static string AgentTelemetryCommand_SessionIdDescription {
             get {
@@ -841,15 +841,6 @@ namespace Aspire.Cli.Resources {
         internal static string SkippedMalformedConfigFile {
             get {
                 return ResourceManager.GetString("SkippedMalformedConfigFile", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Could not update the telemetry hook script &apos;{0}&apos;: {1}.
-        /// </summary>
-        internal static string TelemetryHookScriptUpdateFailed {
-            get {
-                return ResourceManager.GetString("TelemetryHookScriptUpdateFailed", resourceCulture);
             }
         }
     }

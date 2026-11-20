@@ -61,6 +61,19 @@ internal sealed class AgentConfigurationTestContext : IDisposable
 
     public void SetVariable(string name, string value) => _variables[name] = value;
 
+    /// <summary>
+    /// Replaces <c>{sh}</c> and <c>{ps1}</c> in JSON with the JSON-escaped paths of the legacy telemetry
+    /// scripts in this fixture's Aspire home.
+    /// </summary>
+    public string WithLegacyScriptPaths(string json)
+    {
+        static string Escape(string path) => JsonEncodedText.Encode(path).ToString();
+        var hooks = Path.Combine(ExecutionContext.AspireHomeDirectory.FullName, "hooks");
+        return json
+            .Replace("{sh}", Escape(Path.Combine(hooks, "track-telemetry.sh")))
+            .Replace("{ps1}", Escape(Path.Combine(hooks, "track-telemetry.ps1")));
+    }
+
     public IServiceCollection CreateServiceCollection(
         ITestOutputHelper output, Action<CliServiceCollectionTestOptions>? configure = null)
     {

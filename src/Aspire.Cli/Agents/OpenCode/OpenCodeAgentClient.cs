@@ -121,6 +121,10 @@ internal sealed class OpenCodeAgentClient(CliExecutionContext context, IEnvironm
     // OpenCode does not yet have a verified telemetry hook schema.
     public bool SupportsTelemetryHooks => false;
 
+    // Aspire never wrote an OpenCode telemetry hook, so there is nothing to migrate.
+    public Task<string?> FindLegacyTelemetryHookAsync(CancellationToken cancellationToken)
+        => Task.FromResult<string?>(null);
+
     public Task<TelemetryHookStatus> ConfigureTelemetryHookAsync(CancellationToken cancellationToken)
         => throw new NotSupportedException();
 

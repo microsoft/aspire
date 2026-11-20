@@ -505,10 +505,15 @@ internal sealed class AgentInitCommand : BaseCommand
         {
             // Nothing is installed, so scope is not prompted for. The re-run still refreshes hooks for
             // clients whose Aspire setup already exists at the resolved scope.
-            await ConfigureTelemetryHooksForAspireSetupAsync(selectedClients, [], workspaceRoot, scope, cancellationToken);
+            var hooksConfigured = await ConfigureTelemetryHooksForAspireSetupAsync(selectedClients, [], workspaceRoot, scope, cancellationToken);
 
             DisplayRequestedSkillCopiesKept(selectedClients, workspaceRoot, scope, removeSkillCopiesBinding, cancellationToken);
-            InteractionService.DisplaySubtleMessage(AgentCommandStrings.InitCommand_NoConfigurationSelected);
+
+            // A refreshed hook already reported what changed, so claiming nothing changed would contradict it.
+            if (!hooksConfigured)
+            {
+                InteractionService.DisplaySubtleMessage(AgentCommandStrings.InitCommand_NoConfigurationSelected);
+            }
             return new(CliExitCodes.Success, selectedClients, []);
         }
 
@@ -724,11 +729,12 @@ internal sealed class AgentInitCommand : BaseCommand
         // .claude/settings.json, and ignores Claude's `if` filter. A project-level hook would launch the
         // CLI on every matching tool call, or twice alongside the user-level hook. Whether telemetry is
         // actually transmitted stays gated by the single ASPIRE_CLI_TELEMETRY_OPTOUT opt-out, which both
-        // the hook scripts and the `aspire agent telemetry` command path re-check at runtime.
+        // the hook and the `aspire agent telemetry` command path re-check at runtime.
         // The hooks only report aspire@aspire-skills skills and Aspire MCP tool usage, so a client gets a
         // hook only when this run registered that plugin or configured the Aspire MCP server for it at the
-        // requested scope, or either is already set up there. The latter keeps re-runs that skip both
-        // choices refreshing the hook. Selecting the aspire skill choice is not enough: skill sources can
+        // requested scope, either is already set up there, or the client has a user-level legacy script
+        // registration to replace. The latter cases keep re-runs that skip both choices refreshing the hook.
+        // Selecting the aspire skill choice is not enough: skill sources can
         // disable the default source or replace its plugins.
         await ConfigureTelemetryHooksForAspireSetupAsync(
             selectedClients,
@@ -756,7 +762,8 @@ internal sealed class AgentInitCommand : BaseCommand
         };
     }
 
-    private async Task ConfigureTelemetryHooksForAspireSetupAsync(
+    /// <returns><see langword="true"/> when at least one client's hook was written.</returns>
+    private async Task<bool> ConfigureTelemetryHooksForAspireSetupAsync(
         IReadOnlyList<IAgentClient> selectedClients,
         ICollection<IAgentClient> aspireConfiguredClients,
         DirectoryInfo workspaceRoot,
@@ -768,16 +775,16 @@ internal sealed class AgentInitCommand : BaseCommand
         {
             // The configurator owns hook eligibility; the guard only avoids reading config it would ignore.
             if (aspireConfiguredClients.Contains(client) ||
-                (client.SupportsTelemetryHooks && await HasExistingAspireSetupAsync(client, workspaceRoot, scope, cancellationToken)))
+                (client.SupportsTelemetryHooks &&
+                    (await HasLegacyTelemetryHookAsync(client, cancellationToken) ||
+                     await HasExistingAspireSetupAsync(client, workspaceRoot, scope, cancellationToken))))
             {
                 telemetryHookClients.Add(client);
             }
         }
 
-        if (telemetryHookClients.Count > 0)
-        {
+        return telemetryHookClients.Count > 0 &&
             await ConfigureTelemetryHooksAsync(telemetryHookClients, cancellationToken);
-        }
     }
 
     private static IEnumerable<IAgentClient> GetAspireSkillsRegisteredClients(
@@ -794,6 +801,22 @@ internal sealed class AgentInitCommand : BaseCommand
         return registrationResults
             .Where(static result => result.Status is not AgentConfigurationStatus.Failed)
             .SelectMany(static result => result.Clients);
+    }
+
+    private static async Task<bool> HasLegacyTelemetryHookAsync(IAgentClient client, CancellationToken cancellationToken)
+    {
+        // A user-level script registration from Aspire 13.5 or 13.6 is owned by Aspire and runs an obsolete
+        // script. `aspire doctor` points users here to replace it, so refresh it even when the selected
+        // scope has no MCP server or skills registration of its own. An unreadable or malformed file
+        // falls through to the existing setup probe.
+        try
+        {
+            return await client.FindLegacyTelemetryHookAsync(cancellationToken) is not null;
+        }
+        catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
     }
 
     private static async Task<bool> HasExistingAspireSetupAsync(
@@ -857,7 +880,7 @@ internal sealed class AgentInitCommand : BaseCommand
             ex is InvalidOperationException or IOException or UnauthorizedAccessException;
     }
 
-    private async Task ConfigureTelemetryHooksAsync(
+    private async Task<bool> ConfigureTelemetryHooksAsync(
         IReadOnlyList<IAgentClient> clients,
         CancellationToken cancellationToken)
     {
@@ -869,11 +892,10 @@ internal sealed class AgentInitCommand : BaseCommand
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             // Hook installation is best-effort transparency tooling; never fail `agent init` over it.
-            // This deliberately catches everything except cancellation: besides file IO failures, a
-            // corrupted CLI build could surface a missing embedded hook script as an
-            // InvalidOperationException, and that must not abort the whole command either.
+            // This deliberately catches everything except cancellation, including unexpected
+            // non-IO failures, so they cannot abort the whole command.
             InteractionService.DisplaySubtleMessage(ex.Message);
-            return;
+            return false;
         }
 
         var configuredNames = results
@@ -902,6 +924,8 @@ internal sealed class AgentInitCommand : BaseCommand
             // config we can't safely modify must not break `agent init`.
             InteractionService.DisplaySubtleMessage(message);
         }
+
+        return configuredNames.Count > 0;
     }
 
     /// <summary>

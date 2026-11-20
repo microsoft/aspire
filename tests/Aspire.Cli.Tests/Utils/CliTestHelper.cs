@@ -200,7 +200,6 @@ internal static class CliTestHelper
         services.AddSingleton<IAgentClient, CopilotAgentClient>();
         services.AddSingleton<IAgentClient, ClaudeCodeAgentClient>();
         services.AddSingleton<IAgentClient, OpenCodeAgentClient>();
-        services.AddSingleton<ITelemetryHookInstaller, TelemetryHookInstaller>();
         services.AddSingleton(options.TelemetryHookConfiguratorFactory);
         services.AddSingleton(options.ScaffoldingServiceFactory);
         services.AddSingleton<IAppHostServerProjectFactory, AppHostServerProjectFactory>();
@@ -268,6 +267,7 @@ internal static class CliTestHelper
         services.AddSingleton<IDcpConnectionChecker, TestDcpConnectionChecker>();
         services.AddSingleton<IEnvironmentCheck, DcpConnectionHealthCheck>();
         services.AddSingleton<IEnvironmentCheck, DeprecatedAgentConfigCheck>();
+        services.AddSingleton<IEnvironmentCheck, LegacyTelemetryHookCheck>();
         services.AddSingleton<IEnvironmentCheck, AspireSkillsCheck>();
         services.AddSingleton<IEnvironmentChecker, EnvironmentChecker>();
 
@@ -707,8 +707,7 @@ internal sealed class CliServiceCollectionTestOptions
 
     public Func<IServiceProvider, IPlaywrightCliRunner> PlaywrightCliRunnerFactory { get; set; } = _ => new FakePlaywrightCliRunner();
 
-    // Defaults to the real configurator (resolving ITelemetryHookInstaller/CliExecutionContext/IEnvironment
-    // from DI) so agent-init tests exercise the shipped behavior; a test can override it to simulate a
+    // Defaults to the real configurator so agent-init tests exercise the shipped behavior; a test can override it to simulate a
     // failure and assert hook installation never aborts `agent init`.
     public Func<IServiceProvider, ITelemetryHookConfigurator> TelemetryHookConfiguratorFactory { get; set; }
         = serviceProvider => ActivatorUtilities.CreateInstance<TelemetryHookConfigurator>(serviceProvider);

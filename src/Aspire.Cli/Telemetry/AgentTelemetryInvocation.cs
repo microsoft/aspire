@@ -5,14 +5,14 @@ namespace Aspire.Cli.Telemetry;
 
 /// <summary>
 /// Detects whether the current CLI invocation targets the hidden <c>aspire agent telemetry</c>
-/// command used by the agent telemetry hook scripts.
+/// command used by agent telemetry hooks.
 /// </summary>
 /// <remarks>
 /// This check runs against the raw command-line arguments before the host and telemetry
 /// pipeline are built, which lets the CLI suppress the generic <c>aspire/cli/main</c> reported
 /// span so a hook event emits only the single dedicated <c>aspire/cli/agent_telemetry</c> span
 /// rather than two spans.
-/// The hook scripts always invoke the command as <c>aspire agent telemetry ...</c> with no global
+/// Agent telemetry hooks always invoke the command as <c>aspire agent telemetry ...</c> with no global
 /// options preceding the command path, so the detector requires <c>agent</c> and <c>telemetry</c>
 /// to be the first two arguments. Matching only the leading tokens (rather than anywhere in the
 /// argument list) avoids false positives where <c>agent</c>/<c>telemetry</c> appear as option or
