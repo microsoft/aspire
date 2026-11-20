@@ -110,6 +110,10 @@ internal sealed class ClaudeCodeAgentClient(
     public string GetTelemetryHookConfigPath()
         => Path.Combine(ClaudeCodePaths.GetConfigDirectory(context, environment), "settings.json");
 
+    // ConfigureTelemetryHookAsync replaces only hooks nested in PostToolUse groups.
+    public Task<bool> HasLegacyTelemetryHookAsync(CancellationToken cancellationToken)
+        => LegacyTelemetryHook.IsRegisteredAsync(GetTelemetryHookConfigPath(), "PostToolUse", nestedHooks: true, cancellationToken);
+
     public override string ToString() => Id;
 
     public async Task<TelemetryHookStatus> ConfigureTelemetryHookAsync(CancellationToken cancellationToken)
@@ -136,7 +140,7 @@ internal sealed class ClaudeCodeAgentClient(
             JsonNode? parsed;
             try
             {
-                parsed = JsonNode.Parse(content, documentOptions: LegacyTelemetryHook.ParseOptions);
+                parsed = JsonNode.Parse(content, documentOptions: TelemetryHookJson.ParseOptions);
             }
             catch (JsonException ex)
             {

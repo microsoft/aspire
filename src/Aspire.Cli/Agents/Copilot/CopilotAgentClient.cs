@@ -139,6 +139,11 @@ internal sealed class CopilotAgentClient(
     public string GetTelemetryHookConfigPath()
         => Path.Combine(GetSettingsDirectory(), "hooks", "aspire-telemetry.json");
 
+    // Aspire 13.5 and 13.6 wrote each postToolUse entry as a hook, and ConfigureTelemetryHookAsync
+    // replaces the whole file.
+    public Task<bool> HasLegacyTelemetryHookAsync(CancellationToken cancellationToken)
+        => LegacyTelemetryHook.IsRegisteredAsync(GetTelemetryHookConfigPath(), "postToolUse", nestedHooks: false, cancellationToken);
+
     public async Task<TelemetryHookStatus> ConfigureTelemetryHookAsync(CancellationToken cancellationToken)
     {
         try

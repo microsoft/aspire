@@ -16,12 +16,21 @@ internal static class LegacyTelemetryHook
     private static readonly string[] s_scriptPathSuffixes = ["/hooks/track-telemetry.sh", "/hooks/track-telemetry.ps1"];
 
     /// <summary>
-    /// Reads a client's user-level telemetry hook configuration and reports whether it registers a legacy script.
+    /// Reads a client's user-level telemetry hook configuration and reports whether it registers a legacy script
+    /// in the location that client's hook writer replaces.
     /// </summary>
+    /// <param name="configPath">The client's user-level hook configuration file.</param>
+    /// <param name="eventName">The client's post-tool-use event name, such as <c>postToolUse</c> or <c>PostToolUse</c>.</param>
+    /// <param name="nestedHooks">
+    /// <see langword="true"/> when hooks are grouped under each entry's <c>hooks</c> array, as in Claude Code;
+    /// <see langword="false"/> when each entry is a hook, as in GitHub Copilot.
+    /// </param>
+    /// <param name="cancellationToken">A token to cancel the read.</param>
     /// <exception cref="JsonException">The file is not valid JSON or repeats a property name.</exception>
     /// <exception cref="IOException">The file could not be read.</exception>
     /// <exception cref="UnauthorizedAccessException">The file could not be read.</exception>
-    internal static async Task<bool> IsRegisteredAsync(string configPath, CancellationToken cancellationToken)
+    internal static async Task<bool> IsRegisteredAsync(
+        string configPath, string eventName, bool nestedHooks, CancellationToken cancellationToken)
     {
         if (!File.Exists(configPath))
         {
@@ -30,51 +39,28 @@ internal static class LegacyTelemetryHook
 
         var content = await File.ReadAllTextAsync(configPath, cancellationToken);
 
-        // Parse the same way the Claude hook writer does, so `aspire doctor` only reports a registration
+        // Parse the same way the hook writers do, so `aspire doctor` only reports a registration
         // that `aspire agent init` can replace.
-        return IsRegistered(JsonNode.Parse(content, documentOptions: ParseOptions));
-    }
-
-    /// <summary>
-    /// Strict JSON options for hook configuration files. JsonObject materializes properties lazily, so
-    /// a repeated key would otherwise throw <see cref="ArgumentException"/> on first lookup instead of
-    /// failing at parse time as malformed JSON.
-    /// </summary>
-    internal static JsonDocumentOptions ParseOptions { get; } = new() { AllowDuplicateProperties = false };
-
-    internal static bool IsMatch(JsonObject hook)
-        => ReferencesScript(hook["command"])
-            || ReferencesScript(hook["bash"])
-            || ReferencesScript(hook["powershell"])
-            || (hook["args"] is JsonArray args && args.Any(ReferencesScript));
-
-    private static bool IsRegistered(JsonNode? config)
-    {
-        if (config is not JsonObject root || root["hooks"] is not JsonObject events)
+        var config = JsonNode.Parse(content, documentOptions: TelemetryHookJson.ParseOptions);
+        if (config is not JsonObject root || root["hooks"] is not JsonObject events || events[eventName] is not JsonArray entries)
         {
             return false;
         }
 
         // Copilot: {"hooks":{"postToolUse":[{"bash":"bash '/home/me/.aspire/hooks/track-telemetry.sh'"}]}}
         // Claude: {"hooks":{"PostToolUse":[{"matcher":"*","hooks":[{"command":"bash","args":["/home/me/.aspire/hooks/track-telemetry.sh"]}]}]}}
-        foreach (var eventName in new[] { "postToolUse", "PostToolUse" })
-        {
-            if (events[eventName] is not JsonArray entries)
-            {
-                continue;
-            }
+        var hooks = nestedHooks
+            ? entries.OfType<JsonObject>().SelectMany(entry => entry["hooks"] is JsonArray group ? group.OfType<JsonObject>() : [])
+            : entries.OfType<JsonObject>();
 
-            foreach (var entry in entries.OfType<JsonObject>())
-            {
-                if (IsMatch(entry) || (entry["hooks"] is JsonArray hooks && hooks.OfType<JsonObject>().Any(IsMatch)))
-                {
-                    return true;
-                }
-            }
-        }
-
-        return false;
+        return hooks.Any(IsMatch);
     }
+
+    internal static bool IsMatch(JsonObject hook)
+        => ReferencesScript(hook["command"])
+            || ReferencesScript(hook["bash"])
+            || ReferencesScript(hook["powershell"])
+            || (hook["args"] is JsonArray args && args.Any(ReferencesScript));
 
     private static bool ReferencesScript(JsonNode? node)
     {

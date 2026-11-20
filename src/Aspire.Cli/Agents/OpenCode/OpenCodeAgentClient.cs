@@ -124,6 +124,9 @@ internal sealed class OpenCodeAgentClient(CliExecutionContext context, IEnvironm
     public string GetTelemetryHookConfigPath()
         => throw new NotSupportedException();
 
+    public Task<bool> HasLegacyTelemetryHookAsync(CancellationToken cancellationToken)
+        => throw new NotSupportedException();
+
     public Task<TelemetryHookStatus> ConfigureTelemetryHookAsync(CancellationToken cancellationToken)
         => throw new NotSupportedException();
 

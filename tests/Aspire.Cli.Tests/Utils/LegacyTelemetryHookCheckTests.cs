@@ -91,6 +91,9 @@ public class LegacyTelemetryHookCheckTests(ITestOutputHelper outputHelper)
     [InlineData("""{"hooks":{"PostToolUse":[{"hooks":[{"command":"bash","args":["/home/user/.aspire/hooks/track-telemetry.sh"]}]}]},}""")]
     [InlineData("""{"hooks":[]}""")]
     [InlineData("""{"hooks":{"postToolUse":false,"PostToolUse":[null,{"hooks":false}]}}""")]
+    // Each client only replaces its own shape: Copilot entry-level postToolUse hooks and Claude hooks
+    // nested in PostToolUse groups. A legacy path in the other shape is not one agent init can refresh.
+    [InlineData("""{"hooks":{"postToolUse":[{"hooks":[{"command":"bash '/home/user/.aspire/hooks/track-telemetry.sh'"}]}],"PostToolUse":[{"command":"bash '/home/user/.aspire/hooks/track-telemetry.sh'"}]}}""")]
     [InlineData("""{"hooks":{"postToolUse":[{"exec":"aspire","args":["agent","telemetry","--hook"]}],"PostToolUse":[{"hooks":[{"command":"aspire","args":["agent","telemetry","--hook"]}]}]}}""")]
     [InlineData("""{"hooks":{"postToolUse":[{"bash":"bash '/custom/track-telemetry.sh'"}],"PostToolUse":[{"hooks":[{"command":"bash","args":["/custom/track-telemetry.sh"]}]}]}}""")]
     [InlineData("""{"hooks":{"postToolUse":[{"bash":"bash '/home/user/.aspire/hooks/track-telemetry.sh.backup'"}],"PostToolUse":[{"hooks":[{"command":"pwsh","args":["-File","C:\\Users\\user\\.aspire\\hooks\\track-telemetry.ps1.old"]}]}]}}""")]

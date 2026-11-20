@@ -4,7 +4,6 @@
 using System.Globalization;
 using System.Text.Json;
 using Aspire.Cli.Agents;
-using Aspire.Cli.Agents.Hooks;
 using Aspire.Cli.Resources;
 using Microsoft.Extensions.Logging;
 
@@ -29,7 +28,7 @@ internal sealed class LegacyTelemetryHookCheck(
             bool isRegistered;
             try
             {
-                isRegistered = await LegacyTelemetryHook.IsRegisteredAsync(path, cancellationToken);
+                isRegistered = await client.HasLegacyTelemetryHookAsync(cancellationToken);
             }
             catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
             {
