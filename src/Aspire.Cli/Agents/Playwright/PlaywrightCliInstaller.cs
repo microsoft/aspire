@@ -460,9 +460,45 @@ internal sealed class PlaywrightCliInstaller(
     internal static void SyncDirectory(string sourceDir, string targetDir)
     {
         Directory.CreateDirectory(targetDir);
+        if ((File.GetAttributes(targetDir) & FileAttributes.ReparsePoint) != 0)
+        {
+            throw new IOException("Cannot synchronize a skill into a linked directory.");
+        }
 
-        // Copy all files from source to target
-        foreach (var sourceFile in Directory.GetFiles(sourceDir, "*", SearchOption.AllDirectories))
+        // Remove links themselves before copying or cleaning up, never their targets.
+        var directories = new Stack<string>();
+        directories.Push(targetDir);
+        while (directories.TryPop(out var directory))
+        {
+            foreach (var entry in Directory.GetFileSystemEntries(directory))
+            {
+                var attributes = File.GetAttributes(entry);
+                if ((attributes & FileAttributes.ReparsePoint) != 0)
+                {
+                    if ((attributes & FileAttributes.Directory) != 0)
+                    {
+                        Directory.Delete(entry);
+                    }
+                    else
+                    {
+                        File.Delete(entry);
+                    }
+                }
+                else if ((attributes & FileAttributes.Directory) != 0)
+                {
+                    directories.Push(entry);
+                }
+            }
+        }
+
+        // Copy regular files without following links in the generated source skill.
+        var enumerationOptions = new EnumerationOptions
+        {
+            RecurseSubdirectories = true,
+            AttributesToSkip = FileAttributes.ReparsePoint,
+            IgnoreInaccessible = false
+        };
+        foreach (var sourceFile in Directory.GetFiles(sourceDir, "*", enumerationOptions))
         {
             var relativePath = Path.GetRelativePath(sourceDir, sourceFile);
             var targetFile = Path.Combine(targetDir, relativePath);
@@ -479,7 +515,7 @@ internal sealed class PlaywrightCliInstaller(
         // Remove files in target that don't exist in source
         if (Directory.Exists(targetDir))
         {
-            foreach (var targetFile in Directory.GetFiles(targetDir, "*", SearchOption.AllDirectories))
+            foreach (var targetFile in Directory.GetFiles(targetDir, "*", enumerationOptions))
             {
                 var relativePath = Path.GetRelativePath(targetDir, targetFile);
                 var sourceFile = Path.Combine(sourceDir, relativePath);
@@ -491,7 +527,7 @@ internal sealed class PlaywrightCliInstaller(
             }
 
             // Remove empty directories in target
-            foreach (var dir in Directory.GetDirectories(targetDir, "*", SearchOption.AllDirectories)
+            foreach (var dir in Directory.GetDirectories(targetDir, "*", enumerationOptions)
                 .OrderByDescending(d => d.Length))
             {
                 if (Directory.Exists(dir) && Directory.GetFileSystemEntries(dir).Length == 0)
