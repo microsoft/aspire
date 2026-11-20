@@ -1,8 +1,11 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { parse as parseJsonc, type ParseError } from 'jsonc-parser';
-import { aspireConfigExists, failedToConfigureLaunchJson, defaultConfigurationName, selectDashboardLaunchBehavior, dashboardLaunchNoneLabel, dashboardLaunchNoneDescription, dashboardLaunchNotificationLabel, dashboardLaunchNotificationDescription, dashboardLaunchExternalBrowserLabel, dashboardLaunchExternalBrowserDescription, dashboardLaunchIntegratedBrowserLabel, dashboardLaunchIntegratedBrowserDescription, dashboardLaunchChromeLabel, dashboardLaunchChromeDescription, dashboardLaunchEdgeLabel, dashboardLaunchEdgeDescription, dashboardLaunchFirefoxLabel, dashboardLaunchFirefoxDescription } from '../loc/strings';
+import { aspireConfigExists, failedToConfigureLaunchJson, defaultConfigurationName, selectAppHostToLaunch, selectDashboardLaunchBehavior, dashboardLaunchNoneLabel, dashboardLaunchNoneDescription, dashboardLaunchNotificationLabel, dashboardLaunchNotificationDescription, dashboardLaunchExternalBrowserLabel, dashboardLaunchExternalBrowserDescription, dashboardLaunchIntegratedBrowserLabel, dashboardLaunchIntegratedBrowserDescription, dashboardLaunchChromeLabel, dashboardLaunchChromeDescription, dashboardLaunchEdgeLabel, dashboardLaunchEdgeDescription, dashboardLaunchFirefoxLabel, dashboardLaunchFirefoxDescription } from '../loc/strings';
 import type { DashboardLaunchBehavior } from '../debugger/AspireDebugSession';
+import { type AppHostDiscoveryService, type CandidateAppHostDisplayInfo, formatAppHostLanguage, isBuildableAppHostCandidate, selectWorkspaceAppHostPath } from '../utils/appHostDiscovery';
+import { sortCandidatesByPath } from '../utils/appHostCandidateSelection';
+import { extensionLogOutputChannel } from '../utils/logging';
 
 type DashboardLaunchBehaviorQuickPickItem = vscode.QuickPickItem & {
     value: DashboardLaunchBehavior;
@@ -13,11 +16,15 @@ type LaunchJson = {
     [key: string]: unknown;
 };
 
-export async function configureLaunchJsonCommand() {
-    const workspaceFolder = vscode.workspace.workspaceFolders?.[0]!;
-    const launchJsonPath = path.join(workspaceFolder.uri.fsPath, '.vscode', 'launch.json');
+type LaunchTarget = {
+    workspaceFolder: vscode.WorkspaceFolder;
+    appHostPath?: string;
+};
 
+export async function configureLaunchJsonCommand(appHostDiscoveryService: AppHostDiscoveryService) {
     try {
+        const { workspaceFolder, appHostPath } = await selectLaunchTarget(appHostDiscoveryService);
+        const launchJsonPath = path.join(workspaceFolder.uri.fsPath, '.vscode', 'launch.json');
         const vscodeDir = path.join(workspaceFolder.uri.fsPath, '.vscode');
         const vscodeUri = vscode.Uri.file(vscodeDir);
         const launchUri = vscode.Uri.file(launchJsonPath);
@@ -63,7 +70,7 @@ export async function configureLaunchJsonCommand() {
             type: 'aspire',
             request: 'launch',
             name: defaultConfigurationName,
-            program: '${workspaceFolder}',
+            program: getProgram(workspaceFolder, appHostPath),
             dashboardBrowser
         };
 
@@ -98,6 +105,93 @@ export async function configureLaunchJsonCommand() {
 
         vscode.window.showErrorMessage(failedToConfigureLaunchJson(error));
     }
+}
+
+/**
+ * Resolves the AppHost to launch: the active editor's AppHost, then the single or default
+ * AppHost of the active (or only AppHost-containing) folder, otherwise a prompt. Without any
+ * discovered AppHost, falls back to the first workspace folder.
+ */
+async function selectLaunchTarget(appHostDiscoveryService: AppHostDiscoveryService): Promise<LaunchTarget> {
+    const folders = vscode.workspace.workspaceFolders ?? [];
+    const activeUri = vscode.window.activeTextEditor?.document.uri;
+    const activeFolder = activeUri ? vscode.workspace.getWorkspaceFolder(activeUri) : undefined;
+    if (activeUri && activeFolder) {
+        const candidate = await appHostDiscoveryService.tryFindCandidateForEditorFile(activeUri.fsPath, activeFolder).catch(() => undefined);
+        if (candidate) {
+            return toLaunchTarget(activeFolder, candidate.path);
+        }
+    }
+
+    const discoverFolder = async (workspaceFolder: vscode.WorkspaceFolder) => {
+        let candidates: CandidateAppHostDisplayInfo[] = [];
+        try {
+            candidates = await appHostDiscoveryService.discover(workspaceFolder);
+        }
+        catch (error) {
+            extensionLogOutputChannel.warn(`Failed to discover AppHost candidates for workspace ${workspaceFolder.uri.fsPath}: ${error}`);
+        }
+        return { workspaceFolder, candidates, buildable: sortCandidatesByPath(candidates.filter(isBuildableAppHostCandidate)) };
+    };
+    const settledPath = (entry: Awaited<ReturnType<typeof discoverFolder>>) =>
+        entry.buildable.length > 0 ? selectWorkspaceAppHostPath(entry.workspaceFolder, entry.candidates) : Promise.resolve(undefined);
+
+    // A settled AppHost in the active folder wins without waiting on discovery in the other roots.
+    const activeEntry = activeFolder ? await discoverFolder(activeFolder) : undefined;
+    const activePath = activeEntry ? await settledPath(activeEntry) : undefined;
+    if (activeEntry && activePath) {
+        return toLaunchTarget(activeEntry.workspaceFolder, activePath);
+    }
+
+    const discovered = await Promise.all(folders.map(workspaceFolder =>
+        activeEntry && workspaceFolder.uri.toString() === activeEntry.workspaceFolder.uri.toString() ? activeEntry : discoverFolder(workspaceFolder)));
+    const withAppHosts = discovered.filter(entry => entry.buildable.length > 0);
+    if (withAppHosts.length === 0) {
+        return { workspaceFolder: folders[0] };
+    }
+
+    if (withAppHosts.length === 1 && withAppHosts[0] !== activeEntry) {
+        const selectedPath = await settledPath(withAppHosts[0]);
+        if (selectedPath) {
+            return toLaunchTarget(withAppHosts[0].workspaceFolder, selectedPath);
+        }
+    }
+
+    const options = withAppHosts.flatMap(entry => entry.buildable.map(candidate => ({ workspaceFolder: entry.workspaceFolder, candidate })));
+    if (options.length === 1) {
+        return toLaunchTarget(options[0].workspaceFolder, options[0].candidate.path);
+    }
+
+    const selected = await vscode.window.showQuickPick(options.map(option => ({
+        label: path.relative(option.workspaceFolder.uri.fsPath, option.candidate.path),
+        description: [folders.length > 1 ? option.workspaceFolder.name : undefined, option.candidate.language ? formatAppHostLanguage(option.candidate.language) : undefined].filter(Boolean).join(' · ') || undefined,
+        detail: option.candidate.path,
+        option,
+    })), {
+        placeHolder: selectAppHostToLaunch,
+        ignoreFocusOut: true,
+    });
+    if (!selected) {
+        throw new vscode.CancellationError();
+    }
+
+    return toLaunchTarget(selected.option.workspaceFolder, selected.option.candidate.path);
+}
+
+function toLaunchTarget(discoveredIn: vscode.WorkspaceFolder, appHostPath: string): LaunchTarget {
+    // Nested workspace folders: write launch.json into the innermost folder containing the AppHost.
+    return { workspaceFolder: vscode.workspace.getWorkspaceFolder(vscode.Uri.file(appHostPath)) ?? discoveredIn, appHostPath };
+}
+
+function getProgram(workspaceFolder: vscode.WorkspaceFolder, appHostPath: string | undefined): string {
+    if (!appHostPath) {
+        return '${workspaceFolder}';
+    }
+
+    const relativePath = path.relative(workspaceFolder.uri.fsPath, appHostPath);
+    return relativePath.startsWith('..') || path.isAbsolute(relativePath)
+        ? appHostPath
+        : `\${workspaceFolder}/${relativePath.split(path.sep).join('/')}`;
 }
 
 async function promptForDashboardLaunchBehavior(): Promise<DashboardLaunchBehavior | undefined> {
