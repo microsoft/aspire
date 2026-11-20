@@ -27,7 +27,7 @@ namespace Aspire.Dashboard.Model;
 public sealed class ResourceTagStore
 {
     internal const int MaxTagLength = 50;
-    private const int MaxSavedTagAssignments = 50;
+    internal const int MaxSavedTagAssignments = 50;
 
     private readonly LocalStorageSetting<Dictionary<string, List<string>>> _setting;
     private readonly ILogger<ResourceTagStore> _logger;
@@ -101,30 +101,29 @@ public sealed class ResourceTagStore
     /// </summary>
     /// <param name="resourceName">The display name of the resource.</param>
     /// <param name="tag">The tag to add.</param>
-    /// <returns><see langword="true"/> when the tag was added in memory; otherwise, <see langword="false"/> when
-    /// the tag is empty, already assigned, or the saved tag limit has been reached.</returns>
-    public bool AddTag(string resourceName, string tag)
+    internal SettingUpdate AddTag(string resourceName, string tag)
     {
         ArgumentException.ThrowIfNullOrEmpty(resourceName);
 
         if (NormalizeTag(tag) is not { } normalizedTag)
         {
-            return false;
+            return new SettingUpdate(false, Task.FromResult(SettingUpdateResult.Unchanged));
         }
 
-        return _setting.Update(tagsByResource =>
+        return _setting.UpdateWithResult(tagsByResource =>
         {
             if (tagsByResource.Values.Sum(tags => tags.Count) >= MaxSavedTagAssignments)
             {
                 if (!tagsByResource.TryGetValue(resourceName, out var tags) || !tags.Contains(normalizedTag, StringComparer.OrdinalIgnoreCase))
                 {
                     _logger.LogWarning("Cannot add a resource tag because the dashboard has reached the limit of {Limit} saved tag assignments.", MaxSavedTagAssignments);
+                    return SettingUpdateResult.LimitReached;
                 }
 
-                return false;
+                return SettingUpdateResult.Unchanged;
             }
 
-            return AddTagCore(tagsByResource, resourceName, normalizedTag);
+            return AddTagCore(tagsByResource, resourceName, normalizedTag) ? SettingUpdateResult.Changed : SettingUpdateResult.Unchanged;
         });
     }
 

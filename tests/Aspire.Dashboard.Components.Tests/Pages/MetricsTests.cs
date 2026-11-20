@@ -11,8 +11,10 @@ using Aspire.Dashboard.Components.Controls;
 using Aspire.Dashboard.Components.Pages;
 using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Components.Tests.Shared;
+using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Extensions;
 using Aspire.Dashboard.Model;
+using Aspire.Dashboard.Model.BrowserStorage;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Model.MetricValues;
 using Aspire.Dashboard.Otlp.Storage;
@@ -24,8 +26,10 @@ using Aspire.Tests.Shared.Telemetry;
 using Bunit;
 using Google.Protobuf.Collections;
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using Microsoft.FluentUI.AspNetCore.Components;
 using OpenTelemetry.Proto.Metrics.V1;
@@ -373,6 +377,34 @@ public partial class MetricsTests : DashboardTestContext
         });
 
         cut.WaitForAssertion(() => Assert.Empty(cut.FindComponents<ResourceSelect>()));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task PinButton_OverLimitShowsWarningWithoutPinningAnyResources(bool filledByAnotherTab)
+    {
+        MetricsSetupHelpers.SetupMetricsPage(this);
+        var toasts = Render<FluentToastProvider>();
+        var resources = Enumerable.Range(1, filledByAnotherTab ? 2 : 51).Select(i => $"resource-{i}").ToArray();
+        var savedPins = new List<MetricPin>();
+        var cut = Render<MetricPinButton>(builder => builder
+            .Add(button => button.InstrumentKey, new OtlpInstrumentKey("test-meter", "requests"))
+            .Add(button => button.ResourceNames, resources));
+        if (filledByAnotherTab)
+        {
+            savedPins.AddRange(Enumerable.Range(1, 49).Select(i => new MetricPin($"other-{i}", "test-meter", "requests")));
+            var applicationName = Services.GetRequiredService<IOptions<DashboardOptions>>().Value.GetApplicationNameOrDefault();
+            await Services.GetRequiredService<ILocalStorage>().SetAsync(BrowserStorageKeys.MetricPinsKey(applicationName), savedPins);
+        }
+
+        await cut.Find("fluent-button").ClickAsync(new MouseEventArgs());
+
+        var toast = Assert.Single(toasts.FindComponents<FluentToast>()).Instance;
+        Assert.Equal(ToastIntent.Warning, toast.Intent);
+        Assert.Equal("Can't pin this metric. The limit is 50 pins per application. Select fewer resources or unpin existing metrics.", toast.Title);
+        Assert.Equal("false", cut.Find("fluent-button").GetAttribute("aria-pressed"));
+        Assert.Equal(savedPins, Services.GetRequiredService<MetricPinStore>().GetPins());
     }
 
     [Fact]

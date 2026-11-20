@@ -84,7 +84,8 @@ independently of individual runs. The dashboard ignores old plaintext values and
 them with protected values on the next change. AppHost-declared tags are unaffected.
 Each application can store up to 50 user-added tag assignments and 50 metric pins. A tag
 assigned to multiple resources counts once per resource. A pin counts once per resource and
-instrument. Edits that exceed either limit are rejected without removing existing entries.
+instrument. If an edit would exceed either limit, the dashboard shows a warning toast
+without removing any existing entries.
 
 `WithDisplayOrder` stores its own annotation rather than a trait, and is transported
 as the `resource.displayOrder` resource property; repeated calls replace the previous
