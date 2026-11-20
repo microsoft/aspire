@@ -44,7 +44,7 @@
       </trans-unit>
       <trans-unit id="ChannelFeedAlreadyConfiguredFormat">
         <source>Cannot modify '{0}' because channel source '{1}' is disabled, or the source or its package mappings are inherited or user-owned. Update the NuGet configuration manually instead.</source>
-        <target state="new">Cannot modify '{0}' because channel source '{1}' is disabled, or the source or its package mappings are inherited or user-owned. Update the NuGet configuration manually instead.</target>
+        <target state="translated">Nie można zmodyfikować elementu „{0}”, ponieważ źródło kanału „{1}” jest wyłączone albo mapowania źródła lub jego pakietu są dziedziczone lub należą do użytkownika. Zamiast tego ręcznie zaktualizuj konfigurację pakietu NuGet.</target>
         <note />
       </trans-unit>
       <trans-unit id="ChannelNonePlaceholder">
@@ -64,7 +64,7 @@
       </trans-unit>
       <trans-unit id="ChannelUpdateRequiresAmbientNuGetConfigurationFormat">
         <source>Cannot apply channel '{0}' for '{1}' because MSBuild overrides NuGet configuration: {2}. Remove these overrides to enable channel updates. Updates without a command-line or configured channel remain supported.</source>
-        <target state="needs-review-translation">Nie można zastosować '{0}' kanału dla '{1}', ponieważ program MSBuild przesłania konfigurację NuGet: {2}. Usuń te zastąpienia, aby włączyć jawne aktualizacje kanału. Aktualizacje bez jawnego kanału pozostają obsługiwane.</target>
+        <target state="translated">Nie można zastosować '{0}' kanału dla '{1}', ponieważ program MSBuild przesłania konfigurację NuGet: {2}. Usuń te zastąpienia, aby włączyć aktualizacje kanału. Aktualizacje bez wiersza polecenia lub skonfigurowanego kanału pozostają obsługiwane.</target>
         <note />
       </trans-unit>
       <trans-unit id="CheckingForUpdates">
@@ -84,7 +84,7 @@
       </trans-unit>
       <trans-unit id="ConfiguredChannelNotFoundFormat">
         <source>Cannot use channel '{0}' from Aspire configuration. {1}</source>
-        <target state="new">Cannot use channel '{0}' from Aspire configuration. {1}</target>
+        <target state="translated">Nie można użyć kanału „{0}” z konfiguracji łańcucha narzędzi Aspire. {1}</target>
         <note>{0} = configured channel name. {1} = reason the channel could not be resolved.</note>
       </trans-unit>
       <trans-unit id="CouldNotFindPackageVersionInDirectoryPackagesProps">
@@ -114,49 +114,49 @@
       </trans-unit>
       <trans-unit id="DryRunBackupRecoveryFormat">
         <source>Could not restore '{0}'. Its recovery backup was preserved at '{1}'. Restore the backup manually before retrying.</source>
-        <target state="new">Could not restore '{0}'. Its recovery backup was preserved at '{1}'. Restore the backup manually before retrying.</target>
+        <target state="translated">Nie można przywrócić '{0}'. Jego kopia zapasowa odzyskiwania została zachowana w '{1}'. Przywróć kopię zapasową ręcznie przed ponowieniem próby.</target>
         <note />
       </trans-unit>
       <trans-unit id="DryRunBackupsNotReplaced">
         <source>Dry run cancelled without replacing existing backups. Recover the originals from the listed backup files or move them aside before retrying.</source>
-        <target state="new">Dry run cancelled without replacing existing backups. Recover the originals from the listed backup files or move them aside before retrying.</target>
+        <target state="translated">Przebieg próbny został anulowany bez zastępowania istniejących kopii zapasowych. Odzyskaj oryginały z wymienionych plików kopii zapasowych lub przenieś je na bok przed ponowieniem próby.</target>
         <note />
       </trans-unit>
       <trans-unit id="DryRunExistingBackupsFormat">
         <source>Backups from an earlier dry run already exist. Preserve them for recovery if needed before replacing them:
 {0}</source>
-        <target state="new">Backups from an earlier dry run already exist. Preserve them for recovery if needed before replacing them:
+        <target state="translated">Kopie zapasowe z wcześniejszego przebiegu próbnego już istnieją. Zachowaj je do odzyskania w razie potrzeby przed ich zastąpieniem:
 {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="DryRunOptionDescription">
         <source>Validate an explicit .NET AppHost channel update using temporary NuGet caches, without proposing or applying changes.</source>
-        <target state="new">Validate an explicit .NET AppHost channel update using temporary NuGet caches, without proposing or applying changes.</target>
+        <target state="translated">Zweryfikuj jawną aktualizację kanału AppHost platformy .NET przy użyciu tymczasowych pamięci podręcznych NuGet bez proponowania ani stosowania zmian.</target>
         <note />
       </trans-unit>
       <trans-unit id="DryRunReplaceBackupsPrompt">
         <source>Replace the existing backups with the current file contents? This discards the previous recovery copies.</source>
-        <target state="new">Replace the existing backups with the current file contents? This discards the previous recovery copies.</target>
+        <target state="translated">Zastąpić istniejące kopie zapasowe bieżącą zawartością pliku? Spowoduje to odrzucenie poprzednich kopii odzyskiwania.</target>
         <note />
       </trans-unit>
       <trans-unit id="DryRunRequiresChannel">
         <source>--dry-run requires an explicit --channel or --quality other than default, and cannot be combined with --self or --migrate.</source>
-        <target state="new">--dry-run requires an explicit --channel or --quality other than default, and cannot be combined with --self or --migrate.</target>
+        <target state="translated">Parametr --dry-run wymaga jawnego parametru --channel lub --quality innego niż domyślny i nie można go łączyć z funkcją --self ani --migrate.</target>
         <note />
       </trans-unit>
       <trans-unit id="DryRunRequiresDotNet">
         <source>--dry-run is supported only for .NET AppHosts.</source>
-        <target state="new">--dry-run is supported only for .NET AppHosts.</target>
+        <target state="translated">Polecenie --dry-run jest obsługiwane tylko w przypadku hostów aplikacji platformy .NET.</target>
         <note />
       </trans-unit>
       <trans-unit id="DryRunSuccessful">
         <source>Channel update validation succeeded. Original files have been restored; no update was applied.</source>
-        <target state="new">Channel update validation succeeded. Original files have been restored; no update was applied.</target>
+        <target state="translated">Weryfikacja aktualizacji kanału powiodła się. Oryginalne pliki zostały przywrócone; Nie zastosowano aktualizacji.</target>
         <note />
       </trans-unit>
       <trans-unit id="DryRunValidating">
         <source>Validating the channel update...</source>
-        <target state="new">Validating the channel update...</target>
+        <target state="translated">Trwa weryfikowanie aktualizacji kanału...</target>
         <note />
       </trans-unit>
       <trans-unit id="ExecutingUpdateStepFormat">
@@ -491,7 +491,7 @@
       </trans-unit>
       <trans-unit id="UsingConfiguredChannelFormat">
         <source>Using channel '{0}' from Aspire configuration. Pass --channel to override.</source>
-        <target state="new">Using channel '{0}' from Aspire configuration. Pass --channel to override.</target>
+        <target state="translated">Korzystanie z kanału „{0}” z konfiguracji łańcucha narzędzi Aspire. Przekaż element --channel do zastąpienia.</target>
         <note>{0} = configured channel name.</note>
       </trans-unit>
       <trans-unit id="WhichDirectoryNuGetConfigPrompt">
