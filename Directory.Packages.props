@@ -189,7 +189,7 @@
     <PackageVersion Include="Microsoft.DotNet.GenAPI.Task" Version="9.0.103-servicing.25065.25" />
     <PackageVersion Include="Microsoft.TemplateEngine.Edge" Version="11.0.100" />
     <PackageVersion Include="Microsoft.TemplateEngine.Orchestrator.RunnableProjects" Version="11.0.100" />
-    <PackageVersion Include="System.CommandLine" Version="2.0.12" />
+    <PackageVersion Include="System.CommandLine" Version="3.0.0" />
     <!-- test dependencies shared with playground -->
     <PackageVersion Include="xunit.v3.assert" Version="$(XunitV3Version)" />
     <!-- playground apps dependencies -->
