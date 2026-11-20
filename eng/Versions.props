@@ -3,7 +3,7 @@
     <!-- This repo version -->
     <MajorVersion>17</MajorVersion>
     <MinorVersion>0</MinorVersion>
-    <PatchVersion>0</PatchVersion>
+    <PatchVersion>1</PatchVersion>
     <VersionPrefix>$(MajorVersion).$(MinorVersion).$(PatchVersion)</VersionPrefix>
     <PreReleaseVersionLabel>preview.1</PreReleaseVersionLabel>
     <!-- Uncomment this override in future releases when the development branch precedes its dashboard image, using an available tag. -->
