@@ -8,7 +8,8 @@ description: |
   resolved from the source PR's release reasoning (PR milestone, linked-issue
   milestone, then source PR base), using the matching release/* branch when it
   already exists and falling back to aspire.dev main otherwise. It assigns the
-  source PR's author, merger, and assignees, requests review from the SME and
+  source PR's author and assignees (plus the merger when the author is not on
+  the Aspire team), requests review from the SME and
   Copilot, and comments on the original PR with a link to the docs PR (or a
   "no docs needed" message). The workflow never merges docs PRs.
 
@@ -515,8 +516,24 @@ safe-outputs:
             gh api "/repos/microsoft/aspire/pulls/${SOURCE_PR_NUMBER}" > "${PEOPLE_DIR}/pr.json"
             gh api --paginate "/repos/microsoft/aspire/pulls/${SOURCE_PR_NUMBER}/reviews?per_page=100" \
               | jq -s 'add // []' > "${PEOPLE_DIR}/reviews.json"
+            # The merger is assigned only when the effective author is not on the
+            # Aspire team (write, maintain, or admin; the API reports maintain as
+            # write). A failed lookup counts as not on the team. Candidates are
+            # validated GitHub logins, so they are safe in the URL.
+            # https://docs.github.com/en/rest/collaborators/collaborators#get-repository-permissions-for-a-user
+            : > "${PEOPLE_DIR}/team.txt"
+            python3 _validator/.github/workflows/pr-docs-check/resolve_people.py team-candidates \
+              "${PEOPLE_DIR}/pr.json" > "${PEOPLE_DIR}/candidates.txt"
+            while IFS= read -r login; do
+              permission="$(gh api "/repos/microsoft/aspire/collaborators/${login}/permission" --jq '.permission' 2>/dev/null || true)"
+              case "${permission}" in
+                admin|write) echo "${login}" >> "${PEOPLE_DIR}/team.txt" ;;
+              esac
+            done < "${PEOPLE_DIR}/candidates.txt"
+            jq -R -s 'split("\n") | map(select(length > 0))' "${PEOPLE_DIR}/team.txt" > "${PEOPLE_DIR}/team.json"
             python3 _validator/.github/workflows/pr-docs-check/resolve_people.py resolve \
-              "${PEOPLE_DIR}/pr.json" "${PEOPLE_DIR}/reviews.json" "${PEOPLE_DIR}/people.json"
+              "${PEOPLE_DIR}/pr.json" "${PEOPLE_DIR}/reviews.json" "${PEOPLE_DIR}/team.json" \
+              "${PEOPLE_DIR}/people.json"
             cat "${PEOPLE_DIR}/people.json"
         - name: Assign people and request reviewers on docs PR
           id: people-apply
@@ -1164,8 +1181,20 @@ pre-agent-steps:
       # effects: the trusted notify-source-pr job recomputes it from the live
       # source PR before assigning or requesting anyone. See resolve_people.py.
       PEOPLE_OUT=.pr-docs-check/people.json
+      # Same team lookup as the notify-source-pr job; see the comment there.
+      TEAM_TXT="$(mktemp)"
+      TEAM_JSON="$(mktemp)"
+      python3 _repos/aspire/.github/workflows/pr-docs-check/resolve_people.py team-candidates \
+        "${PR_JSON}" | while IFS= read -r login; do
+          permission="$(gh api "/repos/microsoft/aspire/collaborators/${login}/permission" --jq '.permission' 2>/dev/null || true)"
+          case "${permission}" in
+            admin|write) echo "${login}" ;;
+          esac
+        done > "${TEAM_TXT}"
+      jq -R -s 'split("\n") | map(select(length > 0))' "${TEAM_TXT}" > "${TEAM_JSON}"
       python3 _repos/aspire/.github/workflows/pr-docs-check/resolve_people.py resolve \
-        "${PR_JSON}" "${REVIEWS_JSON}" "${PEOPLE_OUT}"
+        "${PR_JSON}" "${REVIEWS_JSON}" "${TEAM_JSON}" "${PEOPLE_OUT}"
+      rm -f "${TEAM_TXT}" "${TEAM_JSON}"
 
       # Keep patches available for targeted reads without inflating pr.json or
       # spending model calls fetching and decoding the same API response again.
@@ -1283,13 +1312,13 @@ shell step (`resolve_people.py`) and written to `.pr-docs-check/people.json`.
 
 | Field | Meaning |
 | --- | --- |
-| `assignees` | Humans the workflow assigns to the docs PR: the source PR author, merger, and assignees. |
+| `assignees` | Humans the workflow assigns to the docs PR: the source PR author and assignees, plus the merger when the author is not on the Aspire team. |
 | `sme_login` | The subject-matter expert requested as reviewer, or `""` when none was resolved. |
 | `sme_source` | How it was chosen: `approved_reviewer`, `substantive_reviewer`, or `none`. |
 
 You never pass these logins anywhere. A trusted post-processing job assigns
 people, requests the SME and Copilot reviews, and adds a footer that mentions
-the source PR author and merger. Do **not** write `@` mentions in the PR body
+the source PR author (and the merger when assigned). Do **not** write `@` mentions in the PR body
 or summary; refer to people as "the source PR author" or "the SME" instead.
 
 ## Step 3: Read the Pre-Resolved Target Branch

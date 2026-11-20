@@ -15,9 +15,18 @@ Rules
 Assignees are the de-duplicated union, in priority order, of:
 
 1. the source PR author (core team or community),
-2. the user who merged the source PR (``merged_by``),
+2. the user who merged the source PR (``merged_by``), only when the effective
+   author is not on the Aspire team. A team author already owns the follow-up,
+   so also assigning the merger is redundant,
 3. the source PR assignees (for Copilot-authored PRs these are the humans who
    started the Copilot session).
+
+The effective author is the human author, or, for bot-authored PRs (Copilot
+coding agent), the human source assignees. "On the Aspire team" means write,
+maintain, or admin permission on microsoft/aspire. The workflow looks that up
+for the logins printed by ``team-candidates`` and passes the team members in;
+a failed lookup counts as not on the team, so the merger is assigned rather
+than nobody.
 
 Bots are never assigned or mentioned. GitHub caps a pull request or issue at 10
 assignees, so anyone past the cap is returned as ``overflow`` and mentioned
@@ -35,12 +44,15 @@ reviewer; the notify job requests it directly, not through this script.
 Usage
 -----
 
-    python3 resolve_people.py resolve <pr.json> <reviews.json> <people.json>
+    python3 resolve_people.py team-candidates <pr.json>
+    python3 resolve_people.py resolve <pr.json> <reviews.json> <team.json> <people.json>
     python3 resolve_people.py footer <people.json> <assigned.json> <body.md> <out.md>
 
 ``pr.json`` is the raw body of ``GET /repos/microsoft/aspire/pulls/{N}`` and
 ``reviews.json`` is the paginated, JSON-arrayed body of
-``GET /repos/microsoft/aspire/pulls/{N}/reviews``. ``assigned.json`` is the JSON
+``GET /repos/microsoft/aspire/pulls/{N}/reviews``. ``team-candidates`` prints
+the effective-author logins, one per line, and ``team.json`` is the JSON array
+of those logins that are on the Aspire team. ``assigned.json`` is the JSON
 array of logins that GitHub actually kept after the assign call, ``body.md`` is
 the current docs PR or issue body, and ``out.md`` receives the updated body.
 """
@@ -141,7 +153,20 @@ def _latest_review_by_reviewer(reviews: list[Any]) -> dict[str, dict]:
     return latest
 
 
-def resolve_people(pr: dict, reviews: list[Any]) -> dict:
+def effective_authors(pr: dict) -> list[str]:
+    """Return the human author, or the human assignees of a bot-authored PR."""
+    author = _human_login(pr.get("user"))
+    if author:
+        return [author]
+    logins: list[str] = []
+    for assignee in pr.get("assignees") or []:
+        login = _human_login(assignee)
+        if login and login.lower() not in {existing.lower() for existing in logins}:
+            logins.append(login)
+    return logins
+
+
+def resolve_people(pr: dict, reviews: list[Any], team: list[Any]) -> dict:
     """Resolve docs PR assignees and the SME reviewer from the raw source PR."""
     people: list[str] = []
     roles: dict[str, list[str]] = {}
@@ -157,8 +182,12 @@ def resolve_people(pr: dict, reviews: list[Any]) -> dict:
         if role not in roles[key]:
             roles[key].append(role)
 
+    team_keys = {login.lower() for login in team if isinstance(login, str)}
+    author_on_team = any(login.lower() in team_keys for login in effective_authors(pr))
+
     add(pr.get("user"), "author")
-    add(pr.get("merged_by"), "merged_by")
+    if not author_on_team:
+        add(pr.get("merged_by"), "merged_by")
     for assignee in pr.get("assignees") or []:
         add(assignee, "assignee")
 
@@ -195,7 +224,9 @@ def resolve_people(pr: dict, reviews: list[Any]) -> dict:
 
     return {
         "author": author,
-        "merged_by": merged_by,
+        "author_on_team": author_on_team,
+        # Empty when the merger is not assigned, so the footer does not mention them.
+        "merged_by": "" if author_on_team else merged_by,
         "assignees": people[:MAX_ASSIGNEES],
         "overflow": people[MAX_ASSIGNEES:],
         "roles": {login: roles[login.lower()] for login in people},
@@ -221,7 +252,8 @@ def render_footer(people: dict, assigned: list[Any]) -> str:
 
         <!-- pr-docs-check:people:end -->
 
-    The source PR author and merger are always mentioned. Every other intended
+    The source PR author is always mentioned, and so is the merger when they
+    were assigned (non-team author). Every other intended
     assignee that GitHub did not keep (no access to the docs repository, or past
     the assignee cap) is mentioned on the cc line so they are still notified.
     Returns "" when there is nobody to mention.
@@ -287,11 +319,22 @@ def _load_json(path: str) -> Any:
 
 
 def main(argv: list[str]) -> int:
-    if len(argv) == 5 and argv[1] == "resolve":
+    if len(argv) == 3 and argv[1] == "team-candidates":
+        pr = _load_json(argv[2])
+        for login in effective_authors(pr if isinstance(pr, dict) else {}):
+            print(login)
+        return 0
+
+    if len(argv) == 6 and argv[1] == "resolve":
         pr = _load_json(argv[2])
         reviews = _load_json(argv[3])
-        result = resolve_people(pr if isinstance(pr, dict) else {}, reviews if isinstance(reviews, list) else [])
-        with open(argv[4], "w", encoding="utf-8") as fh:
+        team = _load_json(argv[4])
+        result = resolve_people(
+            pr if isinstance(pr, dict) else {},
+            reviews if isinstance(reviews, list) else [],
+            team if isinstance(team, list) else [],
+        )
+        with open(argv[5], "w", encoding="utf-8") as fh:
             json.dump(result, fh, indent=2)
             fh.write("\n")
         return 0
@@ -310,7 +353,8 @@ def main(argv: list[str]) -> int:
         return 0
 
     print(
-        f"usage: {argv[0]} resolve <pr.json> <reviews.json> <people.json>\n"
+        f"usage: {argv[0]} team-candidates <pr.json>\n"
+        f"       {argv[0]} resolve <pr.json> <reviews.json> <team.json> <people.json>\n"
         f"       {argv[0]} footer <people.json> <assigned.json> <body.md> <out.md>",
         file=sys.stderr,
     )
