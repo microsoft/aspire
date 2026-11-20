@@ -127,7 +127,7 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
             case DashboardPersistenceMode.None:
                 // CreateTempSubdirectory uses owner-only permissions (0700) on Unix and inherits the
                 // current user's temporary directory ACL on Windows.
-                _temporaryDirectory = Directory.CreateTempSubdirectory(TemporaryDirectoryPrefix).FullName;
+                _temporaryDirectory = Aspire.Shared.TemporaryStorage.CreateTempSubdirectory(TemporaryDirectoryPrefix).FullName;
                 CurrentWorkingDirectory = _temporaryDirectory;
                 DatabasePath = Path.Combine(CurrentWorkingDirectory, DatabaseFileName);
                 _runLock = OpenRunLock(CurrentWorkingDirectory);

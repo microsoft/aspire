@@ -137,7 +137,7 @@ internal sealed class FileSystemService : IFileSystemService, IDisposable
         /// <inheritdoc/>
         public TempDirectory CreateTempSubdirectory(string? prefix = null)
         {
-            var path = Directory.CreateTempSubdirectory(prefix ?? "aspire").FullName;
+            var path = Aspire.Shared.TemporaryStorage.CreateTempSubdirectory(prefix ?? "aspire").FullName;
             var tempDir = new DefaultTempDirectory(path, _parent);
             _parent.TrackItem(path, tempDir);
             return tempDir;
@@ -148,14 +148,14 @@ internal sealed class FileSystemService : IFileSystemService, IDisposable
         {
             if (fileName is null)
             {
-                var tempFile = Path.GetTempFileName();
+                var tempFile = Aspire.Shared.TemporaryStorage.GetTempFileName();
                 var file = new DefaultTempFile(tempFile, deleteParentDirectory: false, _parent);
                 _parent.TrackItem(tempFile, file);
                 return file;
             }
 
             // Create a temp subdirectory and place the named file inside it
-            var tempDir = Directory.CreateTempSubdirectory("aspire").FullName;
+            var tempDir = Aspire.Shared.TemporaryStorage.CreateTempSubdirectory("aspire").FullName;
             var filePath = Path.Combine(tempDir, fileName);
             File.Create(filePath).Dispose();
             var tempFileObj = new DefaultTempFile(filePath, deleteParentDirectory: true, _parent);

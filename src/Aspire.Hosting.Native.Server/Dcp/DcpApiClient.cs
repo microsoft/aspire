@@ -21,7 +21,7 @@ namespace Aspire.Hosting.Native.Dcp;
 internal sealed class DcpApiClient : IAsyncDisposable
 {
     private const string Api = "/apis/usvc-dev.developer.microsoft.com/v1/";
-    private readonly DirectoryInfo _directory = Directory.CreateTempSubdirectory("aspire-native-dcp-");
+    private readonly DirectoryInfo _directory = Aspire.Shared.TemporaryStorage.CreateTempSubdirectory("aspire-native-dcp-");
     private Process? _process;
     private Task? _output;
     private HttpClient? _client;

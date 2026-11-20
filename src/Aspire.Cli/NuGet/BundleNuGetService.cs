@@ -379,7 +379,7 @@ internal sealed class BundleNuGetService : INuGetService
         var directory = bypassCaches
             ? DirectoryHelper.CreateWithOwnerOnlyPermissions(Path.Combine(
                 globalPackagesFolder, $".sdk-acquisition-{Guid.NewGuid():N}"))
-            : Directory.CreateTempSubdirectory("aspire-package-acquisition-");
+            : Aspire.Shared.TemporaryStorage.CreateTempSubdirectory("aspire-package-acquisition-");
         try
         {
             var settings = GetNuGetSettings(configuration.EffectiveWorkingDirectory.FullName, protectIntegrationSources: false, cancellationToken);

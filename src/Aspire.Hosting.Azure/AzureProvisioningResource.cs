@@ -128,7 +128,7 @@ public class AzureProvisioningResource(string name, Action<AzureResourceInfrastr
         }
         source.Append(compiledBicep.Value);
 
-        var generationPath = Directory.CreateTempSubdirectory("aspire").FullName;
+        var generationPath = Aspire.Shared.TemporaryStorage.CreateTempSubdirectory("aspire").FullName;
         var moduleSourcePath = Path.Combine(generationPath, "main.bicep");
         File.WriteAllText(moduleSourcePath, source.ToString());
 

@@ -124,7 +124,7 @@ internal partial class ChildProcess : IChildProcess
                 _completionPath = _options.CompletionPath;
                 if (_completionPath is null)
                 {
-                    _completionDirectory = Directory.CreateTempSubdirectory("aspire-process-completion-");
+                    _completionDirectory = Aspire.Shared.TemporaryStorage.CreateTempSubdirectory("aspire-process-completion-");
                     _completionPath = Path.Combine(_completionDirectory.FullName, "exit-code");
                 }
                 startInfo = _options.CreateSupervisorStartInfo(_startInfo, _completionPath, _options.TerminationTimeout);

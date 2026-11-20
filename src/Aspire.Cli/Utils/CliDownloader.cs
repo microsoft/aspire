@@ -60,7 +60,7 @@ internal class CliDownloader(
         var checksumUrl = $"{baseUrl}/{checksumFilename}";
 
         // Create temp directory for download
-        var tempDir = Directory.CreateTempSubdirectory("aspire-cli-download").FullName;
+        var tempDir = Aspire.Shared.TemporaryStorage.CreateTempSubdirectory("aspire-cli-download").FullName;
 
         try
         {

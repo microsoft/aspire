@@ -37,7 +37,7 @@ internal static class DotnetProjectRunPropertiesResolver
             buildEnvironment,
             logger,
             cancellationToken).ConfigureAwait(false);
-        var resultDirectory = Directory.CreateTempSubdirectory("aspire-msbuild-result-");
+        var resultDirectory = Aspire.Shared.TemporaryStorage.CreateTempSubdirectory("aspire-msbuild-result-");
         var resultOutputPath = Path.Combine(resultDirectory.FullName, "run-properties.json");
 
         try

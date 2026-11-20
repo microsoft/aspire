@@ -442,7 +442,7 @@ internal sealed class RenderCommand : BaseCommand
 
     private async Task<int> TestLinksAsync(CancellationToken cancellationToken)
     {
-        var tempDirectory = Directory.CreateTempSubdirectory("aspire-render-links-");
+        var tempDirectory = Aspire.Shared.TemporaryStorage.CreateTempSubdirectory("aspire-render-links-");
         var filePath = Path.Combine(tempDirectory.FullName, "safe file link sample.txt");
         await File.WriteAllTextAsync(filePath, "This file is used to smoke test SafeFileLink rendering.", cancellationToken).ConfigureAwait(false);
         InteractionService.DisplaySubtleMessage($"Temporary file created at {filePath}", allowMarkup: false);

@@ -44,7 +44,7 @@ internal sealed class JsonRpcServer : BackgroundService
         _useDefaultSocketPath = string.IsNullOrEmpty(socketPath);
         if (string.IsNullOrEmpty(socketPath) && OperatingSystem.IsWindows())
         {
-            socketPath = Path.Combine(Path.GetTempPath(), "aspire", "remote-app-host.sock");
+            socketPath = Path.Combine(Aspire.Shared.TemporaryStorage.GetTempPath(), "aspire", "remote-app-host.sock");
         }
         else if (string.IsNullOrEmpty(socketPath))
         {

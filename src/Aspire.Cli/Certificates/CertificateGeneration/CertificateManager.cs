@@ -739,7 +739,7 @@ internal abstract class CertificateManager
             // Create a temp file with the correct Unix file mode before moving it to the expected path.
             if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
-                var tempFilename = Path.GetTempFileName();
+                var tempFilename = Aspire.Shared.TemporaryStorage.GetTempFileName();
                 File.Move(tempFilename, path, overwrite: true);
             }
 
@@ -767,7 +767,7 @@ internal abstract class CertificateManager
                 // Create a temp file with the correct Unix file mode before moving it to the expected path.
                 if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
                 {
-                    var tempFilename = Path.GetTempFileName();
+                    var tempFilename = Aspire.Shared.TemporaryStorage.GetTempFileName();
                     File.Move(tempFilename, keyPath, overwrite: true);
                 }
 

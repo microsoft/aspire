@@ -21,7 +21,7 @@ internal sealed class LinuxTrayIcons(string source) : IDisposable
         {
             return source;
         }
-        _directory ??= Directory.CreateTempSubdirectory("aspire-tray-icons-");
+        _directory ??= Aspire.Shared.TemporaryStorage.CreateTempSubdirectory("aspire-tray-icons-");
         path = Path.Combine(_directory.FullName, $"{status}.png");
         Render(source, path, status);
         _paths.Add(status, path);

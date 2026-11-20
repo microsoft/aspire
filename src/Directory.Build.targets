@@ -10,6 +10,30 @@
     <Compile Remove="$(GenAPITargetPath)" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.BannedApiAnalyzers" PrivateAssets="all" IncludeAssets="analyzers;build;buildtransitive">
+      <Version Condition="'$(ManagePackageVersionsCentrally)' != 'true'">@(PackageVersion->WithMetadataValue('Identity', 'Microsoft.CodeAnalysis.BannedApiAnalyzers')->'%(Version)')</Version>
+    </PackageReference>
+    <AdditionalFiles Include="$(MSBuildThisFileDirectory)BannedSymbols.txt" />
+  </ItemGroup>
+  <PropertyGroup>
+    <WarningsAsErrors>$(WarningsAsErrors);RS0030</WarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup Condition="$(MSBuildProjectName.StartsWith('Aspire.Cli')) or
+                        $(MSBuildProjectName.StartsWith('Aspire.Tray.')) or
+                        '$(MSBuildProjectName)' == 'Aspire.Hosting' or
+                        '$(MSBuildProjectName)' == 'Aspire.Hosting.Azure' or
+                        '$(MSBuildProjectName)' == 'Aspire.Hosting.Dotnet' or
+                        '$(MSBuildProjectName)' == 'Aspire.Hosting.Kubernetes' or
+                        '$(MSBuildProjectName)' == 'Aspire.Hosting.Radius' or
+                        '$(MSBuildProjectName)' == 'Aspire.Hosting.Native.Server' or
+                        '$(MSBuildProjectName)' == 'Aspire.Hosting.RemoteHost' or
+                        '$(MSBuildProjectName)' == 'Aspire.Dashboard' or
+                        '$(MSBuildProjectName)' == 'Aspire.TerminalHost'">
+    <Compile Include="$(SharedDir)TemporaryStorage.cs" Link="Shared/TemporaryStorage.cs" />
+  </ItemGroup>
+
   <Target Name="CreateGenAPITargetPathFolder" BeforeTargets="GenAPIGenerateReferenceAssemblySource">
     <MakeDir Directories="$(MSBuildProjectDirectory)/api" Condition="!Exists('$(MSBuildProjectDirectory)/api')" />
   </Target>

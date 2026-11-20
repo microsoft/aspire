@@ -1524,7 +1524,7 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
                 var patchJson = System.Text.Json.JsonSerializer.Serialize(patchOperations);
 
                 // Write patch to a temp file to avoid shell escaping issues with kubectl -p
-                var patchTempDir = Directory.CreateTempSubdirectory(".aspire-gateway-patch");
+                var patchTempDir = Aspire.Shared.TemporaryStorage.CreateTempSubdirectory(".aspire-gateway-patch");
                 try
                 {
                     var patchFilePath = Path.Combine(patchTempDir.FullName, "patch.json");
@@ -1636,7 +1636,7 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
         var certPem = cert.ExportCertificatePem();
         var keyPem = ecdsa.ExportECPrivateKeyPem();
 
-        var tempDir = Directory.CreateTempSubdirectory(".aspire-tls-discovery");
+        var tempDir = Aspire.Shared.TemporaryStorage.CreateTempSubdirectory(".aspire-tls-discovery");
         try
         {
             var certPath = Path.Combine(tempDir.FullName, "tls.crt");
@@ -1970,7 +1970,7 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
                 });
             var patchJson = System.Text.Json.JsonSerializer.Serialize(ops);
 
-            var patchTempDir = Directory.CreateTempSubdirectory(".aspire-gateway-fields");
+            var patchTempDir = Aspire.Shared.TemporaryStorage.CreateTempSubdirectory(".aspire-gateway-fields");
             try
             {
                 var patchFilePath = Path.Combine(patchTempDir.FullName, "patch.json");
@@ -2151,7 +2151,7 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
                 minimal["spec"] = System.Text.Json.Nodes.JsonNode.Parse(spec.GetRawText());
             }
 
-            var tempDir = Directory.CreateTempSubdirectory(".aspire-gateway-ownership");
+            var tempDir = Aspire.Shared.TemporaryStorage.CreateTempSubdirectory(".aspire-gateway-ownership");
             try
             {
                 var manifestPath = Path.Combine(tempDir.FullName, "gateway.json");
@@ -2273,7 +2273,7 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
             var certPem = cert.ExportCertificatePem();
             var keyPem = ecdsa.ExportECPrivateKeyPem();
 
-            var tempDir = Directory.CreateTempSubdirectory(".aspire-tls-bootstrap");
+            var tempDir = Aspire.Shared.TemporaryStorage.CreateTempSubdirectory(".aspire-tls-bootstrap");
             try
             {
                 var certPath = Path.Combine(tempDir.FullName, "tls.crt");

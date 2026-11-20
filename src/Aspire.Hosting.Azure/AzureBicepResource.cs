@@ -164,7 +164,7 @@ public class AzureBicepResource : Resource, IAzureResource, IResourceWithParamet
             var isTempFile = directory is null;
 
             var path = TempDirectory is null
-                ? Path.Combine(directory ?? Directory.CreateTempSubdirectory("aspire").FullName, $"{Name.ToLowerInvariant()}.module.bicep")
+                ? Path.Combine(directory ?? Aspire.Shared.TemporaryStorage.CreateTempSubdirectory("aspire").FullName, $"{Name.ToLowerInvariant()}.module.bicep")
                 : Path.Combine(TempDirectory, $"{Name.ToLowerInvariant()}.module.bicep");
 
             if (TemplateResourceName is null)

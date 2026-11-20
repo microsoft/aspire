@@ -159,7 +159,7 @@ internal sealed class RadiusDeploymentPipelineStep
 
         // Created with restrictive permissions because the minified kubeconfig written into it can
         // carry client certificates or tokens for the target cluster.
-        var kubeConfigHome = Directory.CreateTempSubdirectory("aspire-radius-kubeconfig");
+        var kubeConfigHome = Aspire.Shared.TemporaryStorage.CreateTempSubdirectory("aspire-radius-kubeconfig");
 
         try
         {
@@ -693,7 +693,7 @@ internal sealed class RadiusDeploymentPipelineStep
         };
 
         // CreateTempSubdirectory creates the directory with owner-only permissions (0700) on Unix.
-        var directory = Directory.CreateTempSubdirectory("radius-deploy-");
+        var directory = Aspire.Shared.TemporaryStorage.CreateTempSubdirectory("radius-deploy-");
         var filePath = Path.Combine(directory.FullName, "parameters.json");
         try
         {

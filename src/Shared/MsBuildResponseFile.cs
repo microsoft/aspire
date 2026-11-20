@@ -26,7 +26,7 @@ internal static class MsBuildResponseFileFactory
             return null;
         }
 
-        var directory = Directory.CreateTempSubdirectory("aspire-msbuild-");
+        var directory = Aspire.Shared.TemporaryStorage.CreateTempSubdirectory("aspire-msbuild-");
         var responseFilePath = Path.Combine(directory.FullName, "build-properties.rsp");
         try
         {

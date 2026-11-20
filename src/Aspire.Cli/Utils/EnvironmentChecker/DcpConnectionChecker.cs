@@ -225,7 +225,7 @@ internal sealed class DcpConnectionChecker(
             ILogger logger,
             CancellationToken cancellationToken)
         {
-            var sessionDirectory = Directory.CreateTempSubdirectory("aspire-dcp-doctor-").FullName;
+            var sessionDirectory = Aspire.Shared.TemporaryStorage.CreateTempSubdirectory("aspire-dcp-doctor-").FullName;
             var kubeconfigPath = Path.Combine(sessionDirectory, "kubeconfig");
             var dcpExecutablePath = BundleDiscovery.GetDcpExecutablePath(dcpDirectory);
             var output = new OutputCollector();
