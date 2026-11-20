@@ -27,10 +27,14 @@ namespace Aspire.Dashboard.Model;
 /// </remarks>
 public sealed class MetricPinStore
 {
+    private const int MaxSavedPins = 50;
+
     private readonly LocalStorageSetting<List<MetricPin>> _setting;
+    private readonly ILogger<MetricPinStore> _logger;
 
     public MetricPinStore(ILocalStorage localStorage, LocalStorageLocks locks, TimeProvider timeProvider, IOptions<DashboardOptions> options, ILogger<MetricPinStore> logger)
     {
+        _logger = logger;
         _setting = new(localStorage, locks, timeProvider, BrowserStorageKeys.MetricPinsKey(options.Value.GetApplicationNameOrDefault()), logger, protect: true,
             NormalizePins, (x, y) => x.SequenceEqual(y), () => Changed?.Invoke());
     }
@@ -73,19 +77,27 @@ public sealed class MetricPinStore
         _setting.Read(pins => pins.Any(pin => resourceNames.Any(name => pin.Matches(name, key))));
 
     /// <summary>
-    /// Pins or unpins an instrument for each of <paramref name="resourceNames"/>. Pinning an instrument again for a
-    /// resource lists it last.
+    /// Pins or unpins an instrument for each of <paramref name="resourceNames"/>. A pin operation is rejected if
+    /// the new pins would exceed the saved pin limit.
     /// </summary>
     public void SetPinned(OtlpInstrumentKey key, IReadOnlyCollection<string> resourceNames, bool pinned)
     {
         _setting.Update(pins =>
         {
+            var originalCount = pins.Count;
             var changed = false;
             foreach (var name in resourceNames)
             {
                 changed |= pinned
                     ? AddPin(pins, new MetricPin(name, key.MeterName, key.InstrumentName))
                     : pins.RemoveAll(pin => pin.Matches(name, key)) > 0;
+                if (pinned && pins.Count > MaxSavedPins)
+                {
+                    // Pinning a selection adds pins for all selected resources or none of them.
+                    pins.RemoveRange(originalCount, pins.Count - originalCount);
+                    _logger.LogWarning("Cannot pin the instrument for the selection because it would exceed the limit of {Limit} saved metric pins.", MaxSavedPins);
+                    return false;
+                }
             }
 
             return changed;
@@ -109,6 +121,11 @@ public sealed class MetricPinStore
         var pins = new List<MetricPin>();
         foreach (var pin in stored ?? [])
         {
+            if (pins.Count == MaxSavedPins)
+            {
+                break;
+            }
+
             if (!string.IsNullOrEmpty(pin.ResourceName) && !string.IsNullOrEmpty(pin.MeterName) && !string.IsNullOrEmpty(pin.InstrumentName))
             {
                 AddPin(pins, pin);

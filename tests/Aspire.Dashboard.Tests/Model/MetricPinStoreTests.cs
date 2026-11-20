@@ -105,6 +105,32 @@ public sealed class MetricPinStoreTests
     }
 
     [Fact]
+    public async Task SetPinned_RejectsASelectionThatWouldExceedFiftyPinsEvenAcrossTabs()
+    {
+        var firstTab = await CreateLoadedStoreAsync();
+        var staleTab = await CreateLoadedStoreAsync();
+        var names = Enumerable.Range(1, 49).Select(i => FormattableString.Invariant($"resource-{i:D2}")).ToArray();
+        var initialPins = names.Select(name => Pin(name, s_heap)).ToArray();
+        firstTab.SetPinned(s_heap, names, pinned: true);
+
+        firstTab.SetPinned(s_cpu, ["api", "worker"], pinned: true);
+        Assert.Equal(initialPins, firstTab.GetPins());
+
+        // The stale tab has local capacity but cannot save a selection that exceeds the combined limit.
+        staleTab.SetPinned(s_cpu, ["api", "worker"], pinned: true);
+        Assert.Equal(initialPins, staleTab.GetPins());
+        Assert.Equal(initialPins, (await CreateLoadedStoreAsync()).GetPins());
+
+        staleTab.SetPinned(s_cpu, ["api"], pinned: true);
+        staleTab.SetPinned(s_cpu, ["worker"], pinned: true);
+        Assert.Equal([.. initialPins, Pin("api", s_cpu)], (await CreateLoadedStoreAsync()).GetPins());
+
+        staleTab.SetPinned(s_cpu, ["api"], pinned: false);
+        staleTab.SetPinned(s_cpu, ["worker"], pinned: true);
+        Assert.Equal([.. initialPins, Pin("worker", s_cpu)], (await CreateLoadedStoreAsync()).GetPins());
+    }
+
+    [Fact]
     public void SetPinned_RaisesChangedOnlyWhenPinsChange()
     {
         var store = CreateStore();

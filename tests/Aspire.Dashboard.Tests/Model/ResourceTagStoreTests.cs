@@ -165,6 +165,32 @@ public sealed class ResourceTagStoreTests
     }
 
     [Fact]
+    public async Task Tags_RejectsMoreThanFiftyAssignmentsEvenAcrossTabs()
+    {
+        var firstTab = await CreateLoadedStoreAsync();
+        var staleTab = await CreateLoadedStoreAsync();
+        var names = Enumerable.Range(1, 50).Select(i => FormattableString.Invariant($"resource-{i:D2}")).ToArray();
+        foreach (var name in names)
+        {
+            Assert.True(firstTab.AddTag(name, "backend"));
+        }
+
+        Assert.False(firstTab.AddTag(names[0], "extra"));
+        Assert.False(firstTab.AddTag("worker", "backend"));
+        Assert.True(staleTab.AddTag("worker", "backend")); // Accepted locally, then rejected when merged.
+        Assert.Equal([], staleTab.GetTags("worker"));
+
+        var reloaded = await CreateLoadedStoreAsync();
+        var saved = reloaded.GetTagsByResource();
+        Assert.Equal(names, saved.Keys.Order(StringComparer.Ordinal));
+        Assert.All(saved.Values, tags => Assert.Equal(["backend"], tags));
+
+        Assert.True(reloaded.RemoveTag(names[0], "backend"));
+        Assert.True(reloaded.AddTag("worker", "backend"));
+        Assert.Equal(["backend"], (await CreateLoadedStoreAsync()).GetTags("worker"));
+    }
+
+    [Fact]
     public async Task Tags_OverlappingSavesFromTwoTabsKeepBothChanges()
     {
         var tabA = await CreateLoadedStoreAsync();

@@ -27,11 +27,14 @@ namespace Aspire.Dashboard.Model;
 public sealed class ResourceTagStore
 {
     internal const int MaxTagLength = 50;
+    private const int MaxSavedTagAssignments = 50;
 
     private readonly LocalStorageSetting<Dictionary<string, List<string>>> _setting;
+    private readonly ILogger<ResourceTagStore> _logger;
 
     public ResourceTagStore(ILocalStorage localStorage, LocalStorageLocks locks, TimeProvider timeProvider, IOptions<DashboardOptions> options, ILogger<ResourceTagStore> logger)
     {
+        _logger = logger;
         _setting = new(localStorage, locks, timeProvider, BrowserStorageKeys.ResourceTagsKey(options.Value.GetApplicationNameOrDefault()), logger, protect: true,
             NormalizeTags, TagsEqual, () => Changed?.Invoke());
     }
@@ -98,7 +101,8 @@ public sealed class ResourceTagStore
     /// </summary>
     /// <param name="resourceName">The display name of the resource.</param>
     /// <param name="tag">The tag to add.</param>
-    /// <returns><see langword="true"/> when the tag was added; otherwise, <see langword="false"/> when the tag is empty or already assigned.</returns>
+    /// <returns><see langword="true"/> when the tag was added in memory; otherwise, <see langword="false"/> when
+    /// the tag is empty, already assigned, or the saved tag limit has been reached.</returns>
     public bool AddTag(string resourceName, string tag)
     {
         ArgumentException.ThrowIfNullOrEmpty(resourceName);
@@ -108,7 +112,20 @@ public sealed class ResourceTagStore
             return false;
         }
 
-        return _setting.Update(tagsByResource => AddTagCore(tagsByResource, resourceName, normalizedTag));
+        return _setting.Update(tagsByResource =>
+        {
+            if (tagsByResource.Values.Sum(tags => tags.Count) >= MaxSavedTagAssignments)
+            {
+                if (!tagsByResource.TryGetValue(resourceName, out var tags) || !tags.Contains(normalizedTag, StringComparer.OrdinalIgnoreCase))
+                {
+                    _logger.LogWarning("Cannot add a resource tag because the dashboard has reached the limit of {Limit} saved tag assignments.", MaxSavedTagAssignments);
+                }
+
+                return false;
+            }
+
+            return AddTagCore(tagsByResource, resourceName, normalizedTag);
+        });
     }
 
     /// <summary>
@@ -200,6 +217,7 @@ public sealed class ResourceTagStore
     private static Dictionary<string, List<string>> NormalizeTags(Dictionary<string, List<string>>? stored)
     {
         var tagsByResource = new Dictionary<string, List<string>>(StringComparers.ResourceName);
+        var assignmentCount = 0;
         foreach (var (resourceName, tags) in stored ?? [])
         {
             if (string.IsNullOrEmpty(resourceName) || tags is null)
@@ -209,9 +227,12 @@ public sealed class ResourceTagStore
 
             foreach (var tag in tags)
             {
-                if (NormalizeTag(tag) is { } normalizedTag)
+                if (NormalizeTag(tag) is { } normalizedTag && AddTagCore(tagsByResource, resourceName, normalizedTag))
                 {
-                    AddTagCore(tagsByResource, resourceName, normalizedTag);
+                    if (++assignmentCount == MaxSavedTagAssignments)
+                    {
+                        return tagsByResource;
+                    }
                 }
             }
         }
