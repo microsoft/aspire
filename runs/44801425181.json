@@ -1,0 +1,109 @@
+{
+  "run_id": 44801425181,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/44801425181",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-20T20:29:23Z",
+  "verdict": "transient-infra",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 22459,
+    "title": "[automated] Reacquire the CLI path rejection notification before clicking",
+    "author": "radical",
+    "state": "closed",
+    "head_branch": "ci-health/22431-r1-main-fix",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/22459",
+    "merged_at": "2026-11-20T19:21:49Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "c8be31f10baf00c07bc37fb232b0949e86eb0742",
+    "failed_sha": "3165d4a7369f6d2a4eb410b4937645297bba418d",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "f04f1cb430285efc2602335ab04055c088330bfd",
+        "message": "Localized file check-in by OneLocBuild Task: Build definition ID 1602: Build ID 3141445 (#22469)",
+        "html_url": "https://github.com/microsoft/aspire/commit/f04f1cb430285efc2602335ab04055c088330bfd",
+        "pull_request": {
+          "number": 22469,
+          "title": "Localized file check-in by OneLocBuild Task: Build definition ID 1602: Build ID 3141445",
+          "url": "https://github.com/microsoft/aspire/pull/22469",
+          "merged_at": "2026-11-20T06:19:26Z"
+        }
+      },
+      {
+        "sha": "4b9c77d22d737bff29ee2f03a8c1ea3bee1f303d",
+        "message": "[main] Update dependencies from microsoft/dcp (#22463) This pull request updates the following dependencies [marker]: <> (Begin:ca933625-6bed-4cef-95d3-a9cff8f51c9d) ## From https://github.com/microsoft/dcp - **Subscription**: [ca933625-6bed-4cef-95d3-a9cff8f51c9d](https://maestro.dot.net/subscriptions?search=ca933625-6bed-4cef-95d3-a9cff8f51c9d) - **Build**: [0.27.5](https://dev.azure.com/dnceng/internal/_build/results?buildId=3141252) ([342373](https://maestro.dot.net/channel/1648/github:micro",
+        "html_url": "https://github.com/microsoft/aspire/commit/4b9c77d22d737bff29ee2f03a8c1ea3bee1f303d",
+        "pull_request": {
+          "number": 22463,
+          "title": "[main] Update dependencies from microsoft/dcp",
+          "url": "https://github.com/microsoft/aspire/pull/22463",
+          "merged_at": "2026-11-20T17:15:46Z"
+        }
+      },
+      {
+        "sha": "3165d4a7369f6d2a4eb410b4937645297bba418d",
+        "message": "[automated] Reacquire the CLI path rejection notification before clicking (#22459) ## Description The Windows VS Code CLI-path rejection E2E test asserted the warning text, took a screenshot, and then clicked Open Setting using the same Selenium notification element. The [first-attempt failure](https://github.com/microsoft/aspire/actions/runs/44563250177/job/135727014100) reported a stale element in `StandaloneNotification.takeAction`. Use the existing notification-action helper to find the alre",
+        "html_url": "https://github.com/microsoft/aspire/commit/3165d4a7369f6d2a4eb410b4937645297bba418d",
+        "pull_request": {
+          "number": 22459,
+          "title": "[automated] Reacquire the CLI path rejection notification before clicking",
+          "url": "https://github.com/microsoft/aspire/pull/22459",
+          "merged_at": "2026-11-20T19:21:49Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Polyglot SDK Validation / Go SDK Validation",
+      "id": 136518301014,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/44801425181/job/136518301014",
+      "classification": "transient-infra",
+      "reason": "Hosted runner lost communication with the server; no logs or results captured.",
+      "failed_steps": []
+    },
+    {
+      "name": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, browser-debugger)",
+      "id": 136524108613,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/44801425181/job/136524108613",
+      "classification": "transient-infra",
+      "reason": "Mocha before-all hook timed out waiting for Blazor resource to reach Running; no test ran and no changed-code evidence.",
+      "failed_steps": [
+        "Run extension E2E tests"
+      ]
+    },
+    {
+      "name": "Tests / Prepare Homebrew installer artifacts / Prepare Homebrew cask",
+      "id": 136525686113,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/44801425181/job/136525686113",
+      "classification": "transient-infra",
+      "reason": "Homebrew audit failed because the homebrew-cask tap directory was missing on the runner.",
+      "failed_steps": [
+        "Prepare Homebrew cask artifact"
+      ]
+    },
+    {
+      "name": "Tests / Polyglot SDK Validation / Polyglot Validation Results",
+      "id": 136546446042,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/44801425181/job/136546446042",
+      "classification": "transient-infra",
+      "reason": "Aggregate result job failed only because Go SDK validation job lost its runner.",
+      "failed_steps": [
+        "Check validation results"
+      ]
+    }
+  ],
+  "failed_tests": [],
+  "causes": [
+    "hosted-runner-lost-communication-windows-template-tests",
+    "extension-e2e-windows-blazor-resource-start-timeout",
+    "homebrew-cask-audit-missing-homebrew-cask-tap"
+  ]
+}

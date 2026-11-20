@@ -1,0 +1,15 @@
+{
+  "id": "homebrew-cask-audit-missing-homebrew-cask-tap",
+  "type": "infra-failure",
+  "title": "Homebrew cask audit fails because /opt/homebrew/Library/Taps/homebrew/homebrew-cask is missing on runner",
+  "error_pattern": "No such file or directory - /opt/homebrew/Library/Taps/homebrew/homebrew-cask",
+  "occurrences": [
+    {
+      "run_id": 44801425181,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/44801425181",
+      "job": "Tests / Prepare Homebrew installer artifacts / Prepare Homebrew cask",
+      "observed_at": "2026-11-20T20:29:23Z",
+      "pr_number": 0
+    }
+  ]
+}

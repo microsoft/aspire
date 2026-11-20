@@ -62,6 +62,13 @@
       "job": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (windows-latest)",
       "observed_at": "2026-11-14T07:46:53Z",
       "pr_number": 0
+    },
+    {
+      "run_id": 44801425181,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/44801425181",
+      "job": "Tests / Polyglot SDK Validation / Go SDK Validation, Tests / Polyglot SDK Validation / Polyglot Validation Results",
+      "observed_at": "2026-11-20T20:29:23Z",
+      "pr_number": 0
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/20165"
