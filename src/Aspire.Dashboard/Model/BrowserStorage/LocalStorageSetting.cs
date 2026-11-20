@@ -106,12 +106,12 @@ internal sealed class LocalStorageSetting<TValue> where TValue : class
             {
                 await (_protect ? _localStorage.SetAsync(Key, value) : _localStorage.SetUnprotectedAsync(Key, value)).ConfigureAwait(false);
             }
-            else if (result != SettingUpdateResult.Unchanged || !stored.Success)
+            else if (result != SettingUpdateResult.Unchanged)
             {
                 return result;
             }
 
-            // A no-op can refresh a stale tab with the confirmed value that another tab already saved.
+            // A no-op refreshes a stale tab from storage, including defaults if the saved value is missing or invalid.
             changed = Adopt(value, loadVersion: null);
         }
         catch (Exception ex) when (ex is JSDisconnectedException or JSException or OperationCanceledException)
