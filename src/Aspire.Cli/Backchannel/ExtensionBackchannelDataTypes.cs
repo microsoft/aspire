@@ -161,4 +161,11 @@ internal sealed class ExtensionAppHostLogEntry
 
     [JsonPropertyName("exception")]
     public string? Exception { get; set; }
+
+    /// <summary>
+    /// The AppHost's console formatter options, relayed unchanged so the extension can parse the
+    /// AppHost's console output exactly. Absent for AppHosts that do not report them.
+    /// </summary>
+    [JsonPropertyName("consoleFormat")]
+    public BackchannelConsoleFormat? ConsoleFormat { get; set; }
 }
