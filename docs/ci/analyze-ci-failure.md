@@ -100,9 +100,12 @@ response bodies as well as headers. Transient GET responses have at most three
 attempts; a server-requested wait over five seconds fails instead of retrying
 earlier than GitHub permits.
 
-Log acquisition retains at most 10 MiB per job and records bounded partial
-content on stream failure or truncation. HTTP errors expose the method, API
-path and status, not response bodies, authorization headers or signed queries.
+Log acquisition reads at most 10 MiB per job, then stores sanitized focused
+excerpts rather than complete logs. Acquisition errors and truncation are
+recorded; an excerpt that omits a diagnostic or final summary is a collection
+limitation, not evidence that the full log contains no diagnostic. HTTP errors
+expose the method, API path and status, not response bodies, authorization
+headers or signed queries.
 Artifact limits apply to actual received bytes, including partial files from
 failed downloads, in addition to metadata and extraction checks.
 
@@ -484,6 +487,17 @@ writes. Main breaks use cause issues, not comments on a triggering merge PR.
 PR-directed effects check fresh open/unlocked state. Rendering retains the
 65,000-byte comment budget, issue-body budgets, Markdown inertness, Unicode
 handling and secret redaction.
+
+A new cause's `error_pattern` is a verbatim excerpt of one observed diagnostic,
+without added ellipses, placeholders or commentary. Prior-cause retrieval matches
+it with literal substring comparison, so paraphrased or annotated patterns never
+produce a diagnostic-match hint. Explanations belong in the title or reason.
+
+Cause matching must compare the diagnostic and failing phase, not just a shared
+test, job or timeout message. For readiness timeouts, inspect earlier diagnostics
+and captured last state before treating canceled launch, failed resource startup
+and incomplete AppHost startup as one mechanism. Collection/replay projects
+evidence; it does not rerun the workflow agent's classification.
 
 Structured fixture failures caused by runner infrastructure remain in the exact
 test inventory with classification `transient-infra`; they are not omitted or
