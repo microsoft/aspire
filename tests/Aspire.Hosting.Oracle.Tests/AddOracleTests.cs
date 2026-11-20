@@ -119,7 +119,7 @@ public class AddOracleTests
         var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
 
         var connectionStringResource = Assert.Single(appModel.Resources.OfType<IResourceWithConnectionString>());
-        var connectionString = await connectionStringResource.GetConnectionStringAsync(default);
+        var connectionString = await connectionStringResource.GetConnectionStringAsync();
 
         Assert.Equal("user id=system;password={orcl-password.value};data source={orcl.bindings.tcp.host}:{orcl.bindings.tcp.port}", connectionStringResource.ConnectionStringExpression.ValueExpression);
         Assert.StartsWith("user id=system;password=", connectionString);

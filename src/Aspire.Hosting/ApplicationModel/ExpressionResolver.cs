@@ -55,12 +55,26 @@ internal class ExpressionResolver(CancellationToken cancellationToken)
         return new ResolvedValue(value, false);
     }
 
+    async Task<ResolvedValue> ResolveConnectionStringAsync(IResourceWithConnectionString resource, ValueProviderContext context)
+    {
+        if (!IResourceWithConnectionString.GetConnectionStringImplementations(resource.GetType()).Contextual)
+        {
+            return await ResolveInternalAsync(resource.ConnectionStringExpression, context).ConfigureAwait(false);
+        }
+
+        var value = await resource.GetConnectionStringAsync(context, cancellationToken).ConfigureAwait(false);
+
+        // Custom resolvers do not report sensitivity. Treat their output as sensitive without
+        // evaluating an expression that may reference parameters the resolver does not use.
+        return new ResolvedValue(value, IsSensitive: true);
+    }
+
     async Task<ResolvedValue> ResolveConnectionStringReferenceAsync(ConnectionStringReference cs, ValueProviderContext context)
     {
         // We are substituting our own logic for ConnectionStringReference's GetValueAsync.
         // However, ConnectionStringReference#GetValueAsync will throw if the connection string is not optional but is not present.
         // so we need to do the same here.
-        var value = await ResolveInternalAsync(cs.ConnectionStringExpression, context).ConfigureAwait(false);
+        var value = await ResolveInternalAsync(cs.SelectedConnectionStringExpression is { } expression ? expression : cs.Resource, context).ConfigureAwait(false);
 
         // Throw if the connection string is required but not present
         if (string.IsNullOrEmpty(value.Value) && !cs.Optional)
@@ -79,7 +93,7 @@ internal class ExpressionResolver(CancellationToken cancellationToken)
         return value switch
         {
             ConnectionStringReference cs => await ResolveConnectionStringReferenceAsync(cs, context).ConfigureAwait(false),
-            IResourceWithConnectionString cs and not ConnectionStringParameterResource => await ResolveInternalAsync(cs.ConnectionStringExpression, context).ConfigureAwait(false),
+            IResourceWithConnectionString cs and not ConnectionStringParameterResource => await ResolveConnectionStringAsync(cs, context).ConfigureAwait(false),
             ReferenceExpression ex => await EvalExpressionAsync(ex, context).ConfigureAwait(false),
             IValueProvider vp => await EvalValueProvider(vp, context).ConfigureAwait(false),
             _ => throw new NotImplementedException()

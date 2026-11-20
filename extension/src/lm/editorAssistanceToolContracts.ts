@@ -179,6 +179,7 @@ export type EditorAssistanceResourceState =
     | 'Stopping'
     | 'Stopped'
     | 'Waiting'
+    | 'UnresolvedParameters'
     | 'NotStarted'
     | 'Finished'
     | 'Exited'

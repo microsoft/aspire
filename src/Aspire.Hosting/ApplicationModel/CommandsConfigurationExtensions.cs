@@ -135,7 +135,7 @@ internal static class CommandsConfigurationExtensions
         // There is a situation where a container can be stopped with this state: https://github.com/microsoft/aspire/issues/5977
         static bool IsStopped(string? state) => KnownResourceStates.TerminalStates.Contains(state) || state == KnownResourceStates.NotStarted || state == "Unknown";
         static bool IsStopping(string? state) => state == KnownResourceStates.Stopping;
-        static bool IsStarting(string? state) => state == KnownResourceStates.Starting;
+        static bool IsStarting(string? state) => state == KnownResourceStates.Starting || state == KnownResourceStates.UnresolvedParameters;
         static bool IsWaiting(string? state) => state == KnownResourceStates.Waiting;
         static bool IsBuilding(string? state) => state == KnownResourceStates.Building;
         static bool IsRuntimeUnhealthy(string? state) => state == KnownResourceStates.RuntimeUnhealthy;
@@ -219,19 +219,17 @@ internal static class CommandsConfigurationExtensions
             }
         }
 
-        // Stop non-waiting replicas. Waiting replicas have no running process — their DCP
-        // lifecycle is blocked at WaitForInBeforeResourceStartedEvent waiting for dependencies.
-        // Attempting to stop them would fail because no DCP Executable has been created yet.
+        // Replicas waiting for dependencies or parameters are still in their startup pipeline.
+        // They may not have a DCP executable yet, and stopping can wait for their blocked startup operation.
         var replicasToStop = replicaNames.Where(name =>
             !preRebuildStates.TryGetValue(name, out var state)
-            || state != KnownResourceStates.Waiting);
+            || !IsWaitingForStartup(state));
 
         LogBuildInformation(mainLogger, buildOutput, "Stopping resource for rebuild...");
         await Task.WhenAll(replicasToStop.Select(name => orchestrator.StopResourceAsync(name, cancellationToken))).ConfigureAwait(false);
 
-        // Set state to Building after replicas are stopped. Leave Waiting replicas in their
-        // current state — changing their state text would unblock WaitForInBeforeResourceStartedEvent,
-        // causing CreateExecutableAsync to launch the OLD binary while the build is in progress.
+        // Keep startup-waiting replicas unchanged: leaving Waiting would unblock dependency checks,
+        // and replacing UnresolvedParameters would discard the state restored when the parameter resolves.
         // The state each replica reached after stopping is captured in the same update that replaces it with
         // Building, so a terminal state published concurrently by the DCP watcher (e.g. Finished after Stopping)
         // is the one later restored.
@@ -241,7 +239,7 @@ internal static class CommandsConfigurationExtensions
             await resourceNotificationService.PublishUpdateAsync(projectResource, name, s =>
             {
                 postStopStates[name] = s.State?.Text;
-                return s.State?.Text == KnownResourceStates.Waiting
+                return IsWaitingForStartup(s.State?.Text)
                     ? s
                     : s with { State = new ResourceStateSnapshot(KnownResourceStates.Building, KnownResourceStateStyles.Info) };
             }).ConfigureAwait(false);
@@ -311,8 +309,8 @@ internal static class CommandsConfigurationExtensions
             if (exitCode == 0)
             {
                 // Restart replicas that were Running or Starting before the rebuild.
-                // Waiting replicas are already in the startup pipeline — when their deps become
-                // ready, CreateExecutableAsync will launch the freshly-built binary automatically.
+                // Startup-waiting replicas will launch the freshly-built binary automatically
+                // when their dependencies and parameters are ready.
                 LogBuildInformation(mainLogger, buildOutput, "Build succeeded. Restarting resource...");
                 foreach (var name in replicaNames)
                 {
@@ -320,10 +318,7 @@ internal static class CommandsConfigurationExtensions
                     switch (GetReplicaActionAfterRebuild(preRebuildStates.ContainsKey(name), priorState))
                     {
                         case RebuildReplicaAction.LeaveWaiting:
-                            // The resource is still waiting for dependencies. The build output on disk
-                            // has been updated, so when dependencies become ready the new binary will
-                            // be launched. Log a message so the user knows the build succeeded.
-                            LogBuildInformation(mainLogger, buildOutput, "Build succeeded. Resource will start with the updated binary when dependencies are ready.");
+                            LogBuildInformation(mainLogger, buildOutput, "Build succeeded. Resource will start with the updated binary when dependencies and parameters are ready.");
                             break;
 
                         case RebuildReplicaAction.Restart:
@@ -381,6 +376,9 @@ internal static class CommandsConfigurationExtensions
         }
     }
 
+    private static bool IsWaitingForStartup(string? state) =>
+        state == KnownResourceStates.Waiting || state == KnownResourceStates.UnresolvedParameters;
+
     // A replica that was starting (e.g. restarted by a previous rebuild moments ago) was stopped for this
     // rebuild just like a Running one, so it must be started again rather than restored to a stale state.
     // A freshly re-created DCP resource has no state text until DCP reports one, which also means it is starting.
@@ -398,8 +396,11 @@ internal static class CommandsConfigurationExtensions
             return RebuildReplicaAction.None;
         }
 
-        if (preRebuildState == KnownResourceStates.Waiting)
+        if (IsWaitingForStartup(preRebuildState))
         {
+            // Replicas normally share parameter dependencies and values, so a parameter-blocked replica
+            // resuming during a running sibling's rebuild is not a realistic startup scenario. Different
+            // waits would require custom per-invocation configuration rather than ordinary replica startup.
             return RebuildReplicaAction.LeaveWaiting;
         }
 

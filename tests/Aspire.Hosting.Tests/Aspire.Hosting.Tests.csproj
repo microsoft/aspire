@@ -36,8 +36,11 @@
     <ProjectReference Include="..\..\src\Aspire.Hosting.Azure.Functions\Aspire.Hosting.Azure.Functions.csproj" IsAspireProjectResource="false" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.DevTunnels\Aspire.Hosting.DevTunnels.csproj" IsAspireProjectResource="false" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.JavaScript\Aspire.Hosting.JavaScript.csproj" IsAspireProjectResource="false" />
+    <ProjectReference Include="..\..\src\Aspire.Hosting.MongoDB\Aspire.Hosting.MongoDB.csproj" IsAspireProjectResource="false" />
+    <ProjectReference Include="..\..\src\Aspire.Hosting.MySql\Aspire.Hosting.MySql.csproj" IsAspireProjectResource="false" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.Python\Aspire.Hosting.Python.csproj" IsAspireProjectResource="false" />
     <ProjectReference Include="..\..\src\Aspire.TypeSystem\Aspire.TypeSystem.csproj" IsAspireProjectResource="false" />
+    <ProjectReference Include="..\..\src\Aspire.Hosting.Valkey\Aspire.Hosting.Valkey.csproj" IsAspireProjectResource="false" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.Yarp\Aspire.Hosting.Yarp.csproj" IsAspireProjectResource="false" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.Testing\Aspire.Hosting.Testing.csproj" IsAspireProjectResource="false" />
     <ProjectReference Include="..\Aspire.Components.Common.TestUtilities\Aspire.Components.Common.TestUtilities.csproj" IsAspireProjectResource="false" />

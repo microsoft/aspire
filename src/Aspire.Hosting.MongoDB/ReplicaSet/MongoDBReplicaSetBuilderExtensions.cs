@@ -128,7 +128,8 @@ public static class MongoDBReplicaSetBuilderExtensions
                     await evt.Eventing.PublishAsync(new BeforeResourceStartedEvent(resource, evt.Services), ct)
                         .ConfigureAwait(false);
 
-                    connectionString = await rsResource.ConnectionStringExpression.GetValueAsync(ct).ConfigureAwait(false);
+                    var valueContext = ValueProviderContext.ForHost(builder.ExecutionContext, resource);
+                    connectionString = await rsResource.ConnectionStringExpression.GetValueAsync(valueContext, ct).ConfigureAwait(false);
 
                     await evt.Eventing.PublishAsync(new ConnectionStringAvailableEvent(resource, evt.Services), ct)
                         .ConfigureAwait(false);
@@ -148,7 +149,7 @@ public static class MongoDBReplicaSetBuilderExtensions
 
                     var memberConnections = await Task.WhenAll(membersList.Select(async member => new MemberConnection(
                         member,
-                        await member.ConnectionStringExpression.GetValueAsync(ct).ConfigureAwait(false)
+                        await member.ConnectionStringExpression.GetValueAsync(valueContext, ct).ConfigureAwait(false)
                             ?? throw new DistributedApplicationException($"The connection string of MongoDB replica set member '{member.Name}' could not be resolved.")
                     ))).ConfigureAwait(false);
                     var initialPrimary = memberConnections[0];
@@ -160,7 +161,7 @@ public static class MongoDBReplicaSetBuilderExtensions
                         // NOTE: `External` represents the host and port that would actually be advertised to outside clients, and should as such be accessible from outside the MongoDB server's container.
                         External: await m.PrimaryEndpoint
                             .Property(EndpointProperty.HostAndPort)
-                            .GetValueAsync(ct)
+                            .GetValueAsync(valueContext, ct)
                             .ConfigureAwait(false) ?? throw new DistributedApplicationException($"The endpoint of MongoDB replica set member '{m.Name}' could not be resolved.")
                     ))).ConfigureAwait(false);
 

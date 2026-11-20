@@ -91,6 +91,17 @@ public class PostgresServerResource : ContainerResource, IResourceWithConnection
         return ConnectionStringExpression.GetValueAsync(cancellationToken);
     }
 
+    /// <inheritdoc cref="IResourceWithConnectionString.GetConnectionStringAsync(ValueProviderContext, CancellationToken)"/>
+    public ValueTask<string?> GetConnectionStringAsync(ValueProviderContext context, CancellationToken cancellationToken = default)
+    {
+        if (this.TryGetLastAnnotation<ConnectionStringRedirectAnnotation>(out var connectionStringAnnotation))
+        {
+            return connectionStringAnnotation.Resource.GetConnectionStringAsync(context, cancellationToken);
+        }
+
+        return ConnectionStringExpression.GetValueAsync(context, cancellationToken);
+    }
+
     private readonly Dictionary<string, string> _databases = new Dictionary<string, string>(StringComparers.ResourceName);
 
     /// <summary>

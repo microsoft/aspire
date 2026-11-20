@@ -455,7 +455,7 @@ public static class ResourceBuilderExtensions
                 // In publish mode we can't validate the parameter value so we'll just use it without validating.
                 if (!context.ExecutionContext.IsPublishMode)
                 {
-                    var url = await externalService.Resource.UrlParameter.GetValueAsync(context.CancellationToken).ConfigureAwait(false);
+                    var url = await externalService.Resource.UrlParameter.GetValueAsync(new ValueProviderContext { ExecutionContext = context.ExecutionContext, Caller = builder.Resource }, context.CancellationToken).ConfigureAwait(false);
                     if (!ExternalServiceResource.UrlIsValidForExternalService(url, out var _, out var message))
                     {
                         throw new DistributedApplicationException($"The URL parameter '{externalService.Resource.UrlParameter.Name}' for source resource '{externalService.Resource.Name}' is invalid while configuring target resource '{builder.Resource.Name}': {message}");
@@ -1651,7 +1651,7 @@ public static class ResourceBuilderExtensions
                     discoveryEnvVarName = $"services__{externalService.Resource.Name}__default__0";
                     endpointEnvVarName = encodedResourceName.ToUpperInvariant();
                 }
-                else if (ExternalServiceResource.UrlIsValidForExternalService(await externalService.Resource.UrlParameter.GetValueAsync(context.CancellationToken).ConfigureAwait(false), out var uri, out var message))
+                else if (ExternalServiceResource.UrlIsValidForExternalService(await externalService.Resource.UrlParameter.GetValueAsync(new ValueProviderContext { ExecutionContext = context.ExecutionContext, Caller = builder.Resource }, context.CancellationToken).ConfigureAwait(false), out var uri, out var message))
                 {
                     discoveryEnvVarName = $"services__{externalService.Resource.Name}__{uri.Scheme}__0";
                     var encodedScheme = EnvironmentVariableNameEncoder.Encode(uri.Scheme);
@@ -2455,7 +2455,8 @@ public static class ResourceBuilderExtensions
         return builder.WithAnnotation(new ResourceUrlsCallbackAnnotation(async c =>
         {
             var endpoint = url.ValueProviders.OfType<EndpointReference>().FirstOrDefault();
-            var urlValue = await url.GetValueAsync(c.CancellationToken).ConfigureAwait(false);
+            var urlValue = await url.GetValueAsync(
+                ValueProviderContext.ForHost(c.ExecutionContext, c.Resource), c.CancellationToken).ConfigureAwait(false);
             if (!string.IsNullOrEmpty(urlValue))
             {
                 c.Urls.Add(new() { Endpoint = endpoint, Url = urlValue, DisplayText = displayText });

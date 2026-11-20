@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <xliff version="1.2" xmlns="urn:oasis:names:tc:xliff:document:1.2">
   <file original="package" source-language="en" datatype="plaintext"><body>
+    <trans-unit id="aspire-vscode.strings.codeLensResourceUnresolvedParameters">
+      <source xml:lang="en">$(warning)  Unresolved parameters</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.resourceCommandDisabledDescription">
       <source xml:lang="en">(disabled)</source>
     </trans-unit>
@@ -1227,6 +1230,9 @@
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.unableToAddFolderToWorkspace">
       <source xml:lang="en">Unable to add folder to workspace: {0}</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.resourceUnresolvedParameters">
+      <source xml:lang="en">Unresolved parameters</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.updateAspireCliAction">
       <source xml:lang="en">Update Aspire CLI</source>

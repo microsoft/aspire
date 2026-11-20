@@ -23,6 +23,65 @@ namespace Aspire.Hosting.Tests.Orchestrator;
 public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
 {
     [Theory]
+    [InlineData(null)]
+    [InlineData("Starting")]
+    [InlineData("Running")]
+    [InlineData("FailedToStart")]
+    public async Task PreStartUrlParameterWaitRestoresLatestState(string? newerState)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var parameter = builder.AddParameter("region").Resource;
+        parameter.EnsureValueTask();
+        var first = builder.AddExecutable("first", "unused", ".").WithHttpEndpoint(targetPort: 8080);
+        var second = builder.AddExecutable("second", "unused", ".").WithHttpEndpoint(targetPort: 8081);
+        first.WithUrl(ReferenceExpression.Create($"{first.GetEndpoint("http")}/manage?region={parameter}"));
+        var port = 18080;
+        foreach (var resource in new[] { first, second })
+        {
+            var endpoint = resource.GetEndpoint("http").EndpointAnnotation;
+            endpoint.AllocatedEndpoint = new(endpoint, "localhost", port++);
+        }
+
+        using var app = builder.Build();
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
+        var notifications = app.ResourceNotifications;
+        await notifications.PublishUpdateAsync(first.Resource, s => s);
+        await notifications.PublishUpdateAsync(second.Resource, s => s);
+        var orchestrator = CreateOrchestrator(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            notifications,
+            applicationEventing: builder.Eventing);
+
+        var allocation = orchestrator.PublishEndpointsAllocatedAsync(
+            [new(first.Resource, app.Services), new(second.Resource, app.Services)],
+            builder.Eventing, EventDispatchBehavior.BlockingSequential, cts.Token);
+        Assert.False(allocation.IsCompleted);
+        Assert.True(notifications.TryGetCurrentState(first.Resource.Name, out var waiting));
+        Assert.Equal(KnownResourceStates.UnresolvedParameters, waiting.Snapshot.State?.Text);
+        var unresolved = Assert.Single(waiting.Snapshot.Properties, p => p.Name == KnownProperties.Resource.UnresolvedParameters);
+        Assert.Equal(new[] { parameter.Name }, Assert.IsType<string[]>(unresolved.Value));
+        Assert.True(notifications.TryGetCurrentState(second.Resource.Name, out var sibling));
+        Assert.Empty(sibling.Snapshot.Urls);
+
+        ResourceStateSnapshot? latestState = newerState is not null ? new(newerState, null) : null;
+        if (latestState is not null)
+        {
+            await notifications.PublishUpdateAsync(first.Resource, s => s with { State = latestState });
+        }
+
+        await parameter.SetValueAsync("west");
+        await allocation.DefaultTimeout();
+        Assert.True(notifications.TryGetCurrentState(first.Resource.Name, out var completed));
+        Assert.Equal(latestState, completed.Snapshot.State);
+        Assert.Empty(completed.Snapshot.Properties);
+        Assert.Collection(completed.Snapshot.Urls,
+            url => Assert.Equal("http://localhost:18080", url.Url),
+            url => Assert.Equal("http://localhost:18080/manage?region=west", url.Url));
+        Assert.True(notifications.TryGetCurrentState(second.Resource.Name, out var siblingCompleted));
+        Assert.Equal("http://localhost:18081", Assert.Single(siblingCompleted.Snapshot.Urls).Url);
+    }
+
+    [Theory]
     [InlineData(true)]
     [InlineData(false)]
     public async Task UrlCallbackCannotWaitForUnfinishedBrowserOrigins(bool ownEndpoint)
@@ -997,13 +1056,214 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public async Task ConnectionStringAvailableEventUsesCustomConnectionStringResolver()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        builder.WithTestAndResourceLogging(testOutputHelper);
+
+        var resource = builder.AddResource(new TestResourceWithConnectionString("test-resource", "runtime-connection-string")
+        {
+            ConnectionStringExpression = ReferenceExpression.Create($"expression-connection-string")
+        });
+
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var resourceNotificationService = ResourceNotificationServiceTestHelpers.Create();
+        var applicationEventing = new DistributedApplicationEventing();
+        var appOrchestrator = CreateOrchestrator(distributedAppModel, notificationService: resourceNotificationService, applicationEventing: applicationEventing);
+        await appOrchestrator.RunApplicationAsync();
+
+        await applicationEventing.PublishAsync(new ConnectionStringAvailableEvent(resource.Resource, app.Services), CancellationToken.None);
+
+        Assert.True(resourceNotificationService.TryGetCurrentState(resource.Resource.Name, out var currentState));
+        var connectionString = Assert.Single(currentState.Snapshot.Properties, p => p.Name == KnownProperties.Resource.ConnectionString);
+        Assert.Equal("runtime-connection-string", connectionString.Value);
+    }
+
+    [Theory]
+    [InlineData("direct")]
+    [InlineData("context-free-value-provider")]
+    [InlineData("postgres-redirect")]
+    [InlineData("redis-redirect")]
+    public async Task ContextualConnectionStringResolutionPreservesLegacyCustomResolvers(string source)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var unused = builder.AddParameter("unused-by-resolver");
+        unused.Resource.EnsureValueTask();
+        var custom = builder.AddResource(new TestResourceWithConnectionString("custom", "runtime-connection-string")
+        {
+            ConnectionStringExpression = ReferenceExpression.Create($"{unused}")
+        });
+        IResourceWithConnectionString resource = source switch
+        {
+            "postgres-redirect" => builder.AddPostgres("postgres")
+                .WithAnnotation(new ConnectionStringRedirectAnnotation(custom.Resource)).Resource,
+            "redis-redirect" => builder.AddRedis("redis")
+                .WithAnnotation(new ConnectionStringRedirectAnnotation(custom.Resource)).Resource,
+            _ => custom.Resource
+        };
+        var caller = builder.AddExecutable("caller", "unused", ".").Resource;
+        using var app = builder.Build();
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
+        var context = new ValueProviderContext
+        {
+            ExecutionContext = builder.ExecutionContext,
+            Caller = caller,
+            Network = KnownNetworkIdentifiers.LocalhostNetwork
+        };
+
+        var read = source == "context-free-value-provider"
+            ? resource.GetValueAsync(cts.Token)
+            : resource.GetConnectionStringAsync(context, cts.Token);
+        Assert.True(read.IsCompletedSuccessfully);
+        Assert.Equal("runtime-connection-string", await read);
+        Assert.False(unused.Resource.WaitForValueTcs!.Task.IsCompleted);
+    }
+
+    [Theory]
+    [InlineData("postgres")]
+    [InlineData("postgres-database")]
+    [InlineData("redis")]
+    [InlineData("mysql")]
+    [InlineData("mysql-database")]
+    [InlineData("valkey")]
+    [InlineData("mongodb")]
+    [InlineData("mongodb-database")]
+    [InlineData("publisher")]
+    public async Task ConnectionStringAvailableEventReportsMissingPasswordBeforeStarting(string source)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var password = builder.AddParameter("password", secret: true);
+        password.Resource.EnsureValueTask();
+        IResourceWithConnectionString resource = source switch
+        {
+            "postgres" => builder.AddPostgres("database", password: password).Resource,
+            "postgres-database" => builder.AddPostgres("server", password: password).AddDatabase("database").Resource,
+            "redis" => builder.AddRedis("database", password: password).Resource,
+            "mysql" => builder.AddMySql("database", password: password).Resource,
+            "mysql-database" => builder.AddMySql("server", password: password).AddDatabase("database").Resource,
+            "valkey" => builder.AddValkey("database", password: password).Resource,
+            "mongodb" => builder.AddMongoDB("database", password: password).Resource,
+            "mongodb-database" => builder.AddMongoDB("server", password: password).AddDatabase("database").Resource,
+            _ => builder.AddResource(new PostgresServerResource("database", null, password.Resource))
+                .WithEndpoint(targetPort: 5432, scheme: "tcp", name: "tcp").Resource
+        };
+        var endpointResource = resource is IResourceWithParent child ? child.Parent : resource;
+        var endpoint = Assert.Single(endpointResource.Annotations.OfType<EndpointAnnotation>());
+        endpoint.AllocatedEndpoint = new(endpoint, "localhost", 2000);
+        using var app = builder.Build();
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
+        var notifications = app.ResourceNotifications;
+        var events = new DcpExecutorEvents();
+        var beforeStartReached = false;
+        builder.Eventing.Subscribe<BeforeResourceStartedEvent>(resource, (_, _) =>
+        {
+            beforeStartReached = true;
+            return Task.CompletedTask;
+        });
+        var orchestrator = CreateOrchestrator(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            notifications, dcpEvents: events, applicationEventing: builder.Eventing);
+        await orchestrator.RunApplicationAsync();
+        await notifications.PublishUpdateAsync(resource, s => s);
+
+        var startup = StartAsync();
+        Assert.False(startup.IsCompleted);
+        Assert.False(beforeStartReached);
+        Assert.True(notifications.TryGetCurrentState(resource.Name, out var waiting));
+        Assert.Equal(KnownResourceStates.UnresolvedParameters, waiting.Snapshot.State?.Text);
+        var unresolved = Assert.Single(waiting.Snapshot.Properties, p => p.Name == KnownProperties.Resource.UnresolvedParameters);
+        Assert.Equal(new[] { password.Resource.Name }, Assert.IsType<string[]>(unresolved.Value));
+        Assert.False(unresolved.IsSensitive);
+
+        await password.Resource.SetValueAsync("password-value");
+        await startup.DefaultTimeout();
+        Assert.True(beforeStartReached);
+        Assert.True(notifications.TryGetCurrentState(resource.Name, out var started));
+        Assert.Equal(KnownResourceStates.Starting, started.Snapshot.State?.Text);
+        Assert.Empty(started.Snapshot.Properties.Where(p => p.Name == KnownProperties.Resource.UnresolvedParameters));
+        var connectionString = Assert.Single(started.Snapshot.Properties, p => p.Name == KnownProperties.Resource.ConnectionString);
+        Assert.Equal(await resource.GetConnectionStringAsync(cts.Token), connectionString.Value);
+        Assert.True(connectionString.IsSensitive);
+
+        async Task StartAsync()
+        {
+            await events.PublishAsync(new OnConnectionStringAvailableContext(cts.Token, resource));
+            await events.PublishAsync(new OnResourceStartingContext(cts.Token, KnownResourceTypes.Container, resource, resource.Name));
+        }
+    }
+
+#pragma warning disable ASPIREMONGODB001
+    [Fact]
+    public async Task ReplicaSetInitializationReportsMissingPasswordBeforeConnectionStringAvailable()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var password = builder.AddParameter("password", secret: true);
+        password.Resource.EnsureValueTask();
+        var member = builder.AddMongoDB("member");
+        var replicaSet = builder.AddMongoDBReplicaSet("replica-set", password: password).WithMember(member);
+        var endpoint = Assert.Single(member.Resource.Annotations.OfType<EndpointAnnotation>());
+        endpoint.AllocatedEndpoint = new(endpoint, "localhost", 2000);
+        using var app = builder.Build();
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
+        var notifications = app.ResourceNotifications;
+        var connectionStringAvailable = false;
+        builder.Eventing.Subscribe<ConnectionStringAvailableEvent>(replicaSet.Resource, (_, _) =>
+        {
+            connectionStringAvailable = true;
+            return Task.CompletedTask;
+        });
+        await notifications.PublishUpdateAsync(replicaSet.Resource, s => s);
+
+        var initialization = builder.Eventing.PublishAsync(new InitializeResourceEvent(
+            replicaSet.Resource,
+            builder.Eventing,
+            app.Services.GetRequiredService<ResourceLoggerService>(),
+            notifications,
+            app.Services), cts.Token);
+
+        try
+        {
+            Assert.False(initialization.IsCompleted);
+            Assert.False(connectionStringAvailable);
+            Assert.True(notifications.TryGetCurrentState(replicaSet.Resource.Name, out var waiting));
+            Assert.Equal(KnownResourceStates.UnresolvedParameters, waiting.Snapshot.State?.Text);
+            var unresolved = Assert.Single(waiting.Snapshot.Properties, p => p.Name == KnownProperties.Resource.UnresolvedParameters);
+            Assert.Equal(new[] { password.Resource.Name }, Assert.IsType<string[]>(unresolved.Value));
+            Assert.False(unresolved.IsSensitive);
+        }
+        finally
+        {
+            cts.Cancel();
+            await initialization.DefaultTimeout();
+        }
+
+        Assert.False(connectionStringAvailable);
+        Assert.True(notifications.TryGetCurrentState(replicaSet.Resource.Name, out var canceled));
+        Assert.Equal(KnownResourceStates.FailedToStart, canceled.Snapshot.State?.Text);
+        Assert.Empty(canceled.Snapshot.Properties.Where(p => p.Name == KnownProperties.Resource.UnresolvedParameters));
+    }
+#pragma warning restore ASPIREMONGODB001
+
+    [Fact]
     public async Task ConnectionStringAvailableEventUpdatesConnectionStringAndResolvablePropertiesWithoutDuplicates()
     {
         var builder = DistributedApplication.CreateBuilder();
         builder.WithTestAndResourceLogging(testOutputHelper);
 
+        var database = builder.AddContainer("database", "test-image")
+            .WithEndpoint(scheme: "tcp", targetPort: 5432, name: "tcp");
+        var endpoint = database.GetEndpoint("tcp");
+        var annotation = endpoint.EndpointAnnotation;
+        annotation.AllocatedEndpoint = new(annotation, "localhost", 15432);
+        annotation.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(
+            KnownNetworkIdentifiers.DefaultAspireContainerNetwork,
+            new(annotation, "database", 5432, EndpointBindingMode.SingleAddress, networkId: KnownNetworkIdentifiers.DefaultAspireContainerNetwork));
+
         var unresolvedProperty = ReferenceExpression.Create($"{new ThrowingValueProvider()}");
-        var resource = builder.AddResource(new TestResourceWithConnectionString("test-resource", "Server=localhost:5432;Database=testdb", "testdb", "localhost", unresolvedProperty));
+        var host = ReferenceExpression.Create($"{endpoint.Property(EndpointProperty.Host)}");
+        var resource = builder.AddResource(new TestResourceWithConnectionString("test-resource", "Server=localhost:5432;Database=testdb", "testdb", host, unresolvedProperty))
+            .WithAnnotation(new ContainerImageAnnotation { Image = "test-image" });
 
         using var app = builder.Build();
         var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
@@ -1197,6 +1457,134 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
 
         await resourceNotificationService.WaitForResourceAsync(dependency.Resource.Name, KnownResourceStates.Running, TestContext.Current.CancellationToken).DefaultTimeout();
         await startingTask.DefaultTimeout();
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ParameterWaitIsReportedAfterDependenciesComplete(bool readWhileWaitingForDependencies)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var parameter = builder.AddParameter("parameter").Resource;
+        parameter.EnsureValueTask();
+        var dependency = builder.AddExecutable("dependency", "unused", ".");
+        var caller = builder.AddExecutable("caller", "unused", ".").WaitFor(dependency);
+
+        using var app = builder.Build();
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
+        var notifications = app.ResourceNotifications;
+        var events = new DcpExecutorEvents();
+        var orchestrator = CreateOrchestrator(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            notifications,
+            dcpEvents: events,
+            applicationEventing: builder.Eventing);
+        await orchestrator.RunApplicationAsync();
+
+        var startingTask = events.PublishAsync(new OnResourceStartingContext(
+            cts.Token, KnownResourceTypes.Executable, caller.Resource, caller.Resource.Name));
+        await notifications.WaitForResourceAsync(caller.Resource.Name, KnownResourceStates.Waiting, cts.Token).DefaultTimeout();
+
+        var context = new ValueProviderContext { ExecutionContext = builder.ExecutionContext, Caller = caller.Resource };
+        var read = readWhileWaitingForDependencies ? parameter.GetValueAsync(context, cts.Token).AsTask() : null;
+        if (read is not null)
+        {
+            Assert.False(read.IsCompleted);
+            Assert.True(notifications.TryGetCurrentState(caller.Resource.Name, out var waiting));
+            Assert.Equal(KnownResourceStates.Waiting, waiting.Snapshot.State?.Text);
+            var waitingFor = Assert.Single(waiting.Snapshot.Properties, p => p.Name == KnownProperties.Resource.WaitingFor);
+            Assert.Equal(new[] { dependency.Resource.Name }, Assert.IsType<string[]>(waitingFor.Value));
+            Assert.False(startingTask.IsCompleted);
+        }
+
+        await notifications.PublishUpdateAsync(dependency.Resource, s => s with
+        {
+            State = KnownResourceStates.Running,
+            ResourceReadyEvent = new EventSnapshot(Task.CompletedTask)
+        });
+        await startingTask.DefaultTimeout();
+
+        read ??= parameter.GetValueAsync(context, cts.Token).AsTask();
+        Assert.False(read.IsCompleted);
+        Assert.True(caller.Resource.HasAnnotationOfType<WaitAnnotation>());
+        Assert.True(notifications.TryGetCurrentState(caller.Resource.Name, out var blocked));
+        Assert.Equal(KnownResourceStates.UnresolvedParameters, blocked.Snapshot.State?.Text);
+        var unresolved = Assert.Single(blocked.Snapshot.Properties, p => p.Name == KnownProperties.Resource.UnresolvedParameters);
+        Assert.Equal(new[] { parameter.Name }, Assert.IsType<string[]>(unresolved.Value));
+
+        await parameter.SetValueAsync("value");
+        Assert.Equal("value", await read.DefaultTimeout());
+        Assert.True(notifications.TryGetCurrentState(caller.Resource.Name, out var completed));
+        Assert.Equal(KnownResourceStates.Waiting, completed.Snapshot.State?.Text);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ForceStartingResourceBypassesDependenciesButNotParameterWaits(bool readBeforeWaitingForDependencies)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var parameter = builder.AddParameter("parameter").Resource;
+        parameter.EnsureValueTask();
+        var dependency = builder.AddExecutable("dependency", "unused", ".");
+        var caller = builder.AddExecutable("caller", "unused", ".").WaitFor(dependency);
+        caller.Resource.AddLifeCycleCommands();
+
+        using var app = builder.Build();
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
+        var notifications = app.ResourceNotifications;
+        var events = new DcpExecutorEvents();
+        var dcpExecutor = new TestDcpExecutor();
+        dcpExecutor.AddResource(caller.Resource, caller.Resource.Name);
+        var orchestrator = CreateOrchestrator(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            notifications,
+            dcpEvents: events,
+            applicationEventing: builder.Eventing,
+            dcpExecutor: dcpExecutor);
+        await orchestrator.RunApplicationAsync();
+        await notifications.PublishUpdateAsync(dependency.Resource, s => s with { State = KnownResourceStates.NotStarted });
+
+        var context = new ValueProviderContext { ExecutionContext = builder.ExecutionContext, Caller = caller.Resource };
+        var read = readBeforeWaitingForDependencies ? parameter.GetValueAsync(context, cts.Token).AsTask() : null;
+        var startingTask = events.PublishAsync(new OnResourceStartingContext(
+            cts.Token, KnownResourceTypes.Executable, caller.Resource, caller.Resource.Name));
+        await notifications.WaitForResourceAsync(caller.Resource.Name, KnownResourceStates.Waiting, cts.Token).DefaultTimeout();
+        read ??= parameter.GetValueAsync(context, cts.Token).AsTask();
+
+        Assert.False(read.IsCompleted);
+        Assert.False(startingTask.IsCompleted);
+        Assert.True(notifications.TryGetCurrentState(caller.Resource.Name, out var waiting));
+        Assert.Equal(KnownResourceStates.Waiting, waiting.Snapshot.State?.Text);
+        var waitingFor = Assert.Single(waiting.Snapshot.Properties, p => p.Name == KnownProperties.Resource.WaitingFor);
+        Assert.Equal(new[] { dependency.Resource.Name }, Assert.IsType<string[]>(waitingFor.Value));
+        var start = Assert.Single(caller.Resource.Annotations.OfType<ResourceCommandAnnotation>(), c => c.Name == KnownResourceCommands.StartCommand);
+        Assert.Equal(ResourceCommandState.Enabled, start.UpdateState(new UpdateCommandStateContext
+        {
+            ResourceSnapshot = waiting.Snapshot,
+            Services = app.Services
+        }));
+
+        await orchestrator.StartResourceAsync(caller.Resource.Name, cts.Token).DefaultTimeout();
+        await startingTask.DefaultTimeout();
+
+        Assert.Empty(dcpExecutor.StartedResources);
+        Assert.True(notifications.TryGetCurrentState(dependency.Resource.Name, out var dependencyState));
+        Assert.Equal(KnownResourceStates.NotStarted, dependencyState.Snapshot.State?.Text);
+        Assert.False(read.IsCompleted);
+        Assert.True(notifications.TryGetCurrentState(caller.Resource.Name, out var blocked));
+        Assert.Equal(KnownResourceStates.UnresolvedParameters, blocked.Snapshot.State?.Text);
+        Assert.Collection(blocked.Snapshot.Properties, property =>
+        {
+            Assert.Equal(KnownProperties.Resource.UnresolvedParameters, property.Name);
+            Assert.Equal(new[] { parameter.Name }, Assert.IsType<string[]>(property.Value));
+        });
+
+        await parameter.SetValueAsync("value");
+        Assert.Equal("value", await read.DefaultTimeout());
+        Assert.True(notifications.TryGetCurrentState(caller.Resource.Name, out var completed));
+        Assert.Equal(KnownResourceStates.Starting, completed.Snapshot.State?.Text);
+        Assert.Empty(completed.Snapshot.Properties);
     }
 
     [Fact]
@@ -1672,6 +2060,7 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
         var services = new ServiceCollection();
         var configuration = new ConfigurationManager();
         services.AddTestAndResourceLogging(testOutputHelper, configuration);
+        services.AddSingleton(notificationService);
         var serviceProvider = services.BuildServiceProvider();
         resourceLoggerService ??= new ResourceLoggerService();
 
@@ -1803,10 +2192,10 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
         public IResource Parent { get; } = parent;
     }
 
-    private sealed class TestResourceWithConnectionString(string name, string connectionString, string? databaseName = null, string? host = null, ReferenceExpression? unresolvedProperty = null)
+    private sealed class TestResourceWithConnectionString(string name, string connectionString, string? databaseName = null, ReferenceExpression? host = null, ReferenceExpression? unresolvedProperty = null)
         : Resource(name), IResourceWithConnectionString
     {
-        public ReferenceExpression ConnectionStringExpression => ReferenceExpression.Create($"{connectionString}");
+        public ReferenceExpression ConnectionStringExpression { get; init; } = ReferenceExpression.Create($"{connectionString}");
 
         public ValueTask<string?> GetConnectionStringAsync(CancellationToken cancellationToken = default)
         {
@@ -1822,7 +2211,7 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
 
             if (host is not null)
             {
-                yield return new("Host", ReferenceExpression.Create($"{host}"));
+                yield return new("Host", host);
             }
 
             if (unresolvedProperty is not null)

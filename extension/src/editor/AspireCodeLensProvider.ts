@@ -23,6 +23,7 @@ import {
     codeLensResourceStopping,
     codeLensResourceNotStarted,
     codeLensResourceWaiting,
+    codeLensResourceUnresolvedParameters,
     codeLensResourceStopped,
     codeLensResourceStoppedWithExitCode,
     codeLensResourceStoppedError,
@@ -600,6 +601,8 @@ export function getCodeLensStateLabel(state: string, stateStyle: string, exitCod
             return codeLensResourceStarting;
         case ResourceState.Waiting:
             return codeLensResourceWaiting;
+        case ResourceState.UnresolvedParameters:
+            return codeLensResourceUnresolvedParameters;
         case ResourceState.NotStarted:
             return codeLensResourceNotStarted;
         case ResourceState.FailedToStart:

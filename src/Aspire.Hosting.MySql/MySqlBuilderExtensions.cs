@@ -48,7 +48,8 @@ public static class MySqlBuilderExtensions
 
         builder.Eventing.Subscribe<ConnectionStringAvailableEvent>(resource, async (@event, ct) =>
         {
-            connectionString = await resource.ConnectionStringExpression.GetValueAsync(ct).ConfigureAwait(false);
+            connectionString = await resource.ConnectionStringExpression.GetValueAsync(
+                ValueProviderContext.ForHost(builder.ExecutionContext, resource), ct).ConfigureAwait(false);
 
             if (connectionString == null)
             {
@@ -178,7 +179,8 @@ public static class MySqlBuilderExtensions
 
         builder.ApplicationBuilder.Eventing.Subscribe<ConnectionStringAvailableEvent>(mySqlDatabase, async (@event, ct) =>
         {
-            connectionString = await mySqlDatabase.ConnectionStringExpression.GetValueAsync(ct).ConfigureAwait(false);
+            connectionString = await mySqlDatabase.ConnectionStringExpression.GetValueAsync(
+                ValueProviderContext.ForHost(builder.ApplicationBuilder.ExecutionContext, mySqlDatabase), ct).ConfigureAwait(false);
 
             if (connectionString is null)
             {
@@ -352,7 +354,7 @@ public static class MySqlBuilderExtensions
             else
             {
                 var fileSystemService = e.Services.GetRequiredService<IFileSystemService>();
-                var tempConfigFile = await WritePhpMyAdminConfiguration(fileSystemService, mySqlInstances, ct).ConfigureAwait(false);
+                var tempConfigFile = await WritePhpMyAdminConfiguration(fileSystemService, mySqlInstances, new ValueProviderContext { ExecutionContext = builder.ApplicationBuilder.ExecutionContext, Caller = e.Resource }, ct).ConfigureAwait(false);
 
                 try
                 {
@@ -475,7 +477,7 @@ public static class MySqlBuilderExtensions
         return builder.WithContainerFiles(initPath, importFullPath);
     }
 
-    private static async Task<string> WritePhpMyAdminConfiguration(IFileSystemService fileSystemService, IEnumerable<MySqlServerResource> mySqlInstances, CancellationToken cancellationToken)
+    private static async Task<string> WritePhpMyAdminConfiguration(IFileSystemService fileSystemService, IEnumerable<MySqlServerResource> mySqlInstances, ValueProviderContext context, CancellationToken cancellationToken)
     {
         // This temporary file is not used by the container, it will be copied and then deleted
         var filePath = fileSystemService.TempDirectory.CreateTempFile().Path;
@@ -489,7 +491,7 @@ public static class MySqlBuilderExtensions
         foreach (var mySqlInstance in mySqlInstances)
         {
             var endpoint = mySqlInstance.PrimaryEndpoint;
-            var pwd = await mySqlInstance.PasswordParameter.GetValueAsync(cancellationToken).ConfigureAwait(false);
+            var pwd = await mySqlInstance.PasswordParameter.GetValueAsync(context, cancellationToken).ConfigureAwait(false);
 
             writer.WriteLine("$i++;");
             // PhpMyAdmin assumes MySql is being accessed over a default Aspire container network and hardcodes the resource address

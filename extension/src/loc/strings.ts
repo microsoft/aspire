@@ -198,6 +198,7 @@ export const healthCheckDescription = (status: string) => vscode.l10n.t('Status:
 export const resourceDescriptionHealth = (passed: number, total: number) => vscode.l10n.t('Health: {0}/{1}', passed, total);
 export const resourceDescriptionExitCode = (exitCode: number) => vscode.l10n.t('Exit Code: {0}', exitCode);
 export const parameterValueMissing = vscode.l10n.t('Value missing');
+export const resourceUnresolvedParameters = vscode.l10n.t('Unresolved parameters');
 export const failedToStartDebugSession = vscode.l10n.t('Failed to start debug session.');
 export const failedToGetConfigInfo = (exitCode: number) => vscode.l10n.t('Failed to get Aspire config info (exit code: {0}). Try updating the Aspire CLI with: aspire update', exitCode);
 export const failedToParseConfigInfo = (error: any) => vscode.l10n.t('Failed to parse Aspire config info: {0}. Try updating the Aspire CLI with: aspire update', error);
@@ -321,6 +322,7 @@ export const codeLensResourceStarting = vscode.l10n.t('$(loading~spin)\u200A Sta
 export const codeLensResourceStopping = vscode.l10n.t('$(loading~spin)\u200A Stopping');
 export const codeLensResourceNotStarted = vscode.l10n.t('$(circle-outline)\u200A Not Started');
 export const codeLensResourceWaiting = vscode.l10n.t('$(loading~spin)\u200A Waiting');
+export const codeLensResourceUnresolvedParameters = vscode.l10n.t('$(warning)\u200A Unresolved parameters');
 export const codeLensResourceStopped = vscode.l10n.t('$(circle-outline)\u200A Stopped');
 export const codeLensResourceStoppedWithExitCode = (exitCode: number) => vscode.l10n.t('$(circle-outline)\u200A Stopped (Exit Code: {0})', exitCode);
 export const codeLensResourceStoppedError = vscode.l10n.t('$(error)\u200A Stopped');

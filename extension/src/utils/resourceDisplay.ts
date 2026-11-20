@@ -1,6 +1,6 @@
 import { ResourceState, ResourceType, CommandName, ParameterPropertyName } from '../editor/resourceConstants';
 import { ResourceJson, ResourceCommandInputType, ResourceCommandJson } from '../data/AppHostDataRepository';
-import { parameterValueMissing } from '../loc/strings';
+import { parameterValueMissing, resourceUnresolvedParameters } from '../loc/strings';
 
 // Sort commands by sort order, then name.
 export function compareResourceCommands(
@@ -18,7 +18,14 @@ const maskedParameterValue = '●●●●●●●●';
 
 // Humanize the runtime state for display.
 export function getResourceStateDescription(state: string): string {
-    return state === ResourceState.ValueMissing ? parameterValueMissing : state;
+    switch (state) {
+        case ResourceState.ValueMissing:
+            return parameterValueMissing;
+        case ResourceState.UnresolvedParameters:
+            return resourceUnresolvedParameters;
+        default:
+            return state;
+    }
 }
 
 export function getResourceSource(resource: ResourceJson): string | undefined {

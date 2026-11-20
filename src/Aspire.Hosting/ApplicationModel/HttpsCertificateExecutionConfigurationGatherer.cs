@@ -58,7 +58,7 @@ internal class HttpsCertificateExecutionConfigurationGatherer : IExecutionConfig
             KeyPathReference = configurationContext.KeyPath,
             PfxPathReference = configurationContext.PfxPath,
             CertificateWithKeyPathReference = configurationContext.CertificateWithKeyPath,
-            Password = effectiveAnnotation.Password is not null ? await effectiveAnnotation.Password.GetValueAsync(cancellationToken).ConfigureAwait(false) : null,
+            Password = effectiveAnnotation.Password is not null ? await effectiveAnnotation.Password.GetValueAsync(new ValueProviderContext { ExecutionContext = executionContext, Caller = resource }, cancellationToken).ConfigureAwait(false) : null,
         };
         context.AddAdditionalData(additionalData);
 
@@ -188,9 +188,14 @@ public class HttpsCertificateExecutionConfigurationData : IExecutionConfiguratio
 
         public ValueTask<string?> GetValueAsync(CancellationToken cancellationToken = default)
         {
+            return GetValueAsync(new(), cancellationToken);
+        }
+
+        public ValueTask<string?> GetValueAsync(ValueProviderContext context, CancellationToken cancellationToken = default)
+        {
             WasResolved = true;
 
-            return _reference.GetValueAsync(cancellationToken);
+            return _reference.GetValueAsync(context, cancellationToken);
         }
     }
 }

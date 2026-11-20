@@ -66,7 +66,8 @@ public static partial class SqlServerBuilderExtensions
                       .WithHealthCheck(healthCheckKey)
                       .OnConnectionStringAvailable(async (sqlServer, @event, ct) =>
                       {
-                          connectionString = await sqlServer.GetConnectionStringAsync(ct).ConfigureAwait(false);
+                          connectionString = await sqlServer.GetConnectionStringAsync(
+                              ValueProviderContext.ForHost(builder.ExecutionContext, sqlServer), ct).ConfigureAwait(false);
 
                           if (connectionString == null)
                           {
@@ -247,7 +248,8 @@ public static partial class SqlServerBuilderExtensions
             .WithHealthCheck(healthCheckKey)
             .OnConnectionStringAvailable(async (sqlServerDatabase, @event, ct) =>
             {
-                var connectionString = await sqlServerDatabase.ConnectionStringExpression.GetValueAsync(ct).ConfigureAwait(false);
+                var connectionString = await sqlServerDatabase.ConnectionStringExpression.GetValueAsync(
+                    ValueProviderContext.ForHost(builder.ApplicationBuilder.ExecutionContext, sqlServerDatabase), ct).ConfigureAwait(false);
 
                 if (connectionString == null)
                 {

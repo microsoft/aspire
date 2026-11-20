@@ -83,13 +83,14 @@ internal sealed class ApplicationOrchestrator
     {
         if (@event.Resource is IResourceWithConnectionString resourceWithConnectionString)
         {
-            var connectionString = await resourceWithConnectionString.GetConnectionStringAsync(token).ConfigureAwait(false);
+            var valueContext = ValueProviderContext.ForHost(_executionContext, resourceWithConnectionString);
+            var connectionString = await resourceWithConnectionString.GetConnectionStringAsync(valueContext, token).ConfigureAwait(false);
             var connectionProperties = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
             foreach (var property in resourceWithConnectionString.GetConnectionProperties())
             {
                 try
                 {
-                    connectionProperties[property.Key] = await property.Value.GetValueAsync(token).ConfigureAwait(false);
+                    connectionProperties[property.Key] = await property.Value.GetValueAsync(valueContext, token).ConfigureAwait(false);
                 }
                 catch (OperationCanceledException) when (token.IsCancellationRequested)
                 {
