@@ -32,13 +32,7 @@
   "thirdPartyNotices": "https://aka.ms/aspire/third-party-notices",
   "groupIdentity": "Aspire.Starter",
   "guids": [
-    "80B24B1B-1E78-4FCB-BDC9-13678F1789F4",
-    "DB7A3AC1-6E4F-4805-B710-2FCD1084E96E",
-    "9FEB877E-015D-4E20-AE63-06C596E242E4",
-    "AC2DB38C-F5AD-4CEF-BC4C-04AE6EE86C9F",
-    "EB6E56D3-85C9-43D0-A65C-775F4C780950",
-    "98048C9C-BF28-46BA-A98E-63767EE5E3A8",
-    "BAAC2850-FDA3-40E4-8D41-6E024DDBC980"
+    "98048C9C-BF28-46BA-A98E-63767EE5E3A8"
   ],
   "sources": [
     {
@@ -48,7 +42,7 @@
         {
           "condition": "(hostIdentifier != \"dotnetcli\" && hostIdentifier != \"dotnetcli-preview\")",
           "exclude": [
-            "*.sln"
+            "*.slnx"
           ]
         },
         {
@@ -493,7 +487,7 @@
   },
   "primaryOutputs": [
     {
-      "path": "Aspire-StarterApplication.1.sln",
+      "path": "Aspire-StarterApplication.1.slnx",
       "condition": "(hostIdentifier == \"dotnetcli\" || hostIdentifier == \"dotnetcli-preview\")"
     },
     {
