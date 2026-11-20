@@ -214,7 +214,10 @@ internal static partial class PolyglotCapabilityErrorFormatter
             return true;
         }
 
-        if (HostingTypeHelpers.IsResourceBuilderType(handleObject.GetType()) && HostingTypeHelpers.IsResourceType(expectedType))
+        // ATS maps a resource builder and its resource to the same type ID, so a guest resource handle
+        // stands for both. Unwrap to the resource for any expected type it satisfies, including
+        // non-resource interfaces such as IExpressionValue.
+        if (HostingTypeHelpers.IsResourceBuilderType(handleObject.GetType()))
         {
             var resource = handleObject.GetType()
                 .GetProperty("Resource")?
