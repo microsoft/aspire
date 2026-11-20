@@ -282,12 +282,9 @@ internal sealed class AuxiliaryBackchannelMonitor(
     {
         try
         {
-            // Wait for the command to be selected, with a timeout
-            // If timeout occurs or no command is set, monitoring is not needed
-            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(1));
-            using var combined = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken, timeout.Token);
-
-            var command = await executionContext.CommandSelected.Task.WaitAsync(combined.Token).ConfigureAwait(false);
+            // First-run UI can delay command selection. Wait until selection or shutdown
+            // instead of permanently disabling monitoring after an arbitrary timeout.
+            var command = await executionContext.CommandSelected.Task.WaitAsync(stoppingToken).ConfigureAwait(false);
 
             // Only monitor if the command is MCP start command (run --detach uses manual scanning)
             if (command is not McpStartCommand)
@@ -317,11 +314,6 @@ internal sealed class AuxiliaryBackchannelMonitor(
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
         {
             logger.LogInformation("Auxiliary backchannel monitor stopping");
-        }
-        catch (OperationCanceledException)
-        {
-            // Timeout occurred - no command was selected, monitoring not needed
-            logger.LogDebug("No command selected within timeout. Auxiliary backchannel monitoring not needed.");
         }
         catch (Exception ex)
         {

@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Concurrent;
+using System.CommandLine;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Net.Sockets;
@@ -17,6 +18,59 @@ namespace Aspire.Cli.Tests.Backchannel;
 
 public class AuxiliaryBackchannelMonitorTests(ITestOutputHelper outputHelper)
 {
+    [Fact]
+    public async Task DelayedCommandSelectionIsStillObserved()
+    {
+        var homeDirectory = CreateSocketSafeHomeDirectory();
+        try
+        {
+            var executionContext = CreateExecutionContext(homeDirectory);
+            var logger = new CapturingLogger<AuxiliaryBackchannelMonitor>();
+            using var profiling = new ProfilingTelemetry(new ConfigurationBuilder().Build());
+            using var monitor = new AuxiliaryBackchannelMonitor(logger, executionContext, new FakeTimeProvider(), profiling);
+            await monitor.StartAsync(TestContext.Current.CancellationToken);
+            try
+            {
+                // Command selection can follow a first-run banner lasting longer than the
+                // former one-second timeout. Keep the command unresolved across that boundary.
+                await Task.Delay(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken);
+                executionContext.CommandSelected.SetResult(new Command("other"));
+                await monitor.ExecuteTask!.WaitAsync(TestContext.Current.CancellationToken);
+
+                Assert.Contains(logger.Entries, entry => entry.Message ==
+                    "Current command is not MCP start command. Auxiliary backchannel monitoring disabled.");
+            }
+            finally
+            {
+                await monitor.StopAsync(TestContext.Current.CancellationToken);
+            }
+        }
+        finally
+        {
+            homeDirectory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task ShutdownBeforeCommandSelectionStopsMonitor()
+    {
+        var homeDirectory = CreateSocketSafeHomeDirectory();
+        try
+        {
+            using var profiling = new ProfilingTelemetry(new ConfigurationBuilder().Build());
+            using var monitor = new AuxiliaryBackchannelMonitor(
+                new CapturingLogger<AuxiliaryBackchannelMonitor>(), CreateExecutionContext(homeDirectory), new FakeTimeProvider(), profiling);
+            await monitor.StartAsync(TestContext.Current.CancellationToken);
+            await monitor.StopAsync(TestContext.Current.CancellationToken);
+
+            Assert.True(monitor.ExecuteTask!.IsCompleted);
+        }
+        finally
+        {
+            homeDirectory.Delete(recursive: true);
+        }
+    }
+
     [Fact]
     public async Task DefaultWatchEmitsInitialConnectionOnlyOnce()
     {
