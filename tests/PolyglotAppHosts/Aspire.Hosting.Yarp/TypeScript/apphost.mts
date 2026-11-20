@@ -19,7 +19,9 @@ const proxy = await builder.addYarp("proxy")
     .withContainerNetworkAlias("myalias")
     .publishAsContainer()
     .withStaticFiles()
-    .withStaticFiles({ sourcePath: "." });
+    .withStaticFiles({ sourcePath: "." })
+    .withSpaFallback({ enabled: false })
+    .withSpaFallback();
 
 await proxy.withVolume("/data", { name: "proxy-data" });
 await proxy.withBuildArg("BUILD_VERSION", buildVersion);

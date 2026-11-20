@@ -12,16 +12,17 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Source-share YARP container image tags with Aspire.Hosting.Yarp -->
+    <!-- Source-share YARP static-file configuration with Aspire.Hosting.Yarp -->
     <Compile Include="..\Aspire.Hosting.Yarp\YarpContainerImageTags.cs" Link="YarpContainerImageTags.cs" />
+    <Compile Include="..\Aspire.Hosting.Yarp\YarpStaticFileFallback.cs" Link="YarpStaticFileFallback.cs" />
     <!-- Source-share browser debugger types with Aspire.Hosting.Blazor via the shared source directory -->
     <Compile Include="$(SharedDir)BrowserDebuggerResource.cs" Link="BrowserDebuggerResource.cs" />
     <Compile Include="$(SharedDir)BrowserLaunchConfiguration.cs" Link="BrowserLaunchConfiguration.cs" />
-    <Compile Include="$(SharedDir)PathNormalizer.cs" Link="Utils\PathNormalizer.cs" />
     <Compile Include="$(SharedDir)PublishValidationExtensions.cs" Link="PublishValidationExtensions.cs" />
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Aspire.Hosting provides PathNormalizer through friend access; a source-linked copy would conflict. -->
     <ProjectReference Include="..\Aspire.Hosting\Aspire.Hosting.csproj" />
   </ItemGroup>
 

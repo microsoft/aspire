@@ -67,6 +67,32 @@ builder.AddYarp("static")
 ```
 This bind mounts files in run mode and copies them into the generated container image in publish mode.
 
+For client-side routing, enable a fallback that serves `index.html` for unmatched GET and HEAD
+requests for paths without a file extension. Missing files such as `.js` assets still return 404.
+Without `WithSpaFallback`, Aspire does not configure a fallback, and the YARP image's defaults apply.
+
+**C#**
+
+```csharp
+builder.AddYarp("static")
+       .WithStaticFiles("../static")
+       .WithSpaFallback();
+```
+
+**TypeScript**
+
+```typescript
+await builder.addYarp("static")
+    .withStaticFiles({ sourcePath: "../static" })
+    .withSpaFallback();
+```
+
+The fallback uses YARP's maximum route order, so proxy routes with a lower order take precedence.
+A competing catch-all with the same order can be overridden by the fallback; disable the fallback
+if that route should win. For a YARP image that supports the native `NavigationFallback__Path`
+setting, use that setting instead of `WithSpaFallback`, or call `WithSpaFallback(false)`. Otherwise,
+Aspire's `index.html` fallback takes precedence.
+
 #### Copy files via Docker
 
 You can also use a Dockerfile to copy static assets into the YARP container. Pass the YARP base image used by your deployment as `YARP_BASE_IMAGE` when building the image:
