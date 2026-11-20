@@ -175,7 +175,8 @@ cask URL points at validation time:
 Common to both modes:
 
 1. `ruby -c aspire.rb` — Ruby syntax check
-2. `brew style --fix` — Cookbook formatting rules
+2. `brew style --cask local/aspire/aspire` — checks Cookbook formatting rules
+   against the generated cask in the temporary tap
 3. `brew test-bot --tap local/aspire --only-tap-syntax` — tap-level
    cross-platform syntax check; this is the upstream job that catches
    "Invalid cask (Linux on …)" or other platform-evaluation failures
