@@ -78,6 +78,9 @@
   <data name="DeprecatedConfigFix" xml:space="preserve">
     <value>Run 'aspire agent init' to update configuration</value>
   </data>
+  <data name="DeprecatedConfigManualFix" xml:space="preserve">
+    <value>Manually update 'mcp start' to 'agent mcp' in '{0}', preserving your custom command, arguments, and settings</value>
+  </data>
   <data name="ConfigUpdatesSelectPrompt" xml:space="preserve">
     <value>The following agent configurations use the deprecated 'mcp start' command. Update them?</value>
   </data>

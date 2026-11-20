@@ -57,6 +57,11 @@
         <target state="translated">Eseguire 'aspire agent init' per aggiornare la configurazione</target>
         <note />
       </trans-unit>
+      <trans-unit id="DeprecatedConfigManualFix">
+        <source>Manually update 'mcp start' to 'agent mcp' in '{0}', preserving your custom command, arguments, and settings</source>
+        <target state="new">Manually update 'mcp start' to 'agent mcp' in '{0}', preserving your custom command, arguments, and settings</target>
+        <note />
+      </trans-unit>
       <trans-unit id="DeprecatedConfigUpdate_Description">
         <source>Update {0} config to use new 'agent mcp' command</source>
         <target state="translated">Aggiornare la configurazione {0} in modo che usi il nuovo comando 'agent mcp'</target>
