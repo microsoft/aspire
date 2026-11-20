@@ -92,6 +92,17 @@ test("new sessions remain children by default", () => {
   assert.equal(DEFAULT_PREFS.detachedSessions, false);
 });
 
+test("layout preferences default to grid and rows survive reloading", async () => {
+  assert.equal(DEFAULT_PREFS.layout, "grid");
+  const { layout, ...legacyPrefs } = DEFAULT_PREFS;
+  await savePrefs(legacyPrefs);
+  assert.equal((await loadPrefs()).layout, "grid");
+  await updatePrefs((prefs) => { prefs.layout = "rows"; });
+  assert.equal((await loadPrefs()).layout, "rows");
+  await savePrefs({ ...DEFAULT_PREFS, layout: "invalid" });
+  assert.equal((await loadPrefs()).layout, "grid");
+});
+
 test("accountConfig defaults unconfigured accounts to the public repos", () => {
   const emu = accountConfig({ accounts: {} }, "acct:github.com/dapine_microsoft");
   assert.deepEqual(emu.repos, DEFAULT_REPOS);
