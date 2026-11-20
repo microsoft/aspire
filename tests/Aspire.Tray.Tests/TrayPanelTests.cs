@@ -1418,7 +1418,7 @@ public class TrayPanelTests
         Assert.Equal("Stop", Target(panel, PanelTargetKind.Stop, running).Tooltip);
         Assert.Equal("Start", Target(panel, PanelTargetKind.Start, stopped).Tooltip);
         Assert.Equal("More actions", Target(panel, PanelTargetKind.More, running).Tooltip);
-        Assert.Equal(["Settings", "Documentation", "Quit the tray. AppHosts keep running."],
+        Assert.Equal(["Settings", "Documentation", "Quit"],
             panel.Scene.Targets.TakeLast(3).Select(target => target.Tooltip));
         Assert.All(panel.Scene.Targets.Where(target => target.Kind is PanelTargetKind.Row or PanelTargetKind.ToggleRecent or PanelTargetKind.ClearRecent),
             target => Assert.Null(target.Tooltip));
@@ -1430,17 +1430,15 @@ public class TrayPanelTests
         Assert.Equal("Close settings", panel.Scene.Targets.Single(target => target.Kind == PanelTargetKind.Settings).Tooltip);
     }
 
-    [Theory]
-    [InlineData("Quit")]
-    [InlineData("Exit")]
-    public void QuitSaysItClosesOnlyTheTray(string verb)
+    [Fact]
+    public void QuitUsesTheSameLabelForItsNameDescriptionAndTooltip()
     {
-        var panel = new TrayPanel(TrayPanelSamples.Typical(), TrayPanelPalette.Light) { QuitVerb = verb };
+        var panel = new TrayPanel(TrayPanelSamples.Typical(), TrayPanelPalette.Light);
         var quit = panel.Scene.Accessibility.Single(element => element.Target?.Kind == PanelTargetKind.Quit);
 
-        Assert.Equal(verb, quit.Name);
-        Assert.Equal($"{verb} the tray. AppHosts keep running.", quit.Description);
-        Assert.Equal($"{verb} the tray. AppHosts keep running.", quit.Target!.Tooltip);
+        Assert.Equal("Quit", quit.Name);
+        Assert.Equal("Quit", quit.Description);
+        Assert.Equal("Quit", quit.Target!.Tooltip);
         Assert.Equal(PanelActionKind.Quit, panel.Invoke(quit.Target.Key).Action?.Kind);
     }
 

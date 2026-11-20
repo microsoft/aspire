@@ -450,8 +450,8 @@ internal sealed unsafe partial class TrayApplication
             && NativeMethods.SendMessage(_panelTooltip, 0x040D, 0, 0) == _panelTooltips.Count, // TTM_GETTOOLCOUNT
             "Every visible icon button must have exactly one native tooltip.");
         NativeSmokeHarness.Require(panel.Scene.Accessibility.Single(element => element.Target?.Kind == PanelTargetKind.Quit) is
-            { Name: "Exit", Description: "Exit the tray. AppHosts keep running.", Target.Tooltip: "Exit the tray. AppHosts keep running." },
-            "The Exit button must say it closes only the tray.");
+            { Name: "Quit", Description: "Quit", Target.Tooltip: "Quit" },
+            "The Quit button must use the same label for its name, description, and tooltip.");
     }
 
     private void RequireSmoke()
