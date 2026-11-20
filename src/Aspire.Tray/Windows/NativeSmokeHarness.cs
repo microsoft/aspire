@@ -198,8 +198,10 @@ internal sealed class NativeSmokeHarness
                 // An action from a scene drawn before the lifetime was replaced must be rejected.
                 _application.RunPanelActionForSmoke(new(PanelActionKind.Stop, _staleHost));
                 Require(_errors == 1 && _client.Stops.Count == 1, "A stale action stopped a replacement lifetime.");
+                // Reopening the flyout resets confirmation state, so inspect the panel already used for Stop.
+                var stopPanel = _application.PanelForSmoke;
                 _application.PressPanelForSmoke(PanelTargetKind.Stop, _hosts[2].Id);
-                Require(_application.PanelForSmoke.Confirmation is null, "Stop opened a confirmation dialog.");
+                Require(stopPanel.Confirmation is null, "Stop opened a confirmation dialog.");
                 // RequestStop queues the call to the client. Let the native loop
                 // continue while waiting for the fake client to record delivery.
                 _stopRequestDeadline = Environment.TickCount64 + 5_000;
