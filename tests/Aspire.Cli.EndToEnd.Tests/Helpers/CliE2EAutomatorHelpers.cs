@@ -778,6 +778,90 @@ internal static class CliE2EAutomatorHelpers
     }
 
     /// <summary>
+    /// Waits for the current <c>aspire update</c> invocation to return to the shell, declining the optional
+    /// post-update CLI self-update confirmation if it appears.
+    /// </summary>
+    /// <remarks>
+    /// After the project update step, <c>aspire update</c> asks
+    /// "An update is available for the Aspire CLI. Would you like to update it now? [Y/n]" whenever a newer CLI is
+    /// published on the selected channel. <c>features.updateNotificationsEnabled</c> does not gate this prompt, and
+    /// whether it appears depends on what has been published relative to the CLI under test, so callers must handle
+    /// both outcomes.
+    /// </remarks>
+    internal static async Task WaitForAspireUpdateCompletionAsync(
+        this Hex1bTerminalAutomator auto,
+        SequenceCounter counter,
+        TimeSpan? timeout = null)
+    {
+        const string CliSelfUpdatePromptText = "An update is available for the Aspire CLI";
+
+        var effectiveTimeout = timeout ?? TimeSpan.FromSeconds(500);
+        // The prompt that preceded the `aspire update` command shows the previous sequence number, e.g.
+        //   [7 OK] $ aspire update --channel stable
+        // and the command finishes at "[8 OK] $ " or "[8 ERR:1] $ ".
+        var commandPromptText = $"[{counter.Value - 1} OK] $ ";
+        var successPromptText = $"[{counter.Value} OK] $";
+        var errorPromptText = $"[{counter.Value} ERR:";
+        var sawCliSelfUpdatePrompt = false;
+        var sawError = false;
+
+        await auto.WaitUntilAsync(snapshot =>
+        {
+            // Only consider output after the line where this `aspire update` was typed. Earlier update runs in
+            // the same terminal may have left the same CLI self-update prompt on screen. If the command line has
+            // scrolled off screen, anything older has scrolled off too, so the whole screen is current.
+            var firstLine = 0;
+            for (var lineIndex = snapshot.Height - 1; lineIndex >= 0; lineIndex--)
+            {
+                if (snapshot.GetLineTrimmed(lineIndex).Contains(commandPromptText, StringComparison.Ordinal))
+                {
+                    firstLine = lineIndex;
+                    break;
+                }
+            }
+
+            for (var lineIndex = firstLine; lineIndex < snapshot.Height; lineIndex++)
+            {
+                var line = snapshot.GetLineTrimmed(lineIndex);
+                if (line.Contains(successPromptText, StringComparison.Ordinal))
+                {
+                    return true;
+                }
+
+                if (line.Contains(errorPromptText, StringComparison.Ordinal))
+                {
+                    sawError = true;
+                    return true;
+                }
+
+                if (line.Contains(CliSelfUpdatePromptText, StringComparison.Ordinal))
+                {
+                    sawCliSelfUpdatePrompt = true;
+                    return true;
+                }
+            }
+
+            return false;
+        }, timeout: effectiveTimeout, description: $"success prompt [{counter.Value} OK] $ or CLI self-update prompt (fail-fast on error)");
+
+        if (sawError)
+        {
+            throw new InvalidOperationException(
+                $"Command failed with non-zero exit code (detected ERR prompt at sequence {counter.Value}). Check the terminal recording for details.");
+        }
+
+        if (sawCliSelfUpdatePrompt)
+        {
+            // Do not send Enter: the Spectre.Console [Y/n] confirmation accepts a single character, and an extra
+            // Enter can reach bash after aspire exits, running a blank command that desyncs the prompt counter.
+            // See .agents/skills/cli-e2e-testing/troubleshooting.md.
+            await auto.TypeAsync("n");
+        }
+
+        await auto.WaitForSuccessPromptAsync(counter, effectiveTimeout);
+    }
+
+    /// <summary>
     /// Clears the terminal screen by running the <c>clear</c> command and waiting for the prompt.
     /// </summary>
     internal static async Task ClearScreenAsync(
