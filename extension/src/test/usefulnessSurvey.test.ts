@@ -1,4 +1,5 @@
 import * as assert from 'assert';
+import { usefulnessSurveyCampaign } from '../services/UsefulnessSurveyService';
 import { testSurveyCampaign, TestUsefulnessSurvey } from './helpers/usefulnessSurvey';
 
 suite('Usefulness survey', () => {
@@ -6,6 +7,49 @@ suite('Usefulness survey', () => {
     const shownKey = 'aspire.usefulnessSurvey.shown';
     setup(() => { h = new TestUsefulnessSurvey(); });
     teardown(() => h.dispose());
+
+    test('production campaign is enabled through January 4, 2027 UTC with unchanged identifiers', async () => {
+        assert.deepStrictEqual(usefulnessSurveyCampaign, {
+            enabled: true,
+            id: 'usefulness-pilot-v1',
+            questionId: 'aspire-usefulness-v1',
+            expiresAt: Date.parse('2027-01-04T23:59:59.000Z'),
+        });
+        h.service.dispose();
+        h.service = h.createService(usefulnessSurveyCampaign);
+        h.clock.setSystemTime(usefulnessSurveyCampaign.expiresAt - 120_001);
+        h.service.recordCommand('aspire-vscode.runAppHost');
+        await h.show();
+        assert.strictEqual(h.shown, 1);
+        assert.deepStrictEqual(h.events, [
+            { kind: 'invitation', outcome: undefined }, { kind: 'result', outcome: 'yes' },
+        ]);
+    });
+
+    test('production campaign does not display a pending invitation at its exact expiry', async () => {
+        h.service.dispose();
+        h.service = h.createService(usefulnessSurveyCampaign);
+        h.clock.setSystemTime(usefulnessSurveyCampaign.expiresAt - 120_000);
+        h.service.recordCommand('aspire-vscode.runAppHost');
+        await h.show();
+        assert.strictEqual(h.shown, 0);
+        assert.deepStrictEqual(h.events, []);
+        assert.deepStrictEqual(h.persistence.writes, []);
+    });
+
+    test('production campaign does not report an open answer at its exact expiry', async () => {
+        h.service.dispose();
+        h.service = h.createService(usefulnessSurveyCampaign);
+        h.clock.setSystemTime(usefulnessSurveyCampaign.expiresAt - 120_001);
+        h.holdResponse = true;
+        h.service.recordCommand('aspire-vscode.runAppHost');
+        await h.show();
+        await h.clock.tickAsync(1);
+        h.answer!('yes');
+        await h.clock.tickAsync(0);
+        assert.deepStrictEqual(h.events, [{ kind: 'invitation', outcome: undefined }]);
+        assert.deepStrictEqual([...h.persistence.values], [[shownKey, true]]);
+    });
 
     test('first Aspire action qualifies after exactly two quiet minutes', async () => {
         h.service.recordCommand('aspire-vscode.runAppHost');
