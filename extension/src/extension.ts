@@ -57,6 +57,7 @@ import { OutdatedCliNotifier } from './utils/outdatedCliNotifier';
 import { onDidResolveCliForOperation } from './utils/cliOperationResolution';
 import { FileSystemOutdatedCliSuppressionStore } from './utils/outdatedCliSuppressionStore';
 import { initializeUsefulnessSurvey } from './services/initializeUsefulnessSurvey';
+import { warmCurrentProcessStartTime } from './utils/process/cliProcess';
 
 let aspireExtensionContext = new AspireExtensionContext();
 
@@ -65,6 +66,11 @@ export async function activate(context: vscode.ExtensionContext) {
   resetEditorAssistanceWindowState();
   aspireExtensionContext = new AspireExtensionContext();
   initializeHotReloadAdvisory(context.workspaceState);
+
+  // Resolve the extension host's OS creation time now so the first `ps --follow` / `describe --follow`
+  // stamps a precise identity instead of the suspend/resume-sensitive Date.now()/uptime estimate.
+  // Not awaited: activation must not wait on a platform command.
+  void warmCurrentProcessStartTime();
 
   const gitCommitSha = readGitCommitSha(context);
   extensionLogOutputChannel.info(`Activating Aspire extension (commit: ${gitCommitSha})`);
