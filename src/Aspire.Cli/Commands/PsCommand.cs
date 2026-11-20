@@ -469,7 +469,7 @@ internal sealed partial class PsCommand
         var shortPaths = FileSystemHelper.ShortenPaths(appHosts.Select(a => a.AppHostPath).ToList(), _environment);
 
         var table = new Table();
-        table.AddBoldColumn(PsCommandStrings.HeaderPath);
+        table.AddBoldColumn(RunCommandStrings.AppHost);
         table.AddBoldColumn(SharedCommandStrings.HeaderStatus);
         table.AddBoldColumn(PsCommandStrings.HeaderSdk);
         table.AddBoldColumn(PsCommandStrings.HeaderPid);
