@@ -2,8 +2,9 @@
 #
 # COPILOT INSTRUCTIONS:
 # - Keep the shared 'paths:' entries (specialized-test-runner.yml,
-#   run-tests.yml, build-cli-e2e-image.yml, and the non-blocking result verifier) in sync across
-#   tests-outerloop.yml and tests-quarantine.yml. Each workflow also lists itself.
+#   run-tests.yml, build-cli-e2e-image.yml, the result bundle script, and the
+#   non-blocking result verifier) in sync across tests-outerloop.yml and
+#   tests-quarantine.yml. Each workflow also lists itself.
 # - Validate that each path exists in the repository before adding or
 #   updating the list
 # - No external YAML file is used—only the workflow YAMLs themselves
@@ -30,6 +31,7 @@ on:
       - '.github/workflows/run-tests.yml'
       - '.github/workflows/build-cli-e2e-image.yml'
       - '.github/workflows/filter-nonblocking-test-artifacts.sh'
+      - 'eng/scripts/create-specialized-test-results-bundle.ps1'
       - 'eng/scripts/verify-nonblocking-test-results.ps1'
       - 'eng/testing/CITestsProperties.props'
 
@@ -50,6 +52,7 @@ jobs:
       extraRunSheetBuilderArgs: "-p:RunOuterloopTests=true"
       extraTestArgs: "--filter-trait outerloop=true"
       enablePlaywrightInstall: true
+      publishAttemptLabeledTrx: true
 
   # On a scheduled failure, file/append a single deduplicated issue: a
   # 'failing-test' issue listing the failed outerloop tests, or an

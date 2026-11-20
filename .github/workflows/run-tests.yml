@@ -46,6 +46,10 @@ on:
         required: false
         type: boolean
         default: false
+      includeArtifactMetadata:
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   actions: read
@@ -764,6 +768,28 @@ jobs:
         shell: pwsh
         run: ./eng/scripts/ci-resource-monitor.ps1 -Mode Stop -OutputDirectory "${{ github.workspace }}/artifacts/log/test-logs/resource-monitor"
 
+      - name: Write test artifact metadata
+        if: ${{ inputs.includeArtifactMetadata }}
+        shell: pwsh
+        env:
+          TEST_SHORT_NAME: ${{ inputs.testShortName }}
+          TEST_OS: ${{ inputs.os }}
+          TEST_ARTIFACT_NAME: logs-${{ inputs.testShortName }}-${{ inputs.os }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          $metadata = [ordered]@{
+            runId = $env:RUN_ID
+            runAttempt = [int] $env:RUN_ATTEMPT
+            project = $env:TEST_SHORT_NAME
+            os = $env:TEST_OS
+            artifactName = $env:TEST_ARTIFACT_NAME
+          }
+          [System.IO.File]::WriteAllText(
+            (Join-Path $env:GITHUB_WORKSPACE 'test-artifact-metadata.json'),
+            ($metadata | ConvertTo-Json -Compress) + [Environment]::NewLine,
+            [System.Text.UTF8Encoding]::new($false))
+
       - name: Upload logs, and test results
         id: upload-logs
         if: always()
@@ -771,6 +797,7 @@ jobs:
         with:
           name: logs-${{ inputs.testShortName }}-${{ inputs.os }}
           path: |
+            test-artifact-metadata.json
             **/*.binlog
             testresults/**
             artifacts/bin/Aspire.Templates.Tests/Debug/net10.0/logs/**

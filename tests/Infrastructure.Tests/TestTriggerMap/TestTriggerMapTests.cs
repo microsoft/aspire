@@ -39,6 +39,17 @@ public sealed class TestTriggerMapTests
         Assert.Empty(result.Jobs);
     }
 
+    [Fact]
+    public void OuterloopResultBundleScriptSelectsInfrastructureTests()
+    {
+        var result = SelectWithRealMap("eng/scripts/create-specialized-test-results-bundle.ps1");
+
+        Assert.False(result.SelectsAll);
+        Assert.Empty(result.UnmatchedFiles);
+        Assert.Equal(["Infrastructure.Tests"], result.TestProjects);
+        Assert.Empty(result.Jobs);
+    }
+
     [Theory]
     [InlineData("tests/Aspire.Dashboard.Playwright.Tests/Integration/Playwright/Pages/ResourcesTests.cs", "Aspire.Dashboard.Playwright.Tests")]
     [InlineData("tests/Aspire.EndToEnd.Tests/IntegrationTests.cs", "Aspire.EndToEnd.Tests")]

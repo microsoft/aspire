@@ -15,6 +15,21 @@ pattern matching, and no pull-request comment. The scheduled outerloop runs this
 targets have no associated PR, so a failed run is simply rerun as-is until the
 attempt cap is reached.
 
+Each outerloop run also publishes a combined TRX artifact named
+`outerloop-test-results-run-<run-id>-attempt-<attempt>`. Its `manifest.json`
+lists every expected project/OS lane and marks its source as `current`,
+`inherited`, `unknown`, or `missing`, along with whether TRX files were found.
+TRX files retain their project, OS, and source-attempt directories. Since a
+rerun reuses successful jobs from earlier attempts, this bundle describes the
+results available to that attempt; it is not necessarily a complete set from
+jobs that ran during that attempt alone.
+
+The existing per-lane `logs-*` artifact names are unchanged for consumers that
+download those artifacts by name or pattern. Their Outerloop artifacts now
+include metadata identifying the attempt that produced them, so the combined
+bundle can distinguish reused results without changing the existing
+latest-per-name behavior.
+
 `tests-outerloop.yml` also has a narrow `pull_request` paths trigger (for changes
 to a few CI-orchestration workflow files). Those PR-triggered runs are
 **excluded** from auto-rerun (`workflow_run.event != 'pull_request'`): a human is

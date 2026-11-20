@@ -32,6 +32,10 @@ on:
         required: false
         type: boolean
         default: false
+      publishAttemptLabeledTrx:
+        required: false
+        type: boolean
+        default: false
 
 jobs:
 
@@ -185,6 +189,7 @@ jobs:
       extraTestArgs: ${{ inputs.extraTestArgs }}
       ignoreTestFailures: ${{ inputs.ignoreTestFailures || matrix.tests.properties.nonBlockingTestFailures }}
       allowZeroTests: ${{ inputs.allowZeroTests }}
+      includeArtifactMetadata: ${{ inputs.publishAttemptLabeledTrx }}
 
 
   results:
@@ -250,6 +255,36 @@ jobs:
           --
           ${{ github.workspace }}/testresults
           --combined
+
+      - name: Assemble attempt-labeled TRX bundle
+        if: ${{ always() && inputs.publishAttemptLabeledTrx }}
+        shell: pwsh
+        env:
+          RUNSHEET_JSON: ${{ needs.generate_tests_matrix.outputs.runsheet }}
+          RUNSHEET_RESULT: ${{ needs.generate_tests_matrix.result }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          $runsheetPath = Join-Path $env:RUNNER_TEMP 'specialized-test-runsheet.json'
+          [System.IO.File]::WriteAllText(
+            $runsheetPath,
+            $env:RUNSHEET_JSON,
+            [System.Text.UTF8Encoding]::new($false))
+          ./eng/scripts/create-specialized-test-results-bundle.ps1 `
+            -InputDirectory "${{ github.workspace }}/artifacts/all-logs" `
+            -OutputDirectory "${{ github.workspace }}/test-results-bundle" `
+            -RunsheetPath $runsheetPath `
+            -RunsheetResult $env:RUNSHEET_RESULT `
+            -RunId $env:RUN_ID `
+            -CurrentAttempt ([int] $env:RUN_ATTEMPT)
+
+      - name: Upload attempt-labeled TRX bundle
+        if: ${{ always() && inputs.publishAttemptLabeledTrx }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: outerloop-test-results-run-${{ github.run_id }}-attempt-${{ github.run_attempt }}
+          path: ${{ github.workspace }}/test-results-bundle/
+          retention-days: 5
 
       - name: Fail if any dependency failed
         # 'skipped' can be when a transitive dependency fails and the dependent job gets 'skipped'.
