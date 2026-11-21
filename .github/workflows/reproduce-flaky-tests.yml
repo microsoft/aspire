@@ -28,7 +28,8 @@ env:
   #   --filter-method "*.TestMethodName"
   #   --filter-class "*.TestClassName"
   #   --filter-method "*.Test1" --filter-method "*.Test2"
-  TEST_FILTER: '--filter-method *.GeneratedCallbacks_ReceiveResourceBuilderWrapper --filter-method *.GeneratedCode_CompilesWhenAnExportedValueRootIsNamedLikeAnAcceptingInterface --filter-method *.GeneratedSdk_PassesGoToolchainChecks --filter-not-trait quarantined=true --filter-not-trait outerloop=true'
+  TEST_FILTER: '--filter-not-trait quarantined=true --filter-not-trait outerloop=true'
+  PRODUCT_REVISION: '9dfa1516fcf0478c78e64256933831a862e45480'
 
   # Target operating systems (comma-separated)
   # Options: ubuntu-latest, windows-latest, macos-latest
@@ -39,7 +40,7 @@ env:
   RUNNERS_PER_OS: "2"
 
   # Number of test iterations each runner executes
-  ITERATIONS_PER_RUNNER: "2"
+  ITERATIONS_PER_RUNNER: "1"
 
 jobs:
 
@@ -166,6 +167,8 @@ jobs:
 
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.PRODUCT_REVISION }}
 
       - name: Trust HTTPS development certificate (Linux)
         if: runner.os == 'Linux'
@@ -266,6 +269,7 @@ jobs:
           PASS=0
           FAIL=0
           ITERATIONS=${{ env.ITERATIONS_PER_RUNNER }}
+          echo "Product revision: $(git rev-parse HEAD)"
           scratch=$(mktemp -d "$RUNNER_TEMP/go-21829.XXXXXXXX")
           mkdir -p "$scratch/probe" "$scratch/bin"
           printf 'module example.com/toolchain-probe\n\ngo 1.26\n' > "$scratch/probe/go.mod"
@@ -284,7 +288,8 @@ jobs:
           cat > "$scratch/bin/go" <<'SH'
           #!/usr/bin/env bash
           printf '%s start pid=%s command=%s\n' "$(date -u +%FT%T.%NZ)" "$$" "${1:-none}" >> "$GO_TRACE_DIR/$$.log"
-          "$GO_SELECTED_TOOLCHAIN" "$@" 2> >(tee >(grep -Eo 'go: downloading go[0-9.]+|go: using local toolchain go[0-9.]+|go: switching to go[0-9.]+' | sed -n '1,12p' >> "$GO_TRACE_DIR/$$.log") >&2)
+          # Keep the first 12 markers live so a timeout cannot discard them before EOF.
+          "$GO_SELECTED_TOOLCHAIN" "$@" 2> >(tee >(grep --line-buffered -Eo 'go: downloading go[0-9.]+|go: using local toolchain go[0-9.]+|go: switching to go[0-9.]+' | sed -un '1,12p' >> "$GO_TRACE_DIR/$$.log") >&2)
           result=$?
           printf '%s exit pid=%s status=%s\n' "$(date -u +%FT%T.%NZ)" "$$" "$result" >> "$GO_TRACE_DIR/$$.log"
           exit "$result"
