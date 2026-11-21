@@ -406,6 +406,77 @@ public class ResourceOverviewEmptyPanelsTests : DashboardTestContext
         Assert.Equal(["test-TestId"], cut.Instance.SelectedResourceNames);
     }
 
+    [Fact]
+    public async Task TelemetryRefresh_CoalescesNotificationsWhileFirstReadIsRunning()
+    {
+        var firstReadStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseFirstRead = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var liveDelayStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseLiveDelay = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var reads = 0;
+        Func<Task>? notifyLogs = null;
+        ComponentFactories.Add(() =>
+        {
+            var overview = Activator.CreateInstance<ResourceOverview>();
+            overview.TelemetryRefreshDelayAsync = (_, token) =>
+            {
+                liveDelayStarted.TrySetResult();
+                return releaseLiveDelay.Task.WaitAsync(token);
+            };
+            return overview;
+        });
+        ResourceSetupHelpers.SetupResourceOverview(this, s_viewport,
+            new TestDashboardClient(isEnabled: true,
+                initialResources: [ModelTestHelpers.CreateResource("test-TestId")],
+                resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>),
+            configureServices: services => services.AddSingleton<ITelemetryRepository>(provider =>
+                new TestTelemetryRepository(provider.GetRequiredService<SqliteTelemetryRepository>())
+                {
+                    OnOverviewLogsRegistered = callback => notifyLogs = callback,
+                    OnNewResourcesSubscribed = subscription => subscription.Dispose(),
+                    GetOverviewLogsAsyncHandler = async (_, _, _, token) =>
+                    {
+                        var count = Interlocked.Increment(ref reads);
+                        if (count == 1)
+                        {
+                            firstReadStarted.TrySetResult();
+                            await releaseFirstRead.Task.WaitAsync(token);
+                        }
+                        return new OverviewLogs(count, 0, 0, []);
+                    }
+                }));
+        await TelemetryHelpSetupHelpers.AddSignalAsync(Services.GetRequiredService<SqliteTelemetryRepository>(), AspireDataType.StructuredLogs);
+        Services.GetRequiredService<NavigationManager>().NavigateTo("/resources/test-TestId");
+        var cut = RenderOverview(s_viewport, "test-TestId");
+
+        try
+        {
+            await firstReadStarted.Task.WaitAsync(DefaultWaitTimeout);
+            Assert.NotNull(notifyLogs);
+            await notifyLogs();
+            await notifyLogs();
+            await notifyLogs();
+
+            // A live refresh must not even start its delay while the first read is held.
+            await Assert.ThrowsAsync<TimeoutException>(() => liveDelayStarted.Task.WaitAsync(TimeSpan.FromMilliseconds(500)));
+            releaseFirstRead.TrySetResult();
+            await liveDelayStarted.Task.WaitAsync(DefaultWaitTimeout);
+            await cut.WaitForAssertionAsync(() => Assert.Equal("1", GetLogCount()));
+
+            await notifyLogs();
+            releaseLiveDelay.TrySetResult();
+            await cut.WaitForAssertionAsync(() => Assert.Equal("2", GetLogCount()));
+            Assert.Equal(2, Volatile.Read(ref reads));
+        }
+        finally
+        {
+            releaseFirstRead.TrySetResult();
+            releaseLiveDelay.TrySetResult();
+        }
+
+        string GetLogCount() => cut.Find("[aria-labelledby='overview-logs-title'] .overview-stat-value").TextContent;
+    }
+
     private void SetupOverview(TestDashboardClient client)
     {
         ResourceSetupHelpers.SetupResourceOverview(this, s_viewport, client);

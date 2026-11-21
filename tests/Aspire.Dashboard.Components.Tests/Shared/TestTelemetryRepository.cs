@@ -14,6 +14,7 @@ internal sealed class TestTelemetryRepository(ITelemetryRepository inner) : ITel
     public Func<GetInstrumentRequest, CancellationToken, Task<OtlpInstrumentData?>>? GetInstrumentAsyncHandler { get; init; }
     public Func<GetRequestSpansRequest, CancellationToken, Task<GetRequestSpansResponse>>? GetRequestSpansAsyncHandler { get; init; }
     public Action<Func<Task>>? OnNewLogsRegistered { get; init; }
+    public Action<Func<Task>>? OnOverviewLogsRegistered { get; init; }
     public Action<Subscription>? OnNewResourcesSubscribed { get; init; }
 
     public bool IsReadOnly => inner.IsReadOnly;
@@ -41,6 +42,10 @@ internal sealed class TestTelemetryRepository(ITelemetryRepository inner) : ITel
     public Subscription OnNewLogs(ResourceKey? resourceKey, SubscriptionType subscriptionType, Func<Task> callback)
     {
         OnNewLogsRegistered?.Invoke(callback);
+        if (resourceKey is not null && subscriptionType == SubscriptionType.Other)
+        {
+            OnOverviewLogsRegistered?.Invoke(callback);
+        }
         return inner.OnNewLogs(resourceKey, subscriptionType, callback);
     }
     public Subscription OnNewMetrics(ResourceKey? resourceKey, SubscriptionType subscriptionType, Func<Task> callback) => inner.OnNewMetrics(resourceKey, subscriptionType, callback);
