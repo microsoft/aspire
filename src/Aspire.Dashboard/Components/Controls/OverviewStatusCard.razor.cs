@@ -55,11 +55,16 @@ public partial class OverviewStatusCard
                 _properties.Add(new(ControlsLoc[nameof(ControlsStrings.ResourceDetailsStateDescriptionHeader)], description));
             }
         }
-        if (Resource.HealthStatus is { } health)
+        if (!Resource.IsParameter && Resource.HealthStatus is { } health)
         {
             _properties.Add(new(Loc[nameof(ResourceStrings.ResourcesDetailsHealthStateProperty)], health.ToString(), StatusPropertyKind.HealthState));
         }
         _properties.Add(new(Loc[nameof(ResourceStrings.ResourcesTypeColumnHeader)], Resource.ResourceTypeDisplayName));
+        if (Resource.IsParameter)
+        {
+            return;
+        }
+
         if (Resource.IsPersistentContainer)
         {
             _properties.Add(new(Loc[nameof(ResourceStrings.ResourcesDetailsContainerLifetimeProperty)],
