@@ -23,6 +23,7 @@
     <div class="overview-status-grid">
         <PropertyGrid TItem="StatusProperty"
                       Items="@_properties"
+                      IsValueMaskedChanged="OnSourceMaskedChanged"
                       FitNameColumn="true"
                       GenerateHeader="DataGridGeneratedHeaderType.None"
                       RowSize="DataGridRowSize.Small">

@@ -488,6 +488,54 @@ public class ResourceOverviewEmptyPanelsTests : DashboardTestContext
         }
     }
 
+    [Fact]
+    public async Task Status_PreservesSourceRevealOnUpdateAndResetsOnSelectionChange()
+    {
+        var changes = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        SetupOverview(new TestDashboardClient(isEnabled: true,
+            initialResources: [CreateResource("test", "initial-source"), CreateResource("other", "other-source")],
+            resourceChannelProvider: () => changes));
+        var cut = RenderOverview(s_viewport);
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        var mask = DashboardUIHelpers.GetMaskingText(8).Text;
+
+        await cut.Find(".overview-status-card .grid-value-mask-button").ClickAsync(new());
+        AssertRevealedSource("initial-source");
+
+        await changes.Writer.WriteAsync([new(ResourceViewModelChangeType.Upsert, CreateResource("test", "updated-source"))]);
+        cut.WaitForAssertion(() => AssertRevealedSource("updated-source"));
+
+        navigation.NavigateTo("/resources/other?pane=resources#details");
+        cut.Render();
+        cut.WaitForAssertion(() => AssertMaskedSource("other"));
+
+        navigation.NavigateTo("/resources/test?pane=resources#details");
+        cut.Render();
+        cut.WaitForAssertion(() => AssertMaskedSource("test"));
+
+        void AssertRevealedSource(string expected)
+        {
+            var value = cut.Find(".overview-status-card .overview-status-source");
+            Assert.Equal(expected, value.TextContent);
+            Assert.Equal(expected, value.ParentElement!.GetAttribute("data-tooltip"));
+        }
+
+        void AssertMaskedSource(string resourceName)
+        {
+            var status = cut.FindComponent<OverviewStatusCard>();
+            Assert.Equal(resourceName, status.Instance.Resource.Name);
+            var value = status.Find(".grid-value.masked");
+            Assert.Equal(mask, value.TextContent.Trim());
+            Assert.Equal(mask, value.GetAttribute("data-tooltip"));
+        }
+
+        static ResourceViewModel CreateResource(string name, string source) =>
+            ModelTestHelpers.CreateResource(name, properties: new()
+            {
+                [KnownProperties.Resource.Source] = new(KnownProperties.Resource.Source, Value.ForString(source), true, null, 0, null, false)
+            });
+    }
+
     [Theory]
     [InlineData(AspireDataType.StructuredLogs, "overview-logs-title")]
     [InlineData(AspireDataType.Traces, "overview-traces-title")]

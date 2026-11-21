@@ -17,6 +17,8 @@ public partial class OverviewStatusCard
     private const string StateDescriptionPropertyKey = "resource-state-description";
 
     private List<StatusProperty> _properties = [];
+    private string? _resourceName;
+    private string? _revealedSourcePropertyName;
 
     [Inject]
     public required IStringLocalizer<ResourceStrings> Loc { get; init; }
@@ -46,6 +48,12 @@ public partial class OverviewStatusCard
 
     protected override void OnParametersSet()
     {
+        if (!string.Equals(Resource.Name, _resourceName, StringComparisons.ResourceName))
+        {
+            _resourceName = Resource.Name;
+            _revealedSourcePropertyName = null;
+        }
+
         _properties = [new(KnownProperties.Resource.DisplayName, Loc[nameof(ResourceStrings.ResourcesDetailsDisplayNameProperty)], Resource.DisplayName, StatusPropertyKind.DisplayName)];
         if (!string.IsNullOrWhiteSpace(Resource.State))
         {
@@ -90,9 +98,17 @@ public partial class OverviewStatusCard
         if (ResourceSourceViewModel.GetSourceViewModel(Resource) is { } source)
         {
             _properties.Add(new(KnownProperties.Resource.Source, Loc[nameof(ResourceStrings.ResourcesSourceColumnHeader)], source.Value, StatusPropertyKind.Source,
-                source.Tooltip, RawValue: source.OriginalValue, SourceProperty: source.Property));
+                source.Tooltip, RawValue: source.OriginalValue, SourceProperty: source.Property)
+            {
+                IsValueMasked = source.Property.IsValueSensitive &&
+                    !string.Equals(_revealedSourcePropertyName, source.Property.Name, StringComparisons.ResourcePropertyName)
+            });
         }
     }
+
+    // Live resource updates replace the property model, so keep the reveal choice on the card.
+    private void OnSourceMaskedChanged(StatusProperty property) =>
+        _revealedSourcePropertyName = property.IsValueMasked ? null : property.SourceProperty?.Name;
 
     private string FormatName(ResourceViewModel resource) => ResourceViewModel.GetResourceName(resource, Resources);
 
@@ -116,10 +132,6 @@ public partial class OverviewStatusCard
         string IPropertyGridItem.ValueToVisualize => RawValue ?? Text;
         bool IPropertyGridItem.TextVisualizerContainsSecret => SourceProperty?.IsValueSensitive == true;
         bool IPropertyGridItem.IsValueSensitive => SourceProperty?.IsValueSensitive == true;
-        bool IPropertyGridItem.IsValueMasked
-        {
-            get => SourceProperty?.IsValueMasked == true;
-            set => (SourceProperty ?? throw new InvalidOperationException("Only the Source row supports masking.")).IsValueMasked = value;
-        }
+        public bool IsValueMasked { get; set; }
     }
 }
