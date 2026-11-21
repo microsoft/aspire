@@ -25,6 +25,7 @@
         <AspireTemplateColumn Title="@(ValueColumnTitle ?? Loc[nameof(ControlsStrings.PropertyGridValueColumnHeader)])" Class="valueColumn" SortBy="@ValueSort" Sortable="@IsValueSortable">
             <GridValue ValueDescription="@(context.Name ?? ValueColumnTitle ?? Loc[nameof(ControlsStrings.PropertyGridValueColumnHeader)])"
                        Value="@context.Value"
+                       ToolTip="@context.ValueTooltip"
                        ContentAfterValue="@GetContentAfterValue(context)"
                        EnableHighlighting="@(!string.IsNullOrEmpty(HighlightText))"
                        HighlightText="@HighlightText"
@@ -33,6 +34,7 @@
                        IsMaskedChanged="(isMasked) => OnIsValueMaskedChanged(context, isMasked)"
                        TextVisualizerTitle="@context.Name"
                        ValueToVisualize="@(context.ValueToVisualize ?? context.Value)"
+                       ContainsSecret="@context.TextVisualizerContainsSecret"
                        TextVisualizerFormat="@context.TextVisualizerFormat"
                        ComponentMetadata="@GetComponentMetadata(context)"/>
             @ExtraValueContent(context)

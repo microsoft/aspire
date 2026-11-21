@@ -40,10 +40,14 @@ public interface IPropertyGridItem
     /// </summary>
     string? Value { get; }
 
+    string? ValueTooltip => null;
+
     /// <summary>
     /// Overrides the value to visualize. If <see langword="null"/>, <see cref="Value"/> is visualized.
     /// </summary>
     public string? ValueToVisualize => null;
+
+    bool TextVisualizerContainsSecret => false;
 
     /// <summary>
     /// Gets the initial visualizer format, overriding automatic format detection. Users can still change the format.
