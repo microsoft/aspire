@@ -53,7 +53,7 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
     private Subscription? _metricsSubscription;
     private Dictionary<ResourceKey, int>? _unviewedErrorCounts;
     private HomeTelemetry? _telemetry;
-    private int _telemetryRefreshPending;
+    private TelemetryRefreshGeneration? _telemetryRefresh;
     private bool _isLoaded;
     private IReadOnlyList<string>? _scopedResourceNames;
     private DotNetObjectReference<ApplicationSummaryInterop>? _resourcesInteropReference;
@@ -64,6 +64,9 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
     private AspireMenu? _contextMenu;
     private bool _contextMenuOpen;
     private readonly List<MenuButtonItem> _contextMenuItems = [];
+
+    internal Func<TimeSpan, CancellationToken, Task> TelemetryRefreshDelayAsync { get; set; } = Task.Delay;
+
     /// <summary>
     /// Gets or sets the resources to summarize, by name. <see langword="null"/> summarizes every resource.
     /// </summary>
@@ -163,7 +166,6 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
         _logsSubscription = TelemetryRepository.OnNewLogs(null, SubscriptionType.Other, OnTelemetryChanged);
         _tracesSubscription = TelemetryRepository.OnNewTraces(null, SubscriptionType.Other, OnTelemetryChanged);
         _metricsSubscription = TelemetryRepository.OnNewMetrics(null, SubscriptionType.Other, OnTelemetryChanged);
-        QueueTelemetryRefresh();
         _activityRefreshTask = RefreshActivityPeriodicallyAsync(_cts.Token);
 
         var (snapshot, subscription) = await DataSource.ResourceRepository.SubscribeResourcesAsync(_cts.Token);
@@ -241,16 +243,25 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
 
     protected override async Task OnParametersSetAsync()
     {
-        // The overview passes the current selection. When it changes, the telemetry shown is for other resources.
-        if (_scopedResourceNames is null != ResourceNames is null ||
+        if (!_isLoaded || _isDisposing)
+        {
+            return;
+        }
+
+        // Resolve the first selection after the resource snapshot is available, not from a temporary unscoped query.
+        var previousRefresh = _telemetryRefresh;
+        if (previousRefresh is null || _scopedResourceNames is null != ResourceNames is null ||
             (_scopedResourceNames is not null && ResourceNames is not null && !_scopedResourceNames.SequenceEqual(ResourceNames, StringComparers.ResourceName)))
         {
-            var isFirstSet = _scopedResourceNames is null && !_isLoaded;
             _scopedResourceNames = ResourceNames?.ToList();
-            if (!isFirstSet && DashboardClient.IsEnabled)
+            _telemetry = null;
+            var refresh = new TelemetryRefreshGeneration(_scopedResourceNames);
+            Volatile.Write(ref _telemetryRefresh, refresh);
+            previousRefresh?.Dispose();
+            StartTelemetryRefresh(refresh, immediate: true);
+
+            if (previousRefresh is not null)
             {
-                _telemetry = null;
-                QueueTelemetryRefresh();
                 await UpdateResourceGraphResourcesAsync();
             }
         }
@@ -264,53 +275,75 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
 
     private void QueueTelemetryRefresh()
     {
-        // Single-flight: the gate (1) is held through delay, load and publish. Notifications that
-        // arrive while a refresh is running set the dirty flag (2) so exactly one trailing refresh runs.
-        if (Interlocked.CompareExchange(ref _telemetryRefreshPending, 1, 0) != 0)
+        var refresh = Volatile.Read(ref _telemetryRefresh);
+        if (refresh is null)
         {
-            Interlocked.CompareExchange(ref _telemetryRefreshPending, 2, 1);
             return;
         }
 
+        // Single-flight: the gate (1) is held through delay, load and publish. Notifications that
+        // arrive while a refresh is running set the dirty flag (2) so exactly one trailing refresh runs.
+        if (Interlocked.CompareExchange(ref refresh.Pending, 1, 0) != 0)
+        {
+            Interlocked.CompareExchange(ref refresh.Pending, 2, 1);
+            return;
+        }
+
+        StartTelemetryRefresh(refresh, immediate: false);
+    }
+
+    private void StartTelemetryRefresh(TelemetryRefreshGeneration refresh, bool immediate)
+    {
+        var cancellationToken = refresh.CancellationToken;
         _ = Task.Run(async () =>
         {
             try
             {
                 do
                 {
-                    await Task.Delay(s_telemetryRefreshDelay, _cts.Token).ConfigureAwait(false);
-                    Interlocked.Exchange(ref _telemetryRefreshPending, 1);
+                    if (!immediate)
+                    {
+                        await TelemetryRefreshDelayAsync(s_telemetryRefreshDelay, cancellationToken).ConfigureAwait(false);
+                    }
+                    immediate = false;
+                    Interlocked.Exchange(ref refresh.Pending, 1);
 
-                    var telemetry = await LoadTelemetryAsync(_cts.Token).ConfigureAwait(false);
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var telemetry = await LoadTelemetryAsync(refresh.ResourceNames, cancellationToken).ConfigureAwait(false);
                     var unviewedErrorCounts = TelemetryRepository.GetResourceUnviewedErrorLogsCount();
                     await InvokeAsync(() =>
                     {
+                        if (!ReferenceEquals(_telemetryRefresh, refresh))
+                        {
+                            return;
+                        }
+
                         _telemetry = telemetry;
                         _unviewedErrorCounts = unviewedErrorCounts;
                         StateHasChanged();
                     }).ConfigureAwait(false);
                 }
-                while (Interlocked.CompareExchange(ref _telemetryRefreshPending, 0, 1) == 2);
+                while (Interlocked.CompareExchange(ref refresh.Pending, 0, 1) == 2);
             }
             catch (OperationCanceledException)
             {
-                Interlocked.Exchange(ref _telemetryRefreshPending, 0);
+                Interlocked.Exchange(ref refresh.Pending, 0);
             }
             catch (Exception ex)
             {
-                Interlocked.Exchange(ref _telemetryRefreshPending, 0);
+                Interlocked.Exchange(ref refresh.Pending, 0);
                 Logger.LogWarning(ex, "Error loading telemetry for the home page.");
             }
         }, CancellationToken.None);
     }
 
-    private async Task<HomeTelemetry> LoadTelemetryAsync(CancellationToken cancellationToken)
+    private async Task<HomeTelemetry> LoadTelemetryAsync(IReadOnlyList<string>? resourceNames, CancellationToken cancellationToken)
     {
         var repository = TelemetryRepository;
 
         // Telemetry queries take resource keys, where an empty list means every resource. A selection of resources
         // that send no telemetry has nothing to summarize.
-        var resourceKeys = GetScopedResourceKeys();
+        var resourceKeys = GetScopedResourceKeys(resourceNames);
         if (resourceKeys is { Count: 0 })
         {
             return HomeTelemetry.Empty;
@@ -591,9 +624,9 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
     /// <summary>
     /// Gets the telemetry keys of the summarized resources, or <see langword="null"/> when every resource is summarized.
     /// </summary>
-    private List<ResourceKey>? GetScopedResourceKeys()
+    private List<ResourceKey>? GetScopedResourceKeys(IReadOnlyList<string>? names)
     {
-        if (_scopedResourceNames is not { } names)
+        if (names is null)
         {
             return null;
         }
@@ -914,6 +947,7 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         _isDisposing = true;
+        Interlocked.Exchange(ref _telemetryRefresh, null)?.Dispose();
         ViewPreferences.Changed -= OnViewPreferencesChanged;
         TagStore.Changed -= OnTagsChanged;
         _cts.Cancel();
@@ -928,6 +962,28 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
             await _jsModule.DisposeAsync().AsTask().ConfigureAwait(false);
         }
         _cts.Dispose();
+    }
+
+    private sealed class TelemetryRefreshGeneration : IDisposable
+    {
+        private readonly CancellationTokenSource _cts = new();
+
+        public TelemetryRefreshGeneration(IReadOnlyList<string>? resourceNames)
+        {
+            ResourceNames = resourceNames;
+            CancellationToken = _cts.Token;
+        }
+
+        public IReadOnlyList<string>? ResourceNames { get; }
+        public CancellationToken CancellationToken { get; }
+        // The generation starts with its immediate refresh already reserved.
+        public int Pending = 1;
+
+        public void Dispose()
+        {
+            _cts.Cancel();
+            _cts.Dispose();
+        }
     }
 
     internal sealed class ApplicationSummaryInterop(ApplicationSummary summary)

@@ -188,7 +188,7 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
 
                 // Replacing the subscription cancels a refresh that's still waiting. Nothing else queues another one
                 // for a quiet resource, which would otherwise keep showing its loading skeleton.
-                QueueTelemetryRefresh();
+                QueueTelemetryRefresh(immediate: !_telemetryLoaded);
             }
 
             StateHasChanged();
@@ -215,12 +215,12 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
 
     private void OnResourcesChanged()
     {
-        EnsureSubscriptions();
+        // A changed telemetry resource already starts its own first refresh.
+        if (!EnsureSubscriptions())
+        {
+            QueueTelemetryRefresh();
+        }
         UpdateDetails();
-
-        // The telemetry resource can appear after the app model resource, for example when a project starts
-        // sending telemetry. Refresh so the telemetry cards pick it up.
-        QueueTelemetryRefresh();
         StateHasChanged();
     }
 
@@ -228,7 +228,7 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
     /// Starts console log and telemetry subscriptions for the selected resource, replacing subscriptions for a
     /// previously selected resource. The page instance is reused when navigating between resources.
     /// </summary>
-    private void EnsureSubscriptions()
+    private bool EnsureSubscriptions()
     {
         var resource = Resource;
         var otlpResource = resource is not null ? TelemetryRepository.GetResourceByCompositeName(resource.Name) : null;
@@ -236,7 +236,7 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
         if (string.Equals(_subscribedResourceName, resource?.Name, StringComparisons.ResourceName) &&
             Equals(_telemetryKey, otlpResource?.ResourceKey))
         {
-            return;
+            return false;
         }
 
         var resourceChanged = !string.Equals(_subscribedResourceName, resource?.Name, StringComparisons.ResourceName);
@@ -256,26 +256,25 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
         // instead of flashing the previous resource's stale data or popping in abruptly once the new data arrives.
         _telemetryLoaded = false;
         _telemetryKey = otlpResource?.ResourceKey;
+        _telemetryRefresh = new();
 
         if (_telemetryKey is { } key)
         {
             _logsSubscription = TelemetryRepository.OnNewLogs(key, SubscriptionType.Other, OnTelemetryChangedAsync);
             _tracesSubscription = TelemetryRepository.OnNewTraces(key, SubscriptionType.Other, OnTelemetryChangedAsync);
             _metricsSubscription = TelemetryRepository.OnNewMetrics(key, SubscriptionType.Other, OnTelemetryChangedAsync);
-            QueueTelemetryRefresh();
+            QueueTelemetryRefresh(immediate: true);
         }
+
+        return true;
     }
 
-    private Task OnTelemetryChangedAsync()
-    {
-        QueueTelemetryRefresh();
-        return Task.CompletedTask;
-    }
+    private Task OnTelemetryChangedAsync() => InvokeAsync(() => QueueTelemetryRefresh());
 
-    private void QueueTelemetryRefresh()
+    private void QueueTelemetryRefresh(bool immediate = false)
     {
         var refresh = _telemetryRefresh;
-        if (_telemetryKey is null || Interlocked.Exchange(ref refresh.Pending, 1) == 1)
+        if (_telemetryKey is not { } key || Interlocked.Exchange(ref refresh.Pending, 1) == 1)
         {
             return;
         }
@@ -285,19 +284,18 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
         {
             try
             {
-                await TelemetryRefreshDelayAsync(s_telemetryRefreshDelay, cancellationToken).ConfigureAwait(false);
+                if (!immediate)
+                {
+                    await TelemetryRefreshDelayAsync(s_telemetryRefreshDelay, cancellationToken).ConfigureAwait(false);
+                }
                 Interlocked.Exchange(ref refresh.Pending, 0);
 
-                if (_telemetryKey is not { } key)
-                {
-                    return;
-                }
-
+                cancellationToken.ThrowIfCancellationRequested();
                 var telemetry = await LoadTelemetryAsync(key, cancellationToken).ConfigureAwait(false);
                 await InvokeAsync(() =>
                 {
-                    // Ignore results for a resource that is no longer selected.
-                    if (Equals(_telemetryKey, key))
+                    // A canceled refresh must not publish, even if the user switched away and back to the same key.
+                    if (ReferenceEquals(_telemetryRefresh, refresh) && !cancellationToken.IsCancellationRequested)
                     {
                         _telemetry = telemetry;
                         _telemetryLoaded = true;
@@ -733,6 +731,7 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
         PinStore.Changed -= OnPinsChanged;
         TerminalDockState.Changed -= OnTerminalDockStateChanged;
 
+        _telemetryKey = null;
         _resourceCts?.Cancel();
         _resourceCts?.Dispose();
         _logsSubscription?.Dispose();

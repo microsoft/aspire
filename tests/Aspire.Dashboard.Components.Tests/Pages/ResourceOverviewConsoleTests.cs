@@ -89,31 +89,29 @@ public class ResourceOverviewConsoleTests : DashboardTestContext
     }
 
     [Fact]
-    public async Task Selection_QuietReplacementResourceLoadsWithoutNewTelemetry()
+    public async Task Selection_FirstAndReplacementResourceLoadWithoutWaitingForLiveRefresh()
     {
-        var (cut, navigation) = await RenderOverviewWithTelemetryAsync();
-        cut.WaitForAssertion(() => AssertTelemetryLoaded(cut), DefaultWaitTimeout);
-
-        // Hold the next refresh in its delay, without handling cancellation, until the replacement has been selected.
         var held = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var holding = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var delays = 0;
-        cut.FindComponent<ResourceOverview>().Instance.TelemetryRefreshDelayAsync = (delay, cancellationToken) =>
+        ComponentFactories.Add(() =>
         {
-            if (Interlocked.Increment(ref delays) == 1)
+            var overview = Activator.CreateInstance<ResourceOverview>();
+            overview.TelemetryRefreshDelayAsync = (_, _) =>
             {
-                holding.SetResult();
+                holding.TrySetResult();
                 return held.Task;
-            }
-
-            return Task.Delay(delay, cancellationToken);
-        };
-        await AddSpanAsync("api", DateTime.UtcNow, "held");
-        await holding.Task.WaitAsync(DefaultWaitTimeout);
+            };
+            return overview;
+        });
 
         try
         {
-            // No more telemetry arrives, so nothing else queues a refresh for the replacement.
+            var (cut, navigation) = await RenderOverviewWithTelemetryAsync();
+            cut.WaitForAssertion(() => AssertTelemetryLoaded(cut), DefaultWaitTimeout);
+            await AddSpanAsync("api", DateTime.UtcNow, "held");
+            await holding.Task.WaitAsync(DefaultWaitTimeout);
+
+            // The old resource's refresh remains blocked in its delay, even after cancellation.
             navigation.NavigateTo("/resources/cache-TestId");
             cut.Render();
 
