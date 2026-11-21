@@ -789,6 +789,7 @@
 @media (forced-colors: active) {
     .resource-row {
         --resource-row-kind-accent: CanvasText;
+        --resource-row-icon-forced-color: var(--resource-row-kind-accent);
     }
 
     .resource-row.selected,
