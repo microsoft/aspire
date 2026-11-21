@@ -115,7 +115,7 @@ internal sealed class InMemoryBrowserLocalStorage
 
         public Task SetUnprotectedAsync<TValue>(string key, TValue value) => inner.SetUnprotectedAsync(key, value);
 
-        public Task<IUnprotectedLocalStorageReader> ReadUnprotectedSnapshotAsync(string[] keys) => inner.ReadUnprotectedSnapshotAsync(keys);
+        public Task<IUnprotectedLocalStorageSnapshot> ReadUnprotectedSnapshotAsync(string[] keys) => inner.ReadUnprotectedSnapshotAsync(keys);
 
         public Task<StorageResult<string>> GetRawUnprotectedAsync(string key) => inner.GetRawUnprotectedAsync(key);
 
