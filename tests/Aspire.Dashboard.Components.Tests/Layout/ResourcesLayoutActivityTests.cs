@@ -14,6 +14,7 @@ using Aspire.Dashboard.Tests.Shared;
 using Aspire.Tests.Shared.DashboardModel;
 using Bunit;
 using Google.Protobuf.Collections;
+using Google.Protobuf.WellKnownTypes;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.DependencyInjection;
@@ -142,13 +143,19 @@ public class ResourcesLayoutActivityTests : DashboardTestContext
         var timers = new FakeTimeProvider();
         var clock = new TestTimeProvider { Timers = timers };
         var names = Enumerable.Range(0, 28).Select(i => $"service-{i}").ToArray();
+        // Use AppHost tags so every resource can appear twice without consuming the saved tag quota.
+        var tagProperty = KnownProperties.Resource.TraitPrefix + KnownResourceTraits.Tag;
+        var properties = new Dictionary<string, ResourcePropertyViewModel>
+        {
+            [tagProperty] = new(tagProperty, Value.ForList(Value.ForString("Backend"), Value.ForString("Shared")), false, null, 0, null, false)
+        };
         var calls = 0;
         var active = 0;
         var maximumActive = 0;
         var doubleFirst = false;
         ResourceSetupHelpers.SetupResourcesLayout(this, viewport,
             new TestDashboardClient(isEnabled: true,
-                initialResources: names.Select(name => ModelTestHelpers.CreateResource($"{name}-TestId")).ToList(),
+                initialResources: names.Select(name => ModelTestHelpers.CreateResource($"{name}-TestId", properties: properties)).ToList(),
                 resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>),
             configureServices: services =>
             {
@@ -208,12 +215,6 @@ public class ResourcesLayoutActivityTests : DashboardTestContext
                 });
         }
         await SeedAsync("initial", names);
-        var tags = Services.GetRequiredService<ResourceTagStore>();
-        foreach (var name in names)
-        {
-            tags.AddTag($"{name}-TestId", "Backend");
-            tags.AddTag($"{name}-TestId", "Shared");
-        }
         Services.GetRequiredService<NavigationManager>().NavigateTo("/resources?pane=tags");
         var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
         cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
@@ -354,8 +355,8 @@ public class ResourcesLayoutActivityTests : DashboardTestContext
             }
         });
         var tags = Services.GetRequiredService<ResourceTagStore>();
-        tags.AddTag("api-TestId", "Backend");
-        tags.AddTag("api-TestId", "Shared");
+        await tags.AddTagAsync("api-TestId", "Backend");
+        await tags.AddTagAsync("api-TestId", "Shared");
         var navigation = Services.GetRequiredService<NavigationManager>();
         navigation.NavigateTo("/resources?pane=tags");
         var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));

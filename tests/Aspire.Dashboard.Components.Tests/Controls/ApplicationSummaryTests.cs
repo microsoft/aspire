@@ -277,7 +277,7 @@ public class ApplicationSummaryTests : DashboardTestContext
         var tags = Services.GetRequiredService<ResourceTagStore>();
         foreach (var name in new[] { "api", "worker", "other", "parameter", "hidden-parameter" })
         {
-            tags.AddTag(name, "Backend");
+            await tags.AddTagAsync(name, "Backend");
         }
 
         var navigation = Services.GetRequiredService<NavigationManager>();

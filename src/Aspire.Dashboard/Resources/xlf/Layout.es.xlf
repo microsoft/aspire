@@ -2,6 +2,11 @@
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="es" original="../Layout.resx">
     <body>
+      <trans-unit id="BrowserStorageSaveFailed">
+        <source>Couldn't save the change. Check that browser storage is available and try again.</source>
+        <target state="new">Couldn't save the change. Check that browser storage is available and try again.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="DashboardRunMenuAccessibleLabel">
         <source>Select run: {0}</source>
         <target state="translated">Seleccionar ejecución: {0}</target>

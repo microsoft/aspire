@@ -430,11 +430,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         {
             UpsertResource(resource);
         }
-        OrderStore.EnsureResources(snapshot.Where(r => !r.IsParameter)
-            .OrderBy(r => r.ResourceType).ThenBy(r => r, ResourceViewModelNameComparer.Instance)
-            .Select(r => r.PersistentKey));
         UpdateResourceTagFilters();
-        EnsureGroupOrder();
 
         _isLoaded = true;
         UpdateTelemetryOnlyResources();
@@ -452,10 +448,6 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
                     if (changeType == ResourceViewModelChangeType.Upsert)
                     {
                         UpsertResource(resource);
-                        if (!resource.IsParameter)
-                        {
-                            OrderStore.EnsureResources([resource.PersistentKey]);
-                        }
                     }
                     else if (changeType == ResourceViewModelChangeType.Delete)
                     {
@@ -467,7 +459,6 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
                 await InvokeAsync(async () =>
                 {
                     UpdateResourceTagFilters();
-                    EnsureGroupOrder();
                     UpdateTelemetryOnlyResources();
                     // After the telemetry sources are refreshed, so both kinds of row handlers are pruned against
                     // the current rows.
@@ -1351,14 +1342,14 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             (!DashboardClient.IsEnabled || _showTelemetryOnlyResources || IsSelected(r.Name)) &&
             r.Name.Contains(_filter.TextFilter, StringComparisons.UserTextSearch));
 
+    private IEnumerable<ResourceViewModel> GetOrderableResources() =>
+        _resourceByName.Values.Where(r => !r.IsParameter && !r.IsResourceHidden(_filter.ShowHiddenResources));
+
     internal IEnumerable<ResourceGridViewModel> GetPaneRows()
     {
-        var positions = OrderStore.GetPositions(_resourceByName.Values.Where(r => !r.IsParameter));
-        var filteredResources = _resourceByName.Values
-            .Where(r => !r.IsParameter && _filter.FilterAllResourceKinds(r, _filter.TextFilter))
+        var filteredResources = OrderStore.OrderResources(GetOrderableResources())
+            .Where(r => _filter.FilterAllResourceKinds(r, _filter.TextFilter))
             .Select(r => new ResourceGridViewModel { Resource = r })
-            .OrderBy(r => positions.GetValueOrDefault(r.Resource.PersistentKey, long.MaxValue))
-            .ThenBy(r => r.Resource, ResourceViewModelNameComparer.Instance)
             .ToList();
 
         // Nested resources are placed under their parent after sorting so children keep their order.
@@ -1378,51 +1369,36 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     /// </summary>
     private List<ResourceGroup> GetResourceGroups()
     {
-        var groups = _grouping == ResourcePaneGrouping.Tags ? GetTagGroups() : _resourceByName.Values
-            .Where(r => !r.IsParameter && _filter.FilterAllResourceKinds(r, textFilter: string.Empty))
+        var resources = _resourceByName.Values.Where(r => !r.IsResourceHidden(_filter.ShowHiddenResources));
+        var byTags = _grouping == ResourcePaneGrouping.Tags;
+        var groups = byTags ? GetTagGroups(resources) : resources
+            .Where(r => !r.IsParameter)
             .GroupBy(r => _grouping == ResourcePaneGrouping.ResourceType ? r.ResourceType
                 : string.IsNullOrEmpty(r.State) ? nameof(KnownResourceState.Unknown) : r.State, StringComparer.OrdinalIgnoreCase)
-            .Select(group => new ResourceGroup(group.Key,
-                group.Where(r => GetGroupName(group.Key).Contains(_filter.TextFilter, StringComparisons.UserTextSearch) || r.MatchesFilter(_filter.TextFilter))
-                    .OrderBy(r => r, ResourceViewModelNameComparer.Instance).ToList()))
-            .Where(group => group.Resources.Count > 0)
+            .Select(group => new ResourceGroup(group.Key, group.OrderBy(r => r, ResourceViewModelNameComparer.Instance).ToList()))
             .OrderBy(group => GetGroupName(group.Value), StringComparer.CurrentCultureIgnoreCase)
             .ToList();
 
-        var positions = OrderStore.GetGroupPositions(_grouping.ToString());
-        return groups.OrderBy(group => positions.GetValueOrDefault(GetGroupOrderKey(group), long.MaxValue)).ToList();
+        // Replay before filtering so a hidden anchor still determines the order of the remaining groups.
+        return OrderStore.OrderGroups(_grouping.ToString(), groups, GetGroupOrderKey)
+            .Where(group => !byTags || IsTagVisible(GetGroupOrderKey(group)))
+            .Select(group =>
+            {
+                var textFilter = group.Value is not null && GetGroupName(group.Value).Contains(_filter.TextFilter, StringComparisons.UserTextSearch)
+                    ? string.Empty
+                    : _filter.TextFilter;
+                return new ResourceGroup(group.Value, group.Resources.Where(r => _filter.FilterAllResourceKinds(r, textFilter)).ToList());
+            })
+            .Where(group => group.Resources.Count > 0)
+            .ToList();
     }
 
-    private string GetGroupName(string? value) => GetGroupName(_grouping, value);
-
-    private string GetGroupName(ResourcePaneGrouping grouping, string? value) => grouping switch
+    private string GetGroupName(string? value) => _grouping switch
     {
         ResourcePaneGrouping.Tags => value ?? Loc[nameof(Resources.Layout.ResourcePaneUntaggedGroup)],
         ResourcePaneGrouping.State => string.IsNullOrEmpty(value) ? ColumnsLoc[nameof(Columns.UnknownStateLabel)] : value.Humanize(),
         _ => value ?? string.Empty
     };
-
-    private void EnsureGroupOrder()
-    {
-        // Register groups independently of search/type/state/health filters, so a filtered view cannot change
-        // their saved order. Hidden resources participate once the user chooses to show them.
-        var resources = _resourceByName.Values.Where(r => !r.IsResourceHidden(_filter.ShowHiddenResources)).ToList();
-        var tagsByResource = TagStore.GetTagsByResource(resources);
-        var tags = TagStore.GetAllTags(resources)
-            .Where(tag => resources.Any(r => ResourceTagStore.HasTag(r, tag, tagsByResource)))
-            .ToList();
-        if (resources.Any(r => !tagsByResource.ContainsKey(r.DisplayName)))
-        {
-            tags.Add(string.Empty);
-        }
-        OrderStore.EnsureGroups(nameof(ResourcePaneGrouping.Tags), tags);
-        OrderStore.EnsureGroups(nameof(ResourcePaneGrouping.ResourceType), resources.Select(r => r.ResourceType)
-            .Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.CurrentCultureIgnoreCase));
-        OrderStore.EnsureGroups(nameof(ResourcePaneGrouping.State), resources
-            .Select(r => string.IsNullOrEmpty(r.State) ? nameof(KnownResourceState.Unknown) : r.State)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .OrderBy(value => GetGroupName(ResourcePaneGrouping.State, value), StringComparer.CurrentCultureIgnoreCase));
-    }
 
     // Tags are normalized to nonempty values, so the empty key uniquely identifies the synthetic untagged group.
     private static string GetGroupOrderKey(ResourceGroup group) => group.Value ?? string.Empty;
@@ -1474,27 +1450,15 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     // Resources with multiple tags appear in each group; untagged resources initially appear last. Parameters are part of
     // the groups too, after the group's resources: an app tags a parameter like the resource that uses it, so the
     // parameter shows next to that resource.
-    private List<ResourceGroup> GetTagGroups()
+    private List<ResourceGroup> GetTagGroups(IEnumerable<ResourceViewModel> resources)
     {
-        var textFilter = _filter.TextFilter;
-        var resources = OrderTagGroupResources(_resourceByName.Values
-            .Where(r => _filter.FilterAllResourceKinds(r, textFilter: string.Empty))).ToList();
-
-        var tagsByResource = TagStore.GetTagsByResource(resources);
+        var orderedResources = OrderTagGroupResources(resources).ToList();
+        var tagsByResource = TagStore.GetTagsByResource(orderedResources);
         var groups = new List<ResourceGroup>();
-        foreach (var tag in TagStore.GetAllTags(resources))
+        foreach (var tag in TagStore.GetAllTags(orderedResources))
         {
-            // A resource can carry several tags. When the tag filter hides a tag, its group stays hidden even though
-            // resources shown through another tag also carry it.
-            if (!IsTagVisible(tag))
-            {
-                continue;
-            }
-
-            var tagMatchesFilter = textFilter.Length == 0 || tag.Contains(textFilter, StringComparisons.UserTextSearch);
-            var taggedResources = resources
+            var taggedResources = orderedResources
                 .Where(r => ResourceTagStore.HasTag(r, tag, tagsByResource))
-                .Where(r => tagMatchesFilter || r.MatchesFilter(textFilter))
                 .ToList();
 
             if (taggedResources.Count > 0)
@@ -1503,12 +1467,11 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             }
         }
 
-        var untaggedResources = resources
+        var untaggedResources = orderedResources
             .Where(r => !tagsByResource.ContainsKey(r.DisplayName))
-            .Where(r => textFilter.Length == 0 || r.MatchesFilter(textFilter))
             .ToList();
 
-        if (untaggedResources.Count > 0 && IsTagVisible(string.Empty))
+        if (untaggedResources.Count > 0)
         {
             groups.Add(new ResourceGroup(Value: null, untaggedResources));
         }
@@ -1554,7 +1517,6 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         if (_isLoaded)
         {
             UpdateResourceTagFilters();
-            EnsureGroupOrder();
         }
         StateHasChanged();
     });
@@ -1637,28 +1599,30 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     public async Task<bool> ReorderResourceAsync(string resourceName, string targetName, bool after)
     {
         // Revalidate on the server: filters, grouping, or the resource tree can change during a drag.
-        if (!CanReorderResources ||
-            !_resourceByName.TryGetValue(resourceName, out var resource) ||
-            !_resourceByName.TryGetValue(targetName, out var target) ||
-            !_filter.Filter(resource) || !_filter.Filter(target) ||
-            !StringComparers.ResourceName.Equals(GetReorderParentName(resource), GetReorderParentName(target)))
+        if (CanReorderResources &&
+            _resourceByName.TryGetValue(resourceName, out var resource) &&
+            _resourceByName.TryGetValue(targetName, out var target) &&
+            _filter.Filter(resource) && _filter.Filter(target))
         {
-            Logger.LogDebug("Rejected resource reorder from '{ResourceName}' to '{TargetName}' because the visible list changed or the resources aren't siblings.", resourceName, targetName);
-            await ToastService.ShowWarningToastAsync(Loc[nameof(Resources.Layout.ResourcePaneReorderUnavailable)]);
-            return false;
-        }
-        if (!OrderStore.TryMove(resource.PersistentKey, target.PersistentKey, after, _resourceByName.Values.Where(r => !r.IsParameter)))
-        {
-            Logger.LogDebug("Rejected resource reorder from '{ResourceName}' to '{TargetName}' because a resource has no position.", resourceName, targetName);
-            await ToastService.ShowWarningToastAsync(Loc[nameof(Resources.Layout.ResourcePaneReorderUnavailable)]);
-            return false;
+            switch (await OrderStore.MoveResourceAsync(resource, target, after, GetOrderableResources()))
+            {
+                case ResourceOrderMoveResult.Unchanged:
+                    return false;
+                case ResourceOrderMoveResult.NotSaved:
+                    await ToastService.ShowWarningToastAsync(Loc[nameof(Resources.Layout.BrowserStorageSaveFailed)]);
+                    return false;
+                case ResourceOrderMoveResult.Moved:
+                    _orderStatus = string.Format(CultureInfo.CurrentCulture,
+                        Loc[after ? nameof(Resources.Layout.ResourcePaneMovedAfter) : nameof(Resources.Layout.ResourcePaneMovedBefore)],
+                        GetResourceName(resource), GetResourceName(target));
+                    StateHasChanged();
+                    return true;
+            }
         }
 
-        _orderStatus = string.Format(CultureInfo.CurrentCulture,
-            Loc[after ? nameof(Resources.Layout.ResourcePaneMovedAfter) : nameof(Resources.Layout.ResourcePaneMovedBefore)],
-            GetResourceName(resource), GetResourceName(target));
-        StateHasChanged();
-        return true;
+        Logger.LogDebug("Rejected resource reorder from '{ResourceName}' to '{TargetName}' because the visible list changed or the resources aren't siblings.", resourceName, targetName);
+        await ToastService.ShowWarningToastAsync(Loc[nameof(Resources.Layout.ResourcePaneReorderUnavailable)]);
+        return false;
     }
 
     private void OnOrderChanged() => _ = InvokeAsync(StateHasChanged);
@@ -1670,24 +1634,27 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             ? GetResourceGroups() : [];
         var group = groups.Find(group => StringComparers.ResourceName.Equals(GetGroupKey(group), groupKey));
         var target = groups.Find(group => StringComparers.ResourceName.Equals(GetGroupKey(group), targetKey));
-        if (group is null || target is null)
+        if (group is not null && target is not null)
         {
-            Logger.LogDebug("Rejected group reorder from '{GroupKey}' to '{TargetKey}' because the grouping or visible list changed.", groupKey, targetKey);
-            await ToastService.ShowWarningToastAsync(Loc[nameof(Resources.Layout.ResourcePaneGroupReorderUnavailable)]);
-            return false;
-        }
-        if (!OrderStore.TryMoveGroup(grouping, GetGroupOrderKey(group), GetGroupOrderKey(target), after))
-        {
-            Logger.LogDebug("Rejected group reorder from '{GroupKey}' to '{TargetKey}' because a group has no position.", groupKey, targetKey);
-            await ToastService.ShowWarningToastAsync(Loc[nameof(Resources.Layout.ResourcePaneGroupReorderUnavailable)]);
-            return false;
+            switch (await OrderStore.MoveGroupAsync(grouping, GetGroupOrderKey(group), GetGroupOrderKey(target), after, groups.Select(GetGroupOrderKey)))
+            {
+                case ResourceOrderMoveResult.Unchanged:
+                    return false;
+                case ResourceOrderMoveResult.NotSaved:
+                    await ToastService.ShowWarningToastAsync(Loc[nameof(Resources.Layout.BrowserStorageSaveFailed)]);
+                    return false;
+                case ResourceOrderMoveResult.Moved:
+                    _orderStatus = string.Format(CultureInfo.CurrentCulture,
+                        Loc[after ? nameof(Resources.Layout.ResourcePaneMovedAfter) : nameof(Resources.Layout.ResourcePaneMovedBefore)],
+                        GetGroupName(group.Value), GetGroupName(target.Value));
+                    StateHasChanged();
+                    return true;
+            }
         }
 
-        _orderStatus = string.Format(CultureInfo.CurrentCulture,
-            Loc[after ? nameof(Resources.Layout.ResourcePaneMovedAfter) : nameof(Resources.Layout.ResourcePaneMovedBefore)],
-            GetGroupName(group.Value), GetGroupName(target.Value));
-        StateHasChanged();
-        return true;
+        Logger.LogDebug("Rejected group reorder from '{GroupKey}' to '{TargetKey}' because the grouping or visible list changed.", groupKey, targetKey);
+        await ToastService.ShowWarningToastAsync(Loc[nameof(Resources.Layout.ResourcePaneGroupReorderUnavailable)]);
+        return false;
     }
 
     private async Task OnToggleCollapseAsync(string uniqueResourceName)
@@ -1803,7 +1770,6 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             EventCallback.Factory.Create<bool>(this, value =>
             {
                 _filter.ShowHiddenResources = value;
-                EnsureGroupOrder();
                 UpdatePaneMenuItems();
             }));
     }
@@ -1960,7 +1926,9 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
     private List<MenuButtonItem> GetTagGroupMenuItems(string tagName) =>
         ResourceMenuBuilder.CreateTagGroupMenuItems(tagName, $"resource-pane-tag-menu-header-{Guid.NewGuid():N}",
-            () => GetTagGroups().Find(group => StringComparer.OrdinalIgnoreCase.Equals(group.Value, tagName))?.Resources ?? [],
+            () => _grouping == ResourcePaneGrouping.Tags
+                ? GetResourceGroups().Find(group => StringComparer.OrdinalIgnoreCase.Equals(group.Value, tagName))?.Resources ?? []
+                : [],
             (resource, command) => DashboardCommandExecutor.IsExecuting(resource.Name, command.Name),
             (resource, command) => EventCallback.Factory.Create(this, () => ExecuteResourceCommandAsync(resource, command)).InvokeAsync());
 
