@@ -87,6 +87,10 @@ assigned to multiple resources counts once per resource. A pin counts once per r
 instrument. If an edit would exceed either limit, the dashboard shows a warning toast
 without removing any existing entries.
 
+Browser storage reads use the dashboard's Blazor SignalR connection, which accepts messages
+up to 64 KiB. The limit applies to the whole message, including the protected value and
+its protocol overhead; the item caps are not byte limits.
+
 The dashboard applies edits to resource order, group order, user tags, and metric pins only
 after browser storage confirms the save. If the save fails, the dashboard leaves the current
 view unchanged and asks you to try again. If removing a tag or pin finds nothing to

@@ -12,8 +12,7 @@ namespace Aspire.Dashboard.Model;
 /// </summary>
 public sealed class ResourceOrderStore
 {
-    // At 50 moves, 64-character ASCII resource names with both anchors fit under SignalR's 32 KiB receive limit.
-    // https://github.com/dotnet/aspnetcore/blob/ae89581dfd24c6277b4267a9779d05f7b9f047f1/src/SignalR/server/Core/src/HubOptionsSetup.cs#L19-L23
+    // Bound the saved history so typical protected values fit within the dashboard's Blazor receive limit.
     private const int MaxSavedMoves = 50;
 
     private readonly LocalStorageSetting<List<RelativeOrderMove>> _resourceOrder;

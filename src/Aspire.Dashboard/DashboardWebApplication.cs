@@ -314,6 +314,8 @@ public sealed class DashboardWebApplication : IAsyncDisposable
 #pragma warning restore ASPNETCORE9004
 #pragma warning restore FLUENTUI0001
         });
+        // Browser storage reads return protected dashboard customizations over the Blazor hub.
+        builder.Services.AddServerSideBlazor().AddHubOptions(options => options.MaximumReceiveMessageSize = 64 * 1024);
         builder.Services.AddCascadingAuthenticationState();
         builder.Services.AddResponseCompression(options =>
         {
