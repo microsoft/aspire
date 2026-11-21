@@ -2496,7 +2496,6 @@ public static partial class JavaScriptHostingExtensions
         return builder.CreateNextJsAppBuilder(resource, appDirectory, runScriptName);
     }
 
-    [Experimental("ASPIREJAVASCRIPT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     private static IResourceBuilder<NextJsAppResource> CreateNextJsAppBuilder(
             this IDistributedApplicationBuilder builder,
             NextJsAppResource resource,
@@ -3912,7 +3911,6 @@ public static partial class JavaScriptHostingExtensions
     /// <param name="runScriptName">The name of the script to run. Defaults to "dev".</param>
     /// <returns>A resource builder for the Next.js application.</returns>
     [AspireExport("addNextJsAppToWorkspace")]
-    [Experimental("ASPIREJAVASCRIPT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<NextJsAppResource> AddNextJsApp<TWorkspace>(
         this IResourceBuilder<TWorkspace> builder,
         [ResourceName] string name,
