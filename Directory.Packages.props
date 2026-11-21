@@ -167,7 +167,7 @@
     <PackageVersion Include="Microsoft.DevTunnels.Connections" Version="1.3.56" />
     <!-- Open Telemetry -->
     <PackageVersion Include="Azure.Monitor.OpenTelemetry.Exporter" Version="$(AzureMonitorOpenTelemetryExporterVersion)" />
-    <PackageVersion Include="Npgsql.OpenTelemetry" Version="11.0.0" />
+    <PackageVersion Include="Npgsql.OpenTelemetry" Version="10.0.4" />
     <PackageVersion Include="OpenTelemetry.Exporter.Console" Version="1.21.0" />
     <PackageVersion Include="OpenTelemetry.Exporter.InMemory" Version="1.21.0" />
     <PackageVersion Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="$(OpenTelemetryExporterOpenTelemetryProtocolVersion)" />
@@ -270,7 +270,7 @@
     <PackageVersion Include="Microsoft.EntityFrameworkCore.SqlServer" Version="$(MicrosoftEntityFrameworkCoreSqlServerNet10Version)" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Tools" Version="$(MicrosoftEntityFrameworkCoreToolsNet10Version)" />
     <PackageVersion Include="MongoDB.EntityFrameworkCore" Version="10.0.4" />
-    <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
+    <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.4" />
     <PackageVersion Include="Oracle.EntityFrameworkCore" Version="10.23.26000" />
     <!-- ASP.NET Core -->
     <PackageVersion Include="Microsoft.AspNetCore.Authentication.Certificate" Version="$(MicrosoftAspNetCoreAuthenticationCertificateNet10Version)" />
@@ -317,6 +317,7 @@
     <PackageVersion Update="Microsoft.AspNetCore.SignalR.Client" Version="$(MicrosoftAspNetCoreSignalRClientVersion)" />
     <PackageVersion Update="System.IO.Hashing" Version="11.0.0" />
     <PackageVersion Update="Npgsql.EntityFrameworkCore.PostgreSQL" Version="11.0.0" />
+    <PackageVersion Update="Npgsql.OpenTelemetry" Version="11.0.0" />
   </ItemGroup>
 
   <!-- The template engine uses the .NET 11 SDK dependency line. Keep these pins scoped to
