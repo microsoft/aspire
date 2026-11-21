@@ -112,17 +112,6 @@ public partial class OverviewStatusCard
 
     private string FormatName(ResourceViewModel resource) => ResourceViewModel.GetResourceName(resource, Resources);
 
-    private enum StatusPropertyKind
-    {
-        Text,
-        DisplayName,
-        State,
-        HealthState,
-        Lifetime,
-        ExitError,
-        Source
-    }
-
     private sealed record StatusProperty(string PropertyKey, string Name, string Text, StatusPropertyKind Kind = StatusPropertyKind.Text,
         string? Tooltip = null, string? RawValue = null, ResourcePropertyViewModel? SourceProperty = null) : IPropertyGridItem
     {
@@ -134,4 +123,17 @@ public partial class OverviewStatusCard
         bool IPropertyGridItem.IsValueSensitive => SourceProperty?.IsValueSensitive == true;
         public bool IsValueMasked { get; set; }
     }
+}
+
+// Keep this enum outside the component so Blazor's OpenComponent does not preserve its
+// inherited Enum.GetValues(Type), which requires dynamic code under Native AOT.
+internal enum StatusPropertyKind
+{
+    Text,
+    DisplayName,
+    State,
+    HealthState,
+    Lifetime,
+    ExitError,
+    Source
 }
