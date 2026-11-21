@@ -274,45 +274,70 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
     private void QueueTelemetryRefresh(bool immediate = false)
     {
         var refresh = _telemetryRefresh;
-        if (_telemetryKey is not { } key || Interlocked.Exchange(ref refresh.Pending, 1) == 1)
+        if (_telemetryKey is not { } key)
         {
             return;
         }
 
-        var cancellationToken = _resourceCts?.Token ?? CancellationToken.None;
-        _ = Task.Run(async () =>
+        // Keep the gate on the render dispatcher through publication so a slower read cannot overwrite a newer one.
+        if (refresh.IsRunning)
         {
-            try
-            {
-                if (!immediate)
-                {
-                    await TelemetryRefreshDelayAsync(s_telemetryRefreshDelay, cancellationToken).ConfigureAwait(false);
-                }
-                Interlocked.Exchange(ref refresh.Pending, 0);
+            refresh.RefreshRequested = true;
+            return;
+        }
 
-                cancellationToken.ThrowIfCancellationRequested();
-                var telemetry = await LoadTelemetryAsync(key, cancellationToken).ConfigureAwait(false);
-                await InvokeAsync(() =>
+        refresh.IsRunning = true;
+        _ = RefreshTelemetryAsync(refresh, key, immediate, _resourceCts?.Token ?? CancellationToken.None);
+    }
+
+    private async Task RefreshTelemetryAsync(TelemetryRefreshGeneration refresh, ResourceKey key, bool immediate, CancellationToken cancellationToken)
+    {
+        try
+        {
+            do
+            {
+                refresh.RefreshRequested = false;
+                try
                 {
-                    // A canceled refresh must not publish, even if the user switched away and back to the same key.
-                    if (ReferenceEquals(_telemetryRefresh, refresh) && !cancellationToken.IsCancellationRequested)
+                    if (!immediate)
                     {
-                        _telemetry = telemetry;
-                        _telemetryLoaded = true;
-                        StateHasChanged();
+                        await TelemetryRefreshDelayAsync(s_telemetryRefreshDelay, cancellationToken);
                     }
-                }).ConfigureAwait(false);
+                    immediate = false;
+                    if (!IsCurrentRefresh())
+                    {
+                        return;
+                    }
+
+                    // This read covers notifications that arrived during the delay.
+                    refresh.RefreshRequested = false;
+                    var telemetry = await Task.Run(() => LoadTelemetryAsync(key, cancellationToken), cancellationToken);
+                    if (!IsCurrentRefresh())
+                    {
+                        return;
+                    }
+
+                    _telemetry = telemetry;
+                    _telemetryLoaded = true;
+                    StateHasChanged();
+                }
+                catch (OperationCanceledException) when (!IsCurrentRefresh())
+                {
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogWarning(ex, "Error loading telemetry summary for the resource overview.");
+                }
             }
-            catch (OperationCanceledException)
-            {
-                Interlocked.Exchange(ref refresh.Pending, 0);
-            }
-            catch (Exception ex)
-            {
-                Interlocked.Exchange(ref refresh.Pending, 0);
-                Logger.LogWarning(ex, "Error loading telemetry summary for the resource overview.");
-            }
-        }, CancellationToken.None);
+            while (refresh.RefreshRequested && IsCurrentRefresh());
+        }
+        finally
+        {
+            refresh.IsRunning = false;
+        }
+
+        bool IsCurrentRefresh() => ReferenceEquals(_telemetryRefresh, refresh) && !cancellationToken.IsCancellationRequested;
     }
 
     private async Task<OverviewTelemetry> LoadTelemetryAsync(ResourceKey key, CancellationToken cancellationToken)
@@ -593,7 +618,8 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
 
     private sealed class TelemetryRefreshGeneration
     {
-        public int Pending;
+        public bool IsRunning;
+        public bool RefreshRequested;
     }
 
     private sealed record EndpointGroup(DisplayedUrl Primary, DisplayedUrl? Secondary);
