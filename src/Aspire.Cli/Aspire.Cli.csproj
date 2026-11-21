@@ -291,6 +291,7 @@
     <Compile Include="$(SharedDir)ProcessStartInfoHelper.cs" Link="Utils\ProcessStartInfoHelper.cs" />
     <Compile Include="$(SharedDir)CommandPathResolver.cs" Link="Utils\CommandPathResolver.cs" />
     <Compile Include="$(SharedDir)ParentProcessLivenessMonitor.cs" Link="Utils\ParentProcessLivenessMonitor.cs" />
+    <Compile Include="$(SharedDir)ParentProcessWatchdog.cs" Link="Utils\ParentProcessWatchdog.cs" />
     <Compile Include="$(SharedDir)NpmVersionHelper.cs" Link="Utils\NpmVersionHelper.cs" />
   </ItemGroup>
 

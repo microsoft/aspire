@@ -32,6 +32,7 @@ The types under [`src/Shared`](../../src/Shared) are compiled into both the CLI 
 | `ProcessScope` | Holds an `IChildProcess` and its root-exit task for a supervising owner. Delegates full completion and disposal to the execution without adding termination policy. |
 | `ProcessSupervisor` | Runs in a separate guardian process, establishes OS containment, launches the runtime, watches the owner, forwards graceful signals, and hands off runtime completion status. |
 | `ParentProcessLivenessMonitor` / `ProcessStartTimeHelper` | Detects owner death using PID plus stable start identity rather than PID alone. |
+| `ParentProcessWatchdog` / `ParentProcessWatchdogScope` | Arms a launcher watchdog for long-running CLI commands and owns the cancellation scope they run under. See [Launcher watchdogs for long-running commands](#launcher-watchdogs-for-long-running-commands). |
 | `ProcessSupervisorLogger` | Writes synchronously flushed guardian diagnostic records and forwards them to the owner's `ILogger` without losing severity. |
 | `ProcessStartInfoHelper` | Formats executable arguments, including Windows batch shims and the .NET Framework argument-quoting path. |
 
@@ -75,6 +76,31 @@ The guardian writes the runtime's exit code to the private completion path befor
 The default completion directory is securely created on start and deleted on disposal, including failed launches. A caller-supplied completion path remains caller-owned.
 
 Integration package installation succeeds only after command completion and cleanup have both been verified. Installation is a CLI restore operation; integration-host recovery does not reinstall dependencies.
+
+## Launcher watchdogs for long-running commands
+
+Streaming CLI commands (`aspire ps --follow`, `aspire describe --follow`) are spawned as child processes by a host such as the VS Code extension. A host that is force-killed never runs its own cleanup, and an idle follower never writes to its stdout pipe, so it never notices the broken pipe and would wait forever. `ParentProcessWatchdog` covers that case by watching the launcher and cancelling the command when the launcher disappears.
+
+The launcher supplies its identity through `ASPIRE_CLI_PARENT_PID` and `ASPIRE_CLI_PARENT_STARTED` (see `getCliParentWatchdogEnvironment()` in the extension). The start time guards against PID reuse. When no identity is present — an interactive invocation, or a Windows launch where the kernel kill-on-close job already covers the child — the monitor is armed but never fires, so behavior is unchanged.
+
+### Arm the watchdog before any awaited setup
+
+A command must not arm the watchdog from inside its own execution. Connection resolution, the RPC handshake, and the initial state load can each stall on an unresponsive AppHost; a follower stuck in one of those awaits never reaches a later watchdog and is orphaned again. This ordering is enforced structurally rather than by convention:
+
+- A command opts in by overriding `RunsUnderLauncherWatchdog(ParseResult)` on `BaseCommand`.
+- `BaseCommand` calls `ParentProcessWatchdog.StartCliParentScope` **before** `ExecuteAsync` and replaces the invocation token with the scope's token. Command code therefore never holds an unwatched token.
+- `ParentProcessWatchdogScope` owns both the linked `CancellationTokenSource` and the monitor. `StartForCliParent` is internal, so a command cannot obtain a launcher-watchdog handle without the scope.
+
+### Teardown
+
+The watchdog tears down in two stages, mirroring `aspire-managed`:
+
+1. Cancel the scope token so cooperative awaits unwind.
+2. After the grace period, force-exit with code 124 for operations that ignore cancellation.
+
+A launcher-triggered cancellation is a normal end of stream: `BaseCommand` maps it to a successful exit, and commands must not report it as a failure. The caller's own cancellation stays distinct — it still produces the cancelled exit code and message.
+
+Commands that cancel their own token source to stop background work (for example `ps --follow` stopping its watcher) must not dispose the scope; the force-exit backstop stays armed until `BaseCommand` disposes it.
 
 ## Cancellation and disposal
 

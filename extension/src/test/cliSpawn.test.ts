@@ -7,7 +7,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { PassThrough } from 'stream';
 import * as sinon from 'sinon';
-import { getCliSpawnCommand, getCliSpawnDiagnostics, mergeCliSpawnEnvironment, spawnCliProcess, terminateCliProcess } from '../utils/process/cliProcess';
+import { getCliParentWatchdogEnvironment, getCliSpawnCommand, getCliSpawnDiagnostics, getCurrentProcessStartTimeUnixMilliseconds, linuxClockTicksPerSecondFallback, mergeCliSpawnEnvironment, parseLinuxClockTicksPerSecond, spawnCliProcess, terminateCliProcess, warmCurrentProcessStartTime } from '../utils/process/cliProcess';
 import { terminalCommandArgumentControlCharacters } from '../loc/strings';
 import type { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import { canVsCodeQuoteCommandShimLaunch, getCmdShimSpawnCommandWithoutVerbatimArguments } from '../utils/cmdShim';
@@ -18,6 +18,66 @@ import { getPsFollowProcessLogPath, readPsFollowProcesses } from '../testing/psF
 import { withScopedFakeTimers } from './helpers/scopedFakeTimers';
 import { removeDirectorySafely } from './testHelpers';
 suite('spawnCliProcess tests', () => {
+    test('cli parent watchdog start time is the OS process creation time, not a Date.now/uptime estimate', async () => {
+        // Regression guard for Linux suspend/resume: process.uptime() advances across a suspend while
+        // Date.now() does not, so the derived estimate drifts earlier than the real creation time and the
+        // CLI watchdog stops recognizing the live extension host. The OS-reported creation time is fixed.
+        await warmCurrentProcessStartTime();
+        const startTimeMs = getCurrentProcessStartTimeUnixMilliseconds();
+
+        assert.ok(startTimeMs <= Date.now(), `expected ${startTimeMs} to be in the past`);
+
+        if (process.platform === 'linux') {
+            // /proc/<pid>/stat field 22 is expressed in _SC_CLK_TCK ticks since boot, so the value must be
+            // an exact multiple of the tick length (10 ms at the ubiquitous 100 Hz) rather than the
+            // arbitrary millisecond offset the Date.now()/uptime() estimate produces.
+            const stat = fs.readFileSync('/proc/self/stat', 'utf8');
+            const startTicks = Number(stat.slice(stat.lastIndexOf(')') + 2).split(' ')[19]);
+            assert.strictEqual(startTimeMs, Math.floor((startTicks * 1000) / 100));
+        } else {
+            // The estimate is computed from the same clock, so it lands within a second of the OS value.
+            const estimateMs = Math.round(Date.now() - process.uptime() * 1000);
+            assert.ok(Math.abs(startTimeMs - estimateMs) < 1_000, `expected ${startTimeMs} to be near ${estimateMs}`);
+        }
+    });
+
+    test('cli parent watchdog environment stamps the process id and start time in whole Unix seconds', async () => {
+        await warmCurrentProcessStartTime();
+        const env = getCliParentWatchdogEnvironment();
+
+        assert.deepStrictEqual(env.map(variable => variable.name), [
+            EnvironmentVariables.ASPIRE_CLI_PARENT_PID,
+            EnvironmentVariables.ASPIRE_CLI_PARENT_STARTED,
+        ]);
+        assert.strictEqual(env[0].value, String(process.pid));
+        assert.strictEqual(env[1].value, String(Math.round(getCurrentProcessStartTimeUnixMilliseconds() / 1000)));
+    });
+
+    // AT_CLKTCK is 17; every other entry is filler so the scan has to walk past it.
+    const auxvEntries: ReadonlyArray<readonly [number, number]> = [[6, 4096], [17, 250], [23, 0]];
+
+    for (const entrySize of [16, 8] as const) {
+        test(`reads AT_CLKTCK from a ${entrySize === 16 ? '64-bit' : '32-bit'} auxv layout`, () => {
+            // The stride is 2 * sizeof(long), so a 32-bit Linux host (armv7, i686) uses 8-byte entries.
+            // Hardcoding 16 bytes misparses that layout and silently falls back to USER_HZ, which is why
+            // both layouts are pinned here rather than only the one this machine runs.
+            assert.strictEqual(parseLinuxClockTicksPerSecond(buildAuxv(auxvEntries, entrySize), entrySize), 250);
+        });
+
+        test(`falls back to USER_HZ when a ${entrySize === 16 ? '64-bit' : '32-bit'} auxv has no AT_CLKTCK`, () => {
+            assert.strictEqual(
+                parseLinuxClockTicksPerSecond(buildAuxv([[6, 4096], [23, 0]], entrySize), entrySize),
+                linuxClockTicksPerSecondFallback);
+        });
+    }
+
+    test('ignores a zero AT_CLKTCK instead of dividing by it', () => {
+        // A zero tick count would make the start-time conversion divide by zero and yield Infinity.
+        assert.strictEqual(
+            parseLinuxClockTicksPerSecond(buildAuxv([[17, 0]], 16), 16),
+            linuxClockTicksPerSecondFallback);
+    });
+
     test('records native ps followers before output and across extension-host tracker replacement', () => {
         const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-native-ps-'));
         const stateFile = path.join(directory, 'state.json');
@@ -1184,7 +1244,23 @@ suite('spawnCliProcess tests', () => {
     }));
 });
 
-function createTestChildProcess(pid: number, exitCode: number | null = null): nodeChildProcess.ChildProcessWithoutNullStreams & { kill: sinon.SinonStub } {
+function buildAuxv(entries: ReadonlyArray<readonly [number, number]>, entrySize: 8 | 16): Buffer {
+    // One trailing all-zero entry stands in for AT_NULL, matching the real payload's terminator.
+    const buffer = Buffer.alloc(entrySize * (entries.length + 1));
+    entries.forEach(([type, value], index) => {
+        const offset = index * entrySize;
+        if (entrySize === 16) {
+            buffer.writeBigUInt64LE(BigInt(type), offset);
+            buffer.writeBigUInt64LE(BigInt(value), offset + 8);
+        } else {
+            buffer.writeUInt32LE(type, offset);
+            buffer.writeUInt32LE(value, offset + 4);
+        }
+    });
+    return buffer;
+}
+
+function createTestChildProcess(pid: number, exitCode: number | null = null):  nodeChildProcess.ChildProcessWithoutNullStreams & { kill: sinon.SinonStub } {
     const kill = sinon.stub().returns(true);
     return Object.assign(new EventEmitter(), {
         stdin: new PassThrough(),

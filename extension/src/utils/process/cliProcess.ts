@@ -1,4 +1,5 @@
-import { ChildProcessWithoutNullStreams, spawn } from "child_process";
+import { ChildProcessWithoutNullStreams, execFile, spawn } from "child_process";
+import * as fs from "fs";
 import { EnvVar } from "../../dcp/types";
 import { extensionLogOutputChannel } from "../../utils/logging";
 import { AspireTerminalProvider } from "../../utils/AspireTerminalProvider";
@@ -14,6 +15,11 @@ const windowsForcedTaskkillTotalReserveMs = 1_250;
 const windowsTaskkillProcessNotFoundExitCode = 128;
 const managedPosixProcessGroups = new WeakSet<ChildProcessWithoutNullStreams>();
 const cliProcessSpawned = new vscode.EventEmitter<CliProcessSpawnEvent>();
+
+// Cached OS process creation time (Unix milliseconds) for this extension host. Resolved once because
+// every CLI spawn stamps it into the child environment; `undefined` means "not resolved yet".
+let currentProcessStartTimeUnixMilliseconds: number | undefined;
+let startTimeLookup: Promise<void> | undefined;
 
 export interface CliProcessSpawnEvent {
     readonly childProcess: ChildProcessWithoutNullStreams;
@@ -68,6 +74,204 @@ export function mergeCliSpawnEnvironment(env: Record<string, string | undefined>
 
         env[e.name] = e.value;
     }
+}
+
+/**
+ * Environment that lets a long-running CLI command (`aspire ps --follow`, `aspire describe --follow`)
+ * watch the extension host and exit when the host disappears.
+ *
+ * Without it, a force-killed extension host (which never runs `deactivate`) leaves the CLI running as
+ * an orphan, and an idle `--follow` command never writes to its broken stdout pipe, so it never
+ * discovers that nobody is reading. On Windows the tracked child is the `cmd.exe` shim rather than the
+ * CLI itself, so the extension cannot reliably kill that grandchild from its side.
+ *
+ * The start time lets the CLI reject a recycled PID. It must be the OS-reported process creation time:
+ * `Date.now() - process.uptime() * 1000` is wrong on Linux, where `process.uptime()` is CLOCK_BOOTTIME
+ * (it keeps advancing while the machine is suspended) while `Date.now()` is CLOCK_REALTIME (it does
+ * not). After a suspend/resume the two disagree by the suspended duration, so the derived start time
+ * drifts earlier than the real one and the CLI's watchdog stops recognizing a perfectly healthy
+ * extension host as its parent.
+ */
+export function getCliParentWatchdogEnvironment(): EnvVar[] {
+    const startedAtUnixSeconds = Math.round(getCurrentProcessStartTimeUnixMilliseconds() / 1000);
+    return [
+        { name: EnvironmentVariables.ASPIRE_CLI_PARENT_PID, value: String(process.pid) },
+        { name: EnvironmentVariables.ASPIRE_CLI_PARENT_STARTED, value: String(startedAtUnixSeconds) },
+    ];
+}
+
+/**
+ * Gets the current process's creation time as Unix milliseconds, read from the OS rather than derived
+ * from `Date.now()` and `process.uptime()` so wall-clock steps and suspend/resume cannot skew it.
+ *
+ * The CLI verifies `ASPIRE_CLI_PARENT_STARTED` with `ProcessStartTimeHelper.TryGetProcessStartTime`,
+ * which reads `/proc/<pid>/stat` field 22 (clock ticks since boot) on Linux and `Process.StartTime`
+ * elsewhere. Mirror those sources so both sides observe the same value:
+ * - Linux: `/proc/self/stat` start ticks, converted with `_SC_CLK_TCK`.
+ * - macOS: `ps -o lstart=`, which is what `Process.StartTime` reads.
+ * - Windows: `Win32_Process.CreationDate`, since Node exposes no creation time there. This is a
+ *   different API from the `GetProcessTimes` behind `Process.StartTime`, so the two can differ by a
+ *   clock tick; the CLI's one-second identity tolerance absorbs that.
+ *
+ * The value is resolved once and cached, because every CLI spawn stamps it into the child environment
+ * and the OS lookup is a process launch of its own. The lookup never blocks: the Linux path is a small
+ * synchronous file read, while macOS and Windows run an external command asynchronously. Until that
+ * command finishes (and permanently if it fails) the value is the `Date.now() - process.uptime()`
+ * estimate, which keeps the watchdog functional but carries the suspend/resume drift described above.
+ * Call {@link warmCurrentProcessStartTime} at activation so the precise value is ready before the
+ * first long-running command is spawned.
+ */
+export function getCurrentProcessStartTimeUnixMilliseconds(): number {
+    if (process.platform === 'linux') {
+        const startTime = readLinuxProcessStartTimeUnixMilliseconds();
+        if (startTime !== undefined) {
+            return startTime;
+        }
+    } else if (currentProcessStartTimeUnixMilliseconds === undefined) {
+        // Kick off the async lookup on first use in case activation did not warm it.
+        void warmCurrentProcessStartTime();
+    }
+
+    return currentProcessStartTimeUnixMilliseconds ?? getEstimatedProcessStartTimeUnixMilliseconds();
+}
+
+/**
+ * Resolves and caches the precise OS process creation time ahead of the first CLI spawn. Safe to call
+ * repeatedly: the lookup is started at most once, and a failed lookup is not retried so a broken
+ * platform command cannot spawn a process on every CLI launch.
+ */
+export function warmCurrentProcessStartTime(): Promise<void> {
+    startTimeLookup ??= resolveCurrentProcessStartTimeUnixMilliseconds()
+        .then(startTime => {
+            // Only cache a real value. A platform that cannot report the creation time keeps using the
+            // estimate instead of pinning a wrong identity for the lifetime of the extension host.
+            currentProcessStartTimeUnixMilliseconds = startTime;
+        })
+        .catch(() => {
+            // The estimate remains in use; the watchdog stays armed with an approximate start time.
+        });
+
+    return startTimeLookup;
+}
+
+function getEstimatedProcessStartTimeUnixMilliseconds(): number {
+    return Math.round(Date.now() - process.uptime() * 1000);
+}
+
+async function resolveCurrentProcessStartTimeUnixMilliseconds(): Promise<number | undefined> {
+    switch (process.platform) {
+        case 'linux':
+            return readLinuxProcessStartTimeUnixMilliseconds();
+        case 'darwin':
+            return await queryProcessStartTimeUnixMilliseconds('ps', ['-o', 'lstart=', '-p', String(process.pid)]);
+        case 'win32':
+            return await queryWindowsProcessStartTimeUnixMilliseconds();
+        default:
+            return undefined;
+    }
+}
+
+function readLinuxProcessStartTimeUnixMilliseconds(): number | undefined {
+    let stat: string;
+    try {
+        stat = fs.readFileSync('/proc/self/stat', 'utf8');
+    } catch {
+        // /proc is not mounted (unusual on Linux, but possible in restricted sandboxes).
+        return undefined;
+    }
+
+    // /proc/<pid>/stat fields start as:
+    //   12345 (process name may contain spaces or parentheses) S 1 2 3 ...
+    // The start time is field 22, in clock ticks since boot. Split after the final ')' so a process
+    // name containing spaces or parentheses does not shift the field indexes.
+    const closeParenIndex = stat.lastIndexOf(')');
+    if (closeParenIndex < 0) {
+        return undefined;
+    }
+
+    const fields = stat.slice(closeParenIndex + 2).split(' ');
+    const startTicks = Number(fields[19]);
+    if (!Number.isSafeInteger(startTicks) || startTicks < 0) {
+        return undefined;
+    }
+
+    // Same boot-relative millisecond identity the CLI computes, so the values compare exactly.
+    return Math.floor((startTicks * 1000) / getLinuxClockTicksPerSecond());
+}
+
+function getLinuxClockTicksPerSecond(): number {
+    // sysconf(_SC_CLK_TCK) is the value the CLI divides start ticks by, and it is USER_HZ: 100 on every
+    // Linux ABI we run on. Read it rather than assume, but read it from the auxv the kernel exposes at
+    // /proc/self/auxv instead of shelling out to `getconf`.
+    const entrySize = process.arch.includes('64') ? 16 : 8;
+    try {
+        return parseLinuxClockTicksPerSecond(fs.readFileSync('/proc/self/auxv'), entrySize);
+    } catch {
+        // Fall through to the USER_HZ default below.
+    }
+
+    return linuxClockTicksPerSecondFallback;
+}
+
+/**
+ * The value `sysconf(_SC_CLK_TCK)` returns on every Linux ABI we run on (USER_HZ).
+ */
+export const linuxClockTicksPerSecondFallback = 100;
+
+/**
+ * Reads `AT_CLKTCK` from a `/proc/self/auxv` payload.
+ *
+ * Each auxv entry is two C `long`s, so the stride is `2 * sizeof(long)`: 16 bytes on 64-bit and 8 bytes
+ * on 32-bit (armv7, i686). Hardcoding either one misparses the other, which is why the caller derives
+ * `entrySize` from the pointer size Node was built for. `AT_CLKTCK` is 17 on every architecture.
+ *
+ * Exported for tests: the 32-bit layout cannot be produced on a 64-bit CI runner, so both layouts are
+ * exercised against synthetic buffers.
+ */
+export function parseLinuxClockTicksPerSecond(auxv: Buffer, entrySize: 8 | 16): number {
+    for (let offset = 0; offset + entrySize <= auxv.length; offset += entrySize) {
+        const type = entrySize === 16 ? Number(auxv.readBigUInt64LE(offset)) : auxv.readUInt32LE(offset);
+        if (type !== 17) {
+            continue;
+        }
+
+        const ticksPerSecond = entrySize === 16
+            ? Number(auxv.readBigUInt64LE(offset + 8))
+            : auxv.readUInt32LE(offset + 4);
+        if (Number.isSafeInteger(ticksPerSecond) && ticksPerSecond > 0) {
+            return ticksPerSecond;
+        }
+    }
+
+    return linuxClockTicksPerSecondFallback;
+}
+
+async function queryProcessStartTimeUnixMilliseconds(command: string, args: string[]): Promise<number | undefined> {
+    // `ps -o lstart=` prints e.g. "Fri Nov 20 14:32:48 2026" (no leading label because of the '=').
+    // .NET's Process.StartTime uses the same field; the one-second identity tolerance absorbs the
+    // second-level truncation.
+    const stdout = await execFileText(command, args);
+    const startTime = stdout === undefined ? NaN : Date.parse(stdout.trim());
+    return Number.isFinite(startTime) ? startTime : undefined;
+}
+
+async function queryWindowsProcessStartTimeUnixMilliseconds(): Promise<number | undefined> {
+    // Node has no API for a process's creation time, and the CLI reads it via Process.StartTime
+    // (GetProcessTimes). Win32_Process.CreationDate is the same system time value.
+    const script = `(Get-CimInstance -ClassName Win32_Process -Filter "ProcessId = ${process.pid}").CreationDate.ToUniversalTime().ToString('o')`;
+    const stdout = await execFileText(
+        'powershell.exe',
+        ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script]);
+    const startTime = stdout === undefined ? NaN : Date.parse(stdout.trim());
+    return Number.isFinite(startTime) ? startTime : undefined;
+}
+
+function execFileText(command: string, args: string[]): Promise<string | undefined> {
+    return new Promise(resolve => {
+        execFile(command, args, { timeout: 10_000, windowsHide: true, encoding: 'utf8' }, (error, stdout) => {
+            resolve(error ? undefined : stdout);
+        });
+    });
 }
 
 export function spawnCliProcess(terminalProvider: AspireTerminalProvider, command: string, args?: string[], options?: SpawnProcessOptions): ChildProcessWithoutNullStreams {
