@@ -1,0 +1,9 @@
+{
+  "author": "karolz-ms",
+  "comment": "Dependency version bump (DCP) backport",
+  "mergedAt": "2026-11-20T19:28:41Z",
+  "number": 22482,
+  "runDate": "2026-11-21T00:10:00Z",
+  "status": "excluded",
+  "title": "[release/17.0] Update DCP to 0.27.5 for Aspire 17.0.1"
+}

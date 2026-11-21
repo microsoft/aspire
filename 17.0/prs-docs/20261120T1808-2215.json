@@ -1,0 +1,14 @@
+{
+  "author": {
+    "id": "MDQ6VXNlcjc2Nzk3MjA=",
+    "is_bot": false,
+    "login": "IEvangelist",
+    "name": "David Pine"
+  },
+  "comment": "Docs site frontend/infrastructure change; no matching changelog entry",
+  "mergedAt": "2026-11-20T18:08:55Z",
+  "number": 2215,
+  "runDate": "2026-11-21T00:10:00Z",
+  "status": "excluded",
+  "title": "Report frontend dist size and soft budget on every build"
+}

@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": true,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "The first item in a dashboard context menu is no longer highlighted as hovered when the menu opens via pointer; keyboard focus still moves to the first enabled item.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🖱️",
+  "firstMergedAt": "2026-11-20T19:10:31Z",
+  "lastMergedAt": "2026-11-20T19:10:31Z",
+  "name": "No hover highlight on dashboard menu open",
+  "owner": "JamesNK",
+  "prs": [
+    22388
+  ]
+}

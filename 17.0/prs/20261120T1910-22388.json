@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "No hover highlight on dashboard menu open",
+  "mergedAt": "2026-11-20T19:10:31Z",
+  "number": 22388,
+  "runDate": "2026-11-21T00:10:00Z",
+  "status": "included",
+  "title": "[release/17.0] Avoid highlighting dashboard menu items on pointer open"
+}

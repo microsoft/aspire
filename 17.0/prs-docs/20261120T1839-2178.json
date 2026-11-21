@@ -1,0 +1,14 @@
+{
+  "author": {
+    "id": "MDQ6VXNlcjExNjU4MDU=",
+    "is_bot": false,
+    "login": "sebastienros",
+    "name": "S\u00e9bastien Ros"
+  },
+  "comment": "Docs site frontend/infrastructure change; no matching changelog entry",
+  "mergedAt": "2026-11-20T18:39:42Z",
+  "number": 2178,
+  "runDate": "2026-11-21T00:10:00Z",
+  "status": "excluded",
+  "title": "Serve the site with a per-request file middleware instead of MapStaticAssets"
+}

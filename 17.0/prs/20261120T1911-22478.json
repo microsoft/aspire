@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Dashboard stays on home when window narrows",
+  "mergedAt": "2026-11-20T19:11:51Z",
+  "number": 22478,
+  "runDate": "2026-11-21T00:10:00Z",
+  "status": "included",
+  "title": "[release/17.0] Keep the dashboard on home when the window narrows"
+}

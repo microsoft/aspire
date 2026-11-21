@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": true,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Resizing the browser window while on the dashboard home page no longer redirects to Resources, and narrow layouts now have a Home tab to get back.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🏡",
+  "firstMergedAt": "2026-11-20T19:11:51Z",
+  "lastMergedAt": "2026-11-20T19:11:51Z",
+  "name": "Dashboard stays on home when window narrows",
+  "owner": "IEvangelist",
+  "prs": [
+    22478
+  ]
+}
