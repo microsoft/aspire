@@ -51,8 +51,7 @@ public sealed class DashboardViewPreferences(ILocalStorage localStorage, IOption
     private Task? _loadTask;
     private GroupOverview _groupOverview = GroupOverview.Summary;
 
-    // The resource list starts compact, so the dashboard opens on as many resources as fit.
-    private const ResourceListDensity DefaultDensity = ResourceListDensity.Compact;
+    private const ResourceListDensity DefaultDensity = ResourceListDensity.Comfortable;
 
     /// <summary>
     /// Gets the resource list's density.
@@ -135,8 +134,7 @@ public sealed class DashboardViewPreferences(ILocalStorage localStorage, IOption
     private async Task<ResourceListDensity> ReadDensityAsync()
     {
         var result = await localStorage.GetUnprotectedAsync<string>(BrowserStorageKeys.ResourceListDensity).ConfigureAwait(false);
-        // An earlier density, "Spacious", was stored by name. Replace that removed choice once with the closest one,
-        // Comfortable, rather than falling back to the default, Compact, which is the furthest from it.
+        // Rewrite the removed "Spacious" choice once so later loads don't need to migrate it again.
         if (result.Success && result.Value is "Spacious")
         {
             await localStorage.SetUnprotectedAsync(BrowserStorageKeys.ResourceListDensity, nameof(ResourceListDensity.Comfortable)).ConfigureAwait(false);
