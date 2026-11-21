@@ -57,8 +57,6 @@ docker run --rm -d \
 
 Restart the container with the same volume, application name, data directory, and persistence mode to continue using the existing database. The Dashboard can remain running through idle periods, and its data remains available after stop and restart, subject to the configured telemetry retention limits.
 
-The volume in this example preserves the database, not the [ASP.NET Core Data Protection key ring](https://learn.microsoft.com/aspnet/core/security/data-protection/configuration/default-settings). If a replacement container cannot access the keys used to protect browser preferences, the dashboard can't read saved moves, user-added tags, or metric pins.
-
 The AppHost console-log protocol does not identify the AppHost generation that produced a line. Resume prioritizes preserving logs from later AppHost generations, whose line numbers restart at 1. If the Dashboard restarts while the same AppHost remains running, console logs replayed by that AppHost can therefore be persisted again.
 
 ### AppHost resource traits and dashboard customizations
@@ -79,42 +77,24 @@ avoiding a temporary argument array in C#. Polyglot SDKs accept an array of tags
 It uses the reserved trait `Aspire_Tag`, which is not dashboard-specific: it also
 appears as the `resource.trait.Aspire_Tag` property in `aspire describe --format json`.
 These tags participate in dashboard tag grouping but cannot be removed in the
-dashboard. User-added tags and metric pins are stored in protected browser local storage,
-independently of individual runs. The dashboard ignores old plaintext values and replaces
-them with protected values on the next change. AppHost-declared tags are unaffected.
-Each application can store up to 50 user-added tag assignments and 50 metric pins. A tag
-assigned to multiple resources counts once per resource. A pin counts once per resource and
-instrument. If an edit would exceed either limit, the dashboard shows a warning toast
-without removing any existing entries.
-
-Browser storage reads use the dashboard's Blazor SignalR connection, which accepts messages
-up to 64 KiB. The limit applies to the whole message, including the protected value and
-its protocol overhead; the item caps are not byte limits.
-
-The dashboard applies edits to resource order, group order, user tags, and metric pins only
-after browser storage confirms the save. If the save fails, the dashboard leaves the current
-view unchanged and asks you to try again. If removing a tag or pin finds nothing to
-remove, the dashboard refreshes the view without writing. If the saved value is missing
-or can no longer be decrypted, the dashboard shows the defaults.
+dashboard. User-added tags, metric pins, and drag-and-drop moves are saved per
+application in protected browser local storage, not in the run database. Old
+plaintext preferences aren't migrated, and saved preferences are unavailable if
+the Dashboard loses access to the keys used to protect them. Each application can
+save up to 50 tag assignments (one per resource and tag) and 50 metric pins (one
+per resource and instrument).
 
 `WithDisplayOrder` stores its own annotation rather than a trait, and is transported
 as the `resource.displayOrder` resource property; repeated calls replace the previous
-value. Other UIs can use it too. The new dashboard resource pane uses it only when
-**Group resources** is set to **None**. Higher values appear first, and resources without
-one are treated as 0, so a negative value moves a resource after them. Resources with the
-same nonzero order are sorted by name. Resources with an order of 0 are sorted by type
-and name. The same rules apply to resources discovered after the dashboard opens.
-Drag-and-drop moves are replayed over that default order.
-Resource moves and group moves are saved separately in protected browser local storage per application,
-independently of the run database. If the dashboard can no longer decrypt the saved moves, it uses the default
-order. A move stores both neighbors at the drop position. Replay places the item before or after
-the original drop target as requested, using the other neighbor if the target is missing or no
-longer a sibling. Only the latest move for each resource or group is kept,
-so replacing a move can also affect other items that depended on its old position. A drop that
-leaves the item in the same position does not change the saved order.
-The resource list and the combined group setting each retain at most 50 moves to limit the size of the
-protected values sent over the dashboard connection. Trimming drops the oldest resource moves or the
-oldest moves from the grouping mode with the most saved moves.
+value. The new dashboard resource pane uses it only when **Group resources** is
+set to **None**. Higher values appear first; unspecified values count as 0. Ties
+at 0 sort by type and name; other ties sort by name. Late arrivals follow the same
+rules.
+
+The Dashboard saves only explicit moves and replays them over the default order.
+A move uses its drop target when possible and falls back to the other neighbor.
+The Dashboard keeps only the latest move per item, up to 50 resource moves and 50
+group moves across grouping modes.
 
 Traits are transported as list-valued resource properties named `resource.trait.<name>`,
 including in recorded snapshots. Trait names are case-sensitive; dashboard tags are
