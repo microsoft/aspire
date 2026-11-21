@@ -10,6 +10,8 @@ namespace Aspire.Dashboard.Components.Tests.Shared;
 internal sealed class TestTelemetryRepository(ITelemetryRepository inner) : ITelemetryRepository
 {
     public Func<GetLogsContext, CancellationToken, Task<PagedResult<LogSummary>>>? GetLogSummariesAsyncHandler { get; init; }
+    public Func<List<ResourceKey>, int, bool, CancellationToken, Task<OverviewLogs>>? GetOverviewLogsAsyncHandler { get; init; }
+    public Func<GetInstrumentRequest, CancellationToken, Task<OtlpInstrumentData?>>? GetInstrumentAsyncHandler { get; init; }
     public Func<GetRequestSpansRequest, CancellationToken, Task<GetRequestSpansResponse>>? GetRequestSpansAsyncHandler { get; init; }
     public Action<Func<Task>>? OnNewLogsRegistered { get; init; }
     public Action<Subscription>? OnNewResourcesSubscribed { get; init; }
@@ -47,6 +49,8 @@ internal sealed class TestTelemetryRepository(ITelemetryRepository inner) : ITel
     public Task<PagedResult<OtlpLogEntry>> GetLogsAsync(GetLogsContext context, CancellationToken cancellationToken) => inner.GetLogsAsync(context, cancellationToken);
     public Task<PagedResult<LogSummary>> GetLogSummariesAsync(GetLogsContext context, CancellationToken cancellationToken) =>
         GetLogSummariesAsyncHandler?.Invoke(context, cancellationToken) ?? inner.GetLogSummariesAsync(context, cancellationToken);
+    public Task<OverviewLogs> GetOverviewLogsAsync(List<ResourceKey> resourceKeys, int recentCount, bool errorsOnly, CancellationToken cancellationToken) =>
+        GetOverviewLogsAsyncHandler?.Invoke(resourceKeys, recentCount, errorsOnly, cancellationToken) ?? inner.GetOverviewLogsAsync(resourceKeys, recentCount, errorsOnly, cancellationToken);
     public OtlpLogEntry? GetLog(long logId) => inner.GetLog(logId);
     public Task<List<OtlpLogEntry>> GetLogsForSpanAsync(string traceId, string spanId, CancellationToken cancellationToken) => inner.GetLogsForSpanAsync(traceId, spanId, cancellationToken);
     public Task<List<OtlpLogEntry>> GetLogsForTraceAsync(string traceId, CancellationToken cancellationToken) => inner.GetLogsForTraceAsync(traceId, cancellationToken);
@@ -65,7 +69,8 @@ internal sealed class TestTelemetryRepository(ITelemetryRepository inner) : ITel
     public OtlpResource? GetPeerResource(OtlpSpan span) => inner.GetPeerResource(span);
     public List<OtlpInstrumentSummary> GetInstrumentSummaries(ResourceKey key) => inner.GetInstrumentSummaries(key);
     public OtlpInstrumentSummary? GetInstrumentSummary(ResourceKey resourceKey, string meterName, string instrumentName) => inner.GetInstrumentSummary(resourceKey, meterName, instrumentName);
-    public Task<OtlpInstrumentData?> GetInstrumentAsync(GetInstrumentRequest request, CancellationToken cancellationToken) => inner.GetInstrumentAsync(request, cancellationToken);
+    public Task<OtlpInstrumentData?> GetInstrumentAsync(GetInstrumentRequest request, CancellationToken cancellationToken) =>
+        GetInstrumentAsyncHandler?.Invoke(request, cancellationToken) ?? inner.GetInstrumentAsync(request, cancellationToken);
     public DateTime? GetInstrumentLatestEndTime(ResourceKey resourceKey, string meterName, string instrumentName) => inner.GetInstrumentLatestEndTime(resourceKey, meterName, instrumentName);
 
     public IAsyncEnumerable<OtlpSpan> WatchSpansAsync(WatchSpansRequest request, CancellationToken cancellationToken) => inner.WatchSpansAsync(request, cancellationToken);

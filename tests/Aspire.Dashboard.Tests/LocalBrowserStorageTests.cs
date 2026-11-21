@@ -5,6 +5,8 @@ using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
 using Aspire.Dashboard.Model.BrowserStorage;
 using Aspire.Dashboard.Serialization;
+using Aspire.Dashboard.Tests.Shared;
+using Aspire.Dashboard.Utils;
 using Aspire.Tests.Shared;
 using Microsoft.AspNetCore.Components.Server;
 using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage;
@@ -21,6 +23,38 @@ namespace Aspire.Dashboard.Tests;
 
 public class LocalBrowserStorageTests
 {
+    [Fact]
+    public async Task ReadUnprotectedSnapshot_ReadsOnceAndDecodesEachPreferenceIndependently()
+    {
+        var browser = new InMemoryBrowserLocalStorage();
+        browser.Items[BrowserStorageKeys.ResourcePaneWidth] = "320";
+        browser.Items[BrowserStorageKeys.ResourcePaneCollapsed] = "true";
+        browser.Items[BrowserStorageKeys.ResourcePaneGrouping] = "{";
+        browser.Items[BrowserStorageKeys.ResourcePaneKinds] = """["Project","Container"]""";
+
+        var snapshot = await browser.Storage.ReadUnprotectedSnapshotAsync(
+        [
+            BrowserStorageKeys.ResourcePaneWidth,
+            BrowserStorageKeys.ResourcePaneCollapsed,
+            BrowserStorageKeys.ResourcePaneGrouping,
+            BrowserStorageKeys.ResourcePaneKinds,
+            BrowserStorageKeys.ResourcePaneMode
+        ]);
+        browser.Items.Clear();
+
+        var width = await snapshot.GetUnprotectedAsync<int>(BrowserStorageKeys.ResourcePaneWidth);
+        Assert.True(width.Success);
+        Assert.Equal(320, width.Value);
+        Assert.True((await snapshot.GetUnprotectedAsync<bool>(BrowserStorageKeys.ResourcePaneCollapsed)).Value);
+        Assert.True((await snapshot.GetUnprotectedAsync<string>(BrowserStorageKeys.ResourcePaneGrouping)).InvalidValue);
+        Assert.Equal(["Project", "Container"], (await snapshot.GetUnprotectedAsync<List<string>>(BrowserStorageKeys.ResourcePaneKinds)).Value);
+        var missing = await snapshot.GetUnprotectedAsync<string>(BrowserStorageKeys.ResourcePaneMode);
+        Assert.False(missing.Success);
+        Assert.False(missing.ReadFailed);
+        Assert.False(missing.InvalidValue);
+        Assert.Equal(1, browser.SnapshotReadCount);
+    }
+
     [Theory]
     [InlineData(123, "123")]
     [InlineData("Hello world", @"""Hello world""")]

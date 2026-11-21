@@ -319,64 +319,40 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
     {
         var repository = TelemetryRepository;
 
-        var allLogs = await repository.GetLogSummariesAsync(CreateLogsContext(key, [], 0, 0), cancellationToken).ConfigureAwait(false);
-        List<TelemetryFilter> errorFilters = [new FieldTelemetryFilter { Field = nameof(OtlpLogEntry.Severity), Condition = FilterCondition.GreaterThanOrEqual, Value = nameof(LogLevel.Error) }];
-        List<TelemetryFilter> warningFilters = [new FieldTelemetryFilter { Field = nameof(OtlpLogEntry.Severity), Condition = FilterCondition.Equals, Value = nameof(LogLevel.Warning) }];
-        List<TelemetryFilter> attentionFilters = [new FieldTelemetryFilter { Field = nameof(OtlpLogEntry.Severity), Condition = FilterCondition.GreaterThanOrEqual, Value = nameof(LogLevel.Warning) }];
-
-        var errorLogs = await repository.GetLogSummariesAsync(CreateLogsContext(key, errorFilters, 0, 0), cancellationToken).ConfigureAwait(false);
-        var warningLogs = await repository.GetLogSummariesAsync(CreateLogsContext(key, warningFilters, 0, 0), cancellationToken).ConfigureAwait(false);
-
-        // Results are ordered oldest first, so read the last page to get the most recent entries.
-        var attentionCount = errorLogs.TotalItemCount + warningLogs.TotalItemCount;
-        var recentAttentionLogs = attentionCount > 0
-            ? (await repository.GetLogSummariesAsync(CreateLogsContext(key, attentionFilters, Math.Max(0, attentionCount - RecentItemCount), RecentItemCount), cancellationToken).ConfigureAwait(false)).Items
-            : [];
-
-        // A healthy resource has no warnings or errors to highlight, so show its latest logs instead of an empty card.
-        var recentLogs = attentionCount == 0 && allLogs.TotalItemCount > 0
-            ? (await repository.GetLogSummariesAsync(CreateLogsContext(key, [], Math.Max(0, allLogs.TotalItemCount - RecentItemCount), RecentItemCount), cancellationToken).ConfigureAwait(false)).Items
-            : [];
-
-        var allTraces = await repository.GetTraceSummariesAsync(CreateTracesRequest(key, [], 0, 0), cancellationToken).ConfigureAwait(false);
+        var logsTask = repository.GetOverviewLogsAsync([key], RecentItemCount, errorsOnly: false, cancellationToken);
+        var tracesTask = repository.GetTraceSummariesAsync(CreateTracesRequest([], RecentItemCount), cancellationToken);
         List<TelemetryFilter> failedTraceFilters = [new FieldTelemetryFilter { Field = KnownTraceFields.StatusField, Condition = FilterCondition.Equals, Value = nameof(OtlpSpanStatusCode.Error) }];
-        var failedTraces = await repository.GetTraceSummariesAsync(CreateTracesRequest(key, failedTraceFilters, 0, 0), cancellationToken).ConfigureAwait(false);
-        var traceCount = allTraces.PagedResult.TotalItemCount;
-        var recentTraces = traceCount > 0
-            ? (await repository.GetTraceSummariesAsync(CreateTracesRequest(key, [], Math.Max(0, traceCount - RecentItemCount), RecentItemCount), cancellationToken).ConfigureAwait(false)).PagedResult.Items
-            : [];
+        var failedTracesTask = repository.GetTraceSummariesAsync(CreateTracesRequest(failedTraceFilters, 0), cancellationToken);
+        await Task.WhenAll(logsTask, tracesTask, failedTracesTask).ConfigureAwait(false);
+        var logs = await logsTask.ConfigureAwait(false);
+        var traces = (await tracesTask.ConfigureAwait(false)).PagedResult;
+        var failedTraces = (await failedTracesTask.ConfigureAwait(false)).PagedResult;
 
         var instruments = repository.GetInstrumentSummaries(key)
             .OrderBy(i => i.Parent.Name, StringComparer.Ordinal)
             .ThenBy(i => i.Name, StringComparer.Ordinal)
             .ToList();
 
+        var hasAttentionLogs = logs.ErrorCount + logs.WarningCount > 0;
         return new OverviewTelemetry
         {
-            LogCount = allLogs.TotalItemCount,
-            ErrorLogCount = errorLogs.TotalItemCount,
-            WarningLogCount = warningLogs.TotalItemCount,
-            RecentAttentionLogs = recentAttentionLogs.AsEnumerable().Reverse().ToList(),
-            RecentLogs = recentLogs.AsEnumerable().Reverse().ToList(),
-            TraceCount = traceCount,
-            FailedTraceCount = failedTraces.PagedResult.TotalItemCount,
-            RecentTraces = recentTraces.AsEnumerable().Reverse().ToList(),
+            LogCount = logs.TotalCount,
+            ErrorLogCount = logs.ErrorCount,
+            WarningLogCount = logs.WarningCount,
+            RecentAttentionLogs = hasAttentionLogs ? logs.Recent : [],
+            RecentLogs = hasAttentionLogs ? [] : logs.Recent,
+            TraceCount = traces.TotalItemCount,
+            FailedTraceCount = failedTraces.TotalItemCount,
+            RecentTraces = traces.Items.AsEnumerable().Reverse().ToList(),
             Instruments = instruments
         };
 
-        static GetLogsContext CreateLogsContext(ResourceKey key, List<TelemetryFilter> filters, int startIndex, int count) => new()
+        GetTracesRequest CreateTracesRequest(List<TelemetryFilter> filters, int count) => new()
         {
             ResourceKeys = [key],
-            StartIndex = startIndex,
+            StartIndex = 0,
             Count = count,
-            Filters = filters
-        };
-
-        static GetTracesRequest CreateTracesRequest(ResourceKey key, List<TelemetryFilter> filters, int startIndex, int count) => new()
-        {
-            ResourceKeys = [key],
-            StartIndex = startIndex,
-            Count = count,
+            LatestItemCount = count,
             Filters = filters
         };
     }
@@ -772,8 +748,8 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
         public required int LogCount { get; init; }
         public required int ErrorLogCount { get; init; }
         public required int WarningLogCount { get; init; }
-        public required List<LogSummary> RecentAttentionLogs { get; init; }
-        public required List<LogSummary> RecentLogs { get; init; }
+        public required List<OverviewLog> RecentAttentionLogs { get; init; }
+        public required List<OverviewLog> RecentLogs { get; init; }
         public required int TraceCount { get; init; }
         public required int FailedTraceCount { get; init; }
         public required List<TraceSummary> RecentTraces { get; init; }

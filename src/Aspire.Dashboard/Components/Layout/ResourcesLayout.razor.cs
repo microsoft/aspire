@@ -302,27 +302,34 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         _unviewedErrorCounts = TelemetryRepository.GetResourceUnviewedErrorLogsCount();
         UpdateTelemetryOnlyResources();
 
-        var paneCollapsedResult = await LocalStorage.GetUnprotectedAsync<bool>(BrowserStorageKeys.ResourcePaneCollapsed);
+        var panePreferences = await LocalStorage.ReadUnprotectedSnapshotAsync([
+            BrowserStorageKeys.ResourcePaneCollapsed,
+            BrowserStorageKeys.ResourcePaneWidth,
+            BrowserStorageKeys.ResourcePaneMode,
+            BrowserStorageKeys.ResourcePaneGrouping,
+            BrowserStorageKeys.ResourcePaneKinds
+        ]);
+        var paneCollapsedResult = await panePreferences.GetUnprotectedAsync<bool>(BrowserStorageKeys.ResourcePaneCollapsed);
         if (paneCollapsedResult.Success)
         {
             _isPaneCollapsed = paneCollapsedResult.Value;
         }
 
-        var paneWidthResult = await LocalStorage.GetUnprotectedAsync<int>(BrowserStorageKeys.ResourcePaneWidth);
+        var paneWidthResult = await panePreferences.GetUnprotectedAsync<int>(BrowserStorageKeys.ResourcePaneWidth);
         if (paneWidthResult.Success)
         {
             _paneWidth = Math.Clamp(paneWidthResult.Value, MinimumPaneWidthPx, MaximumPaneWidthPx);
         }
         // The URL selects the mode when navigating from the main navigation. Other resource URLs, such as a row's
         // link, don't include it, so the last mode is remembered.
-        var paneModeResult = await LocalStorage.GetUnprotectedAsync<string>(BrowserStorageKeys.ResourcePaneMode);
+        var paneModeResult = await panePreferences.GetUnprotectedAsync<string>(BrowserStorageKeys.ResourcePaneMode);
         if (DashboardClient.IsEnabled && paneModeResult.Success && Enum.TryParse<ResourcePaneMode>(paneModeResult.Value, ignoreCase: true, out var storedPaneMode) && storedPaneMode != ResourcePaneMode.Telemetry)
         {
             // Migrate the former Tags navigation view to the resource pane's grouping preference.
             _grouping = storedPaneMode == ResourcePaneMode.Tags ? ResourcePaneGrouping.Tags : ResourcePaneGrouping.None;
             PaneState.SetMode(ResourcePaneMode.Resources);
         }
-        var groupingResult = await LocalStorage.GetUnprotectedAsync<string>(BrowserStorageKeys.ResourcePaneGrouping);
+        var groupingResult = await panePreferences.GetUnprotectedAsync<string>(BrowserStorageKeys.ResourcePaneGrouping);
         if (groupingResult.Success && Enum.TryParse<ResourcePaneGrouping>(groupingResult.Value, out var grouping) && Enum.IsDefined(grouping))
         {
             _grouping = grouping;
@@ -335,7 +342,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         // A comma-separated list of the kinds of items the pane lists, such as "Resources,Parameters,TelemetrySources".
         // The pane used to have a toggle for each kind. Resources and parameters are now always listed (the filter's
         // types narrow them down), so only the telemetry sources entry still counts.
-        var kindsResult = await LocalStorage.GetUnprotectedAsync<string>(BrowserStorageKeys.ResourcePaneKinds);
+        var kindsResult = await panePreferences.GetUnprotectedAsync<string>(BrowserStorageKeys.ResourcePaneKinds);
         if (kindsResult.Success && kindsResult.Value is { } storedKinds)
         {
             var kinds = storedKinds.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);

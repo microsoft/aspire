@@ -358,11 +358,11 @@ public class ResourceOverviewEmptyPanelsTests : DashboardTestContext
                 var inner = provider.GetRequiredService<SqliteTelemetryRepository>();
                 return new TestTelemetryRepository(inner)
                 {
-                    GetLogSummariesAsyncHandler = async (context, cancellationToken) =>
+                    GetOverviewLogsAsyncHandler = async (resourceKeys, recentCount, errorsOnly, cancellationToken) =>
                     {
                         queryStarted.TrySetResult();
                         await continueQuery.Task.WaitAsync(cancellationToken);
-                        return await inner.GetLogSummariesAsync(context, cancellationToken);
+                        return await inner.GetOverviewLogsAsync(resourceKeys, recentCount, errorsOnly, cancellationToken);
                     }
                 };
             }));

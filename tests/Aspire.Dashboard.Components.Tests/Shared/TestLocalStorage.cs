@@ -19,6 +19,8 @@ public sealed class TestLocalStorage : ILocalStorage
     /// </summary>
     public Func<string, bool>? IsUnprotectedReadFailed { get; set; }
 
+    public Task<IUnprotectedLocalStorageReader> ReadUnprotectedSnapshotAsync(string[] keys) => Task.FromResult<IUnprotectedLocalStorageReader>(this);
+
     public Task<StorageResult<T>> GetAsync<T>(string key)
     {
         if (OnGetAsync is { } callback)

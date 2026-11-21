@@ -93,6 +93,66 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     }
 
     [Fact]
+    public async Task GetOverviewLogs_CountsSeveritiesAndReturnsLatestMatchingPreview()
+    {
+        using var context = await CreateRepositoryAsync();
+        var repository = context.Repository;
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await repository.AsWriter().AddLogsAsync(new AddContext(), new RepeatedField<ResourceLogs>
+        {
+            new ResourceLogs
+            {
+                Resource = CreateResource(name: "api", instanceId: "1"),
+                ScopeLogs =
+                {
+                    new ScopeLogs
+                    {
+                        Scope = CreateScope(),
+                        LogRecords =
+                        {
+                            CreateLogRecord(time: s_testTime, message: "warning", severity: SeverityNumber.Warn),
+                            CreateLogRecord(time: s_testTime.AddSeconds(1), message: "error", severity: SeverityNumber.Error),
+                            CreateLogRecord(time: s_testTime.AddSeconds(1), message: "fatal", severity: SeverityNumber.Fatal),
+                            CreateLogRecord(time: s_testTime.AddSeconds(2), message: "info", severity: SeverityNumber.Info)
+                        }
+                    }
+                }
+            },
+            new ResourceLogs
+            {
+                Resource = CreateResource(name: "api", instanceId: "2"),
+                ScopeLogs =
+                {
+                    new ScopeLogs
+                    {
+                        Scope = CreateScope(),
+                        LogRecords =
+                        {
+                            CreateLogRecord(time: s_testTime.AddSeconds(3), message: "healthy", severity: SeverityNumber.Info)
+                        }
+                    }
+                }
+            }
+        });
+
+        var attention = await repository.GetOverviewLogsAsync([new("API", "1")], 3, errorsOnly: false, cancellationToken);
+        Assert.Equal((4, 1, 2), (attention.TotalCount, attention.WarningCount, attention.ErrorCount));
+        Assert.Equal(["error", "fatal", "warning"], attention.Recent.Select(l => l.Message));
+
+        var errors = await repository.GetOverviewLogsAsync([], 1, errorsOnly: true, cancellationToken);
+        Assert.Equal((5, 2), (errors.TotalCount, errors.ErrorCount));
+        Assert.Equal("error", Assert.Single(errors.Recent).Message);
+
+        var healthy = await repository.GetOverviewLogsAsync([new("api", "2")], 3, errorsOnly: false, cancellationToken);
+        Assert.Equal(1, healthy.TotalCount);
+        Assert.Equal("healthy", Assert.Single(healthy.Recent).Message);
+
+        var empty = await repository.GetOverviewLogsAsync([new("api", "missing")], 3, errorsOnly: false, cancellationToken);
+        Assert.Equal(0, empty.TotalCount);
+        Assert.Empty(empty.Recent);
+    }
+
+    [Fact]
     public async Task GetLogSummaries_ReturnsPageData()
     {
         using var repositoryContext = await CreateRepositoryAsync();

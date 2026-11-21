@@ -3,12 +3,17 @@
 
 namespace Aspire.Dashboard.Model.BrowserStorage;
 
-public interface ILocalStorage : IBrowserStorage
+public interface IUnprotectedLocalStorageReader
 {
     /// <summary>
     /// Get unprotected data from local storage. This must only be used with non-sensitive data.
     /// </summary>
     Task<StorageResult<TValue>> GetUnprotectedAsync<TValue>(string key);
+}
+
+public interface ILocalStorage : IBrowserStorage, IUnprotectedLocalStorageReader
+{
+    Task<IUnprotectedLocalStorageReader> ReadUnprotectedSnapshotAsync(string[] keys);
 
     /// <summary>
     /// Set unprotected data to local storage. This must only be used with non-sensitive data.

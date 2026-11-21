@@ -213,6 +213,8 @@ public sealed partial class SqliteTelemetryRepository : ITelemetryRepository, IT
         RunReadAsync(token => GetLogsFromDatabase(context, token), cancellationToken);
     public Task<PagedResult<LogSummary>> GetLogSummariesAsync(GetLogsContext context, CancellationToken cancellationToken) =>
         RunReadAsync(token => GetLogSummariesFromDatabase(context, token), cancellationToken);
+    public Task<OverviewLogs> GetOverviewLogsAsync(List<ResourceKey> resourceKeys, int recentCount, bool errorsOnly, CancellationToken cancellationToken) =>
+        RunReadAsync(token => GetOverviewLogsFromDatabase(resourceKeys, recentCount, errorsOnly, token), cancellationToken);
     public OtlpLogEntry? GetLog(long logId) => GetLogFromDatabase(logId);
     public async Task<List<OtlpLogEntry>> GetLogsForSpanAsync(string traceId, string spanId, CancellationToken cancellationToken)
     {
