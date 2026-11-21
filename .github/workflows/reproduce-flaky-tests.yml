@@ -28,7 +28,12 @@ env:
   #   --filter-method "*.TestMethodName"
   #   --filter-class "*.TestClassName"
   #   --filter-method "*.Test1" --filter-method "*.Test2"
-  TEST_FILTER: '--filter-not-trait quarantined=true --filter-not-trait outerloop=true'
+  TEST_FILTER: >-
+    --filter-method Aspire.Hosting.CodeGeneration.Go.Tests.AtsGoCodeGeneratorTests.GeneratedCallbacks_ReceiveResourceBuilderWrapper
+    --filter-method Aspire.Hosting.CodeGeneration.Go.Tests.AtsGoDerivedBuilderTests.GeneratedCode_CompilesWhenAnExportedValueRootIsNamedLikeAnAcceptingInterface
+    --filter-method Aspire.Hosting.CodeGeneration.Go.Tests.GoDocCommentTests.GeneratedSdk_PassesGoToolchainChecks
+    --filter-not-trait quarantined=true
+    --filter-not-trait outerloop=true
   PRODUCT_REVISION: '9dfa1516fcf0478c78e64256933831a862e45480'
 
   # Target operating systems (comma-separated)
