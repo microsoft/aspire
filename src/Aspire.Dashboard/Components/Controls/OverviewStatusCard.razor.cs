@@ -14,6 +14,8 @@ namespace Aspire.Dashboard.Components.Controls;
 
 public partial class OverviewStatusCard
 {
+    private const string StateDescriptionPropertyKey = "resource-state-description";
+
     private List<StatusProperty> _properties = [];
 
     [Inject]
@@ -44,22 +46,22 @@ public partial class OverviewStatusCard
 
     protected override void OnParametersSet()
     {
-        _properties = [new(Loc[nameof(ResourceStrings.ResourcesDetailsDisplayNameProperty)], Resource.DisplayName, StatusPropertyKind.DisplayName)];
+        _properties = [new(KnownProperties.Resource.DisplayName, Loc[nameof(ResourceStrings.ResourcesDetailsDisplayNameProperty)], Resource.DisplayName, StatusPropertyKind.DisplayName)];
         if (!string.IsNullOrWhiteSpace(Resource.State))
         {
             var stateText = ResourceStateViewModel.GetStateViewModel(Resource, ColumnsLoc).Text;
-            _properties.Add(new(Loc[nameof(ResourceStrings.ResourcesDetailsStateProperty)], stateText, StatusPropertyKind.State));
+            _properties.Add(new(KnownProperties.Resource.State, Loc[nameof(ResourceStrings.ResourcesDetailsStateProperty)], stateText, StatusPropertyKind.State));
             var description = ResourceStateViewModel.GetResourceStateTooltip(Resource, ColumnsLoc, Resources);
             if (!string.IsNullOrWhiteSpace(description) && !string.Equals(description, stateText, StringComparison.Ordinal))
             {
-                _properties.Add(new(ControlsLoc[nameof(ControlsStrings.ResourceDetailsStateDescriptionHeader)], description));
+                _properties.Add(new(StateDescriptionPropertyKey, ControlsLoc[nameof(ControlsStrings.ResourceDetailsStateDescriptionHeader)], description));
             }
         }
         if (!Resource.IsParameter && Resource.HealthStatus is { } health)
         {
-            _properties.Add(new(Loc[nameof(ResourceStrings.ResourcesDetailsHealthStateProperty)], health.ToString(), StatusPropertyKind.HealthState));
+            _properties.Add(new(KnownProperties.Resource.HealthState, Loc[nameof(ResourceStrings.ResourcesDetailsHealthStateProperty)], health.ToString(), StatusPropertyKind.HealthState));
         }
-        _properties.Add(new(Loc[nameof(ResourceStrings.ResourcesTypeColumnHeader)], Resource.ResourceTypeDisplayName));
+        _properties.Add(new(KnownProperties.Resource.ResourceTypeDisplayName, Loc[nameof(ResourceStrings.ResourcesTypeColumnHeader)], Resource.ResourceTypeDisplayName));
         if (Resource.IsParameter)
         {
             return;
@@ -67,27 +69,28 @@ public partial class OverviewStatusCard
 
         if (Resource.IsPersistentContainer)
         {
-            _properties.Add(new(Loc[nameof(ResourceStrings.ResourcesDetailsContainerLifetimeProperty)],
+            _properties.Add(new(KnownProperties.Container.Lifetime, Loc[nameof(ResourceStrings.ResourcesDetailsContainerLifetimeProperty)],
                 Loc[nameof(ResourceStrings.ResourcePersistentLifetime)], StatusPropertyKind.Lifetime,
                 Loc[nameof(ResourceStrings.ResourcePersistentLifetimeDescription)]));
         }
         if (Resource.StartTimeStamp is { } start)
         {
-            _properties.Add(new(Loc[nameof(ResourceStrings.ResourcesDetailsStartTimeProperty)], FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, start),
+            _properties.Add(new(KnownProperties.Resource.StartTime, Loc[nameof(ResourceStrings.ResourcesDetailsStartTimeProperty)], FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, start),
                 RawValue: Resource.GetResourcePropertyValue(KnownProperties.Resource.StartTime) ?? start.ToString("O", CultureInfo.InvariantCulture)));
         }
         if (Resource.StopTimeStamp is { } stop)
         {
-            _properties.Add(new(Loc[nameof(ResourceStrings.ResourcesDetailsStopTimeProperty)], FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, stop)));
+            _properties.Add(new(KnownProperties.Resource.StopTime, Loc[nameof(ResourceStrings.ResourcesDetailsStopTimeProperty)], FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, stop)));
         }
         if (Resource.TryGetExitCode(out var exitCode))
         {
-            _properties.Add(new(Loc[nameof(ResourceStrings.ResourcesDetailsExitCodeProperty)], exitCode.ToString(CultureInfo.CurrentCulture),
+            _properties.Add(new(KnownProperties.Resource.ExitCode, Loc[nameof(ResourceStrings.ResourcesDetailsExitCodeProperty)], exitCode.ToString(CultureInfo.CurrentCulture),
                 exitCode is 0 ? StatusPropertyKind.Text : StatusPropertyKind.ExitError));
         }
         if (ResourceSourceViewModel.GetSourceViewModel(Resource) is { } source)
         {
-            _properties.Add(new(Loc[nameof(ResourceStrings.ResourcesSourceColumnHeader)], source.Value, StatusPropertyKind.Source, source.Tooltip, RawValue: source.OriginalValue));
+            _properties.Add(new(KnownProperties.Resource.Source, Loc[nameof(ResourceStrings.ResourcesSourceColumnHeader)], source.Value, StatusPropertyKind.Source,
+                source.Tooltip, RawValue: source.OriginalValue, SourceProperty: source.Property));
         }
     }
 
@@ -104,9 +107,19 @@ public partial class OverviewStatusCard
         Source
     }
 
-    private sealed record StatusProperty(string Name, string Text, StatusPropertyKind Kind = StatusPropertyKind.Text, string? Tooltip = null, string? RawValue = null) : IPropertyGridItem
+    private sealed record StatusProperty(string PropertyKey, string Name, string Text, StatusPropertyKind Kind = StatusPropertyKind.Text,
+        string? Tooltip = null, string? RawValue = null, ResourcePropertyViewModel? SourceProperty = null) : IPropertyGridItem
     {
+        object IPropertyGridItem.Key => PropertyKey;
         string? IPropertyGridItem.Value => Kind == StatusPropertyKind.Text ? Text : null;
+        string? IPropertyGridItem.ValueTooltip => Kind == StatusPropertyKind.Source ? Tooltip : null;
         string IPropertyGridItem.ValueToVisualize => RawValue ?? Text;
+        bool IPropertyGridItem.TextVisualizerContainsSecret => SourceProperty?.IsValueSensitive == true;
+        bool IPropertyGridItem.IsValueSensitive => SourceProperty?.IsValueSensitive == true;
+        bool IPropertyGridItem.IsValueMasked
+        {
+            get => SourceProperty?.IsValueMasked == true;
+            set => (SourceProperty ?? throw new InvalidOperationException("Only the Source row supports masking.")).IsValueMasked = value;
+        }
     }
 }

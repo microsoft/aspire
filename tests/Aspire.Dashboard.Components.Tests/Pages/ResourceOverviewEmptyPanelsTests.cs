@@ -10,6 +10,8 @@ using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Tests.Shared;
+using Aspire.Dashboard.Utils;
+using Aspire.Tests.Shared;
 using Aspire.Tests.Shared.DashboardModel;
 using Bunit;
 using Google.Protobuf.WellKnownTypes;
@@ -419,6 +421,71 @@ public class ResourceOverviewEmptyPanelsTests : DashboardTestContext
         Assert.Equal(projectPath, values["Source"].ValueToVisualize);
         Assert.Equal(expectedStart, values["Start time"].ValueToVisualize);
         Assert.NotEqual(expectedStart, values["Start time"].Value);
+    }
+
+    [Fact]
+    [UseCulture("cs-CZ")]
+    public void Status_RendersStateAndHealthStateWithIdenticalLocalizedLabels()
+    {
+        SetupOverview(new TestDashboardClient(isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("test", state: KnownResourceState.Running)],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+
+        var cut = RenderOverview(s_viewport);
+
+        var rows = cut.FindComponent<OverviewStatusCard>().FindAll("td.nameColumn")
+            .Where(cell => cell.TextContent.Trim() == "Stav");
+        Assert.Collection(rows,
+            state => Assert.Contains(KnownResourceState.Running.ToString(), state.NextElementSibling!.TextContent),
+            health => Assert.Contains("Healthy", health.NextElementSibling!.TextContent));
+    }
+
+    [Fact]
+    public async Task Status_MasksSensitiveSourceAndWarnsInVisualizer()
+    {
+        const string rawSource = "sample-sensitive-source";
+        var properties = new Dictionary<string, ResourcePropertyViewModel>
+        {
+            [KnownProperties.Resource.Source] = new(KnownProperties.Resource.Source, Value.ForString(rawSource), true, null, 0, null, false)
+        };
+        var resource = ModelTestHelpers.CreateResource("test", properties: properties);
+        var dialogService = new TestDialogService();
+        ResourceSetupHelpers.SetupResourceOverview(this, s_viewport,
+            new TestDashboardClient(isEnabled: true, initialResources: [resource],
+                resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>),
+            configureServices: services => services.AddSingleton<IDialogService>(dialogService));
+        Services.GetRequiredService<NavigationManager>().NavigateTo("/resources/test");
+        var status = RenderOverview(s_viewport).FindComponent<OverviewStatusCard>();
+        var source = Assert.Single(status.FindComponents<GridValue>(), cell => cell.Instance.TextVisualizerTitle == "Source");
+        var mask = DashboardUIHelpers.GetMaskingText(8).Text;
+        var maskedValue = source.Find(".grid-value.masked");
+
+        Assert.Equal(mask, maskedValue.TextContent.Trim());
+        Assert.Equal(mask, maskedValue.GetAttribute("data-tooltip"));
+
+        await AssertVisualizerWarnsAsync();
+
+        await source.Find(".grid-value-mask-button").ClickAsync(new());
+        Assert.Equal(rawSource, source.Find(".overview-status-source").TextContent);
+        Assert.Equal(rawSource, source.Find(".grid-value").GetAttribute("data-tooltip"));
+        await AssertVisualizerWarnsAsync();
+
+        await source.Find(".grid-value-mask-button").ClickAsync(new());
+        maskedValue = source.Find(".grid-value.masked");
+        Assert.Equal(mask, maskedValue.TextContent.Trim());
+        Assert.Equal(mask, maskedValue.GetAttribute("data-tooltip"));
+
+        async Task AssertVisualizerWarnsAsync()
+        {
+            var previousDialog = dialogService.LastInstance;
+            await source.Find("fluent-button[aria-label='Open in text visualizer']").ClickAsync(new());
+            var instance = Assert.IsAssignableFrom<IDialogInstance>(dialogService.LastInstance);
+            Assert.NotSame(previousDialog, instance);
+            var dialog = Assert.IsType<TextVisualizerDialogViewModel>(instance.Options.Parameters["Content"]);
+            Assert.True(dialog.ContainsSecret);
+            Assert.Equal(rawSource, dialog.Text);
+            await instance.CloseAsync();
+        }
     }
 
     [Theory]

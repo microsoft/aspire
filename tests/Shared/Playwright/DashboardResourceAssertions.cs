@@ -67,7 +67,7 @@ public static class DashboardResourceAssertions
                 await dashboardPageWrapper.GotoAsync(new Uri(new Uri(originalUrl), $"/resources/{Uri.EscapeDataString(resourceName)}").AbsoluteUri);
                 var source = page.Locator(".overview-status-grid .overview-status-source");
                 await Assertions.Expect(source).ToBeVisibleAsync();
-                Assert.Contains(expected.SourceContains, await source.GetAttributeAsync("data-tooltip"));
+                Assert.Contains(expected.SourceContains, await source.Locator("..").GetAttributeAsync("data-tooltip"));
 
                 foundRows.Add(name, expected);
             }
