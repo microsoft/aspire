@@ -968,7 +968,7 @@ public class ResourcesLayoutTests : DashboardTestContext
         var groups = cut.FindAll(".resource-tag-group").Select(g => (
             g.GetAttribute("data-resource-group-key"),
             string.Join(", ", g.QuerySelectorAll(".resource-row-name").Select(n => n.TextContent.Trim())))).ToList();
-        var sections = cut.FindAll(".resource-pane-section-header > span:first-child").Select(s => s.TextContent.Trim()).ToList();
+        var sections = cut.FindAll(".resource-pane-section-header .resource-tag-name").Select(s => s.TextContent.Trim()).ToList();
         if (grouping == "Tags")
         {
             // A parameter shows with the resources that share its tags, after them. Untagged ones are with the untagged.
@@ -984,6 +984,41 @@ public class ResourcesLayoutTests : DashboardTestContext
                 ["api-key", "theme"],
                 cut.FindAll(".resource-pane-section-header ~ .resource-row .resource-row-name").Select(n => n.TextContent.Trim()));
         }
+    }
+
+    [Theory]
+    [InlineData("None")]
+    [InlineData("ResourceType")]
+    public void ParametersSection_SelectsAllParametersIndependentlyOfCollapse(string grouping)
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources:
+            [
+                ModelTestHelpers.CreateResource("api", resourceType: "Project"),
+                ModelTestHelpers.CreateResource("api-key", resourceType: KnownResourceTypes.Parameter),
+                ModelTestHelpers.CreateResource("theme", resourceType: KnownResourceTypes.Parameter)
+            ], resourceChannelProvider: () => channel));
+        var storage = Assert.IsType<TestLocalStorage>(Services.GetRequiredService<ILocalStorage>());
+        storage.OnGetUnprotectedAsync = key => key == BrowserStorageKeys.ResourcePaneGrouping ? (true, grouping) : (false, null);
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo(DashboardUrls.ResourceOverviewUrl("api"));
+        var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
+        const string toggle = ".resource-pane-section-header button[aria-label='Expand or collapse Parameters']";
+        const string link = ".resource-pane-section-header a[aria-label='Parameters, 2 parameters']";
+
+        cut.WaitForAssertion(() => Assert.Equal("true", cut.Find(toggle).GetAttribute("aria-expanded")));
+        cut.Find(toggle).Click();
+        Assert.Equal("false", cut.Find(toggle).GetAttribute("aria-expanded"));
+        Assert.Empty(cut.FindAll(".resource-row-kind-parameter"));
+        Assert.Equal(["api"], cut.Instance.SelectedResourceNames);
+
+        cut.Find(link).Click();
+        cut.Render();
+        Assert.Equal(["api-key", "theme"], cut.Instance.SelectedResourceNames);
+        Assert.Equal("true", cut.Find(link).GetAttribute("aria-current"));
+        Assert.Equal("false", cut.Find(toggle).GetAttribute("aria-expanded"));
     }
 
     [Theory]
@@ -1646,7 +1681,7 @@ public class ResourcesLayoutTests : DashboardTestContext
         const string backendGroup = ".resource-tag-group[aria-label='Backend']";
         cut.WaitForAssertion(() => Assert.Single(cut.FindAll($"{backendGroup} .resource-tag-action")));
         Assert.Equal("1", cut.Find(".untagged .resource-tag-count").TextContent);
-        Assert.Empty(cut.FindAll(".untagged .resource-tag-action"));
+        Assert.Single(cut.FindAll(".untagged .resource-tag-action"));
 
         var trigger = cut.Find($"{backendGroup} .resource-tag-action");
         await trigger.ClickAsync(new MouseEventArgs());
@@ -1663,6 +1698,46 @@ public class ResourcesLayoutTests : DashboardTestContext
         await cut.InvokeAsync(openCommand.OnClick!);
 
         Assert.Equal(["api"], executed);
+    }
+
+    [Theory]
+    [InlineData("None", "Resources", new[] { "api", "cache" })]
+    [InlineData("ResourceType", "Project", new[] { "api" })]
+    [InlineData("State", "Running", new[] { "api" })]
+    public async Task GroupActions_RunCommandsForGroupMembers(string grouping, string groupName, string[] expected)
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var executed = new ConcurrentQueue<string>();
+        var refresh = new CommandViewModel("refresh", CommandViewModelState.Enabled, "Refresh", "",
+            confirmationMessage: "", argumentInputs: [], isHighlighted: true, iconName: "", iconVariant: IconVariant.Regular);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources:
+            [
+                ModelTestHelpers.CreateResource("api", resourceType: "Project", state: KnownResourceState.Running, commands: [refresh]),
+                ModelTestHelpers.CreateResource("cache", resourceType: "Container", state: KnownResourceState.Exited, commands: [refresh]),
+                ModelTestHelpers.CreateResource("setting", resourceType: KnownResourceTypes.Parameter, commands: [refresh])
+            ],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>,
+            executeResourceCommand: (resource, _, _, _, _) =>
+            {
+                executed.Enqueue(resource);
+                return Task.FromResult(new ResourceCommandResponseViewModel { Kind = ResourceCommandResponseKind.Succeeded });
+            }));
+        var storage = Assert.IsType<TestLocalStorage>(Services.GetRequiredService<ILocalStorage>());
+        storage.OnGetUnprotectedAsync = key => key == BrowserStorageKeys.ResourcePaneGrouping ? (true, grouping) : (false, null);
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.ConsoleLogsUrl("cache"));
+        Render<FluentToastProvider>();
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
+
+        var trigger = cut.WaitForElement($".resource-pane-group[aria-label='{groupName}'] .resource-tag-action");
+        await trigger.ClickAsync(new MouseEventArgs());
+        var menu = cut.FindComponents<AspireMenu>().Single(m => m.Instance.Anchor == trigger.Id);
+        var action = Assert.Single(menu.Instance.Items, item => !item.IsHeader);
+        Assert.Equal("Refresh", action.Text);
+        Assert.False(action.IsDisabled);
+        await cut.InvokeAsync(action.OnClick!);
+
+        Assert.Equal(expected, executed.Order());
     }
 
     [Fact]
