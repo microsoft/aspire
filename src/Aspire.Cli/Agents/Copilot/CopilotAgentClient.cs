@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Agents.AspireSkills;
 using Aspire.Cli.Agents.Hooks;
@@ -156,8 +157,9 @@ internal sealed class CopilotAgentClient(
             }
             catch (InvalidOperationException ex)
             {
-                logger.LogDebug(ex, "Copilot hooks at {Path} contained malformed JSON; skipping hook registration.", filePath);
-                return TelemetryHookStatus.MalformedConfig;
+                logger.LogDebug(ex, "Copilot hooks at {Path} could not be merged; skipping hook registration.", filePath);
+                return ex.InnerException is JsonException
+                    ? TelemetryHookStatus.MalformedConfig : TelemetryHookStatus.UnexpectedConfigShape;
             }
 
             if (config.TryGetPropertyValue("hooks", out var hooksNode) && hooksNode is not JsonObject)
@@ -175,7 +177,7 @@ internal sealed class CopilotAgentClient(
             // invocation, preserving other events and hooks even when matchers overlap.
             for (var i = postToolUse.Count - 1; i >= 0; i--)
             {
-                if (IsAspireTelemetryHook(postToolUse[i], command))
+                if (AgentTelemetryHook.IsAspireHook(postToolUse[i], "exec"))
                 {
                     postToolUse.RemoveAt(i);
                 }
@@ -206,23 +208,6 @@ internal sealed class CopilotAgentClient(
             logger.LogDebug(ex, "Failed to write Copilot telemetry hook configuration.");
             return TelemetryHookStatus.WriteFailed;
         }
-    }
-
-    private static bool IsAspireTelemetryHook(JsonNode? node, string currentCommand)
-    {
-        if (node is not JsonObject hook || hook["exec"] is not JsonValue executableValue
-            || !executableValue.TryGetValue<string>(out var executable) || hook["args"] is not JsonArray args)
-        {
-            return false;
-        }
-
-        var values = args.Select(arg => arg is JsonValue value && value.TryGetValue<string>(out var text) ? text : null).ToArray();
-        var executableName = Path.GetFileNameWithoutExtension(executable);
-        return values is [AgentTelemetryProtocol.AgentCommandName, AgentTelemetryProtocol.TelemetryCommandName, AgentTelemetryProtocol.HookOptionName]
-                && (executable == currentCommand || string.Equals(executableName, "aspire", StringComparison.OrdinalIgnoreCase))
-            || string.Equals(executableName, "dotnet", StringComparison.OrdinalIgnoreCase)
-                && values is [var assemblyPath, AgentTelemetryProtocol.AgentCommandName, AgentTelemetryProtocol.TelemetryCommandName, AgentTelemetryProtocol.HookOptionName]
-                && string.Equals(Path.GetFileName(assemblyPath), "aspire.dll", StringComparison.OrdinalIgnoreCase);
     }
 
     public override string ToString() => Id;
