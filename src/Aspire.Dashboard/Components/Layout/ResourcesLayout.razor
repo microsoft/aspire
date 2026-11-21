@@ -1203,11 +1203,15 @@
 
     private void RenderRowIcon(RenderTreeBuilder __builder, ResourceRowContext item)
     {
+        var iconColor = item.UnavailableReason is not null
+            ? "var(--colorNeutralForeground3)"
+            : $"var(--resource-row-icon-forced-color, {ColorGenerator.Instance.GetColorVariableByKey(item.Name)})";
+
         <span class="resource-row-icon">
             <span class="resource-row-glyph">
                 <FluentIcon Width="16px"
                             Color="Color.Custom"
-                            CustomColor="@(item.UnavailableReason is not null ? "var(--colorNeutralForeground3)" : "var(--resource-row-kind-accent)")"
+                            CustomColor="@iconColor"
                             Value="@ResourceIconHelpers.GetIconForResource(IconResolver, item.Resource, IconSize.Size16)" />
             </span>
             <PersistentContainerBadge Resource="@item.Resource" />
