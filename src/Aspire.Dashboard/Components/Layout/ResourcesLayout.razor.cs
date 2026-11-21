@@ -1525,19 +1525,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private bool IsTagVisible(string tag) =>
         !_filter.ResourceTagsToVisibility.TryGetValue(tag, out var visible) || visible;
 
-    private bool IsGroupCollapsed(ResourceGroup group) => _collapsedGroups.Contains(GetGroupKey(group));
-
-    private bool IsSectionCollapsed(string sectionKey) => _collapsedGroups.Contains(sectionKey);
-
-    private void ToggleGroup(ResourceGroup group)
-    {
-        ToggleCollapsedGroup(GetGroupKey(group));
-    }
-
-    private void ToggleSection(string sectionKey)
-    {
-        ToggleCollapsedGroup(sectionKey);
-    }
+    private bool IsGroupCollapsed(string key) => _collapsedGroups.Contains(key);
 
     private void ToggleCollapsedGroup(string key)
     {
@@ -1958,11 +1946,21 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private bool IsCommandDisabled(ResourceViewModel resource, CommandViewModel command) =>
         DashboardClient.IsReadOnly || command.State == CommandViewModelState.Disabled || DashboardCommandExecutor.IsExecuting(resource.Name, command.Name);
 
-    private List<MenuButtonItem> GetTagGroupMenuItems(string tagName) =>
-        ResourceMenuBuilder.CreateTagGroupMenuItems(tagName, $"resource-pane-tag-menu-header-{Guid.NewGuid():N}",
-            () => GetTagGroups().Find(group => StringComparer.OrdinalIgnoreCase.Equals(group.Value, tagName))?.Resources ?? [],
+    private List<MenuButtonItem> GetPaneGroupMenuItems(string groupKey, string groupName, bool isTag) =>
+        ResourceMenuBuilder.CreateGroupMenuItems(groupName, $"resource-pane-group-menu-header-{Guid.NewGuid():N}",
+            isTag ? new Icons.Regular.Size16.Tag() : null,
+            () => GetPaneGroupMembers(groupKey),
             (resource, command) => DashboardCommandExecutor.IsExecuting(resource.Name, command.Name),
-            (resource, command) => EventCallback.Factory.Create(this, () => ExecuteResourceCommandAsync(resource, command)).InvokeAsync());
+            (resource, command) => EventCallback.Factory.Create(this, () => ExecuteResourceCommandAsync(resource, command)).InvokeAsync(),
+            showEmptyGroup: true);
+
+    private IReadOnlyList<ResourceViewModel> GetPaneGroupMembers(string groupKey) => groupKey switch
+    {
+        ResourcesSectionKey => _grouping == ResourcePaneGrouping.None ? GetPaneRows().Select(row => row.Resource).ToList() : [],
+        ParametersSectionKey => _grouping != ResourcePaneGrouping.Tags ? GetParameterPaneRows() : [],
+        TelemetrySectionKey => [],
+        _ => GetResourceGroups().Find(group => StringComparer.OrdinalIgnoreCase.Equals(GetGroupKey(group), groupKey))?.Resources ?? []
+    };
 
     private List<MenuButtonItem> GetResourceMenuItems(ResourceViewModel resource)
     {
@@ -2803,7 +2801,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         {
             // A resource with several tags is listed several times. Ranges use its first position.
             names = GetResourceGroups()
-                .Where(g => !IsGroupCollapsed(g))
+                .Where(g => !IsGroupCollapsed(GetGroupKey(g)))
                 .SelectMany(g => g.Resources)
                 .Select(GetResourceName)
                 .Distinct(StringComparers.ResourceName)
@@ -2811,17 +2809,17 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         }
         else
         {
-            names = IsSectionCollapsed(ResourcesSectionKey)
+            names = IsGroupCollapsed(ResourcesSectionKey)
                 ? []
                 : GetPaneRows().Select(r => GetResourceName(r.Resource)).ToList();
 
-            if (!IsSectionCollapsed(ParametersSectionKey))
+            if (!IsGroupCollapsed(ParametersSectionKey))
             {
                 names.AddRange(GetParameterPaneRows().Select(GetResourceName));
             }
         }
 
-        if (!IsSectionCollapsed(TelemetrySectionKey))
+        if (!IsGroupCollapsed(TelemetrySectionKey))
         {
             names.AddRange(GetVisibleTelemetryResources().Select(r => r.Name));
         }
