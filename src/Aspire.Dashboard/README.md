@@ -71,7 +71,8 @@ to open the resource drawer. Its filters and footer stay outside the scrolling r
 ## Exporting the resource graph
 
 In **Resources > Graph**, select **Export as Mermaid** in the graph controls to open a dialog showing the generated
-Mermaid source. Use **Copy to clipboard** to copy the source or **Download** to save it as `resources.mmd`.
+Mermaid source. In the dialog footer, use **Copy to clipboard** to copy the source or **Download** to save it as `resources.mmd`.
+Long lines wrap by default. Select **Disable word wrap** in the dialog header to view them on a single line.
 The diagram includes the currently visible resources and their connections, respecting search, resource filters,
 and the **Show hidden resources** setting. Parameters are not included. Resource labels match the dashboard graph,
 including replica names; resource values, endpoints, and other configuration are not exported.
