@@ -686,6 +686,7 @@ public class Program
         builder.Services.AddSingleton<IMcpTransportFactory, StdioMcpTransportFactory>();
 
         // Commands.
+        builder.Services.AddSingleton(new LauncherWatchdogOptions());
         builder.Services.AddSingleton<CommonCommandServices>();
         builder.Services.AddSingleton<ResourceWaitService>();
         builder.Services.AddSingleton<AppHostConfigurationProjector>();

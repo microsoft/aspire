@@ -18,7 +18,8 @@ internal sealed class CommonCommandServices(
     ConsoleCancellationManager cancellationManager,
     ILoggerFactory loggerFactory,
     ICliHostEnvironment hostEnvironment,
-    ConfigSourceService configSources)
+    ConfigSourceService configSources,
+    LauncherWatchdogOptions launcherWatchdogOptions)
 {
     public IFeatures Features { get; } = features;
     public ICliUpdateNotifier UpdateNotifier { get; } = updateNotifier;
@@ -29,4 +30,5 @@ internal sealed class CommonCommandServices(
     public ILoggerFactory LoggerFactory { get; } = loggerFactory;
     public ICliHostEnvironment HostEnvironment { get; } = hostEnvironment;
     public ConfigSourceService ConfigSources { get; } = configSources;
+    public LauncherWatchdogOptions LauncherWatchdogOptions { get; } = launcherWatchdogOptions;
 }

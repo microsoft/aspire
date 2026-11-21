@@ -42,17 +42,21 @@ internal static class ParentProcessWatchdog
     /// cannot leave the command running forever.
     /// </summary>
     /// <remarks>
-    /// Deliberately not public: CLI commands must go through <see cref="StartCliParentScope"/> so the
+    /// Deliberately not public: CLI commands must go through <see cref="StartCliParentScope(CancellationToken)"/> so the
     /// watchdog is armed before any awaited setup and the command cannot obtain a token without it.
     /// </remarks>
     /// <returns>A handle that stops the watchdog when disposed, or <see langword="null"/> when this
     /// process was not launched by a host that opted into the watchdog.</returns>
     internal static IAsyncDisposable? StartForCliParent(CancellationTokenSource operationCts)
+        => StartForCliParent(operationCts, pollInterval: null);
+
+    internal static IAsyncDisposable? StartForCliParent(CancellationTokenSource operationCts, TimeSpan? pollInterval)
         => Start(
             operationCts,
             KnownConfigNames.CliParentProcessId,
             stableStartVariable: null,
-            KnownConfigNames.CliParentProcessStarted);
+            KnownConfigNames.CliParentProcessStarted,
+            pollInterval: pollInterval);
 
     /// <summary>
     /// Starts watching the host that launched this CLI process and returns the cancellation scope the
@@ -67,11 +71,22 @@ internal static class ParentProcessWatchdog
     /// opt in via <c>RunsUnderLauncherWatchdog</c>.
     /// </remarks>
     public static ParentProcessWatchdogScope StartCliParentScope(CancellationToken cancellationToken)
+        => StartCliParentScope(cancellationToken, pollInterval: null);
+
+    /// <summary>
+    /// Starts watching the host that launched this CLI process with an explicit poll interval.
+    /// </summary>
+    /// <remarks>
+    /// The production entry point is <see cref="StartCliParentScope(CancellationToken)"/>, which uses the
+    /// monitor's default one-second poll. Tests pass a short interval so a launcher killed after the
+    /// initial probe is detected without racing wall-clock scheduling under CPU contention.
+    /// </remarks>
+    internal static ParentProcessWatchdogScope StartCliParentScope(CancellationToken cancellationToken, TimeSpan? pollInterval)
     {
         var operationCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         try
         {
-            return new ParentProcessWatchdogScope(operationCts, StartForCliParent(operationCts));
+            return new ParentProcessWatchdogScope(operationCts, StartForCliParent(operationCts, pollInterval));
         }
         catch
         {
@@ -87,7 +102,8 @@ internal static class ParentProcessWatchdog
         CancellationTokenSource operationCts,
         string processIdVariable,
         string? stableStartVariable,
-        string? legacyStartVariable)
+        string? legacyStartVariable,
+        TimeSpan? pollInterval = null)
     {
         if (!int.TryParse(Environment.GetEnvironmentVariable(processIdVariable), NumberStyles.Integer, CultureInfo.InvariantCulture, out var parentPid))
         {
@@ -104,7 +120,8 @@ internal static class ParentProcessWatchdog
             parentPid,
             expectedStartTimeUnix,
             stopToken => CancelAndForceExitAsync(operationCts, stopToken, ForceExitGracePeriod, Environment.Exit),
-            useRuntimeStartTime: useRuntimeStartTime);
+            useRuntimeStartTime: useRuntimeStartTime,
+            pollInterval: pollInterval);
     }
 
     // Returns the stable identity value (ASPIRE_CLI_STARTED_STABLE, Unix milliseconds) when present,
@@ -178,7 +195,7 @@ internal static class ParentProcessWatchdog
 
 /// <summary>
 /// The cancellation scope a long-running CLI command runs under while a launcher watchdog is armed.
-/// Created by <see cref="ParentProcessWatchdog.StartCliParentScope"/>, so obtaining the token and arming
+/// Created by <see cref="ParentProcessWatchdog.StartCliParentScope(CancellationToken)"/>, so obtaining the token and arming
 /// the watchdog cannot be separated: there is no way to hold this scope without the monitor running.
 /// </summary>
 internal sealed class ParentProcessWatchdogScope : IAsyncDisposable

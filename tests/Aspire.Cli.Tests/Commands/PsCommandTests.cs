@@ -658,7 +658,41 @@ public class PsCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await provider.GetRequiredService<RootCommand>()
             .Parse("ps --format json --follow")
             .InvokeAsync()
-            .DefaultTimeout();
+            .DefaultTimeout(TestConstants.LongTimeoutDuration);
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+    }
+
+    [Fact]
+    public async Task PsCommand_Follow_ExitsWhenLauncherStartTimeDoesNotMatchLiveProcess()
+    {
+        // Guards the PID-reuse check that ASPIRE_CLI_PARENT_STARTED feeds. The launcher PID is alive, but
+        // its stamped start time is wrong, which is exactly what a recycled PID looks like - and exactly
+        // what a start time derived from Date.now()/process.uptime() looks like after a Linux suspend.
+        // The follower must treat the launcher as gone instead of streaming forever at a stranger.
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var monitor = new TestAuxiliaryBackchannelMonitor
+        {
+            WatchConnectionsHandler = cancellationToken => IdleConnectionsAsync(cancellationToken)
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
+            options.LauncherWatchdogPollInterval = EnvVarOverride.LauncherWatchdogTestPollInterval;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        using var launcher = TestProcesses.StartLongRunning();
+        using var parentPid = EnvVarOverride.CreateForRunningProcess(KnownConfigNames.CliParentProcessId, launcher);
+        using var parentStarted = new EnvVarOverride(
+            KnownConfigNames.CliParentProcessStarted,
+            EnvVarOverride.CreateMismatchedStartTimeUnixSeconds(launcher));
+
+        var exitCode = await provider.GetRequiredService<RootCommand>()
+            .Parse("ps --format json --follow")
+            .InvokeAsync()
+            .DefaultTimeout(TestConstants.LongTimeoutDuration);
 
         Assert.Equal(CliExitCodes.Success, exitCode);
     }
@@ -668,6 +702,57 @@ public class PsCommandTests(ITestOutputHelper outputHelper)
     {
         await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
         yield break;
+    }
+
+    [Fact]
+    public async Task PsCommand_Follow_ExitsWhenLauncherIsKilledWhileStreamIsIdle()
+    {
+        // The launcher-death tests above arm the watchdog against a PID that was already gone, so they
+        // only prove the immediate pre-tick probe. This one starts with a live launcher, lets the
+        // follower reach its idle wait, and only then kills the launcher: the exit must come from the
+        // periodic poll noticing the parent disappeared, which is the real orphaned-launcher condition.
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var monitor = new TestAuxiliaryBackchannelMonitor
+        {
+            // No AppHost is ever discovered, so the follower idles without writing anything.
+            WatchConnectionsHandler = cancellationToken => IdleConnectionsAsync(cancellationToken)
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
+            options.LauncherWatchdogPollInterval = EnvVarOverride.LauncherWatchdogTestPollInterval;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        using var launcher = TestProcesses.StartLongRunning();
+        using var parentPid = EnvVarOverride.CreateForRunningProcess(KnownConfigNames.CliParentProcessId, launcher);
+        using var parentStarted = new EnvVarOverride(KnownConfigNames.CliParentProcessStarted, null);
+
+        var invocation = provider.GetRequiredService<RootCommand>()
+            .Parse("ps --format json --follow")
+            .InvokeAsync();
+
+        try
+        {
+            // Let the follower arm the watchdog and settle into its idle wait before the launcher dies.
+            await Task.Delay(TimeSpan.FromSeconds(2));
+            Assert.False(invocation.IsCompleted, "ps --follow should still be streaming while its launcher is alive.");
+
+            launcher.Kill(entireProcessTree: true);
+            launcher.WaitForExit();
+
+            var exitCode = await invocation.DefaultTimeout();
+            Assert.Equal(CliExitCodes.Success, exitCode);
+        }
+        finally
+        {
+            if (!launcher.HasExited)
+            {
+                launcher.Kill(entireProcessTree: true);
+                launcher.WaitForExit();
+            }
+        }
     }
 
     [Fact]

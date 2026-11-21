@@ -160,7 +160,7 @@ internal abstract class BaseCommand : Command
         // force-killed launcher could strand the command there forever. The scope owns the linked token,
         // so the hook cannot be used to obtain a token without also starting the monitor.
         await using var launcherWatchdogScope = RunsUnderLauncherWatchdog(parseResult)
-            ? ParentProcessWatchdog.StartCliParentScope(cancellationToken)
+            ? ParentProcessWatchdog.StartCliParentScope(cancellationToken, services.LauncherWatchdogOptions.PollInterval)
             : null;
         if (launcherWatchdogScope is not null)
         {

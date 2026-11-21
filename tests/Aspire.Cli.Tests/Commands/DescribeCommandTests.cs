@@ -1338,11 +1338,116 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
         using var parentPid = EnvVarOverride.CreateForExitedProcess(KnownConfigNames.CliParentProcessId);
         using var parentStarted = new EnvVarOverride(KnownConfigNames.CliParentProcessStarted, null);
 
-        var exitCode = await provider.GetRequiredService<RootCommand>().Parse("describe --follow --format json").InvokeAsync().DefaultTimeout();
+        var exitCode = await provider.GetRequiredService<RootCommand>().Parse("describe --follow --format json").InvokeAsync().DefaultTimeout(TestConstants.LongTimeoutDuration);
 
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.True(launcherExited.Task.IsCompleted, "The stalled initial snapshot load should have been cancelled by the launcher watchdog.");
         Assert.Equal("", string.Join("", outputWriter.Logs));
+    }
+
+    [Fact]
+    public async Task DescribeCommand_Follow_ExitsWhenLauncherIsKilledWhileStreamIsIdle()
+    {
+        // The launcher-death tests above arm the watchdog against a PID that was already gone, so they
+        // only prove the immediate pre-tick probe. This one starts with a live launcher, lets the
+        // follower reach its idle wait, and only then kills the launcher: the exit must come from the
+        // periodic poll noticing the parent disappeared, which is the real orphaned-launcher condition.
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        var connection = new TestAppHostAuxiliaryBackchannel
+        {
+            IsInScope = true,
+            AppHostInfo = CreateAppHostInfo(workspace, 1234),
+            ResourceSnapshots = [],
+            // The initial load completes empty, then the live watch never yields and never completes:
+            // the follower prints nothing further and parks in its idle wait, which is where a
+            // force-killed launcher used to strand it.
+            GetResourceSnapshotsHandler = _ => Task.FromResult(new List<ResourceSnapshot>()),
+            WatchResourceSnapshotsHandler = (_, cancellationToken) => IdleResourceSnapshots(cancellationToken),
+        };
+        monitor.AddConnection("socket.hash1", connection);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
+            options.OutputTextWriter = outputWriter;
+            options.DisableAnsi = true;
+            options.LauncherWatchdogPollInterval = EnvVarOverride.LauncherWatchdogTestPollInterval;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        using var launcher = TestProcesses.StartLongRunning();
+        using var parentPid = EnvVarOverride.CreateForRunningProcess(KnownConfigNames.CliParentProcessId, launcher);
+        using var parentStarted = new EnvVarOverride(KnownConfigNames.CliParentProcessStarted, null);
+
+        var invocation = provider.GetRequiredService<RootCommand>()
+            .Parse("describe --follow --format json")
+            .InvokeAsync();
+
+        try
+        {
+            // Let the follower arm the watchdog and settle into its idle wait before the launcher dies.
+            await Task.Delay(TimeSpan.FromSeconds(2));
+            Assert.False(invocation.IsCompleted, "describe --follow should still be streaming while its launcher is alive.");
+
+            launcher.Kill(entireProcessTree: true);
+            launcher.WaitForExit();
+
+            var exitCode = await invocation.DefaultTimeout();
+            Assert.Equal(CliExitCodes.Success, exitCode);
+        }
+        finally
+        {
+            if (!launcher.HasExited)
+            {
+                launcher.Kill(entireProcessTree: true);
+                launcher.WaitForExit();
+            }
+        }
+    }
+
+    [Fact]
+    public async Task DescribeCommand_Follow_ExitsWhenLauncherStartTimeDoesNotMatchLiveProcess()
+    {
+        // Guards the PID-reuse check that ASPIRE_CLI_PARENT_STARTED feeds. The launcher PID is alive, but
+        // its stamped start time is wrong, which is exactly what a recycled PID looks like - and exactly
+        // what a start time derived from Date.now()/process.uptime() looks like after a Linux suspend.
+        // The follower must treat the launcher as gone instead of streaming forever at a stranger.
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        var connection = new TestAppHostAuxiliaryBackchannel
+        {
+            IsInScope = true,
+            AppHostInfo = CreateAppHostInfo(workspace, 1234),
+            ResourceSnapshots = [],
+            GetResourceSnapshotsHandler = _ => Task.FromResult(new List<ResourceSnapshot>()),
+            WatchResourceSnapshotsHandler = (_, cancellationToken) => IdleResourceSnapshots(cancellationToken),
+        };
+        monitor.AddConnection("socket.hash1", connection);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
+            options.OutputTextWriter = outputWriter;
+            options.DisableAnsi = true;
+            options.LauncherWatchdogPollInterval = EnvVarOverride.LauncherWatchdogTestPollInterval;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        using var launcher = TestProcesses.StartLongRunning();
+        using var parentPid = EnvVarOverride.CreateForRunningProcess(KnownConfigNames.CliParentProcessId, launcher);
+        using var parentStarted = new EnvVarOverride(
+            KnownConfigNames.CliParentProcessStarted,
+            EnvVarOverride.CreateMismatchedStartTimeUnixSeconds(launcher));
+
+        var exitCode = await provider.GetRequiredService<RootCommand>()
+            .Parse("describe --follow --format json")
+            .InvokeAsync()
+            .DefaultTimeout(TestConstants.LongTimeoutDuration);
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
@@ -1383,7 +1488,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
         using var parentPid = EnvVarOverride.CreateForExitedProcess(KnownConfigNames.CliParentProcessId);
         using var parentStarted = new EnvVarOverride(KnownConfigNames.CliParentProcessStarted, null);
 
-        var exitCode = await provider.GetRequiredService<RootCommand>().Parse("describe --follow --format json").InvokeAsync().DefaultTimeout();
+        var exitCode = await provider.GetRequiredService<RootCommand>().Parse("describe --follow --format json").InvokeAsync().DefaultTimeout(TestConstants.LongTimeoutDuration);
 
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.True(scanStarted.Task.IsCompleted, "describe --follow should have started scanning for AppHosts.");
@@ -1550,6 +1655,14 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     {
         await Task.Yield();
         cancellationToken.ThrowIfCancellationRequested();
+        yield break;
+    }
+
+    // An empty stream that never completes, so a follower stays parked in its idle wait instead of
+    // finishing on its own. Only cancellation (from the launcher watchdog or the caller) ends it.
+    private static async IAsyncEnumerable<ResourceSnapshot> IdleResourceSnapshots([EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
         yield break;
     }
 
