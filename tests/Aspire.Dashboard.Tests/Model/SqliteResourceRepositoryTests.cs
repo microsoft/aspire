@@ -369,6 +369,7 @@ public sealed class SqliteResourceRepositoryTests(ITestOutputHelper testOutputHe
         resource.StoppedAt = Timestamp.FromDateTime(DateTime.UnixEpoch.AddMinutes(2));
         resource.IsHidden = true;
         resource.SupportsDetailedTelemetry = true;
+        resource.IconData = "data:image/png;base64,AQID";
         resource.IconName = "Box";
         resource.IconVariant = Aspire.DashboardService.Proto.V1.IconVariant.Filled;
         resource.Environment.Add(new EnvironmentVariable { Name = "OPTIONAL", IsFromSpec = true });
@@ -468,6 +469,7 @@ public sealed class SqliteResourceRepositoryTests(ITestOutputHelper testOutputHe
         Assert.Equal(DateTime.UnixEpoch.AddMinutes(1), actual.StartTimeStamp);
         Assert.Equal(DateTime.UnixEpoch.AddMinutes(2), actual.StopTimeStamp);
         Assert.True(actual.SupportsDetailedTelemetry);
+        Assert.Equal("data:image/png;base64,AQID", actual.IconData);
         Assert.Equal("Box", actual.IconName);
         Assert.Collection(actual.Environment,
             item =>
