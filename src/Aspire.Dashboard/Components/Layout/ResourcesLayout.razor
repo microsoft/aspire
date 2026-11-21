@@ -500,7 +500,7 @@
 
 @code {
     // The resource overview shows highlighted commands with labels; the resource list shows icons and a menu.
-    // Parameters in the full-page list show only their Set parameter command as a button, and the rest in their menu.
+    // Parameter rows show at most one highlighted command inline in either list view.
     // Menus are built when opened.
     internal RenderFragment RenderResourceActions(ResourceViewModel resource, bool showLabels, ResourceGridViewModel? row, DisplayedUrl? primaryUrl = null) => __builder =>
     {
@@ -535,7 +535,7 @@
             @* Resolved icons are shared. Set the component color rather than mutating the cached icon with WithColor.
                Every action icon takes its button's text color, labeled or not, so an icon reads as part of its button
                and dims with it when the button is disabled. *@
-            @foreach (var command in showLabels ? GetHighlightedCommands(resource) : _isPaneFullCanvas ? GetFullPageRowCommands(resource) : GetSidebarCommands(resource))
+            @foreach (var command in showLabels ? GetHighlightedCommands(resource) : GetInlineRowCommands(resource))
             {
                 var commandTitle = !string.IsNullOrEmpty(command.GetDisplayDescription()) ? command.GetDisplayDescription() : command.GetDisplayName();
                 if (showLabels)
