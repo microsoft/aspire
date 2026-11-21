@@ -73,12 +73,14 @@
 }
 
 /* Spans are computed per card from its content (see OverviewCardLayout) and passed in as custom properties. */
-.overview-grid > .overview-card {
+.overview-grid > .overview-card,
+.overview-grid ::deep > .overview-status-card {
     grid-column: span var(--overview-span, 12);
 }
 
 /* Grid rows size to their tallest content and stretch the other cards to match. Keep the tags picker unclipped. */
-.overview-grid > .overview-card:not(.overview-tags-card) {
+.overview-grid > .overview-card:not(.overview-tags-card),
+.overview-grid ::deep > .overview-status-card {
     overflow: hidden;
 }
 
@@ -103,13 +105,15 @@
 }
 
 @container (max-width: 1100px) {
-    .overview-grid > .overview-card {
+    .overview-grid > .overview-card,
+    .overview-grid ::deep > .overview-status-card {
         grid-column: span var(--overview-span-md, 12);
     }
 }
 
 @container (max-width: 760px) {
-    .overview-grid > .overview-card {
+    .overview-grid > .overview-card,
+    .overview-grid ::deep > .overview-status-card {
         grid-column: span 12;
     }
 }
@@ -287,37 +291,9 @@
     font-size: var(--aspire-font-size-body);
 }
 
-.overview-properties {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
-    gap: var(--aspire-space-1) var(--aspire-space-3);
-    margin: 0;
-    font-size: var(--aspire-font-size-body);
-}
-
-/* Labels are regular weight in the secondary grey, so the values beside them are what stands out. Fluent's reboot
-   stylesheet makes <dt> bold. */
-.overview-properties dt {
-    color: var(--colorNeutralForeground3);
-    font-weight: var(--aspire-font-weight-regular);
-}
-
-.overview-properties dd {
-    min-width: 0;
-    margin: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
 .overview-mono {
     font-family: var(--aspire-font-mono);
     font-size: var(--aspire-font-size-secondary);
-}
-
-.overview-error-text {
-    color: var(--error);
-    font-weight: var(--aspire-font-weight-semibold);
 }
 
 .overview-state {
@@ -792,8 +768,4 @@ a.overview-selection-card-title:hover {
     .resource-overview {
         padding: 12px;
     }
-}
-
-.overview-status-actions {
-    margin-inline-start: auto;
 }

@@ -342,6 +342,49 @@ public class ResourceOverviewEmptyPanelsTests : DashboardTestContext
     }
 
     [Theory]
+    [InlineData(KnownResourceTypes.Parameter)]
+    [InlineData(KnownResourceTypes.Project)]
+    public void Status_UsesSameMetadataOrderAndOnlyShowsInlineCommandsForNonParameters(string resourceType)
+    {
+        var command = new CommandViewModel("refresh", CommandViewModelState.Enabled, "Refresh status", "",
+            confirmationMessage: "", argumentInputs: [], isHighlighted: true, iconName: "", iconVariant: IconVariant.Regular);
+        ResourceSetupHelpers.SetupResourceOverview(this, s_viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("test", displayName: "test-item", resourceType: resourceType, state: KnownResourceState.Running, commands: [command])],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        Services.GetRequiredService<NavigationManager>().NavigateTo("/resources/test");
+        var cut = RenderOverview(s_viewport);
+        var status = cut.FindComponent<OverviewStatusCard>();
+        var isParameter = resourceType == KnownResourceTypes.Parameter;
+
+        status.WaitForAssertion(() =>
+        {
+            var names = status.FindAll("td.nameColumn");
+            Assert.Equal(["Display name", "State", "Health state", "Type", "Start time", "Stop time"],
+                names.Select(cell => cell.TextContent.Trim()));
+            Assert.Equal(new[] { "test-item", "Running", "Healthy", resourceType },
+                names.Take(4).Select(cell => cell.NextElementSibling!.TextContent.Trim()));
+            Assert.Single(status.FindAll("td.valueColumn svg.resource-icon"));
+        });
+
+        var actions = status.FindAll(".overview-status-actions fluent-button");
+        Assert.Equal(isParameter ? 1 : 2, actions.Count);
+        if (!isParameter)
+        {
+            Assert.Equal("Refresh status", actions[0].TextContent.Trim());
+        }
+        Assert.Equal("Actions for test-item", actions[^1].GetAttribute("aria-label"));
+        var menu = status.FindComponent<AspireMenuButton>();
+        Assert.Contains(menu.Instance.ItemsProvider(), item => item.Text == "View JSON");
+        Assert.Contains(menu.Instance.ItemsProvider(), item => item.Text == "Refresh status");
+
+        if (isParameter)
+        {
+            Assert.Equal(["overview-status-title", "parameter-value-title"],
+                cut.FindComponent<ParameterOverview>().FindAll("section").Select(section => section.GetAttribute("aria-labelledby")));
+        }
+    }
+
+    [Theory]
     [InlineData(AspireDataType.StructuredLogs, "overview-logs-title")]
     [InlineData(AspireDataType.Traces, "overview-traces-title")]
     [InlineData(AspireDataType.Metrics, "overview-metrics-title")]

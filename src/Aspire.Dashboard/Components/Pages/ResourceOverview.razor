@@ -64,7 +64,6 @@
             @TagsCard(resolvedParameter)
         </div>
         <ParameterOverview Resource="resolvedParameter"
-                           ResourceByName="ResourcesLayout.ResourceByName"
                            OnExecuteCommandAsync="ExecuteResourceCommandAsync"
                            OnExecuteCommandWithOptionsAsync="ExecuteResourceCommandAsync"
                            IsCommandExecuting="@((resource, command) => DashboardCommandExecutor.IsExecuting(resource.Name, command.Name))" />
@@ -79,11 +78,9 @@
     else
     {
         var resourceName = GetResourceName(resource);
-        var stateViewModel = ResourceStateViewModel.GetStateViewModel(resource, ColumnsLoc);
         // Internal URLs are listed after the URLs a user can browse to.
         var urls = ResourceUrlHelpers.GetUrls(resource, includeInternalUrls: true, includeNonEndpointUrls: true).OrderBy(u => u.IsInternal).ToList();
         var relatedResources = GetRelatedResources(resource).ToList();
-        var source = ResourceSourceViewModel.GetSourceViewModel(resource);
         var hasTelemetry = _telemetryKey is not null;
         var isInstrumented = hasTelemetry && TelemetryRepository.GetResource(_telemetryKey!.Value) is { UninstrumentedPeer: false };
         // The telemetry cards show their content only when the resource sends that telemetry. While the first query
@@ -127,69 +124,7 @@
         <div class="overview-grid">
             @TagsCard(resource)
 
-            <section class="overview-card" style="@cardLayout.Style(OverviewCard.Status)" aria-labelledby="overview-status-title">
-                <div class="overview-card-header">
-                    <span class="card-header-icon" aria-hidden="true">
-                        <FluentIcon Value="@(new Icons.Regular.Size16.Info())" Width="16px" Color="Color.Custom" CustomColor="currentColor" />
-                    </span>
-                    <h2 id="overview-status-title">@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewStatusTitle)]</h2>
-                    @* Start, stop and the other actions live here rather than above every page of the resource, next to
-                       the state they change. *@
-                    @if (ResourcesLayout is not null)
-                    {
-                        <div class="overview-status-actions">
-                            @ResourcesLayout.RenderResourceActions(resource, showLabels: true, row: null)
-                        </div>
-                    }
-                </div>
-                <dl class="overview-properties">
-                    <dt>@Loc[nameof(Dashboard.Resources.Resources.ResourcesStateColumnHeader)]</dt>
-                    <dd>
-                        <span class="overview-state @ResourcesLayout.GetStateClass(resource)">
-                            <FluentIcon Value="@stateViewModel.Icon" Width="14px" Color="Color.Custom" CustomColor="currentColor" />
-                            @stateViewModel.Text
-                        </span>
-                    </dd>
-                    @if (GetStateDescription(resource, stateViewModel.Text) is { } stateDescription)
-                    {
-                        <dt>@ControlsStringsLoc[nameof(ControlsStrings.ResourceDetailsStateDescriptionHeader)]</dt>
-                        <dd>@stateDescription</dd>
-                    }
-                    @if (resource.HealthStatus is { } healthStatus)
-                    {
-                        <dt>@Loc[nameof(Dashboard.Resources.Resources.ResourcesDetailsHealthStateProperty)]</dt>
-                        <dd>@healthStatus.Humanize()</dd>
-                    }
-                    <dt>@Loc[nameof(Dashboard.Resources.Resources.ResourcesTypeColumnHeader)]</dt>
-                    <dd>@resource.ResourceTypeDisplayName</dd>
-                    @if (resource.IsPersistentContainer)
-                    {
-                        <dt>@Loc[nameof(Dashboard.Resources.Resources.ResourcesDetailsContainerLifetimeProperty)]</dt>
-                        <dd data-tooltip="@Loc[nameof(Dashboard.Resources.Resources.ResourcePersistentLifetimeDescription)]"
-                            aria-description="@Loc[nameof(Dashboard.Resources.Resources.ResourcePersistentLifetimeDescription)]">@Loc[nameof(Dashboard.Resources.Resources.ResourcePersistentLifetime)]</dd>
-                    }
-                    @if (resource.StartTimeStamp is not null)
-                    {
-                        <dt>@Loc[nameof(Dashboard.Resources.Resources.ResourcesStartTimeColumnHeader)]</dt>
-                        <dd><StartTimeColumnDisplay Resource="@resource" /></dd>
-                    }
-                    @if (resource.StopTimeStamp is { } stopTime)
-                    {
-                        <dt>@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewStopTime)]</dt>
-                        <dd>@FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, stopTime)</dd>
-                    }
-                    @if (resource.TryGetExitCode(out var exitCode))
-                    {
-                        <dt>@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewExitCode)]</dt>
-                        <dd class="@(exitCode is not 0 ? "overview-error-text" : string.Empty)">@exitCode</dd>
-                    }
-                    @if (source is not null)
-                    {
-                        <dt>@Loc[nameof(Dashboard.Resources.Resources.ResourcesSourceColumnHeader)]</dt>
-                        <dd class="overview-mono" data-tooltip="@source.Tooltip">@source.Value</dd>
-                    }
-                </dl>
-            </section>
+            <OverviewStatusCard Resource="resource" HideCommandButtons="false" Style="@cardLayout.Style(OverviewCard.Status)" />
 
             @if (showEndpoints)
             {
