@@ -1,15 +1,7 @@
 name: CI
 
 on:
-  pull_request:
-    branches:
-      - main
-      - 'release/**'
-
-  push:
-    branches:
-      - main
-      - 'release/**'
+  workflow_dispatch: {}
 
 permissions:
   contents: read
