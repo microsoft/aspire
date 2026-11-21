@@ -68,7 +68,8 @@ public partial class OverviewStatusCard
         }
         if (Resource.StartTimeStamp is { } start)
         {
-            _properties.Add(new(Loc[nameof(ResourceStrings.ResourcesDetailsStartTimeProperty)], FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, start)));
+            _properties.Add(new(Loc[nameof(ResourceStrings.ResourcesDetailsStartTimeProperty)], FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, start),
+                RawValue: Resource.GetResourcePropertyValue(KnownProperties.Resource.StartTime) ?? start.ToString("O", CultureInfo.InvariantCulture)));
         }
         if (Resource.StopTimeStamp is { } stop)
         {
@@ -81,7 +82,7 @@ public partial class OverviewStatusCard
         }
         if (ResourceSourceViewModel.GetSourceViewModel(Resource) is { } source)
         {
-            _properties.Add(new(Loc[nameof(ResourceStrings.ResourcesSourceColumnHeader)], source.Value, StatusPropertyKind.Source, source.Tooltip));
+            _properties.Add(new(Loc[nameof(ResourceStrings.ResourcesSourceColumnHeader)], source.Value, StatusPropertyKind.Source, source.Tooltip, RawValue: source.OriginalValue));
         }
     }
 
@@ -98,9 +99,9 @@ public partial class OverviewStatusCard
         Source
     }
 
-    private sealed record StatusProperty(string Name, string Text, StatusPropertyKind Kind = StatusPropertyKind.Text, string? Tooltip = null) : IPropertyGridItem
+    private sealed record StatusProperty(string Name, string Text, StatusPropertyKind Kind = StatusPropertyKind.Text, string? Tooltip = null, string? RawValue = null) : IPropertyGridItem
     {
         string? IPropertyGridItem.Value => Kind == StatusPropertyKind.Text ? Text : null;
-        string IPropertyGridItem.ValueToVisualize => Text;
+        string IPropertyGridItem.ValueToVisualize => RawValue ?? Text;
     }
 }

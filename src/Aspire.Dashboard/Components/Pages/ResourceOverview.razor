@@ -530,7 +530,7 @@
                     <PropertyGrid TItem="DisplayedResourcePropertyViewModel"
                                   Items="@(_propertiesExpanded ? properties : properties.Take(DetailsPreviewCount))"
                                   IsValueMaskedChanged="@OnPropertyMaskedChanged"
-                                  GridTemplateColumns="1fr 1.5fr"
+                                  GridTemplateColumns="1fr 2fr"
                                   GenerateHeader="DataGridGeneratedHeaderType.None"
                                   RowSize="DataGridRowSize.Small"
                                   ValueComponents="@_propertyValueComponents"
@@ -589,7 +589,7 @@
                                   Items="@(_environmentExpanded ? environmentVariables : environmentVariables.Take(DetailsPreviewCount))"
                                   IsValueMaskedChanged="@(variable => OnEnvironmentVariableMaskedChanged(resource, variable))"
                                   HighlightText="@_environmentFilter"
-                                  GridTemplateColumns="1fr 1fr"
+                                  GridTemplateColumns="1fr 2fr"
                                   GenerateHeader="DataGridGeneratedHeaderType.None"
                                   RowSize="DataGridRowSize.Small"
                                   Class="overview-property-grid env-var-properties" />
