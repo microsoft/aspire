@@ -855,7 +855,7 @@
 
 /* A parent's expand toggle takes its icon tile's place rather than a column of its own, so every row's icon stays
    aligned with the filter box above the list. At rest the tile shows the resource's icon. The chevron shows instead
-   when the row is hovered or has focus, always on touch screens, which can't hover, and always while the parent is
+   when the row is hovered or has visible keyboard focus, always on touch screens, which can't hover, and always while the parent is
    collapsed, so hidden rows are never out of sight. Hidden, it can't be clicked or tabbed to, so a click on the icon
    selects the row as on any other; the row's Left and Right arrow keys collapse and expand it from the keyboard.
    https://www.w3.org/WAI/ARIA/apg/patterns/treeview/ */
@@ -879,12 +879,12 @@
     transform: translateY(-50%);
 }
 
-.resource-row:is(:hover, :focus-within) ::deep .resource-row-toggle-leading,
+.resource-row:is(:hover, :has(:focus-visible)) ::deep .resource-row-toggle-leading,
 .resource-row ::deep .resource-row-toggle-leading.collapsed {
     visibility: visible;
 }
 
-.resource-row:has(> .resource-row-toggle-leading):is(:hover, :focus-within) .resource-row-glyph,
+.resource-row:has(> .resource-row-toggle-leading):is(:hover, :has(:focus-visible)) .resource-row-glyph,
 .resource-row:has(> .resource-row-toggle-leading.collapsed) .resource-row-glyph {
     visibility: hidden;
 }

@@ -2253,28 +2253,40 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                 Assert.Equal(0d, rest[5]);
 
                 await row.Locator(".resource-row-name").HoverAsync();
-                AssertToggle(await row.EvaluateAsync<double[]>(measure), name, "row hover", shownControls, checkTopmost: true);
+                AssertToggle(await row.EvaluateAsync<double[]>(measure), name, "row hover", shownControls);
 
                 await page.Mouse.MoveAsync(1, 1);
                 await page.Keyboard.PressAsync("Tab");
                 await row.Locator(".resource-row-link").FocusAsync();
-                AssertToggle(await row.EvaluateAsync<double[]>(measure), name, "focus", shownControls, checkTopmost: true);
+                AssertToggle(await row.EvaluateAsync<double[]>(measure), name, "keyboard focus", shownControls);
 
-                // The open menu's popup may lie over the toggle, so whether it's topmost isn't checked.
                 await row.HoverAsync();
                 await row.Locator(".resource-row-actions .aspire-menu-button").Last.ClickAsync();
                 await page.Mouse.MoveAsync(1, 1);
-                AssertToggle(await row.EvaluateAsync<double[]>(measure), name, "menu open", shownControls, checkTopmost: false);
+                AssertActions(await row.EvaluateAsync<double[]>(measure), $"{name}, menu open", shownControls);
                 await page.Keyboard.PressAsync("Escape");
             }
 
-            static void AssertToggle(double[] current, string row, string state, double shownControls, bool checkTopmost)
+            var selectedRow = pane.Locator("[data-resource-name='cache']").First;
+            var selectedLink = selectedRow.Locator(".resource-row-link");
+            await selectedRow.Locator(".resource-row-name").ClickAsync();
+            await page.Mouse.MoveAsync(1, 1);
+            await Assertions.Expect(selectedLink).ToBeFocusedAsync();
+            await Assertions.Expect(selectedRow.Locator(".resource-row-glyph")).ToBeVisibleAsync();
+            await Assertions.Expect(selectedRow.Locator(".resource-row-toggle-leading")).ToBeHiddenAsync();
+
+            static void AssertToggle(double[] current, string row, string state, double shownControls)
             {
                 var context = $"{row}, {state}";
                 Assert.True(current[0] == 1, $"{context}: the toggle doesn't show.");
                 Assert.True(current[1] == 1, $"{context}: the toggle doesn't cover the icon tile.");
-                Assert.True(!checkTopmost || current[2] == 1, $"{context}: something covers the toggle.");
+                Assert.True(current[2] == 1, $"{context}: something covers the toggle.");
                 Assert.True(current[3] == 1, $"{context}: the icon's glyph shows under the toggle.");
+                AssertActions(current, context, shownControls);
+            }
+
+            static void AssertActions(double[] current, string context, double shownControls)
+            {
                 Assert.True(current[4] == 1, $"{context}: the shown actions overlap or don't run left to right in tab order.");
                 Assert.Equal(shownControls, current[5]);
                 Assert.True(current[6] == 1, $"{context}: the name runs into the actions.");
