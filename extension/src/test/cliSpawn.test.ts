@@ -7,7 +7,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { PassThrough } from 'stream';
 import * as sinon from 'sinon';
-import { getCliParentWatchdogEnvironment, getCliSpawnCommand, getCliSpawnDiagnostics, getCurrentProcessStartTimeUnixMilliseconds, mergeCliSpawnEnvironment, spawnCliProcess, terminateCliProcess, warmCurrentProcessStartTime } from '../utils/process/cliProcess';
+import { getCliParentWatchdogEnvironment, getCliSpawnCommand, getCliSpawnDiagnostics, getCurrentProcessStartTimeUnixMilliseconds, linuxClockTicksPerSecondFallback, mergeCliSpawnEnvironment, parseLinuxClockTicksPerSecond, spawnCliProcess, terminateCliProcess, warmCurrentProcessStartTime } from '../utils/process/cliProcess';
 import { terminalCommandArgumentControlCharacters } from '../loc/strings';
 import type { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import { canVsCodeQuoteCommandShimLaunch, getCmdShimSpawnCommandWithoutVerbatimArguments } from '../utils/cmdShim';
@@ -51,6 +51,31 @@ suite('spawnCliProcess tests', () => {
         ]);
         assert.strictEqual(env[0].value, String(process.pid));
         assert.strictEqual(env[1].value, String(Math.round(getCurrentProcessStartTimeUnixMilliseconds() / 1000)));
+    });
+
+    // AT_CLKTCK is 17; every other entry is filler so the scan has to walk past it.
+    const auxvEntries: ReadonlyArray<readonly [number, number]> = [[6, 4096], [17, 250], [23, 0]];
+
+    for (const entrySize of [16, 8] as const) {
+        test(`reads AT_CLKTCK from a ${entrySize === 16 ? '64-bit' : '32-bit'} auxv layout`, () => {
+            // The stride is 2 * sizeof(long), so a 32-bit Linux host (armv7, i686) uses 8-byte entries.
+            // Hardcoding 16 bytes misparses that layout and silently falls back to USER_HZ, which is why
+            // both layouts are pinned here rather than only the one this machine runs.
+            assert.strictEqual(parseLinuxClockTicksPerSecond(buildAuxv(auxvEntries, entrySize), entrySize), 250);
+        });
+
+        test(`falls back to USER_HZ when a ${entrySize === 16 ? '64-bit' : '32-bit'} auxv has no AT_CLKTCK`, () => {
+            assert.strictEqual(
+                parseLinuxClockTicksPerSecond(buildAuxv([[6, 4096], [23, 0]], entrySize), entrySize),
+                linuxClockTicksPerSecondFallback);
+        });
+    }
+
+    test('ignores a zero AT_CLKTCK instead of dividing by it', () => {
+        // A zero tick count would make the start-time conversion divide by zero and yield Infinity.
+        assert.strictEqual(
+            parseLinuxClockTicksPerSecond(buildAuxv([[17, 0]], 16), 16),
+            linuxClockTicksPerSecondFallback);
     });
 
     test('records native ps followers before output and across extension-host tracker replacement', () => {
@@ -1219,7 +1244,23 @@ suite('spawnCliProcess tests', () => {
     }));
 });
 
-function createTestChildProcess(pid: number, exitCode: number | null = null): nodeChildProcess.ChildProcessWithoutNullStreams & { kill: sinon.SinonStub } {
+function buildAuxv(entries: ReadonlyArray<readonly [number, number]>, entrySize: 8 | 16): Buffer {
+    // One trailing all-zero entry stands in for AT_NULL, matching the real payload's terminator.
+    const buffer = Buffer.alloc(entrySize * (entries.length + 1));
+    entries.forEach(([type, value], index) => {
+        const offset = index * entrySize;
+        if (entrySize === 16) {
+            buffer.writeBigUInt64LE(BigInt(type), offset);
+            buffer.writeBigUInt64LE(BigInt(value), offset + 8);
+        } else {
+            buffer.writeUInt32LE(type, offset);
+            buffer.writeUInt32LE(value, offset + 4);
+        }
+    });
+    return buffer;
+}
+
+function createTestChildProcess(pid: number, exitCode: number | null = null):  nodeChildProcess.ChildProcessWithoutNullStreams & { kill: sinon.SinonStub } {
     const kill = sinon.stub().returns(true);
     return Object.assign(new EventEmitter(), {
         stdin: new PassThrough(),

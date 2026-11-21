@@ -106,10 +106,12 @@ export function getCliParentWatchdogEnvironment(): EnvVar[] {
  *
  * The CLI verifies `ASPIRE_CLI_PARENT_STARTED` with `ProcessStartTimeHelper.TryGetProcessStartTime`,
  * which reads `/proc/<pid>/stat` field 22 (clock ticks since boot) on Linux and `Process.StartTime`
- * elsewhere. Mirror those exact sources so both sides observe the same value:
+ * elsewhere. Mirror those sources so both sides observe the same value:
  * - Linux: `/proc/self/stat` start ticks, converted with `_SC_CLK_TCK`.
  * - macOS: `ps -o lstart=`, which is what `Process.StartTime` reads.
- * - Windows: `Win32_Process.CreationDate`, since Node exposes no creation time there.
+ * - Windows: `Win32_Process.CreationDate`, since Node exposes no creation time there. This is a
+ *   different API from the `GetProcessTimes` behind `Process.StartTime`, so the two can differ by a
+ *   clock tick; the CLI's one-second identity tolerance absorbs that.
  *
  * The value is resolved once and cached, because every CLI spawn stamps it into the child environment
  * and the OS lookup is a process launch of its own. The lookup never blocks: the Linux path is a small
@@ -198,26 +200,50 @@ function readLinuxProcessStartTimeUnixMilliseconds(): number | undefined {
 }
 
 function getLinuxClockTicksPerSecond(): number {
-    // sysconf(_SC_CLK_TCK) is 100 on every mainstream distro, but it is not part of the kernel ABI.
-    // Read it from the auxv the kernel exposes at /proc/self/auxv instead of shelling out to `getconf`:
-    // AT_CLKTCK (17) is a plain integer entry, so this stays a cheap synchronous read.
+    // sysconf(_SC_CLK_TCK) is the value the CLI divides start ticks by, and it is USER_HZ: 100 on every
+    // Linux ABI we run on. Read it rather than assume, but read it from the auxv the kernel exposes at
+    // /proc/self/auxv instead of shelling out to `getconf`.
+    const entrySize = process.arch.includes('64') ? 16 : 8;
     try {
-        const auxv = fs.readFileSync('/proc/self/auxv');
-        for (let offset = 0; offset + 16 <= auxv.length; offset += 16) {
-            // Entries are (uint64 type, uint64 value) pairs; the header is 16 bytes on 64-bit Linux.
-            const type = Number(auxv.readBigUInt64LE(offset));
-            if (type === 17) {
-                const ticksPerSecond = Number(auxv.readBigUInt64LE(offset + 8));
-                if (Number.isSafeInteger(ticksPerSecond) && ticksPerSecond > 0) {
-                    return ticksPerSecond;
-                }
-            }
-        }
+        return parseLinuxClockTicksPerSecond(fs.readFileSync('/proc/self/auxv'), entrySize);
     } catch {
-        // Fall through to the mainstream default below.
+        // Fall through to the USER_HZ default below.
     }
 
-    return 100;
+    return linuxClockTicksPerSecondFallback;
+}
+
+/**
+ * The value `sysconf(_SC_CLK_TCK)` returns on every Linux ABI we run on (USER_HZ).
+ */
+export const linuxClockTicksPerSecondFallback = 100;
+
+/**
+ * Reads `AT_CLKTCK` from a `/proc/self/auxv` payload.
+ *
+ * Each auxv entry is two C `long`s, so the stride is `2 * sizeof(long)`: 16 bytes on 64-bit and 8 bytes
+ * on 32-bit (armv7, i686). Hardcoding either one misparses the other, which is why the caller derives
+ * `entrySize` from the pointer size Node was built for. `AT_CLKTCK` is 17 on every architecture.
+ *
+ * Exported for tests: the 32-bit layout cannot be produced on a 64-bit CI runner, so both layouts are
+ * exercised against synthetic buffers.
+ */
+export function parseLinuxClockTicksPerSecond(auxv: Buffer, entrySize: 8 | 16): number {
+    for (let offset = 0; offset + entrySize <= auxv.length; offset += entrySize) {
+        const type = entrySize === 16 ? Number(auxv.readBigUInt64LE(offset)) : auxv.readUInt32LE(offset);
+        if (type !== 17) {
+            continue;
+        }
+
+        const ticksPerSecond = entrySize === 16
+            ? Number(auxv.readBigUInt64LE(offset + 8))
+            : auxv.readUInt32LE(offset + 4);
+        if (Number.isSafeInteger(ticksPerSecond) && ticksPerSecond > 0) {
+            return ticksPerSecond;
+        }
+    }
+
+    return linuxClockTicksPerSecondFallback;
 }
 
 async function queryProcessStartTimeUnixMilliseconds(command: string, args: string[]): Promise<number | undefined> {
