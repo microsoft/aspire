@@ -29,12 +29,12 @@
 }
 
 /* When the button is hidden, let the label use the full cell before it truncates. */
-.fit-name-column ::deep .nameColumn:not(:hover, :focus-within) .grid-value {
+.fit-name-column ::deep .nameColumn:not(:hover, :focus-visible, :has(:focus-visible)) .grid-value {
     flex-shrink: 0;
     max-inline-size: 100%;
 }
 
-.fit-name-column ::deep .nameColumn:not(:hover, :focus-within) .button-container {
+.fit-name-column ::deep .nameColumn:not(:hover, :focus-visible, :has(:focus-visible)) .button-container {
     min-inline-size: 0;
     overflow: clip;
     pointer-events: none;
