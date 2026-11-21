@@ -74,6 +74,7 @@ internal sealed record AppHostMenuItem(
     bool IsStopping,
     string? Error)
 {
+    public TrayGitCheckout? Checkout { get; init; }
     public bool IsPinned { get; init; }
     public bool CanStart { get; init; }
     public bool IsStarting { get; init; }

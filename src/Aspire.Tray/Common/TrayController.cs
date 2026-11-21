@@ -11,6 +11,7 @@ internal sealed class TrayController : IAsyncDisposable
     private readonly ITraySavedStateStore _savedStateStore;
     private readonly int _recentAppHostLimit;
     private readonly TimeProvider _timeProvider;
+    private readonly TrayGitCheckoutCache _checkoutCache;
     internal static TimeSpan StartReconciliationTimeout => TimeSpan.FromSeconds(60);
     private readonly object _gate = new();
     private readonly CancellationTokenSource _shutdown = new();
@@ -43,6 +44,12 @@ internal sealed class TrayController : IAsyncDisposable
     }
 
     internal TrayController(IAppHostClient client, ITraySavedStateStore savedStateStore, int recentAppHostLimit, TimeProvider timeProvider)
+        : this(client, savedStateStore, recentAppHostLimit, timeProvider, TrayGitCheckoutReader.Read)
+    {
+    }
+
+    internal TrayController(IAppHostClient client, ITraySavedStateStore savedStateStore, int recentAppHostLimit,
+        TimeProvider timeProvider, Func<string, TrayGitCheckout?> readCheckout)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(recentAppHostLimit);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(recentAppHostLimit, TraySavedState.MaximumRecentAppHosts);
@@ -50,6 +57,8 @@ internal sealed class TrayController : IAsyncDisposable
         _savedStateStore = savedStateStore;
         _recentAppHostLimit = recentAppHostLimit;
         _timeProvider = timeProvider;
+        // The controller owns the cache's entire lifecycle; tests replace only the IO.
+        _checkoutCache = new TrayGitCheckoutCache(timeProvider, readCheckout);
         try
         {
             _savedState = savedStateStore.Load();
@@ -68,6 +77,7 @@ internal sealed class TrayController : IAsyncDisposable
             _savedStateDirty = true;
         }
         PublishLocked();
+        _checkoutCache.Changed += OnCheckoutChanged;
     }
 
     // Raised on the publishing thread. Native frontends coalesce and post a main-thread refresh.
@@ -84,6 +94,7 @@ internal sealed class TrayController : IAsyncDisposable
             {
                 throw new InvalidOperationException("The tray controller is already started.");
             }
+            _checkoutCache.Start();
             _watcher = Task.Run(WatchAsync);
         }
     }
@@ -196,10 +207,13 @@ internal sealed class TrayController : IAsyncDisposable
     public void RequestStart(string appHostPath)
     {
         var path = TrayAppHostPath.Normalize(appHostPath);
+        var publish = false;
         try
         {
             lock (_gate)
             {
+                ObjectDisposedException.ThrowIf(_disposed, this);
+                publish = true;
                 try
                 {
                     RequireStartablePathLocked(path);
@@ -226,7 +240,10 @@ internal sealed class TrayController : IAsyncDisposable
         }
         finally
         {
-            Changed?.Invoke();
+            if (publish)
+            {
+                Changed?.Invoke();
+            }
         }
     }
 
@@ -566,6 +583,8 @@ internal sealed class TrayController : IAsyncDisposable
 
     private void PublishLocked()
     {
+        _checkoutCache.SetPaths(_snapshot.AppHosts.Select(host => host.AppHostPath)
+            .Concat(_savedState.AppHosts.Select(host => host.AppHostPath)));
         var live = _snapshot.Discovery == DiscoveryState.Live;
         var pins = _savedState.AppHosts.Where(host => host.IsPinned)
             .Select(host => host.AppHostPath).ToHashSet(TrayAppHostPath.Comparer);
@@ -585,6 +604,7 @@ internal sealed class TrayController : IAsyncDisposable
                 live && !stopped && !stopping && host.ProcessStartTimeUnixMilliseconds is > 0,
                 stopping, error)
             {
+                Checkout = _checkoutCache.Get(host.AppHostPath),
                 IsPinned = pins.Contains(TrayAppHostPath.Normalize(host.AppHostPath)),
                 IsRunning = !stopped,
                 Health = live && !stopped ? host.Health : AppHostHealth.Unknown
@@ -643,6 +663,7 @@ internal sealed class TrayController : IAsyncDisposable
         return new(host.Id, AppHostPresentation.GetTitle(host), subtitle, AppHostPresentation.GetDisplayName(host),
             false, false, false, error)
         {
+            Checkout = _checkoutCache.Get(saved.AppHostPath),
             IsPinned = saved.IsPinned,
             CanStart = live && start?.BlocksStart != true,
             IsStarting = starting,
@@ -689,6 +710,19 @@ internal sealed class TrayController : IAsyncDisposable
         _ => $"Unable to stop AppHost{(result.ExitCode is int code ? $" (CLI exit {code})" : "")}."
     };
 
+    private void OnCheckoutChanged()
+    {
+        lock (_gate)
+        {
+            if (_disposed)
+            {
+                return;
+            }
+            PublishLocked();
+        }
+        Changed?.Invoke();
+    }
+
     public ValueTask DisposeAsync()
     {
         lock (_gate)
@@ -706,6 +740,8 @@ internal sealed class TrayController : IAsyncDisposable
         {
             tasks.Add(_watcher);
         }
+        _checkoutCache.Changed -= OnCheckoutChanged;
+        tasks.Add(_checkoutCache.DisposeAsync().AsTask());
         try
         {
             await _shutdown.CancelAsync().ConfigureAwait(false);
