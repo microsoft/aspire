@@ -1924,12 +1924,10 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         .Where(c => c.IsHighlighted && c.State != CommandViewModelState.Hidden)
         .Take(DashboardUIHelpers.MaxHighlightedCommands);
 
-    private static IEnumerable<CommandViewModel> GetFullPageRowCommands(ResourceViewModel resource) =>
+    private IEnumerable<CommandViewModel> GetInlineRowCommands(ResourceViewModel resource) =>
         resource.IsParameter
-            ? resource.Commands.Where(c =>
-                string.Equals(c.Name, CommandViewModel.SetParameterCommand, StringComparisons.CommandName) &&
-                c.State != CommandViewModelState.Hidden).Take(1)
-            : GetHighlightedCommands(resource);
+            ? GetHighlightedCommands(resource).Take(1)
+            : _isPaneFullCanvas ? GetHighlightedCommands(resource) : GetSidebarCommands(resource);
 
     private static IEnumerable<CommandViewModel> GetResourceRowCommands(ResourceViewModel resource)
     {

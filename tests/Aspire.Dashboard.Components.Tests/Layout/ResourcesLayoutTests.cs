@@ -2046,31 +2046,27 @@ public class ResourcesLayoutTests : DashboardTestContext
     }
 
     [Theory]
-    [InlineData(CommandViewModelState.Enabled, false, false, ResourceListDensity.Comfortable)]
-    [InlineData(CommandViewModelState.Enabled, true, false, ResourceListDensity.Compact)]
-    [InlineData(CommandViewModelState.Disabled, true, false, ResourceListDensity.Comfortable)]
-    [InlineData(CommandViewModelState.Enabled, true, true, ResourceListDensity.Compact)]
-    [InlineData(CommandViewModelState.Hidden, true, false, ResourceListDensity.Comfortable)]
-    [InlineData(null, false, false, ResourceListDensity.Compact)]
-    public async Task FullPageParameterActions_ShowOnlySetCommandWhenAvailable(
-        CommandViewModelState? setState, bool highlighted, bool readOnly, ResourceListDensity density)
+    [InlineData(CommandViewModelState.Enabled, true, true, false, ResourceListDensity.Compact, "Set parameter")]
+    [InlineData(CommandViewModelState.Disabled, true, true, false, ResourceListDensity.Comfortable, "Set parameter")]
+    [InlineData(CommandViewModelState.Enabled, true, true, true, ResourceListDensity.Compact, "Set parameter")]
+    [InlineData(CommandViewModelState.Enabled, false, true, false, ResourceListDensity.Comfortable, "Delete parameter")]
+    [InlineData(CommandViewModelState.Hidden, true, true, false, ResourceListDensity.Compact, "Delete parameter")]
+    [InlineData(CommandViewModelState.Enabled, false, false, false, ResourceListDensity.Compact, null)]
+    public async Task ParameterRowActions_ShowFirstVisibleHighlightedCommandInBothViews(
+        CommandViewModelState setState, bool setHighlighted, bool hasValue, bool readOnly, ResourceListDensity density, string? expectedCommand)
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         static CommandViewModel Command(string name, string displayName, CommandViewModelState state, bool highlighted) =>
             new(name, state, displayName, "", confirmationMessage: "", argumentInputs: [], isHighlighted: highlighted, iconName: "Key", iconVariant: IconVariant.Regular);
-        var commands = new List<CommandViewModel>
-        {
-            Command("custom", "Custom", CommandViewModelState.Enabled, true),
-            Command(CommandViewModel.DeleteParameterCommand, "Delete parameter", CommandViewModelState.Enabled, true)
-        };
-        if (setState is { } state)
-        {
-            commands.Add(Command(CommandViewModel.SetParameterCommand, "Set parameter", state, highlighted));
-        }
         ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true, isReadOnly: readOnly,
             initialResources:
             [
-                ModelTestHelpers.CreateResource("setting-id", displayName: "setting", resourceType: KnownResourceTypes.Parameter, commands: [.. commands]),
+                ModelTestHelpers.CreateResource("setting-id", displayName: "setting", resourceType: KnownResourceTypes.Parameter, commands:
+                [
+                    Command("custom", "Custom", CommandViewModelState.Enabled, false),
+                    Command(CommandViewModel.SetParameterCommand, "Set parameter", setState, setHighlighted),
+                    Command(CommandViewModel.DeleteParameterCommand, "Delete parameter", hasValue ? CommandViewModelState.Enabled : CommandViewModelState.Hidden, true)
+                ]),
                 ModelTestHelpers.CreateResource("api")
             ],
             resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
@@ -2079,30 +2075,32 @@ public class ResourcesLayoutTests : DashboardTestContext
         var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
         cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
         await cut.InvokeAsync(() => Services.GetRequiredService<DashboardViewPreferences>().SetDensityAsync(density));
-        Assert.Equal(["Custom setting", "Delete parameter setting", "Actions for setting"],
-            cut.FindAll("[data-resource-name='setting-id'] .resource-row-actions fluent-button").Select(button => button.GetAttribute("aria-label")));
+        AssertRowActions();
         ResourceSetupHelpers.ToggleResourceList(cut);
         cut.WaitForAssertion(() => Assert.Single(cut.FindAll(".pane-full-canvas")));
+        AssertRowActions();
 
-        var actions = cut.FindAll("[data-resource-name='setting-id'] .resource-row-actions fluent-button");
-        // The row keeps its menu, which holds the other commands, such as Delete parameter.
-        var menu = cut.FindComponents<AspireMenuButton>().Single(button => button.Instance.Title == "Actions for setting");
-        Assert.Contains(menu.Instance.ItemsProvider(), item => item.Text == "Delete parameter");
-        if (setState is null or CommandViewModelState.Hidden)
+        if (expectedCommand == "Set parameter" && !readOnly && setState == CommandViewModelState.Enabled)
         {
-            Assert.Equal(["Actions for setting"], actions.Select(button => button.GetAttribute("aria-label")));
+            await cut.InvokeAsync(() => cut.Find("[data-resource-name='setting-id'] fluent-button[aria-label='Set parameter setting']").Click());
+            var navigation = Services.GetRequiredService<NavigationManager>();
+            Assert.Equal(navigation.ToAbsoluteUri(DashboardUrls.ResourceOverviewUrl("setting")).AbsoluteUri, navigation.Uri);
         }
-        else
+
+        void AssertRowActions()
         {
-            Assert.Equal(["Set parameter setting", "Actions for setting"], actions.Select(button => button.GetAttribute("aria-label")));
-            var setButton = actions[0];
-            Assert.Equal(readOnly || setState == CommandViewModelState.Disabled, setButton.HasAttribute("disabled"));
-            if (!setButton.HasAttribute("disabled"))
+            var actions = cut.FindAll("[data-resource-name='setting-id'] .resource-row-actions fluent-button");
+            string[] expectedActions = expectedCommand is null
+                ? ["Actions for setting"]
+                : [$"{expectedCommand} setting", "Actions for setting"];
+            Assert.Equal(expectedActions, actions.Select(button => button.GetAttribute("aria-label")));
+            if (expectedCommand is not null)
             {
-                await cut.InvokeAsync(() => setButton.Click());
-                var navigation = Services.GetRequiredService<NavigationManager>();
-                Assert.Equal(navigation.ToAbsoluteUri(DashboardUrls.ResourceOverviewUrl("setting")).AbsoluteUri, navigation.Uri);
+                Assert.Equal(readOnly || (expectedCommand == "Set parameter" && setState == CommandViewModelState.Disabled), actions[0].HasAttribute("disabled"));
             }
+
+            var menu = cut.FindComponents<AspireMenuButton>().Single(button => button.Instance.Title == "Actions for setting");
+            Assert.Equal(hasValue, menu.Instance.ItemsProvider().Any(item => item.Text == "Delete parameter"));
         }
     }
 
