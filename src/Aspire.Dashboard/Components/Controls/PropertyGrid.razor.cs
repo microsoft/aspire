@@ -104,6 +104,9 @@ public partial class PropertyGrid<TItem> where TItem : IPropertyGridItem
     public string GridTemplateColumns { get; set; } = "1fr 1fr";
 
     [Parameter]
+    public bool FitNameColumn { get; set; }
+
+    [Parameter]
     public string? NameColumnTitle { get; set; }
 
     [Parameter]
