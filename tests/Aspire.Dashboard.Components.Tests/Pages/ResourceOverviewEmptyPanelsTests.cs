@@ -385,6 +385,38 @@ public class ResourceOverviewEmptyPanelsTests : DashboardTestContext
     }
 
     [Theory]
+    [InlineData("2026-06-15T09:04:05.1234567+02:00", "2026-06-15T09:04:05.1234567+02:00")]
+    [InlineData(null, "2026-06-15T07:04:05.0000000Z")]
+    public void Status_SourceAndStartTimeVisualizersUseRawValues(string? startProperty, string expectedStart)
+    {
+        var projectPath = Path.Combine("projects", "test", "Test.csproj");
+        var properties = new Dictionary<string, ResourcePropertyViewModel>
+        {
+            [KnownProperties.Project.Path] = new(KnownProperties.Project.Path, Value.ForString(projectPath), false, null, 0, null, false)
+        };
+        if (startProperty is not null)
+        {
+            properties[KnownProperties.Resource.StartTime] = new(KnownProperties.Resource.StartTime, Value.ForString(startProperty), false, null, 0, null, false);
+        }
+
+        var resource = ModelTestHelpers.CreateResource("test", state: KnownResourceState.Running, resourceType: KnownResourceTypes.Project,
+            properties: properties, startTimeStamp: new DateTime(2026, 6, 15, 7, 4, 5, DateTimeKind.Utc));
+        SetupOverview(new TestDashboardClient(isEnabled: true, initialResources: [resource],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+
+        var cut = RenderOverview(s_viewport);
+        var status = cut.FindComponent<OverviewStatusCard>();
+        var values = status.FindComponents<GridValue>()
+            .Where(cell => cell.Instance.TextVisualizerTitle is not null)
+            .ToDictionary(cell => cell.Instance.TextVisualizerTitle!, cell => cell.Instance);
+
+        Assert.Equal("Test.csproj", status.Find(".overview-status-source").TextContent);
+        Assert.Equal(projectPath, values["Source"].ValueToVisualize);
+        Assert.Equal(expectedStart, values["Start time"].ValueToVisualize);
+        Assert.NotEqual(expectedStart, values["Start time"].Value);
+    }
+
+    [Theory]
     [InlineData(AspireDataType.StructuredLogs, "overview-logs-title")]
     [InlineData(AspireDataType.Traces, "overview-traces-title")]
     [InlineData(AspireDataType.Metrics, "overview-metrics-title")]
