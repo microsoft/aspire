@@ -1786,6 +1786,74 @@ public partial class MetricsTests : DashboardTestContext
     }
 
     [Fact]
+    public async Task LiveMetricTiles_OverlapsReadsInBoundedBatches()
+    {
+        const int instrumentCount = 6;
+        const int batchSize = 4;
+        var readsStarted = 0;
+        var firstBatchStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseReads = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        MetricsSetupHelpers.SetupMetricsPage(this);
+        Services.AddSingleton<ITelemetryRepository>(provider =>
+        {
+            var inner = provider.GetRequiredService<SqliteTelemetryRepository>();
+            return new TestTelemetryRepository(inner)
+            {
+                GetInstrumentAsyncHandler = async (request, cancellationToken) =>
+                {
+                    if (Interlocked.Increment(ref readsStarted) == batchSize)
+                    {
+                        firstBatchStarted.TrySetResult();
+                    }
+
+                    await releaseReads.Task.WaitAsync(cancellationToken);
+                    return await inner.GetInstrumentAsync(request, cancellationToken);
+                }
+            };
+        });
+        await FluentUISetupHelpers.ConfigureTelemetryRepository(this, readOnly: true, repository => repository.AddMetricsAsync(new AddContext(), new RepeatedField<ResourceMetrics>
+        {
+            new ResourceMetrics
+            {
+                Resource = CreateResource(name: "TestApp"),
+                ScopeMetrics =
+                {
+                    new ScopeMetrics
+                    {
+                        Scope = CreateScope(name: "test-meter"),
+                        Metrics = { Enumerable.Range(1, instrumentCount).Select(i =>
+                            CreateSumMetric(metricName: $"instrument-{i}", startTime: s_testTime, value: i)) }
+                    }
+                }
+            }
+        }));
+
+        var repository = Services.GetRequiredService<DashboardDataSource>().TelemetryRepository;
+        var resource = Assert.Single(repository.GetResources());
+        var cut = Render<LiveMetricTiles>(builder => builder
+            .Add(c => c.ResourceKey, resource.ResourceKey)
+            .Add(c => c.Instruments, repository.GetInstrumentSummaries(resource.ResourceKey))
+            .Add(c => c.Duration, TimeSpan.FromMinutes(5))
+            .Add(c => c.GetInstrumentUrl, instrument => $"/metrics/{instrument.Name}"));
+
+        try
+        {
+            await firstBatchStarted.Task.WaitAsync(DefaultWaitTimeout, Xunit.TestContext.Current.CancellationToken);
+            await cut.InvokeAsync(() => Assert.Equal(batchSize, Volatile.Read(ref readsStarted)));
+        }
+        finally
+        {
+            releaseReads.TrySetResult();
+        }
+
+        await cut.WaitForAssertionAsync(() =>
+        {
+            Assert.Equal(instrumentCount, Volatile.Read(ref readsStarted));
+            Assert.Equal(instrumentCount, cut.FindAll(".overview-metric-tile .metric-sparkline-bars").Count);
+        });
+    }
+
+    [Fact]
     public async Task LiveMetricTiles_DeltaCounter_ShowsTotalChangeOfLatestInterval()
     {
         MetricsSetupHelpers.SetupMetricsPage(this);

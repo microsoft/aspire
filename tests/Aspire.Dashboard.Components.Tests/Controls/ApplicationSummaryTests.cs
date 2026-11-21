@@ -513,18 +513,23 @@ public class ApplicationSummaryTests : DashboardTestContext
     }
 
     [Fact]
-    public async Task Live_OtherLayoutDoesNotRefreshActivityPeriodically()
+    public async Task Live_GraphSkipsActivityAndSummaryLoadsImmediately()
     {
         JSInterop.SetupModule("/js/app-resourcegraph.js").Mode = JSRuntimeMode.Loose;
+        ComponentFactories.Add(() =>
+        {
+            var summary = Activator.CreateInstance<ApplicationSummary>();
+            summary.TelemetryRefreshDelayAsync = (_, token) => Task.Delay(Timeout.InfiniteTimeSpan, token);
+            return summary;
+        });
         var context = await RenderLiveSummaryAsync(GroupOverview.Graph);
-        context.Summary.WaitForAssertion(() => Assert.True(Volatile.Read(ref context.RequestQueries.Count) > 0), DefaultWaitTimeout);
-        var queries = Volatile.Read(ref context.RequestQueries.Count);
-
         context.Timers.Advance(TimeSpan.FromSeconds(30));
+        Assert.Equal(0, Volatile.Read(ref context.RequestQueries.Count));
 
-        // Longer than the delay before a queued refresh runs.
-        await Task.Delay(TimeSpan.FromSeconds(2));
-        Assert.Equal(queries, Volatile.Read(ref context.RequestQueries.Count));
+        var preferences = Services.GetRequiredService<DashboardViewPreferences>();
+        await context.Summary.InvokeAsync(() => preferences.SetGroupOverviewAsync(GroupOverview.Summary));
+        await context.Summary.WaitForAssertionAsync(() => Assert.Single(context.Summary.FindAll(".home-chart-bar")));
+        Assert.Equal(1, Volatile.Read(ref context.RequestQueries.Count));
     }
 
     [Fact]
@@ -588,8 +593,10 @@ public class ApplicationSummaryTests : DashboardTestContext
             }
         });
 
+        var preferences = Services.GetRequiredService<DashboardViewPreferences>();
+        await preferences.EnsureLoadedAsync();
+        await preferences.SetGroupOverviewAsync(overview);
         var cut = Render<ApplicationSummary>(builder => builder.AddCascadingValue(viewport).Add(p => p.ResourceNames, resourceNames));
-        await cut.InvokeAsync(() => Services.GetRequiredService<DashboardViewPreferences>().SetGroupOverviewAsync(overview));
         return new LiveSummaryContext(cut, clock, timers, requestQueries);
     }
 
