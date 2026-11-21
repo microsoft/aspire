@@ -344,12 +344,17 @@ public class ResourceOverviewEmptyPanelsTests : DashboardTestContext
     [Theory]
     [InlineData(KnownResourceTypes.Parameter)]
     [InlineData(KnownResourceTypes.Project)]
-    public void Status_UsesSameMetadataOrderAndOnlyShowsInlineCommandsForNonParameters(string resourceType)
+    public void Status_ShowsOnlyBasicMetadataAndNoInlineCommandsForParameters(string resourceType)
     {
         var command = new CommandViewModel("refresh", CommandViewModelState.Enabled, "Refresh status", "",
             confirmationMessage: "", argumentInputs: [], isHighlighted: true, iconName: "", iconVariant: IconVariant.Regular);
+        var properties = new Dictionary<string, ResourcePropertyViewModel>
+        {
+            [KnownProperties.Resource.Source] = new(KnownProperties.Resource.Source, Value.ForString("test-source"), false, null, 0, null, false)
+        };
         ResourceSetupHelpers.SetupResourceOverview(this, s_viewport, new TestDashboardClient(isEnabled: true,
-            initialResources: [ModelTestHelpers.CreateResource("test", displayName: "test-item", resourceType: resourceType, state: KnownResourceState.Running, commands: [command])],
+            initialResources: [ModelTestHelpers.CreateResource("test", displayName: "test-item", resourceType: resourceType, state: KnownResourceState.Running,
+                properties: properties, commands: [command])],
             resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
         Services.GetRequiredService<NavigationManager>().NavigateTo("/resources/test");
         var cut = RenderOverview(s_viewport);
@@ -359,9 +364,9 @@ public class ResourceOverviewEmptyPanelsTests : DashboardTestContext
         status.WaitForAssertion(() =>
         {
             var names = status.FindAll("td.nameColumn");
-            Assert.Equal(["Display name", "State", "Health state", "Type", "Start time", "Stop time"],
+            Assert.Equal(isParameter ? ["Display name", "State", "Type"] : ["Display name", "State", "Health state", "Type", "Start time", "Stop time", "Source"],
                 names.Select(cell => cell.TextContent.Trim()));
-            Assert.Equal(new[] { "test-item", "Running", "Healthy", resourceType },
+            Assert.Equal(isParameter ? ["test-item", "Running", resourceType] : ["test-item", "Running", "Healthy", resourceType],
                 names.Take(4).Select(cell => cell.NextElementSibling!.TextContent.Trim()));
             Assert.Single(status.FindAll("td.valueColumn svg.resource-icon"));
         });
