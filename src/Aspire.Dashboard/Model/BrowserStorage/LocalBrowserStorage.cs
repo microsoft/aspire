@@ -39,8 +39,9 @@ public class LocalBrowserStorage : BrowserStorageBase, ILocalStorage
 
     public Task<StorageResult<TValue>> GetUnprotectedAsync<TValue>(string key) => GetJsonAsync<TValue>(key);
 
-    public async Task<IUnprotectedLocalStorageReader> ReadUnprotectedSnapshotAsync(string[] keys)
+    public async Task<IUnprotectedLocalStorageSnapshot> ReadUnprotectedSnapshotAsync(string[] keys)
     {
+        keys = keys.ToArray();
         var result = await ReadAsync("local storage snapshot", async () =>
         {
             var values = await _jsRuntime.InvokeAsync<string?[]>("getLocalStorageItems", (object)keys).ConfigureAwait(false);
@@ -92,15 +93,35 @@ public class LocalBrowserStorage : BrowserStorageBase, ILocalStorage
         => _jsRuntime.InvokeVoidAsync("localStorage.setItem", key, json);
 
     private sealed class UnprotectedSnapshot(LocalBrowserStorage storage, string[] keys, StorageResult<string?[]> result)
-        : IUnprotectedLocalStorageReader
+        : IUnprotectedLocalStorageSnapshot
     {
-        public Task<StorageResult<TValue>> GetUnprotectedAsync<TValue>(string key)
+        public StorageResult<TValue> Get<TValue>(string key)
         {
             var index = Array.IndexOf(keys, key);
-            ArgumentOutOfRangeException.ThrowIfNegative(index, nameof(key));
-            return storage.ReadAsync(key, () => Task.FromResult(result.Success
-                ? storage.Deserialize<TValue>(result.Value![index])
-                : new StorageResult<TValue>(false, default) { ReadFailed = result.ReadFailed, InvalidValue = result.InvalidValue }));
+            if (index < 0)
+            {
+                throw new ArgumentException($"Key '{key}' was not requested when loading the snapshot.", nameof(key));
+            }
+
+            if (!result.Success)
+            {
+                return new StorageResult<TValue>(false, default) { ReadFailed = result.ReadFailed, InvalidValue = result.InvalidValue };
+            }
+
+            try
+            {
+                return storage.Deserialize<TValue>(result.Value![index]);
+            }
+            catch (JsonException ex)
+            {
+                storage.Logger.LogInformation(ex, "Error when reading '{Key}' as {ValueType}.", key, typeof(TValue).Name);
+                return new StorageResult<TValue>(false, default) { InvalidValue = true };
+            }
+            catch (NotSupportedException ex)
+            {
+                storage.Logger.LogWarning(ex, "Error when reading '{Key}' as {ValueType}.", key, typeof(TValue).Name);
+                return new StorageResult<TValue>(false, default) { InvalidValue = true };
+            }
         }
     }
 }

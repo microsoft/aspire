@@ -31,6 +31,7 @@ public class LocalBrowserStorageTests
         browser.Items[BrowserStorageKeys.ResourcePaneCollapsed] = "true";
         browser.Items[BrowserStorageKeys.ResourcePaneGrouping] = "{";
         browser.Items[BrowserStorageKeys.ResourcePaneKinds] = """["Project","Container"]""";
+        browser.Items["Unrequested"] = "123";
 
         var snapshot = await browser.Storage.ReadUnprotectedSnapshotAsync(
         [
@@ -42,17 +43,30 @@ public class LocalBrowserStorageTests
         ]);
         browser.Items.Clear();
 
-        var width = await snapshot.GetUnprotectedAsync<int>(BrowserStorageKeys.ResourcePaneWidth);
+        var width = snapshot.Get<int>(BrowserStorageKeys.ResourcePaneWidth);
         Assert.True(width.Success);
         Assert.Equal(320, width.Value);
-        Assert.True((await snapshot.GetUnprotectedAsync<bool>(BrowserStorageKeys.ResourcePaneCollapsed)).Value);
-        Assert.True((await snapshot.GetUnprotectedAsync<string>(BrowserStorageKeys.ResourcePaneGrouping)).InvalidValue);
-        Assert.Equal(["Project", "Container"], (await snapshot.GetUnprotectedAsync<List<string>>(BrowserStorageKeys.ResourcePaneKinds)).Value);
-        var missing = await snapshot.GetUnprotectedAsync<string>(BrowserStorageKeys.ResourcePaneMode);
+        Assert.True(snapshot.Get<bool>(BrowserStorageKeys.ResourcePaneCollapsed).Value);
+        Assert.True(snapshot.Get<string>(BrowserStorageKeys.ResourcePaneGrouping).InvalidValue);
+        Assert.Equal(["Project", "Container"], snapshot.Get<List<string>>(BrowserStorageKeys.ResourcePaneKinds).Value);
+        var missing = snapshot.Get<string>(BrowserStorageKeys.ResourcePaneMode);
         Assert.False(missing.Success);
         Assert.False(missing.ReadFailed);
         Assert.False(missing.InvalidValue);
+        Assert.Throws<ArgumentException>("key", () => snapshot.Get<int>("Unrequested"));
         Assert.Equal(1, browser.SnapshotReadCount);
+    }
+
+    [Fact]
+    public async Task ReadUnprotectedSnapshot_ReadFailureIsNotAnUnrequestedKey()
+    {
+        var browser = new InMemoryBrowserLocalStorage { FailReads = true };
+        var snapshot = await browser.Storage.ReadUnprotectedSnapshotAsync([BrowserStorageKeys.ResourcePaneWidth]);
+
+        var width = snapshot.Get<int>(BrowserStorageKeys.ResourcePaneWidth);
+        Assert.False(width.Success);
+        Assert.True(width.ReadFailed);
+        Assert.Throws<ArgumentException>("key", () => snapshot.Get<int>(BrowserStorageKeys.ResourcePaneMode));
     }
 
     [Theory]
