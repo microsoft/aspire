@@ -36,7 +36,8 @@
 }
 
 /* Keep the cards and terminal mounted so minimizing restores their state without reconnecting. */
-.terminal-focused > .overview-grid > :not(.overview-terminal-card) {
+.terminal-focused > .overview-grid > :not(.overview-terminal-card),
+.terminal-focused > .overview-grid ::deep > .overview-status-card {
     display: none;
 }
 
