@@ -1,0 +1,15 @@
+{
+  "id": "extension-e2e-windows-blazor-resource-failedtostart",
+  "type": "infra-failure",
+  "title": "VS Code extension E2E (Windows) Blazor browser-debugger test times out as resource enters FailedToStart",
+  "error_pattern": "Timed out after 89388ms waiting for resource 'hosted-global' state Exited or Finished or Stopped. ... \"state\": \"FailedToStart\"",
+  "occurrences": [
+    {
+      "run_id": 45018155854,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/45018155854",
+      "job": "Tests / Run VS Code extension E2E tests / VS Code extension E2E (Windows, browser-debugger)",
+      "observed_at": "2026-11-22T12:12:46Z",
+      "pr_number": 0
+    }
+  ]
+}
