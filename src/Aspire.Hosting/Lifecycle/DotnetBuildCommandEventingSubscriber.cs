@@ -93,7 +93,12 @@ internal sealed class DotnetBuildCommandEventingSubscriber(
                     return;
                 }
 
-                args.Insert(Math.Min(2, args.Count), "-mt");
+                // On Windows, coordinated builds can invoke WebAssembly tasks whose task factory
+                // cannot run out of process in multithreaded mode (https://github.com/microsoft/aspire/issues/22430).
+                var buildMode = OperatingSystem.IsWindows() && buildTarget.EndsWith(".proj", StringComparison.OrdinalIgnoreCase)
+                    ? "-mt:false"
+                    : "-mt";
+                args.Insert(2, buildMode);
             }));
             executable.Annotations.Add(MultiThreadedBuildConfiguredAnnotation.Instance);
         }
