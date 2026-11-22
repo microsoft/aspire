@@ -2011,46 +2011,32 @@
 ::deep .resource-row-insight {
     display: inline-flex;
     align-items: center;
-    gap: var(--resource-insight-gap);
     min-width: 0;
     box-sizing: border-box;
-    height: var(--resource-insight-height);
-    padding: 0 var(--resource-insight-padding);
-    border: 0;
     border-radius: var(--aspire-radius-small);
-    background: color-mix(in srgb, var(--colorBrandBackground2) 25%, var(--colorNeutralBackground1));
-    color: var(--colorNeutralForeground2);
-    font-size: var(--resource-row-font-size);
-    line-height: var(--resource-metadata-line-height);
-    font-variant-numeric: tabular-nums;
-    white-space: nowrap;
     text-decoration: none;
 }
 
-::deep .resource-row-insight:hover {
-    background: var(--colorBrandBackground2);
-    color: var(--colorNeutralForeground1);
-    text-decoration: underline;
-}
-
-::deep .resource-row-insight-requests {
+::deep .resource-row-insight-button {
     justify-self: start;
     max-width: 100%;
-    height: auto;
-    padding-block: 1px;
+    gap: var(--resource-insight-gap);
+    padding: 1px var(--resource-insight-padding);
     border: 1px solid var(--colorNeutralStroke1);
     background: var(--colorNeutralBackground1);
     color: var(--colorNeutralForeground1);
     font-size: var(--resource-secondary-font-size);
+    line-height: var(--resource-metadata-line-height);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
 }
 
-::deep .resource-row-insight-requests:hover {
+::deep .resource-row-insight-button:hover {
     border-color: var(--aspire-button-hover-border);
     background: var(--colorNeutralBackground3);
-    text-decoration: none;
 }
 
-::deep .resource-row-insight > span {
+::deep .resource-row-insight-button > span {
     flex-shrink: 0;
 }
 
@@ -2064,13 +2050,19 @@
 }
 
 ::deep .resource-row-insight-failed {
+    height: var(--resource-insight-height);
     background: var(--colorPaletteRedBackground1);
     color: var(--error);
 }
 
+::deep .resource-row-insight-failed:hover {
+    background: var(--colorBrandBackground2);
+    color: var(--colorNeutralForeground1);
+}
+
 @media (forced-colors: active) {
     ::deep .resource-row-insight,
-    ::deep .resource-row-insight-requests:hover {
+    ::deep .resource-row-insight-button:hover {
         border-color: LinkText;
         background: Canvas;
         color: LinkText;

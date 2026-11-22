@@ -11,7 +11,7 @@
     var count = string.Format(CultureInfo.CurrentCulture,
         Loc[snapshot.Sampled ? nameof(Resources.Layout.ResourcePaneActivitySampledCount) : nameof(Resources.Layout.ResourcePaneActivityCount)], activity.Count);
     <div class="resource-row-insights">
-        <a class="resource-row-insight resource-row-insight-requests" href="@traceUrl"
+        <a class="resource-row-insight resource-row-insight-button resource-row-insight-requests" href="@traceUrl"
            aria-label="@($"{count}. {context}")" data-tooltip="@($"{count}. {context}")"
            data-tooltip-positioning="above" @onclick:stopPropagation="true">
             <FluentIcon Value="@(new Icons.Regular.Size16.DataUsage())" Width="var(--resource-insight-icon-size)" Color="Color.Custom" CustomColor="currentColor" />
@@ -23,7 +23,7 @@
             var p95 = string.Format(CultureInfo.CurrentCulture,
                 Loc[snapshot.Sampled ? nameof(Resources.Layout.ResourcePaneActivitySampledP95) : nameof(Resources.Layout.ResourcePaneActivityP95)], duration);
             var conciseP95 = string.Format(CultureInfo.CurrentCulture, Loc[nameof(Resources.Layout.ResourcePaneActivityP95)], duration);
-            <a class="resource-row-insight resource-row-insight-latency" href="@traceUrl"
+            <a class="resource-row-insight resource-row-insight-button resource-row-insight-latency" href="@traceUrl"
                aria-label="@($"{p95}. {context}")" data-tooltip="@($"{p95}. {context}")"
                data-tooltip-positioning="above" @onclick:stopPropagation="true">
                 <FluentIcon Value="@(new Icons.Regular.Size16.Timer())" Width="var(--resource-insight-icon-size)" Color="Color.Custom" CustomColor="currentColor" />

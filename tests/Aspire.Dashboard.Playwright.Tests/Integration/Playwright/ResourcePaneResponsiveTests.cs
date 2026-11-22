@@ -1211,14 +1211,13 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                                 if (!chipBox.width) continue;
                                 const style = getComputedStyle(chip), glyph = chip.querySelector('svg').getBoundingClientRect();
                                 const line = compact ? 16 : 18;
-                                const incoming = chip.classList.contains('resource-row-insight-requests');
-                                const font = incoming ? 12 : expectedFont;
-                                const target = incoming ? line + 4 : compact ? 24 : 28;
+                                const hasLabel = !!chip.querySelector('span');
+                                const target = hasLabel ? line + 4 : compact ? 24 : 28;
                                 const iconSize = compact ? 12 : 14;
-                                if (parseFloat(style.fontSize) !== font || parseFloat(style.lineHeight) !== line ||
+                                if ((hasLabel && (parseFloat(style.fontSize) !== 12 || parseFloat(style.lineHeight) !== line ||
+                                    style.fontVariantNumeric !== 'tabular-nums')) ||
                                     chipBox.height !== target || chipBox.width < target ||
-                                    glyph.width !== iconSize || glyph.height !== iconSize ||
-                                    style.fontVariantNumeric !== 'tabular-nums')
+                                    glyph.width !== iconSize || glyph.height !== iconSize)
                                     errors.push(`${row.dataset.resourceName}: chip density geometry; font=${style.fontSize}; line=${style.lineHeight}; target=${chipBox.width}x${chipBox.height}; icon=${glyph.width}x${glyph.height}`);
                             }
                             if (i && b.y < rows[i-1].getBoundingClientRect().bottom + 1) errors.push(`${i}: overlap/gap`);
@@ -1291,11 +1290,12 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                                     errors.push(`${row.dataset.resourceName}: intersecting tracks`);
                                 if (insights?.width) {
                                     const gap = parseFloat(getComputedStyle(row).columnGap);
+                                    const incoming = box('.resource-row-insight-requests');
                                     const latency = box('.resource-row-insight-latency');
                                     if (Math.abs(actions.x - insights.right - gap) > .5)
                                         errors.push(`${row.dataset.resourceName}: activity/action gap; activityRight=${insights.right}; actionX=${actions.x}; expected=${gap}`);
-                                    if (latency?.width && Math.abs(latency.right - insights.right) > .5)
-                                        errors.push(`${row.dataset.resourceName}: latency not trailing; latencyRight=${latency.right}; trackRight=${insights.right}`);
+                                    if (latency?.width && (latency.x < incoming.right - .5 || latency.right > insights.right + .5))
+                                        errors.push(`${row.dataset.resourceName}: latency overlaps an adjacent control; latencyRight=${latency.right}; trackRight=${insights.right}`);
                                 }
                                 for (const label of row.querySelectorAll('.resource-relationship-label')) {
                                     if (label.getBoundingClientRect().width && label.scrollWidth > label.clientWidth)
