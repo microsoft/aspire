@@ -1212,11 +1212,11 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                                 const style = getComputedStyle(chip), glyph = chip.querySelector('svg').getBoundingClientRect();
                                 const line = compact ? 16 : 18;
                                 const hasLabel = !!chip.querySelector('span');
-                                const target = hasLabel ? line + 4 : compact ? 24 : 28;
+                                const target = line + 4;
                                 const iconSize = compact ? 12 : 14;
                                 if ((hasLabel && (parseFloat(style.fontSize) !== 12 || parseFloat(style.lineHeight) !== line ||
                                     style.fontVariantNumeric !== 'tabular-nums')) ||
-                                    chipBox.height !== target || chipBox.width < target ||
+                                    chipBox.height !== target || (hasLabel ? chipBox.width < target : chipBox.width !== target) ||
                                     glyph.width !== iconSize || glyph.height !== iconSize)
                                     errors.push(`${row.dataset.resourceName}: chip density geometry; font=${style.fontSize}; line=${style.lineHeight}; target=${chipBox.width}x${chipBox.height}; icon=${glyph.width}x${glyph.height}`);
                             }
@@ -1384,6 +1384,43 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                 await Assertions.Expect(menu.GetByText("api", new() { Exact = true })).ToBeVisibleAsync();
                 await page.Keyboard.PressAsync("Escape");
                 await Assertions.Expect(row.Locator(".resource-row-link")).ToBeFocusedAsync();
+            }
+        });
+    }
+
+    [Theory]
+    [InlineData("Compact")]
+    [InlineData("Comfortable")]
+    public async Task ActivityLinks_AreClickableAcrossTheirColumns(string density)
+    {
+        await RunTestAsync(async page =>
+        {
+            await fixture.SeedActivityAsync();
+            await page.SetViewportSizeAsync(1550, 750);
+            await page.EmulateMediaAsync(new() { ReducedMotion = ReducedMotion.Reduce });
+            await page.GotoAsync("/resources/api");
+            await page.GetByRole(AriaRole.Button, new() { Name = "Settings", Exact = true }).ClickAsync();
+            await page.GetByRole(AriaRole.Button, new() { Name = density, Exact = true }).ClickAsync();
+            await page.GetByRole(AriaRole.Button, new() { Name = "Close", Exact = true }).Last.ClickAsync();
+            await ResourcePaneNavigation.ToggleResourceListAsync(page);
+
+            var insights = page.Locator(".resource-row[data-resource-name='api'] .resource-row-insights").First;
+            var incoming = insights.Locator(".resource-row-insight-requests");
+            var latency = insights.Locator(".resource-row-insight-latency");
+            foreach (var (link, isIncoming) in new[] { (incoming, true), (latency, false) })
+            {
+                await Assertions.Expect(link).ToBeVisibleAsync();
+                var edge = await insights.EvaluateAsync<float>("""
+                    (insights, isIncoming) => isIncoming
+                        ? insights.querySelector('.resource-row-insight-latency').getBoundingClientRect().left - parseFloat(getComputedStyle(insights).columnGap)
+                        : insights.getBoundingClientRect().right
+                    """, isIncoming);
+                var bounds = await link.BoundingBoxAsync();
+                Assert.NotNull(bounds);
+                await page.Mouse.ClickAsync(edge - 2, bounds.Y + bounds.Height / 2);
+                await Assertions.Expect(page).ToHaveURLAsync(new Regex(@"/traces/resource/api\?"));
+                await page.GoBackAsync();
+                await Assertions.Expect(page.Locator(".resources-layout.pane-full-canvas")).ToBeVisibleAsync();
             }
         });
     }

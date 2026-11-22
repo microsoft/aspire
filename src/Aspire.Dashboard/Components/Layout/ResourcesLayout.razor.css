@@ -16,7 +16,6 @@
     --resource-row-actions-width: 92px;
     /* The full canvas's Started column: a clock, the verb and a short age, up to "Stopped 23h ago". */
     --resource-row-status-width: 128px;
-    --resource-insight-height: 28px;
     --resource-insight-icon-size: 14px;
     --resource-insight-padding: 6px;
     --resource-insight-gap: var(--spacingHorizontalXS);
@@ -48,7 +47,6 @@
     --resource-row-identity-extra: calc(var(--resource-row-meta-type-width) + 26px);
     --resource-row-line-height: var(--lineHeightBase200);
     --resource-metadata-line-height: 16px;
-    --resource-insight-height: 24px;
     --resource-insight-icon-size: 12px;
     --resource-insight-padding: var(--spacingHorizontalXS);
     --resource-insight-request-width: 116px;
@@ -1987,6 +1985,8 @@
 }
 
 ::deep .resource-row-insights {
+    --resource-insight-border-width: 1px;
+    --resource-insight-padding-block: 1px;
     display: none;
     min-width: 0;
 }
@@ -2013,27 +2013,26 @@
     align-items: center;
     min-width: 0;
     box-sizing: border-box;
+    border: var(--resource-insight-border-width) solid var(--colorNeutralStroke1);
     border-radius: var(--aspire-radius-small);
+    background: var(--colorNeutralBackground1);
     text-decoration: none;
 }
 
+::deep .resource-row-insight:hover {
+    border-color: var(--aspire-button-hover-border);
+    background: var(--colorNeutralBackground3);
+}
+
 ::deep .resource-row-insight-button {
-    justify-self: start;
-    max-width: 100%;
+    justify-self: stretch;
     gap: var(--resource-insight-gap);
-    padding: 1px var(--resource-insight-padding);
-    border: 1px solid var(--colorNeutralStroke1);
-    background: var(--colorNeutralBackground1);
+    padding: var(--resource-insight-padding-block) var(--resource-insight-padding);
     color: var(--colorNeutralForeground1);
     font-size: var(--resource-secondary-font-size);
     line-height: var(--resource-metadata-line-height);
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
-}
-
-::deep .resource-row-insight-button:hover {
-    border-color: var(--aspire-button-hover-border);
-    background: var(--colorNeutralBackground3);
 }
 
 ::deep .resource-row-insight-button > span {
@@ -2050,19 +2049,14 @@
 }
 
 ::deep .resource-row-insight-failed {
-    height: var(--resource-insight-height);
-    background: var(--colorPaletteRedBackground1);
+    height: calc(var(--resource-metadata-line-height) + 2 * (var(--resource-insight-padding-block) + var(--resource-insight-border-width)));
+    aspect-ratio: 1;
     color: var(--error);
-}
-
-::deep .resource-row-insight-failed:hover {
-    background: var(--colorBrandBackground2);
-    color: var(--colorNeutralForeground1);
 }
 
 @media (forced-colors: active) {
     ::deep .resource-row-insight,
-    ::deep .resource-row-insight-button:hover {
+    ::deep .resource-row-insight:hover {
         border-color: LinkText;
         background: Canvas;
         color: LinkText;
@@ -2820,7 +2814,6 @@
         inset-inline-start: 0;
         top: 50%;
         transform: translateY(-50%);
-        width: var(--resource-insight-height);
         justify-content: center;
     }
 }
