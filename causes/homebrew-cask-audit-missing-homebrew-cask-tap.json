@@ -31,6 +31,13 @@
       "job": "Tests / Prepare Homebrew installer artifacts / Prepare Homebrew cask",
       "observed_at": "2026-11-22T10:45:17Z",
       "pr_number": 0
+    },
+    {
+      "run_id": 45014147680,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/45014147680",
+      "job": "Tests / Prepare Homebrew installer artifacts / Prepare Homebrew cask",
+      "observed_at": "2026-11-22T11:20:14Z",
+      "pr_number": 0
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/22497"
