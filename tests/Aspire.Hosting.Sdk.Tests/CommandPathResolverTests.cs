@@ -75,8 +75,8 @@ public class CommandPathResolverTests
     }
 
     // CommandPathResolver mirrors src/Shared/PathLookupHelper.cs because the tasks must also build for net472.
-    // These cases pin the lookup rules the two must share. Intentional task-only additions (quoted and duplicate
-    // PATH entries, and the PATHEXT default when it is unset) are covered by the tests above.
+    // These cases pin the lookup rules the two must share. Quoted and duplicate PATH entries are intentionally
+    // handled only by the task resolver and are covered by the tests above.
     [Theory]
     [InlineData("aspire", new[] { "first/aspire", "second/aspire" }, null, new[] { "first/aspire", "second/aspire" })]
     [InlineData("aspire", new[] { "first/aspire.CMD", "first/aspire.EXE", "first/aspire", "second/aspire.BAT" }, new[] { ".EXE", ".CMD", ".BAT" }, new[] { "first/aspire.EXE", "second/aspire.BAT" })]
@@ -95,6 +95,16 @@ public class CommandPathResolverTests
 
         Assert.Equal(expected.Select(ToFullPath), taskCandidates);
         Assert.Equal(sharedCandidates, taskCandidates);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData(";")]
+    [InlineData(".EXE;.PS1;")]
+    public void WindowsPathExtensionsMatchPathLookupHelper(string? pathExtensions)
+    {
+        Assert.Equal(PathLookupHelper.GetWindowsPathExtensions(pathExtensions), CommandPathResolver.GetWindowsPathExtensions(pathExtensions));
     }
 
     private static string ToFullPath(string relativePath) => Path.Combine(s_root, relativePath.Replace('/', Path.DirectorySeparatorChar));

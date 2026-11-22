@@ -389,6 +389,66 @@ public class ConfigureDefaultDcpOptionsTests
     }
 
     [Fact]
+    public void BundleFallbackResolvesLayoutBesideAspireCliOnPath()
+    {
+        var root = Directory.CreateTempSubdirectory("aspire-dcp-fallback-");
+        try
+        {
+            var cliDirectory = Path.Combine(root.FullName, "cli");
+            CreateBundleLayout(cliDirectory);
+            var cliPath = Path.Combine(cliDirectory, BundleDiscovery.GetExecutableFileName("aspire"));
+            CreateEmptyFile(cliPath);
+            if (!OperatingSystem.IsWindows())
+            {
+                // PATH lookup skips files without an execute bit, matching Unix shells.
+                File.SetUnixFileMode(cliPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            }
+
+            var options = Configure(
+                [],
+                Path.Combine(root.FullName, "missing-home"),
+                DistributedApplicationOperation.Run,
+                new FakeLogger<ConfigureDefaultDcpOptions>(),
+                path: cliDirectory,
+                pathExtensions: ".EXE");
+
+            Assert.Equal(Path.Combine(cliDirectory, "dcp", BundleDiscovery.GetDcpExecutableName()), options.CliPath);
+            Assert.Equal(Path.Combine(cliDirectory, "dashboard", BundleDiscovery.GetExecutableFileName(BundleDiscovery.DashboardExecutableName)), options.DashboardPath);
+        }
+        finally
+        {
+            root.Delete(recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData(null, "")]
+    [InlineData("custom-subcommand", "custom-subcommand")]
+    [InlineData("", "")]
+    public void BundleFallbackUsesLayoutTerminalHostArgumentsUnlessConfigured(string? configuredArgs, string expectedArgs)
+    {
+        var aspireHome = Directory.CreateTempSubdirectory("aspire-dcp-fallback-");
+        try
+        {
+            CreateBundleLayout(aspireHome.FullName);
+            var settings = new Dictionary<string, string?>();
+            if (configuredArgs is not null)
+            {
+                settings["ASPIRE_TERMINAL_HOST_INVOCATION_ARGS"] = configuredArgs;
+            }
+
+            var options = Configure(settings, aspireHome.FullName, DistributedApplicationOperation.Run, new FakeLogger<ConfigureDefaultDcpOptions>());
+
+            Assert.Equal(Path.Combine(aspireHome.FullName, "terminalhost", BundleDiscovery.GetExecutableFileName(BundleDiscovery.TerminalHostExecutableName)), options.TerminalHostPath);
+            Assert.Equal(expectedArgs, options.TerminalHostInvocationArgs);
+        }
+        finally
+        {
+            aspireHome.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
     public void BundleFallbackDoesNotRunInPublishMode()
     {
         var aspireHome = Directory.CreateTempSubdirectory("aspire-dcp-fallback-");
@@ -422,7 +482,9 @@ public class ConfigureDefaultDcpOptionsTests
         Dictionary<string, string?> dcpPublisherSettings,
         string aspireHome,
         DistributedApplicationOperation operation,
-        ILogger<ConfigureDefaultDcpOptions> logger)
+        ILogger<ConfigureDefaultDcpOptions> logger,
+        string path = "",
+        string? pathExtensions = null)
     {
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(dcpPublisherSettings)
@@ -438,11 +500,12 @@ public class ConfigureDefaultDcpOptionsTests
         };
         var configurer = new ConfigureDefaultDcpOptions(appOptions, configuration, new DistributedApplicationExecutionContext(operation), logger)
         {
-            // An empty PATH disables the CLI search, so only the given Aspire home is probed.
+            // An empty PATH (the default) disables the CLI search, so only the given Aspire home is probed.
             GetEnvironmentVariable = name => name switch
             {
                 "ASPIRE_HOME" => aspireHome,
-                "PATH" => string.Empty,
+                "PATH" => path,
+                "PATHEXT" => pathExtensions,
                 _ => null,
             },
         };

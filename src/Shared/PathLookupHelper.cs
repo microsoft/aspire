@@ -34,7 +34,7 @@ internal static class PathLookupHelper
 
         var path = pathOverride ?? Environment.GetEnvironmentVariable("PATH");
         var pathExtensions = OperatingSystem.IsWindows()
-            ? (pathExtensionsOverride ?? Environment.GetEnvironmentVariable("PATHEXT"))?.Split(';', StringSplitOptions.RemoveEmptyEntries) ?? []
+            ? GetWindowsPathExtensions(pathExtensionsOverride ?? Environment.GetEnvironmentVariable("PATHEXT"))
             : null;
 
         // Non-explicit command names must resolve through the effective PATH before Process.Start sees them. On Windows,
@@ -78,7 +78,7 @@ internal static class PathLookupHelper
     public static string? FindFullPathFromPath(string command)
     {
         var pathExtensions = OperatingSystem.IsWindows()
-            ? Environment.GetEnvironmentVariable("PATHEXT")?.Split(';', StringSplitOptions.RemoveEmptyEntries) ?? []
+            ? GetWindowsPathExtensions(Environment.GetEnvironmentVariable("PATHEXT"))
             : null;
 
         return FindFullPathFromPath(command, Environment.GetEnvironmentVariable("PATH"), Path.PathSeparator, FileExistsAndIsExecutable, pathExtensions);
@@ -104,7 +104,7 @@ internal static class PathLookupHelper
     public static IEnumerable<string> FindAllFullPathsFromPath(string command, string? pathVariable, string? pathExtensionsVariable)
     {
         var pathExtensions = OperatingSystem.IsWindows()
-            ? pathExtensionsVariable?.Split(';', StringSplitOptions.RemoveEmptyEntries) ?? []
+            ? GetWindowsPathExtensions(pathExtensionsVariable)
             : null;
 
         return FindAllFullPathsFromPath(command, pathVariable, Path.PathSeparator, FileExistsAndIsExecutable, pathExtensions);
@@ -162,6 +162,20 @@ internal static class PathLookupHelper
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Splits a Windows PATHEXT value, falling back to the command shell's defaults when it has no entries.
+    /// </summary>
+    /// <remarks>
+    /// cmd.exe searches .COM, .EXE, .BAT and .CMD when PATHEXT is unset. Without this fallback, a process started
+    /// with a stripped environment could only find extensionless files on Windows.
+    /// See https://learn.microsoft.com/windows-server/administration/windows-commands/path
+    /// </remarks>
+    internal static string[] GetWindowsPathExtensions(string? pathExtensions)
+    {
+        var extensions = pathExtensions?.Split(';', StringSplitOptions.RemoveEmptyEntries) ?? [];
+        return extensions.Length > 0 ? extensions : [".COM", ".EXE", ".BAT", ".CMD"];
     }
 
     private static IEnumerable<string> FindAllFullPaths(string command, string? pathVariable, char pathSeparator, Func<string, bool> fileExists, string[]? pathExtensions)

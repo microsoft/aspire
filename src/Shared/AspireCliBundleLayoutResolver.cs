@@ -57,9 +57,11 @@ internal static class AspireCliBundleLayoutResolver
     /// </summary>
     /// <remarks>
     /// Mirrors the build's default (non-explicit) discovery: the layout pinned to <paramref name="hostingVersion"/>
-    /// is preferred because it is paired with this exact Aspire.Hosting version, then the layouts of
-    /// <paramref name="pathCliPaths"/> (the <c>aspire</c> executables found on PATH, in lookup order), then the
-    /// shared Aspire home layout.
+    /// is preferred because it is paired with this exact Aspire.Hosting version, then the <c>aspire</c> executables
+    /// in <paramref name="pathCliPaths"/>, in PATH order. Each PATH CLI is resolved with
+    /// <see cref="TryResolveFromCliPath(string, string, out AspireCliBundleLayout)"/>, so a CLI with no layout beside
+    /// it resolves to the shared Aspire home layout before later PATH entries are probed; install routes without
+    /// an install sidecar extract there. The shared Aspire home layout is probed directly only when PATH has no CLI.
     /// </remarks>
     public static bool TryResolveRuntimeFallback(
         string aspireHomeDirectory,

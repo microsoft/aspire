@@ -477,11 +477,18 @@ internal class ConfigureDefaultDcpOptions(
             resolvedComponents.Add("dashboard");
         }
 
-        // The terminal host path and its dispatcher arguments describe one binary, so take both from this layout.
+        // The terminal host path and its dispatcher arguments describe one binary, so take the arguments from this
+        // layout as well unless they were explicitly configured (an explicitly empty value is still an override).
         if (string.IsNullOrEmpty(options.TerminalHostPath))
         {
             options.TerminalHostPath = layout.TerminalHostPath;
-            options.TerminalHostInvocationArgs ??= layout.TerminalHostInvocationArgs;
+
+            var invocationArgsConfigured = configuration[BundleDiscovery.TerminalHostInvocationArgsEnvVar] is not null ||
+                configuration.GetSection(DcpPublisher)[nameof(options.TerminalHostInvocationArgs)] is not null;
+            if (!invocationArgsConfigured)
+            {
+                options.TerminalHostInvocationArgs = layout.TerminalHostInvocationArgs;
+            }
         }
 
         var bundleDirectory = Path.GetDirectoryName(layout.DcpDir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
