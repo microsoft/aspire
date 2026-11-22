@@ -1391,6 +1391,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
     [Theory]
     [InlineData("Compact")]
     [InlineData("Comfortable")]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
     public async Task ActivityLinks_AreClickableAcrossTheirColumns(string density)
     {
         await RunTestAsync(async page =>
