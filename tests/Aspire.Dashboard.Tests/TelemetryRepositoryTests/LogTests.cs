@@ -113,7 +113,8 @@ public abstract class LogTests : TelemetryRepositoryTestBase
                             CreateLogRecord(time: s_testTime, message: "warning", severity: SeverityNumber.Warn),
                             CreateLogRecord(time: s_testTime.AddSeconds(1), message: "error", severity: SeverityNumber.Error),
                             CreateLogRecord(time: s_testTime.AddSeconds(1), message: "fatal", severity: SeverityNumber.Fatal),
-                            CreateLogRecord(time: s_testTime.AddSeconds(2), message: "info", severity: SeverityNumber.Info)
+                            CreateLogRecord(time: s_testTime.AddSeconds(2), message: "info", severity: SeverityNumber.Info),
+                            CreateLogRecord(time: s_testTime.AddSeconds(3), message: "unspecified", severity: SeverityNumber.Unspecified)
                         }
                     }
                 }
@@ -128,7 +129,8 @@ public abstract class LogTests : TelemetryRepositoryTestBase
                         Scope = CreateScope(),
                         LogRecords =
                         {
-                            CreateLogRecord(time: s_testTime.AddSeconds(3), message: "healthy", severity: SeverityNumber.Info)
+                            CreateLogRecord(time: s_testTime.AddSeconds(3), message: "healthy", severity: SeverityNumber.Info),
+                            CreateLogRecord(time: s_testTime.AddSeconds(4), message: "unspecified healthy", severity: SeverityNumber.Unspecified)
                         }
                     }
                 }
@@ -136,16 +138,20 @@ public abstract class LogTests : TelemetryRepositoryTestBase
         });
 
         var attention = await repository.GetOverviewLogsAsync([new("API", "1")], 3, errorsOnly: false, cancellationToken);
-        Assert.Equal((4, 1, 2), (attention.TotalCount, attention.WarningCount, attention.ErrorCount));
+        Assert.Equal((5, 1, 2), (attention.TotalCount, attention.WarningCount, attention.ErrorCount));
         Assert.Equal(["error", "fatal", "warning"], attention.Recent.Select(l => l.Message));
 
         var errors = await repository.GetOverviewLogsAsync([], 1, errorsOnly: true, cancellationToken);
-        Assert.Equal((5, 2), (errors.TotalCount, errors.ErrorCount));
+        Assert.Equal((7, 2), (errors.TotalCount, errors.ErrorCount));
         Assert.Equal("error", Assert.Single(errors.Recent).Message);
 
         var healthy = await repository.GetOverviewLogsAsync([new("api", "2")], 3, errorsOnly: false, cancellationToken);
-        Assert.Equal(1, healthy.TotalCount);
-        Assert.Equal("healthy", Assert.Single(healthy.Recent).Message);
+        Assert.Equal((2, 0, 0), (healthy.TotalCount, healthy.WarningCount, healthy.ErrorCount));
+        Assert.Equal(["unspecified healthy", "healthy"], healthy.Recent.Select(l => l.Message));
+
+        var healthyErrors = await repository.GetOverviewLogsAsync([new("api", "2")], 3, errorsOnly: true, cancellationToken);
+        Assert.Equal(0, healthyErrors.ErrorCount);
+        Assert.Empty(healthyErrors.Recent);
 
         var empty = await repository.GetOverviewLogsAsync([new("api", "missing")], 3, errorsOnly: false, cancellationToken);
         Assert.Equal(0, empty.TotalCount);

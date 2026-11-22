@@ -39,7 +39,11 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
     // Metrics arrive every few seconds from each resource, so coalesce telemetry notifications to bound the
     // number of repository queries the page runs.
     private static readonly TimeSpan s_telemetryRefreshDelay = TimeSpan.FromSeconds(1);
-    private static readonly List<TelemetryFilter> s_errorLogFilters = [new FieldTelemetryFilter { Field = nameof(OtlpLogEntry.Severity), Condition = FilterCondition.GreaterThanOrEqual, Value = nameof(LogLevel.Error) }];
+    private static readonly List<TelemetryFilter> s_errorLogFilters =
+    [
+        new FieldTelemetryFilter { Field = nameof(OtlpLogEntry.Severity), Condition = FilterCondition.GreaterThanOrEqual, Value = nameof(LogLevel.Error) },
+        new FieldTelemetryFilter { Field = nameof(OtlpLogEntry.Severity), Condition = FilterCondition.LessThanOrEqual, Value = nameof(LogLevel.Critical) }
+    ];
     private static readonly FieldTelemetryFilter s_failedTraceFilter = new() { Field = KnownTraceFields.StatusField, Condition = FilterCondition.Equals, Value = nameof(OtlpSpanStatusCode.Error) };
     private static readonly string s_failedTracesUrl = DashboardUrls.TracesUrl(filters: TelemetryFilterFormatter.SerializeFiltersToString([s_failedTraceFilter]));
 
@@ -297,6 +301,8 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
         var refresh = Volatile.Read(ref _telemetryRefresh);
         if (refresh is null)
         {
+            // Known limitation: disabling Graph via live configuration reload while Graph is open doesn't
+            // raise ViewPreferences.Changed. Summary can show loading placeholders until the view is reopened.
             return;
         }
 

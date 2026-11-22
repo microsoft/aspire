@@ -437,7 +437,11 @@ public class ApplicationSummaryTests : DashboardTestContext
                         new ScopeLogs
                         {
                             Scope = TelemetryTestHelpers.CreateScope(),
-                            LogRecords = { logTimes.Select(time => TelemetryTestHelpers.CreateLogRecord(time: time, observedTime: time, severity: SeverityNumber.Error)) }
+                            LogRecords =
+                            {
+                                logTimes.Select(time => TelemetryTestHelpers.CreateLogRecord(time: time, observedTime: time, severity: SeverityNumber.Error)),
+                                TelemetryTestHelpers.CreateLogRecord(time: requestTime, severity: SeverityNumber.Unspecified)
+                            }
                         }
                     }
                 }

@@ -413,10 +413,12 @@ public sealed partial class SqliteTelemetryRepository
             : "FROM telemetry_logs l JOIN telemetry_resources r ON r.resource_id = l.resource_id";
         parameters.Add("Warning", (int)LogLevel.Warning);
         parameters.Add("Error", (int)LogLevel.Error);
+        parameters.Add("Critical", (int)LogLevel.Critical);
         parameters.Add("RecentCount", recentCount);
+        // Unspecified OTLP severities map to LogLevel.None, which sorts above Critical.
         var severityPredicate = errorsOnly
-            ? "(SELECT ErrorCount FROM log_counts) > 0 AND l.severity >= @Error"
-            : "(SELECT WarningCount + ErrorCount FROM log_counts) = 0 OR l.severity >= @Warning";
+            ? "l.severity BETWEEN @Error AND @Critical"
+            : "(SELECT WarningCount + ErrorCount FROM log_counts) = 0 OR l.severity BETWEEN @Warning AND @Critical";
 
         // Keep the aggregate and the preview in one statement so new or trimmed entries can't move the page.
         // The preview only needs the message and severity; don't join attributes or materialize structured logs.
@@ -424,7 +426,7 @@ public sealed partial class SqliteTelemetryRepository
             WITH log_counts AS (
                 SELECT COUNT(*) AS TotalCount,
                     COUNT(*) FILTER (WHERE l.severity = @Warning) AS WarningCount,
-                    COUNT(*) FILTER (WHERE l.severity >= @Error) AS ErrorCount
+                    COUNT(*) FILTER (WHERE l.severity BETWEEN @Error AND @Critical) AS ErrorCount
                 {from}
                 {(resourcePredicate is null ? "" : $"WHERE {resourcePredicate}")}
             ),
