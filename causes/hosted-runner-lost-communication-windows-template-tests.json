@@ -76,6 +76,13 @@
       "job": "Tests / No-package tests (regular, Aspire.Cli.Tests, Cli, Cli, tests/Aspire.Cli.Tests/Aspire.Cli.Tests.cs... / Cli (windows-latest)",
       "observed_at": "2026-11-20T21:23:46Z",
       "pr_number": 0
+    },
+    {
+      "run_id": 45009202020,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/45009202020",
+      "job": "Tests / No-package tests (collection, Aspire.Hosting.Tests, Hosting, Hosting, tests/Aspire.Hosting.Tests/... / Hosting (windows-latest)",
+      "observed_at": "2026-11-22T10:45:17Z",
+      "pr_number": 0
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/20165"
