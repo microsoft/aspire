@@ -303,6 +303,7 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
         {
             // Known limitation: disabling Graph via live configuration reload while Graph is open doesn't
             // raise ViewPreferences.Changed. Summary can show loading placeholders until the view is reopened.
+            // This is unlikely in normal use, so this transition is intentionally not handled.
             return;
         }
 
