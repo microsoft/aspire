@@ -1088,10 +1088,9 @@
                     <div class="resource-row-endpoints">
                         @if (item.Urls.Count > 0)
                         {
-                            @* The resources grid's URLs column, showing the first URL and a +N button listing the rest, so a
-                               resource with many URLs doesn't widen the column. Links and buttons don't select the row
-                               (see ResourcesLayout.razor.js). *@
-                            <UrlsColumnDisplay Resource="@resource" HasMultipleReplicas="@HasMultipleReplicas(resource)" DisplayedUrls="@item.Urls" ShowFirstUrlOnly="true" />
+                            @* Render all candidates so even a wide column with many short URLs shows everything that fits.
+                               Links and buttons don't select the row (see ResourcesLayout.razor.js). *@
+                            <UrlsColumnDisplay Resource="@resource" HasMultipleReplicas="@HasMultipleReplicas(resource)" DisplayedUrls="@item.Urls" UseNeutralOverflowButton="true" MaxRenderedItems="@item.Urls.Count" />
                         }
                     </div>
                     @* What ran the resource ("alpine:latest", "Api.csproj"). The type is in the name column, next to the

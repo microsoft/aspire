@@ -2506,6 +2506,45 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
 
     [Fact]
     [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task FullCanvasUrls_AdaptsToAvailableWidth()
+    {
+        await RunTestAsync(async page =>
+        {
+            fixture.StartDynamicSession();
+            await page.SetViewportSizeAsync(2000, 900);
+            await page.GotoAsync("/resources?pane=tags");
+            await ResourcePaneNavigation.ToggleResourceListAsync(page);
+            await fixture.PublishAsync([new(ResourceViewModelChangeType.Upsert, ModelTestHelpers.CreateResource("api",
+                state: KnownResourceState.Running, resourceType: KnownResourceTypes.Project, urls:
+                [
+                    new("https", new Uri("https://example.test/first"), false, false, new("First endpoint", 0)),
+                    new("http", new Uri("https://example.test/second"), false, false, new("Second endpoint", 1))
+                ]))]);
+
+            var api = page.Locator(".resource-pane [data-resource-name='api']").First;
+            var first = api.Locator(".resource-row-endpoints a").Filter(new() { HasText = "First endpoint" });
+            var second = api.Locator(".resource-row-endpoints a").Filter(new() { HasText = "Second endpoint" });
+            var more = api.Locator(".resource-row-endpoints .url-button");
+            await Assertions.Expect(first).ToBeVisibleAsync();
+            await Assertions.Expect(second).ToBeVisibleAsync();
+            await Assertions.Expect(more).Not.ToBeVisibleAsync();
+
+            await page.SetViewportSizeAsync(769, 900);
+            await Assertions.Expect(first).ToBeVisibleAsync();
+            await Assertions.Expect(more).ToHaveTextAsync("+1");
+            await more.ClickAsync();
+            await Assertions.Expect(api.Locator(".url-overflow-popover a")).ToHaveTextAsync("Second endpoint");
+            await Assertions.Expect(page.Locator(".pane-full-canvas")).ToBeVisibleAsync();
+            await page.Keyboard.PressAsync("Escape");
+
+            await page.SetViewportSizeAsync(2000, 900);
+            await Assertions.Expect(second).ToBeVisibleAsync();
+            await Assertions.Expect(more).Not.ToBeVisibleAsync();
+        });
+    }
+
+    [Fact]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
     public async Task FullCanvasUrls_ListTheOtherUrlsInAPopoverWithoutSelectingTheResource()
     {
         await RunTestAsync(async page =>
