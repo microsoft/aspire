@@ -352,7 +352,10 @@ internal class ConfigureDefaultDcpOptions(
         //    MSBuild target). This is the **primary** path in the normal `dotnet build`
         //    → `dotnet run` case — by the time the AppHost runs, the metadata already
         //    points at the bundled aspire-managed binary.
-        // 4. Runtime inference from DashboardPath (below): only fires when none of the
+        // 4. The Aspire CLI bundle discovered at runtime by ApplyBundleLayoutFallback
+        //    (above). It only runs in run mode when the DCP or dashboard path is still
+        //    missing, which means the AppHost assembly lacks its bundle metadata.
+        // 5. Runtime inference from DashboardPath (below): only fires when none of the
         //    above produced a value, which happens when the AppHost was built on a
         //    machine where ResolveAspireCliBundle could not locate the bundle, but at
         //    runtime the launching CLI did set ASPIRE_DASHBOARD_PATH. This fallback
