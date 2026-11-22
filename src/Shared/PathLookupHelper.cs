@@ -180,8 +180,16 @@ internal static class PathLookupHelper
 
     private static IEnumerable<string> FindAllFullPaths(string command, string? pathVariable, char pathSeparator, Func<string, bool> fileExists, string[]? pathExtensions)
     {
-        foreach (var directory in (pathVariable ?? string.Empty).Split(pathSeparator, StringSplitOptions.RemoveEmptyEntries))
+        foreach (var pathEntry in (pathVariable ?? string.Empty).Split(pathSeparator, StringSplitOptions.RemoveEmptyEntries))
         {
+            // Windows PATH entries can be quoted, and Path.Combine keeps the quotes as part of the directory name:
+            //   C:\Tools;"C:\Program Files\Aspire";C:\Users\user\.dotnet\tools
+            var directory = pathEntry.Trim().Trim('"');
+            if (directory.Length == 0)
+            {
+                continue;
+            }
+
             // On Windows, search each directory completely with all PATHEXT extensions before moving to the next.
             // This matches Windows command lookup behavior where directory order takes precedence.
             if (pathExtensions is not null && pathExtensions.Length > 0)

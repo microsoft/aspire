@@ -506,6 +506,20 @@ public class PathLookupHelperTests(ITestOutputHelper outputHelper)
         Assert.Equal(dir1ExactPath, result);
     }
 
+    [Fact]
+    public void FindAllFullPathsFromPath_QuotedEntries_AreUnquoted()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "Program Files", "Aspire");
+        var existingFiles = new HashSet<string>
+        {
+            Path.Combine(dir, "aspire.EXE")
+        };
+
+        var result = PathLookupHelper.FindAllFullPathsFromPath("aspire", $" \"{dir}\" ;\"\"", ';', existingFiles.Contains, [".EXE"]);
+
+        Assert.Equal([Path.Combine(dir, "aspire.EXE")], result);
+    }
+
     private static void MakeExecutableOnUnix(string path)
     {
         if (!OperatingSystem.IsWindows())

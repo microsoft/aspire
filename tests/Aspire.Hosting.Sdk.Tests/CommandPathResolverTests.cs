@@ -75,8 +75,8 @@ public class CommandPathResolverTests
     }
 
     // CommandPathResolver mirrors src/Shared/PathLookupHelper.cs because the tasks must also build for net472.
-    // These cases pin the lookup rules the two must share. Quoted and duplicate PATH entries are intentionally
-    // handled only by the task resolver and are covered by the tests above.
+    // These cases pin the lookup rules the two must share. Collapsing duplicate PATH entries is intentionally
+    // task-only and is covered by the tests above.
     [Theory]
     [InlineData("aspire", new[] { "first/aspire", "second/aspire" }, null, new[] { "first/aspire", "second/aspire" })]
     [InlineData("aspire", new[] { "first/aspire.CMD", "first/aspire.EXE", "first/aspire", "second/aspire.BAT" }, new[] { ".EXE", ".CMD", ".BAT" }, new[] { "first/aspire.EXE", "second/aspire.BAT" })]
@@ -87,8 +87,8 @@ public class CommandPathResolverTests
     public void ResolvesConsistentlyWithPathLookupHelper(string command, string[] files, string[]? pathExtensions, string[] expected)
     {
         var existingFiles = CreateFileSet(files.Select(ToFullPath).ToArray());
-        // Includes an empty entry, which both helpers skip.
-        var path = string.Join(Path.PathSeparator.ToString(), s_firstDirectory, string.Empty, s_secondDirectory);
+        // Includes an empty entry and a quoted, padded entry, which both helpers skip and unquote respectively.
+        var path = string.Join(Path.PathSeparator.ToString(), s_firstDirectory, string.Empty, $" \"{s_secondDirectory}\" ");
 
         var taskCandidates = CommandPathResolver.EnumerateFromPath(command, path, pathExtensions, existingFiles.Contains).ToArray();
         var sharedCandidates = PathLookupHelper.FindAllFullPathsFromPath(command, path, Path.PathSeparator, existingFiles.Contains, pathExtensions).ToArray();
