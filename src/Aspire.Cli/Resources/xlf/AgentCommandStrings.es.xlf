@@ -241,7 +241,7 @@
       </trans-unit>
       <trans-unit id="InitCommand_RemoveSkillCopiesOptionDescription">
         <source>Delete copied Aspire skill folders without asking for confirmation, including all files inside them and any changes you made. Only applies when the Aspire skills plugin replaces them at the selected scope. Defaults to false</source>
-        <target state="new">Delete copied Aspire skill folders without asking for confirmation, including all files inside them and any changes you made. Only applies when the Aspire skills plugin replaces them at the selected scope. Defaults to false</target>
+        <target state="translated">Elimine las carpetas de aptitudes de Aspire copiadas sin pedir confirmación, incluidos todos los archivos que contienen y los cambios realizados. Solo se aplica cuando el complemento de aptitudes de Aspire las reemplaza en el ámbito seleccionado. El valor predeterminado es false</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_RemoveSkillCopyFailed">

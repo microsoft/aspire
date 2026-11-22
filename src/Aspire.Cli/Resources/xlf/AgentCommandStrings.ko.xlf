@@ -241,7 +241,7 @@
       </trans-unit>
       <trans-unit id="InitCommand_RemoveSkillCopiesOptionDescription">
         <source>Delete copied Aspire skill folders without asking for confirmation, including all files inside them and any changes you made. Only applies when the Aspire skills plugin replaces them at the selected scope. Defaults to false</source>
-        <target state="new">Delete copied Aspire skill folders without asking for confirmation, including all files inside them and any changes you made. Only applies when the Aspire skills plugin replaces them at the selected scope. Defaults to false</target>
+        <target state="translated">복사된 Aspire 기술 폴더를 확인 없이 삭제합니다. 폴더 안의 모든 파일과 여러분이 변경한 내용도 함께 삭제됩니다. Aspire 기술 플러그인이 선택한 범위에서 해당 폴더를 대체하는 경우에만 적용됩니다. 기본값: false</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_RemoveSkillCopyFailed">
@@ -251,12 +251,12 @@
       </trans-unit>
       <trans-unit id="InitCommand_RemovedSkillCopies">
         <source>Deleted {0} copied skill folders</source>
-        <target state="new">Deleted {0} copied skill folders</target>
+        <target state="translated">복사된 기술 폴더 {0}개를 삭제함</target>
         <note>{0} is the number of deleted skill folders, always greater than one.</note>
       </trans-unit>
       <trans-unit id="InitCommand_RemovedSkillCopy">
         <source>Deleted 1 copied skill folder</source>
-        <target state="new">Deleted 1 copied skill folder</target>
+        <target state="translated">복사된 기술 폴더 1개를 삭제함</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_ScopeOptionDescription">
@@ -286,7 +286,7 @@
       </trans-unit>
       <trans-unit id="InitCommand_SkillCopiesFound">
         <source>The Aspire skills plugin now provides these skills. Deleting the copied folders also deletes everything inside them, including any changes you made:</source>
-        <target state="new">The Aspire skills plugin now provides these skills. Deleting the copied folders also deletes everything inside them, including any changes you made:</target>
+        <target state="translated">이제 Aspire 기술 플러그인에서 다음 기술을 제공합니다. 복사된 폴더를 삭제하면 폴더 안의 모든 항목이 삭제되며, 여기에는 여러분이 변경한 내용도 포함됩니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_SkillCopiesRequirePlugin">

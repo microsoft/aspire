@@ -201,7 +201,7 @@
       </trans-unit>
       <trans-unit id="FailedToRestoreAfterUpdateFormat">
         <source>Validation restore for {0} channel update failed for project {1}. The update was not applied. Review the restore output for details.</source>
-        <target state="new">Validation restore for {0} channel update failed for project {1}. The update was not applied. Review the restore output for details.</target>
+        <target state="translated">專案 {1} 的 {0} 頻道更新驗證還原失敗。未套用更新。請檢閱還原輸出以取得詳細資料。</target>
         <note>{0} = Channel name. {1} = AppHost file path.</note>
       </trans-unit>
       <trans-unit id="FailedUpdatePackageReferenceFormat">
