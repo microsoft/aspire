@@ -575,6 +575,7 @@ public class ResourcesLayoutTests : DashboardTestContext
         // The URLs column is the resources grid's: the URL opens in a new tab, and the tcp address isn't a link but takes
         // focus for its tooltip. Addresses are masked. The internal and inactive URLs aren't listed.
         var urls = row.QuerySelector(".resource-row-endpoints .url-container")!;
+        Assert.Single(urls.QuerySelectorAll("fluent-overflow"));
         var link = Assert.Single(urls.QuerySelectorAll("a"));
         Assert.Equal(address, link.GetAttribute("href"));
         Assert.Equal("_blank", link.GetAttribute("target"));
