@@ -567,6 +567,13 @@ public class ResourcesLayoutTests : DashboardTestContext
         Assert.Equal("Running", GetStateText(cut.Find("[data-resource-name='api']")));
         // A compact sidebar row is a single line without the start time. The expanded list below has a column for it.
         Assert.Equal(compact ? [] : ["Started 10m ago"], cut.FindAll("[data-resource-name='api'] time").Select(time => time.TextContent));
+        if (!compact)
+        {
+            var separator = cut.Find("[data-resource-name='api'] .state-dot + span + .resource-row-sep:has(+ .resource-row-sidebar-start)");
+            Assert.Equal("·", separator.TextContent);
+            Assert.Equal("true", separator.GetAttribute("aria-hidden"));
+            Assert.Empty(cut.FindAll("[data-resource-name='missing'] .resource-row-sep"));
+        }
         Assert.Equal("Finished", GetStateText(cut.Find("[data-resource-name='finished']")));
         Assert.Empty(cut.FindAll(".resource-pane-canvas-toggle"));
         ResourceSetupHelpers.ToggleResourceList(cut);
@@ -574,8 +581,8 @@ public class ResourcesLayoutTests : DashboardTestContext
         var row = cut.Find("[data-resource-name='api']");
         // The URLs column is the resources grid's: the URL opens in a new tab, and the tcp address isn't a link but takes
         // focus for its tooltip. Addresses are masked. The internal and inactive URLs aren't listed.
-        var urls = row.QuerySelector(".resource-row-endpoints .url-container")!;
-        Assert.Single(urls.QuerySelectorAll("fluent-overflow"));
+        var urls = row.QuerySelector(".resource-row-endpoints fluent-overflow")!;
+        Assert.True(cut.FindComponent<UrlsColumnDisplay>().Instance.UseNeutralOverflowButton);
         var link = Assert.Single(urls.QuerySelectorAll("a"));
         Assert.Equal(address, link.GetAttribute("href"));
         Assert.Equal("_blank", link.GetAttribute("target"));

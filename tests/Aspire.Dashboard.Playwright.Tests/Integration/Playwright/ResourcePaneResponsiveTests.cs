@@ -191,7 +191,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
     [InlineData(false)]
     [InlineData(true)]
     [OuterloopTest("Resource-intensive Playwright browser test")]
-    public async Task EndpointTypography_UsesSecondaryDensityAndKeepsRowRhythm(bool dark)
+    public async Task MetadataTypography_UsesBodySizeAndKeepsRowRhythm(bool dark)
     {
         await RunTestAsync(async page =>
         {
@@ -199,8 +199,8 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
             await page.EmulateMediaAsync(new() { ReducedMotion = ReducedMotion.Reduce });
             await page.GotoAsync("/resources/cache?pane=tags");
             // These are expanded-list rows: a compact row is a single 32px line, and a comfortable one has two lines.
-            foreach (var (density, fontSize, lineHeight, rowHeight) in new[]
-                { ("Compact", 12d, 16d, 32d), ("Comfortable", 12d, 18d, 52d) })
+            foreach (var (density, lineHeight, rowHeight) in new[]
+                { ("Compact", 16d, 32d), ("Comfortable", 18d, 52d) })
             {
                 await page.GetByRole(AriaRole.Button, new() { Name = "Settings", Exact = true }).ClickAsync();
                 await page.GetByRole(AriaRole.Button, new() { Name = density, Exact = true }).ClickAsync();
@@ -225,7 +225,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                             a.textOverflow==='ellipsis'?1:0];
                     }
                     """);
-                Assert.Equal([fontSize, lineHeight, 400d, fontSize, fontSize], metrics[..5]);
+                Assert.Equal([13d, lineHeight, 400d, 13d, 13d], metrics[..5]);
                 Assert.All(metrics[5..7], value => Assert.InRange(Math.Abs(value), 0, .5));
                 Assert.Equal(rowHeight, metrics[7]);
                 Assert.Equal(1d, metrics[8]);
@@ -1202,7 +1202,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                             if (icon.width !== iconBox || icon.height !== iconBox) errors.push(`${row.dataset.resourceName}: icon box`);
                             const mainGlyph = row.querySelector('.resource-row-glyph svg').getBoundingClientRect();
                             if (mainGlyph.width !== glyphSize || mainGlyph.height !== glyphSize) errors.push(`${row.dataset.resourceName}: glyph`);
-                            // Both densities use the shared body size for names and secondary size for chips.
+                            // Both densities use the shared body size for names.
                             const expectedFont = 13;
                             if (parseFloat(getComputedStyle(row.querySelector('.resource-row-name')).fontSize) !== expectedFont)
                                 errors.push(`${row.dataset.resourceName}: density font`);
@@ -1210,9 +1210,10 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                                 const chipBox = chip.getBoundingClientRect();
                                 if (!chipBox.width) continue;
                                 const style = getComputedStyle(chip), glyph = chip.querySelector('svg').getBoundingClientRect();
-                                const font = 12;
                                 const line = compact ? 16 : 18;
-                                const target = compact ? 24 : 28;
+                                const incoming = chip.classList.contains('resource-row-insight-requests');
+                                const font = incoming ? 12 : expectedFont;
+                                const target = incoming ? line + 4 : compact ? 24 : 28;
                                 const iconSize = compact ? 12 : 14;
                                 if (parseFloat(style.fontSize) !== font || parseFloat(style.lineHeight) !== line ||
                                     chipBox.height !== target || chipBox.width < target ||
@@ -2578,7 +2579,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
             var api = pane.Locator("[data-resource-name='api']").First;
 
             // Like the resources grid, the URLs that don't fit are behind a +N button, which lists them.
-            var more = api.Locator(".resource-row-endpoints .url-button");
+            var more = api.Locator(".resource-row-endpoints .url-button-neutral");
             await Assertions.Expect(more).ToHaveTextAsync("+1");
             await more.ClickAsync();
             var list = api.Locator(".url-overflow-popover");
@@ -2596,6 +2597,12 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
             await page.Keyboard.PressAsync("Escape");
             await Assertions.Expect(listed).Not.ToBeVisibleAsync();
             await Assertions.Expect(page.Locator(".pane-full-canvas")).ToBeVisibleAsync();
+
+            // When the column gets wider, URLs that now fit are shown inline rather than behind a count.
+            await page.SetViewportSizeAsync(2800, 900);
+            var inlineLinks = api.Locator(".resource-row-endpoints fluent-overflow > div > a:visible");
+            await Assertions.Expect(inlineLinks).ToHaveCountAsync(2);
+            await Assertions.Expect(more).Not.ToBeVisibleAsync();
         });
     }
 
