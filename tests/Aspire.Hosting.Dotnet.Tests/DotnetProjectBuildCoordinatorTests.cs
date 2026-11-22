@@ -230,7 +230,9 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         var buildArguments = await ArgumentEvaluator.GetArgumentListAsync(
             buildResource,
             app.Services);
-        Assert.Equal(CoordinatedProjectBuildMode, Assert.Single(buildArguments.Where(argument => argument is "-mt" or "-mt:false")));
+        var expectedBuildArguments = new List<string> { "build", projectPath, "-mt" };
+        AddExpectedConfiguration(builder, expectedBuildArguments);
+        Assert.Equal(expectedBuildArguments, buildArguments.Where(argument => !argument.StartsWith('@')));
         await app.ResourceNotifications.PublishUpdateAsync(
             buildResource,
             snapshot => snapshot with
@@ -247,7 +249,9 @@ public class DotnetProjectBuildCoordinatorTests(ITestOutputHelper outputHelper)
         var rebuildArguments = await ArgumentEvaluator.GetArgumentListAsync(
             rebuilder,
             app.Services);
-        Assert.Empty(rebuildArguments.Where(argument => argument is "-mt" or "-mt:false"));
+        var expectedRebuildArguments = new List<string> { "build", projectPath };
+        AddExpectedConfiguration(builder, expectedRebuildArguments);
+        Assert.Equal(expectedRebuildArguments, rebuildArguments.Where(argument => !argument.StartsWith('@')));
         await app.ResourceNotifications.PublishUpdateAsync(
             rebuilder,
             snapshot => snapshot with
