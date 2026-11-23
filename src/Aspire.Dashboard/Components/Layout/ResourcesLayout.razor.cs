@@ -303,6 +303,24 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         _unviewedErrorCounts = TelemetryRepository.GetResourceUnviewedErrorLogsCount();
         UpdateTelemetryOnlyResources();
 
+        // Pane keys share one local-storage snapshot. Start the other independent reads first so they
+        // overlap that snapshot instead of waiting until each pane key has been applied.
+        var viewPreferencesTask = ViewPreferences.EnsureLoadedAsync();
+        var showHiddenResourcesTask = SessionStorage.GetAsync<bool>(BrowserStorageKeys.ResourcesShowHiddenResources);
+
+        // When the AppHost client is already connected, the application name is known now, so
+        // collapsed tree state can ride in the same initial storage wave.
+        Task<StorageResult<List<string>>>? collapsedResultTask = null;
+        if (DashboardClient.IsEnabled && DashboardClient.WhenConnected.IsCompletedSuccessfully)
+        {
+            _collapsedResourceNamesKey = BrowserStorageKeys.CollapsedResourceNamesKey(DashboardClient.ApplicationName);
+            collapsedResultTask = LocalStorage.GetAsync<List<string>>(_collapsedResourceNamesKey);
+        }
+
+        var lastSelectedResourcesTask = _pendingLandingRedirect
+            ? ReadLastSelectedResourcesAsync()
+            : null;
+
         var panePreferences = await LocalStorage.ReadUnprotectedSnapshotAsync([
             BrowserStorageKeys.ResourcePaneCollapsed,
             BrowserStorageKeys.ResourcePaneWidth,
@@ -310,6 +328,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             BrowserStorageKeys.ResourcePaneGrouping,
             BrowserStorageKeys.ResourcePaneKinds
         ]);
+        await viewPreferencesTask;
         var paneCollapsedResult = panePreferences.Get<bool>(BrowserStorageKeys.ResourcePaneCollapsed);
         if (paneCollapsedResult.Success)
         {
@@ -339,7 +358,6 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         {
             await LocalStorage.SetUnprotectedAsync(BrowserStorageKeys.ResourcePaneGrouping, _grouping.ToString());
         }
-        await ViewPreferences.EnsureLoadedAsync();
         // A comma-separated list of the kinds of items the pane lists, such as "Resources,Parameters,TelemetrySources".
         // The pane used to have a toggle for each kind. Resources and parameters are now always listed (the filter's
         // types narrow them down), so only the telemetry sources entry still counts.
@@ -360,10 +378,11 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         ViewPreferences.Changed += OnViewPreferencesChanged;
         OrderStore.Changed += OnOrderChanged;
 
-        // Start reading stored tags and order now, so the reads overlap the other storage reads and the connection.
+        // Subscribe before loading so a change raised while the stores read is observed. The read still
+        // overlaps the hidden-resource session value and the dashboard connection.
         var settingsLoaded = Task.WhenAll(TagStore.EnsureLoadedAsync(), OrderStore.EnsureLoadedAsync());
 
-        var showHiddenResources = await SessionStorage.GetAsync<bool>(BrowserStorageKeys.ResourcesShowHiddenResources);
+        var showHiddenResources = await showHiddenResourcesTask;
         if (showHiddenResources.Success)
         {
             _filter.ShowHiddenResources = showHiddenResources.Value;
@@ -371,10 +390,19 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
         if (DashboardClient.IsEnabled)
         {
-            // The application name is only correct once the dashboard is connected, and it scopes persisted tree state.
-            await DashboardClient.WhenConnected;
-            _collapsedResourceNamesKey = BrowserStorageKeys.CollapsedResourceNamesKey(DashboardClient.ApplicationName);
-            var collapsedResult = await LocalStorage.GetAsync<List<string>>(_collapsedResourceNamesKey);
+            StorageResult<List<string>> collapsedResult;
+            if (collapsedResultTask is not null)
+            {
+                collapsedResult = await collapsedResultTask;
+            }
+            else
+            {
+                // The application name is only correct once the dashboard is connected, and it scopes persisted tree state.
+                await DashboardClient.WhenConnected;
+                _collapsedResourceNamesKey = BrowserStorageKeys.CollapsedResourceNamesKey(DashboardClient.ApplicationName);
+                collapsedResult = await LocalStorage.GetAsync<List<string>>(_collapsedResourceNamesKey);
+            }
+
             if (collapsedResult.Success)
             {
                 foreach (var resourceName in collapsedResult.Value)
@@ -446,7 +474,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         CarrySelectionAcrossRuns();
         UpdateSelection();
         UpdatePaneMenuItems();
-        await TryRedirectLandingAsync();
+        await TryRedirectLandingAsync(lastSelectedResourcesTask);
 
         _resourceSubscriptionTask = Task.Run(async () =>
         {
@@ -1251,7 +1279,19 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         }
     }
 
-    private async Task TryRedirectLandingAsync()
+    private async Task<StorageResult<List<string>>> ReadLastSelectedResourcesAsync()
+    {
+        try
+        {
+            return await SessionStorage.GetAsync<List<string>>(BrowserStorageKeys.LastSelectedResources);
+        }
+        catch (JSDisconnectedException)
+        {
+            return new StorageResult<List<string>>(false, null) { ReadFailed = true };
+        }
+    }
+
+    private async Task TryRedirectLandingAsync(Task<StorageResult<List<string>>>? prefetchedLastSelectedTask = null)
     {
         if (!_pendingLandingRedirect || !_isLoaded)
         {
@@ -1259,20 +1299,10 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         }
 
         _pendingLandingRedirect = false;
-        List<string> resourceNames;
-        try
-        {
-            // Entering the overview without a selection restores the selection made earlier in this browser session.
-            // Without one, all resources stay selected and the overview summarizes the app.
-            var lastSelected = await SessionStorage.GetAsync<List<string>>(BrowserStorageKeys.LastSelectedResources);
-            resourceNames = lastSelected is { Success: true, Value: { } names }
-                ? names.Where(IsKnownResourceName).ToList()
-                : [];
-        }
-        catch (JSDisconnectedException)
-        {
-            return;
-        }
+        var lastSelected = await (prefetchedLastSelectedTask ?? ReadLastSelectedResourcesAsync());
+        var resourceNames = lastSelected is { Success: true, Value: { } names }
+            ? names.Where(IsKnownResourceName).ToList()
+            : [];
 
         if (resourceNames.Count > 0)
         {

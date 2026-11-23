@@ -115,8 +115,12 @@ public sealed class DashboardViewPreferences(ILocalStorage localStorage, IOption
     {
         try
         {
-            var density = await ReadDensityAsync().ConfigureAwait(false);
-            var groupOverview = await ReadGroupOverviewAsync().ConfigureAwait(false);
+            var densityTask = ReadDensityAsync();
+            var groupOverviewTask = ReadGroupOverviewAsync();
+            await Task.WhenAll(densityTask, groupOverviewTask).ConfigureAwait(false);
+
+            var density = await densityTask.ConfigureAwait(false);
+            var groupOverview = await groupOverviewTask.ConfigureAwait(false);
             if (density != Density || groupOverview != GroupOverview)
             {
                 Density = density;

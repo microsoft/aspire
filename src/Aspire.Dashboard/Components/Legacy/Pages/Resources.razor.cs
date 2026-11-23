@@ -216,24 +216,51 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
 
         _resourceUnviewedErrorCounts = TelemetryRepository.GetResourceUnviewedErrorLogsCount();
 
-        var showResourceTypeColumn = await SessionStorage.GetAsync<bool>(BrowserStorageKeys.ResourcesShowResourceTypes);
+        var showResourceTypeColumnTask = SessionStorage.GetAsync<bool>(BrowserStorageKeys.ResourcesShowResourceTypes);
+        var showHiddenResourcesTask = SessionStorage.GetAsync<bool>(BrowserStorageKeys.ResourcesShowHiddenResources);
+
+        Task<StorageResult<List<string>>>? collapsedResultTask = null;
+        if (DashboardClient.WhenConnected.IsCompletedSuccessfully)
+        {
+            _collapsedResourceNamesKey = BrowserStorageKeys.CollapsedResourceNamesKey(DashboardClient.ApplicationName);
+            collapsedResultTask = LocalStorage.GetAsync<List<string>>(_collapsedResourceNamesKey);
+        }
+
+        if (collapsedResultTask is not null)
+        {
+            await Task.WhenAll(showResourceTypeColumnTask, showHiddenResourcesTask, collapsedResultTask);
+        }
+        else
+        {
+            await Task.WhenAll(showResourceTypeColumnTask, showHiddenResourcesTask);
+        }
+
+        var showResourceTypeColumn = await showResourceTypeColumnTask;
         if (showResourceTypeColumn.Success)
         {
             _showResourceTypeColumn = showResourceTypeColumn.Value;
         }
 
-        var showHiddenResources = await SessionStorage.GetAsync<bool>(BrowserStorageKeys.ResourcesShowHiddenResources);
+        var showHiddenResources = await showHiddenResourcesTask;
         if (showHiddenResources.Success)
         {
             PageViewModel.ShowHiddenResources = showHiddenResources.Value;
         }
         UpdateMenuButtons();
 
-        // Must wait until after the dashboard is connected so the application name is correct.
-        await DashboardClient.WhenConnected;
-        _collapsedResourceNamesKey = BrowserStorageKeys.CollapsedResourceNamesKey(DashboardClient.ApplicationName);
+        StorageResult<List<string>> collapsedResult;
+        if (collapsedResultTask is not null)
+        {
+            collapsedResult = await collapsedResultTask;
+        }
+        else
+        {
+            // Must wait until after the dashboard is connected so the application name is correct.
+            await DashboardClient.WhenConnected;
+            _collapsedResourceNamesKey = BrowserStorageKeys.CollapsedResourceNamesKey(DashboardClient.ApplicationName);
+            collapsedResult = await LocalStorage.GetAsync<List<string>>(_collapsedResourceNamesKey);
+        }
 
-        var collapsedResult = await LocalStorage.GetAsync<List<string>>(_collapsedResourceNamesKey);
         if (collapsedResult.Success)
         {
             foreach (var resourceName in collapsedResult.Value)

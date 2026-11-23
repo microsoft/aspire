@@ -219,7 +219,13 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
             await SubscribeAsync(isAllSelected, selectedResourceName);
         });
 
-        var consoleSettingsResult = await LocalStorage.GetUnprotectedAsync<ConsoleLogConsoleSettings>(BrowserStorageKeys.ConsoleLogConsoleSettings);
+        var consoleSettingsTask = LocalStorage.GetUnprotectedAsync<ConsoleLogConsoleSettings>(BrowserStorageKeys.ConsoleLogConsoleSettings);
+        var showHiddenResourcesTask = SessionStorage.GetAsync<bool>(BrowserStorageKeys.ResourcesShowHiddenResources);
+        var consoleLogsManagerTask = ConsoleLogsManager.EnsureInitializedAsync();
+
+        await Task.WhenAll(consoleSettingsTask, showHiddenResourcesTask, consoleLogsManagerTask);
+
+        var consoleSettingsResult = await consoleSettingsTask;
         if (consoleSettingsResult.Value is { } consoleSettings)
         {
             _showTimestamp = consoleSettings.ShowTimestamp;
@@ -227,13 +233,11 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
             _noWrapLogs = consoleSettings.NoWrapLogs;
         }
 
-        var showHiddenResources = await SessionStorage.GetAsync<bool>(BrowserStorageKeys.ResourcesShowHiddenResources);
+        var showHiddenResources = await showHiddenResourcesTask;
         if (showHiddenResources.Success)
         {
             _showHiddenResources = showHiddenResources.Value;
         }
-
-        await ConsoleLogsManager.EnsureInitializedAsync();
 
         var loadingTcs = new TaskCompletionSource();
 

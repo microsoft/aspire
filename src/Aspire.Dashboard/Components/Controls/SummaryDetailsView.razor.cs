@@ -102,18 +102,30 @@ public partial class SummaryDetailsView<T> : IGlobalKeydownListener, IDisposable
             // If show details is changing from false to true, read saved state.
             if (ShowDetails)
             {
-                if (RememberOrientation)
+                var orientationTask = RememberOrientation
+                    ? LocalStore.GetUnprotectedAsync<Orientation>(GetOrientationStorageKey())
+                    : null;
+                var sizeTask = RememberSize
+                    ? LocalStore.GetUnprotectedAsync<float>(GetSizeStorageKey())
+                    : null;
+
+                if (orientationTask is not null && sizeTask is not null)
                 {
-                    var orientationResult = await LocalStore.GetUnprotectedAsync<Orientation>(GetOrientationStorageKey());
+                    await Task.WhenAll(orientationTask, sizeTask);
+                }
+
+                if (orientationTask is not null)
+                {
+                    var orientationResult = await orientationTask;
                     if (orientationResult.Success)
                     {
                         Orientation = orientationResult.Value;
                     }
                 }
 
-                if (RememberSize)
+                if (sizeTask is not null)
                 {
-                    var panel1FractionResult = await LocalStore.GetUnprotectedAsync<float>(GetSizeStorageKey());
+                    var panel1FractionResult = await sizeTask;
                     if (panel1FractionResult.Success)
                     {
                         var fraction = Math.Clamp(panel1FractionResult.Value, 0, 1);
