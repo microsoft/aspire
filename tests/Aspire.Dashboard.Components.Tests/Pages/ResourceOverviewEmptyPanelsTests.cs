@@ -65,6 +65,9 @@ public class ResourceOverviewEmptyPanelsTests : DashboardTestContext
             Assert.Equal(KnownTraceFields.StatusField, filter.Field);
             Assert.Equal(FilterCondition.Equals, filter.Condition);
             Assert.Equal(nameof(OtlpSpanStatusCode.Error), filter.Value);
+
+            var traceRow = Assert.Single(cut.FindAll("[aria-labelledby='overview-traces-title'] a.overview-list-row-link"));
+            Assert.Equal("test: Test span. Id: span", traceRow.GetAttribute("data-tooltip"));
         });
     }
 
@@ -98,6 +101,7 @@ public class ResourceOverviewEmptyPanelsTests : DashboardTestContext
             foreach (var (_, level) in levels)
             {
                 var row = Assert.Single(rows, r => r.QuerySelector(".overview-list-value")!.TextContent == $"{level} message");
+                Assert.Equal($"{level} message", row.GetAttribute("data-tooltip"));
                 var severity = row.QuerySelector(".overview-level")!;
                 Assert.Equal(level, severity.GetAttribute("data-tooltip"));
                 Assert.Equal(level, severity.QuerySelector(".visually-hidden")!.TextContent);

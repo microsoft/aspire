@@ -384,7 +384,7 @@
                             @foreach (var log in recentLogs)
                             {
                                 <li @key="log.InternalId">
-                                    <a class="overview-list-row-link" href="@DashboardUrls.StructuredLogsUrl(resourceName, logEntryId: log.InternalId)">
+                                    <a class="overview-list-row-link" href="@DashboardUrls.StructuredLogsUrl(resourceName, logEntryId: log.InternalId)" data-tooltip="@log.Message">
                                         <span class="overview-level" data-tooltip="@log.Severity">
                                             @if (log.IsError)
                                             {
@@ -400,7 +400,7 @@
                                             }
                                             <span class="visually-hidden">@log.Severity</span>
                                         </span>
-                                        <span class="overview-list-value" data-tooltip="@log.Message">@log.Message</span>
+                                        <span class="overview-list-value">@log.Message</span>
                                         <span class="overview-list-time">@FormatHelpers.FormatTime(TimeProvider, log.TimeStamp)</span>
                                     </a>
                                 </li>
@@ -452,7 +452,7 @@
                             @foreach (var trace in telemetry.RecentTraces)
                             {
                                 <li @key="trace.TraceId">
-                                    <a class="overview-list-row-link" href="@(ResourcesLayout?.GetTraceDetailUrl(trace.TraceId) ?? DashboardUrls.TraceDetailUrl(trace.TraceId))">
+                                    <a class="overview-list-row-link" href="@(ResourcesLayout?.GetTraceDetailUrl(trace.TraceId) ?? DashboardUrls.TraceDetailUrl(trace.TraceId))" data-tooltip="@trace.FullName">
                                         @if (trace.HasError)
                                         {
                                             <FluentIcon Value="@(new Icons.Filled.Size12.ErrorCircle())" Color="Color.Error" data-tooltip="@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewFailed)]" aria-label="@Loc[nameof(Dashboard.Resources.Resources.ResourceOverviewFailed)]" />
@@ -461,7 +461,7 @@
                                         {
                                             <span class="overview-dot"></span>
                                         }
-                                        <span class="overview-list-value" data-tooltip="@trace.FullName">@trace.FullName</span>
+                                        <span class="overview-list-value">@trace.FullName</span>
                                         <span class="overview-list-time">@DurationFormatter.FormatDuration(trace.Duration, CultureInfo.CurrentCulture)</span>
                                     </a>
                                 </li>
