@@ -1,0 +1,15 @@
+{
+  "id": "symstore-pdb2pdb-pdb-file-in-use-windows",
+  "type": "infra-failure",
+  "title": "Windows native CLI build fails in SymStore Pdb2Pdb because aspire.pdb is used by another process",
+  "error_pattern": "The process cannot access the file 'D:\\a\\aspire\\aspire\\artifacts\\SymStore\\Release\\Aspire.Cli\\net11.0\\aspire.pdb' because it is being used by another process.\nSymStore.targets(64,5): error MSB3073: Pdb2Pdb.exe exited with code 2",
+  "occurrences": [
+    {
+      "run_id": 45104545180,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/45104545180",
+      "job": "Tests / Build native CLI archive (Windows) / Build CLI (win-x64)",
+      "observed_at": "2026-11-23T03:48:11Z",
+      "pr_number": 0
+    }
+  ]
+}

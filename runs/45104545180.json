@@ -1,0 +1,198 @@
+{
+  "run_id": 45104545180,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/45104545180",
+  "run_scope": "main",
+  "analyzed_at": "2026-11-23T03:48:11Z",
+  "verdict": "transient-infra",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 22423,
+    "title": "Enable MapStaticAssets for fingerprinted immutable Dashboard static assets",
+    "author": "4dwaffle",
+    "state": "closed",
+    "head_branch": "perf/dashboard-map-static-assets",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/22423",
+    "merged_at": "2026-11-23T03:11:56Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "c8be31f10baf00c07bc37fb232b0949e86eb0742",
+    "failed_sha": "6a33d5a5b18e821fb4b703398b9c4ec02ce1b5f8",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "f04f1cb430285efc2602335ab04055c088330bfd",
+        "message": "Localized file check-in by OneLocBuild Task: Build definition ID 1602: Build ID 3141445 (#22469)",
+        "html_url": "https://github.com/microsoft/aspire/commit/f04f1cb430285efc2602335ab04055c088330bfd",
+        "pull_request": {
+          "number": 22469,
+          "title": "Localized file check-in by OneLocBuild Task: Build definition ID 1602: Build ID 3141445",
+          "url": "https://github.com/microsoft/aspire/pull/22469",
+          "merged_at": "2026-11-20T06:19:26Z"
+        }
+      },
+      {
+        "sha": "4b9c77d22d737bff29ee2f03a8c1ea3bee1f303d",
+        "message": "[main] Update dependencies from microsoft/dcp (#22463) This pull request updates the following dependencies [marker]: <> (Begin:ca933625-6bed-4cef-95d3-a9cff8f51c9d) ## From https://github.com/microsoft/dcp - **Subscription**: [ca933625-6bed-4cef-95d3-a9cff8f51c9d](https://maestro.dot.net/subscriptions?search=ca933625-6bed-4cef-95d3-a9cff8f51c9d) - **Build**: [0.27.5](https://dev.azure.com/dnceng/internal/_build/results?buildId=3141252) ([342373](https://maestro.dot.net/channel/1648/github:micro",
+        "html_url": "https://github.com/microsoft/aspire/commit/4b9c77d22d737bff29ee2f03a8c1ea3bee1f303d",
+        "pull_request": {
+          "number": 22463,
+          "title": "[main] Update dependencies from microsoft/dcp",
+          "url": "https://github.com/microsoft/aspire/pull/22463",
+          "merged_at": "2026-11-20T17:15:46Z"
+        }
+      },
+      {
+        "sha": "3165d4a7369f6d2a4eb410b4937645297bba418d",
+        "message": "[automated] Reacquire the CLI path rejection notification before clicking (#22459) ## Description The Windows VS Code CLI-path rejection E2E test asserted the warning text, took a screenshot, and then clicked Open Setting using the same Selenium notification element. The [first-attempt failure](https://github.com/microsoft/aspire/actions/runs/44563250177/job/135727014100) reported a stale element in `StandaloneNotification.takeAction`. Use the existing notification-action helper to find the alre",
+        "html_url": "https://github.com/microsoft/aspire/commit/3165d4a7369f6d2a4eb410b4937645297bba418d",
+        "pull_request": {
+          "number": 22459,
+          "title": "[automated] Reacquire the CLI path rejection notification before clicking",
+          "url": "https://github.com/microsoft/aspire/pull/22459",
+          "merged_at": "2026-11-20T19:21:49Z"
+        }
+      },
+      {
+        "sha": "2430d51ba04542632161f6a35a1e648a444fe81d",
+        "message": "Document Npgsql EF major-version dependency transitions (#22155) ## Description Document how to update Npgsql EF integrations when a new .NET/EF Core major reaches GA before a compatible stable PostgreSQL provider. This avoids holding unrelated EF integrations and managed dependency flow on prerelease packages. The dependency-update skill now covers provider nuspec range verification, TFM-scoped provider and HealthChecks EF overrides, the different Azure/non-Azure `PackageReference Include`/`Upd",
+        "html_url": "https://github.com/microsoft/aspire/commit/2430d51ba04542632161f6a35a1e648a444fe81d",
+        "pull_request": {
+          "number": 22155,
+          "title": "Document Npgsql EF major-version dependency transitions",
+          "url": "https://github.com/microsoft/aspire/pull/22155",
+          "merged_at": "2026-11-20T19:51:08Z"
+        }
+      },
+      {
+        "sha": "f6fc5f1983b7fbc05d8bbb572f0b1cf1eb636929",
+        "message": "Dashboard: preserve resource selection in telemetry pages and metric charts (#21431) ## Description Fixes the two remaining selection-loss review findings tracked in #21419 (follow-up to #21412). **1. Structured logs / traces lose the resource scope when telemetry arrives later.** If a resource's logs or traces page is opened before that resource has sent telemetry, the route resolves to \"(All)\" and the view model keeps a `null` `ResourceKey`. When telemetry later arrives, `GetSelectionTelemetry",
+        "html_url": "https://github.com/microsoft/aspire/commit/f6fc5f1983b7fbc05d8bbb572f0b1cf1eb636929",
+        "pull_request": {
+          "number": 21431,
+          "title": "Dashboard: preserve resource selection in telemetry pages and metric charts",
+          "url": "https://github.com/microsoft/aspire/pull/21431",
+          "merged_at": "2026-11-20T20:05:41Z"
+        }
+      },
+      {
+        "sha": "2b6b2d1b17965f0f33c2e847e803b19d46547803",
+        "message": "[automated] Prioritize fixes-ci and urgent-review PRs in the team canvas (#22428) <!-- copilot-assessment:v1 --> ### Agent assessment Self-reported assessment, not an independent review. Assessed revision: `9af75f129cef5f56579229c37d8a18456c5b2eaa` | Dimension | Assessment | Rationale | |---|---|---| | Change confidence | 8.5/10 | Extension tests cover label ordering, pagination and incomplete-data recovery. The browser fixture validated the prior revision; the latest error and draft fallback ch",
+        "html_url": "https://github.com/microsoft/aspire/commit/2b6b2d1b17965f0f33c2e847e803b19d46547803",
+        "pull_request": {
+          "number": 22428,
+          "title": "[automated] Prioritize fixes-ci and urgent-review PRs in the team canvas",
+          "url": "https://github.com/microsoft/aspire/pull/22428",
+          "merged_at": "2026-11-20T20:27:24Z"
+        }
+      },
+      {
+        "sha": "b5aeae3d0f17ae45e0dfbf483a675df3c8dbc02e",
+        "message": "Use consistent tray quit label (#22295) ## Description The tray action should use one concise, consistent label on every platform. The Quit action still closes only the tray; running AppHosts remain unaffected. ### User-facing usage | Platform | Before | After | | --- | --- | --- | | macOS | `Quit`; tooltip/accessibility: \"Quit the tray. AppHosts keep running.\" | `Quit` | | Windows | `Exit`; tooltip/accessibility: \"Exit the tray. AppHosts keep running.\" | `Quit` | | Linux | `Quit`; tooltip/acces",
+        "html_url": "https://github.com/microsoft/aspire/commit/b5aeae3d0f17ae45e0dfbf483a675df3c8dbc02e",
+        "pull_request": {
+          "number": 22295,
+          "title": "Use consistent tray quit label",
+          "url": "https://github.com/microsoft/aspire/pull/22295",
+          "merged_at": "2026-11-20T20:31:27Z"
+        }
+      },
+      {
+        "sha": "ff0bb26562a0be85920b4bb88f682c7a3412dba7",
+        "message": "Upgrade gh-aw to v1.2.2 and recompile agentic workflows (#22494) ## Description Upgrades gh-aw from v0.89.17 to v1.2.2, the latest stable release, and recompiles every agentic workflow. This is the bottom layer of a two-PR stack. The targeted `pr-docs-check` changes will follow in a separate PR stacked on this branch. > [!IMPORTANT] > **Actions allow-list update required before merge.** This PR adds the following immutable pins. An admin must add them to the repository or enterprise allowed-acti",
+        "html_url": "https://github.com/microsoft/aspire/commit/ff0bb26562a0be85920b4bb88f682c7a3412dba7",
+        "pull_request": {
+          "number": 22494,
+          "title": "Upgrade gh-aw to v1.2.2 and recompile agentic workflows",
+          "url": "https://github.com/microsoft/aspire/pull/22494",
+          "merged_at": "2026-11-20T21:26:21Z"
+        }
+      },
+      {
+        "sha": "1b2154f41c97f004df710f0ee75404c9e064bc3a",
+        "message": "Avoid unsupported WebAssembly task hosting in Windows coordinated builds (#22526)",
+        "html_url": "https://github.com/microsoft/aspire/commit/1b2154f41c97f004df710f0ee75404c9e064bc3a",
+        "pull_request": {
+          "number": 22526,
+          "title": "Avoid unsupported WebAssembly task hosting in Windows coordinated builds",
+          "url": "https://github.com/microsoft/aspire/pull/22526",
+          "merged_at": "2026-11-22T09:46:51Z"
+        }
+      },
+      {
+        "sha": "2f1115bd7b3c37576b5db8ba628d6ef9219dbfd9",
+        "message": "Select the latest telemetry in SQLite for /api/telemetry reads (#22529) ## Description The dashboard telemetry API (`/api/telemetry/logs|spans|traces`, used by the Aspire CLI and MCP tools) read every matching item with `Count = int.MaxValue` and then kept the newest `limit` items in memory. Cost grew with all retained telemetry instead of the requested page, and span reads also materialized the full trace of every matching span. This change passes `LatestItemCount` so SQLite selects the tail an",
+        "html_url": "https://github.com/microsoft/aspire/commit/2f1115bd7b3c37576b5db8ba628d6ef9219dbfd9",
+        "pull_request": {
+          "number": 22529,
+          "title": "Select the latest telemetry in SQLite for /api/telemetry reads",
+          "url": "https://github.com/microsoft/aspire/pull/22529",
+          "merged_at": "2026-11-22T10:47:35Z"
+        }
+      },
+      {
+        "sha": "2183e1634278e3701b95cbd6099c5de8edef77e0",
+        "message": "Localized file check-in by OneLocBuild Task: Build definition ID 1602: Build ID 3143074 (#22496) This is the pull request automatically created by the OneLocBuild task in the build process to check-in localized files generated based upon translation source files (.lcl files) handed-back from the downstream localization pipeline. If there are issues in translations, visit https://aka.ms/icxLocBug and log bugs for fixes. The OneLocBuild wiki is https://aka.ms/onelocbuild and the localization proce",
+        "html_url": "https://github.com/microsoft/aspire/commit/2183e1634278e3701b95cbd6099c5de8edef77e0",
+        "pull_request": {
+          "number": 22496,
+          "title": "Localized file check-in by OneLocBuild Task: Build definition ID 1602: Build ID 3143074",
+          "url": "https://github.com/microsoft/aspire/pull/22496",
+          "merged_at": "2026-11-22T11:36:22Z"
+        }
+      },
+      {
+        "sha": "721692be5422215923316a1cbe9a04a3d55e33bd",
+        "message": "Dashboard vNext: Allow resource to show multiple URLs if it fits the column (#22541)",
+        "html_url": "https://github.com/microsoft/aspire/commit/721692be5422215923316a1cbe9a04a3d55e33bd",
+        "pull_request": {
+          "number": 22541,
+          "title": "Dashboard vNext: Allow resource to show multiple URLs if it fits the column",
+          "url": "https://github.com/microsoft/aspire/pull/22541",
+          "merged_at": "2026-11-22T23:17:59Z"
+        }
+      },
+      {
+        "sha": "6a33d5a5b18e821fb4b703398b9c4ec02ce1b5f8",
+        "message": "Enable MapStaticAssets for fingerprinted immutable Dashboard static assets (#22423) ## Description Opening or reloading the Aspire Dashboard currently revalidates all static CSS and JS assets on every visit because `DashboardWebApplication` uses `UseStaticFiles` with `Cache-Control: no-cache`, even though `App.razor` and Dashboard components already reference assets via `@Assets[...]`. On higher-latency links, conditional revalidation of static assets adds noticeable delay before `blazor.web.js`",
+        "html_url": "https://github.com/microsoft/aspire/commit/6a33d5a5b18e821fb4b703398b9c4ec02ce1b5f8",
+        "pull_request": {
+          "number": 22423,
+          "title": "Enable MapStaticAssets for fingerprinted immutable Dashboard static assets",
+          "url": "https://github.com/microsoft/aspire/pull/22423",
+          "merged_at": "2026-11-23T03:11:56Z"
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Build native CLI archive (Windows) / Build CLI (win-x64)",
+      "id": 137462736420,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/45104545180/job/137462736420",
+      "classification": "transient-infra",
+      "reason": "Pdb2Pdb failed in SymStore because aspire.pdb was in use by another process (file lock race), not a code diagnostic.",
+      "failed_steps": [
+        "Build native bundle and CLI packages"
+      ]
+    },
+    {
+      "name": "Tests / Prepare Homebrew installer artifacts / Prepare Homebrew cask",
+      "id": 137469321526,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/45104545180/job/137469321526",
+      "classification": "transient-infra",
+      "reason": "Homebrew cask audit failed because the homebrew-cask tap directory is missing on the macOS runner.",
+      "failed_steps": [
+        "Prepare Homebrew cask artifact"
+      ]
+    }
+  ],
+  "failed_tests": [],
+  "causes": [
+    "symstore-pdb2pdb-pdb-file-in-use-windows",
+    "homebrew-cask-audit-missing-homebrew-cask-tap"
+  ]
+}
