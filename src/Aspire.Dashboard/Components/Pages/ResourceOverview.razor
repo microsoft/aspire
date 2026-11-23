@@ -8,7 +8,6 @@
 @using Aspire.Dashboard.Resources
 @using Aspire.Shared
 @using Humanizer
-@using Microsoft.Extensions.Logging
 
 <PageTitle><ApplicationName AdditionalText="@(Resource is { } r ? GetResourceName(r) : null)" ResourceName="@nameof(Dashboard.Resources.Resources.ResourceOverviewPageTitle)" Loc="@Loc" /></PageTitle>
 
@@ -391,7 +390,7 @@
                                             {
                                                 <FluentIcon Icon="Icons.Filled.Size12.ErrorCircle" Color="Color.Error" aria-hidden="true" />
                                             }
-                                            else if (log.Severity is LogLevel.Warning)
+                                            else if (log.IsWarning)
                                             {
                                                 <FluentIcon Icon="Icons.Filled.Size16.Warning" Color="Color.Warning" Width="12px" aria-hidden="true" />
                                             }

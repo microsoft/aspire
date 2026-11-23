@@ -10,4 +10,5 @@ public sealed record OverviewLogs(int TotalCount, int WarningCount, int ErrorCou
 public sealed record OverviewLog(long InternalId, DateTime TimeStamp, LogLevel Severity, string Message, OtlpResource Resource)
 {
     public bool IsError => Severity is LogLevel.Error or LogLevel.Critical;
+    public bool IsWarning => Severity is LogLevel.Warning;
 }
