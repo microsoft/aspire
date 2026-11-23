@@ -167,7 +167,9 @@ expected responses, and Restart/Rebuild work. Check service-to-service reference
 not just whether the AppHost compiles. Build the solution separately to check genuine library
 references and resource-project build inputs.
 
-An unresolved CLI bundle produces `ASPIRE009` with installation/setup guidance. Fix the
+An unresolved CLI bundle produces the `ASPIRE009` warning with installation/setup guidance.
+The build still succeeds so build-only jobs don't need a CLI installation, and the AppHost
+resolves the bundle again when it starts. If the AppHost is run on this machine, fix the
 installation or explicit bundle path rather than suppressing the diagnostic.
 Pinned DNX selection uses the CLI version paired with `Aspire.Hosting.AppHost`, independently
 of an older SDK retained during staged migration.

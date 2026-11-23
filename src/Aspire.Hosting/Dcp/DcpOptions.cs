@@ -248,6 +248,10 @@ internal class ConfigureDefaultDcpOptions(
     private const string DashboardPathMetadataKey = "aspiredashboardpath";
     private const string TerminalHostPathMetadataKey = "aspireterminalhostpath";
     private const string TerminalHostInvocationArgsMetadataKey = "aspireterminalhostinvocationargs";
+    private const string CliInvocationModeMetadataKey = "aspirecliinvocationmode";
+    private const string CliPathMetadataKey = "aspireclipath";
+    private const string CliBundlePathMetadataKey = "aspireclibundlepath";
+    private const string CliPinnedVersionMetadataKey = "aspireclipinnedversion";
 
     public static string DcpPublisher = nameof(DcpPublisher);
 
@@ -257,10 +261,15 @@ internal class ConfigureDefaultDcpOptions(
     /// </summary>
     internal Func<string, string?> GetEnvironmentVariable { get; init; } = Environment.GetEnvironmentVariable;
 
+    /// <summary>
+    /// Reads the AppHost assembly's metadata. Tests replace it to simulate the attributes the AppHost build embeds.
+    /// </summary>
+    internal Func<IEnumerable<AssemblyMetadataAttribute>?> GetAssemblyMetadata { get; init; } = () => appOptions.Assembly?.GetCustomAttributes<AssemblyMetadataAttribute>();
+
     public void Configure(DcpOptions options)
     {
         var dcpPublisherConfiguration = configuration.GetSection(DcpPublisher);
-        var assemblyMetadata = appOptions.Assembly?.GetCustomAttributes<AssemblyMetadataAttribute>();
+        var assemblyMetadata = GetAssemblyMetadata()?.ToList();
 
         // Priority 1: Check explicit DcpPublisher configuration first (env vars are automatically bound via IConfiguration)
         // Priority 2: BundleDiscovery env vars: ASPIRE_DCP_PATH, ASPIRE_DASHBOARD_PATH
@@ -338,7 +347,7 @@ internal class ConfigureDefaultDcpOptions(
         if (executionContext.IsRunMode &&
             (string.IsNullOrWhiteSpace(options.CliPath) || string.IsNullOrWhiteSpace(options.DashboardPath)))
         {
-            ApplyBundleLayoutFallback(options);
+            ApplyBundleLayoutFallback(options, assemblyMetadata);
         }
 
         // Discovery order for the terminal host binary:
@@ -446,19 +455,21 @@ internal class ConfigureDefaultDcpOptions(
     /// be compiled without them, for example when the package targets were not imported or a stale generated
     /// AssemblyInfo file was compiled. IDE fast up-to-date checks can then keep relaunching that assembly until it is
     /// rebuilt. Launches through the Aspire CLI are unaffected because the CLI supplies the paths through environment
-    /// variables. This performs the same read-only discovery as the build's default mode; it never extracts a bundle.
+    /// variables.
+    /// <para>
+    /// The build also embeds the project's bundle selection settings (EmbedAspireCliBundleSelection), which survive in
+    /// a stale AssemblyInfo file because they don't depend on build-time resolution. They're replayed here through the
+    /// same <see cref="AspireCliBundleLayoutResolver.TryResolve"/> policy the build uses, so explicit CLI or bundle paths
+    /// and DnxPinned layouts stay authoritative. This discovery is read-only; it never extracts a bundle.
+    /// </para>
     /// </remarks>
-    private void ApplyBundleLayoutFallback(DcpOptions options)
+    private void ApplyBundleLayoutFallback(DcpOptions options, IEnumerable<AssemblyMetadataAttribute>? assemblyMetadata)
     {
         var aspireHomeDirectory = AspireCliBundleLayoutResolver.GetAspireHomeDirectory(
             GetEnvironmentVariable(AspireCliBundleLayoutResolver.AspireHomeEnvironmentVariable));
-        var hostingVersion = AssemblyVersionHelper.GetDisplayVersion(typeof(DcpOptions).Assembly);
+        var selection = GetBundleSelection(assemblyMetadata);
 
-        if (!AspireCliBundleLayoutResolver.TryResolveRuntimeFallback(
-                aspireHomeDirectory,
-                hostingVersion,
-                PathLookupHelper.FindAllFullPathsFromPath("aspire", GetEnvironmentVariable("PATH"), GetEnvironmentVariable("PATHEXT")),
-                out var layout))
+        if (!AspireCliBundleLayoutResolver.TryResolve(selection, aspireHomeDirectory, static () => [], out var layout))
         {
             return;
         }
@@ -497,6 +508,40 @@ internal class ConfigureDefaultDcpOptions(
             appOptions.Assembly?.GetName().Name,
             string.Join(" and ", resolvedComponents),
             bundleDirectory);
+    }
+
+    /// <summary>
+    /// Rebuilds the bundle selection the ResolveAspireCliBundlePaths target makes from the embedded project settings.
+    /// </summary>
+    private AspireCliBundleSelection GetBundleSelection(IEnumerable<AssemblyMetadataAttribute>? assemblyMetadata)
+    {
+        // An AppHost built without the Aspire.Hosting.AppHost targets has no settings; treat it as the default mode.
+        var invocationMode = GetMetadataValue(assemblyMetadata, CliInvocationModeMetadataKey);
+        var usesDnx = string.Equals(invocationMode, "Dnx", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(invocationMode, "DnxPinned", StringComparison.OrdinalIgnoreCase);
+
+        // An explicit AspireCliPath always wins. Otherwise the default (Path) mode selects the first aspire CLI on
+        // PATH, as the build's ResolveAspireCliInvocation task does, while Dnx modes never consult PATH.
+        var cliPath = GetMetadataValue(assemblyMetadata, CliPathMetadataKey);
+        if (string.IsNullOrWhiteSpace(cliPath) && !usesDnx)
+        {
+            cliPath = PathLookupHelper.FindAllFullPathsFromPath("aspire", GetEnvironmentVariable("PATH"), GetEnvironmentVariable("PATHEXT")).FirstOrDefault();
+        }
+
+        string? pinnedVersion = null;
+        if (string.Equals(invocationMode, "DnxPinned", StringComparison.OrdinalIgnoreCase))
+        {
+            // The build pins to the Aspire.Hosting.AppHost package version, which ships in lockstep with this assembly.
+            pinnedVersion = GetMetadataValue(assemblyMetadata, CliPinnedVersionMetadataKey) is { Length: > 0 } embeddedVersion
+                ? embeddedVersion
+                : AssemblyVersionHelper.GetDisplayVersion(typeof(DcpOptions).Assembly);
+        }
+
+        return new AspireCliBundleSelection(
+            GetMetadataValue(assemblyMetadata, CliBundlePathMetadataKey),
+            cliPath,
+            pinnedVersion,
+            searchPath: false);
     }
 
     private static void ApplyProxylessEndpointPortRangeOverride(DcpOptions options, IConfiguration configuration)

@@ -53,34 +53,52 @@ internal static class AspireCliBundleLayoutResolver
     }
 
     /// <summary>
-    /// Resolves a layout for an AppHost whose build did not embed bundle paths.
+    /// Resolves the layout selected by <paramref name="selection"/>.
     /// </summary>
     /// <remarks>
-    /// Mirrors the build's default (non-explicit) discovery: the layout pinned to <paramref name="hostingVersion"/>
-    /// is preferred because it is paired with this exact Aspire.Hosting version, then the <c>aspire</c> executables
-    /// in <paramref name="pathCliPaths"/>, in PATH order. Each PATH CLI is resolved with
-    /// <see cref="TryResolveFromCliPath(string, string, out AspireCliBundleLayout)"/>, so a CLI with no layout beside
-    /// it resolves to the shared Aspire home layout before later PATH entries are probed; install routes without
-    /// an install sidecar extract there. The shared Aspire home layout is probed directly only when PATH has no CLI.
+    /// This is the single selection policy shared by the build's ResolveAspireCliBundle task and the AppHost's
+    /// runtime fallback, so both pick the same layout for the same project settings. Explicit bundle and CLI paths
+    /// and pinned layouts are authoritative: when they don't resolve, nothing else is probed. Only the default
+    /// selection searches PATH (when <see cref="AspireCliBundleSelection.SearchPath"/> is set) and then the shared
+    /// Aspire home layout.
     /// </remarks>
-    public static bool TryResolveRuntimeFallback(
+    /// <param name="selection">The project's bundle selection settings.</param>
+    /// <param name="aspireHomeDirectory">The Aspire home directory.</param>
+    /// <param name="pathCliPaths">The <c>aspire</c> executables on PATH, in lookup order; only enumerated when PATH is searched.</param>
+    /// <param name="layout">The resolved layout.</param>
+    public static bool TryResolve(
+        AspireCliBundleSelection selection,
         string aspireHomeDirectory,
-        string? hostingVersion,
-        IEnumerable<string> pathCliPaths,
+        Func<IEnumerable<string>> pathCliPaths,
         out AspireCliBundleLayout layout)
     {
-        if (!string.IsNullOrWhiteSpace(hostingVersion) &&
-            TryResolveFromLayoutPath(GetPinnedLayoutDirectory(aspireHomeDirectory, hostingVersion!), out layout))
+        switch (selection.Kind)
         {
-            return true;
-        }
+            case AspireCliBundleSelectionKind.BundlePath:
+                return TryResolveFromLayoutPath(selection.BundlePath!, out layout);
 
-        if (TryResolveFromCliPaths(pathCliPaths, aspireHomeDirectory, out layout))
-        {
-            return true;
-        }
+            case AspireCliBundleSelectionKind.CliPath:
+                if (File.Exists(selection.CliPath))
+                {
+                    return TryResolveFromCliPath(selection.CliPath!, aspireHomeDirectory, out layout);
+                }
 
-        return TryResolveFromLayoutPath(aspireHomeDirectory, out layout);
+                layout = default!;
+                return false;
+
+            case AspireCliBundleSelectionKind.PinnedVersion:
+                // Shared Aspire home layouts can come from a CLI with a different DCP build, so a pinned
+                // selection never falls back to them. See https://github.com/microsoft/aspire/issues/21463.
+                return TryResolveFromLayoutPath(GetPinnedLayoutDirectory(aspireHomeDirectory, selection.PinnedVersion!), out layout);
+
+            default:
+                if (selection.SearchPath && TryResolveFromCliPaths(pathCliPaths(), aspireHomeDirectory, out layout))
+                {
+                    return true;
+                }
+
+                return TryResolveFromLayoutPath(aspireHomeDirectory, out layout);
+        }
     }
 
     /// <summary>
@@ -458,6 +476,48 @@ internal static class AspireCliBundleLayoutResolver
             or PathTooLongException
             or System.Security.SecurityException;
     }
+}
+
+/// <summary>
+/// Identifies which <see cref="AspireCliBundleSelection"/> setting decides the layout.
+/// </summary>
+internal enum AspireCliBundleSelectionKind
+{
+    /// <summary>An explicit bundle or layout directory.</summary>
+    BundlePath,
+
+    /// <summary>An explicit or selected Aspire CLI executable.</summary>
+    CliPath,
+
+    /// <summary>The layout extracted for a pinned CLI version.</summary>
+    PinnedVersion,
+
+    /// <summary>Optionally the CLIs on PATH, then the shared Aspire home layout.</summary>
+    Default,
+}
+
+/// <summary>
+/// The project settings that select an Aspire CLI bundle layout, in precedence order.
+/// </summary>
+internal sealed class AspireCliBundleSelection(string? bundlePath, string? cliPath, string? pinnedVersion, bool searchPath)
+{
+    /// <summary>An explicit bundle or layout directory (AspireCliBundlePath).</summary>
+    public string? BundlePath { get; } = bundlePath;
+
+    /// <summary>The Aspire CLI whose bundle is used (AspireCliPath, or the CLI selected for invocation).</summary>
+    public string? CliPath { get; } = cliPath;
+
+    /// <summary>The CLI version whose pinned layout is used (AspireCliInvocationMode=DnxPinned).</summary>
+    public string? PinnedVersion { get; } = pinnedVersion;
+
+    /// <summary>Whether the default selection searches PATH for Aspire CLIs before the shared Aspire home layout.</summary>
+    public bool SearchPath { get; } = searchPath;
+
+    public AspireCliBundleSelectionKind Kind =>
+        !string.IsNullOrWhiteSpace(BundlePath) ? AspireCliBundleSelectionKind.BundlePath
+        : !string.IsNullOrWhiteSpace(CliPath) ? AspireCliBundleSelectionKind.CliPath
+        : !string.IsNullOrWhiteSpace(PinnedVersion) ? AspireCliBundleSelectionKind.PinnedVersion
+        : AspireCliBundleSelectionKind.Default;
 }
 
 /// <summary>

@@ -624,7 +624,7 @@ public static class DistributedApplicationTestingBuilder
             var builder = TestingBuilderFactory.CreateBuilder(args, onConstructing: (applicationOptions, hostBuilderOptions) =>
             {
                 Assembly appAssembly;
-                if (appHostAssembly is not null && GetDcpCliPath(appHostAssembly) is { Length: > 0 })
+                if (appHostAssembly is not null && IsAppHostAssembly(appHostAssembly))
                 {
                     appAssembly = appHostAssembly;
                 }
@@ -652,13 +652,12 @@ public static class DistributedApplicationTestingBuilder
 
             static Assembly FindApplicationAssembly()
             {
-                // Walk the stack trace to find the first assembly that has the 'dcpclipath' metadata attribute.
-                // This will be selected as the application host assembly. DCP is necessary to launch the application.
+                // Walk the stack trace to find the first AppHost assembly. This will be selected as the application host assembly.
                 var stackTrace = new StackTrace();
                 foreach (var stackFrame in stackTrace.GetFrames())
                 {
                     var asm = stackFrame.GetMethod()?.DeclaringType?.Assembly;
-                    if (asm is not null && GetDcpCliPath(asm) is { Length: > 0 })
+                    if (asm is not null && IsAppHostAssembly(asm))
                     {
                         return asm;
                     }
@@ -667,10 +666,15 @@ public static class DistributedApplicationTestingBuilder
                 throw new InvalidOperationException("No application host assembly was found. Ensure that you have a project that references the 'Aspire.Hosting.AppHost' package and imports the 'Aspire.AppHost.Sdk' SDK.");
             }
 
-            static string? GetDcpCliPath(Assembly? assembly)
+            // The Aspire.Hosting.AppHost build targets write 'apphostprojectpath' into every AppHost. The DCP path is not a
+            // reliable marker: it's only written when the build resolved an Aspire CLI bundle, and the AppHost can resolve
+            // one at runtime instead. 'dcpclipath' is still accepted for AppHosts built by older targets.
+            static bool IsAppHostAssembly(Assembly assembly)
             {
-                var assemblyMetadata = assembly?.GetCustomAttributes<AssemblyMetadataAttribute>();
-                return assemblyMetadata?.FirstOrDefault(m => string.Equals(m.Key, "dcpclipath", StringComparison.OrdinalIgnoreCase))?.Value;
+                return assembly.GetCustomAttributes<AssemblyMetadataAttribute>().Any(static m =>
+                    (string.Equals(m.Key, "apphostprojectpath", StringComparison.OrdinalIgnoreCase) ||
+                     string.Equals(m.Key, "dcpclipath", StringComparison.OrdinalIgnoreCase)) &&
+                    !string.IsNullOrEmpty(m.Value));
             }
         }
 

@@ -352,11 +352,11 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
         return result.Output;
     }
 
-    private static string BuildProjectWithFailure(string workingDirectory, IDictionary<string, string>? environment = null)
+    private static string BuildProjectWithWarnings(string workingDirectory, IDictionary<string, string>? environment = null)
     {
         var result = BuildProjectCore(workingDirectory, environment);
 
-        Assert.NotEqual(0, result.ExitCode);
+        Assert.True(result.ExitCode == 0, $"Build failed: {Environment.NewLine}{result.Output}");
 
         return result.Output;
     }
@@ -765,11 +765,11 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
 
         CreateAppHostPackageDirectoryBuildFiles(appHostDirectory, repoRoot);
 
-        var output = BuildProjectWithFailure(
+        var output = BuildProjectWithWarnings(
             appHostDirectory,
             new Dictionary<string, string> { ["ASPIRE_HOME"] = aspireHome });
 
-        Assert.Contains("ASPIRE009", output);
+        Assert.Contains("warning ASPIRE009", output);
         Assert.Contains("Automatic Aspire CLI bundle setup did not produce a usable DCP and dashboard layout.", output);
         Assert.Contains("The command timed out", output, StringComparison.OrdinalIgnoreCase);
     }
@@ -827,7 +827,7 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
 
         CreateAppHostPackageDirectoryBuildFiles(appHostDirectory, repoRoot);
 
-        var output = BuildProjectWithFailure(appHostDirectory, new Dictionary<string, string>
+        var output = BuildProjectWithWarnings(appHostDirectory, new Dictionary<string, string>
         {
             ["ASPIRE_HOME"] = Path.Combine(workspace.WorkspaceRoot.FullName, "empty-aspire-home"),
             ["ASPIRE_LITERAL_SEGMENT"] = "expanded-segment"
@@ -927,7 +927,7 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void CliBundleOptInFailsWhenExplicitBundlePathIsInvalid()
+    public void CliBundleOptInWarnsWhenExplicitBundlePathIsInvalid()
     {
         var repoRoot = MSBuildUtils.GetRepoRoot();
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -941,12 +941,12 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
 
         CreateAppHostPackageDirectoryBuildFiles(appHostDirectory, repoRoot);
 
-        var output = BuildProjectWithFailure(appHostDirectory);
+        var output = BuildProjectWithWarnings(appHostDirectory);
 
         Assert.Contains("warning", output);
         Assert.Contains("AspireCliBundlePath", output);
         Assert.Contains(missingBundlePath, output);
-        Assert.Contains("ASPIRE009", output);
+        Assert.Contains("warning ASPIRE009", output);
         Assert.Contains("the bundle could not be resolved", output);
         Assert.Contains("New features require the Aspire CLI to be installed.", output);
         Assert.Contains("https://get.aspire.dev", output);
@@ -956,7 +956,7 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
     [Theory]
     [InlineData(null)]
     [InlineData("Dnx")]
-    public void CliBundleDnxInvocationFailsWhenSetupCannotProduceLayout(string? invocationMode)
+    public void CliBundleDnxInvocationWarnsWhenSetupCannotProduceLayout(string? invocationMode)
     {
         var repoRoot = MSBuildUtils.GetRepoRoot();
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -986,13 +986,19 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
 
         CreateAppHostPackageDirectoryBuildFiles(appHostDirectory, repoRoot);
 
-        var output = BuildProjectWithFailure(appHostDirectory, new Dictionary<string, string>
+        var output = BuildProjectWithWarnings(appHostDirectory, new Dictionary<string, string>
         {
             ["ASPIRE_HOME"] = Path.Combine(workspace.WorkspaceRoot.FullName, "empty-aspire-home"),
             ["PATH"] = GetPathWithoutAspire(fakeCliDirectory.FullName)
         });
 
-        Assert.Contains("ASPIRE009", output);
+        // Build-only jobs succeed without a bundle (https://github.com/microsoft/aspire/issues/22491). The AppHost
+        // carries the bundle selection settings instead of DCP paths, so it can resolve a bundle when it runs.
+        var assemblyInfo = File.ReadAllText(Assert.Single(Directory.GetFiles(Path.Combine(appHostDirectory, "obj"), "*.AssemblyInfo.cs", SearchOption.AllDirectories)));
+        Assert.Contains($"AssemblyMetadataAttribute(\"aspirecliinvocationmode\", \"{invocationMode ?? "Path"}\")", assemblyInfo);
+        Assert.DoesNotContain("dcpclipath", assemblyInfo);
+
+        Assert.Contains("warning ASPIRE009", output);
         Assert.Contains("the bundle could not be resolved", output);
         Assert.Contains("failed with exit code", output);
         if (!OperatingSystem.IsWindows())
@@ -1002,7 +1008,7 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void CliBundleOptInFailsWhenExplicitCliPathIsInvalid()
+    public void CliBundleOptInWarnsWhenExplicitCliPathIsInvalid()
     {
         var repoRoot = MSBuildUtils.GetRepoRoot();
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -1015,7 +1021,7 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
 
         CreateAppHostPackageDirectoryBuildFiles(appHostDirectory, repoRoot);
 
-        var output = BuildProjectWithFailure(appHostDirectory);
+        var output = BuildProjectWithWarnings(appHostDirectory);
 
         Assert.Contains("warning", output);
         Assert.Contains("AspireCliPath", output);

@@ -104,62 +104,25 @@ public sealed class ResolveAspireCliBundle : Microsoft.Build.Utilities.Task
         AspireHomeDirectory = aspireHomeDirectory;
         AspireCliSetupDirectory = aspireHomeDirectory;
 
-        if (!string.IsNullOrWhiteSpace(AspireCliBundlePath))
+        var selection = new AspireCliBundleSelection(AspireCliBundlePath, AspireCliPath, PinnedAspireCliVersion, SearchPathForAspireCli);
+        if (selection.Kind == AspireCliBundleSelectionKind.PinnedVersion)
         {
-            if (AspireCliBundleLayoutResolver.TryResolveFromLayoutPath(AspireCliBundlePath!, out var explicitBundle))
-            {
-                SetOutputs(explicitBundle);
-                return true;
-            }
+            AspireCliSetupDirectory = AspireCliBundleLayoutResolver.GetPinnedLayoutDirectory(aspireHomeDirectory, PinnedAspireCliVersion!);
+        }
 
-            if (WarnOnInvalidPaths)
-            {
-                Log.LogWarning("The AspireCliBundlePath value '{0}' does not point to a valid Aspire CLI bundle layout.", AspireCliBundlePath);
-            }
-
+        if (AspireCliBundleLayoutResolver.TryResolve(selection, aspireHomeDirectory, static () => CommandPathResolver.EnumerateFromPath("aspire"), out var layout))
+        {
+            SetOutputs(layout);
             return true;
         }
 
-        if (!string.IsNullOrWhiteSpace(AspireCliPath))
+        if (WarnOnInvalidPaths && selection.Kind == AspireCliBundleSelectionKind.BundlePath)
         {
-            if (File.Exists(AspireCliPath) && AspireCliBundleLayoutResolver.TryResolveFromCliPath(AspireCliPath!, aspireHomeDirectory, out var explicitCliBundle))
-            {
-                SetOutputs(explicitCliBundle);
-                return true;
-            }
-
-            if (WarnOnInvalidPaths)
-            {
-                Log.LogWarning("The AspireCliPath value '{0}' does not point to an existing Aspire CLI executable with a valid bundle layout.", AspireCliPath);
-            }
-
-            return true;
+            Log.LogWarning("The AspireCliBundlePath value '{0}' does not point to a valid Aspire CLI bundle layout.", AspireCliBundlePath);
         }
-
-        if (!string.IsNullOrWhiteSpace(PinnedAspireCliVersion))
+        else if (WarnOnInvalidPaths && selection.Kind == AspireCliBundleSelectionKind.CliPath)
         {
-            var pinnedLayoutDirectory = AspireCliBundleLayoutResolver.GetPinnedLayoutDirectory(aspireHomeDirectory, PinnedAspireCliVersion!);
-            AspireCliSetupDirectory = pinnedLayoutDirectory;
-
-            if (AspireCliBundleLayoutResolver.TryResolveFromLayoutPath(pinnedLayoutDirectory, out var pinnedBundle))
-            {
-                SetOutputs(pinnedBundle);
-            }
-
-            return true;
-        }
-
-        if (SearchPathForAspireCli &&
-            AspireCliBundleLayoutResolver.TryResolveFromCliPaths(CommandPathResolver.EnumerateFromPath("aspire"), aspireHomeDirectory, out var pathBundle))
-        {
-            SetOutputs(pathBundle);
-            return true;
-        }
-
-        if (AspireCliBundleLayoutResolver.TryResolveFromLayoutPath(aspireHomeDirectory, out var aspireHomeBundle))
-        {
-            SetOutputs(aspireHomeBundle);
-            return true;
+            Log.LogWarning("The AspireCliPath value '{0}' does not point to an existing Aspire CLI executable with a valid bundle layout.", AspireCliPath);
         }
 
         return true;
