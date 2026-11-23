@@ -1,0 +1,4 @@
+﻿Scanning for running AppHosts...
+Name  Type    State   Health  URLs                  
+api   Project Running Healthy https://localhost:7001
+cache Redis   Running -       -                     

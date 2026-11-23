@@ -23,6 +23,8 @@ namespace Aspire.Cli.Commands;
 /// </summary>
 internal sealed class TelemetryTracesCommand : BaseCommand
 {
+    private const int MaxDbQueryTextLength = 200;
+
     private readonly AppHostConnectionResolver _connectionResolver;
     private readonly ILogger<TelemetryTracesCommand> _logger;
     private readonly IHttpClientFactory _httpClientFactory;
@@ -240,7 +242,9 @@ internal sealed class TelemetryTracesCommand : BaseCommand
             return;
         }
 
-        var table = new Table();
+        var rowLinkDashboardUrl = TelemetryCommandHelpers.GetRowLinkDashboardUrl(HostEnvironment, dashboardUrl);
+
+        var table = HostEnvironment.CreateTable();
         table.AddBoldColumn(TelemetryCommandStrings.HeaderTimestamp);
         table.AddBoldColumn(TelemetryCommandStrings.HeaderName);
         table.AddBoldColumn(TelemetryCommandStrings.HeaderSpans);
@@ -294,7 +298,7 @@ internal sealed class TelemetryTracesCommand : BaseCommand
                 ? FormatHelpers.FormatConsoleTime(_timeProvider, OtlpHelpers.UnixNanoSecondsToDateTime(info.StartTimeNano.Value))
                 : "";
             var shortTraceId = OtlpHelpers.ToShortenedId(info.TraceId);
-            var traceLink = TelemetryCommandHelpers.FormatTraceLink(InteractionService, dashboardUrl, info.TraceId, shortTraceId);
+            var traceLink = TelemetryCommandHelpers.FormatTraceLink(InteractionService, rowLinkDashboardUrl, info.TraceId, shortTraceId);
             var nameColumn = $"[{resourceColor}]{info.Resource.EscapeMarkup()}[/]: {info.FirstSpanName.EscapeMarkup()} [grey]{traceLink}[/]";
             table.AddRow(timestamp, nameColumn, info.SpanCount.ToString(CultureInfo.InvariantCulture), durationStr, statusText);
         }
@@ -325,8 +329,9 @@ internal sealed class TelemetryTracesCommand : BaseCommand
                     var duration = OtlpHelpers.CalculateDuration(span.StartTimeUnixNano, span.EndTimeUnixNano);
                     var startNano = (long)(span.StartTimeUnixNano ?? 0);
                     var hasError = span.Status?.Code == 2; // ERROR status
+                    var dbQueryText = GetDbQueryText(span);
 
-                    spans.Add(new SpanInfo(spanId, parentSpanId, resourceName, name, duration, startNano, hasError));
+                    spans.Add(new SpanInfo(spanId, parentSpanId, resourceName, name, duration, startNano, hasError, dbQueryText));
                 }
             }
         }
@@ -350,11 +355,12 @@ internal sealed class TelemetryTracesCommand : BaseCommand
         InteractionService.DisplayMarkupLine($"[bold]Duration:[/] {TelemetryCommandHelpers.FormatDuration(totalDuration)}  [bold]Spans:[/] {spans.Count}");
         InteractionService.DisplayEmptyLine();
 
-        // Build tree and display
-        DisplaySpanTree(spans, dashboardUrl, traceId);
+        // Build tree and display. The trace link in the header is shown once, but each span row
+        // only links to the dashboard when the output is an interactive terminal.
+        DisplaySpanTree(spans, TelemetryCommandHelpers.GetRowLinkDashboardUrl(HostEnvironment, dashboardUrl), traceId);
     }
 
-    private void DisplaySpanTree(List<SpanInfo> spans, string dashboardUrl, string traceId)
+    private void DisplaySpanTree(List<SpanInfo> spans, string? dashboardUrl, string traceId)
     {
         // Build a lookup of children by parent ID
         var childrenByParent = spans
@@ -383,7 +389,7 @@ internal sealed class TelemetryTracesCommand : BaseCommand
         Dictionary<string, List<SpanInfo>> childrenByParent,
         string indent,
         bool isLast,
-        string dashboardUrl,
+        string? dashboardUrl,
         string traceId,
         ref string? lastResource)
     {
@@ -417,7 +423,11 @@ internal sealed class TelemetryTracesCommand : BaseCommand
             ? escapedName[..(maxNameLength - 3)] + "..."
             : escapedName;
 
-        InteractionService.DisplayMarkupLine($"{indent}{connector} [dim]{spanIdLink}[/] {displayName} [{statusColor}]{statusText}[/] [dim]{durationStr}[/]");
+        var dbQueryText = span.DbQueryText is { } queryText
+            ? $" [dim]{FormatDbQueryText(queryText).EscapeMarkup()}[/]"
+            : "";
+
+        InteractionService.DisplayMarkupLine($"{indent}{connector} [dim]{spanIdLink}[/] {displayName} [{statusColor}]{statusText}[/] [dim]{durationStr}[/]{dbQueryText}");
 
         // Render children
         if (childrenByParent.TryGetValue(span.SpanId, out var children))
@@ -429,6 +439,32 @@ internal sealed class TelemetryTracesCommand : BaseCommand
         }
     }
 
+    private static string? GetDbQueryText(OtlpSpanJson span)
+    {
+        // "db.query.text" is the current OpenTelemetry semantic convention; "db.statement" is the
+        // deprecated name still emitted by older instrumentation libraries.
+        // https://opentelemetry.io/docs/specs/semconv/database/database-spans/
+        return SharedAIHelpers.GetAttributeStringValue(span.Attributes, "db.query.text")
+            ?? SharedAIHelpers.GetAttributeStringValue(span.Attributes, "db.statement");
+    }
+
+    /// <summary>
+    /// Collapses a database query onto one line and truncates it, so the span tree stays one row per span.
+    /// </summary>
+    private static string FormatDbQueryText(string queryText)
+    {
+        // Queries are commonly multi-line and indented, e.g.
+        //   SELECT o."Id", o."Total"
+        //   FROM "Orders" AS o
+        //   WHERE o."CustomerId" = @p0
+        // Collapse every whitespace run (including newlines) to a single space.
+        var collapsed = string.Join(' ', queryText.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+
+        return collapsed.Length > MaxDbQueryTextLength
+            ? collapsed[..(MaxDbQueryTextLength - 3)] + "..."
+            : collapsed;
+    }
+
     private sealed record SpanInfo(
         string SpanId,
         string? ParentSpanId,
@@ -436,5 +472,6 @@ internal sealed class TelemetryTracesCommand : BaseCommand
         string Name,
         TimeSpan Duration,
         long StartNano,
-        bool HasError);
+        bool HasError,
+        string? DbQueryText);
 }
