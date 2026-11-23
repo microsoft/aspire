@@ -454,6 +454,22 @@ public static class DistributedApplicationTestingBuilder
     /// </summary>
     private readonly record struct DashboardTestingState(bool Enabled, string? BrowserToken, string? ResourceServiceApiKey);
 
+    /// <summary>
+    /// Determines whether <paramref name="assembly"/> was built as an Aspire AppHost.
+    /// </summary>
+    /// <remarks>
+    /// The Aspire.Hosting.AppHost build targets write 'apphostprojectpath' into every AppHost. The DCP path is not a
+    /// reliable marker: it's only written when the build resolved an Aspire CLI bundle, and the AppHost can resolve
+    /// one at runtime instead. 'dcpclipath' is still accepted for AppHosts built by older targets.
+    /// </remarks>
+    internal static bool IsAppHostAssembly(Assembly assembly)
+    {
+        return assembly.GetCustomAttributes<AssemblyMetadataAttribute>().Any(static m =>
+            (string.Equals(m.Key, "apphostprojectpath", StringComparison.OrdinalIgnoreCase) ||
+             string.Equals(m.Key, "dcpclipath", StringComparison.OrdinalIgnoreCase)) &&
+            !string.IsNullOrEmpty(m.Value));
+    }
+
     private sealed class SuspendingDistributedApplicationFactory(
         Type entryPoint,
         string[] args,
@@ -666,16 +682,6 @@ public static class DistributedApplicationTestingBuilder
                 throw new InvalidOperationException("No application host assembly was found. Ensure that you have a project that references the 'Aspire.Hosting.AppHost' package and imports the 'Aspire.AppHost.Sdk' SDK.");
             }
 
-            // The Aspire.Hosting.AppHost build targets write 'apphostprojectpath' into every AppHost. The DCP path is not a
-            // reliable marker: it's only written when the build resolved an Aspire CLI bundle, and the AppHost can resolve
-            // one at runtime instead. 'dcpclipath' is still accepted for AppHosts built by older targets.
-            static bool IsAppHostAssembly(Assembly assembly)
-            {
-                return assembly.GetCustomAttributes<AssemblyMetadataAttribute>().Any(static m =>
-                    (string.Equals(m.Key, "apphostprojectpath", StringComparison.OrdinalIgnoreCase) ||
-                     string.Equals(m.Key, "dcpclipath", StringComparison.OrdinalIgnoreCase)) &&
-                    !string.IsNullOrEmpty(m.Value));
-            }
         }
 
         public ConfigurationManager Configuration => _innerBuilder.Configuration;

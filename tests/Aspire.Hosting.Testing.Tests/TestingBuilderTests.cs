@@ -3,6 +3,7 @@
 
 using System.Net.Http.Json;
 using System.Reflection;
+using System.Reflection.Emit;
 using Aspire.Hosting.Dashboard;
 using Aspire.Hosting.Dotnet;
 using Aspire.Hosting.Tests;
@@ -24,6 +25,28 @@ namespace Aspire.Hosting.Testing.Tests;
 public class TestingBuilderTests(ITestOutputHelper output)
 {
     private static readonly TimeSpan s_appAliveCheckTimeout = TimeSpan.FromMinutes(1);
+
+    // Both AppHost selection paths (an explicit entry point and the stack walk) use this check. An AppHost built
+    // without a resolvable Aspire CLI bundle has 'apphostprojectpath' but no 'dcpclipath', and must still be found.
+    [Theory]
+    [InlineData(true, "apphostprojectpath", "/src/AppHost")]
+    [InlineData(true, "dcpclipath", "/bundle/dcp/dcp")]
+    [InlineData(true, "AppHostProjectPath", "/src/AppHost")]
+    [InlineData(false, "apphostprojectpath", "")]
+    [InlineData(false, "aspirecliinvocationmode", "Path")]
+    [InlineData(false)]
+    public void IsAppHostAssemblyRequiresAppHostMetadata(bool expected, params string[] metadata)
+    {
+        var assembly = AssemblyBuilder.DefineDynamicAssembly(new AssemblyName($"AppHostCandidate{Guid.NewGuid():N}"), AssemblyBuilderAccess.Run);
+        for (var i = 0; i < metadata.Length; i += 2)
+        {
+            assembly.SetCustomAttribute(new CustomAttributeBuilder(
+                typeof(AssemblyMetadataAttribute).GetConstructor([typeof(string), typeof(string)])!,
+                [metadata[i], metadata[i + 1]]));
+        }
+
+        Assert.Equal(expected, DistributedApplicationTestingBuilder.IsAppHostAssembly(assembly));
+    }
 
     [Fact]
     [ActiveIssue("https://github.com/dotnet/dnceng/issues/6232", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningOnAzdoBuildMachine))]
