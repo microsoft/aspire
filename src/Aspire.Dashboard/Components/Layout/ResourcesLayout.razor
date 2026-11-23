@@ -564,17 +564,22 @@
             }
             @* Every row has its menu, parameters included: it holds what the row's buttons don't, such as Delete
                parameter, and a row without it looks broken beside the others. *@
-            <AspireMenuButton ButtonAppearance="@(showLabels ? ButtonAppearance.Default : ButtonAppearance.Transparent)"
-                              ButtonClass="@(showLabels ? null : "resource-row-action")"
-                              Icon="@(new Icons.Regular.Size16.MoreHorizontal())"
-                              ItemsProvider="@handlers.MenuItems"
-                              data-tooltip-positioning="@(!showLabels ? "above" : null)"
-                              Title="@string.Format(CultureInfo.CurrentCulture, Loc[nameof(Dashboard.Resources.Layout.ResourcePaneResourceActions)], resourceName)" />
+            @RenderResourceMenuButton(resource, isRow: !showLabels)
             @if (!showLabels && toggleLast)
             {
                 RenderRowToggleSlot(__builder);
             }
         </div>
+    };
+
+    internal RenderFragment RenderResourceMenuButton(ResourceViewModel resource, bool isRow) => __builder =>
+    {
+        <AspireMenuButton ButtonAppearance="@(isRow ? ButtonAppearance.Transparent : ButtonAppearance.Default)"
+                          ButtonClass="@(isRow ? "resource-row-action" : null)"
+                          Icon="@(new Icons.Regular.Size16.MoreHorizontal())"
+                          ItemsProvider="@GetRowHandlers(resource).MenuItems"
+                          data-tooltip-positioning="@(isRow ? "above" : null)"
+                          Title="@string.Format(CultureInfo.CurrentCulture, Loc[nameof(Dashboard.Resources.Layout.ResourcePaneResourceActions)], GetResourceName(resource))" />
     };
 
     private static void RenderRowToggleSlot(RenderTreeBuilder __builder)

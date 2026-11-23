@@ -2051,6 +2051,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         if (resource.IsParameter &&
             string.Equals(command.Name, CommandViewModel.SetParameterCommand, StringComparisons.CommandName))
         {
+            // The parameter editor is on its Overview, so this does nothing when the parameter is already selected.
             NavigationManager.NavigateTo(DashboardUrls.ResourceOverviewUrl(GetResourceName(resource)));
             return Task.CompletedTask;
         }
