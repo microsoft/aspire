@@ -317,8 +317,10 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             collapsedResultTask = LocalStorage.GetAsync<List<string>>(_collapsedResourceNamesKey);
         }
 
+        // Prefetching LastSelectedResources here is safe because writers either require _isLoaded
+        // or navigate away (which clears _pendingLandingRedirect).
         var lastSelectedResourcesTask = _pendingLandingRedirect
-            ? ReadLastSelectedResourcesAsync()
+            ? SessionStorage.GetAsync<List<string>>(BrowserStorageKeys.LastSelectedResources)
             : null;
 
         var panePreferences = await LocalStorage.ReadUnprotectedSnapshotAsync([
@@ -328,7 +330,6 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             BrowserStorageKeys.ResourcePaneGrouping,
             BrowserStorageKeys.ResourcePaneKinds
         ]);
-        await viewPreferencesTask;
         var paneCollapsedResult = panePreferences.Get<bool>(BrowserStorageKeys.ResourcePaneCollapsed);
         if (paneCollapsedResult.Success)
         {
@@ -358,6 +359,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         {
             await LocalStorage.SetUnprotectedAsync(BrowserStorageKeys.ResourcePaneGrouping, _grouping.ToString());
         }
+        await viewPreferencesTask;
         // A comma-separated list of the kinds of items the pane lists, such as "Resources,Parameters,TelemetrySources".
         // The pane used to have a toggle for each kind. Resources and parameters are now always listed (the filter's
         // types narrow them down), so only the telemetry sources entry still counts.
@@ -1279,18 +1281,6 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         }
     }
 
-    private async Task<StorageResult<List<string>>> ReadLastSelectedResourcesAsync()
-    {
-        try
-        {
-            return await SessionStorage.GetAsync<List<string>>(BrowserStorageKeys.LastSelectedResources);
-        }
-        catch (JSDisconnectedException)
-        {
-            return new StorageResult<List<string>>(false, null) { ReadFailed = true };
-        }
-    }
-
     private async Task TryRedirectLandingAsync(Task<StorageResult<List<string>>>? prefetchedLastSelectedTask = null)
     {
         if (!_pendingLandingRedirect || !_isLoaded)
@@ -1299,7 +1289,9 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         }
 
         _pendingLandingRedirect = false;
-        var lastSelected = await (prefetchedLastSelectedTask ?? ReadLastSelectedResourcesAsync());
+        // Entering the overview without a selection restores the selection made earlier in this browser session.
+        // Without one, all resources stay selected and the overview summarizes the app.
+        var lastSelected = await (prefetchedLastSelectedTask ?? SessionStorage.GetAsync<List<string>>(BrowserStorageKeys.LastSelectedResources));
         var resourceNames = lastSelected is { Success: true, Value: { } names }
             ? names.Where(IsKnownResourceName).ToList()
             : [];

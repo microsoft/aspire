@@ -223,8 +223,6 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         var showHiddenResourcesTask = SessionStorage.GetAsync<bool>(BrowserStorageKeys.ResourcesShowHiddenResources);
         var consoleLogsManagerTask = ConsoleLogsManager.EnsureInitializedAsync();
 
-        await Task.WhenAll(consoleSettingsTask, showHiddenResourcesTask, consoleLogsManagerTask);
-
         var consoleSettingsResult = await consoleSettingsTask;
         if (consoleSettingsResult.Value is { } consoleSettings)
         {
@@ -238,6 +236,8 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         {
             _showHiddenResources = showHiddenResources.Value;
         }
+
+        await consoleLogsManagerTask;
 
         var loadingTcs = new TaskCompletionSource();
 

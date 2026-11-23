@@ -218,8 +218,6 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
         var browserInfoTask = JS.InvokeAsync<BrowserInfo>("window.getBrowserInfo").AsTask();
         var timeFormatTask = LocalStorage.GetAsync<TimeFormat>(BrowserStorageKeys.TimeFormat);
 
-        await Task.WhenAll(browserInfoTask, timeFormatTask);
-
         var result = await browserInfoTask;
         TimeProvider.SetBrowserTimeZone(result.TimeZone);
         TimeProvider.SetBrowserTimeFormat(result.Is24HourTime ? TimeFormat.TwentyFourHour : TimeFormat.TwelveHour);
@@ -252,7 +250,6 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
         // Check UnsecuredTelemetryMessageDismissedKey for backwards compatibility.
         var endpointDismissedTask = LocalStorage.GetUnprotectedAsync<bool>(BrowserStorageKeys.UnsecuredEndpointMessageDismissedKey);
         var telemetryDismissedTask = LocalStorage.GetUnprotectedAsync<bool>(BrowserStorageKeys.UnsecuredTelemetryMessageDismissedKey);
-        await Task.WhenAll(endpointDismissedTask, telemetryDismissedTask);
 
         var endpointDismissed = await endpointDismissedTask;
         var telemetryDismissed = await telemetryDismissedTask;

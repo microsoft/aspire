@@ -228,6 +228,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
         var showResourceTypeColumnTask = SessionStorage.GetAsync<bool>(BrowserStorageKeys.ResourcesShowResourceTypes);
         var showHiddenResourcesTask = SessionStorage.GetAsync<bool>(BrowserStorageKeys.ResourcesShowHiddenResources);
 
+        // Must wait until after the dashboard is connected so the application name is correct.
         Task<StorageResult<List<string>>>? collapsedResultTask = null;
         if (DashboardClient.WhenConnected.IsCompletedSuccessfully)
         {
@@ -235,11 +236,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
             collapsedResultTask = LocalStorage.GetAsync<List<string>>(_collapsedResourceNamesKey);
         }
 
-        await Task.WhenAll(
-            tagStoreTask,
-            showResourceTypeColumnTask,
-            showHiddenResourcesTask,
-            collapsedResultTask ?? Task.CompletedTask);
+        await tagStoreTask;
 
         var showResourceTypeColumn = await showResourceTypeColumnTask;
         if (showResourceTypeColumn.Success)

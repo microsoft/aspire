@@ -109,11 +109,6 @@ public partial class SummaryDetailsView<T> : IGlobalKeydownListener, IDisposable
                     ? LocalStore.GetUnprotectedAsync<float>(GetSizeStorageKey())
                     : null;
 
-                if (orientationTask is not null && sizeTask is not null)
-                {
-                    await Task.WhenAll(orientationTask, sizeTask);
-                }
-
                 if (orientationTask is not null)
                 {
                     var orientationResult = await orientationTask;
