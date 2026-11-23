@@ -2541,6 +2541,21 @@ public class AtsGoCodeGeneratorTests
     }
 
     [Fact]
+    public void GeneratedCode_RequiredNonNullableCollectionArgumentsSendAnEmptyCollectionForNil()
+    {
+        var atsContext = CreateContextFromBothAssemblies();
+        var aspireGo = _generator.GenerateDistributedApplication(atsContext)["aspire.go"].ReplaceLineEndings("\n");
+        var method = ExtractGeneratedMethod(
+            aspireGo,
+            "func (s *distributedApplicationBuilder) AddExecutable(name string, command string, workingDirectory string, args []string)");
+
+        // A nil slice is Go's "no items"; the required argument must still reach the AppHost server.
+        Assert.Matches(
+            @"if args != nil \{\s+reqArgs\[""args""\] = serializeValue\(args\)\s+\} else \{\s+reqArgs\[""args""\] = \[\]any\{\}\s+\}",
+            method);
+    }
+
+    [Fact]
     public void GeneratedCode_InteractionInputValueHelpersHandleNullableValues()
     {
         var atsContext = CreateContextFromBothAssemblies();

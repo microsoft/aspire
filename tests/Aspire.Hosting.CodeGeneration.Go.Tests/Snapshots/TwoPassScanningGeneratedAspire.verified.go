@@ -4200,6 +4200,8 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithArgs(args 
 	}
 	if args != nil {
 		reqArgs["args"] = serializeValue(args)
+	} else {
+		reqArgs["args"] = []any{}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withArgs", reqArgs); err != nil {
 		s.setErr(err)
@@ -4243,6 +4245,8 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithArgsReplac
 	}
 	if args != nil {
 		reqArgs["args"] = serializeValue(args)
+	} else {
+		reqArgs["args"] = []any{}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withArgsReplace", reqArgs); err != nil {
 		s.setErr(err)
@@ -4683,6 +4687,8 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithContainerR
 	}
 	if args != nil {
 		reqArgs["args"] = serializeValue(args)
+	} else {
+		reqArgs["args"] = []any{}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withContainerRuntimeArgs", reqArgs); err != nil {
 		s.setErr(err)
@@ -5000,6 +5006,8 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithEndpoints(
 	}
 	if endpoints != nil {
 		reqArgs["endpoints"] = serializeValue(endpoints)
+	} else {
+		reqArgs["endpoints"] = []any{}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withEndpoints", reqArgs); err != nil {
 		s.setErr(err)
@@ -5085,6 +5093,8 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithEnvironmen
 	}
 	if variables != nil {
 		reqArgs["variables"] = serializeValue(variables)
+	} else {
+		reqArgs["variables"] = map[string]any{}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withEnvironmentVariables", reqArgs); err != nil {
 		s.setErr(err)
@@ -6319,6 +6329,8 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithTags(tags 
 	}
 	if tags != nil {
 		reqArgs["tags"] = serializeValue(tags)
+	} else {
+		reqArgs["tags"] = []any{}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTags", reqArgs); err != nil {
 		s.setErr(err)
@@ -8389,6 +8401,8 @@ func (s *cSharpAppResource) WithArgs(args []string) CSharpAppResource {
 	}
 	if args != nil {
 		reqArgs["args"] = serializeValue(args)
+	} else {
+		reqArgs["args"] = []any{}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withArgs", reqArgs); err != nil {
 		s.setErr(err)
@@ -8432,6 +8446,8 @@ func (s *cSharpAppResource) WithArgsReplace(args []string) CSharpAppResource {
 	}
 	if args != nil {
 		reqArgs["args"] = serializeValue(args)
+	} else {
+		reqArgs["args"] = []any{}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withArgsReplace", reqArgs); err != nil {
 		s.setErr(err)
@@ -8862,6 +8878,8 @@ func (s *cSharpAppResource) WithEndpoints(endpoints []string) CSharpAppResource 
 	}
 	if endpoints != nil {
 		reqArgs["endpoints"] = serializeValue(endpoints)
+	} else {
+		reqArgs["endpoints"] = []any{}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withEndpoints", reqArgs); err != nil {
 		s.setErr(err)
@@ -8881,6 +8899,8 @@ func (s *cSharpAppResource) WithEndpointsInEnvironment(endpointNames []string) C
 	}
 	if endpointNames != nil {
 		reqArgs["endpointNames"] = serializeValue(endpointNames)
+	} else {
+		reqArgs["endpointNames"] = []any{}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withEndpointsInEnvironment", reqArgs); err != nil {
 		s.setErr(err)
@@ -8950,6 +8970,8 @@ func (s *cSharpAppResource) WithEnvironmentVariables(variables map[string]string
 	}
 	if variables != nil {
 		reqArgs["variables"] = serializeValue(variables)
+	} else {
+		reqArgs["variables"] = map[string]any{}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withEnvironmentVariables", reqArgs); err != nil {
 		s.setErr(err)
@@ -10094,6 +10116,8 @@ func (s *cSharpAppResource) WithTags(tags []string) CSharpAppResource {
 	}
 	if tags != nil {
 		reqArgs["tags"] = serializeValue(tags)
+	} else {
+		reqArgs["tags"] = []any{}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTags", reqArgs); err != nil {
 		s.setErr(err)
@@ -11440,6 +11464,8 @@ func (s *containerFileSystemCallbackContext) CreateDirectory(name string, entrie
 	reqArgs["name"] = serializeValue(name)
 	if entries != nil {
 		reqArgs["entries"] = serializeValue(entries)
+	} else {
+		reqArgs["entries"] = []any{}
 	}
 	if len(options) > 0 {
 		merged := &CreateDirectoryOptions{}
@@ -13122,6 +13148,8 @@ func (s *containerRegistryResource) WithEndpoints(endpoints []string) ContainerR
 	}
 	if endpoints != nil {
 		reqArgs["endpoints"] = serializeValue(endpoints)
+	} else {
+		reqArgs["endpoints"] = []any{}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withEndpoints", reqArgs); err != nil {
 		s.setErr(err)
@@ -13810,6 +13838,8 @@ func (s *containerRegistryResource) WithTags(tags []string) ContainerRegistryRes
 	}
 	if tags != nil {
 		reqArgs["tags"] = serializeValue(tags)
+	} else {
+		reqArgs["tags"] = []any{}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTags", reqArgs); err != nil {
 		s.setErr(err)
@@ -15758,6 +15788,8 @@ func (s *containerResource) WithArgs(args []string) ContainerResource {
 	}
 	if args != nil {
 		reqArgs["args"] = serializeValue(args)
+	} else {
+		reqArgs["args"] = []any{}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withArgs", reqArgs); err != nil {
 		s.setErr(err)
@@ -15801,6 +15833,8 @@ func (s *containerResource) WithArgsReplace(args []string) ContainerResource {
 	}
 	if args != nil {
 		reqArgs["args"] = serializeValue(args)
+	} else {
+		reqArgs["args"] = []any{}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withArgsReplace", reqArgs); err != nil {
 		s.setErr(err)
@@ -16241,6 +16275,8 @@ func (s *containerResource) WithContainerRuntimeArgs(args []string) ContainerRes
 	}
 	if args != nil {
 		reqArgs["args"] = serializeValue(args)
+	} else {
+		reqArgs["args"] = []any{}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withContainerRuntimeArgs", reqArgs); err != nil {
 		s.setErr(err)
@@ -16558,6 +16594,8 @@ func (s *containerResource) WithEndpoints(endpoints []string) ContainerResource 
 	}
 	if endpoints != nil {
 		reqArgs["endpoints"] = serializeValue(endpoints)
+	} else {
+		reqArgs["endpoints"] = []any{}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withEndpoints", reqArgs); err != nil {
 		s.setErr(err)
@@ -16643,6 +16681,8 @@ func (s *containerResource) WithEnvironmentVariables(variables map[string]string
 	}
 	if variables != nil {
 		reqArgs["variables"] = serializeValue(variables)
+	} else {
+		reqArgs["variables"] = map[string]any{}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withEnvironmentVariables", reqArgs); err != nil {
 		s.setErr(err)
@@ -17877,6 +17917,8 @@ func (s *containerResource) WithTags(tags []string) ContainerResource {
 	}
 	if tags != nil {
 		reqArgs["tags"] = serializeValue(tags)
+	} else {
+		reqArgs["tags"] = []any{}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTags", reqArgs); err != nil {
 		s.setErr(err)
@@ -18779,6 +18821,8 @@ func (s *distributedApplicationBuilder) AddExecutable(name string, command strin
 	reqArgs["workingDirectory"] = serializeValue(workingDirectory)
 	if args != nil {
 		reqArgs["args"] = serializeValue(args)
+	} else {
+		reqArgs["args"] = []any{}
 	}
 	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/addExecutable", reqArgs)
 	if err != nil {
@@ -20254,6 +20298,8 @@ func (s *dockerfileStage) Cmd(command []string) DockerfileStage {
 	}
 	if command != nil {
 		reqArgs["command"] = serializeValue(command)
+	} else {
+		reqArgs["command"] = []any{}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/cmd", reqArgs); err != nil {
 		s.setErr(err)
@@ -20360,6 +20406,8 @@ func (s *dockerfileStage) Entrypoint(command []string) DockerfileStage {
 	}
 	if command != nil {
 		reqArgs["command"] = serializeValue(command)
+	} else {
+		reqArgs["command"] = []any{}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/entrypoint", reqArgs); err != nil {
 		s.setErr(err)
@@ -20428,6 +20476,8 @@ func (s *dockerfileStage) RunWithMounts(command string, mounts []string) Dockerf
 	reqArgs["command"] = serializeValue(command)
 	if mounts != nil {
 		reqArgs["mounts"] = serializeValue(mounts)
+	} else {
+		reqArgs["mounts"] = []any{}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/runWithMounts", reqArgs); err != nil {
 		s.setErr(err)
@@ -22083,6 +22133,8 @@ func (s *dotnetToolResource) WithArgs(args []string) DotnetToolResource {
 	}
 	if args != nil {
 		reqArgs["args"] = serializeValue(args)
+	} else {
+		reqArgs["args"] = []any{}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withArgs", reqArgs); err != nil {
 		s.setErr(err)
@@ -22126,6 +22178,8 @@ func (s *dotnetToolResource) WithArgsReplace(args []string) DotnetToolResource {
 	}
 	if args != nil {
 		reqArgs["args"] = serializeValue(args)
+	} else {
+		reqArgs["args"] = []any{}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withArgsReplace", reqArgs); err != nil {
 		s.setErr(err)
@@ -22556,6 +22610,8 @@ func (s *dotnetToolResource) WithEndpoints(endpoints []string) DotnetToolResourc
 	}
 	if endpoints != nil {
 		reqArgs["endpoints"] = serializeValue(endpoints)
+	} else {
+		reqArgs["endpoints"] = []any{}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withEndpoints", reqArgs); err != nil {
 		s.setErr(err)
@@ -22625,6 +22681,8 @@ func (s *dotnetToolResource) WithEnvironmentVariables(variables map[string]strin
 	}
 	if variables != nil {
 		reqArgs["variables"] = serializeValue(variables)
+	} else {
+		reqArgs["variables"] = map[string]any{}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withEnvironmentVariables", reqArgs); err != nil {
 		s.setErr(err)
@@ -23797,6 +23855,8 @@ func (s *dotnetToolResource) WithTags(tags []string) DotnetToolResource {
 	}
 	if tags != nil {
 		reqArgs["tags"] = serializeValue(tags)
+	} else {
+		reqArgs["tags"] = []any{}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTags", reqArgs); err != nil {
 		s.setErr(err)
@@ -27199,6 +27259,8 @@ func (s *executableResource) WithArgs(args []string) ExecutableResource {
 	}
 	if args != nil {
 		reqArgs["args"] = serializeValue(args)
+	} else {
+		reqArgs["args"] = []any{}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withArgs", reqArgs); err != nil {
 		s.setErr(err)
@@ -27242,6 +27304,8 @@ func (s *executableResource) WithArgsReplace(args []string) ExecutableResource {
 	}
 	if args != nil {
 		reqArgs["args"] = serializeValue(args)
+	} else {
+		reqArgs["args"] = []any{}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withArgsReplace", reqArgs); err != nil {
 		s.setErr(err)
@@ -27672,6 +27736,8 @@ func (s *executableResource) WithEndpoints(endpoints []string) ExecutableResourc
 	}
 	if endpoints != nil {
 		reqArgs["endpoints"] = serializeValue(endpoints)
+	} else {
+		reqArgs["endpoints"] = []any{}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withEndpoints", reqArgs); err != nil {
 		s.setErr(err)
@@ -27741,6 +27807,8 @@ func (s *executableResource) WithEnvironmentVariables(variables map[string]strin
 	}
 	if variables != nil {
 		reqArgs["variables"] = serializeValue(variables)
+	} else {
+		reqArgs["variables"] = map[string]any{}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withEnvironmentVariables", reqArgs); err != nil {
 		s.setErr(err)
@@ -28913,6 +28981,8 @@ func (s *executableResource) WithTags(tags []string) ExecutableResource {
 	}
 	if tags != nil {
 		reqArgs["tags"] = serializeValue(tags)
+	} else {
+		reqArgs["tags"] = []any{}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTags", reqArgs); err != nil {
 		s.setErr(err)
@@ -30660,6 +30730,8 @@ func (s *externalServiceResource) WithEndpoints(endpoints []string) ExternalServ
 	}
 	if endpoints != nil {
 		reqArgs["endpoints"] = serializeValue(endpoints)
+	} else {
+		reqArgs["endpoints"] = []any{}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withEndpoints", reqArgs); err != nil {
 		s.setErr(err)
@@ -31375,6 +31447,8 @@ func (s *externalServiceResource) WithTags(tags []string) ExternalServiceResourc
 	}
 	if tags != nil {
 		reqArgs["tags"] = serializeValue(tags)
+	} else {
+		reqArgs["tags"] = []any{}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTags", reqArgs); err != nil {
 		s.setErr(err)
@@ -32979,6 +33053,8 @@ func (s *interactionInputBuilder) WithChoiceOptions(choices []*InteractionChoice
 	}
 	if choices != nil {
 		reqArgs["choices"] = serializeValue(choices)
+	} else {
+		reqArgs["choices"] = []any{}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Ats/withChoiceOptions", reqArgs); err != nil {
 		s.setErr(err)
@@ -33311,6 +33387,8 @@ func (s *interactionLoadingInput) SetChoiceOptions(choices []*InteractionChoiceO
 	}
 	if choices != nil {
 		reqArgs["choices"] = serializeValue(choices)
+	} else {
+		reqArgs["choices"] = []any{}
 	}
 	_, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Ats/setChoiceOptions", reqArgs)
 	return err
@@ -33743,6 +33821,8 @@ func (s *interactionService) PromptInputs(title string, message string, inputs [
 	reqArgs["message"] = serializeValue(message)
 	if inputs != nil {
 		reqArgs["inputs"] = serializeValue(inputs)
+	} else {
+		reqArgs["inputs"] = []any{}
 	}
 	if len(options) > 0 {
 		merged := &PromptInputsOptions{}
@@ -35400,6 +35480,8 @@ func (s *parameterResource) WithEndpoints(endpoints []string) ParameterResource 
 	}
 	if endpoints != nil {
 		reqArgs["endpoints"] = serializeValue(endpoints)
+	} else {
+		reqArgs["endpoints"] = []any{}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withEndpoints", reqArgs); err != nil {
 		s.setErr(err)
@@ -36088,6 +36170,8 @@ func (s *parameterResource) WithTags(tags []string) ParameterResource {
 	}
 	if tags != nil {
 		reqArgs["tags"] = serializeValue(tags)
+	} else {
+		reqArgs["tags"] = []any{}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTags", reqArgs); err != nil {
 		s.setErr(err)
@@ -38849,6 +38933,8 @@ func (s *projectResource) WithArgs(args []string) ProjectResource {
 	}
 	if args != nil {
 		reqArgs["args"] = serializeValue(args)
+	} else {
+		reqArgs["args"] = []any{}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withArgs", reqArgs); err != nil {
 		s.setErr(err)
@@ -38892,6 +38978,8 @@ func (s *projectResource) WithArgsReplace(args []string) ProjectResource {
 	}
 	if args != nil {
 		reqArgs["args"] = serializeValue(args)
+	} else {
+		reqArgs["args"] = []any{}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withArgsReplace", reqArgs); err != nil {
 		s.setErr(err)
@@ -39322,6 +39410,8 @@ func (s *projectResource) WithEndpoints(endpoints []string) ProjectResource {
 	}
 	if endpoints != nil {
 		reqArgs["endpoints"] = serializeValue(endpoints)
+	} else {
+		reqArgs["endpoints"] = []any{}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withEndpoints", reqArgs); err != nil {
 		s.setErr(err)
@@ -39341,6 +39431,8 @@ func (s *projectResource) WithEndpointsInEnvironment(endpointNames []string) Pro
 	}
 	if endpointNames != nil {
 		reqArgs["endpointNames"] = serializeValue(endpointNames)
+	} else {
+		reqArgs["endpointNames"] = []any{}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withEndpointsInEnvironment", reqArgs); err != nil {
 		s.setErr(err)
@@ -39410,6 +39502,8 @@ func (s *projectResource) WithEnvironmentVariables(variables map[string]string) 
 	}
 	if variables != nil {
 		reqArgs["variables"] = serializeValue(variables)
+	} else {
+		reqArgs["variables"] = map[string]any{}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withEnvironmentVariables", reqArgs); err != nil {
 		s.setErr(err)
@@ -40554,6 +40648,8 @@ func (s *projectResource) WithTags(tags []string) ProjectResource {
 	}
 	if tags != nil {
 		reqArgs["tags"] = serializeValue(tags)
+	} else {
+		reqArgs["tags"] = []any{}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTags", reqArgs); err != nil {
 		s.setErr(err)
@@ -42106,6 +42202,8 @@ func (s *resourceNotificationService) WaitForResourceStates(resourceName string,
 	reqArgs["resourceName"] = serializeValue(resourceName)
 	if targetStates != nil {
 		reqArgs["targetStates"] = serializeValue(targetStates)
+	} else {
+		reqArgs["targetStates"] = []any{}
 	}
 	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/waitForResourceStates", reqArgs)
 	if err != nil {
@@ -44840,6 +44938,8 @@ func (s *testDatabaseResource) WithArgs(args []string) TestDatabaseResource {
 	}
 	if args != nil {
 		reqArgs["args"] = serializeValue(args)
+	} else {
+		reqArgs["args"] = []any{}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withArgs", reqArgs); err != nil {
 		s.setErr(err)
@@ -44883,6 +44983,8 @@ func (s *testDatabaseResource) WithArgsReplace(args []string) TestDatabaseResour
 	}
 	if args != nil {
 		reqArgs["args"] = serializeValue(args)
+	} else {
+		reqArgs["args"] = []any{}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withArgsReplace", reqArgs); err != nil {
 		s.setErr(err)
@@ -45323,6 +45425,8 @@ func (s *testDatabaseResource) WithContainerRuntimeArgs(args []string) TestDatab
 	}
 	if args != nil {
 		reqArgs["args"] = serializeValue(args)
+	} else {
+		reqArgs["args"] = []any{}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withContainerRuntimeArgs", reqArgs); err != nil {
 		s.setErr(err)
@@ -45640,6 +45744,8 @@ func (s *testDatabaseResource) WithEndpoints(endpoints []string) TestDatabaseRes
 	}
 	if endpoints != nil {
 		reqArgs["endpoints"] = serializeValue(endpoints)
+	} else {
+		reqArgs["endpoints"] = []any{}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withEndpoints", reqArgs); err != nil {
 		s.setErr(err)
@@ -45725,6 +45831,8 @@ func (s *testDatabaseResource) WithEnvironmentVariables(variables map[string]str
 	}
 	if variables != nil {
 		reqArgs["variables"] = serializeValue(variables)
+	} else {
+		reqArgs["variables"] = map[string]any{}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withEnvironmentVariables", reqArgs); err != nil {
 		s.setErr(err)
@@ -46959,6 +47067,8 @@ func (s *testDatabaseResource) WithTags(tags []string) TestDatabaseResource {
 	}
 	if tags != nil {
 		reqArgs["tags"] = serializeValue(tags)
+	} else {
+		reqArgs["tags"] = []any{}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTags", reqArgs); err != nil {
 		s.setErr(err)
@@ -49561,6 +49671,8 @@ func (s *testRedisResource) WithArgs(args []string) TestRedisResource {
 	}
 	if args != nil {
 		reqArgs["args"] = serializeValue(args)
+	} else {
+		reqArgs["args"] = []any{}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withArgs", reqArgs); err != nil {
 		s.setErr(err)
@@ -49604,6 +49716,8 @@ func (s *testRedisResource) WithArgsReplace(args []string) TestRedisResource {
 	}
 	if args != nil {
 		reqArgs["args"] = serializeValue(args)
+	} else {
+		reqArgs["args"] = []any{}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withArgsReplace", reqArgs); err != nil {
 		s.setErr(err)
@@ -50136,6 +50250,8 @@ func (s *testRedisResource) WithContainerRuntimeArgs(args []string) TestRedisRes
 	}
 	if args != nil {
 		reqArgs["args"] = serializeValue(args)
+	} else {
+		reqArgs["args"] = []any{}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withContainerRuntimeArgs", reqArgs); err != nil {
 		s.setErr(err)
@@ -50479,6 +50595,8 @@ func (s *testRedisResource) WithEndpoints(endpoints []string) TestRedisResource 
 	}
 	if endpoints != nil {
 		reqArgs["endpoints"] = serializeValue(endpoints)
+	} else {
+		reqArgs["endpoints"] = []any{}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withEndpoints", reqArgs); err != nil {
 		s.setErr(err)
@@ -50564,6 +50682,8 @@ func (s *testRedisResource) WithEnvironmentVariables(variables map[string]string
 	}
 	if variables != nil {
 		reqArgs["variables"] = serializeValue(variables)
+	} else {
+		reqArgs["variables"] = map[string]any{}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withEnvironmentVariables", reqArgs); err != nil {
 		s.setErr(err)
@@ -51956,6 +52076,8 @@ func (s *testRedisResource) WithTags(tags []string) TestRedisResource {
 	}
 	if tags != nil {
 		reqArgs["tags"] = serializeValue(tags)
+	} else {
+		reqArgs["tags"] = []any{}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTags", reqArgs); err != nil {
 		s.setErr(err)

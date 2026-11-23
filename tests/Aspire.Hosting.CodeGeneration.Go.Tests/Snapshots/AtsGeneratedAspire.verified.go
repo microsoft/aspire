@@ -500,6 +500,8 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithEndpoints(
 	}
 	if endpoints != nil {
 		reqArgs["endpoints"] = serializeValue(endpoints)
+	} else {
+		reqArgs["endpoints"] = []any{}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withEndpoints", reqArgs); err != nil {
 		s.setErr(err)
@@ -518,6 +520,8 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithEnvironmen
 	}
 	if variables != nil {
 		reqArgs["variables"] = serializeValue(variables)
+	} else {
+		reqArgs["variables"] = map[string]any{}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withEnvironmentVariables", reqArgs); err != nil {
 		s.setErr(err)
@@ -1649,6 +1653,8 @@ func (s *testDatabaseResource) WithEndpoints(endpoints []string) TestDatabaseRes
 	}
 	if endpoints != nil {
 		reqArgs["endpoints"] = serializeValue(endpoints)
+	} else {
+		reqArgs["endpoints"] = []any{}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withEndpoints", reqArgs); err != nil {
 		s.setErr(err)
@@ -1667,6 +1673,8 @@ func (s *testDatabaseResource) WithEnvironmentVariables(variables map[string]str
 	}
 	if variables != nil {
 		reqArgs["variables"] = serializeValue(variables)
+	} else {
+		reqArgs["variables"] = map[string]any{}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withEnvironmentVariables", reqArgs); err != nil {
 		s.setErr(err)
@@ -2871,6 +2879,8 @@ func (s *testRedisResource) WithEndpoints(endpoints []string) TestRedisResource 
 	}
 	if endpoints != nil {
 		reqArgs["endpoints"] = serializeValue(endpoints)
+	} else {
+		reqArgs["endpoints"] = []any{}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withEndpoints", reqArgs); err != nil {
 		s.setErr(err)
@@ -2889,6 +2899,8 @@ func (s *testRedisResource) WithEnvironmentVariables(variables map[string]string
 	}
 	if variables != nil {
 		reqArgs["variables"] = serializeValue(variables)
+	} else {
+		reqArgs["variables"] = map[string]any{}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withEnvironmentVariables", reqArgs); err != nil {
 		s.setErr(err)
