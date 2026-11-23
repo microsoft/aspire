@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.IO.Compression;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Shared;
@@ -564,6 +565,29 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void CliBundleSelectionEmbedsRelativeBundlePathAsFullPath()
+    {
+        var repoRoot = MSBuildUtils.GetRepoRoot();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        // CreateSdkBundleAppHostProject places the project in <workspace>/AppHost.
+        var bundle = CreateFakeCliBundle(workspace.WorkspaceRoot.FullName);
+        var relativeLayoutRoot = Path.GetRelativePath(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost"), bundle.LayoutRoot);
+        var appHostDirectory = CreateSdkBundleAppHostProject(workspace.WorkspaceRoot.FullName, repoRoot,
+            $"""
+              <AspireCliBundlePath>{relativeLayoutRoot}</AspireCliBundlePath>
+            """);
+
+        CreateAppHostPackageDirectoryBuildFiles(appHostDirectory, repoRoot);
+
+        BuildProject(appHostDirectory);
+
+        // The runtime fallback resolves this value from the AppHost's working directory, which differs from the
+        // project directory in tests, so the build must embed the full path.
+        Assert.Equal(Path.GetFullPath(bundle.LayoutRoot), GetGeneratedAssemblyMetadataValue(appHostDirectory, "aspireclibundlepath"));
+    }
+
+    [Fact]
     public async Task CliBundleOptInResolvesNewestVersionedBundlePath()
     {
         var repoRoot = MSBuildUtils.GetRepoRoot();
@@ -994,9 +1018,8 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
 
         // Build-only jobs succeed without a bundle (https://github.com/microsoft/aspire/issues/22491). The AppHost
         // carries the bundle selection settings instead of DCP paths, so it can resolve a bundle when it runs.
-        var assemblyInfo = File.ReadAllText(Assert.Single(Directory.GetFiles(Path.Combine(appHostDirectory, "obj"), "*.AssemblyInfo.cs", SearchOption.AllDirectories)));
-        Assert.Contains($"AssemblyMetadataAttribute(\"aspirecliinvocationmode\", \"{invocationMode ?? "Path"}\")", assemblyInfo);
-        Assert.DoesNotContain("dcpclipath", assemblyInfo);
+        Assert.Equal(invocationMode ?? "Path", GetGeneratedAssemblyMetadataValue(appHostDirectory, "aspirecliinvocationmode"));
+        Assert.Null(GetGeneratedAssemblyMetadataValue(appHostDirectory, "dcpclipath"));
 
         Assert.Contains("warning ASPIRE009", output);
         Assert.Contains("the bundle could not be resolved", output);
@@ -1174,6 +1197,19 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
           <Import Project="{repoRoot}\src\Aspire.AppHost.Sdk\SDK\Sdk.in.targets" />
         </Project>
         """);
+    }
+
+    private static string? GetGeneratedAssemblyMetadataValue(string projectDirectory, string key)
+    {
+        var assemblyInfo = File.ReadAllText(Assert.Single(Directory.GetFiles(Path.Combine(projectDirectory, "obj"), "*.AssemblyInfo.cs", SearchOption.AllDirectories)));
+
+        // WriteCodeFragment splits long string literals into concatenations, for example:
+        //   [assembly: System.Reflection.AssemblyMetadataAttribute("key", ("/a/very/long" +
+        //       "/path"))]
+        // Join the pieces, then read the C# string literal that follows the key.
+        var joined = Regex.Replace(assemblyInfo, "\"\\s*\\+\\s*\"", string.Empty);
+        var match = Regex.Match(joined, $"\"{Regex.Escape(key)}\",\\s*\\(?\"(?<value>(?:[^\"\\\\]|\\\\.)*)\"");
+        return match.Success ? Regex.Unescape(match.Groups["value"].Value) : null;
     }
 
     private static (string LayoutRoot, string DcpDir, string DashboardDir, string DashboardPath) CreateFakeCliBundle(string basePath)

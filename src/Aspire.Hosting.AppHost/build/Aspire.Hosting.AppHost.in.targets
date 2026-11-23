@@ -785,13 +785,15 @@ namespace Projects%3B
         <_Parameter1>aspirecliinvocationmode</_Parameter1>
         <_Parameter2>$(_AspireCliInvocationMode)</_Parameter2>
       </AssemblyAttribute>
+      <!-- The build resolves relative paths from the project directory (MSBuild's current directory for tasks), but the
+           AppHost may run from elsewhere, such as a test output directory, so embed full paths. -->
       <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute" Condition=" '$(AspireCliPath)' != '' ">
         <_Parameter1>aspireclipath</_Parameter1>
-        <_Parameter2>$(AspireCliPath)</_Parameter2>
+        <_Parameter2>$([MSBuild]::NormalizePath('$(MSBuildProjectDirectory)', '$(AspireCliPath)'))</_Parameter2>
       </AssemblyAttribute>
       <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute" Condition=" '$(AspireCliBundlePath)' != '' ">
         <_Parameter1>aspireclibundlepath</_Parameter1>
-        <_Parameter2>$(AspireCliBundlePath)</_Parameter2>
+        <_Parameter2>$([MSBuild]::NormalizePath('$(MSBuildProjectDirectory)', '$(AspireCliBundlePath)'))</_Parameter2>
       </AssemblyAttribute>
       <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute" Condition=" '$(_AspireCliInvocationMode.ToLowerInvariant())' == 'dnxpinned' ">
         <_Parameter1>aspireclipinnedversion</_Parameter1>
