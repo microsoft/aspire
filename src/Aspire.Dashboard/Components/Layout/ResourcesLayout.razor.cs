@@ -13,6 +13,7 @@ using Humanizer;
 using System.Globalization;
 using System.Web;
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Rendering;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Localization;
@@ -1373,6 +1374,68 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             .ThenBy(r => r, ResourceViewModelNameComparer.Instance)
             .ToList();
 
+    private bool IsResourcePaneGrouped => DashboardClient.IsEnabled && _grouping != ResourcePaneGrouping.None;
+
+    private IEnumerable<PaneSection> GetPaneSections()
+    {
+        if (DashboardClient.IsEnabled)
+        {
+            if (IsResourcePaneGrouped)
+            {
+                foreach (var group in GetResourceGroups())
+                {
+                    yield return new GroupPaneSection(GetGroupKey(group), group);
+                }
+            }
+            else if (GetPaneRows().ToList() is { Count: > 0 } treeRows)
+            {
+                yield return new TreePaneSection(treeRows);
+            }
+
+            // Tags already include parameters in their groups.
+            if (_grouping != ResourcePaneGrouping.Tags && GetParameterPaneRows() is { Count: > 0 } parameterRows)
+            {
+                yield return new ParametersPaneSection(parameterRows);
+            }
+        }
+
+        if (GetVisibleTelemetryResources().ToList() is { Count: > 0 } telemetryRows)
+        {
+            yield return new TelemetryPaneSection(telemetryRows);
+        }
+    }
+
+    private void RenderPaneSection(RenderTreeBuilder builder, PaneSection section)
+    {
+        switch (section)
+        {
+            case GroupPaneSection { Group: var group }:
+                RenderPaneGroup(builder, section.Key, GetGroupName(group.Value), group.Resources.Select(GetResourceName).ToList(),
+                    GetPaneCountText(group.Resources.Count, 0, 0), RenderGroupIcon(group), RenderFlatResourceRows(group.Resources),
+                    isSection: false, actionTag: _grouping == ResourcePaneGrouping.Tags ? group.Value : null);
+                break;
+            case TreePaneSection tree:
+                RenderPaneGroup(builder, section.Key, ResourcesLoc[nameof(Resources.Resources.ResourcesHeader)],
+                    section.Resources.Select(GetResourceName).ToList(), GetPaneCountText(tree.Rows.Count, 0, 0),
+                    icon: null, RenderTreeResourceRows(tree.Rows, GetTreeGuides(tree.Rows)), isSection: true, actionTag: null);
+                break;
+            case ParametersPaneSection parameters:
+                RenderPaneGroup(builder, section.Key, Loc[nameof(Resources.Layout.NavMenuParametersTab)],
+                    parameters.Rows.Select(GetResourceName).ToList(), GetPaneCountText(0, parameters.Rows.Count, 0),
+                    IsResourcePaneGrouped ? RenderSectionIcon(new Icons.Regular.Size16.Key(), "var(--colorPaletteDarkOrangeForeground2)") : null,
+                    RenderFlatResourceRows(parameters.Rows), isSection: true, actionTag: null);
+                break;
+            case TelemetryPaneSection telemetry:
+                RenderPaneGroup(builder, section.Key, Loc[nameof(Resources.Layout.NavMenuTelemetrySourcesTab)],
+                    telemetry.Rows.Select(row => row.Name).ToList(), GetPaneCountText(0, 0, telemetry.Rows.Count),
+                    IsResourcePaneGrouped ? RenderSectionIcon(new Icons.Regular.Size16.DataUsage(), "var(--colorPaletteBlueForeground2)") : null,
+                    RenderTelemetryRows(telemetry.Rows), isSection: true, actionTag: null);
+                break;
+            default:
+                throw new InvalidOperationException($"Unexpected resource pane section: {section.GetType().Name}.");
+        }
+    }
+
     /// <summary>
     /// Gets the filtered resources grouped by the selected property. Text search matches group names or resources.
     /// </summary>
@@ -1525,19 +1588,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private bool IsTagVisible(string tag) =>
         !_filter.ResourceTagsToVisibility.TryGetValue(tag, out var visible) || visible;
 
-    private bool IsGroupCollapsed(ResourceGroup group) => _collapsedGroups.Contains(GetGroupKey(group));
-
-    private bool IsSectionCollapsed(string sectionKey) => _collapsedGroups.Contains(sectionKey);
-
-    private void ToggleGroup(ResourceGroup group)
-    {
-        ToggleCollapsedGroup(GetGroupKey(group));
-    }
-
-    private void ToggleSection(string sectionKey)
-    {
-        ToggleCollapsedGroup(sectionKey);
-    }
+    private bool IsGroupCollapsed(string key) => _collapsedGroups.Contains(key);
 
     private void ToggleCollapsedGroup(string key)
     {
@@ -1958,11 +2009,21 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private bool IsCommandDisabled(ResourceViewModel resource, CommandViewModel command) =>
         DashboardClient.IsReadOnly || command.State == CommandViewModelState.Disabled || DashboardCommandExecutor.IsExecuting(resource.Name, command.Name);
 
-    private List<MenuButtonItem> GetTagGroupMenuItems(string tagName) =>
-        ResourceMenuBuilder.CreateTagGroupMenuItems(tagName, $"resource-pane-tag-menu-header-{Guid.NewGuid():N}",
-            () => GetTagGroups().Find(group => StringComparer.OrdinalIgnoreCase.Equals(group.Value, tagName))?.Resources ?? [],
+    private List<MenuButtonItem> GetPaneGroupMenuItems(string groupKey, string groupName, bool isTag) =>
+        ResourceMenuBuilder.CreateGroupMenuItems(groupName, $"resource-pane-group-menu-header-{Guid.NewGuid():N}",
+            isTag ? new Icons.Regular.Size16.Tag() : null,
+            () => GetPaneGroupMembers(groupKey),
             (resource, command) => DashboardCommandExecutor.IsExecuting(resource.Name, command.Name),
-            (resource, command) => EventCallback.Factory.Create(this, () => ExecuteResourceCommandAsync(resource, command)).InvokeAsync());
+            (resource, command) => EventCallback.Factory.Create(this, () => ExecuteResourceCommandAsync(resource, command)).InvokeAsync(),
+            showEmptyGroup: true);
+
+    private IReadOnlyList<ResourceViewModel> GetPaneGroupMembers(string groupKey) => groupKey switch
+    {
+        ResourcesSectionKey => _grouping == ResourcePaneGrouping.None ? GetPaneRows().Select(row => row.Resource).ToList() : [],
+        ParametersSectionKey => _grouping != ResourcePaneGrouping.Tags ? GetParameterPaneRows() : [],
+        TelemetrySectionKey => [],
+        _ => GetResourceGroups().Find(group => StringComparer.OrdinalIgnoreCase.Equals(GetGroupKey(group), groupKey))?.Resources ?? []
+    };
 
     private List<MenuButtonItem> GetResourceMenuItems(ResourceViewModel resource)
     {
@@ -2645,13 +2706,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             _selectionAnchor = resourceName;
         }
 
-        if (selection.Count == 0)
-        {
-            // Remember the cleared selection so the overview doesn't select a resource again.
-            await SetStoredSelectionAsync(selection);
-        }
-
-        NavigateToSelection(selection);
+        await NavigateToSelectionAsync(selection);
     }
 
     // A single selected resource is shown by its row alone, so a one-resource group doesn't duplicate the highlight.
@@ -2712,7 +2767,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         }
 
         _selectionAnchor = selection is [.., var last] ? last : null;
-        NavigateToSelection(selection);
+        await NavigateToSelectionAsync(selection);
     }
 
     private async Task OnAllResourcesClickAsync()
@@ -2766,8 +2821,14 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         return names;
     }
 
-    private void NavigateToSelection(IReadOnlyList<string> resourceNames)
+    private async Task NavigateToSelectionAsync(IReadOnlyList<string> resourceNames)
     {
+        if (resourceNames.Count == 0)
+        {
+            // Clear the remembered selection before Overview can restore it during navigation.
+            await SetStoredSelectionAsync(resourceNames);
+        }
+
         var url = GetSelectionUrl(resourceNames);
         _animatedPaneNavigation = _isPaneFullCanvas && resourceNames.Count == 1
             ? NavigationManager.ToAbsoluteUri(url).AbsoluteUri
@@ -2799,33 +2860,22 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
     private List<string> GetVisibleRowNames()
     {
-        List<string> names;
-        if (DashboardClient.IsEnabled && _grouping != ResourcePaneGrouping.None)
+        var names = new List<string>();
+        // A resource with several tags is listed several times. Ranges use its first visible position.
+        var groupedNames = new HashSet<string>(StringComparers.ResourceName);
+        foreach (var section in GetPaneSections().Where(section => !IsGroupCollapsed(section.Key)))
         {
-            // A resource with several tags is listed several times. Ranges use its first position.
-            names = GetResourceGroups()
-                .Where(g => !IsGroupCollapsed(g))
-                .SelectMany(g => g.Resources)
-                .Select(GetResourceName)
-                .Distinct(StringComparers.ResourceName)
-                .ToList();
-        }
-        else
-        {
-            names = IsSectionCollapsed(ResourcesSectionKey)
-                ? []
-                : GetPaneRows().Select(r => GetResourceName(r.Resource)).ToList();
-
-            if (!IsSectionCollapsed(ParametersSectionKey))
+            if (section is TelemetryPaneSection telemetry)
             {
-                names.AddRange(GetParameterPaneRows().Select(GetResourceName));
+                names.AddRange(telemetry.Rows.Select(row => row.Name));
+            }
+            else
+            {
+                var resourceNames = section.Resources.Select(GetResourceName);
+                names.AddRange(section is GroupPaneSection ? resourceNames.Where(groupedNames.Add) : resourceNames);
             }
         }
 
-        if (!IsSectionCollapsed(TelemetrySectionKey))
-        {
-            names.AddRange(GetVisibleTelemetryResources().Select(r => r.Name));
-        }
         return names;
     }
 
@@ -3239,6 +3289,17 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private sealed record SelectedResourceItem(string Name, ResourceViewModel? Resource, TelemetryOnlyResource? TelemetryOnly);
 
     private sealed record ResourceGroup(string? Value, List<ResourceViewModel> Resources);
+
+    private abstract record PaneSection(string Key, IEnumerable<ResourceViewModel> Resources);
+
+    private sealed record GroupPaneSection(string Key, ResourceGroup Group) : PaneSection(Key, Group.Resources);
+
+    private sealed record TreePaneSection(IReadOnlyList<ResourceGridViewModel> Rows)
+        : PaneSection(ResourcesSectionKey, Rows.Select(row => row.Resource));
+
+    private sealed record ParametersPaneSection(IReadOnlyList<ResourceViewModel> Rows) : PaneSection(ParametersSectionKey, Rows);
+
+    private sealed record TelemetryPaneSection(IReadOnlyList<TelemetryOnlyResource> Rows) : PaneSection(TelemetrySectionKey, []);
 
     private sealed record TabItem(ResourceTab Tab, string Text, Icon Icon, bool IsVisible, string Href, int ErrorCount, bool IsAvailable);
 

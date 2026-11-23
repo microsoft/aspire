@@ -434,64 +434,6 @@
     text-transform: uppercase;
 }
 
-.resource-pane-section-header {
-    display: flex;
-    align-items: center;
-    width: 100%;
-    margin: var(--resource-group-boundary-gap) 0 var(--resource-group-header-gap);
-    padding: 8px 6px 5px;
-    border: 0;
-    background: transparent;
-    color: var(--colorNeutralForeground3);
-    font: inherit;
-    font-size: var(--aspire-font-size-caption);
-    font-weight: var(--aspire-font-weight-semibold);
-    line-height: 16px;
-    text-align: left;
-    text-transform: uppercase;
-    cursor: pointer;
-}
-
-.resource-pane-section-header:hover {
-    color: var(--colorNeutralForeground2);
-}
-
-.resource-pane-section-count {
-    min-width: 20px;
-    margin-left: 6px;
-    padding-inline: 5px;
-    border-radius: var(--aspire-radius-medium);
-    background: var(--colorNeutralBackground3);
-    color: var(--colorNeutralForeground2);
-    line-height: 18px;
-    text-align: center;
-}
-
-.resource-pane-section-chevron {
-    display: inline-flex;
-    margin-left: auto;
-    transition: transform .15s ease;
-}
-
-/* In the full-page list, pointing at a section header draws a dotted rule from its count to the chevron, as the
-   metrics page's section headers do, so the wide header reads as one collapsible row. At rest it's hidden to keep the
-   table quiet. It always takes its room, so the chevron doesn't move. */
-.resource-pane-section-rule {
-    flex: 1 1 auto;
-    min-width: 16px;
-    margin-inline: 12px 8px;
-    border-top: 2px dotted var(--colorNeutralStroke2);
-    visibility: hidden;
-}
-
-.resources-layout.pane-full-canvas .resource-pane-section-header:is(:hover, :focus-visible) .resource-pane-section-rule {
-    visibility: visible;
-}
-
-.resource-pane-section-chevron.collapsed {
-    transform: rotate(-90deg);
-}
-
 .resource-pane-message {
     display: flex;
     justify-content: center;
@@ -501,30 +443,17 @@
 }
 
 .resource-pane-group {
-    margin: 10px 6px 4px;
-    color: var(--colorNeutralForeground2);
-    font-size: var(--aspire-font-size-caption);
-    font-weight: var(--aspire-font-weight-semibold);
-    letter-spacing: .04em;
-    text-transform: uppercase;
-}
-
-.resource-tag-group {
     /* Contain the last row's margin instead of collapsing it between groups. */
     display: flow-root;
     position: relative;
     padding: 0;
 }
 
-.resource-tag-group + .resource-tag-group {
+.resource-pane-group + .resource-pane-group {
     margin-top: var(--resource-group-boundary-gap);
 }
 
-.resource-tag-group > .resource-row:last-child {
-    margin-bottom: 0;
-}
-
-.resource-pane-list > .resource-row:has(+ .resource-pane-section-header) {
+.resource-pane-group > .resource-row:last-child {
     margin-bottom: 0;
 }
 
@@ -534,15 +463,6 @@
     position: relative;
     margin-bottom: var(--resource-group-header-gap);
     border-radius: var(--aspire-radius-medium);
-}
-
-.resource-tag-header:hover {
-    background: light-dark(var(--colorNeutralBackground1Hover), color-mix(in srgb, var(--aspire-control-background) 88%, var(--colorNeutralForeground1)));
-}
-
-.resource-tag-header.selected {
-    background: var(--aspire-control-background);
-    box-shadow: 0 1px 2px rgba(0, 0, 0, .08);
 }
 
 .resource-tag-header.selected::before {
@@ -578,7 +498,6 @@
 }
 
 .resource-tag-name {
-    flex: 1 1 auto;
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -603,15 +522,8 @@
 }
 
 .resource-tag-actions {
-    display: grid;
-    place-items: center;
     flex: 0 0 auto;
     margin-inline-end: 4px;
-}
-
-.resource-tag-actions > .resource-tag-count,
-.resource-tag-actions ::deep .aspire-menu-button {
-    grid-area: 1 / 1;
 }
 
 .resource-tag-actions ::deep .resource-tag-action,
@@ -623,26 +535,11 @@
 }
 
 @media (hover: hover) {
-    /* Opacity keeps the menu button in the tab order while the count occupies the same slot. */
+    /* Opacity keeps the menu button in the tab order without moving the chevron on hover. */
     .resource-tag-header:not(:hover, :has(:focus-visible, .resource-tag-action[aria-expanded="true"])) .resource-tag-actions ::deep .aspire-menu-button {
         opacity: 0;
         pointer-events: none;
     }
-
-    .resource-tag-header:is(:hover, :has(:focus-visible, .resource-tag-action[aria-expanded="true"])) .resource-tag-actions > .resource-tag-count {
-        visibility: hidden;
-    }
-}
-
-@media (hover: none) {
-    .resource-tag-actions > .resource-tag-count {
-        visibility: hidden;
-    }
-}
-
-/* Rows of a group are indented under its header so the grouping reads at a glance. */
-.resource-tag-group .resource-row-link {
-    padding-inline-start: calc(var(--resource-row-icon-offset) + 8px);
 }
 
 .resource-tags-empty {
@@ -697,11 +594,12 @@
     --resource-row-kind-accent: var(--colorPaletteBlueForeground2);
 }
 
-.resource-row.selected {
+:is(.resource-row, .resource-tag-header).selected {
     background: var(--colorNeutralBackground1);
 }
 
-.resource-row:hover {
+:is(.resource-row, .resource-tag-header):hover,
+:is(.resource-row, .resource-tag-header).selected:hover {
     background: var(--colorNeutralBackground3);
 }
 
@@ -725,7 +623,7 @@
 /* The full-page list draws a hairline between rows, in the 1px gap that separates them, so a wide row is easy to follow
    from its name to its URLs and actions. It uses the lightest stroke and stops before a section header, which has its
    own spacing. The sidebar's rows are short enough not to need it. */
-.resource-row.resource-row-table:not(:last-child, :has(+ .resource-pane-section-header))::after {
+.resource-row.resource-row-table:not(:last-child)::after {
     content: "";
     position: absolute;
     left: 0;
@@ -734,10 +632,6 @@
     height: 1px;
     background: var(--colorNeutralStroke3);
     pointer-events: none;
-}
-
-.resource-row.selected:hover {
-    background: var(--colorNeutralBackground3);
 }
 
 .resource-row:active {
