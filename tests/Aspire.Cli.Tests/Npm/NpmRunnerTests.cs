@@ -171,7 +171,7 @@ public class NpmRunnerTests
             using var pathExtensionsOverride = OperatingSystem.IsWindows() ? new EnvVarOverride("PATHEXT", ".CMD") : null;
             using var argumentsPathOverride = new EnvVarOverride("NPM_ARGS_FILE", argumentsPath);
             using var profilingTelemetry = new ProfilingTelemetry(new ConfigurationBuilder().Build());
-            var runner = new NpmRunner(new TestEnvironment(), NullLogger<NpmRunner>.Instance, profilingTelemetry);
+            var runner = new NpmRunner(new TestEnvironment(), new Aspire.Shared.TemporaryStorage(), NullLogger<NpmRunner>.Instance, profilingTelemetry);
             var tarballPath = Path.Combine(tempDirectory.FullName, "playwright-%PATH%! cli.tgz");
 
             var result = await runner.InstallGlobalAsync(tarballPath, TestContext.Current.CancellationToken);

@@ -58,6 +58,10 @@ internal partial class ChildProcess : IChildProcess
         {
             throw new ArgumentException("A detached process cannot belong to its launcher's owned tree.", nameof(options));
         }
+        if (options.Lifetime == ChildProcessLifetime.OwnedTree && options.CompletionPath is null && options.TemporaryStorage is null)
+        {
+            throw new ArgumentException($"An owned tree requires either {nameof(ChildProcessOptions.CompletionPath)} or {nameof(ChildProcessOptions.TemporaryStorage)}.", nameof(options));
+        }
         _isSupervisor = options.Lifetime == ChildProcessLifetime.OwnedTree ||
             startInfo.Environment.ContainsKey(ProcessSupervisor.CommandVariable);
         _lastActivityTimestamp = options.TimeProvider.GetTimestamp();
@@ -124,7 +128,7 @@ internal partial class ChildProcess : IChildProcess
                 _completionPath = _options.CompletionPath;
                 if (_completionPath is null)
                 {
-                    _completionDirectory = Aspire.Shared.TemporaryStorage.CreateTempSubdirectory("aspire-process-completion-");
+                    _completionDirectory = _options.TemporaryStorage!.CreateTempSubdirectory("aspire-process-completion-");
                     _completionPath = Path.Combine(_completionDirectory.FullName, "exit-code");
                 }
                 startInfo = _options.CreateSupervisorStartInfo(_startInfo, _completionPath, _options.TerminationTimeout);

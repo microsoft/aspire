@@ -7,6 +7,7 @@ using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Radius.Publishing;
 using Aspire.Hosting.Radius.ResourceMapping;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Radius;
 
@@ -80,7 +81,10 @@ public sealed class RadiusEnvironmentResource : Resource, IComputeEnvironmentRes
             {
                 Name = $"verify-radius-control-plane-{Name}",
                 Description = $"Verifies the Radius control plane version for {Name}.",
-                Action = stepContext => RadiusDeploymentPipelineStep.VerifyControlPlaneVersionAsync(stepContext.Logger, stepContext.CancellationToken),
+                Action = stepContext => RadiusDeploymentPipelineStep.VerifyControlPlaneVersionAsync(
+                    stepContext.Logger,
+                    stepContext.Services.GetRequiredService<IFileSystemService>().TempDirectory,
+                    stepContext.CancellationToken),
                 DependsOnSteps = [WellKnownPipelineSteps.DeployPrereq],
                 RequiredBySteps = [applySealedSecretsStep.Name, deployStep.Name],
             };

@@ -1,5 +1,5 @@
 # Production temporary storage APIs must go through the shared helper or Hosting's filesystem service.
-M:System.IO.Path.GetTempPath; Use Aspire.Shared.TemporaryStorage or IFileSystemService.TempDirectory.
-M:System.IO.Path.GetTempPath(System.Boolean); Use Aspire.Shared.TemporaryStorage or IFileSystemService.TempDirectory.
-M:System.IO.Path.GetTempFileName; Use Aspire.Shared.TemporaryStorage or IFileSystemService.TempDirectory.
-M:System.IO.Directory.CreateTempSubdirectory(System.String); Use Aspire.Shared.TemporaryStorage or IFileSystemService.TempDirectory.
+M:System.IO.Path.GetTempPath; Use an injected Aspire.Shared.ITemporaryStorage or IFileSystemService.TempDirectory.
+M:System.IO.Path.GetTempPath(System.Boolean); Use an injected Aspire.Shared.ITemporaryStorage or IFileSystemService.TempDirectory.
+M:System.IO.Path.GetTempFileName; Use an injected Aspire.Shared.ITemporaryStorage or IFileSystemService.TempDirectory.
+M:System.IO.Directory.CreateTempSubdirectory(System.String); Use an injected Aspire.Shared.ITemporaryStorage or IFileSystemService.TempDirectory.

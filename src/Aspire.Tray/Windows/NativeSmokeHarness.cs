@@ -15,7 +15,7 @@ namespace Aspire.Tray;
 internal sealed class NativeSmokeHarness
 {
     private readonly SmokeClient _client = new();
-    private readonly DirectoryInfo _directory = Aspire.Shared.TemporaryStorage.CreateTempSubdirectory("aspire-tray-smoke-");
+    private readonly DirectoryInfo _directory = new Aspire.Shared.TemporaryStorage().CreateTempSubdirectory("aspire-tray-smoke-");
     private readonly MemoryTraySavedStateStore _store = new();
     private readonly SmokeStartupSettings _startupSettings = new();
     private readonly bool _interactiveSmoke;

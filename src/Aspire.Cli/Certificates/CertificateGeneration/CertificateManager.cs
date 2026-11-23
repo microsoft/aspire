@@ -49,15 +49,22 @@ internal abstract class CertificateManager
     private const string LocalhostHttpsDnsName = "localhost";
     internal const string LocalhostHttpsDistinguishedName = "CN=" + LocalhostHttpsDnsName;
 
-    public static CertificateManager Create(ILogger logger, IEnvironment environment, CertificateConfiguration.NssDbOverride? nssDbOverride) => environment.IsWindows() ?
+    public static CertificateManager Create(ILogger logger, IEnvironment environment, ITemporaryStorage temporaryStorage, CertificateConfiguration.NssDbOverride? nssDbOverride) => environment.IsWindows() ?
 #pragma warning disable CA1416 // Validate platform compatibility
-            new WindowsCertificateManager(logger) :
+            new WindowsCertificateManager(logger, temporaryStorage) :
 #pragma warning restore CA1416 // Validate platform compatibility
             environment.IsMacOS() ?
-            new MacOSCertificateManager(logger) as CertificateManager :
-            new UnixCertificateManager(logger, environment, nssDbOverride);
+            new MacOSCertificateManager(logger, temporaryStorage) as CertificateManager :
+            new UnixCertificateManager(logger, environment, temporaryStorage, nssDbOverride);
 
     protected CertificateManagerLogger Log { get; }
+
+    // The subject/version constructors exist only for tests that never write certificates to disk, so they
+    // leave this unset rather than silently allocating from a default location.
+    private readonly ITemporaryStorage? _temporaryStorage;
+
+    protected ITemporaryStorage TemporaryStorage => _temporaryStorage
+        ?? throw new InvalidOperationException($"{GetType().Name} was constructed without temporary storage.");
 
     // Setting to 0 means we don't append the version byte,
     // which is what all machines currently have.
@@ -91,19 +98,20 @@ internal abstract class CertificateManager
 
     public string Subject { get; }
 
-    public CertificateManager(ILogger logger) : this(logger, LocalhostHttpsDistinguishedName, CurrentAspNetCoreCertificateVersion, CurrentMinimumAspNetCoreCertificateVersion)
+    public CertificateManager(ILogger logger, ITemporaryStorage temporaryStorage) : this(logger, LocalhostHttpsDistinguishedName, CurrentAspNetCoreCertificateVersion, CurrentMinimumAspNetCoreCertificateVersion, temporaryStorage)
     {
     }
 
     // For testing purposes only
     internal CertificateManager(string subject, int version)
-        : this(NullLogger.Instance, subject, version, version)
+        : this(NullLogger.Instance, subject, version, version, temporaryStorage: null)
     {
     }
 
     // For testing purposes only
-    internal CertificateManager(ILogger logger, string subject, int generatedVersion, int minimumVersion)
+    internal CertificateManager(ILogger logger, string subject, int generatedVersion, int minimumVersion, ITemporaryStorage? temporaryStorage)
     {
+        _temporaryStorage = temporaryStorage;
         Log = new CertificateManagerLogger(logger);
         Subject = subject;
         AspNetHttpsCertificateVersion = generatedVersion;
@@ -739,7 +747,7 @@ internal abstract class CertificateManager
             // Create a temp file with the correct Unix file mode before moving it to the expected path.
             if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
-                var tempFilename = Aspire.Shared.TemporaryStorage.GetTempFileName();
+                var tempFilename = TemporaryStorage.GetTempFileName();
                 File.Move(tempFilename, path, overwrite: true);
             }
 
@@ -767,7 +775,7 @@ internal abstract class CertificateManager
                 // Create a temp file with the correct Unix file mode before moving it to the expected path.
                 if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
                 {
-                    var tempFilename = Aspire.Shared.TemporaryStorage.GetTempFileName();
+                    var tempFilename = TemporaryStorage.GetTempFileName();
                     File.Move(tempFilename, keyPath, overwrite: true);
                 }
 

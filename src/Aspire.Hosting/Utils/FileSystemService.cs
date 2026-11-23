@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Concurrent;
+using Aspire.Shared;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
@@ -13,15 +14,19 @@ namespace Aspire.Hosting;
 internal sealed class FileSystemService : IFileSystemService, IDisposable
 {
     private readonly TempFileSystemService _tempDirectory;
+    private readonly ITemporaryStorage _temporaryStorage;
     private ILogger? _logger;
     private readonly bool _preserveTempFiles;
 
     // Track allocated temp files and directories as disposable objects using path as key
     private readonly ConcurrentDictionary<string, IDisposable> _allocatedItems = new();
 
-    public FileSystemService(IConfiguration configuration)
+    public FileSystemService(IConfiguration configuration, ITemporaryStorage temporaryStorage)
     {
         ArgumentNullException.ThrowIfNull(configuration);
+        ArgumentNullException.ThrowIfNull(temporaryStorage);
+
+        _temporaryStorage = temporaryStorage;
 
         // Check configuration to preserve temp files for debugging
         _preserveTempFiles = configuration["ASPIRE_PRESERVE_TEMP_FILES"] is not null;
@@ -53,6 +58,8 @@ internal sealed class FileSystemService : IFileSystemService, IDisposable
     /// Gets the logger for this service, if set.
     /// </summary>
     internal ILogger? Logger => _logger;
+
+    internal ITemporaryStorage TemporaryStorage => _temporaryStorage;
 
     private bool _disposed;
     private readonly object _disposeLock = new();
@@ -137,7 +144,7 @@ internal sealed class FileSystemService : IFileSystemService, IDisposable
         /// <inheritdoc/>
         public TempDirectory CreateTempSubdirectory(string? prefix = null)
         {
-            var path = Aspire.Shared.TemporaryStorage.CreateTempSubdirectory(prefix ?? "aspire").FullName;
+            var path = _parent.TemporaryStorage.CreateTempSubdirectory(prefix ?? "aspire").FullName;
             var tempDir = new DefaultTempDirectory(path, _parent);
             _parent.TrackItem(path, tempDir);
             return tempDir;
@@ -148,14 +155,14 @@ internal sealed class FileSystemService : IFileSystemService, IDisposable
         {
             if (fileName is null)
             {
-                var tempFile = Aspire.Shared.TemporaryStorage.GetTempFileName();
+                var tempFile = _parent.TemporaryStorage.GetTempFileName();
                 var file = new DefaultTempFile(tempFile, deleteParentDirectory: false, _parent);
                 _parent.TrackItem(tempFile, file);
                 return file;
             }
 
             // Create a temp subdirectory and place the named file inside it
-            var tempDir = Aspire.Shared.TemporaryStorage.CreateTempSubdirectory("aspire").FullName;
+            var tempDir = _parent.TemporaryStorage.CreateTempSubdirectory("aspire").FullName;
             var filePath = Path.Combine(tempDir, fileName);
             File.Create(filePath).Dispose();
             var tempFileObj = new DefaultTempFile(filePath, deleteParentDirectory: true, _parent);

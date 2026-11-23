@@ -348,7 +348,7 @@ public sealed class ProcessTestFixture : IAsyncLifetime
             case "owner":
                 await using (var guardian = new ChildProcess(
                     Command("tree", args[1]),
-                    NullLogger.Instance, new ChildProcessOptions { Lifetime = ChildProcessLifetime.OwnedTree }, OperatingSystem.IsWindows()))
+                    NullLogger.Instance, new ChildProcessOptions { Lifetime = ChildProcessLifetime.OwnedTree, TemporaryStorage = new TemporaryStorage() }, OperatingSystem.IsWindows()))
                 {
                     await guardian.StartAsync(CancellationToken.None);
                     await using var scope = new ProcessScope(guardian, NullLogger.Instance, "test owner");

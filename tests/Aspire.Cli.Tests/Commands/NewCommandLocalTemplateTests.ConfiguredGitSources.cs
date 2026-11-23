@@ -517,7 +517,7 @@ public partial class NewCommandLocalTemplateTests
         var git = new TestGitCommandRunner();
         var services = CreateServices(workspace, interaction, interactive: true);
         services.AddSingleton<IProcessExecutionFactory>(
-            new ProcessExecutionFactory(new HostEnvironment(), NullLogger<ProcessExecutionFactory>.Instance));
+            new ProcessExecutionFactory(new HostEnvironment(), new Aspire.Shared.TemporaryStorage(), NullLogger<ProcessExecutionFactory>.Instance));
         services.AddSingleton<IGitCommandRunner>(git);
         using var provider = services.BuildServiceProvider();
         var realGit = ActivatorUtilities.CreateInstance<GitCommandRunner>(provider);

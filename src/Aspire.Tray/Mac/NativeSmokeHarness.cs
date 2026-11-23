@@ -28,7 +28,7 @@ internal sealed class NativeSmokeHarness
     };
     private readonly CancellationTokenSource _shutdown = new();
     private readonly TrayController _controller;
-    private readonly DirectoryInfo _directory = Aspire.Shared.TemporaryStorage.CreateTempSubdirectory("aspire-tray-smoke-");
+    private readonly DirectoryInfo _directory = new Aspire.Shared.TemporaryStorage().CreateTempSubdirectory("aspire-tray-smoke-");
     private readonly AppHostInfo _savedHost;
     private MacTrayApplication _application = null!;
     private TrayController? _discovery;

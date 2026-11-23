@@ -14,6 +14,7 @@ using Aspire.Cli.Projects;
 using Aspire.Cli.Secrets;
 using Aspire.Cli.Utils;
 using Aspire.Cli.Utils.Markdown;
+using Aspire.Shared;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -89,17 +90,20 @@ internal sealed class RenderCommand : BaseCommand
     private readonly IAnsiConsole _ansiConsole;
     private readonly ICliHostEnvironment _hostEnvironment;
     private readonly IServiceProvider _serviceProvider;
+    private readonly ITemporaryStorage _temporaryStorage;
 
     public RenderCommand(
         IAnsiConsole ansiConsole,
         ICliHostEnvironment hostEnvironment,
         IServiceProvider serviceProvider,
+        ITemporaryStorage temporaryStorage,
         CommonCommandServices services)
         : base("render", "Smoke test CLI rendering", services)
     {
         _ansiConsole = ansiConsole;
         _hostEnvironment = hostEnvironment;
         _serviceProvider = serviceProvider;
+        _temporaryStorage = temporaryStorage;
 
         Options.Add(s_scenarioOption);
         Options.Add(s_consoleWidthOption);
@@ -442,7 +446,7 @@ internal sealed class RenderCommand : BaseCommand
 
     private async Task<int> TestLinksAsync(CancellationToken cancellationToken)
     {
-        var tempDirectory = Aspire.Shared.TemporaryStorage.CreateTempSubdirectory("aspire-render-links-");
+        var tempDirectory = _temporaryStorage.CreateTempSubdirectory("aspire-render-links-");
         var filePath = Path.Combine(tempDirectory.FullName, "safe file link sample.txt");
         await File.WriteAllTextAsync(filePath, "This file is used to smoke test SafeFileLink rendering.", cancellationToken).ConfigureAwait(false);
         InteractionService.DisplaySubtleMessage($"Temporary file created at {filePath}", allowMarkup: false);

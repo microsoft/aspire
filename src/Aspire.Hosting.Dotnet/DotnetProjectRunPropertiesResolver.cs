@@ -20,6 +20,7 @@ internal delegate Task<DotnetProjectRunProperties> DotnetProjectRunPropertiesRes
     string? buildConfiguration,
     IReadOnlyDictionary<string, string> buildEnvironment,
     string workingDirectory,
+    ITempFileSystemService temporaryFileSystem,
     ILogger logger,
     CancellationToken cancellationToken);
 
@@ -30,149 +31,143 @@ internal static class DotnetProjectRunPropertiesResolver
         string? buildConfiguration,
         IReadOnlyDictionary<string, string> buildEnvironment,
         string workingDirectory,
+        ITempFileSystemService temporaryFileSystem,
         ILogger logger,
         CancellationToken cancellationToken)
     {
         using var responseFile = await DotnetProjectBuildEnvironment.CreateResponseFileAsync(
             buildEnvironment,
-            logger,
+            temporaryFileSystem,
             cancellationToken).ConfigureAwait(false);
-        var resultDirectory = Aspire.Shared.TemporaryStorage.CreateTempSubdirectory("aspire-msbuild-result-");
-        var resultOutputPath = Path.Combine(resultDirectory.FullName, "run-properties.json");
+        using var resultDirectory = temporaryFileSystem.CreateTempSubdirectory("aspire-msbuild-result-");
+        var resultOutputPath = Path.Combine(resultDirectory.Path, "run-properties.json");
+
+        var startInfo = new ProcessStartInfo("dotnet")
+        {
+            WorkingDirectory = workingDirectory,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+        };
+        startInfo.ArgumentList.Add("msbuild");
+        startInfo.ArgumentList.Add(projectPath);
+        startInfo.ArgumentList.Add("-nologo");
+        startInfo.ArgumentList.Add("-target:ComputeRunArguments");
+        startInfo.ArgumentList.Add("-getProperty:RunCommand,RunArguments,RunWorkingDirectory,TargetPath,UseAppHost");
+        startInfo.ArgumentList.Add($"-getResultOutputFile:{resultOutputPath}");
+        startInfo.ArgumentList.Add("-v:q");
+        if (!string.IsNullOrEmpty(buildConfiguration))
+        {
+            startInfo.ArgumentList.Add($"-property:Configuration={buildConfiguration}");
+        }
+
+        foreach (var (name, value) in buildEnvironment)
+        {
+            startInfo.Environment[name] = value;
+        }
+        if (responseFile is not null)
+        {
+            startInfo.ArgumentList.Add(responseFile.Argument);
+        }
+        startInfo.ArgumentList.Add("-property:GenerateFullPaths=true");
+
+        using var process = new Process { StartInfo = startInfo };
+        try
+        {
+            process.Start();
+        }
+        catch (Exception ex) when (ex is Win32Exception or InvalidOperationException)
+        {
+            throw new DistributedApplicationException(
+                $"Failed to start dotnet to resolve the run command for project '{projectPath}'.",
+                ex);
+        }
+
+        // Read both streams concurrently to avoid deadlock when a pipe buffer fills.
+        var standardOutputTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
+        var standardErrorTask = process.StandardError.ReadToEndAsync(cancellationToken);
+        try
+        {
+            await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            try
+            {
+                if (!process.HasExited)
+                {
+                    process.Kill(entireProcessTree: true);
+                }
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or Win32Exception)
+            {
+                // The process can exit between HasExited and Kill, and termination itself can fail. Neither cleanup
+                // outcome should replace the cancellation that caused this path.
+            }
+
+            await ((Task)Task.WhenAll(standardOutputTask, standardErrorTask))
+                .ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
+            throw;
+        }
+
+        var standardOutput = await standardOutputTask.ConfigureAwait(false);
+        var standardError = await standardErrorTask.ConfigureAwait(false);
+        if (process.ExitCode != 0)
+        {
+            logger.LogDebug(
+                "dotnet msbuild failed while resolving the run command for project {ProjectPath}. Standard output: {StandardOutput} Standard error: {StandardError}",
+                projectPath,
+                standardOutput,
+                standardError);
+            throw new DistributedApplicationException(
+                $"dotnet msbuild failed with exit code {process.ExitCode} while resolving the run command for project '{projectPath}'.");
+        }
 
         try
         {
-            var startInfo = new ProcessStartInfo("dotnet")
-            {
-                WorkingDirectory = workingDirectory,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-            };
-            startInfo.ArgumentList.Add("msbuild");
-            startInfo.ArgumentList.Add(projectPath);
-            startInfo.ArgumentList.Add("-nologo");
-            startInfo.ArgumentList.Add("-target:ComputeRunArguments");
-            startInfo.ArgumentList.Add("-getProperty:RunCommand,RunArguments,RunWorkingDirectory,TargetPath,UseAppHost");
-            startInfo.ArgumentList.Add($"-getResultOutputFile:{resultOutputPath}");
-            startInfo.ArgumentList.Add("-v:q");
-            if (!string.IsNullOrEmpty(buildConfiguration))
-            {
-                startInfo.ArgumentList.Add($"-property:Configuration={buildConfiguration}");
-            }
-
-            foreach (var (name, value) in buildEnvironment)
-            {
-                startInfo.Environment[name] = value;
-            }
-            if (responseFile is not null)
-            {
-                startInfo.ArgumentList.Add(responseFile.Argument);
-            }
-            startInfo.ArgumentList.Add("-property:GenerateFullPaths=true");
-
-            using var process = new Process { StartInfo = startInfo };
-            try
-            {
-                process.Start();
-            }
-            catch (Exception ex) when (ex is Win32Exception or InvalidOperationException)
+            // Multiple -getProperty values produce:
+            //   { "Properties": { "RunCommand": "...", "RunArguments": "...", "RunWorkingDirectory": "...",
+            //                     "TargetPath": "/repo/bin/Release/net10.0/Api.dll", "UseAppHost": "true" } }
+            // Keep the machine-readable result separate so SDK diagnostics on stdout cannot corrupt it.
+            var resultOutput = await File.ReadAllTextAsync(resultOutputPath, cancellationToken).ConfigureAwait(false);
+            using var document = JsonDocument.Parse(resultOutput);
+            var properties = document.RootElement.GetProperty("Properties");
+            var command = properties.GetProperty("RunCommand").GetString();
+            var arguments = properties.GetProperty("RunArguments").GetString() ?? string.Empty;
+            var runWorkingDirectory = properties.GetProperty("RunWorkingDirectory").GetString();
+            var targetPath = properties.GetProperty("TargetPath").GetString();
+            var useAppHost = properties.GetProperty("UseAppHost").GetString();
+            var normalizedCommand = command?.Trim().Trim('"');
+            var normalizedWorkingDirectory = string.IsNullOrEmpty(runWorkingDirectory)
+                ? null
+                : Path.GetFullPath(runWorkingDirectory, Path.GetDirectoryName(Path.GetFullPath(projectPath))!);
+            if (string.IsNullOrWhiteSpace(normalizedCommand))
             {
                 throw new DistributedApplicationException(
-                    $"Failed to start dotnet to resolve the run command for project '{projectPath}'.",
-                    ex);
+                    $"dotnet msbuild returned an empty run command for project '{projectPath}'.");
             }
 
-            // Read both streams concurrently to avoid deadlock when a pipe buffer fills.
-            var standardOutputTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
-            var standardErrorTask = process.StandardError.ReadToEndAsync(cancellationToken);
-            try
-            {
-                await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-            {
-                try
-                {
-                    if (!process.HasExited)
-                    {
-                        process.Kill(entireProcessTree: true);
-                    }
-                }
-                catch (Exception ex) when (ex is InvalidOperationException or Win32Exception)
-                {
-                    // The process can exit between HasExited and Kill, and termination itself can fail. Neither cleanup
-                    // outcome should replace the cancellation that caused this path.
-                }
-
-                await ((Task)Task.WhenAll(standardOutputTask, standardErrorTask))
-                    .ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
-                throw;
-            }
-
-            var standardOutput = await standardOutputTask.ConfigureAwait(false);
-            var standardError = await standardErrorTask.ConfigureAwait(false);
-            if (process.ExitCode != 0)
-            {
-                logger.LogDebug(
-                    "dotnet msbuild failed while resolving the run command for project {ProjectPath}. Standard output: {StandardOutput} Standard error: {StandardError}",
-                    projectPath,
-                    standardOutput,
-                    standardError);
-                throw new DistributedApplicationException(
-                    $"dotnet msbuild failed with exit code {process.ExitCode} while resolving the run command for project '{projectPath}'.");
-            }
-
-            try
-            {
-                // Multiple -getProperty values produce:
-                //   { "Properties": { "RunCommand": "...", "RunArguments": "...", "RunWorkingDirectory": "...",
-                //                     "TargetPath": "/repo/bin/Release/net10.0/Api.dll", "UseAppHost": "true" } }
-                // Keep the machine-readable result separate so SDK diagnostics on stdout cannot corrupt it.
-                var resultOutput = await File.ReadAllTextAsync(resultOutputPath, cancellationToken).ConfigureAwait(false);
-                using var document = JsonDocument.Parse(resultOutput);
-                var properties = document.RootElement.GetProperty("Properties");
-                var command = properties.GetProperty("RunCommand").GetString();
-                var arguments = properties.GetProperty("RunArguments").GetString() ?? string.Empty;
-                var runWorkingDirectory = properties.GetProperty("RunWorkingDirectory").GetString();
-                var targetPath = properties.GetProperty("TargetPath").GetString();
-                var useAppHost = properties.GetProperty("UseAppHost").GetString();
-                var normalizedCommand = command?.Trim().Trim('"');
-                var normalizedWorkingDirectory = string.IsNullOrEmpty(runWorkingDirectory)
-                    ? null
-                    : Path.GetFullPath(runWorkingDirectory, Path.GetDirectoryName(Path.GetFullPath(projectPath))!);
-                if (string.IsNullOrWhiteSpace(normalizedCommand))
-                {
-                    throw new DistributedApplicationException(
-                        $"dotnet msbuild returned an empty run command for project '{projectPath}'.");
-                }
-
-                if (string.IsNullOrWhiteSpace(targetPath))
-                {
-                    throw new DistributedApplicationException(
-                        $"dotnet msbuild returned an empty target path for project '{projectPath}'.");
-                }
-
-                var normalizedTargetPath = Path.GetFullPath(
-                    targetPath.Trim(),
-                    Path.GetDirectoryName(Path.GetFullPath(projectPath))!);
-                return new(
-                    normalizedCommand,
-                    arguments,
-                    normalizedWorkingDirectory,
-                    normalizedTargetPath,
-                    string.Equals(useAppHost, bool.TrueString, StringComparison.OrdinalIgnoreCase));
-            }
-            catch (Exception ex) when (ex is ArgumentException or JsonException or InvalidOperationException or KeyNotFoundException or IOException or UnauthorizedAccessException)
+            if (string.IsNullOrWhiteSpace(targetPath))
             {
                 throw new DistributedApplicationException(
-                    $"dotnet msbuild returned an invalid run-command response for project '{projectPath}'.",
-                    ex);
+                    $"dotnet msbuild returned an empty target path for project '{projectPath}'.");
             }
+
+            var normalizedTargetPath = Path.GetFullPath(
+                targetPath.Trim(),
+                Path.GetDirectoryName(Path.GetFullPath(projectPath))!);
+            return new(
+                normalizedCommand,
+                arguments,
+                normalizedWorkingDirectory,
+                normalizedTargetPath,
+                string.Equals(useAppHost, bool.TrueString, StringComparison.OrdinalIgnoreCase));
         }
-        finally
+        catch (Exception ex) when (ex is ArgumentException or JsonException or InvalidOperationException or KeyNotFoundException or IOException or UnauthorizedAccessException)
         {
-            DotnetProjectBuildEnvironment.TryDeleteDirectory(resultDirectory, logger);
+            throw new DistributedApplicationException(
+                $"dotnet msbuild returned an invalid run-command response for project '{projectPath}'.",
+                ex);
         }
     }
 }

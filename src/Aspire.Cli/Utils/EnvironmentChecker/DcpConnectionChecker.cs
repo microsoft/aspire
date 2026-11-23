@@ -25,6 +25,7 @@ internal sealed class DcpConnectionChecker(
     IProcessExecutionFactory processExecutionFactory,
     CliExecutionContext executionContext,
     IEnvironment environment,
+    ITemporaryStorage temporaryStorage,
     ILogger<DcpConnectionChecker> logger) : IDcpConnectionChecker
 {
     private static readonly TimeSpan s_connectionTimeout = TimeSpan.FromSeconds(20);
@@ -44,6 +45,7 @@ internal sealed class DcpConnectionChecker(
                 processExecutionFactory,
                 executionContext,
                 environment,
+                temporaryStorage,
                 logger,
                 timeoutCts.Token).ConfigureAwait(false);
 
@@ -222,10 +224,11 @@ internal sealed class DcpConnectionChecker(
             IProcessExecutionFactory processExecutionFactory,
             CliExecutionContext executionContext,
             IEnvironment environment,
+            ITemporaryStorage temporaryStorage,
             ILogger logger,
             CancellationToken cancellationToken)
         {
-            var sessionDirectory = Aspire.Shared.TemporaryStorage.CreateTempSubdirectory("aspire-dcp-doctor-").FullName;
+            var sessionDirectory = temporaryStorage.CreateTempSubdirectory("aspire-dcp-doctor-").FullName;
             var kubeconfigPath = Path.Combine(sessionDirectory, "kubeconfig");
             var dcpExecutablePath = BundleDiscovery.GetDcpExecutablePath(dcpDirectory);
             var output = new OutputCollector();

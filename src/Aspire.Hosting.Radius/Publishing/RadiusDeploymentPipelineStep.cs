@@ -10,6 +10,7 @@ using System.Text.Json.Nodes;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Utils;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.Radius.Publishing;
@@ -130,10 +131,10 @@ internal sealed class RadiusDeploymentPipelineStep
     /// See https://github.com/radius-project/radius/blob/main/pkg/kubeutil/config.go.
     /// </para>
     /// </remarks>
-    internal static async Task VerifyControlPlaneVersionAsync(ILogger logger, CancellationToken cancellationToken)
+    internal static async Task VerifyControlPlaneVersionAsync(ILogger logger, ITempFileSystemService temporaryFileSystem, CancellationToken cancellationToken)
     {
         var kubeContext = await RadiusWorkspaceKubeContext.TryResolveAsync(RunAsync, cancellationToken).ConfigureAwait(false);
-        await VerifyControlPlaneVersionAsync(logger, kubeContext, RunAsync, cancellationToken).ConfigureAwait(false);
+        await VerifyControlPlaneVersionAsync(logger, temporaryFileSystem, kubeContext, RunAsync, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -146,6 +147,7 @@ internal sealed class RadiusDeploymentPipelineStep
     /// </summary>
     internal static async Task VerifyControlPlaneVersionAsync(
         ILogger logger,
+        ITempFileSystemService temporaryFileSystem,
         string? kubeContext,
         RadiusCommandRunner runCommand,
         CancellationToken cancellationToken)
@@ -159,14 +161,14 @@ internal sealed class RadiusDeploymentPipelineStep
 
         // Created with restrictive permissions because the minified kubeconfig written into it can
         // carry client certificates or tokens for the target cluster.
-        var kubeConfigHome = Aspire.Shared.TemporaryStorage.CreateTempSubdirectory("aspire-radius-kubeconfig");
+        var kubeConfigHome = temporaryFileSystem.CreateTempSubdirectory("aspire-radius-kubeconfig");
 
         try
         {
             // Laid out as a real home directory (<home>/.kube/config) rather than an arbitrary
             // path, because the isolation works by redirecting HOME: the parts of `rad` that ignore
             // KUBECONFIG resolve exactly this location.
-            var kubeConfigPath = Path.Combine(kubeConfigHome.FullName, ".kube", "config");
+            var kubeConfigPath = Path.Combine(kubeConfigHome.Path, ".kube", "config");
             Directory.CreateDirectory(Path.GetDirectoryName(kubeConfigPath)!);
 
             // --flatten inlines file-backed credentials (client certificates, keys, token files)
@@ -194,7 +196,7 @@ internal sealed class RadiusDeploymentPipelineStep
                 "rad",
                 ["version", "--output", "json"],
                 environment: BuildIsolatedKubeConfigEnvironment(
-                    kubeConfigHome.FullName,
+                    kubeConfigHome.Path,
                     Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
                     Environment.GetEnvironmentVariable),
                 cancellationToken).ConfigureAwait(false);
@@ -225,14 +227,9 @@ internal sealed class RadiusDeploymentPipelineStep
         }
         finally
         {
-            try
-            {
-                kubeConfigHome.Delete(recursive: true);
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-                // Best effort: a leaked temp kubeconfig must never fail an otherwise valid deploy.
-            }
+            // Best effort: disposal swallows cleanup failures, so a leaked temp kubeconfig never
+            // fails an otherwise valid deploy.
+            kubeConfigHome.Dispose();
         }
     }
 
@@ -544,7 +541,10 @@ internal sealed class RadiusDeploymentPipelineStep
             // temporary ARM JSON parameters file. This supplies the `@secure()` Bicep params
             // emitted by publish without inlining secrets into the artifact or exposing them on the
             // `rad` command line. Written inside the try so the finally always deletes it.
-            parametersFilePath = await WriteDeployParametersFileAsync(logger, cancellationToken).ConfigureAwait(false);
+            parametersFilePath = await WriteDeployParametersFileAsync(
+                context.Services.GetRequiredService<IFileSystemService>().TempDirectory,
+                logger,
+                cancellationToken).ConfigureAwait(false);
 
             var stderrBuilder = new System.Text.StringBuilder();
 
@@ -654,7 +654,7 @@ internal sealed class RadiusDeploymentPipelineStep
     // them to an owner-only temporary ARM JSON parameters file. Returns the file path, or null when
     // there are no parameters to supply. The caller is responsible for deleting the file. Internal so
     // tests can exercise the real file contract (ARM JSON shape + owner-only permissions).
-    internal async Task<string?> WriteDeployParametersFileAsync(ILogger logger, CancellationToken cancellationToken)
+    internal async Task<string?> WriteDeployParametersFileAsync(ITempFileSystemService temporaryFileSystem, ILogger logger, CancellationToken cancellationToken)
     {
         if (!_environment.TryGetAnnotationsOfType<RadiusDeployParametersAnnotation>(out var annotations))
         {
@@ -693,8 +693,9 @@ internal sealed class RadiusDeploymentPipelineStep
         };
 
         // CreateTempSubdirectory creates the directory with owner-only permissions (0700) on Unix.
-        var directory = Aspire.Shared.TemporaryStorage.CreateTempSubdirectory("radius-deploy-");
-        var filePath = Path.Combine(directory.FullName, "parameters.json");
+        // The parameters file is returned by path and deleted by DeleteDeployParametersFile.
+        var directory = temporaryFileSystem.CreateTempSubdirectory("radius-deploy-");
+        var filePath = Path.Combine(directory.Path, "parameters.json");
         try
         {
             await File.WriteAllTextAsync(

@@ -7,6 +7,7 @@ using Aspire.Cli.Agents.ClaudeCode;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Npm;
 using Aspire.Cli.Resources;
+using Aspire.Shared;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Semver;
@@ -49,6 +50,7 @@ internal sealed class PlaywrightCliInstaller(
     IPlaywrightCliRunner playwrightCliRunner,
     IInteractionService interactionService,
     IConfiguration configuration,
+    ITemporaryStorage temporaryStorage,
     ILogger<PlaywrightCliInstaller> logger)
 {
     /// <summary>
@@ -89,7 +91,7 @@ internal sealed class PlaywrightCliInstaller(
     {
         // The upstream generator chooses its own output directories. Generate in isolation,
         // then copy only to destinations belonging to the selected agents and scope.
-        var stagingDirectory = Aspire.Shared.TemporaryStorage.CreateTempSubdirectory("aspire-playwright-skills-");
+        var stagingDirectory = temporaryStorage.CreateTempSubdirectory("aspire-playwright-skills-");
         try
         {
             return await InstallAsync(stagingDirectory.FullName, selectedSkillDirectories, cancellationToken);
@@ -211,7 +213,7 @@ internal sealed class PlaywrightCliInstaller(
         }
 
         // Step 3: Download the tarball via npm pack.
-        var tempDir = Aspire.Shared.TemporaryStorage.CreateTempSubdirectory("aspire-playwright-").FullName;
+        var tempDir = temporaryStorage.CreateTempSubdirectory("aspire-playwright-").FullName;
 
         try
         {

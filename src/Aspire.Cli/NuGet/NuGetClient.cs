@@ -10,6 +10,7 @@ using Aspire.Cli.Packaging;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
+using Aspire.Shared;
 using Microsoft.Extensions.Logging;
 using NuGet.Commands;
 using NuGet.Configuration;
@@ -141,6 +142,7 @@ internal sealed class NuGetOperationException(string output)
 internal sealed class NuGetClient(
     IFeatures features,
     IEnvironment environment,
+    ITemporaryStorage temporaryStorage,
     ILogger<NuGetClient> logger) : INuGetClient
 {
     private const string RuntimeIdentifierGraphResourceName = "Aspire.Cli.RuntimeIdentifierGraph.json";
@@ -263,7 +265,7 @@ internal sealed class NuGetClient(
                 MachineWideSettings = machineWideSettings,
             };
 
-            NativeAotNuGetTrustStore.Initialize(output, _diagnosticLogger, environment);
+            NativeAotNuGetTrustStore.Initialize(output, _diagnosticLogger, environment, temporaryStorage);
 
             var results = await RestoreRunner.RunAsync(restoreArgs, cancellationToken).ConfigureAwait(false);
             var summary = results.Count > 0 ? results[0] : null;
@@ -1473,7 +1475,7 @@ internal sealed class NuGetClient(
         private static readonly object s_lock = new();
         private static bool s_initialized;
 
-        public static void Initialize(NuGetOperationOutput output, INuGetLogger diagnosticLogger, IEnvironment environment)
+        public static void Initialize(NuGetOperationOutput output, INuGetLogger diagnosticLogger, IEnvironment environment, ITemporaryStorage temporaryStorage)
         {
             if (s_initialized ||
                 !environment.IsLinux() ||
@@ -1493,7 +1495,7 @@ internal sealed class NuGetClient(
 
                 try
                 {
-                    InitializeFromEmbeddedResources(diagnosticLogger);
+                    InitializeFromEmbeddedResources(diagnosticLogger, temporaryStorage);
                     s_initialized = true;
                 }
                 catch (Exception ex)
@@ -1505,10 +1507,10 @@ internal sealed class NuGetClient(
             }
         }
 
-        private static void InitializeFromEmbeddedResources(INuGetLogger diagnosticLogger)
+        private static void InitializeFromEmbeddedResources(INuGetLogger diagnosticLogger, ITemporaryStorage temporaryStorage)
         {
             var previousSdkRoot = AppContext.GetData("Microsoft.DotNet.Sdk.Root");
-            var rootDirectory = Aspire.Shared.TemporaryStorage.CreateTempSubdirectory("aspire-nuget-trust-");
+            var rootDirectory = temporaryStorage.CreateTempSubdirectory("aspire-nuget-trust-");
             try
             {
                 var trustedRootsDirectory = Directory.CreateDirectory(

@@ -31,7 +31,6 @@
     <Compile Include="$(SharedDir)EndpointPropertyInputCache.cs" LinkBase="Shared" />
     <Compile Include="$(SharedDir)EnvironmentVariableNameEncoder.cs" LinkBase="Shared" />
     <Compile Include="$(SharedDir)Model\KnownRelationshipTypes.cs" LinkBase="Shared" />
-    <Compile Include="$(SharedDir)TemporaryStorage.cs" Link="Shared/TemporaryStorage.cs" />
   </ItemGroup>
 
   <ItemGroup>

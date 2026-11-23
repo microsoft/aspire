@@ -99,8 +99,8 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
     private readonly object _runStateLock = new();
     private bool _metadataPublished;
 
-    public DashboardRunStore(IOptions<DashboardOptions> options, ILogger<DashboardRunStore> logger, TimeProvider timeProvider)
-        : this(options, logger, timeProvider, static directory => Directory.Delete(directory, recursive: true))
+    public DashboardRunStore(IOptions<DashboardOptions> options, ILogger<DashboardRunStore> logger, TimeProvider timeProvider, ITemporaryStorage temporaryStorage)
+        : this(options, logger, timeProvider, temporaryStorage, static directory => Directory.Delete(directory, recursive: true))
     {
     }
 
@@ -108,6 +108,7 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
         IOptions<DashboardOptions> options,
         ILogger<DashboardRunStore> logger,
         TimeProvider timeProvider,
+        ITemporaryStorage temporaryStorage,
         Action<string> deleteRunDirectory)
     {
         _logger = logger;
@@ -127,7 +128,7 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
             case DashboardPersistenceMode.None:
                 // CreateTempSubdirectory uses owner-only permissions (0700) on Unix and inherits the
                 // current user's temporary directory ACL on Windows.
-                _temporaryDirectory = Aspire.Shared.TemporaryStorage.CreateTempSubdirectory(TemporaryDirectoryPrefix).FullName;
+                _temporaryDirectory = temporaryStorage.CreateTempSubdirectory(TemporaryDirectoryPrefix).FullName;
                 CurrentWorkingDirectory = _temporaryDirectory;
                 DatabasePath = Path.Combine(CurrentWorkingDirectory, DatabaseFileName);
                 _runLock = OpenRunLock(CurrentWorkingDirectory);

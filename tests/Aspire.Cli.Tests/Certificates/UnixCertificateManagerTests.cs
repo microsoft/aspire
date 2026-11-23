@@ -222,6 +222,7 @@ public class UnixCertificateManagerTests
             var manager = new UnixCertificateManager(
                 logger,
                 environment,
+                new Aspire.Shared.TemporaryStorage(),
                 CertificateConfiguration.ResolveNssDbOverride(configuration));
 
             var nssDbs = manager.GetNssDbs(homeDirectory.FullName);
@@ -260,6 +261,7 @@ public class UnixCertificateManagerTests
             var manager = new UnixCertificateManager(
                 logger,
                 environment,
+                new Aspire.Shared.TemporaryStorage(),
                 CertificateConfiguration.ResolveNssDbOverride(configuration));
 
             var nssDbs = manager.GetNssDbs(homeDirectory.FullName);
@@ -420,7 +422,7 @@ public class UnixCertificateManagerTests
                 ["SSL_CERT_DIR"] = tempDirectory.FullName,
                 ["DOTNET_DEV_CERTS_NSSDB_PATHS"] = nssDbDirectory.FullName
             });
-            var manager = new UnixCertificateManager(NullLogger.Instance, environment, nssDbOverride: null, startInfo =>
+            var manager = new UnixCertificateManager(NullLogger.Instance, environment, new Aspire.Shared.TemporaryStorage(), nssDbOverride: null, startInfo =>
             {
                 startInfo.FileName = certUtilFile.FullName;
             });
@@ -466,7 +468,7 @@ public class UnixCertificateManagerTests
                 ["SSL_CERT_DIR"] = tempDirectory.FullName,
                 ["DOTNET_DEV_CERTS_NSSDB_PATHS"] = nssDbDirectory.FullName
             });
-            var manager = new UnixCertificateManager(NullLogger.Instance, environment, nssDbOverride: null, startInfo =>
+            var manager = new UnixCertificateManager(NullLogger.Instance, environment, new Aspire.Shared.TemporaryStorage(), nssDbOverride: null, startInfo =>
             {
                 startInfo.FileName = certUtilFile.FullName;
             });
@@ -500,7 +502,7 @@ public class UnixCertificateManagerTests
                 ["SSL_CERT_DIR"] = openSslDirectory.FullName,
                 ["DOTNET_DEV_CERTS_NSSDB_PATHS"] = Path.Combine(openSslDirectory.FullName, "missing-nss-db")
             });
-            var manager = new UnixCertificateManager(NullLogger.Instance, environment, nssDbOverride: null);
+            var manager = new UnixCertificateManager(NullLogger.Instance, environment, nssDbOverride: null, temporaryStorage: new Aspire.Shared.TemporaryStorage());
             using var certificate = manager.CreateAspNetCoreHttpsDevelopmentCertificate(
                 DateTimeOffset.UtcNow.AddDays(-1),
                 DateTimeOffset.UtcNow.AddDays(365));
@@ -535,7 +537,7 @@ public class UnixCertificateManagerTests
                 ["SSL_CERT_DIR"] = string.Join(Path.PathSeparator, corruptOpenSslDirectory.FullName, validOpenSslDirectory.FullName),
                 ["DOTNET_DEV_CERTS_NSSDB_PATHS"] = Path.Combine(corruptOpenSslDirectory.FullName, "missing-nss-db")
             });
-            var manager = new UnixCertificateManager(logger, environment, nssDbOverride: null);
+            var manager = new UnixCertificateManager(logger, environment, nssDbOverride: null, temporaryStorage: new Aspire.Shared.TemporaryStorage());
             using var certificate = manager.CreateAspNetCoreHttpsDevelopmentCertificate(
                 DateTimeOffset.UtcNow.AddDays(-1),
                 DateTimeOffset.UtcNow.AddDays(365));
@@ -570,7 +572,7 @@ public class UnixCertificateManagerTests
                 ["DOTNET_DEV_CERTS_NSSDB_PATHS"] = Path.Combine(openSslDirectory.FullName, "missing-nss-db"),
                 [CertificateHelpers.DevCertsOpenSslCertDirEnvVar] = openSslDirectory.FullName
             });
-            var manager = new UnixCertificateManager(NullLogger.Instance, environment, nssDbOverride: null);
+            var manager = new UnixCertificateManager(NullLogger.Instance, environment, nssDbOverride: null, temporaryStorage: new Aspire.Shared.TemporaryStorage());
             using var certificate = manager.CreateAspNetCoreHttpsDevelopmentCertificate(
                 DateTimeOffset.UtcNow.AddDays(-1),
                 DateTimeOffset.UtcNow.AddDays(365));
@@ -605,7 +607,7 @@ public class UnixCertificateManagerTests
                 ["DOTNET_DEV_CERTS_NSSDB_PATHS"] = nssDbDirectory.FullName,
                 [CertificateHelpers.DevCertsOpenSslCertDirEnvVar] = openSslDirectory.FullName
             });
-            var manager = new UnixCertificateManager(NullLogger.Instance, environment, nssDbOverride: null);
+            var manager = new UnixCertificateManager(NullLogger.Instance, environment, nssDbOverride: null, temporaryStorage: new Aspire.Shared.TemporaryStorage());
             using var certificate = manager.CreateAspNetCoreHttpsDevelopmentCertificate(
                 DateTimeOffset.UtcNow.AddDays(-1),
                 DateTimeOffset.UtcNow.AddDays(365));
@@ -680,7 +682,7 @@ public class UnixCertificateManagerTests
             .Build();
         var nssDbOverride = CertificateConfiguration.ResolveNssDbOverride(configuration);
 
-        return new UnixCertificateManager(NullLogger.Instance, environment, nssDbOverride);
+        return new UnixCertificateManager(NullLogger.Instance, environment, new Aspire.Shared.TemporaryStorage(), nssDbOverride);
     }
 
     private static string CreateDirectory(DirectoryInfo homeDirectory, params string[] pathSegments)

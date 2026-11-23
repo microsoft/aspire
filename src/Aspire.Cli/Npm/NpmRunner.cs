@@ -4,6 +4,7 @@
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using Aspire.Cli.Telemetry;
+using Aspire.Shared;
 using Microsoft.Extensions.Logging;
 using Microsoft.Win32.SafeHandles;
 using Semver;
@@ -13,7 +14,7 @@ namespace Aspire.Cli.Npm;
 /// <summary>
 /// Runs npm CLI commands for package management operations.
 /// </summary>
-internal sealed class NpmRunner(IEnvironment environment, ILogger<NpmRunner> logger, ProfilingTelemetry profilingTelemetry) : INpmRunner
+internal sealed class NpmRunner(IEnvironment environment, ITemporaryStorage temporaryStorage, ILogger<NpmRunner> logger, ProfilingTelemetry profilingTelemetry) : INpmRunner
 {
     /// <summary>
     /// The canonical public npm registry URL. Commands that resolve, pack, or install
@@ -180,9 +181,9 @@ internal sealed class NpmRunner(IEnvironment environment, ILogger<NpmRunner> log
         return npmPath;
     }
 
-    private static string CreateIsolatedTempDirectory()
+    private string CreateIsolatedTempDirectory()
     {
-        return Aspire.Shared.TemporaryStorage.CreateTempSubdirectory("aspire-npm-").FullName;
+        return temporaryStorage.CreateTempSubdirectory("aspire-npm-").FullName;
     }
 
     private void CleanupTempDirectory(string tempDir)
