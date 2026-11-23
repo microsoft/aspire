@@ -252,6 +252,11 @@
         <target state="translated">Wird ausgeführt</target>
         <note />
       </trans-unit>
+      <trans-unit id="HomeSingleRequestCount">
+        <source>{0} request</source>
+        <target state="new">{0} request</target>
+        <note>{0} is the request count, which is one.</note>
+      </trans-unit>
       <trans-unit id="HomeSlowestEndpoints">
         <source>Slowest endpoints</source>
         <target state="translated">Langsamste Endpunkte</target>

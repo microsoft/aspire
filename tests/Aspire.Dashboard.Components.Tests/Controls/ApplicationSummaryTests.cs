@@ -1,14 +1,18 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
 using System.Threading.Channels;
+using System.Web;
 using Aspire.Dashboard.Components.Controls;
 using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Configuration;
+using Aspire.Dashboard.Extensions;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.BrowserStorage;
+using Aspire.Dashboard.Model.Otlp;
 using Aspire.Dashboard.Model.ResourceGraph;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
@@ -204,7 +208,79 @@ public class ApplicationSummaryTests : DashboardTestContext
             Assert.Equal(loc[nameof(ResourceStrings.HomeActivityBucketTooltip),
                 FormatHelpers.FormatTimeWithOptionalDate(Services.GetRequiredService<BrowserTimeProvider>(), bucketStart), "1", "1"],
                 cut.Find(".home-chart-bar").GetAttribute("data-tooltip"));
+            Assert.Equal(loc[nameof(ResourceStrings.HomeSingleRequestCount), "1"], cut.Find(".home-chart-max").TextContent);
         });
+    }
+
+    [Theory]
+    [InlineData(1, null)]
+    [InlineData(5, new[] { "api-TestId" })]
+    [InlineData(5, new[] { "api-TestId", "broken" })]
+    public async Task Render_ActivityColumns_LinkToSelectedInterval(int requestCount, string[]? resourceNames)
+    {
+        var bucketStart = new DateTime(2020, 1, 15, 12, 0, 0, DateTimeKind.Utc);
+        var bucketEnd = bucketStart + ApplicationSummary.s_activityBucketSize;
+        var times = Enumerable.Range(0, requestCount).Select(i => bucketStart.AddSeconds(i))
+            .Prepend(bucketStart.AddMilliseconds(-1)).Append(bucketEnd);
+        var cut = await RenderRecordingSummaryAsync(writer => writer.AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource("api"),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            times.Select((time, i) => CreateSpan($"trace-{i}", $"span-{i}", time, time.AddMilliseconds(5),
+                                kind: Span.Types.SpanKind.Server,
+                                status: new Status { Code = i == 1 ? Status.Types.StatusCode.Error : Status.Types.StatusCode.Ok }))
+                        }
+                    }
+                }
+            }
+        }));
+        await cut.InvokeAsync(() => cut.Render(builder => builder.Add(p => p.ResourceNames, resourceNames)));
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal(requestCount == 1 ? "1 request" : "5 requests", cut.Find(".home-chart-max").TextContent);
+            Assert.Equal(3, cut.FindAll(".home-chart-bar").Count);
+        });
+        var column = cut.FindAll(".home-chart-bar")[1];
+        Assert.Equal("a", column.LocalName);
+        Assert.Equal(column.GetAttribute("data-tooltip"), column.GetAttribute("aria-label"));
+        Assert.Equal("group", cut.Find(".home-chart-svg").GetAttribute("role"));
+
+        var uri = new Uri(new Uri("http://localhost"), column.GetAttribute("href"));
+        Assert.Equal("/traces", uri.AbsolutePath);
+        var query = HttpUtility.ParseQueryString(uri.Query);
+        Assert.Equal(resourceNames, query.GetValues(DashboardUrls.ResourceSelectionQueryName));
+        var filters = TelemetryFilterFormatter.DeserializeFiltersFromString(query["filters"]!);
+        Assert.Collection(filters,
+            filter =>
+            {
+                Assert.Equal(KnownTraceFields.TimestampField, filter.Field);
+                Assert.Equal(FilterCondition.GreaterThanOrEqual, filter.Condition);
+                Assert.Equal(bucketStart.ToString("O", CultureInfo.InvariantCulture), filter.Value);
+            },
+            filter =>
+            {
+                Assert.Equal(KnownTraceFields.TimestampField, filter.Field);
+                Assert.Equal(FilterCondition.LessThan, filter.Condition);
+                Assert.Equal(bucketEnd.ToString("O", CultureInfo.InvariantCulture), filter.Value);
+            });
+
+        var result = await Services.GetRequiredService<DashboardDataSource>().TelemetryRepository.GetTraceSummariesAsync(new GetTracesRequest
+        {
+            ResourceKeys = [],
+            StartIndex = 0,
+            Count = 100,
+            Filters = [.. filters]
+        }, CancellationToken.None);
+        Assert.Equal(requestCount, result.PagedResult.TotalItemCount);
     }
 
     [Fact]

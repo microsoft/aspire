@@ -511,6 +511,15 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to {0} request.
+        /// </summary>
+        public static string HomeSingleRequestCount {
+            get {
+                return ResourceManager.GetString("HomeSingleRequestCount", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Slowest endpoints.
         /// </summary>
         public static string HomeSlowestEndpoints {

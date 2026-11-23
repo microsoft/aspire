@@ -298,7 +298,7 @@
                 </div>
 
                 <div class="home-chart">
-                    <svg class="home-chart-svg" viewBox="0 0 @Svg(ChartWidth) @Svg(ChartHeight)" preserveAspectRatio="none" role="img" aria-label="@Loc[nameof(Dashboard.Resources.Resources.HomeActivityChartLabel)]">
+                    <svg class="home-chart-svg" viewBox="0 0 @Svg(ChartWidth) @Svg(ChartHeight)" preserveAspectRatio="none" role="group" aria-label="@Loc[nameof(Dashboard.Resources.Resources.HomeActivityChartLabel)]">
                         <line class="home-chart-grid" x1="0" x2="@Svg(ChartWidth)" y1="8" y2="8" />
                         <line class="home-chart-grid" x1="0" x2="@Svg(ChartWidth)" y1="54" y2="54" />
                         <line class="home-chart-baseline" x1="0" x2="@Svg(ChartWidth)" y1="@Svg(ChartHeight)" y2="@Svg(ChartHeight)" />
@@ -317,19 +317,20 @@
                                 var okHeight = ok * 92.0 / max;
                                 var errorHeight = errors * 92.0 / max;
                                 var bucketStart = activity.WindowStart + (s_activityBucketSize * i);
-                                <g class="home-chart-bar @(i == ActivityBucketCount - 1 ? "current" : null)" data-tooltip="@Loc[nameof(Dashboard.Resources.Resources.HomeActivityBucketTooltip), FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, bucketStart), FormatCount(ok + errors), FormatCount(errors)]">
+                                var tooltip = Loc[nameof(Dashboard.Resources.Resources.HomeActivityBucketTooltip), FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, bucketStart), FormatCount(ok + errors), FormatCount(errors)];
+                                <a class="home-chart-bar @(i == ActivityBucketCount - 1 ? "current" : null)" href="@GetActivityBucketTracesUrl(bucketStart)" aria-label="@tooltip" data-tooltip="@tooltip">
                                     <rect class="ok" x="@Svg(x)" y="@Svg(ChartHeight - okHeight)" width="@Svg(barWidth)" height="@Svg(okHeight)" />
                                     @if (errors > 0)
                                     {
                                         <rect class="error" x="@Svg(x)" y="@Svg(ChartHeight - okHeight - errorHeight)" width="@Svg(barWidth)" height="@Svg(errorHeight)" />
                                     }
-                                </g>
+                                </a>
                             }
                         }
                     </svg>
                     @if (activity is not null && max > 0)
                     {
-                        <span class="home-chart-max">@FormatCount(max)</span>
+                        <span class="home-chart-max">@Loc[max == 1 ? nameof(Dashboard.Resources.Resources.HomeSingleRequestCount) : nameof(Dashboard.Resources.Resources.HomeRequestCount), FormatCount(max)]</span>
                     }
                     else
                     {

@@ -153,6 +153,19 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
 
     private bool ShowsMovingActivityWindow => ViewPreferences.GroupOverview == GroupOverview.Summary && !TelemetryRepository.IsReadOnly;
 
+    private string GetActivityBucketTracesUrl(DateTime bucketStart)
+    {
+        List<FieldTelemetryFilter> filters =
+        [
+            new() { Field = KnownTraceFields.TimestampField, Condition = FilterCondition.GreaterThanOrEqual, Value = bucketStart.ToString("O", CultureInfo.InvariantCulture) },
+            new() { Field = KnownTraceFields.TimestampField, Condition = FilterCondition.LessThan, Value = (bucketStart + s_activityBucketSize).ToString("O", CultureInfo.InvariantCulture) }
+        ];
+
+        return DashboardUrls.AddResourceSelection(
+            DashboardUrls.TracesUrl(filters: TelemetryFilterFormatter.SerializeFiltersToString(filters)),
+            _scopedResourceNames ?? []);
+    }
+
     protected override async Task OnInitializedAsync()
     {
         ViewPreferences.Changed += OnViewPreferencesChanged;
