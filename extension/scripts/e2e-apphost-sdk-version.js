@@ -24,7 +24,22 @@ function resolveAppHostSdkVersion(versionResult, getAvailablePackageVersions, ge
   return { version: getFallbackVersion(), usedLocalVersion: false };
 }
 
-function createBrowserDebuggerAppHostProject(appHostSdkVersion) {
+// A package that sets SuppressFinalPackageVersion keeps its prerelease suffix when release branding
+// stabilizes the others, so the same build produces, for example:
+//   Aspire.Hosting.AppHost.17.0.1.nupkg
+//   Aspire.Hosting.Blazor.17.0.1-ci.nupkg
+// Pinning such a package to the AppHost version fails restore with NU1103, so prefer the exact
+// version and otherwise use the locally built prerelease of the same major.minor.patch.
+function selectCompanionPackageVersion(appHostSdkVersion, availablePackageVersions) {
+  if (availablePackageVersions.includes(appHostSdkVersion)) {
+    return appHostSdkVersion;
+  }
+
+  const versionPrefix = appHostSdkVersion.split('-')[0];
+  return availablePackageVersions.find(version => version.split('-')[0] === versionPrefix) ?? appHostSdkVersion;
+}
+
+function createBrowserDebuggerAppHostProject(appHostSdkVersion, blazorPackageVersion) {
   return `<Project Sdk="Aspire.AppHost.Sdk/${appHostSdkVersion}">
 
   <PropertyGroup>
@@ -40,7 +55,7 @@ function createBrowserDebuggerAppHostProject(appHostSdkVersion) {
     <ProjectReference Include="../HostedGlobal/HostedGlobal.Client/HostedGlobal.Client.csproj" />
     <ProjectReference Include="../HostedPerPage/HostedPerPage/HostedPerPage.csproj" />
     <ProjectReference Include="../HostedPerPage/HostedPerPage.Client/HostedPerPage.Client.csproj" />
-    <PackageReference Include="Aspire.Hosting.Blazor" Version="${appHostSdkVersion}" />
+    <PackageReference Include="Aspire.Hosting.Blazor" Version="${blazorPackageVersion}" />
     <PackageReference Include="Aspire.Hosting.Dotnet" Version="${appHostSdkVersion}" />
   </ItemGroup>
 
@@ -48,4 +63,4 @@ function createBrowserDebuggerAppHostProject(appHostSdkVersion) {
 `;
 }
 
-module.exports = { createBrowserDebuggerAppHostProject, resolveAppHostSdkVersion };
+module.exports = { createBrowserDebuggerAppHostProject, resolveAppHostSdkVersion, selectCompanionPackageVersion };

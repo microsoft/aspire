@@ -10,7 +10,7 @@ import { error as webDriverError, WebDriver } from 'selenium-webdriver';
 import { blazorWasmDebugProofResponseAllowanceMs, blazorWasmDebugProofTimeoutMs, getBlazorWasmDebugProofCleanupTimeoutMs, getBlazorWasmDebugProofControlTimeoutMs } from '../testing/blazorWasmDebugProofTimeouts';
 
 const { createBrowserDebuggerAppHostProject } = require(path.resolve(__dirname, '..', '..', 'scripts', 'e2e-apphost-sdk-version.js')) as {
-    createBrowserDebuggerAppHostProject(appHostSdkVersion: string): string;
+    createBrowserDebuggerAppHostProject(appHostSdkVersion: string, blazorPackageVersion: string): string;
 };
 
 function removeDirectorySafely(directory: string): void {
@@ -789,7 +789,7 @@ suite('E2E launch profile', () => {
         const globalJson = JSON.parse(fs.readFileSync(path.join(extensionRoot, '..', 'global.json'), 'utf8'));
         const repositoryTargetFramework = `net${globalJson.sdk.version.split('.')[0]}.0`;
         const appHostSdkVersion = '17.0.0-ci';
-        const appHostProject = createBrowserDebuggerAppHostProject(appHostSdkVersion);
+        const appHostProject = createBrowserDebuggerAppHostProject(appHostSdkVersion, appHostSdkVersion);
 
         assert.ok(runner.includes("const enableBrowserDebuggerE2E = shardName === 'browser-debugger';"));
         assert.ok(runner.includes(`const browserDebuggerTargetFramework = '${repositoryTargetFramework}';`));
@@ -1128,6 +1128,8 @@ writeAppHostProject('AppHost', '13.6.0-test', ${includeAzureFunctions}, ${includ
             workspaceRoot: '/app',
             csharpFileHeader: '',
             createBrowserDebuggerAppHostProject,
+            selectCompanionPackageVersion: (version: string) => version,
+            getAvailablePackageVersions: () => [],
             fs: {
                 mkdirSync: () => undefined,
                 readFileSync: (filePath: string) => files.get(filePath),

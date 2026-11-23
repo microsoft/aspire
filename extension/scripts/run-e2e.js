@@ -8,6 +8,7 @@ const { spawn, spawnSync } = require('child_process');
 const {
   createBrowserDebuggerAppHostProject,
   resolveAppHostSdkVersion: resolveAppHostSdkVersionFromResult,
+  selectCompanionPackageVersion,
 } = require('./e2e-apphost-sdk-version');
 const {
   ensureDownloadCache,
@@ -1737,7 +1738,11 @@ function writeBrowserDebuggerAppHostProject(projectName, resolvedAppHostSdkVersi
   fs.mkdirSync(projectDirectory, { recursive: true });
   // The standalone client still consumes generated Projects metadata. Keep that SDK and
   // the browser fixtures' project-reference graph for restore/build prewarming.
-  fs.writeFileSync(path.join(projectDirectory, `${projectName}.csproj`), createBrowserDebuggerAppHostProject(resolvedAppHostSdkVersion));
+  const blazorPackageVersion = selectCompanionPackageVersion(resolvedAppHostSdkVersion, getAvailablePackageVersions('Aspire.Hosting.Blazor'));
+  if (blazorPackageVersion !== resolvedAppHostSdkVersion) {
+    console.log(`Using local Aspire.Hosting.Blazor ${blazorPackageVersion} with Aspire.AppHost.Sdk ${resolvedAppHostSdkVersion} because Aspire.Hosting.Blazor is not stabilized with the other packages.`);
+  }
+  fs.writeFileSync(path.join(projectDirectory, `${projectName}.csproj`), createBrowserDebuggerAppHostProject(resolvedAppHostSdkVersion, blazorPackageVersion));
 
   fs.writeFileSync(path.join(projectDirectory, 'AppHost.cs'), `${csharpFileHeader}#pragma warning disable ASPIREBLAZOR001
 using Aspire.Hosting.ApplicationModel;

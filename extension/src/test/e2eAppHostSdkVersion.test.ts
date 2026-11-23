@@ -5,8 +5,10 @@ const extensionRoot = path.resolve(__dirname, '..', '..');
 const {
     createBrowserDebuggerAppHostProject,
     resolveAppHostSdkVersion,
+    selectCompanionPackageVersion,
 } = require(path.join(extensionRoot, 'scripts', 'e2e-apphost-sdk-version.js')) as {
-    createBrowserDebuggerAppHostProject(appHostSdkVersion: string): string;
+    createBrowserDebuggerAppHostProject(appHostSdkVersion: string, blazorPackageVersion: string): string;
+    selectCompanionPackageVersion(appHostSdkVersion: string, availablePackageVersions: string[]): string;
     resolveAppHostSdkVersion(versionResult: { status: number; stdout: string }, getAvailablePackageVersions: () => string[], getFallbackVersion: () => string, environment?: NodeJS.ProcessEnv): { version: string; usedLocalVersion: boolean };
 };
 
@@ -25,7 +27,7 @@ suite('E2E AppHost SDK version selection', () => {
 
     test('uses the local prerelease version throughout the browser debugger fixture when CI has a stable CLI', () => {
         const resolution = resolveAppHostSdkVersion({ status: 0, stdout: '17.0.0\n' }, () => ['17.0.0-ci'], () => 'fallback', { CI: 'true' });
-        const project = createBrowserDebuggerAppHostProject(resolution.version);
+        const project = createBrowserDebuggerAppHostProject(resolution.version, selectCompanionPackageVersion(resolution.version, ['17.0.0-ci']));
 
         assert.strictEqual(resolution.version, '17.0.0-ci');
         assert.strictEqual(resolution.usedLocalVersion, true);
@@ -44,5 +46,21 @@ suite('E2E AppHost SDK version selection', () => {
         const result = resolveAppHostSdkVersion({ status: 0, stdout: '17.0.0\n' }, () => ['17.0.0-ci'], () => 'fallback', { ASPIRE_EXTENSION_E2E_APPHOST_SDK_VERSION: '16.0.0' });
         assert.strictEqual(result.version, '16.0.0');
         assert.strictEqual(result.usedLocalVersion, false);
+    });
+
+    test('uses the local prerelease Blazor package when release branding stabilizes the AppHost SDK', () => {
+        const resolution = resolveAppHostSdkVersion({ status: 0, stdout: '17.0.1\n' }, () => ['17.0.1'], () => 'fallback', { ASPIRE_EXTENSION_E2E_APPHOST_SDK_VERSION: '17.0.1' });
+        const blazorPackageVersion = selectCompanionPackageVersion(resolution.version, ['17.0.1-ci', '17.0.0']);
+        const project = createBrowserDebuggerAppHostProject(resolution.version, blazorPackageVersion);
+
+        assert.strictEqual(blazorPackageVersion, '17.0.1-ci');
+        assert.match(project, /^<Project Sdk="Aspire\.AppHost\.Sdk\/17\.0\.1">/);
+        assert.match(project, /<PackageReference Include="Aspire\.Hosting\.Blazor" Version="17\.0\.1-ci" \/>/);
+        assert.match(project, /<PackageReference Include="Aspire\.Hosting\.Dotnet" Version="17\.0\.1" \/>/);
+    });
+
+    test('keeps the AppHost SDK version for companion packages built with the same version', () => {
+        assert.strictEqual(selectCompanionPackageVersion('17.1.0-preview.1', ['17.1.0-preview.1', '17.0.1']), '17.1.0-preview.1');
+        assert.strictEqual(selectCompanionPackageVersion('17.0.1', []), '17.0.1');
     });
 });
