@@ -11,10 +11,17 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Aspire.Hosting.Tests;
 
 [Trait("Partition", "5")]
-public class WithEndpointTests
+public class WithEndpointTests : WithEndpointTests<ProjectResource>
 {
-    // copied from /src/Shared/StringComparers.cs to avoid ambiguous reference since StringComparers exists internally in multiple Hosting assemblies.
-    private static StringComparison EndpointAnnotationName => StringComparison.OrdinalIgnoreCase;
+    protected override IResourceBuilder<ProjectResource> AddProject<TProject>(
+        IDistributedApplicationBuilder builder, string name)
+    {
+#pragma warning disable CS0618 // Exercise the legacy factory through the same consumer contracts as V2.
+        return builder.AddProject<TProject>(name);
+#pragma warning restore CS0618
+    }
+
+#pragma warning disable CS0618 // Retain project-specific legacy manifest contracts.
 
     [Fact]
     public void EndpointIsProxiedBinaryCompatibilityOverloadsExist()
@@ -157,23 +164,6 @@ public class WithEndpointTests
         Assert.True(endpoint.IsExplicitlyProxied);
     }
 
-    [Fact]
-    public void WithEndpointInvokesCallback()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create();
-
-        var projectA = builder.AddProject<ProjectA>("projecta")
-                              .WithEndpoint(3000, 1000, name: "mybinding")
-                              .WithEndpoint("mybinding", endpoint =>
-                              {
-                                  endpoint.Port = 2000;
-                              });
-
-        var endpoint = projectA.Resource.Annotations.OfType<EndpointAnnotation>()
-            .Where(e => string.Equals(e.Name, "mybinding", EndpointAnnotationName)).Single();
-        Assert.Equal(2000, endpoint.Port);
-    }
-
     private static MethodInfo? GetPublicStaticMethod(Type declaringType, string methodName, params Type[] parameterTypes)
     {
         return declaringType.GetMethods(BindingFlags.Public | BindingFlags.Static)
@@ -194,128 +184,6 @@ public class WithEndpointTests
         return parameterType.IsGenericType && parameterType.GetGenericTypeDefinition() == typeof(IResourceBuilder<>)
             ? typeof(IResourceBuilder<>)
             : parameterType;
-    }
-
-    [Fact]
-    public void WithEndpointMakesTargetPortEqualToPortIfProxyless()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create();
-
-        var projectA = builder.AddProject<ProjectA>("projecta")
-                              .WithEndpoint("mybinding", endpoint =>
-                              {
-                                  endpoint.Port = 2000;
-                                  endpoint.IsProxied = false;
-                              });
-
-        var endpoint = projectA.Resource.Annotations.OfType<EndpointAnnotation>()
-            .Where(e => string.Equals(e.Name, "mybinding", EndpointAnnotationName)).Single();
-
-        // It should fall back to the Port value since TargetPort was not set
-        Assert.Equal(2000, endpoint.TargetPort);
-
-        // In Proxy mode, the fallback should not happen
-        endpoint.IsProxied = true;
-        Assert.Null(endpoint.TargetPort);
-
-        // Back in proxy-less mode, it should fall back again
-        endpoint.IsProxied = false;
-        Assert.Equal(2000, endpoint.TargetPort);
-
-        // Setting it to null explicitly should disable the override mechanism
-        endpoint.TargetPort = null;
-        Assert.Null(endpoint.TargetPort);
-
-        // No fallback when setting TargetPort explicitly
-        endpoint.TargetPort = 2001;
-        Assert.Equal(2001, endpoint.TargetPort);
-    }
-
-    [Fact]
-    public void WithEndpointMakesPortEqualToTargetPortIfProxyless()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create();
-
-        var projectA = builder.AddProject<ProjectA>("projecta")
-                              .WithEndpoint("mybinding", endpoint =>
-                              {
-                                  endpoint.TargetPort = 2000;
-                                  endpoint.IsProxied = false;
-                              });
-
-        var endpoint = projectA.Resource.Annotations.OfType<EndpointAnnotation>()
-            .Where(e => string.Equals(e.Name, "mybinding", EndpointAnnotationName)).Single();
-
-        // It should fall back to the TargetPort value since Port was not set
-        Assert.Equal(2000, endpoint.Port);
-
-        // In Proxy mode, the fallback should not happen
-        endpoint.IsProxied = true;
-        Assert.Null(endpoint.Port);
-
-        // Back in proxy-less mode, it should fall back again
-        endpoint.IsProxied = false;
-        Assert.Equal(2000, endpoint.Port);
-
-        // Setting it to null explicitly should disable the override mechanism
-        endpoint.Port = null;
-        Assert.Null(endpoint.Port);
-
-        // No fallback when setting Port explicitly
-        endpoint.Port = 2001;
-        Assert.Equal(2001, endpoint.Port);
-    }
-
-    [Fact]
-    public void WithEndpointCallbackDoesNotRunIfEndpointDoesntExistAndCreateIfNotExistsIsFalse()
-    {
-        var executed = false;
-
-        using var builder = TestDistributedApplicationBuilder.Create();
-
-        var projectA = builder.AddProject<ProjectA>("projecta")
-                              .WithEndpoint("mybinding", endpoint =>
-                              {
-                                  executed = true;
-                              },
-                              createIfNotExists: false);
-
-        Assert.False(executed);
-        Assert.False(projectA.Resource.TryGetAnnotationsOfType<EndpointAnnotation>(out var annotations));
-    }
-
-    [Fact]
-    public void WithEndpointCallbackRunsIfEndpointDoesntExistAndCreateIfNotExistsIsDefault()
-    {
-        var executed = false;
-
-        using var builder = TestDistributedApplicationBuilder.Create();
-
-        var projectA = builder.AddProject<ProjectA>("projecta")
-                              .WithEndpoint("mybinding", endpoint =>
-                              {
-                                  executed = true;
-                              });
-
-        Assert.True(executed);
-        Assert.True(projectA.Resource.TryGetAnnotationsOfType<EndpointAnnotation>(out _));
-    }
-
-    [Fact]
-    public void WithEndpointCallbackRunsIfEndpointDoesntExistAndCreateIfNotExistsIsTrue()
-    {
-        var executed = false;
-
-        using var builder = TestDistributedApplicationBuilder.Create();
-
-        var projectA = builder.AddProject<ProjectA>("projecta").WithEndpoint("mybinding", endpoint =>
-        {
-            executed = true;
-        },
-        createIfNotExists: true);
-
-        Assert.True(executed);
-        Assert.True(projectA.Resource.TryGetAnnotationsOfType<EndpointAnnotation>(out _));
     }
 
     [Fact]
@@ -348,49 +216,6 @@ public class WithEndpointTests
         Assert.Equal("https", endpoint.UriScheme);
         Assert.Equal("http", endpoint.Transport);
         Assert.Equal(ProtocolType.Tcp, endpoint.Protocol);
-    }
-
-    [Fact]
-    public void EndpointsWithTwoPortsSameNameUpdatesExisting()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create();
-
-        builder.AddProject<ProjectA>("projecta")
-                .WithHttpsEndpoint(3000, 1000, name: "mybinding")
-                .WithHttpsEndpoint(3000, 2000, name: "mybinding");
-
-        var resource = Assert.Single(builder.Resources.OfType<ProjectResource>());
-        var endpoint = Assert.Single(resource.Annotations.OfType<EndpointAnnotation>(), e => e.Name == "mybinding");
-        Assert.Equal(3000, endpoint.Port);
-        Assert.Equal(2000, endpoint.TargetPort);
-    }
-
-    [Fact]
-    public void AddingTwoEndpointsWithDefaultNamesUpdatesExisting()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create();
-
-        builder.AddProject<ProjectA>("projecta")
-                .WithHttpsEndpoint(3000, 1000)
-                .WithHttpsEndpoint(3000, 2000);
-
-        var resource = Assert.Single(builder.Resources.OfType<ProjectResource>());
-        var endpoint = Assert.Single(resource.Annotations.OfType<EndpointAnnotation>(), e => e.Name == "https");
-        Assert.Equal(3000, endpoint.Port);
-        Assert.Equal(2000, endpoint.TargetPort);
-    }
-
-    [Fact]
-    public void EndpointsWithSinglePortSameNameUpdatesExisting()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create();
-        builder.AddProject<ProjectB>("projectb")
-               .WithHttpsEndpoint(1000, name: "mybinding")
-               .WithHttpsEndpoint(2000, name: "mybinding");
-
-        var resource = Assert.Single(builder.Resources.OfType<ProjectResource>());
-        var endpoint = Assert.Single(resource.Annotations.OfType<EndpointAnnotation>(), e => e.Name == "mybinding");
-        Assert.Equal(2000, endpoint.Port);
     }
 
     [Fact]
@@ -772,92 +597,6 @@ public class WithEndpointTests
     }
 
     [Fact]
-    public void WithEndpoint_WithAllArguments_ForwardsAllArguments()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create();
-
-        var projectA = builder.AddProject<ProjectA>("projecta")
-                              .WithEndpoint(123, 456, "scheme", "mybinding", "env", true, true);
-
-        var endpoint = projectA.Resource.Annotations.OfType<EndpointAnnotation>()
-            .Where(e => string.Equals(e.Name, "mybinding", EndpointAnnotationName)).Single();
-
-        Assert.Equal(123, endpoint.Port);
-        Assert.Equal(456, endpoint.TargetPort);
-        Assert.Equal("scheme", endpoint.UriScheme);
-        Assert.Equal("env", endpoint.TargetPortEnvironmentVariable);
-        Assert.True(endpoint.IsProxied);
-        Assert.True(endpoint.IsExternal);
-        Assert.Equal(System.Net.Sockets.ProtocolType.Tcp, endpoint.Protocol);
-    }
-
-    [Fact]
-    public async Task LocalhostTopLevelDomainSetsAnnotationValues()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create();
-
-        var tcs = new TaskCompletionSource();
-        var projectA = builder.AddProject<ProjectA>("projecta")
-            .WithHttpsEndpoint()
-            .WithEndpoint("https", e => e.TargetHost = "example.localhost", createIfNotExists: false)
-            .OnBeforeResourceStarted((_, _, _) =>
-            {
-                tcs.SetResult();
-                return Task.CompletedTask;
-            });
-
-        var app = await builder.BuildAsync();
-        await app.StartAsync();
-        await tcs.Task;
-
-        var urls = projectA.Resource.Annotations.OfType<ResourceUrlAnnotation>();
-        Assert.Collection(urls,
-            url => Assert.StartsWith("https://example.localhost:", url.Url),
-            url => Assert.StartsWith("https://localhost:", url.Url));
-
-        EndpointAnnotation endpoint = Assert.Single(projectA.Resource.Annotations.OfType<EndpointAnnotation>());
-        Assert.NotNull(endpoint.AllocatedEndpoint);
-        Assert.Equal(EndpointBindingMode.SingleAddress, endpoint.AllocatedEndpoint.BindingMode);
-        Assert.Equal("localhost", endpoint.AllocatedEndpoint.Address);
-
-        await app.StopAsync();
-    }
-
-    [Theory]
-    [InlineData("0.0.0.0", EndpointBindingMode.IPv4AnyAddresses)]
-    //[InlineData("::", EndpointBindingMode.IPv6AnyAddresses)] // Need to figure out a good way to check that Ipv6 binding is supported
-    public async Task TopLevelDomainSetsAnnotationValues(string host, EndpointBindingMode endpointBindingMode)
-    {
-        using var builder = TestDistributedApplicationBuilder.Create();
-
-        var tcs = new TaskCompletionSource();
-        var projectA = builder.AddProject<ProjectA>("projecta")
-            .WithHttpsEndpoint()
-            .WithEndpoint("https", e => e.TargetHost = host, createIfNotExists: false)
-            .OnBeforeResourceStarted((_, _, _) =>
-            {
-                tcs.SetResult();
-                return Task.CompletedTask;
-            });
-
-        var app = await builder.BuildAsync();
-        await app.StartAsync();
-        await tcs.Task;
-
-        var urls = projectA.Resource.Annotations.OfType<ResourceUrlAnnotation>();
-        Assert.Collection(urls,
-            url => Assert.StartsWith("https://localhost:", url.Url),
-            url => Assert.StartsWith($"https://{Environment.MachineName}:", url.Url));
-
-        EndpointAnnotation endpoint = Assert.Single(projectA.Resource.Annotations.OfType<EndpointAnnotation>());
-        Assert.NotNull(endpoint.AllocatedEndpoint);
-        Assert.Equal(endpointBindingMode, endpoint.AllocatedEndpoint.BindingMode);
-        Assert.Equal("localhost", endpoint.AllocatedEndpoint.Address);
-
-        await app.StopAsync();
-    }
-
-    [Fact]
     public async Task VerifyManifestProjectWithExplicitPortAndNoLaunchProfile()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
@@ -1092,6 +831,286 @@ public class WithEndpointTests
         var resource = Assert.Single(builder.Resources.OfType<ContainerResource>());
         var endpoint = Assert.Single(resource.Annotations.OfType<EndpointAnnotation>(), e => e.Name == "http");
         Assert.True(endpoint.IsExternal);
+    }
+
+#pragma warning restore CS0618
+}
+
+public abstract class WithEndpointTests<TResource>
+    where TResource : class, IResourceWithEnvironment, IResourceWithServiceDiscovery
+{
+    protected abstract IResourceBuilder<TResource> AddProject<TProject>(
+        IDistributedApplicationBuilder builder, string name)
+        where TProject : IProjectMetadata, new();
+
+    protected static StringComparison EndpointAnnotationName => StringComparison.OrdinalIgnoreCase;
+
+    [Fact]
+    public void WithEndpointInvokesCallback()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var projectA = AddProject<ProjectA>(builder, "projecta")
+                              .WithEndpoint(3000, 1000, name: "mybinding")
+                              .WithEndpoint("mybinding", endpoint =>
+                              {
+                                  endpoint.Port = 2000;
+                              });
+
+        var endpoint = projectA.Resource.Annotations.OfType<EndpointAnnotation>()
+            .Where(e => string.Equals(e.Name, "mybinding", EndpointAnnotationName)).Single();
+        Assert.Equal(2000, endpoint.Port);
+    }
+
+    [Fact]
+    public void WithEndpointMakesTargetPortEqualToPortIfProxyless()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var projectA = AddProject<ProjectA>(builder, "projecta")
+                              .WithEndpoint("mybinding", endpoint =>
+                              {
+                                  endpoint.Port = 2000;
+                                  endpoint.IsProxied = false;
+                              });
+
+        var endpoint = projectA.Resource.Annotations.OfType<EndpointAnnotation>()
+            .Where(e => string.Equals(e.Name, "mybinding", EndpointAnnotationName)).Single();
+
+        // It should fall back to the Port value since TargetPort was not set
+        Assert.Equal(2000, endpoint.TargetPort);
+
+        // In Proxy mode, the fallback should not happen
+        endpoint.IsProxied = true;
+        Assert.Null(endpoint.TargetPort);
+
+        // Back in proxy-less mode, it should fall back again
+        endpoint.IsProxied = false;
+        Assert.Equal(2000, endpoint.TargetPort);
+
+        // Setting it to null explicitly should disable the override mechanism
+        endpoint.TargetPort = null;
+        Assert.Null(endpoint.TargetPort);
+
+        // No fallback when setting TargetPort explicitly
+        endpoint.TargetPort = 2001;
+        Assert.Equal(2001, endpoint.TargetPort);
+    }
+
+    [Fact]
+    public void WithEndpointMakesPortEqualToTargetPortIfProxyless()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var projectA = AddProject<ProjectA>(builder, "projecta")
+                              .WithEndpoint("mybinding", endpoint =>
+                              {
+                                  endpoint.TargetPort = 2000;
+                                  endpoint.IsProxied = false;
+                              });
+
+        var endpoint = projectA.Resource.Annotations.OfType<EndpointAnnotation>()
+            .Where(e => string.Equals(e.Name, "mybinding", EndpointAnnotationName)).Single();
+
+        // It should fall back to the TargetPort value since Port was not set
+        Assert.Equal(2000, endpoint.Port);
+
+        // In Proxy mode, the fallback should not happen
+        endpoint.IsProxied = true;
+        Assert.Null(endpoint.Port);
+
+        // Back in proxy-less mode, it should fall back again
+        endpoint.IsProxied = false;
+        Assert.Equal(2000, endpoint.Port);
+
+        // Setting it to null explicitly should disable the override mechanism
+        endpoint.Port = null;
+        Assert.Null(endpoint.Port);
+
+        // No fallback when setting Port explicitly
+        endpoint.Port = 2001;
+        Assert.Equal(2001, endpoint.Port);
+    }
+
+    [Fact]
+    public void WithEndpointCallbackDoesNotRunIfEndpointDoesntExistAndCreateIfNotExistsIsFalse()
+    {
+        var executed = false;
+
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var projectA = AddProject<ProjectA>(builder, "projecta")
+                              .WithEndpoint("mybinding", endpoint =>
+                              {
+                                  executed = true;
+                              },
+                              createIfNotExists: false);
+
+        Assert.False(executed);
+        Assert.False(projectA.Resource.TryGetAnnotationsOfType<EndpointAnnotation>(out var annotations));
+    }
+
+    [Fact]
+    public void WithEndpointCallbackRunsIfEndpointDoesntExistAndCreateIfNotExistsIsDefault()
+    {
+        var executed = false;
+
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var projectA = AddProject<ProjectA>(builder, "projecta")
+                              .WithEndpoint("mybinding", endpoint =>
+                              {
+                                  executed = true;
+                              });
+
+        Assert.True(executed);
+        Assert.True(projectA.Resource.TryGetAnnotationsOfType<EndpointAnnotation>(out _));
+    }
+
+    [Fact]
+    public void WithEndpointCallbackRunsIfEndpointDoesntExistAndCreateIfNotExistsIsTrue()
+    {
+        var executed = false;
+
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var projectA = AddProject<ProjectA>(builder, "projecta").WithEndpoint("mybinding", endpoint =>
+        {
+            executed = true;
+        },
+        createIfNotExists: true);
+
+        Assert.True(executed);
+        Assert.True(projectA.Resource.TryGetAnnotationsOfType<EndpointAnnotation>(out _));
+    }
+
+    [Fact]
+    public void EndpointsWithTwoPortsSameNameUpdatesExisting()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        AddProject<ProjectA>(builder, "projecta")
+                .WithHttpsEndpoint(3000, 1000, name: "mybinding")
+                .WithHttpsEndpoint(3000, 2000, name: "mybinding");
+
+        var resource = Assert.Single(builder.Resources.OfType<TResource>());
+        var endpoint = Assert.Single(resource.Annotations.OfType<EndpointAnnotation>(), e => e.Name == "mybinding");
+        Assert.Equal(3000, endpoint.Port);
+        Assert.Equal(2000, endpoint.TargetPort);
+    }
+
+    [Fact]
+    public void AddingTwoEndpointsWithDefaultNamesUpdatesExisting()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        AddProject<ProjectA>(builder, "projecta")
+                .WithHttpsEndpoint(3000, 1000)
+                .WithHttpsEndpoint(3000, 2000);
+
+        var resource = Assert.Single(builder.Resources.OfType<TResource>());
+        var endpoint = Assert.Single(resource.Annotations.OfType<EndpointAnnotation>(), e => e.Name == "https");
+        Assert.Equal(3000, endpoint.Port);
+        Assert.Equal(2000, endpoint.TargetPort);
+    }
+
+    [Fact]
+    public void EndpointsWithSinglePortSameNameUpdatesExisting()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        AddProject<ProjectB>(builder, "projectb")
+               .WithHttpsEndpoint(1000, name: "mybinding")
+               .WithHttpsEndpoint(2000, name: "mybinding");
+
+        var resource = Assert.Single(builder.Resources.OfType<TResource>());
+        var endpoint = Assert.Single(resource.Annotations.OfType<EndpointAnnotation>(), e => e.Name == "mybinding");
+        Assert.Equal(2000, endpoint.Port);
+    }
+
+    [Fact]
+    public void WithEndpoint_WithAllArguments_ForwardsAllArguments()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var projectA = AddProject<ProjectA>(builder, "projecta")
+                              .WithEndpoint(123, 456, "scheme", "mybinding", "env", true, true);
+
+        var endpoint = projectA.Resource.Annotations.OfType<EndpointAnnotation>()
+            .Where(e => string.Equals(e.Name, "mybinding", EndpointAnnotationName)).Single();
+
+        Assert.Equal(123, endpoint.Port);
+        Assert.Equal(456, endpoint.TargetPort);
+        Assert.Equal("scheme", endpoint.UriScheme);
+        Assert.Equal("env", endpoint.TargetPortEnvironmentVariable);
+        Assert.True(endpoint.IsProxied);
+        Assert.True(endpoint.IsExternal);
+        Assert.Equal(System.Net.Sockets.ProtocolType.Tcp, endpoint.Protocol);
+    }
+
+    [Fact]
+    public async Task LocalhostTopLevelDomainSetsAnnotationValues()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var tcs = new TaskCompletionSource();
+        var projectA = AddProject<ProjectA>(builder, "projecta")
+            .WithHttpsEndpoint()
+            .WithEndpoint("https", e => e.TargetHost = "example.localhost", createIfNotExists: false)
+            .OnBeforeResourceStarted((_, _, _) =>
+            {
+                tcs.SetResult();
+                return Task.CompletedTask;
+            });
+
+        var app = await builder.BuildAsync();
+        await app.StartAsync();
+        await tcs.Task;
+
+        var urls = projectA.Resource.Annotations.OfType<ResourceUrlAnnotation>();
+        Assert.Collection(urls,
+            url => Assert.StartsWith("https://example.localhost:", url.Url),
+            url => Assert.StartsWith("https://localhost:", url.Url));
+
+        EndpointAnnotation endpoint = Assert.Single(projectA.Resource.Annotations.OfType<EndpointAnnotation>());
+        Assert.NotNull(endpoint.AllocatedEndpoint);
+        Assert.Equal(EndpointBindingMode.SingleAddress, endpoint.AllocatedEndpoint.BindingMode);
+        Assert.Equal("localhost", endpoint.AllocatedEndpoint.Address);
+
+        await app.StopAsync();
+    }
+
+    [Theory]
+    [InlineData("0.0.0.0", EndpointBindingMode.IPv4AnyAddresses)]
+    //[InlineData("::", EndpointBindingMode.IPv6AnyAddresses)] // Need to figure out a good way to check that Ipv6 binding is supported
+    public async Task TopLevelDomainSetsAnnotationValues(string host, EndpointBindingMode endpointBindingMode)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var tcs = new TaskCompletionSource();
+        var projectA = AddProject<ProjectA>(builder, "projecta")
+            .WithHttpsEndpoint()
+            .WithEndpoint("https", e => e.TargetHost = host, createIfNotExists: false)
+            .OnBeforeResourceStarted((_, _, _) =>
+            {
+                tcs.SetResult();
+                return Task.CompletedTask;
+            });
+
+        var app = await builder.BuildAsync();
+        await app.StartAsync();
+        await tcs.Task;
+
+        var urls = projectA.Resource.Annotations.OfType<ResourceUrlAnnotation>();
+        Assert.Collection(urls,
+            url => Assert.StartsWith("https://localhost:", url.Url),
+            url => Assert.StartsWith($"https://{Environment.MachineName}:", url.Url));
+
+        EndpointAnnotation endpoint = Assert.Single(projectA.Resource.Annotations.OfType<EndpointAnnotation>());
+        Assert.NotNull(endpoint.AllocatedEndpoint);
+        Assert.Equal(endpointBindingMode, endpoint.AllocatedEndpoint.BindingMode);
+        Assert.Equal("localhost", endpoint.AllocatedEndpoint.Address);
+
+        await app.StopAsync();
     }
 
     private sealed class ProjectA : IProjectMetadata

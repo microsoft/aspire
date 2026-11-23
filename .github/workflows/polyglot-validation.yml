@@ -17,6 +17,7 @@ env:
 jobs:
   validate_python:
     name: Python SDK Validation
+    if: ${{ github.repository == 'microsoft/aspire' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -72,6 +73,7 @@ jobs:
 
   validate_go:
     name: Go SDK Validation
+    if: ${{ github.repository == 'microsoft/aspire' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -127,6 +129,7 @@ jobs:
 
   validate_java:
     name: Java SDK Validation
+    if: ${{ github.repository == 'microsoft/aspire' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -182,6 +185,7 @@ jobs:
 
   validate_rust:
     name: Rust SDK Validation
+    if: ${{ github.repository == 'microsoft/aspire' }}
     runs-on: ubuntu-latest
     # Rust SDK has known issues - don't fail the workflow
     continue-on-error: true
@@ -239,11 +243,12 @@ jobs:
 
   validate_typescript:
     name: TypeScript SDK Validation (Node ${{ matrix.node-version }}.x)
+    if: ${{ github.repository == 'microsoft/aspire' }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        node-version: ${{ fromJson(github.event_name == 'pull_request' && '[24]' || '[22,24]') }}
+        node-version: [22, 24]
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -291,14 +296,20 @@ jobs:
 
       - name: Run TypeScript SDK validation
         run: |
+          # TypeScript AppHosts and the Nuxt fixture resolve floating npm ranges. Shortly after an
+          # upstream publish, the registry lists the new version before its tarball is downloadable,
+          # so npm fails with E404. Only resolve releases that are at least one day old.
+          # https://docs.npmjs.com/cli/v11/using-npm/config#before
+          npm_release_cutoff="$(date -u -d '1 day ago' '+%Y-%m-%dT%H:%M:%SZ')"
           docker run --rm \
             -e ASPIRE_CLI_CHANNEL="${POLYGLOT_ASPIRE_CLI_CHANNEL}" \
+            -e npm_config_before="${npm_release_cutoff}" \
             -v "${{ github.workspace }}:/workspace" \
             -v /var/run/docker.sock:/var/run/docker.sock \
             polyglot-typescript-node-${{ matrix.node-version }}
 
   results:
-    if: always()
+    if: ${{ always() && github.repository == 'microsoft/aspire' }}
     runs-on: ubuntu-latest
     name: Polyglot Validation Results
     needs: [validate_python, validate_go, validate_java, validate_rust, validate_typescript]

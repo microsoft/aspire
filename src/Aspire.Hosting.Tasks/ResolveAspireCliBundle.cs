@@ -15,6 +15,8 @@ public sealed class ResolveAspireCliBundle : Microsoft.Build.Utilities.Task
     private const string VersionsDirectoryName = "versions";
     private const string InstallSidecarFileName = ".aspire-install.json";
     private const string AspireHomeEnvironmentVariable = "ASPIRE_HOME";
+    private const string PinnedLayoutsDirectoryName = "dnx";
+    private const string PinnedCliPackageDirectoryName = "aspire.cli";
     private const int MaxInstallSidecarBytes = 64 * 1024;
     private static readonly Version s_unversionedDirectoryVersion = new(0, 0);
 
@@ -42,10 +44,28 @@ public sealed class ResolveAspireCliBundle : Microsoft.Build.Utilities.Task
     public bool WarnOnInvalidPaths { get; set; } = true;
 
     /// <summary>
+    /// Gets or sets the Aspire CLI package version that DNX runs when the invocation is pinned to the AppHost version.
+    /// </summary>
+    /// <remarks>
+    /// When set, and no explicit bundle or CLI path is configured, only the layout extracted for this version is
+    /// accepted. Shared Aspire home layouts can belong to a different CLI and its DCP build, so they are ignored.
+    /// </remarks>
+    public string? PinnedAspireCliVersion { get; set; }
+
+    /// <summary>
     /// The Aspire home directory used to find and prepare extracted bundle layouts.
     /// </summary>
     [Output]
     public string? AspireHomeDirectory { get; set; }
+
+    /// <summary>
+    /// The directory that automatic bundle setup should extract into.
+    /// </summary>
+    /// <remarks>
+    /// This is the Aspire home directory, or a version-specific directory under it when <see cref="PinnedAspireCliVersion"/> is set.
+    /// </remarks>
+    [Output]
+    public string? AspireCliSetupDirectory { get; set; }
 
     /// <summary>
     /// The resolved DCP directory.
@@ -90,6 +110,7 @@ public sealed class ResolveAspireCliBundle : Microsoft.Build.Utilities.Task
     {
         var aspireHomeDirectory = GetDefaultAspireHomeDirectory();
         AspireHomeDirectory = aspireHomeDirectory;
+        AspireCliSetupDirectory = aspireHomeDirectory;
 
         if (!string.IsNullOrWhiteSpace(AspireCliBundlePath))
         {
@@ -123,6 +144,19 @@ public sealed class ResolveAspireCliBundle : Microsoft.Build.Utilities.Task
             return true;
         }
 
+        if (!string.IsNullOrWhiteSpace(PinnedAspireCliVersion))
+        {
+            var pinnedLayoutDirectory = GetPinnedLayoutDirectory(aspireHomeDirectory, PinnedAspireCliVersion!);
+            AspireCliSetupDirectory = pinnedLayoutDirectory;
+
+            if (TryResolveFromLayoutPath(pinnedLayoutDirectory, out var pinnedBundle))
+            {
+                SetOutputs(pinnedBundle);
+            }
+
+            return true;
+        }
+
         if (SearchPathForAspireCli && TryResolveFromPath(out var pathBundle))
         {
             SetOutputs(pathBundle);
@@ -143,9 +177,9 @@ public sealed class ResolveAspireCliBundle : Microsoft.Build.Utilities.Task
         DcpDir = EnsureTrailingDirectorySeparator(resolution.DcpDir);
         AspireDashboardDir = EnsureTrailingDirectorySeparator(resolution.DashboardDir);
         AspireDashboardPath = resolution.DashboardPath;
-        AspireTerminalHostDir = EnsureTrailingDirectorySeparator(resolution.ManagedDir);
-        AspireTerminalHostPath = resolution.ManagedPath;
-        AspireTerminalHostInvocationArgs = "terminalhost";
+        AspireTerminalHostDir = EnsureTrailingDirectorySeparator(resolution.TerminalHostDir);
+        AspireTerminalHostPath = resolution.TerminalHostPath;
+        AspireTerminalHostInvocationArgs = resolution.TerminalHostInvocationArgs;
     }
 
     private static bool TryResolveFromPath(out BundleResolution resolution)
@@ -255,12 +289,25 @@ public sealed class ResolveAspireCliBundle : Microsoft.Build.Utilities.Task
             return false;
         }
 
+        var terminalHostDir = Path.Combine(bundleRoot, "terminalhost");
+        var terminalHostPath = Path.Combine(terminalHostDir, IsWindows() ? "Aspire.TerminalHost.exe" : "Aspire.TerminalHost");
+        if (Directory.Exists(terminalHostDir) && !File.Exists(terminalHostPath))
+        {
+            return false;
+        }
+
+        // Older CLI bundles omit terminalhost/ entirely. Try their legacy dispatcher as a
+        // best-effort fallback; an existing but incomplete component was rejected above.
+        var hasStandaloneTerminalHost = File.Exists(terminalHostPath);
         resolution = new BundleResolution(
             dcpDir,
             managedDir,
             managedPath,
             dashboardDir,
-            File.Exists(dashboardPath) ? dashboardPath : managedPath);
+            File.Exists(dashboardPath) ? dashboardPath : managedPath,
+            hasStandaloneTerminalHost ? terminalHostDir : managedDir,
+            hasStandaloneTerminalHost ? terminalHostPath : managedPath,
+            hasStandaloneTerminalHost ? string.Empty : "terminalhost");
         return true;
     }
 
@@ -487,6 +534,19 @@ public sealed class ResolveAspireCliBundle : Microsoft.Build.Utilities.Task
             : aspireHome;
     }
 
+    internal static string GetPinnedLayoutDirectory(string aspireHomeDirectory, string version)
+    {
+        // Package versions only contain alphanumerics, '.', '-' and '+'. Replace anything else so
+        // the version cannot escape the pinned layouts directory.
+        var directoryName = new string(version.Trim().Select(static ch => char.IsLetterOrDigit(ch) || ch is '.' or '-' or '+' ? ch : '_').ToArray());
+        if (directoryName.Trim('.').Length == 0)
+        {
+            directoryName = directoryName.Replace('.', '_');
+        }
+
+        return Path.Combine(aspireHomeDirectory, PinnedLayoutsDirectoryName, PinnedCliPackageDirectoryName, directoryName);
+    }
+
     private static StringComparer GetPathComparer()
     {
         return IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
@@ -518,7 +578,8 @@ public sealed class ResolveAspireCliBundle : Microsoft.Build.Utilities.Task
             or System.Security.SecurityException;
     }
 
-    private sealed class BundleResolution(string dcpDir, string managedDir, string managedPath, string dashboardDir, string dashboardPath)
+    private sealed class BundleResolution(string dcpDir, string managedDir, string managedPath, string dashboardDir, string dashboardPath,
+        string terminalHostDir, string terminalHostPath, string terminalHostInvocationArgs)
     {
         public string DcpDir { get; } = dcpDir;
 
@@ -529,5 +590,11 @@ public sealed class ResolveAspireCliBundle : Microsoft.Build.Utilities.Task
         public string DashboardDir { get; } = dashboardDir;
 
         public string DashboardPath { get; } = dashboardPath;
+
+        public string TerminalHostDir { get; } = terminalHostDir;
+
+        public string TerminalHostPath { get; } = terminalHostPath;
+
+        public string TerminalHostInvocationArgs { get; } = terminalHostInvocationArgs;
     }
 }

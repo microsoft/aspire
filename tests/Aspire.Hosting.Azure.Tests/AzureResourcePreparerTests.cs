@@ -1,13 +1,14 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable CS0618 // Retain legacy ProjectResource Azure publishing/provisioning contracts with synthetic metadata.
 #pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-#pragma warning disable ASPIREPIPELINES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Utils;
 using Azure.Provisioning.KeyVault;
+using Azure.Provisioning.Resources;
 using Azure.Provisioning.SignalR;
 using Azure.Provisioning.Storage;
 using Microsoft.Extensions.DependencyInjection;
@@ -19,6 +20,112 @@ namespace Aspire.Hosting.Azure.Tests;
 
 public class AzureResourcePreparerTests(ITestOutputHelper testOutputHelper)
 {
+    [Theory]
+    [InlineData(DistributedApplicationOperation.Run)]
+    [InlineData(DistributedApplicationOperation.Publish)]
+    public async Task ExplicitResourceScopeIsPreservedForResourceAndRoleAssignments(DistributedApplicationOperation operation)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(operation, testOutputHelper);
+        builder.AddAzureContainerAppEnvironment("env");
+        var storage = builder.AddAzureStorage("storage").AsExisting(
+            builder.AddParameter("storage-name", "existingstorage"),
+            builder.AddParameter("storage-group", "annotation-rg"));
+        var scope = new AzureBicepResourceScope("explicit-rg", "00000000-0000-0000-0000-000000000001");
+        storage.Resource.Scope = scope;
+        builder.AddProject<Project>("api", launchProfileName: null)
+            .WithRoleAssignments(storage, StorageBuiltInRole.StorageBlobDataReader);
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var roles = Assert.Single(model.Resources.OfType<AzureRoleAssignmentResource>(),
+            resource => resource.TargetAzureResource == storage.Resource);
+        Assert.Same(scope, roles.Scope);
+
+        var storageManifest = await GetManifestWithBicep(storage.Resource, skipPreparer: true);
+        var roleManifest = await GetManifestWithBicep(roles, skipPreparer: true);
+        Assert.Same(scope, storage.Resource.Scope);
+        Assert.Same(scope, roles.Scope);
+        await Verify(storageManifest.BicepText, "bicep")
+            .UseParameters(operation)
+            .AppendContentAsFile(roleManifest.BicepText, "bicep");
+    }
+
+    [Theory]
+    [InlineData(DistributedApplicationOperation.Run, false)]
+    [InlineData(DistributedApplicationOperation.Run, true)]
+    [InlineData(DistributedApplicationOperation.Publish, false)]
+    [InlineData(DistributedApplicationOperation.Publish, true)]
+    public async Task InfrastructureCallbackScopeIsPropagatedToPreparedRoleResources(DistributedApplicationOperation operation, bool parameterizedScope)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(operation, testOutputHelper);
+        builder.AddAzureContainerAppEnvironment("env");
+        var storage = builder.AddAzureStorage("storage").AsExisting(
+            builder.AddParameter("storage-name", "existingstorage"),
+            builder.AddParameter("storage-group", "annotation-rg"));
+        var scope = parameterizedScope
+            ? new AzureBicepResourceScope(
+                builder.AddParameter("callback-group", "callback-rg").Resource,
+                builder.AddParameter("callback-subscription", "00000000-0000-0000-0000-000000000001").Resource)
+            : new AzureBicepResourceScope("callback-rg", "00000000-0000-0000-0000-000000000001");
+        storage.Resource.Scope = new AzureBicepResourceScope("initial-rg");
+        storage.ConfigureInfrastructure(infrastructure => infrastructure.AspireResource.Scope = scope);
+        builder.AddProject<Project>("api", launchProfileName: null)
+            .WithRoleAssignments(storage, StorageBuiltInRole.StorageBlobDataReader);
+        builder.AddProject<Project>("api2", launchProfileName: null)
+            .WithRoleAssignments(storage, StorageBuiltInRole.StorageBlobDataReader);
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        await app.Services.GetRequiredService<AzureResourcePreparer>().PrepareResourcesAsync(model, default);
+        var roles = model.Resources.OfType<AzureRoleAssignmentResource>()
+            .Where(resource => resource.TargetAzureResource == storage.Resource).ToArray();
+        Assert.Equal(operation == DistributedApplicationOperation.Run ? 1 : 2, roles.Length);
+        Assert.All(roles, role => Assert.Contains(storage.Resource, role.GetExplicitAzureReferences()));
+
+        var storageManifest = await GetManifestWithBicep(storage.Resource, skipPreparer: true);
+        Assert.Same(scope, storage.Resource.Scope);
+        Assert.All(roles, role => Assert.Same(scope, role.Scope));
+
+        await app.Services.GetRequiredService<AzureResourcePreparer>().PrepareResourcesAsync(model, default);
+        Assert.Equal(roles, model.Resources.OfType<AzureRoleAssignmentResource>()
+            .Where(resource => resource.TargetAzureResource == storage.Resource));
+        Assert.All(roles, role => Assert.Same(scope, role.Scope));
+
+        var roleManifest = await GetManifestWithBicep(roles[0], skipPreparer: true);
+        await Verify(storageManifest.BicepText, "bicep")
+            .UseParameters(operation, parameterizedScope)
+            .AppendContentAsFile(roleManifest.BicepText, "bicep");
+    }
+
+    [Fact]
+    public async Task ReciprocalIdentityRoleAssignmentsDependOnlyOnIdentityProvisioning()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
+        builder.AddAzureContainerAppEnvironment("env");
+        var first = builder.AddAzureUserAssignedIdentity("first");
+        var second = builder.AddAzureUserAssignedIdentity("second");
+        HashSet<RoleDefinition> operatorRoles = [new(ArmBuiltInRole.ManagedIdentityOperator.ToString(), ArmBuiltInRole.GetBuiltInRoleName(ArmBuiltInRole.ManagedIdentityOperator))];
+        first.WithAnnotation(new RoleAssignmentAnnotation(second.Resource, operatorRoles));
+        second.WithAnnotation(new RoleAssignmentAnnotation(first.Resource, operatorRoles));
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var preparer = app.Services.GetRequiredService<AzureResourcePreparer>();
+        await preparer.PrepareResourcesAsync(model, default);
+        await preparer.PrepareResourcesAsync(model, default);
+
+        var roles = model.Resources.OfType<AzureRoleAssignmentResource>().OrderBy(resource => resource.Name).ToArray();
+        Assert.Equal(["first-roles-second", "second-roles-first"], roles.Select(resource => resource.Name));
+        Assert.All(roles, role =>
+        {
+            Assert.Equal(["first", "second"], role.GetAzureReferences().Select(resource => resource.Name).Order());
+            Assert.Empty(role.Annotations.OfType<DeploymentPrerequisitesAnnotation>());
+        });
+        Assert.Same(roles[0], Assert.Single(first.Resource.Annotations.OfType<DeploymentPrerequisitesAnnotation>()).Resources.Single());
+        Assert.Same(roles[1], Assert.Single(second.Resource.Annotations.OfType<DeploymentPrerequisitesAnnotation>()).Resources.Single());
+    }
+
     [Fact]
     public void AzureRoleAssignmentResourceThrowsWhenOwnerAndIdentityAreInconsistent()
     {
@@ -47,7 +154,7 @@ public class AzureResourcePreparerTests(ITestOutputHelper testOutputHelper)
         builder.AddProject<Project>("api", launchProfileName: null)
             .WithRoleAssignments(storage, StorageBuiltInRole.StorageBlobDataReader);
 
-        var app = builder.Build();
+        using var app = builder.Build();
 
         if (operation == DistributedApplicationOperation.Publish)
         {
@@ -56,7 +163,8 @@ public class AzureResourcePreparerTests(ITestOutputHelper testOutputHelper)
         }
         else
         {
-            await app.StartAsync();
+            // Run the Azure before-start hooks directly: app.StartAsync() would also launch DCP, which this test doesn't need.
+            await ExecuteBeforeStartHooksAsync(app, default);
             // no exception is thrown in Run mode
         }
     }
@@ -301,7 +409,35 @@ public class AzureResourcePreparerTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    public async Task RoleAssignmentsAreNotDuplicatedWhenBeforeStartRunsBeforePublishPipeline()
+    public async Task PrepareResourcesStepRunsAfterComputeEnvironmentValidation()
+    {
+        // Regression test for https://github.com/microsoft/aspire/issues/19308.
+        // Preparing Azure resources adds role assignment resources to the model, which must not happen
+        // while compute environment validation is enumerating the model's resources.
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper, step: WellKnownPipelineSteps.BeforeStart);
+        builder.AddAzureContainerAppEnvironment("env1").WithUniqueResourceNaming();
+        builder.AddAzureContainerAppEnvironment("env2").WithUniqueResourceNaming();
+
+        var keyVault = builder.AddAzureKeyVault("keyvault");
+
+        // Not bound to either compute environment, so validation fails.
+        builder.AddProject<Project>("api", launchProfileName: null)
+            .WithRoleAssignments(keyVault, KeyVaultBuiltInRole.KeyVaultSecretsUser);
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => ExecutePipelineAsync(app));
+        Assert.Contains($"Step '{WellKnownPipelineSteps.ValidateComputeEnvironments}' failed", ex.Message);
+
+        // The prepare step depends on validation, so it never ran and never mutated the model.
+        Assert.Empty(model.Resources.OfType<AzureRoleAssignmentResource>());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RoleAssignmentsAreNotDuplicatedWhenBeforeStartRunsBeforePublishPipeline(bool useDotnetProject)
     {
         const string inspectRoleAssignmentsStepName = "inspect-signalr-role-assignments";
 
@@ -310,11 +446,17 @@ public class AzureResourcePreparerTests(ITestOutputHelper testOutputHelper)
 
         var signalR = builder.AddAzureSignalR("signalr");
 
-        var serviceA = builder.AddProject<Project>("service-a", launchProfileName: null)
+        IResourceBuilder<IResourceWithEnvironment> serviceA = useDotnetProject
+            ? builder.AddDotnetProject("service-a", "service-a.csproj", options => options.ExcludeLaunchProfile = true)
+            : builder.AddProject<Project>("service-a", launchProfileName: null);
+        serviceA
             .WithReference(signalR)
             .WithRoleAssignments(signalR, SignalRBuiltInRole.SignalRContributor);
 
-        var serviceB = builder.AddProject<Project>("service-b", launchProfileName: null)
+        IResourceBuilder<IResourceWithEnvironment> serviceB = useDotnetProject
+            ? builder.AddDotnetProject("service-b", "service-b.csproj", options => options.ExcludeLaunchProfile = true)
+            : builder.AddProject<Project>("service-b", launchProfileName: null);
+        serviceB
             .WithReference(signalR)
             .WithRoleAssignments(signalR, SignalRBuiltInRole.SignalRContributor);
 
@@ -354,7 +496,7 @@ public class AzureResourcePreparerTests(ITestOutputHelper testOutputHelper)
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
         Assert.Collection(
             model.Resources
-                .OfType<ProjectResource>()
+                .Where(resource => resource is IDotnetProgramResource)
                 .OrderBy(resource => resource.Name, StringComparer.Ordinal),
             resource => Assert.Single(resource.Annotations.OfType<DeploymentPrerequisitesAnnotation>()),
             resource => Assert.Single(resource.Annotations.OfType<DeploymentPrerequisitesAnnotation>()));
@@ -754,3 +896,4 @@ public class AzureResourcePreparerTests(ITestOutputHelper testOutputHelper)
         return pipeline.ExecuteAsync(context);
     }
 }
+#pragma warning restore CS0618

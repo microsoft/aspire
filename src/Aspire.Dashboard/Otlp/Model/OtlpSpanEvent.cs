@@ -3,6 +3,7 @@
 
 using System.Globalization;
 using Aspire.Dashboard.Components.Controls;
+using Aspire.Dashboard.Model;
 using Aspire.Shared;
 
 namespace Aspire.Dashboard.Otlp.Model;
@@ -11,6 +12,16 @@ public class OtlpSpanAttributeItem(string name, string value) : IPropertyGridIte
 {
     public string Name { get; } = name;
     public string Value { get; } = value;
+    public string? TextVisualizerFormat { get; init; }
+
+    internal static IEnumerable<OtlpSpanAttributeItem> CreateItems(KeyValuePair<string, string>[] attributes, KeyValuePair<string, string>[] fallbackAttributes)
+    {
+        var databaseSystem = TextVisualizerFormatHelpers.GetDatabaseSystem(attributes) ?? TextVisualizerFormatHelpers.GetDatabaseSystem(fallbackAttributes);
+        return attributes.Select(pair => new OtlpSpanAttributeItem(pair.Key, pair.Value)
+        {
+            TextVisualizerFormat = TextVisualizerFormatHelpers.GetFormat(pair.Key, databaseSystem)
+        });
+    }
 }
 
 public class OtlpSpanEvent(OtlpSpan span) : IPropertyGridItem

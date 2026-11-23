@@ -1,6 +1,6 @@
 var builder = DistributedApplication.CreateBuilder(args);
 
-var weatherApi = builder.AddProject<Projects.AspireJavaScript_MinimalApi>("weatherapi")
+var weatherApi = builder.AddDotnetProject("weatherapi", "../AspireJavaScript.MinimalApi/AspireJavaScript.MinimalApi.csproj")
     .WithExternalHttpEndpoints();
 
 builder.AddJavaScriptApp("angular", "../AspireJavaScript.Angular", runScriptName: "start")
@@ -39,11 +39,9 @@ var reactvite = builder.AddViteApp("reactvite", "../AspireJavaScript.Vite")
 
 // PublishAsStaticWebsite: deploys the Vite app as a static site served by YARP.
 // With apiPath/apiTarget, YARP reverse-proxies /api/* to the weather API via service discovery — no CORS needed.
-#pragma warning disable ASPIREJAVASCRIPT001
 builder.AddViteApp("vite-static", "../AspireJavaScript.Vite")
     .WithExternalHttpEndpoints()
     .PublishAsStaticWebsite("/api", weatherApi);
-#pragma warning restore ASPIREJAVASCRIPT001
 
 // PublishAsNodeServer: for frameworks that produce a self-contained Node.js server artifact.
 // Example: SvelteKit with adapter-node builds to build/index.js, Nuxt/TanStack build to .output/server/index.mjs

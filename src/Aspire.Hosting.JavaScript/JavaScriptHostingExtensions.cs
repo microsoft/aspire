@@ -1,13 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREDENO001 // AddDenoApp and its implementation use the experimental Deno resource
-
-#pragma warning disable ASPIREDOCKERFILEBUILDER001
-#pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIRECERTIFICATES001
 #pragma warning disable ASPIREEXTENSION001
-#pragma warning disable ASPIRECOMMAND001
 
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
@@ -815,7 +810,6 @@ public static partial class JavaScriptHostingExtensions
     /// </code>
     /// </example>
     [AspireExport]
-    [Experimental("ASPIREDENO001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<DenoAppResource> AddDenoApp(this IDistributedApplicationBuilder builder, [ResourceName] string name, string appDirectory, string scriptPath)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -1196,7 +1190,6 @@ public static partial class JavaScriptHostingExtensions
     /// To add an API reverse-proxy, use the overload that accepts an <c>apiPath</c> and <c>apiTarget</c>.
     /// </para>
     /// </remarks>
-    [Experimental("ASPIREJAVASCRIPT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExportIgnore(Reason = "Use the polyglot-compatible overload instead.")]
     public static IResourceBuilder<TResource> PublishAsStaticWebsite<TResource>(
         this IResourceBuilder<TResource> builder,
@@ -1235,7 +1228,6 @@ public static partial class JavaScriptHostingExtensions
     /// work correctly across all deployment targets (Docker Compose, Azure App Service, etc.).
     /// </para>
     /// </remarks>
-    [Experimental("ASPIREJAVASCRIPT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExportIgnore(Reason = "Use the polyglot-compatible overload instead.")]
     public static IResourceBuilder<TResource> PublishAsStaticWebsite<TResource>(
         this IResourceBuilder<TResource> builder,
@@ -1254,7 +1246,6 @@ public static partial class JavaScriptHostingExtensions
     /// <summary>
     /// Publishes the JavaScript application as a standalone static website using YARP.
     /// </summary>
-    [Experimental("ASPIREJAVASCRIPT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExport("publishAsStaticWebsite")]
     internal static IResourceBuilder<TResource> PublishAsStaticWebsitePolyglot<TResource>(
 #pragma warning restore ASPIREEXPORT009
@@ -1275,7 +1266,6 @@ public static partial class JavaScriptHostingExtensions
         return PublishAsStaticWebsiteCore(builder, apiPath, apiTarget, options);
     }
 
-    [Experimental("ASPIREJAVASCRIPT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     private static IResourceBuilder<TResource> PublishAsStaticWebsiteCore<TResource>(
         IResourceBuilder<TResource> builder,
         string? apiPath,
@@ -1392,7 +1382,6 @@ public static partial class JavaScriptHostingExtensions
     /// the built output directory is copied into the runtime container, not the full application source.
     /// </para>
     /// </remarks>
-    [Experimental("ASPIREJAVASCRIPT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExport]
     public static IResourceBuilder<TResource> PublishAsNodeServer<TResource>(this IResourceBuilder<TResource> builder, string entryPoint, string outputPath = ".")
         where TResource : JavaScriptAppResource
@@ -1474,7 +1463,6 @@ public static partial class JavaScriptHostingExtensions
     /// use <see cref="PublishAsNodeServer{TResource}"/> instead for a smaller runtime image.
     /// </para>
     /// </remarks>
-    [Experimental("ASPIREJAVASCRIPT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExport]
     public static IResourceBuilder<TResource> PublishAsPackageScript<TResource>(this IResourceBuilder<TResource> builder, string scriptName = "start", string? runScriptArguments = null)
         where TResource : JavaScriptAppResource
@@ -1903,8 +1891,6 @@ public static partial class JavaScriptHostingExtensions
         if (builder.ExecutionContext.IsPublishMode &&
             builder.TryCreateResourceBuilder<ContainerResource>(resource.Name, out var containerBuilder))
         {
-            var validationStepName = $"validate-javascript-dockerfile-run-script-{resource.Name}";
-
             Task WriteValidatedContainerAsync(ManifestPublishingContext context)
             {
                 ValidateExistingDockerfileRunScript(resource, containerBuilder.Resource);
@@ -1913,18 +1899,11 @@ public static partial class JavaScriptHostingExtensions
 
             resourceBuilder.WithManifestPublishingCallback(WriteValidatedContainerAsync);
             containerBuilder.WithManifestPublishingCallback(WriteValidatedContainerAsync);
-            containerBuilder.WithAnnotation(new PipelineStepAnnotation(_ => new PipelineStep
-            {
-                Name = validationStepName,
-                Description = $"Validates that JavaScript app '{resource.Name}' does not publish an ignored run script with an existing Dockerfile.",
-                RequiredBySteps = [WellKnownPipelineSteps.Build, WellKnownPipelineSteps.Publish],
-                Resource = containerBuilder.Resource,
-                Action = _ =>
-                {
-                    ValidateExistingDockerfileRunScript(resource, containerBuilder.Resource);
-                    return Task.CompletedTask;
-                }
-            }));
+            containerBuilder.AddPublishValidation(
+                $"validate-javascript-dockerfile-run-script-{resource.Name}",
+                $"Validates that JavaScript app '{resource.Name}' does not publish an ignored run script with an existing Dockerfile.",
+                [WellKnownPipelineSteps.Build, WellKnownPipelineSteps.Publish],
+                _ => ValidateExistingDockerfileRunScript(resource, containerBuilder.Resource));
         }
 
         resourceBuilder.WithVSCodeDebugging();
@@ -2194,6 +2173,9 @@ public static partial class JavaScriptHostingExtensions
     /// <para>
     /// The Next.js application must have <c>output: "standalone"</c> configured in <c>next.config.ts</c>
     /// and a <c>public/</c> directory (even if empty) for the published container to build correctly.
+    /// The standalone output check runs before the container image build during publish and deployment,
+    /// including Azure Container Apps and App Service. Resources excluded from publishing are not validated.
+    /// Use <see cref="DisableBuildValidation"/> when the configuration cannot be statically inspected.
     /// </para>
     /// <example>
     /// The following example creates a Next.js app.
@@ -2206,7 +2188,6 @@ public static partial class JavaScriptHostingExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [Experimental("ASPIREJAVASCRIPT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExport]
     public static IResourceBuilder<NextJsAppResource> AddNextJsApp(this IDistributedApplicationBuilder builder, [ResourceName] string name, string appDirectory, string runScriptName = "dev")
     {
@@ -2255,29 +2236,22 @@ public static partial class JavaScriptHostingExtensions
             }
         }
 
-        // Add a publish prereq step that validates the Next.js config has standalone output enabled.
-        // This runs at deploy time (not resource creation time) so it doesn't block `aspire start`.
-        // Can be disabled with .DisableBuildValidation().
-        resourceBuilder.WithAnnotation(new PipelineStepAnnotation(factoryCtx =>
-        [
-            new PipelineStep
-            {
-                Name = $"nextjs-standalone-check-{name}",
-                Description = $"Validates that the Next.js app '{name}' has output: \"standalone\" configured.",
-                DependsOnSteps = [WellKnownPipelineSteps.BuildPrereq],
-                RequiredBySteps = [WellKnownPipelineSteps.Build],
-                Resource = resourceBuilder.Resource,
-                Action = _ =>
+        if (builder.ExecutionContext.IsPublishMode &&
+            builder.TryCreateResourceBuilder<ContainerResource>(name, out var containerBuilder))
+        {
+            var validationStep = containerBuilder.AddPublishValidation(
+                $"nextjs-standalone-check-{name}",
+                $"Validates that the Next.js app '{name}' has output: \"standalone\" configured.",
+                [WellKnownPipelineSteps.Build],
+                _ =>
                 {
                     if (!resourceBuilder.Resource.TryGetLastAnnotation<SuppressPublishValidationAnnotation>(out var suppress))
                     {
                         ValidateNextJsStandaloneOutput(appDirectory);
                     }
-
-                    return Task.CompletedTask;
-                }
-            }
-        ]));
+                });
+            validationStep.DependsOn(WellKnownPipelineSteps.BuildPrereq);
+        }
 
         return resourceBuilder;
     }
@@ -2293,7 +2267,6 @@ public static partial class JavaScriptHostingExtensions
     /// to suppress those checks when the configuration is set dynamically or via an external
     /// mechanism that cannot be detected by static file inspection.
     /// </remarks>
-    [Experimental("ASPIREJAVASCRIPT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExport]
     public static IResourceBuilder<NextJsAppResource> DisableBuildValidation(this IResourceBuilder<NextJsAppResource> builder)
     {
@@ -2470,7 +2443,6 @@ public static partial class JavaScriptHostingExtensions
     /// </code>
     /// </example>
     [AspireExport]
-    [Experimental("ASPIREDENO001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<TResource> WithDeno<TResource>(this IResourceBuilder<TResource> resource, bool install = false, string[]? installArgs = null) where TResource : JavaScriptAppResource
     {
         ArgumentNullException.ThrowIfNull(resource);

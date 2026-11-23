@@ -6,12 +6,15 @@ using System.Text;
 using Aspire.Dashboard.Model;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.WebUtilities;
+using Microsoft.Extensions.Localization;
 using Microsoft.FluentUI.AspNetCore.Components;
+using LayoutResources = Aspire.Dashboard.Resources.Layout;
 
 namespace Aspire.Dashboard.Utils;
 
 internal static class DashboardUIHelpers
 {
+    public const string PageTitleTopBarSection = "PageTitleTopBar";
     // Virtualize represents unloaded rows with CSS spacers. Browser engines clamp very tall
     // elements, causing the spacer observer to report inconsistent measurements and render forever.
     // At the dashboard's 46px grid row height, 200,000 items use a 9.2 million pixel spacer.
@@ -19,18 +22,13 @@ internal static class DashboardUIHelpers
 
     public const string MessageBarSection = "MessagesTop";
 
-    // Blazor SectionOutlet/SectionContent name used to teleport the current page's title
-    // (the page's <h1 class="page-header">) up into the top header, where it renders as a
-    // suffix after the app/brand name (e.g. "Stress / Resources"). See MainLayout.razor
-    // (outlet) and AspirePageContentLayout.razor (content).
-    public const string PageTitleTopBarSection = "PageTitleTopBar";
-
     // these are language names supported by highlight.js
     public const string XmlFormat = "xml";
     public const string JsonFormat = "json";
     public const string JavascriptFormat = "javascript";
     public const string PlaintextFormat = "plaintext";
     public const string MarkdownFormat = "markdown";
+    public const string SqlFormat = "sql";
     public const string PropertiesFormat = "properties";
 
     // The initial data fetch for a FluentDataGrid doesn't include a count of items to return.
@@ -97,6 +95,29 @@ internal static class DashboardUIHelpers
     }
 
     /// <summary>
+    /// Formats an elapsed interval using localized relative-time text, such as "5 minutes ago" or "5m ago".
+    /// </summary>
+    public static string FormatTimeAgo(TimeSpan age, IStringLocalizer<LayoutResources> loc, bool useShortFormat, string lessThanMinuteText)
+    {
+        // Negative ages caused by clock skew use the same text as times less than a minute ago.
+        return age switch
+        {
+            { TotalMinutes: < 1 } => lessThanMinuteText,
+            { TotalMinutes: < 2 } when !useShortFormat => loc[nameof(LayoutResources.DashboardRunSelectMinuteAgo)],
+            { TotalHours: < 1 } => loc[
+                useShortFormat ? nameof(LayoutResources.ResourceStartedAgeMinutes) : nameof(LayoutResources.DashboardRunSelectMinutesAgo),
+                (int)age.TotalMinutes],
+            { TotalDays: < 1 } => loc[
+                useShortFormat ? nameof(LayoutResources.ResourceStartedAgeHours) : nameof(LayoutResources.DashboardRunSelectHoursAgo),
+                (int)age.TotalHours],
+            { TotalDays: < 2 } when !useShortFormat => loc[nameof(LayoutResources.DashboardRunSelectDayAgo)],
+            _ => loc[
+                useShortFormat ? nameof(LayoutResources.ResourceStartedAgeDays) : nameof(LayoutResources.DashboardRunSelectDaysAgo),
+                (int)age.TotalDays]
+        };
+    }
+
+    /// <summary>
     /// Safely converts a duration to milliseconds as an integer.
     /// If the value exceeds int.MaxValue, returns int.MaxValue. A duration must be longer than 24 days to hit this limit. That should almost never happen and it's ok to truncate at this point.
     /// </summary>
@@ -115,6 +136,37 @@ internal static class DashboardUIHelpers
         }
         
         return (int)milliseconds;
+    }
+
+    public static string MaskUrlForDisplay(string url)
+    {
+        // For example, redis://:password@host:6379/?token=secret#access_token=secret must
+        // display only redis://host:6379/?token=<mask>. Slice the original text to preserve
+        // escaping, casing and paths; URI normalization would change the displayed address.
+        var fragmentIndex = url.IndexOf('#');
+        if (fragmentIndex >= 0)
+        {
+            url = url[..fragmentIndex];
+        }
+
+        var schemeEnd = url.IndexOf("://", StringComparison.Ordinal);
+        if (schemeEnd >= 0)
+        {
+            var authorityStart = schemeEnd + 3;
+            var authority = url.AsSpan(authorityStart);
+            var authorityLength = authority.IndexOfAny('/', '?');
+            if (authorityLength < 0)
+            {
+                authorityLength = authority.Length;
+            }
+            var userInfoLength = authority[..authorityLength].LastIndexOf('@') + 1;
+            if (userInfoLength > 0)
+            {
+                url = url.Remove(authorityStart, userInfoLength);
+            }
+        }
+
+        return MaskQueryStringValues(url);
     }
 
     /// <summary>

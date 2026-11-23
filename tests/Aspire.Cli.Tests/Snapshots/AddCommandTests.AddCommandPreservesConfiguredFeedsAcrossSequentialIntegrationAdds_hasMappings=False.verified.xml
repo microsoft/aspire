@@ -1,0 +1,34 @@
+﻿<configurations>
+  <Contoso.Hosting.One>
+    <configuration>
+      <packageSources>
+        <clear />
+        <add key="sdk" value="https://example.com/sdk" />
+        <add key="public" value="https://example.com/public" />
+        <add key="aspire-integration-team" value="https://example.com/team" />
+      </packageSources>
+    </configuration>
+  </Contoso.Hosting.One>
+  <Fabrikam.Hosting.Two>
+    <configuration>
+      <packageSources>
+        <clear />
+        <add key="sdk" value="https://example.com/sdk" />
+        <add key="public" value="https://example.com/public" />
+        <add key="aspire-integration-team" value="https://example.com/team" />
+        <add key="aspire-integration-other" value="https://example.com/other" />
+      </packageSources>
+    </configuration>
+  </Fabrikam.Hosting.Two>
+  <Contoso.Hosting.Three>
+    <configuration>
+      <packageSources>
+        <clear />
+        <add key="sdk" value="https://example.com/sdk" />
+        <add key="public" value="https://example.com/public" />
+        <add key="aspire-integration-team" value="https://example.com/team" />
+        <add key="aspire-integration-other" value="https://example.com/other" />
+      </packageSources>
+    </configuration>
+  </Contoso.Hosting.Three>
+</configurations>

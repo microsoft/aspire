@@ -26,17 +26,23 @@ var options = new WebApplicationOptions
     ContentRootPath = AppContext.BaseDirectory
 };
 var app = new DashboardWebApplication(options: options);
-
-using var shutdownCts = new CancellationTokenSource();
-var parentWatchdog = ParentProcessWatchdog.Start(shutdownCts);
 try
 {
-    return await app.RunAsync(shutdownCts.Token).ConfigureAwait(false);
+    using var shutdownCts = new CancellationTokenSource();
+    var parentWatchdog = ParentProcessWatchdog.Start(shutdownCts);
+    try
+    {
+        return await app.RunAsync(shutdownCts.Token).ConfigureAwait(false);
+    }
+    finally
+    {
+        if (parentWatchdog is not null)
+        {
+            await parentWatchdog.DisposeAsync().ConfigureAwait(false);
+        }
+    }
 }
 finally
 {
-    if (parentWatchdog is not null)
-    {
-        await parentWatchdog.DisposeAsync().ConfigureAwait(false);
-    }
+    await app.DisposeAsync().ConfigureAwait(false);
 }

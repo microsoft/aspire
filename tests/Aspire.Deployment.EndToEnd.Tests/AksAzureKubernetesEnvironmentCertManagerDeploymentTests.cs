@@ -9,7 +9,7 @@ namespace Aspire.Deployment.EndToEnd.Tests;
 
 /// <summary>
 /// End-to-end test for the typed cert-manager API on top of <c>AddAzureKubernetesEnvironment</c>:
-/// <c>aks.AddCertManager("cert-manager")</c> + <c>AddIssuer().WithLetsEncryptStaging(email).WithHttp01Solver()</c>
+/// <c>aks.AddCertManager("cert-manager")</c> + <c>AddIssuer().WithAcmeServer(url, email).WithHttp01Solver()</c>
 /// combined with <c>gateway.WithTls(issuer)</c>. The Aspire deploy pipeline provisions the AKS
 /// cluster, ACR, VNet, AGC, installs the cert-manager Helm chart, applies the <c>ClusterIssuer</c>
 /// manifest, pre-creates the bootstrap TLS secret, and patches the discovered AGC FQDN onto
@@ -77,6 +77,9 @@ public sealed class AksAzureKubernetesEnvironmentCertManagerDeploymentTests(ITes
 
         try
         {
+            var pebbleDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, "pebble-eab");
+            await PebbleAcmeFixture.CreateAsync(pebbleDirectory, cancellationToken);
+
             using var terminal = DeploymentE2ETestHelpers.CreateTestTerminal();
             var pendingRun = terminal.RunAsync(cancellationToken);
 
@@ -134,13 +137,28 @@ var publicLb = aks.AddLoadBalancer("public", albSubnet);
 // Email registered with the staging ACME endpoint. Passed as a parameter so the test
 // supplies it via Parameters__acmeemail without burning it into AppHost source.
 var acmeEmail = builder.AddParameter("acmeemail");
+var acmeServer = builder.AddParameter("acmeserver");
 
 // Install cert-manager via the typed API and declare a Let's Encrypt STAGING ClusterIssuer.
 // Staging is intentional — production rate limits would block repeat E2E runs. The
 // staging endpoint exercises the same HTTP-01 + Gateway API solver flow end-to-end.
 var certManager = aks.AddCertManager("cert-manager");
 var letsEncrypt = certManager.AddIssuer("letsencrypt-staging")
-    .WithLetsEncryptStaging(acmeEmail)
+    .WithAcmeServer(acmeServer, acmeEmail)
+    .WithHttp01Solver();
+
+// Independent, fresh accounts test EAB registration and rejection without commercial-provider credentials.
+var pebbleHmac = builder.AddParameter("pebblehmac", secret: true);
+var pebbleInvalidHmac = builder.AddParameter("pebbleinvalidhmac", secret: true);
+var pebbleKeyId = builder.AddParameter("pebblekeyid");
+var pebbleServer = builder.AddParameter("pebbleserver");
+certManager.AddIssuer("pebble-valid")
+    .WithAcmeServer(pebbleServer, acmeEmail)
+    .WithExternalAccountBinding(pebbleKeyId, pebbleHmac)
+    .WithHttp01Solver();
+certManager.AddIssuer("pebble-invalid")
+    .WithAcmeServer(pebbleServer, acmeEmail)
+    .WithExternalAccountBinding(pebbleKeyId, pebbleInvalidHmac)
     .WithHttp01Solver();
 
 // Gateway with HTTPS listener. WithTls(letsEncrypt) creates the listener AND adds the
@@ -162,11 +180,10 @@ builder.Build().Run();
             content = content.Replace(buildRunPattern, replacement);
 
             const string pragmaBlock =
-                "#pragma warning disable ASPIREPIPELINES001\n" +
                 "#pragma warning disable ASPIRECOMPUTE003\n" +
                 "#pragma warning disable ASPIREAZURE003\n";
 
-            if (!content.Contains("#pragma warning disable ASPIREPIPELINES001"))
+            if (!content.Contains(pragmaBlock))
             {
                 content = pragmaBlock + content;
             }
@@ -186,7 +203,12 @@ builder.Build().Run();
                 $"unset ASPIRE_PLAYGROUND && unset Azure__Location && " +
                 $"export AZURE__LOCATION=westus3 && " +
                 $"export AZURE__RESOURCEGROUP={resourceGroupName} && " +
-                $"export Parameters__acmeemail={acmeEmail}");
+                $"export Parameters__acmeemail={acmeEmail} && " +
+                "export Parameters__acmeserver=https://acme-staging-v02.api.letsencrypt.org/directory && " +
+                $"export Parameters__pebblekeyid={PebbleAcmeFixture.KeyId} && " +
+                $"export Parameters__pebbleserver={PebbleAcmeFixture.DirectoryUrl} && " +
+                $"export Parameters__pebblehmac=$(cat \"{pebbleDirectory}/valid-key\") && " +
+                $"export Parameters__pebbleinvalidhmac=$(cat \"{pebbleDirectory}/invalid-key\")");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter);
 
@@ -205,6 +227,34 @@ builder.Build().Run();
                 $"az aks get-credentials -g {resourceGroupName} -n $AKS_NAME --overwrite-existing");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(60));
+
+            // The fixture has no registered accounts yet. Patch only test CA trust; all EAB
+            // configuration and both Secrets must have come from the actual Aspire deploy.
+            output.WriteLine("Verifying fresh ACME registration with required EAB...");
+            await auto.TypeAsync(
+                "test -z \"$(kubectl get clusterissuer pebble-valid -o jsonpath='{.status.acme.uri}')\" && " +
+                $"kubectl apply -f \"{pebbleDirectory}/pebble.json\" && " +
+                "kubectl rollout status deployment/pebble-acme -n cert-manager-chart --timeout=180s && " +
+                $"kubectl patch clusterissuer pebble-valid --type=merge --patch-file \"{pebbleDirectory}/trust.json\" && " +
+                $"kubectl patch clusterissuer pebble-invalid --type=merge --patch-file \"{pebbleDirectory}/trust.json\" && " +
+                "kubectl wait clusterissuer/pebble-valid --for=condition=Ready --timeout=300s && " +
+                "test -n \"$(kubectl get clusterissuer pebble-valid -o jsonpath='{.status.acme.uri}')\" && " +
+                "EAB_ACCOUNT_UID=$(kubectl get secret pebble-valid-account-key -n cert-manager-chart -o jsonpath='{.metadata.uid}') && " +
+                "test -n \"$EAB_ACCOUNT_UID\"");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(9));
+
+            await auto.TypeAsync(
+                "OK=0; for i in $(seq 1 60); do " +
+                "MESSAGE=$(kubectl get clusterissuer pebble-invalid -o jsonpath='{.status.conditions[?(@.type==\"Ready\")].message}') && " +
+                "READY=$(kubectl get clusterissuer pebble-invalid -o jsonpath='{.status.conditions[?(@.type==\"Ready\")].status}') && " +
+                "if [ \"$READY\" = 'False' ] && printf '%s' \"$MESSAGE\" | grep -q 'external account binding JWS verification error'; " +
+                "then OK=1; break; fi; sleep 5; done; " +
+                "test \"$OK\" = 1 && " +
+                "test -z \"$(kubectl get clusterissuer pebble-invalid -o jsonpath='{.status.acme.uri}')\" && " +
+                "echo 'PASS: valid EAB registered; invalid EAB was rejected by the ACME server'");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(6));
 
             output.WriteLine("Step 11: Waiting for pods to be ready...");
             await auto.TypeAsync("kubectl wait --for=condition=ready pod --all --all-namespaces --timeout=300s 2>/dev/null || true");
@@ -316,6 +366,13 @@ builder.Build().Run();
             await auto.TypeAsync("aspire deploy");
             await auto.EnterAsync();
             await auto.WaitForPipelineSuccessAsync(timeout: TimeSpan.FromMinutes(20));
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
+
+            await auto.TypeAsync(
+                "kubectl wait clusterissuer/pebble-valid --for=condition=Ready --timeout=60s && " +
+                "test \"$EAB_ACCOUNT_UID\" = \"$(kubectl get secret pebble-valid-account-key -n cert-manager-chart -o jsonpath='{.metadata.uid}')\" && " +
+                "echo 'PASS: redeployment preserved the registered ACME account key'");
+            await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
 
             output.WriteLine("Step 19: Destroying deployment...");

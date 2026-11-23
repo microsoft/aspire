@@ -14,6 +14,7 @@ internal static class MsBuildResponseFileFactory
 {
     public static async Task<MsBuildResponseFile?> CreateAsync(
         IReadOnlyDictionary<string, string> properties,
+        bool isFileBasedApp,
         ILogger logger,
         CancellationToken cancellationToken)
     {
@@ -52,8 +53,12 @@ internal static class MsBuildResponseFileFactory
                 // MSBuild's response-file tokenizer splits on all Unicode whitespace. Quoting the complete switch
                 // keeps those characters in the property value; percent escaping handles embedded quotes,
                 // backslashes, and line-breaking whitespace without relying on platform quoting rules.
+                // The .NET CLI parses switches for file-based apps itself and does not recognize a quoted switch,
+                // so it would fall back to MSBuild. Its parser consumes a trailing ';', which also keeps it from
+                // trimming trailing Unicode whitespace from the value.
+                var argument = CreatePropertyArgument(name, value);
                 await writer.WriteLineAsync(
-                    $"\"{CreatePropertyArgument(name, value)}\"".AsMemory(),
+                    (isFileBasedApp ? $"{argument};" : $"\"{argument}\"").AsMemory(),
                     cancellationToken).ConfigureAwait(false);
             }
 
@@ -68,6 +73,17 @@ internal static class MsBuildResponseFileFactory
 
     public static string CreatePropertyArgument(string name, string value) =>
         $"--property:{EscapePropertyValue(name)}={EscapePropertyValue(value)}";
+
+    // Escaped ';' (%3B) stays literal when MSBuild expands a property into items, so list-valued properties
+    // such as RuntimeIdentifiers would collapse into a single entry. Escape each entry and keep the separators
+    // as real ';' inside quotes so MSBuild's property-switch parser doesn't split the value into new properties.
+    public static string CreateListPropertyArgument(string name, IEnumerable<string> values) =>
+        $"--property:{EscapePropertyValue(name)}=\"{string.Join(';', values.Select(EscapePropertyValue))}\"";
+
+    // The .NET CLI parses property switches for file-based apps instead of MSBuild. It keeps quotes literally
+    // and appends ';' segments without '=' to the previous value, so list values must be passed unquoted.
+    public static string CreateFileBasedAppListPropertyArgument(string name, IEnumerable<string> values) =>
+        $"--property:{EscapePropertyValue(name)}={string.Join(';', values.Select(EscapePropertyValue))}";
 
     internal static void TryDeleteDirectory(DirectoryInfo directory, ILogger logger)
     {

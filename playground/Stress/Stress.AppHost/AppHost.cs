@@ -6,6 +6,10 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 #pragma warning disable ASPIREDOTNETTOOL
+#pragma warning disable ASPIRERESOURCETRAITS001 // Resource tag APIs are experimental.
+#pragma warning disable ASPIRETERMINAL001
+
+const string telemetryReplayTag = "Telemetry replay and cross-region recovery drill";
 
 var builder = DistributedApplication.CreateBuilder(args);
 builder.Services.AddHttpClient();
@@ -17,22 +21,26 @@ builder.Services.AddHealthChecks().AddAsyncCheck("health-test", async (ct) =>
 });
 
 var manualArgSource = builder.AddExecutable("manual-arg-source", "dotnet", Environment.CurrentDirectory)
+    .WithTags("Command-line fixtures", "Runtime", "Diagnostics")
     .WithHttpEndpoint(targetPort: 8088);
 var manualArgEndpoint = manualArgSource.GetEndpoint("http");
 
 manualArgSource.WithArgs("--dashboard-port")
     .WithArgs(c => c.Args.Add(manualArgEndpoint.Property(EndpointProperty.Port)));
 
-builder.AddProject<Projects.Stress_Empty>("manual-project-args", launchProfileName: null)
+builder.AddDotnetProject("manual-project-args", "../Stress.Empty/Stress.Empty.csproj", options => options.ExcludeLaunchProfile = true)
+    .WithTags("Command-line fixtures", "Runtime")
     .WithArgs("--dashboard-port")
     .WithArgs(c => c.Args.Add(manualArgEndpoint.Property(EndpointProperty.Port)));
 
 builder.AddContainer("manual-container-args", "alpine")
+    .WithTags("Command-line fixtures", "Runtime", "Containers")
     .WithEntrypoint("sleep")
     .WithArgs("3600", "--dashboard-port")
     .WithArgs(c => c.Args.Add(manualArgEndpoint.Property(EndpointProperty.Port)));
 
 builder.AddDotnetTool("manual-dotnet-tool-args", "dotnet-dump")
+    .WithTags("Command-line fixtures", "Diagnostics")
     .WithArgs("--version", "--dashboard-port")
     .WithArgs(c => c.Args.Add(manualArgEndpoint.Property(EndpointProperty.Port)))
     .WithExplicitStart();
@@ -40,13 +48,20 @@ builder.AddDotnetTool("manual-dotnet-tool-args", "dotnet-dump")
 for (var i = 0; i < 2; i++)
 {
     var name = $"test-{i:0000}";
-    var rb = builder.AddTestResource(name);
+    var rb = builder.AddTestResource(name)
+        .WithTags("Resource hierarchy");
     IResource parent = rb.Resource;
 
     for (var j = 0; j < 3; j++)
     {
         name += $"-n{j}";
-        var nestedRb = builder.AddNestedResource(name, parent);
+        var nestedRb = builder.AddNestedResource(name, parent)
+            .WithTags("Resource hierarchy");
+        if (j == 2)
+        {
+            nestedRb.WithTags("Leaf resources");
+        }
+
         parent = nestedRb.Resource;
     }
 }
@@ -56,6 +71,7 @@ builder.AddParameter("testParameterResource", () => "value", secret: true);
 var apiKeyParam = builder.AddParameter("api-key", () => "value", secret: true);
 var connectionStringParam = builder.AddParameter("db-connection-string", () => "value");
 builder.AddContainer("hiddenContainer", "alpine")
+    .WithTags("Containers", "Diagnostics")
     .WithHidden()
     .WithInitialState(new CustomResourceSnapshot
     {
@@ -65,7 +81,8 @@ builder.AddContainer("hiddenContainer", "alpine")
 
 // TODO: OTEL env var can be removed when OTEL libraries are updated to 1.9.0
 // See https://github.com/open-telemetry/opentelemetry-dotnet/blob/main/RELEASENOTES.md#1100
-var serviceBuilder = builder.AddProject<Projects.Stress_ApiService>("stress-apiservice", launchProfileName: null)
+var serviceBuilder = builder.AddDotnetProject("stress-apiservice", "../Stress.ApiService/Stress.ApiService.csproj", options => options.ExcludeLaunchProfile = true)
+    .WithTags("Runtime", "Diagnostics", "Load test", telemetryReplayTag, "Endpoint fan-out")
     .WithEnvironment("OTEL_DOTNET_EXPERIMENTAL_METRICS_EMIT_OVERFLOW_ATTRIBUTE", "true")
     .WithEnvironment("API_KEY", apiKeyParam)
     .WithEnvironment("DB_CONNECTION_STRING", connectionStringParam)
@@ -82,7 +99,9 @@ for (var i = 1; i <= 30; i++)
     serviceBuilder.WithHttpEndpoint(port, name: $"http-{port}");
 }
 
-var telemetryBuilder = builder.AddProject<Projects.Stress_TelemetryService>("stress-telemetryservice")
+// Give two tags identical members but very different label widths.
+var telemetryBuilder = builder.AddDotnetProject("stress-telemetryservice", "../Stress.TelemetryService/Stress.TelemetryService.csproj")
+       .WithTags("Diagnostics", "Load test", telemetryReplayTag)
        .WithUrls(c => c.Urls.Add(new() { Url = "https://someplace.com", DisplayText = "Some place" }))
        .WithUrl("https://someotherplace.com/some-path", "Some other place")
        .WithUrl("https://extremely-long-url.com/abcdefghijklmnopqrstuvwxyz/abcdefghijklmnopqrstuvwxyz/abcdefghijklmnopqrstuvwxyz//abcdefghijklmnopqrstuvwxyz/abcdefghijklmnopqrstuvwxyz/abcdefghijklmnopqrstuvwxyz/abcdefghijklmnopqrstuvwxyz/abcdefghijklmno");
@@ -101,7 +120,7 @@ builder.AddCommandResources(serviceBuilder, telemetryBuilder);
 // dashboard launch experience, Refer to Directory.Build.props for the path to
 // the dashboard binary (defaults to the Aspire.Dashboard bin output in the
 // artifacts dir).
-var dashboardBuilder = builder.AddProject<Projects.Aspire_Dashboard>(KnownResourceNames.AspireDashboard);
+var dashboardBuilder = builder.AddDotnetProject(KnownResourceNames.AspireDashboard, "../../../src/Aspire.Dashboard/Aspire.Dashboard.csproj");
 if (string.Equals(builder.Configuration["STRESS_REMOVE_DASHBOARD_LIMITS"], bool.TrueString, StringComparison.OrdinalIgnoreCase))
 {
     var unlimited = int.MaxValue.ToString(CultureInfo.InvariantCulture);
@@ -133,7 +152,8 @@ IResourceBuilder<IResource>? previousResourceBuilder = null;
 
 for (var i = 0; i < 3; i++)
 {
-    var resourceBuilder = builder.AddProject<Projects.Stress_Empty>($"empty-{i:0000}", launchProfileName: null)
+    var resourceBuilder = builder.AddDotnetProject($"empty-{i:0000}", "../Stress.Empty/Stress.Empty.csproj", options => options.ExcludeLaunchProfile = true)
+                                .WithTags("Startup chain", "Runtime")
                                 .WithIconName("Document");
     if (previousResourceBuilder != null)
     {
@@ -144,13 +164,37 @@ for (var i = 0; i < 3; i++)
     previousResourceBuilder = resourceBuilder;
 }
 
-builder.AddProject<Projects.Stress_Empty>("empty-profile-1", launchProfileName: "Profile1");
-builder.AddProject<Projects.Stress_Empty>("empty-profile-2", launchProfileName: "Profile1")
+builder.AddDotnetProject("empty-profile-1", "../Stress.Empty/Stress.Empty.csproj", options => options.LaunchProfileName = "Profile1");
+builder.AddDotnetProject("empty-profile-2", "../Stress.Empty/Stress.Empty.csproj", options => options.LaunchProfileName = "Profile1")
     .WithEnvironment("APPHOST_ENV_VAR", "test")
     .WithEnvironment("ENV_TO_OVERRIDE", "this value came from the apphost")
     .WithArgs("arg_from_apphost");
 
 builder.AddNoStatusResource("no-status-resource");
 builder.AddPropertyStressResource("property-stress-resource");
+
+if (OperatingSystem.IsWindows())
+{
+    builder.AddExecutable("stress-shell", "cmd.exe", ".")
+        .WithTerminal();
+}
+else
+{
+    builder.AddExecutable("stress-shell", "/bin/bash", ".", "-i", "-l")
+        .WithTerminal();
+}
+
+// The dashboard isn't running yet during BeforeStartEvent, so the interaction service reports itself
+// as unavailable. Without that guard, awaiting this prompt would block the app host from starting.
+builder.Eventing.Subscribe<BeforeStartEvent>(async (e, ct) =>
+{
+    var interactionService = e.Services.GetRequiredService<IInteractionService>();
+    if (!interactionService.IsAvailable)
+    {
+        return;
+    }
+
+    await interactionService.PromptMessageBoxAsync("Before start", "This prompt should never be shown before the app host starts.", cancellationToken: ct);
+});
 
 builder.Build().Run();

@@ -98,6 +98,10 @@ TAP_ROOT=""
 remove_tap() {
   local tap_name="$1"
 
+  # `brew untap` does not remove trust entries, so drop the cask trust granted
+  # below (or implicitly by `brew install`) to avoid leaving it in the user's
+  # persistent Homebrew trust store.
+  brew untrust --cask "$tap_name/$CASK_NAME" >/dev/null 2>&1 || true
   brew untap "$tap_name" >/dev/null 2>&1 || true
 
   local tap_org="${tap_name%%/*}"
@@ -185,6 +189,11 @@ echo ""
 # All of these run in LiveRelease in `homebrew-validate-release.yml` for every
 # released version, so a regression in any of them surfaces there.
 echo "Auditing cask via local tap..."
+# Homebrew 7.0.11+ only grants implicit trust to fully qualified names for
+# install/reinstall/upgrade; `brew audit` refuses to load a cask from an
+# untrusted non-official tap. `brew test-bot` trusts the tap only inside its
+# own temporary HOME, so trust just this cask before auditing it.
+brew trust --cask "$TAP_NAME/$CASK_NAME"
 audit_args=(--cask --online)
 if [[ "$VALIDATION_MODE" == "LiveArchives" ]]; then
   audit_args=(--cask)

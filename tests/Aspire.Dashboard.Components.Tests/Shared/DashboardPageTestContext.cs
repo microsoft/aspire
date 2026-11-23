@@ -43,6 +43,7 @@ public abstract class DashboardTestContext : BunitContext
             return true;
         }).SetVoidResult();
         JSInterop.Setup<bool>($"{VirtualizeJsFunctionsPrefix}isFollowingBottom", _ => true).SetResult(false);
+        JSInterop.Setup<bool>($"{VirtualizeJsFunctionsPrefix}isFollowingTop", _ => true).SetResult(false);
     }
 
     private void RemoveBunitVirtualizeHandler()

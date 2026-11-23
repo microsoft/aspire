@@ -1,0 +1,72 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
+  <file datatype="xml" source-language="en" target-language="ru" original="../TrayCommandStrings.resx">
+    <body>
+      <trans-unit id="BundleRequired">
+        <source>The Aspire tray requires a leased, versioned CLI bundle. No usable bundle was found. Install an Aspire bundle that includes the tray companion for your desktop.</source>
+        <target state="translated">Для области Aspire требуется арендуемый пакет CLI с указанием версии. Подходящий пакет не найден. Установите пакет Aspire, включающий компаньон области уведомлений для рабочего стола.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="Description">
+        <source>Manage the desktop tray companion (Preview)</source>
+        <target state="translated">Управление компаньоном области уведомлений на рабочем столе (предварительная версия)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HelperFailed">
+        <source>The Aspire tray '{0}' helper failed with exit code {1}.</source>
+        <target state="translated">Сбой модуля поддержки '{0}' Aspire лотка с кодом завершения {1}.</target>
+        <note>{0} is the start or stop subcommand name. {1} is the helper exit code.</note>
+      </trans-unit>
+      <trans-unit id="HelperTimedOut">
+        <source>The Aspire tray '{0}' helper did not acknowledge completion within 30 seconds.</source>
+        <target state="translated">Вспомогательное приложение трея Aspire "{0}" не подтвердило выполнение в течение 30 секунд.</target>
+        <note>{0} is the start or stop subcommand name.</note>
+      </trans-unit>
+      <trans-unit id="NativeCliRequired">
+        <source>Starting the tray requires an installed native Aspire CLI executable. Managed development builds and 'dotnet aspire.dll' are not supported.</source>
+        <target state="translated">Для запуска области требуется установленный собственный исполняемый файл Aspire CLI. Управляемые сборки для разработки и "dotnet aspire.dll" не поддерживаются.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NoTrayHost">
+        <source>The desktop has no tray host, so the tray icon won't appear yet. Enable an AppIndicator extension on GNOME or your desktop's tray module. The icon appears as soon as tray support is available.</source>
+        <target state="translated">На рабочем столе нет узла области уведомлений, поэтому значок пока не появится. Включите расширение AppIndicator в GNOME или модуль области уведомлений рабочего стола. Значок появляется, как только становится доступна поддержка области уведомлений.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="OperationFailed">
+        <source>Could not complete Aspire tray '{0}': {1}</source>
+        <target state="translated">Не удалось выполнить трей Aspire "{0}": {1}</target>
+        <note>{0} is the start or stop subcommand name. {1} is the underlying error message.</note>
+      </trans-unit>
+      <trans-unit id="PayloadMissing">
+        <source>The CLI bundle does not contain the tray companion for this platform (Windows: tray/aspire-tray.exe and tray/Aspire.ico; macOS: tray/Aspire Tray.app; Linux: tray/aspire-tray and tray/Aspire.png). Install a matching native Aspire bundle, or run 'aspire setup --force' to repair an incomplete extraction.</source>
+        <target state="translated">Пакет CLI не содержит компаньон области уведомлений для этой платформы (Windows: tray/aspire-tray.exe и tray/Aspire.ico. macOS: tray/Aspire Tray.app. Linux: tray/aspire-tray и tray/Aspire.png). Установите соответствующий собственный пакет Aspire или выполните "aspire setup --force" для восстановления неполного извлечения.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="StartDescription">
+        <source>Start or restore the tray icon (Preview)</source>
+        <target state="translated">Запустить или восстановить значок области (предварительная версия)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="Started">
+        <source>The Aspire Tray is starting.</source>
+        <target state="translated">Запускается Aspire в области уведомлений.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="StopDescription">
+        <source>Stop the tray without stopping AppHosts (Preview)</source>
+        <target state="translated">Остановить область без остановки AppHost (предварительная версия)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="Stopped">
+        <source>The Aspire tray is stopped. AppHosts were not stopped.</source>
+        <target state="translated">Трей Aspire остановлен. AppHosts не остановлены.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="UnsupportedPlatform">
+        <source>The Aspire tray supports Windows, macOS, and glibc Linux x64/ARM64 installations. Linux requires a graphical desktop with StatusNotifierItem support, GTK 3, and an AppIndicator library.</source>
+        <target state="translated">Лоток Aspire поддерживает установки Windows, macOS и glibc Linux x64/ARM64. Для Linux требуется графический рабочий стол с поддержкой StatusNotifierItem, GTK 3 и библиотека AppIndicator.</target>
+        <note />
+      </trans-unit>
+    </body>
+  </file>
+</xliff>

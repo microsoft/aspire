@@ -14,6 +14,7 @@ From your AppHost directory, add the `Aspire.Hosting.Azure.AppConfiguration` int
 
 ```bash
 aspire add Aspire.Hosting.Azure.AppConfiguration
+aspire add Aspire.Hosting.Dotnet
 ```
 
 ## Configure Azure Provisioning for local development
@@ -40,7 +41,7 @@ In the AppHost, add an App Configuration connection and reference it from anothe
 ```csharp
 var appConfig = builder.AddAzureAppConfiguration("config");
 
-var myService = builder.AddProject<Projects.MyService>()
+var myService = builder.AddDotnetProject("myservice", "../MyService/MyService.csproj")
                        .WithReference(appConfig);
 ```
 

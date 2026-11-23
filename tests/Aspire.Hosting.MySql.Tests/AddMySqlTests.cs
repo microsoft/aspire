@@ -305,6 +305,29 @@ public class AddMySqlTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task WithPhpMyAdminServerConfigFileIsMountedOnceAcrossRestarts()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        builder.Configuration["Aspire:Store:Path"] = workspace.Path;
+
+        var mysql1 = builder.AddMySql("mysql1").WithPhpMyAdmin();
+        var mysql2 = builder.AddMySql("mysql2").WithPhpMyAdmin();
+
+        using var app = builder.Build();
+
+        var myAdmin = builder.Resources.Single(r => r.Name.Equals("phpmyadmin"));
+
+        // The config file is mounted from BeforeResourceStartedEvent, which is raised again on every restart.
+        await builder.Eventing.PublishAsync<BeforeResourceStartedEvent>(new(myAdmin, app.Services));
+        await builder.Eventing.PublishAsync<BeforeResourceStartedEvent>(new(myAdmin, app.Services));
+
+        var mount = Assert.Single(myAdmin.Annotations.OfType<ContainerMountAnnotation>());
+        Assert.Equal("/etc/phpmyadmin/config.user.inc.php", mount.Target);
+    }
+
+    [Fact]
     public void ThrowsWithIdenticalChildResourceNames()
     {
         using var builder = TestDistributedApplicationBuilder.Create(outputHelper);

@@ -6,13 +6,12 @@ using System.Runtime.CompilerServices;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.ApplicationModel.Docker;
 using Aspire.Hosting.Pipelines;
+using Aspire.Hosting.Publishing;
 using Aspire.Hosting.Python;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
-#pragma warning disable ASPIREDOCKERFILEBUILDER001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREEXTENSION001
-#pragma warning disable ASPIREPIPELINES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREPUBLISHERS001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIRECERTIFICATES001
 
@@ -477,6 +476,24 @@ public static class PythonAppResourceBuilderExtensions
                 });
         });
 
+        if (builder.ExecutionContext.IsPublishMode &&
+            builder.TryCreateResourceBuilder<ContainerResource>(resource.Name, out var containerBuilder))
+        {
+            Task WriteValidatedContainerAsync(ManifestPublishingContext context)
+            {
+                ValidateExistingDockerfileEntrypoint(resource, containerBuilder.Resource, entrypointType, entrypoint);
+                return context.WriteContainerAsync(containerBuilder.Resource);
+            }
+
+            resourceBuilder.WithManifestPublishingCallback(WriteValidatedContainerAsync);
+            containerBuilder.WithManifestPublishingCallback(WriteValidatedContainerAsync);
+            containerBuilder.AddPublishValidation(
+                $"validate-python-dockerfile-entrypoint-{resource.Name}",
+                $"Validates that Python app '{resource.Name}' does not publish an ignored entrypoint with an existing Dockerfile.",
+                [WellKnownPipelineSteps.Build, WellKnownPipelineSteps.Publish],
+                _ => ValidateExistingDockerfileEntrypoint(resource, containerBuilder.Resource, entrypointType, entrypoint));
+        }
+
         resourceBuilder.WithPipelineConfiguration(context =>
         {
             if (resourceBuilder.Resource.TryGetAnnotationsOfType<ContainerFilesDestinationAnnotation>(out var containerFilesAnnotations))
@@ -524,6 +541,48 @@ public static class PythonAppResourceBuilderExtensions
 
         return resourceBuilder;
     }
+
+    /// <summary>
+    /// Fails when publish uses an existing Dockerfile but the entrypoint was changed after the app was added.
+    /// </summary>
+    private static void ValidateExistingDockerfileEntrypoint(
+        PythonAppResource resource, ContainerResource containerResource, EntrypointType declaredType, string declaredEntrypoint)
+    {
+        if (containerResource.Entrypoint is not null ||
+            !containerResource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out var dockerfileBuildAnnotation) ||
+            dockerfileBuildAnnotation.DockerfileFactory is not null ||
+            !resource.TryGetLastAnnotation<PythonEntrypointAnnotation>(out var entrypointAnnotation))
+        {
+            return;
+        }
+
+        // Python has no default entrypoint: every AddPython* method records the one it was called with, and
+        // apps that ship their own Dockerfile are expected to run it. Only a later WithEntrypoint(...) that
+        // changes it is an explicit request an existing Dockerfile cannot honor, so re-stating the same
+        // entrypoint is not a conflict.
+        if (entrypointAnnotation.Type == declaredType &&
+            (string.Equals(entrypointAnnotation.Entrypoint, declaredEntrypoint, StringComparison.Ordinal) ||
+             (declaredType == EntrypointType.Script &&
+              IsSameScriptPath(resource.WorkingDirectory, entrypointAnnotation.Entrypoint, declaredEntrypoint))))
+        {
+            return;
+        }
+
+        // Existing Dockerfiles are user-authored, so Aspire cannot know which script, module or executable
+        // they run. If the user provides an explicit container entrypoint, honor it; otherwise fail
+        // instead of silently publishing an image that ignores the requested entrypoint.
+        throw new DistributedApplicationException(
+            $"Python app resource '{resource.Name}' is configured to run {entrypointAnnotation.Type.ToString().ToLowerInvariant()} '{entrypointAnnotation.Entrypoint}', but publish is using the existing Dockerfile '{dockerfileBuildAnnotation.DockerfilePath}'. " +
+            "An existing Dockerfile entrypoint cannot be changed automatically from WithEntrypoint. " +
+            "Remove or rename the Dockerfile so Aspire can generate one, or call PublishAsDockerFile(...) and set the container entrypoint explicitly.");
+    }
+
+    // Script entrypoints are relative to the app directory, so "main.py" and "./main.py" name the same file.
+    private static bool IsSameScriptPath(string appDirectory, string left, string right) =>
+        string.Equals(
+            Path.GetFullPath(left, appDirectory),
+            Path.GetFullPath(right, appDirectory),
+            OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
 
     private static void GenerateUvDockerfile(DockerfileBuilderCallbackContext context, PythonAppResource resource,
         string pythonVersion, EntrypointType entrypointType, string entrypoint)

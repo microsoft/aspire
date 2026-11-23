@@ -196,7 +196,7 @@ internal sealed class TerminalHostControlListener : IAsyncDisposable
         {
             await using var stream = new NetworkStream(client, ownsSocket: true);
 
-            var formatter = new SystemTextJsonFormatter();
+            var formatter = TerminalHostControlJsonSerializerContext.CreateRpcMessageFormatter();
             var handler = new HeaderDelimitedMessageHandler(stream, stream, formatter);
 
             rpc = new JsonRpc(handler);

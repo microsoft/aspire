@@ -2,6 +2,11 @@
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="ko" original="../NewCommandStrings.resx">
     <body>
+      <trans-unit id="BuiltInTemplates">
+        <source>Built-in templates</source>
+        <target state="translated">기본 제공 템플릿</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ChannelOptionDescription">
         <source>Channel to use for templates (stable, daily)</source>
         <target state="translated">템플릿에 사용할 채널(안정, 데일리)</target>
@@ -12,29 +17,39 @@
         <target state="translated">템플릿에 사용할 채널(안정, 스테이징, 데일리)</target>
         <note />
       </trans-unit>
+      <trans-unit id="ConfiguredTemplateConflictingOptions">
+        <source>Templates from configured sources cannot be combined with --source, --version, --channel, or --language.</source>
+        <target state="translated">구성된 원본의 템플릿은 --source, --version, --channel 또는 --language와 함께 사용할 수 없습니다.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="CreateProjectDirectlyInSelectedFolderChoice">
         <source>Directly in the selected folder</source>
-        <target state="new">Directly in the selected folder</target>
+        <target state="translated">선택한 폴더에서 직접</target>
         <note />
       </trans-unit>
       <trans-unit id="CreateProjectNameSubdirectoryChoice">
         <source>In a subdirectory named '{0}' in the selected folder</source>
-        <target state="new">In a subdirectory named '{0}' in the selected folder</target>
+        <target state="translated">선택한 폴더의 '{0}' 하위 디렉터리에 있음</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
         <source>Create a new app from an Aspire starter template</source>
-        <target state="needs-review-translation">새 Aspire 프로젝트를 만듭니다.</target>
+        <target state="translated">Aspire 시작 템플릿에서 새 앱 만들기</target>
         <note />
       </trans-unit>
       <trans-unit id="EnterTheOutputPath">
         <source>Enter the output path</source>
-        <target state="new">Enter the output path</target>
+        <target state="translated">출력 경로 입력</target>
         <note />
       </trans-unit>
       <trans-unit id="EnterTheProjectName">
         <source>Enter the project name</source>
         <target state="translated">프로젝트 이름 입력</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InvalidConfiguredTemplateSource">
+        <source>Expected a source object with an absolute 'path', or a 'repository' and optional 'ref'/'path'. Use 'aspire template source add' to configure a source.</source>
+        <target state="translated">절대 'path'가 있는 원본 개체 또는 리포지토리와 선택적 'ref'/'path'가 있는 원본 개체가 필요합니다. 원본을 구성하려면 'aspire template source add'를 사용하세요.</target>
         <note />
       </trans-unit>
       <trans-unit id="InvalidProjectName">
@@ -44,57 +59,82 @@
       </trans-unit>
       <trans-unit id="LanguageOptionDescription">
         <source>The programming language for the AppHost</source>
-        <target state="new">The programming language for the AppHost</target>
+        <target state="translated">AppHost에 대한 프로그래밍 언어</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="LocalTemplateCreationFailed">
+        <source>Could not create the local template ({0}): {1}</source>
+        <target state="translated">로컬 템플릿을 만들 수 없습니다({0}). {1}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="LocalTemplateLoadFailed">
+        <source>Could not load the local template: {0}</source>
+        <target state="translated">로컬 템플릿을 로드할 수 없습니다. {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="LocalTemplateSelectionRequiresInteraction">
+        <source>The directory contains multiple templates. Run interactively to select one, or point --template-path at a single template directory.</source>
+        <target state="translated">디렉터리에 여러 템플릿이 포함되어 있습니다. 대화형으로 실행해 하나를 선택하거나, --template-path에 단일 템플릿 디렉터리의 경로를 지정하세요.</target>
         <note />
       </trans-unit>
       <trans-unit id="NameArgumentDescription">
         <source>The name of the project to create</source>
-        <target state="needs-review-translation">만들 프로젝트의 이름입니다.</target>
+        <target state="translated">만들 프로젝트의 이름입니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoChannelFoundMatching">
         <source>No channel found matching '{0}'. Valid options are: {1}.</source>
-        <target state="new">No channel found matching '{0}'. Valid options are: {1}.</target>
+        <target state="translated">'{0}'과 일치하는 채널을 찾을 수 없습니다. 유효한 옵션은 {1}입니다.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NoConfiguredTemplateSources">
+        <source>No usable template sources are configured. Use 'aspire template source add &lt;name&gt;' with '--path' or '--repository'. Sources are stored globally.</source>
+        <target state="translated">사용할 수 있는 템플릿 원본이 구성되지 않았습니다. '--path' 또는 '--repository'와 함께 'aspire template source add &lt;name&gt;'을 사용하세요. 원본은 전역으로 저장됩니다.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NoLocalTemplatesFound">
+        <source>No .NET templates were found in '{0}'. Expected a .template.config/template.json file in the directory or one of its subdirectories.</source>
+        <target state="translated">'{0}'에서 .NET 템플릿을 찾을 수 없습니다. 디렉터리 또는 하위 디렉터리 중 하나에 .template.config/template.json 파일이 있어야 합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoMatchingLocalTemplatePackage">
         <source>No matching local Aspire.ProjectTemplates package was found for Aspire CLI version '{0}'. Build and stage matching packages with localhive.sh (macOS/Linux) or localhive.ps1 (Windows), set ASPIRE_CLI_PACKAGES to a directory containing the package, or explicitly choose feed-backed templates with --channel, --source, or --version.</source>
-        <target state="new">No matching local Aspire.ProjectTemplates package was found for Aspire CLI version '{0}'. Build and stage matching packages with localhive.sh (macOS/Linux) or localhive.ps1 (Windows), set ASPIRE_CLI_PACKAGES to a directory containing the package, or explicitly choose feed-backed templates with --channel, --source, or --version.</target>
+        <target state="translated">Aspire CLI 버전 '{0}'와(과) 일치하는 로컬 Aspire.ProjectTemplates 패키지를 찾을 수 없습니다. localhive.sh(macOS/Linux) 또는 localhive.ps1(Windows)를 사용해 일치하는 패키지를 빌드하고 스테이징하세요. 또는 ASPIRE_CLI_PACKAGES를 패키지가 포함된 디렉터리로 설정하거나 --channel, --source 또는 --version을 사용해 피드 기반 템플릿을 명시적으로 선택하세요.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoPackageChannelsAvailable">
         <source>No package channels are available.</source>
-        <target state="new">No package channels are available.</target>
+        <target state="translated">사용할 수 있는 패키지 채널이 없습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoTemplateVersionsFoundInChannel">
         <source>No template versions found in channel '{0}'.</source>
-        <target state="new">No template versions found in channel '{0}'.</target>
+        <target state="translated">채널 '{0}'에서 템플릿 버전을 찾을 수 없습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="NonInteractiveTemplateRequired">
         <source>A template must be specified when running in non-interactive mode. Use 'aspire new &lt;template&gt;'.</source>
-        <target state="new">A template must be specified when running in non-interactive mode. Use 'aspire new &lt;template&gt;'.</target>
+        <target state="translated">비대화형 모드에서 실행할 때는 템플릿을 지정해야 합니다. 'new &lt;template&gt;'을 사용합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="OutputArgumentDescription">
         <source>The output path for the project</source>
-        <target state="needs-review-translation">프로젝트의 출력 경로입니다.</target>
+        <target state="translated">프로젝트의 출력 경로</target>
         <note />
       </trans-unit>
       <trans-unit id="OutputDirectoryNotEmptyNonInteractive">
         <source>The output directory '{0}' already exists and is not empty. Specify --output with a different location.</source>
-        <target state="new">The output directory '{0}' already exists and is not empty. Specify --output with a different location.</target>
+        <target state="translated">출력 디렉터리 '{0}'이(가) 이미 존재하며 비어 있지 않습니다. --output 옵션 다른 위치를 지정하세요.</target>
         <note />
       </trans-unit>
       <trans-unit id="OutputDirectoryNotEmptyInteractive">
         <source>The output directory '{0}' already exists and is not empty. Specify a different location.</source>
-        <target state="new">The output directory '{0}' already exists and is not empty. Specify a different location.</target>
+        <target state="translated">출력 디렉터리 '{0}'가 이미 있으며 비어 있지 않습니다. 다른 위치를 지정하십시오.</target>
         <note />
       </trans-unit>
       <trans-unit id="OutputPathContainsInvalidCharacters">
         <source>The output path '{0}' contains invalid characters.</source>
-        <target state="new">The output path '{0}' contains invalid characters.</target>
+        <target state="translated">출력 경로 '{0}'에 잘못된 문자가 포함되어 있습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResolvingTemplateVersion">
@@ -114,22 +154,232 @@
       </trans-unit>
       <trans-unit id="SelectProjectCreationLocation">
         <source>Where do you want the project to be created?</source>
-        <target state="new">Where do you want the project to be created?</target>
+        <target state="translated">어디에 프로젝트를 만들까요?</target>
         <note />
       </trans-unit>
       <trans-unit id="SourceArgumentDescription">
         <source>The NuGet source to use for the project templates</source>
-        <target state="needs-review-translation">프로젝트 템플릿에 사용할 NuGet 소스입니다.</target>
+        <target state="translated">프로젝트 템플릿에 사용할 NuGet 원본</target>
         <note />
       </trans-unit>
       <trans-unit id="SourceDirectoryNotFound">
         <source>The local NuGet source directory '{0}' does not exist.</source>
-        <target state="new">The local NuGet source directory '{0}' does not exist.</target>
+        <target state="translated">로컬 NuGet 원본 디렉터리 '{0}'이(가) 없습니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="SourceWithCredentialsCannotBePersisted">
         <source>The --source URL includes credentials, a query string, or a fragment and cannot be written to the project's NuGet.config. Configure credentials with NuGet credential providers or user-level NuGet configuration, then pass the feed URL without embedded secrets.</source>
-        <target state="new">The --source URL includes credentials, a query string, or a fragment and cannot be written to the project's NuGet.config. Configure credentials with NuGet credential providers or user-level NuGet configuration, then pass the feed URL without embedded secrets.</target>
+        <target state="translated">--source URL에 자격 증명, 쿼리 문자열 또는 프래그먼트가 포함되어 있어 프로젝트의 NuGet.config에 기록할 수 없습니다. NuGet 자격 증명 공급자 또는 사용자 수준 NuGet 구성을 사용해 자격 증명을 구성한 다음, 비밀이 포함되지 않은 피드 URL을 전달하세요.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateCommandDescription">
+        <source>Manage project templates.</source>
+        <target state="translated">프로젝트 템플릿 관리</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateDirectoryNotFound">
+        <source>The template directory '{0}' does not exist.</source>
+        <target state="translated">템플릿 디렉터리 '{0}'이(가) 없습니다.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplatePathConflictingOptions">
+        <source>--template-path and --template-repository require non-empty values and cannot be combined with a template subcommand, --source, --version, --channel, or --language.</source>
+        <target state="translated">--template-path와 --template-repository에는 비어 있지 않은 값을 지정해야 합니다. 템플릿 하위 명령, --source, --version, --channel 또는 --language와 함께 사용할 수 없습니다.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplatePathOptionDescription">
+        <source>Path to an unpacked .NET template package directory (relative to the repository when --template-repository is specified)</source>
+        <target state="translated">압축을 푼 .NET 템플릿 패키지 디렉터리의 경로입니다. --template-repository를 지정한 경우 리포지토리를 기준으로 한 상대 경로입니다.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateRepositoryGitExited">
+        <source>Git failed with exit code {0}: {1}</source>
+        <target state="translated">종료 코드 {1}을(를) 반환하며 테스트 {0}에 실패했습니다.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateRepositoryGitFailed">
+        <source>Could not access the template repository: {0}</source>
+        <target state="translated">템플릿 리포지토리에 액세스할 수 없습니다: {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateRepositoryGitUnavailable">
+        <source>Git could not be started. Install Git and ensure it is on PATH.</source>
+        <target state="translated">Git을 시작할 수 없습니다. Git을 설치하고 PATH에 포함되어 있는지 확인하세요.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateRepositoryOptionDescription">
+        <source>Clone a Git repository containing templates; --template-path is relative to its root</source>
+        <target state="translated">템플릿이 포함된 Git 리포지토리를 복제합니다. --template-path는 리포지토리 루트를 기준으로 한 상대 경로입니다.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateRepositoryPathInvalid">
+        <source>Template repository paths must be relative and stay within the repository without traversing symbolic links.</source>
+        <target state="translated">템플릿 리포지토리 경로는 상대 경로여야 하며 심볼릭 링크를 따라가지 않고 리포지토리 내부에 있어야 합니다.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateRepositoryRefNotFound">
+        <source>Could not resolve template repository ref '{0}' to a commit SHA. Specify a branch, tag, or full commit SHA.</source>
+        <target state="translated">템플릿 리포지토리 ref '{0}'을(를) 커밋 SHA로 확인할 수 없습니다. 브랜치, 태그 또는 전체 커밋 SHA를 지정하세요.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateRepositoryRefOptionDescription">
+        <source>Template repository branch, tag, or full commit SHA (requires --template-repository; defaults to the remote HEAD)</source>
+        <target state="translated">템플릿 리포지토리의 브랜치, 태그 또는 전체 커밋 SHA입니다. --template-repository가 필요하며, 기본값은 원격 HEAD입니다.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateRepositoryRefRequiresRepository">
+        <source>--template-repository-ref requires --template-repository and a non-empty ref value.</source>
+        <target state="translated">--template-repository-ref를 사용하려면 --template-repository와 비어 있지 않은 ref 값을 지정해야 합니다.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceAddDescription">
+        <source>Add a named template source to global configuration after confirming you trust it.</source>
+        <target state="translated">신뢰할 수 있는지 확인한 후 명명된 템플릿 원본을 전역 구성에 추가합니다.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceAdded">
+        <source>Template source '{0}' added to global configuration.</source>
+        <target state="translated">템플릿 원본 '{0}'이(가) 전역 구성에 추가되었습니다.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceAlreadyExists">
+        <source>A template source with this name already exists. Remove it before adding a replacement.</source>
+        <target state="translated">이 이름의 템플릿 원본이 이미 있습니다. 대체 항목을 추가하기 전에 기존 항목을 제거하세요.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceCannotExtendString">
+        <source>This source is a string. Delete it with 'aspire config delete {0} --global' before setting object fields.</source>
+        <target state="translated">이 원본은 문자열입니다. 개체 필드를 설정하기 전에 'aspire config delete {0} --global'을 사용하여 삭제하세요.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceCommandDescription">
+        <source>Manage global template sources.</source>
+        <target state="translated">전역 템플릿 원본을 관리합니다.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceConfigurationHeader">
+        <source>Configuration</source>
+        <target state="translated">구성</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceDisplayNameInvalid">
+        <source>Expected a display name string without control characters, or null to use the source alias.</source>
+        <target state="translated">컨트롤 문자가 없는 표시 이름 문자열 또는 소스 별칭을 사용하는 null이 필요합니다.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceExplanation">
+        <source>One or more template sources are configured. A template source lets an organization share Aspire templates to customize your development experience.</source>
+        <target state="translated">하나 이상의 템플릿 원본이 구성되지 않았습니다. 템플릿 원본을 사용하면 조직에서 Aspire 템플릿을 공유하여 사용자의 개발 환경을 사용자 지정할 수 있습니다.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceInvalidRepository">
+        <source>Expected an HTTPS or SSH Git repository URL without passwords, tokens, queries, or fragments. SSH usernames are allowed.</source>
+        <target state="translated">암호, 토큰, 쿼리 또는 조각이 없는 HTTPS 또는 SSH Git 리포지토리 URL이 필요합니다. SSH 사용자 이름은 사용할 수 있습니다.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceLegacyConfiguration">
+        <source>Template sources require aspire.config.json. Run 'aspire config info' to migrate your legacy global configuration, then retry.</source>
+        <target state="translated">템플릿 원본을 사용하려면 aspire.config.json이 필요합니다. 레거시 전역 구성을 마이그레이션하려면 'aspire config info'를 실행한 후 다시 시도하세요.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceListDescription">
+        <source>List named template sources without discovering templates.</source>
+        <target state="translated">템플릿을 검색하지 않고 이름이 지정된 템플릿 원본을 나열합니다.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceListEmpty">
+        <source>No template sources are configured. Use 'aspire template source add' to add one.</source>
+        <target state="translated">템플릿 원본이 구성되지 않았습니다. 추가하려면 'aspire template source add'를 사용하세요.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceMissingLocation">
+        <source>Specify an absolute 'path' for a local source or 'repository' for a Git source. 'ref' requires 'repository'.</source>
+        <target state="translated">로컬 원본에는 절대 'path'를, Git 원본에는 'repository'를 지정하세요. 'ref'를 사용하려면 'repository'가 필요합니다.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceNameDescription">
+        <source>The name of the template source.</source>
+        <target state="translated">템플릿 원본의 이름입니다.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceNameRequired">
+        <source>Template source names must be 1-64 ASCII letters, digits, dots, hyphens, or underscores, starting with a letter or digit.</source>
+        <target state="translated">템플릿 원본 이름은 문자 또는 숫자로 시작하는 1-64개의 ASCII 문자, 숫자, 점, 하이픈 또는 밑줄이어야 합니다.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceNotFound">
+        <source>Template source '{0}' was not found in global configuration.</source>
+        <target state="translated">전역 구성에서 '{0}' 템플릿 원본을 찾을 수 없습니다.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourcePathDescription">
+        <source>An absolute local template directory, or a repository-relative directory when --repository is specified.</source>
+        <target state="translated">절대 로컬 템플릿 디렉터리이거나, --repository가 지정된 경우 리포지토리 기준 디렉터리입니다.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceReadFailed">
+        <source>Could not read global template sources. Check the configuration file's JSON format and file permissions.</source>
+        <target state="translated">전역 템플릿 원본을 읽을 수 없습니다. 구성 파일의 JSON 형식 및 파일 권한을 확인하세요.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceRefDescription">
+        <source>A Git branch, tag, or full commit SHA (requires --repository; defaults to HEAD).</source>
+        <target state="translated">Git 분기, 태그 또는 전체 커밋 SHA입니다. --repository가 필요하며 기본값은 HEAD입니다.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceRemoveDescription">
+        <source>Remove a named template source from global configuration.</source>
+        <target state="translated">전역 구성에서 이름이 지정된 템플릿 원본을 제거합니다.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceRemoved">
+        <source>Template source '{0}' removed from global configuration.</source>
+        <target state="translated">템플릿 원본 '{0}'이(가) 전역 구성에서 제거되었습니다.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceRepositoryDescription">
+        <source>An HTTPS or SSH Git repository URL containing templates.</source>
+        <target state="translated">템플릿을 포함하는 HTTPS 또는 SSH Git 리포지토리 URL입니다.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceSearchFailed">
+        <source>Could not search template source '{0}': {1}</source>
+        <target state="translated">템플릿 원본 '{0}'을(를) 검색할 수 없음: {1}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceSettingInvalid">
+        <source>Invalid template setting '{0}': {1}</source>
+        <target state="translated">'{0}'은(는) 잘못된 템플릿 요약임: {1}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceStringRequired">
+        <source>Expected a nonempty string without control characters.</source>
+        <target state="translated">제어 문자가 없는 비어 있지 않은 문자열이 필요합니다.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceTrustPrompt">
+        <source>Do you trust template source '{0}' ({1})?</source>
+        <target state="translated">템플릿 원본 '{0}'({1})을(를) 신뢰하시겠습니까?</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceUnknownField">
+        <source>Unknown source field. Use 'path', 'repository', 'ref', or 'displayName'.</source>
+        <target state="translated">알 수 없는 원본 필드입니다. 'path', 'repository', 'ref' 또는 'displayName'을 사용합니다.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceWriteFailed">
+        <source>Could not update global template sources. Check the configuration file's JSON format and file permissions.</source>
+        <target state="translated">전역 템플릿 소스를 업데이트할 수 없습니다. 구성 파일의 JSON 형식 및 파일 권한을 확인하세요.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceYesOptionDescription">
+        <source>Trust the template source and skip confirmation.</source>
+        <target state="translated">템플릿 원본을 신뢰하고 확인을 건너뜁니다.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourcesMustBeObject">
+        <source>The global 'templateSources' setting must be an object containing named template sources.</source>
+        <target state="translated">전역 'templateSources' 설정은 이름이 지정된 템플릿 원본을 포함하는 개체여야 합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="UsePrereleaseTemplates">
@@ -139,7 +389,7 @@
       </trans-unit>
       <trans-unit id="VersionArgumentDescription">
         <source>The version of the project templates to use</source>
-        <target state="needs-review-translation">사용할 프로젝트 템플릿의 버전입니다.</target>
+        <target state="translated">사용할 프로젝트 템플릿의 버전</target>
         <note />
       </trans-unit>
     </body>

@@ -180,6 +180,49 @@ public class ExecutableLaunchPlanTests
     }
 
     [Fact]
+    public async Task AzureFunctionsCompatibilityLaunchInspectionAgreesWithRetainedProjectOwnedToolArguments()
+    {
+        // An IDE that advertises "project" but not "azure-functions" gets a synthesized compatibility project launch.
+        // That launch is not a declared producer, so the plan keeps "project"-owned launch-tool arguments and the
+        // inspection helpers must report the same ownership decision to integrations.
+        var resource = new ProjectResource("functions");
+        resource.Annotations.Add(new TestProjectMetadata("/tmp/functions.csproj"));
+        resource.Annotations.Add(new LaunchToolArgsCallbackAnnotation(
+            static _ => Task.CompletedTask,
+            owningLaunchConfigurationType: KnownLaunchConfigurationTypes.Project,
+            showInCommandLine: true));
+        resource.Annotations.Add(SupportsDebuggingAnnotation.Create(
+            resource.Name,
+            "azure-functions",
+            static _ => Task.FromResult(new ExecutableLaunchConfiguration("azure-functions"))));
+        var configurationValues =
+            new Dictionary<string, string?>
+            {
+                [DcpExecutor.DebugSessionPortVar] = "12345",
+                [KnownConfigNames.DebugSessionInfo] = JsonSerializer.Serialize(new RunSessionInfo
+                {
+                    ProtocolsSupported = ["test"],
+                    SupportedLaunchConfigurations = [KnownLaunchConfigurationTypes.Project]
+                })
+            };
+        var inspectionConfiguration = new ConfigurationBuilder()
+            .AddInMemoryCollection(configurationValues)
+            .Build();
+        var configuration = CreateExecutionConfiguration(
+            [("run", false), ("app-arg", false)],
+            launchToolArgumentCount: 1);
+
+        Assert.True(resource.SupportsDebugging(inspectionConfiguration, out var ideLaunchAnnotation));
+        Assert.Equal(KnownLaunchConfigurationTypes.Project, ideLaunchAnnotation.LaunchConfigurationType);
+        Assert.False(resource.HasLaunchToolArgsOwnedBy(ideLaunchAnnotation));
+
+        var plan = await ResolveLaunchPlanAsync(resource, configuration, configurationValues);
+
+        Assert.Equal(ExecutableLaunchMechanism.Ide, plan.Mechanism);
+        Assert.Equal(["run", "app-arg"], plan.Arguments);
+    }
+
+    [Fact]
     public void ForcedProcessProjectRetainsProjectLaunchMode()
     {
         var resource = new ProjectResource("project");
@@ -239,6 +282,41 @@ public class ExecutableLaunchPlanTests
                 Assert.Equal("ENV", variable.Name);
                 Assert.Equal("value", variable.Value);
             });
+    }
+
+    [Fact]
+    public void RendererPreservesSensitivityForHiddenEffectiveArguments()
+    {
+        var resource = new ExecutableResource("app", "dotnet", "/tmp");
+        var executable = Executable.Create("app-12345678", "stale-tool");
+        var renderedResource = new RenderedModelResource<Executable>(resource, executable);
+        var plan = new ExecutableLaunchPlan(
+            "dotnet",
+            "/tmp",
+            ExecutableLaunchMechanism.Process,
+            ["run", "--configuration", "resolved-secret"],
+            [],
+            [],
+            [
+                new("run", isSensitive: false, executable: true, display: false, effectiveArgumentIndex: 0, role: ExecutableLaunchArgumentRole.LaunchTool),
+                new("--configuration", isSensitive: false, executable: true, display: false, effectiveArgumentIndex: 1, role: ExecutableLaunchArgumentRole.LaunchTool),
+                new("resolved-secret", isSensitive: true, executable: true, display: false, effectiveArgumentIndex: 2, role: ExecutableLaunchArgumentRole.LaunchTool),
+            ]);
+
+        ExecutableCreator.Render(
+            renderedResource,
+            plan,
+            pemCertificates: null,
+            NullLogger<ExecutableCreator>.Instance);
+
+        Assert.True(executable.TryGetAnnotationAsObjectList<int>(
+            Executable.SensitiveEffectiveArgumentIndexesAnnotation,
+            out var sensitiveEffectiveArgumentIndexes));
+        Assert.Equal([2], sensitiveEffectiveArgumentIndexes);
+        Assert.True(executable.TryGetAnnotationAsObjectList<AppLaunchArgumentAnnotation>(
+            CustomResource.ResourceAppArgsAnnotation,
+            out var displayedArguments));
+        Assert.Empty(displayedArguments);
     }
 
     [Fact]

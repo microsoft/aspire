@@ -2,9 +2,74 @@
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="fr" original="../Metrics.resx">
     <body>
+      <trans-unit id="MetricsAllInstrumentsTitle">
+        <source>All instruments</source>
+        <target state="translated">Tous les instruments</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MetricsBackTo">
+        <source>Back to {0}</source>
+        <target state="translated">Revenir à {0}</target>
+        <note>{0} is where the metric was opened from, e.g. a meter name or "Pinned"</note>
+      </trans-unit>
+      <trans-unit id="MetricsFilterResultsTitle">
+        <source>Metrics matching "{0}"</source>
+        <target state="translated">Métriques correspondant à "{0}"</target>
+        <note>{0} is the filter text</note>
+      </trans-unit>
+      <trans-unit id="MetricsGroupByLabel">
+        <source>Group by</source>
+        <target state="translated">Regrouper par</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MetricsGroupByTooltip">
+        <source>Group instruments</source>
+        <target state="translated">Instruments de groupe</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MetricsGroupMenuTitle">
+        <source>Group metrics</source>
+        <target state="translated">Mesures de groupe</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MetricsGroupNone">
+        <source>None</source>
+        <target state="translated">Aucun</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MetricsGroupsLabel">
+        <source>Metric groups</source>
+        <target state="translated">Groupes de métriques</target>
+        <note />
+      </trans-unit>
       <trans-unit id="MetricsHeader">
         <source>Metrics</source>
         <target state="translated">Métriques</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MetricsInstrumentLimitReached">
+        <source>Showing the first {0} of {1} instruments. Filter to narrow the list.</source>
+        <target state="translated">Affichage du premier {0} des {1} instruments. Filtrez pour affiner la liste.</target>
+        <note>{0} is the number of instruments shown, {1} is the number of instruments in the list.</note>
+      </trans-unit>
+      <trans-unit id="MetricsInstrumentNoDataTooltip">
+        <source>No data has been recorded for this instrument yet</source>
+        <target state="translated">Aucune donnée n’a encore été enregistrée pour cet instrument</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MetricsInstrumentTypeCounter">
+        <source>Counter</source>
+        <target state="translated">Compteur</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MetricsInstrumentTypeGauge">
+        <source>Gauge</source>
+        <target state="translated">Jauge</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MetricsInstrumentTypeHistogram">
+        <source>Histogram</source>
+        <target state="translated">Histogramme</target>
         <note />
       </trans-unit>
       <trans-unit id="MetricsInsturementDescriptionGridNameColumnHeader">
@@ -57,15 +122,60 @@
         <target state="translated">12 dernières heures</target>
         <note />
       </trans-unit>
+      <trans-unit id="MetricsNoMatchingInstruments">
+        <source>No metrics match the filter</source>
+        <target state="translated">Aucune métrique ne correspond au filtre</target>
+        <note />
+      </trans-unit>
       <trans-unit id="MetricsNoMetricsForResource">
         <source>No metrics for the selected resource</source>
         <target state="translated">Aucune métrique pour la ressource sélectionnée</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MetricsOrganizeInstrument">
+        <source>Instrument</source>
+        <target state="translated">Instrumenter</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MetricsOrganizeLandmark">
+        <source>Organize metrics</source>
+        <target state="translated">Organiser les métriques</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MetricsOrganizeMeter">
+        <source>Meter</source>
+        <target state="translated">Mètre</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MetricsOrganizeResource">
+        <source>Resource</source>
+        <target state="translated">Ressource</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MetricsOverviewNoData">
+        <source>No data</source>
+        <target state="translated">Aucune donnée</target>
         <note />
       </trans-unit>
       <trans-unit id="MetricsPageTitle">
         <source>{0} metrics</source>
         <target state="translated">Métriques {0}</target>
         <note>{0} is an application name</note>
+      </trans-unit>
+      <trans-unit id="MetricsPinInstrument">
+        <source>Pin metric</source>
+        <target state="translated">Épingler la métrique</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MetricsPinnedEmpty">
+        <source>No pinned metrics for this resource. Pin a metric from its card or chart to see it here.</source>
+        <target state="translated">Aucune métrique épinglée pour cette ressource. Épinglez une métrique à partir de sa carte ou de son graphique pour l’afficher ici.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MetricsPinnedHeader">
+        <source>Pinned</source>
+        <target state="translated">Épinglé</target>
+        <note />
       </trans-unit>
       <trans-unit id="MetricsSelectAResource">
         <source>Select a resource to view metrics</source>
@@ -75,6 +185,46 @@
       <trans-unit id="MetricsSelectInstrument">
         <source>Select instrument.</source>
         <target state="translated">Sélectionnez un instrument.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MetricsShowAllInstruments">
+        <source>Show all instruments</source>
+        <target state="translated">Afficher tous les instruments</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MetricsSortByLabel">
+        <source>Sort by</source>
+        <target state="translated">Trier par</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MetricsSortByTooltip">
+        <source>Sort instruments</source>
+        <target state="translated">Trier les instruments</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MetricsSortMenuTitle">
+        <source>Sort metrics</source>
+        <target state="translated">Trier les métriques</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MetricsSortName">
+        <source>Name</source>
+        <target state="translated">Nom</target>
+        <note>Sorts instruments by their name.</note>
+      </trans-unit>
+      <trans-unit id="MetricsSortValueAscending">
+        <source>Value (low to high)</source>
+        <target state="translated">Valeur (faible à élevée)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MetricsSortValueDescending">
+        <source>Value (high to low)</source>
+        <target state="translated">Valeur (de haut en bas)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MetricsUnpinInstrument">
+        <source>Unpin metric</source>
+        <target state="translated">Détacher la métrique</target>
         <note />
       </trans-unit>
       <trans-unit id="MetricsViewAttributesToolbar">

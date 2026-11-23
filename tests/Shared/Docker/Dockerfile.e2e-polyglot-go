@@ -1,0 +1,25 @@
+# Polyglot Dockerfile for Go AppHost E2E tests.
+# Extends the shared polyglot base with the Go toolchain required by Go AppHosts.
+
+# DisableDockerDetector "Extends a locally built aspire-e2e-polyglot-base image; the GitHub image workflow and local CLI E2E helper build it first from the separately scanned Dockerfile.e2e-polyglot-base. The Go toolchain image copied below with COPY --from is registered through .github/workflows/polyglot-validation/Dockerfile.golang."
+
+FROM aspire-e2e-polyglot-base
+
+ARG UBUNTU_APT_MIRROR=
+
+# The Microsoft Go image is Debian bookworm based (glibc 2.36) but the native Aspire CLI needs
+# glibc 2.38+, so only the toolchain is copied onto the Ubuntu 24.04 polyglot base. This is the
+# same image and version the polyglot-validation Go job uses.
+COPY --from=mcr.microsoft.com/oss/go/microsoft/golang:1.26-bookworm /usr/local/go /usr/local/go
+
+# Microsoft Go's system crypto backend needs the C toolchain and the OpenSSL development files.
+# `aspire deploy` builds the app image with `docker buildx`; the polyglot base installs docker.io
+# without recommended packages, so the buildx plugin is absent unless it is installed here.
+COPY tests/Shared/Docker/configure-ubuntu-apt-mirror.sh /usr/local/bin/
+RUN sh /usr/local/bin/configure-ubuntu-apt-mirror.sh "$UBUNTU_APT_MIRROR"
+RUN apt-get update -qq && \
+    apt-get install -y --no-install-recommends build-essential pkg-config libssl-dev docker-buildx && \
+    rm -rf /var/lib/apt/lists/*
+
+ENV GOPATH=/go
+ENV PATH="/usr/local/go/bin:/go/bin:${PATH}"

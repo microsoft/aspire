@@ -19,6 +19,7 @@
     <AspireProjectOrPackageReference Include="Aspire.Hosting.Azure.Storage" />
     <AspireProjectOrPackageReference Include="Aspire.Hosting.Azure.Redis" />
     <AspireProjectOrPackageReference Include="Aspire.Hosting.AppHost" />
+    <AspireProjectOrPackageReference Include="Aspire.Hosting.Dotnet" />
     <AspireProjectOrPackageReference Include="Aspire.Hosting.Redis" />
 
     <ProjectReference Include="..\AzureContainerApps.ApiService\AzureContainerApps.ApiService.csproj" />

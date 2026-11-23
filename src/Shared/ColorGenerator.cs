@@ -55,17 +55,50 @@ internal class ColorGenerator
 
     public static readonly ColorGenerator Instance = new ColorGenerator();
 
+    // Alternate hues to help distinguish neighboring tag assignments.
+    internal static readonly string[] s_tagVariableNames =
+    [
+        "--accent-teal",
+        "--accent-orchid",
+        "--accent-marigold",
+        "--accent-royal-blue",
+        "--accent-coral",
+        "--accent-mink",
+        "--accent-seafoam",
+        "--accent-peach",
+        "--accent-brass",
+        "--accent-brand-blue",
+        "--accent-cyan",
+        "--accent-berry",
+        "--accent-gold",
+        "--accent-navy",
+        "--accent-rust",
+        "--accent-olive",
+        "--accent-jade",
+        "--accent-orange",
+        "--accent-bronze",
+        "--accent-ocean"
+    ];
+
+    // Tags have their own allocation sequence so resource names cannot consume their colors or alias them.
+    public static readonly ColorGenerator TagInstance = new ColorGenerator(s_tagVariableNames);
+
     private readonly List<AccentColor> _colors;
     private readonly ConcurrentDictionary<string, Lazy<int>> _colorIndexByKey;
+    private readonly object _lock = new();
     private int _currentIndex;
 
-    internal ColorGenerator()
+    internal ColorGenerator() : this(s_variableNames)
+    {
+    }
+
+    internal ColorGenerator(IEnumerable<string> variableNames)
     {
         _colors = new List<AccentColor>();
         _colorIndexByKey = new ConcurrentDictionary<string, Lazy<int>>(StringComparer.OrdinalIgnoreCase);
         _currentIndex = 0;
 
-        foreach (var name in s_variableNames)
+        foreach (var name in variableNames)
         {
             _colors.Add(new AccentColor(name));
         }
@@ -79,9 +112,12 @@ internal class ColorGenerator
             // Use lazy to ensure that the index is only calculated once for an app.
             return new Lazy<int>(() =>
             {
-                var i = _currentIndex;
-                _currentIndex = ++_currentIndex % _colors.Count;
-                return i;
+                lock (_lock)
+                {
+                    var i = _currentIndex;
+                    _currentIndex = ++_currentIndex % _colors.Count;
+                    return i;
+                }
             });
         }).Value;
     }

@@ -15,6 +15,7 @@ import { AspireAppHostTreeProvider } from '../views/AspireAppHostTreeProvider';
 import { AppHostDataRepository, AppHostDisplayInfo, ResourceJson } from '../data/AppHostDataRepository';
 import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import { AppHostLaunchService } from '../services/AppHostLaunchService';
+import type { ResourceDebugger } from '../debugger/resourceDebugContracts';
 import { launchConfigurationTypePropertyName } from '../debugger/debuggerInstallHints';
 // Import parsers so they self-register before the provider consults them.
 import '../editor/parsers/csharpAppHostParser';
@@ -72,9 +73,13 @@ function createHarness(opts: {
     const subs: vscode.Disposable[] = [];
     const terminalProvider = new AspireTerminalProvider(subs);
     const repository = new AppHostDataRepository(terminalProvider);
+    const resourceDebugger: ResourceDebugger = {
+        debug: async () => ({ outcome: 'unsupportedResource' }),
+        canAttachToResource: () => false,
+    };
     const treeProvider = new AspireAppHostTreeProvider(repository, terminalProvider, new AppHostLaunchService({
         getCapabilityStatus: async () => 'supported',
-    }));
+    }), resourceDebugger);
 
     const appHostsStub = sinon.stub(repository, 'appHosts').get(() => opts.appHosts ?? []);
     const workspaceResourcesStub = sinon.stub(repository, 'workspaceResources').get(() => opts.workspaceResources ?? []);
@@ -180,6 +185,30 @@ suite('AspireCodeLensProvider builder lens', () => {
         assert.deepStrictEqual(builderLenses[0].command?.arguments, [hostPath]);
         assert.deepStrictEqual(builderLenses[1].command?.arguments, [hostPath]);
         harness.dispose();
+    });
+
+    test('shows Go builder and resource lenses and running gutter state', async () => {
+        const appHostPath = p('repo', 'AppHost', 'apphost.go');
+        const harness = createHarness({
+            appHosts: [{ ...makeAppHost(appHostPath), resources: [makeResource('cache')] }],
+        });
+        const doc = createMockDocument('package main\nfunc main() {\n builder, err := aspire.CreateBuilder()\n cache := (builder.AddRedis("cache"))\n}', appHostPath);
+        const gutter = new AspireGutterDecorationProvider(harness.treeProvider);
+        try {
+            const lenses = await harness.provider.provideCodeLenses(doc, cancellationToken) as vscode.CodeLens[];
+            assert.ok(lenses.some(lens => lens.command?.command === 'aspire-vscode.codeLensOpenDashboard'));
+            const resourceLenses = lenses.filter(lens => lens.command?.command === 'aspire-vscode.codeLensResourceAction'
+                || lens.command?.command === 'aspire-vscode.codeLensRevealResource');
+            assert.ok(resourceLenses.length > 0);
+            assert.ok(resourceLenses.every(lens => lens.range.start.line === 3));
+            const editor = createMockEditor(doc);
+            await applyGutterDecorations(gutter, editor.editor);
+            assert.deepStrictEqual(getCurrentDecoratedLines(editor.decorationState), [3]);
+        }
+        finally {
+            gutter.dispose();
+            harness.dispose();
+        }
     });
 
     test('emits builder lenses when .mts document matches a running global AppHost', async () => {

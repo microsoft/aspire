@@ -1,0 +1,66 @@
+﻿{
+  "run_id": 9007199254740993,
+  "run_attempt": 1e1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/9007199254740993",
+  "run_scope": "main",
+  "analyzed_at": "2026-08-31T12:00:00Z",
+  "verdict": "main-repository-breakage",
+  "pr": null,
+  "triggering_merge_pr": {
+    "number": 4.2e1,
+    "title": "Merge title",
+    "author": "author",
+    "state": "",
+    "head_branch": "feature",
+    "base_branch": "main",
+    "url": "",
+    "merged_at": "2026-10-21T01:00:00Z"
+  },
+  "main_context": {
+    "last_successful_main_sha": "success",
+    "failed_sha": "failed",
+    "candidate_merge_history_state": "available",
+    "candidate_merges": [
+      {
+        "sha": "commit",
+        "message": "Candidate",
+        "html_url": "https://github.com/microsoft/aspire/commit/commit",
+        "pull_request": {
+          "number": 42,
+          "title": "Candidate PR",
+          "url": "https://github.com/microsoft/aspire/pull/42",
+          "merged_at": null
+        }
+      }
+    ]
+  },
+  "failed_jobs": [
+    {
+      "name": "Build",
+      "id": 123.0,
+      "conclusion": "failure",
+      "url": "",
+      "classification": "main-repository-breakage",
+      "reason": "Build failed",
+      "failed_steps": [
+        "Build"
+      ]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Test",
+      "job": "Build",
+      "error": "Failure",
+      "stack_trace": "",
+      "standard_output": "",
+      "standard_error": "",
+      "classification": "",
+      "reason": "",
+      "job_id": 123.0
+    }
+  ],
+  "causes": [
+    "build-break"
+  ]
+}

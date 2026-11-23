@@ -20,6 +20,7 @@ namespace Aspire.Cli.Tests.Mcp;
 public class ExcludeFromMcpTests
 {
     private const string ApiServiceName = "api-service";
+    private const string AppHostPath = "/repo/TestAppHost/TestAppHost.csproj";
     private const string SecretServiceName = "secret-service";
 
     [Fact]
@@ -100,6 +101,7 @@ public class ExcludeFromMcpTests
         var monitor = new TestAuxiliaryBackchannelMonitor();
         var connection = new TestAppHostAuxiliaryBackchannel
         {
+            AppHostInfo = CreateAppHostInfo(),
             ResourceSnapshots =
             [
                 new ResourceSnapshot
@@ -107,7 +109,16 @@ public class ExcludeFromMcpTests
                     Name = ApiServiceName,
                     DisplayName = "API Service",
                     ResourceType = "Project",
-                    State = "Running"
+                    State = "Running",
+                    WaitingFor = [SecretServiceName],
+                    Relationships =
+                    [
+                        new ResourceSnapshotRelationship
+                        {
+                            ResourceName = "Secret Service",
+                            Type = "Reference"
+                        }
+                    ]
                 },
                 new ResourceSnapshot
                 {
@@ -130,8 +141,16 @@ public class ExcludeFromMcpTests
 
         var textContent = result.Content![0] as TextContentBlock;
         Assert.NotNull(textContent);
-        Assert.Contains(ApiServiceName, textContent.Text);
-        Assert.DoesNotContain(SecretServiceName, textContent.Text);
+        const string marker = "# RESOURCE DATA";
+        var markerIndex = textContent.Text.IndexOf(marker, StringComparison.Ordinal);
+        Assert.True(markerIndex >= 0, "Response should contain the resource data marker.");
+        var jsonText = textContent.Text[(markerIndex + marker.Length)..].Trim();
+        using var json = JsonDocument.Parse(jsonText);
+        var resource = json.RootElement[0];
+
+        Assert.Equal(ApiServiceName, resource.GetProperty("name").GetString());
+        Assert.Equal("[]", resource.GetProperty("waiting_for").GetRawText());
+        Assert.Empty(resource.GetProperty("relationships").EnumerateArray());
     }
 
     [Fact]
@@ -140,6 +159,7 @@ public class ExcludeFromMcpTests
         var monitor = new TestAuxiliaryBackchannelMonitor();
         var connection = new TestAppHostAuxiliaryBackchannel
         {
+            AppHostInfo = CreateAppHostInfo(),
             ResourceSnapshots =
             [
                 new ResourceSnapshot
@@ -163,8 +183,22 @@ public class ExcludeFromMcpTests
 
         var textContent = result.Content![0] as TextContentBlock;
         Assert.NotNull(textContent);
-        Assert.Contains("No resources found", textContent.Text);
+        const string marker = "# RESOURCE DATA";
+        var markerIndex = textContent.Text.IndexOf(marker, StringComparison.Ordinal);
+        Assert.True(markerIndex >= 0, "Response should contain the resource data marker.");
+        var jsonText = textContent.Text[(markerIndex + marker.Length)..].Trim();
+        Assert.StartsWith("[", jsonText, StringComparison.Ordinal);
+        using var json = JsonDocument.Parse(jsonText);
+
+        Assert.Empty(json.RootElement.EnumerateArray());
     }
+
+    private static AppHostInformation CreateAppHostInfo()
+        => new()
+        {
+            AppHostPath = AppHostPath,
+            ProcessId = 4242
+        };
 
     [Fact]
     public async Task ListConsoleLogsTool_ReturnsError_WhenResourceIsExcluded()

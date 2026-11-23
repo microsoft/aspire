@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREPIPELINES002
 #pragma warning disable ASPIRECOMPUTE002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
 using Aspire.Hosting.ApplicationModel;
@@ -342,18 +341,29 @@ internal sealed class KubernetesPublishingContext(
 
             paramValues[valuesKey] = value ?? string.Empty;
 
-            // Capture container image references for deploy-time registry resolution.
-            // During publish, the default image name (e.g., "server:latest") is written to values.yaml.
-            // During deploy, the ContainerImageReference resolves the full registry-prefixed name
-            // (e.g., "myregistry.azurecr.io/server:latest") and writes it to the override file.
-            if (helmExpressionWithValue.ImageResource is not null)
+            if (helmExpressionWithValue.ImageResource is { } imageResource)
             {
+                var registry = imageResource.TryGetLastAnnotation<ContainerRegistryReferenceAnnotation>(out var registryReference)
+                    ? registryReference.Registry
+                    : imageResource.GetDeploymentTargetAnnotation()?.ContainerRegistry;
+
+                // Do not evaluate missing parameters, secrets, or provisioned outputs during publish.
+                // Deployment resolves these references again after the registry is available.
+                if (registry is not null &&
+                    CanResolveDuringPublish(registry.Endpoint) &&
+                    (registry.Repository is null || CanResolveDuringPublish(registry.Repository)))
+                {
+                    IValueProvider imageReference = new ContainerImageReference(imageResource);
+                    paramValues[valuesKey] = await imageReference.GetValueAsync(cancellationToken).ConfigureAwait(false)
+                        ?? throw new InvalidOperationException($"Container image for resource '{imageResource.Name}' could not be resolved during publish.");
+                }
+
                 environment?.CapturedHelmImageReferences.Add(
                     new KubernetesEnvironmentResource.CapturedHelmImageReference(
                         helmKey,
                         resource.Name.ToHelmValuesSectionName(),
                         valuesKey,
-                        helmExpressionWithValue.ImageResource));
+                        imageResource));
             }
         }
 
@@ -363,14 +373,28 @@ internal sealed class KubernetesPublishingContext(
         }
     }
 
+    private static bool CanResolveDuringPublish(ReferenceExpression expression)
+    {
+        return !expression.IsConditional && expression.ValueProviders.All(provider => provider switch
+        {
+            ParameterResource parameter => !parameter.Secret && parameter.Default is not null,
+            ReferenceExpression nested => CanResolveDuringPublish(nested),
+            _ => false
+        });
+    }
+
     private async Task WriteKubernetesTemplatesForResource(IResource resource, IEnumerable<BaseKubernetesResource> templatedItems)
     {
         var templatesFolder = Path.Combine(OutputPath, "templates", resource.Name);
         Directory.CreateDirectory(templatesFolder);
 
+        // Different kinds may legitimately share a name (e.g. a Service and a ServiceExport targeting it),
+        // so make file names unique rather than letting a later template silently overwrite an earlier one.
+        var usedFileNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
         foreach (var templatedItem in templatedItems)
         {
-            var fileName = GetFilename(resource.Name, templatedItem);
+            var fileName = GetUniqueFilename(GetFilename(resource.Name, templatedItem), templatedItem, usedFileNames);
             var outputFile = Path.Combine(templatesFolder, fileName);
             var yaml = _serializer.Serialize(templatedItem);
 
@@ -378,6 +402,28 @@ internal sealed class KubernetesPublishingContext(
             await writer.WriteLineAsync(HelmExtensions.TemplateFileSeparator).ConfigureAwait(false);
             await writer.WriteAsync(yaml).ConfigureAwait(false);
         }
+    }
+
+    private static string GetUniqueFilename(string fileName, BaseKubernetesResource templatedItem, HashSet<string> usedFileNames)
+    {
+        if (usedFileNames.Add(fileName))
+        {
+            return fileName;
+        }
+
+        var baseName = Path.GetFileNameWithoutExtension(fileName);
+        if (!string.IsNullOrWhiteSpace(templatedItem.Kind))
+        {
+            baseName = $"{baseName}-{templatedItem.Kind.ToLowerInvariant()}";
+        }
+
+        var candidate = $"{baseName}.yaml";
+        for (var i = 2; !usedFileNames.Add(candidate); i++)
+        {
+            candidate = $"{baseName}-{i}.yaml";
+        }
+
+        return candidate;
     }
 
     private static string GetFilename(string baseName, BaseKubernetesResource templatedItem)

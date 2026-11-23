@@ -1,0 +1,6 @@
+﻿{
+  settings.txt:
+Database enabled: True
+Features: [web]
+
+}

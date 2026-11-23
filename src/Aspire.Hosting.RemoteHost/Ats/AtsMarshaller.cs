@@ -255,43 +255,6 @@ internal sealed class AtsMarshaller
         return JsonNode.Parse(json);
     }
 
-    private sealed class TimeSpanMillisecondsJsonConverter : JsonConverter<TimeSpan>
-    {
-        public override TimeSpan Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
-        {
-            if (reader.TokenType == JsonTokenType.Number)
-            {
-                var milliseconds = reader.GetDouble();
-                if (!double.IsFinite(milliseconds))
-                {
-                    throw new JsonException("TimeSpan milliseconds must be a finite number.");
-                }
-
-                try
-                {
-                    return TimeSpan.FromMilliseconds(milliseconds);
-                }
-                catch (OverflowException ex)
-                {
-                    throw new JsonException("TimeSpan milliseconds are outside the supported range.", ex);
-                }
-            }
-
-            if (reader.TokenType == JsonTokenType.String &&
-                TimeSpan.TryParse(reader.GetString(), System.Globalization.CultureInfo.InvariantCulture, out var value))
-            {
-                return value;
-            }
-
-            throw new JsonException("TimeSpan values must be milliseconds or a standard TimeSpan string.");
-        }
-
-        public override void Write(Utf8JsonWriter writer, TimeSpan value, JsonSerializerOptions options)
-        {
-            writer.WriteNumberValue(value.TotalMilliseconds);
-        }
-    }
-
     private object? DeserializeDto(JsonObject jsonObj, Type targetType, UnmarshalContext context)
     {
         try
@@ -1067,7 +1030,15 @@ internal sealed class AtsMarshaller
 
             try
             {
-                prop.Set(target, jsonValue.Deserialize(prop.PropertyType, s_jsonOptions));
+                var typeCode = Type.GetTypeCode(Nullable.GetUnderlyingType(prop.PropertyType) ?? prop.PropertyType);
+                // Java and Rust encode integral ATS numbers as 200.0. System.Text.Json rejects
+                // that spelling for CLR integers, so use the same checked conversion as parameters.
+                var value = jsonValue is JsonValue primitive && primitive.GetValueKind() == JsonValueKind.Number &&
+                    typeCode is TypeCode.SByte or TypeCode.Byte or TypeCode.Int16 or TypeCode.UInt16 or
+                        TypeCode.Int32 or TypeCode.UInt32 or TypeCode.Int64 or TypeCode.UInt64
+                    ? ConvertPrimitive(primitive, prop.PropertyType)
+                    : jsonValue.Deserialize(prop.PropertyType, s_jsonOptions);
+                prop.Set(target, value);
             }
             catch (NotSupportedException)
             {

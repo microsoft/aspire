@@ -25,6 +25,10 @@ import type { AppHostDataRepository } from '../data/AppHostDataRepository';
  * `extension.ts` imports, otherwise the production build breaks at bundle time rather than at
  * runtime - which is the intended failure mode.
  */
+export function createE2ePsFollowProcessTracker(): vscode.Disposable {
+  return new vscode.Disposable(() => undefined);
+}
+
 export function createE2eStateFileBridge(
   _context: vscode.ExtensionContext,
   _aspireContext: AspireExtensionContext,
@@ -33,6 +37,10 @@ export function createE2eStateFileBridge(
   _appHostTreeProvider: AspireAppHostTreeProvider,
   _terminalProvider: AspireTerminalProvider,
   _onDidChangeState: vscode.Event<AspireExtensionStateSnapshot>,
+  _languageModelTools: ReadonlyMap<string, {
+    readonly tool: vscode.LanguageModelTool<unknown>;
+    readonly registered: boolean;
+  }>,
 ): vscode.Disposable {
   return new vscode.Disposable(() => undefined);
 }

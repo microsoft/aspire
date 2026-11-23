@@ -113,13 +113,13 @@
     <value>Get a configuration value</value>
   </data>
   <data name="GetCommand_KeyArgumentDescription" xml:space="preserve">
-    <value>The configuration key to retrieve</value>
+    <value>The configuration key to retrieve. Use dots for nested properties and [index] for array elements.</value>
   </data>
   <data name="SetCommand_Description" xml:space="preserve">
     <value>Set a configuration value</value>
   </data>
   <data name="SetCommand_KeyArgumentDescription" xml:space="preserve">
-    <value>The configuration key to set</value>
+    <value>The configuration key to set. Use dots for nested properties and [index] to create or edit array elements.</value>
   </data>
   <data name="SetCommand_ValueArgumentDescription" xml:space="preserve">
     <value>The configuration value to set</value>
@@ -151,7 +151,23 @@
     <value>Delete a configuration value</value>
   </data>
   <data name="DeleteCommand_KeyArgumentDescription" xml:space="preserve">
-    <value>The configuration key to delete</value>
+    <value>The configuration key to delete. Use dots for nested properties and [index] for array elements.</value>
+  </data>
+  <data name="ConfigurationKeyInvalid" xml:space="preserve">
+    <value>Configuration key '{0}' is invalid. Use dots for nested properties and brackets containing a non-negative integer for array indices.</value>
+    <comment>{0} is the configuration key.</comment>
+  </data>
+  <data name="ConfigurationArrayRequired" xml:space="preserve">
+    <value>Configuration key '{0}' requires an array, but the existing value is not an array.</value>
+    <comment>{0} is the configuration key.</comment>
+  </data>
+  <data name="ConfigurationArrayIndexInvalid" xml:space="preserve">
+    <value>Configuration key '{0}' requires a non-negative integer array index.</value>
+    <comment>{0} is the configuration key.</comment>
+  </data>
+  <data name="ConfigurationArrayIndexOutOfRange" xml:space="preserve">
+    <value>Array index {0} in configuration key '{1}' is out of range. Edit an existing element or append at index {2}.</value>
+    <comment>{0} is the requested index, {1} is the configuration key, and {2} is the array length.</comment>
   </data>
   <data name="DeleteCommand_GlobalArgumentDescription" xml:space="preserve">
     <value>Delete the configuration value from the global $HOME/.aspire/settings.json instead of the local settings file</value>

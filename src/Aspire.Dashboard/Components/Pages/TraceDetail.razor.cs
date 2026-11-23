@@ -1,4 +1,4 @@
-// Licensed to the .NET Foundation under one or more agreements.
+﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
@@ -49,6 +49,8 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
     private readonly List<MenuButtonItem> _traceActionsMenuItems = [];
     private AspirePageContentLayout? _layout;
     private List<SelectViewModel<SpanType>> _spanTypes = default!;
+    private TotalItemsFooter _totalItemsFooter = default!;
+    private int _totalItemsCount;
 
     public TraceDetailPageViewModel PageViewModel { get; set; } = new();
 
@@ -86,6 +88,12 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
     public required IStringLocalizer<Dashboard.Resources.StructuredLogs> StructuredLogsLoc { get; init; }
 
     [Inject]
+    public required IStringLocalizer<Dashboard.Resources.Traces> TracesLoc { get; init; }
+
+    [Inject]
+    public required PauseManager PauseManager { get; init; }
+
+    [Inject]
     public required IStringLocalizer<ControlsStrings> ControlStringsLoc { get; init; }
 
     [Inject]
@@ -99,6 +107,13 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
 
     [CascadingParameter]
     public required ViewportInformation ViewportInformation { get; set; }
+
+    /// <summary>
+    /// The resources layout hosting this page. When present, the layout's resource pane selects the resource
+    /// and displays resource commands, so the page doesn't display its own resource selector.
+    /// </summary>
+    [CascadingParameter]
+    public ResourcesLayout? ResourcesLayout { get; set; }
 
     protected override void OnInitialized()
     {
@@ -157,6 +172,8 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
     {
         var visibleItems = GetVisibleSpanViewModels().ToList();
         var totalItemCount = visibleItems.Count;
+        _totalItemsCount = totalItemCount;
+        _totalItemsFooter?.UpdateDisplayedCount(totalItemCount);
         var startIndex = Math.Min(request.StartIndex, visibleItems.Count);
         var count = Math.Min(request.Count ?? DashboardUIHelpers.DefaultDataGridResultCount, visibleItems.Count - startIndex);
         var page = count > 0
@@ -179,6 +196,10 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
 
         return TraceDetailPageViewModel.ApplySpanFilters(PageViewModel.SpanWaterfallViewModels, PageViewModel.ContextFilterMatches, PageViewModel.DurationFilterMatches);
     }
+
+    private string TracesListUrl => ResourcesLayout?.DetailParentUrl ?? DashboardUrls.TracesUrl();
+
+    private DateTime? PausedAt => PauseManager.AreTracesPaused(out var startTime) ? startTime : null;
 
     internal string? GetPageTitle()
     {
@@ -241,7 +262,7 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
             // Navigate to remove ?spanId=xxx in the URL. A small delay is required here, otherwise the page rendering breaks.
             await Task.Delay(200, _cts.Token);
 
-            NavigationManager.NavigateTo(DashboardUrls.TraceDetailUrl(TraceId), new NavigationOptions { ReplaceHistoryEntry = true });
+            NavigationManager.NavigateTo(ResourcesLayout?.GetTraceDetailUrl(TraceId) ?? DashboardUrls.TraceDetailUrl(TraceId), new NavigationOptions { ReplaceHistoryEntry = true });
         }
     }
 
@@ -530,6 +551,13 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
     }
 
     private string GetResourceName(OtlpResourceView app) => OtlpResource.GetResourceName(app, _resources);
+
+    private SpanLogPreview? _logPreview;
+
+    // Fills the shared preview when the pointer or keyboard reaches a log marker. The callback's receiver is the
+    // preview, so only it renders again: the page's handlers would render the whole waterfall on every hover.
+    private EventCallback ShowLogPreview(LogSummary logEntry) =>
+        EventCallback.Factory.Create(_logPreview ?? (object)this, () => _logPreview?.Show(logEntry));
 
     private async Task ToggleSpanLogsAsync(LogSummary logEntry)
     {

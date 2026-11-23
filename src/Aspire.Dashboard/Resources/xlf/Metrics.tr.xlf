@@ -2,9 +2,74 @@
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="tr" original="../Metrics.resx">
     <body>
+      <trans-unit id="MetricsAllInstrumentsTitle">
+        <source>All instruments</source>
+        <target state="translated">Tüm araçlar</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MetricsBackTo">
+        <source>Back to {0}</source>
+        <target state="translated">{0} sitesine geri dön</target>
+        <note>{0} is where the metric was opened from, e.g. a meter name or "Pinned"</note>
+      </trans-unit>
+      <trans-unit id="MetricsFilterResultsTitle">
+        <source>Metrics matching "{0}"</source>
+        <target state="translated">"{0}" ile eşleşen ölçümler</target>
+        <note>{0} is the filter text</note>
+      </trans-unit>
+      <trans-unit id="MetricsGroupByLabel">
+        <source>Group by</source>
+        <target state="translated">Gruplandırma ölçütü</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MetricsGroupByTooltip">
+        <source>Group instruments</source>
+        <target state="translated">Araçları gruplandır</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MetricsGroupMenuTitle">
+        <source>Group metrics</source>
+        <target state="translated">Ölçümleri gruplandır</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MetricsGroupNone">
+        <source>None</source>
+        <target state="translated">Yok</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MetricsGroupsLabel">
+        <source>Metric groups</source>
+        <target state="translated">Ölçüm grupları</target>
+        <note />
+      </trans-unit>
       <trans-unit id="MetricsHeader">
         <source>Metrics</source>
         <target state="translated">Ölçümler</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MetricsInstrumentLimitReached">
+        <source>Showing the first {0} of {1} instruments. Filter to narrow the list.</source>
+        <target state="translated">{1} araçlarının ilk {0} gösteriliyor. Listeyi daraltmak için filtreleyin.</target>
+        <note>{0} is the number of instruments shown, {1} is the number of instruments in the list.</note>
+      </trans-unit>
+      <trans-unit id="MetricsInstrumentNoDataTooltip">
+        <source>No data has been recorded for this instrument yet</source>
+        <target state="translated">Bu araç için henüz veri kaydedilmedi</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MetricsInstrumentTypeCounter">
+        <source>Counter</source>
+        <target state="translated">Sayaç</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MetricsInstrumentTypeGauge">
+        <source>Gauge</source>
+        <target state="translated">Ölçer</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MetricsInstrumentTypeHistogram">
+        <source>Histogram</source>
+        <target state="translated">Histogram</target>
         <note />
       </trans-unit>
       <trans-unit id="MetricsInsturementDescriptionGridNameColumnHeader">
@@ -57,15 +122,60 @@
         <target state="translated">Son 12 saat</target>
         <note />
       </trans-unit>
+      <trans-unit id="MetricsNoMatchingInstruments">
+        <source>No metrics match the filter</source>
+        <target state="translated">Filtreyle eşleşen ölçüm yok</target>
+        <note />
+      </trans-unit>
       <trans-unit id="MetricsNoMetricsForResource">
         <source>No metrics for the selected resource</source>
         <target state="translated">Seçili kaynak için ölçüm yok</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MetricsOrganizeInstrument">
+        <source>Instrument</source>
+        <target state="translated">Araç</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MetricsOrganizeLandmark">
+        <source>Organize metrics</source>
+        <target state="translated">Ölçümleri düzenle</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MetricsOrganizeMeter">
+        <source>Meter</source>
+        <target state="translated">Ölçüm</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MetricsOrganizeResource">
+        <source>Resource</source>
+        <target state="translated">Kaynak</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MetricsOverviewNoData">
+        <source>No data</source>
+        <target state="translated">Veri yok</target>
         <note />
       </trans-unit>
       <trans-unit id="MetricsPageTitle">
         <source>{0} metrics</source>
         <target state="translated">{0} ölçümler</target>
         <note>{0} is an application name</note>
+      </trans-unit>
+      <trans-unit id="MetricsPinInstrument">
+        <source>Pin metric</source>
+        <target state="translated">Ölçümü sabitle</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MetricsPinnedEmpty">
+        <source>No pinned metrics for this resource. Pin a metric from its card or chart to see it here.</source>
+        <target state="translated">Bu kaynak için sabitlenmiş ölçüm yok. Burada görmek için kartından veya grafiğinden bir ölçümü sabitleyin.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MetricsPinnedHeader">
+        <source>Pinned</source>
+        <target state="translated">Sabitlenmiş</target>
+        <note />
       </trans-unit>
       <trans-unit id="MetricsSelectAResource">
         <source>Select a resource to view metrics</source>
@@ -75,6 +185,46 @@
       <trans-unit id="MetricsSelectInstrument">
         <source>Select instrument.</source>
         <target state="translated">Aracı seçin.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MetricsShowAllInstruments">
+        <source>Show all instruments</source>
+        <target state="translated">Tüm araçları göster</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MetricsSortByLabel">
+        <source>Sort by</source>
+        <target state="translated">Sıralama ölçütü:</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MetricsSortByTooltip">
+        <source>Sort instruments</source>
+        <target state="translated">Araçları sırala</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MetricsSortMenuTitle">
+        <source>Sort metrics</source>
+        <target state="translated">Ölçümleri sırala</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MetricsSortName">
+        <source>Name</source>
+        <target state="translated">Ad</target>
+        <note>Sorts instruments by their name.</note>
+      </trans-unit>
+      <trans-unit id="MetricsSortValueAscending">
+        <source>Value (low to high)</source>
+        <target state="translated">Değer (düşükten yükseğe)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MetricsSortValueDescending">
+        <source>Value (high to low)</source>
+        <target state="translated">Değer (yüksekten düşüğe)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MetricsUnpinInstrument">
+        <source>Unpin metric</source>
+        <target state="translated">Ölçümün sabitlemesini kaldır</target>
         <note />
       </trans-unit>
       <trans-unit id="MetricsViewAttributesToolbar">

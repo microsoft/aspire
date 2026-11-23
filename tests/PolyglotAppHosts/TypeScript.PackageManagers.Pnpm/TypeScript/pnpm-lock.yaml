@@ -5,7 +5,7 @@ settings:
   excludeLinksFromLockfile: false
 
 overrides:
-  brace-expansion: 5.0.8
+  brace-expansion: 5.0.12
 
 importers:
 
@@ -201,8 +201,8 @@ packages:
     resolution: {integrity: sha1-9uFKl4WNMnJSIAJC1Mz+UixEVSI=, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/binary-extensions/-/binary-extensions-2.3.0.tgz}
     engines: {node: '>=8'}
 
-  brace-expansion@5.0.8:
-    resolution: {integrity: sha1-E1rQ2NgI6xjrXg7Joh86C5LvGM8=, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/brace-expansion/-/brace-expansion-5.0.8.tgz}
+  brace-expansion@5.0.12:
+    resolution: {integrity: sha512-YovQ3rzhaLMIrDjNDMkNS01tea93qhEhG5xy8f6+R0l+dw3Ki+5sCoIoI942iuLZTHWogWktgwVDhU09iNEimQ==, tarball: https://ms-feed-25.pkgs.visualstudio.com/1es-public/_packaging/npm-public/npm/registry/brace-expansion/-/brace-expansion-5.0.12.tgz}
     engines: {node: 20 || >=22}
 
   braces@3.0.3:
@@ -424,7 +424,7 @@ snapshots:
 
   binary-extensions@2.3.0: {}
 
-  brace-expansion@5.0.8:
+  brace-expansion@5.0.12:
     dependencies:
       balanced-match: 4.0.4
 
@@ -508,7 +508,7 @@ snapshots:
 
   minimatch@10.2.5:
     dependencies:
-      brace-expansion: 5.0.8
+      brace-expansion: 5.0.12
 
   ms@2.1.3: {}
 

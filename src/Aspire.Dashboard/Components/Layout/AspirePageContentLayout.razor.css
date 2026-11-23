@@ -40,8 +40,8 @@
         margin: 10px 0 12px 8px;
         padding: 6px 10px 0;
         font-family: var(--aspire-font-display);
-        font-size: 16px;
-        font-weight: 600;
+        font-size: var(--aspire-font-size-heading);
+        font-weight: var(--aspire-font-weight-semibold);
         line-height: 22px;
     }
 }

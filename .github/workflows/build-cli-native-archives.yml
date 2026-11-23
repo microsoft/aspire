@@ -9,7 +9,7 @@ on:
       configuration:
         required: false
         type: string
-        default: Debug
+        default: Release
       targets:
         description: >
           JSON array of target objects to build. Each object must have 'os', 'runner', and 'rids' keys.
@@ -31,6 +31,7 @@ jobs:
 
   build_cli_archives:
     name: Build CLI (${{ matrix.targets.rids }})
+    if: ${{ github.repository == 'microsoft/aspire' }}
     runs-on: ${{ matrix.targets.runner }}
     strategy:
       matrix:
@@ -50,9 +51,18 @@ jobs:
     # CLI's IdentityChannelReader can return the channel verbatim, with no
     # separate parse of the version suffix at runtime.
     env:
+      # Keep caller-supplied values out of script source; consume them as data in PowerShell.
+      BUILD_CONFIGURATION: ${{ inputs.configuration }}
+      TARGET_RIDS: ${{ matrix.targets.rids }}
+      VERSION_OVERRIDE_ARG: ${{ inputs.versionOverrideArg }}
       ASPIRE_CLI_CHANNEL: ${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || (startsWith(github.ref, 'refs/heads/release/') || startsWith(github.ref, 'refs/heads/internal/release/')) && 'staging' || github.ref == 'refs/heads/main' && 'local' || 'daily' }}
 
     steps:
+      - name: Configure NuGet package cache (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Write-Output "NUGET_PACKAGES=$env:GITHUB_WORKSPACE/.nuget/packages" >> $env:GITHUB_ENV
+
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -66,100 +76,175 @@ jobs:
         with:
           node-version: 22.x
 
-      # Build RID-specific NuGet packages (DCP + Dashboard) locally instead of
-      # downloading them from the build_packages job. This allows the CLI archive
-      # build to run in parallel with build_packages.
-      #
-      # Capture the complete build output so the expected framework-owned IL2026
-      # can remain visible while verification rejects any additional IL2026 warnings.
-      - name: Build RID-specific packages
+      # Bundle.proj owns publish, warning validation, signing, payload assembly,
+      # and the clipack build/sign/pack flow in both CI systems.
+      - name: Build native bundle and CLI packages
         shell: pwsh
         run: |
-          $ErrorActionPreference = 'Stop'
-          $buildLog = '${{ github.workspace }}/artifacts/log/${{ inputs.configuration }}/BuildBundleDeps.log'
-          & '${{ runner.os == 'Windows' && './build.cmd' || './build.sh' }}' `
-            -ci `
-            -restore `
-            -build `
-            -pack `
-            -configuration '${{ inputs.configuration }}' `
-            '/bl:${{ github.workspace }}/artifacts/log/${{ inputs.configuration }}/BuildBundleDeps.binlog' `
-            /p:ContinuousIntegrationBuild=true `
-            /p:BuildBundleDepsOnly=true `
-            /p:TargetRids=${{ matrix.targets.rids }} `
-            /p:AspireCliChannel=${{ env.ASPIRE_CLI_CHANNEL }} `
-            ${{ inputs.versionOverrideArg }} 2>&1 | Tee-Object -FilePath $buildLog
+          $dotnetScript = if ($IsWindows) { "./dotnet.cmd" } else { "./dotnet.sh" }
+          $arguments = @(
+            "msbuild",
+            "eng/Bundle.proj",
+            "/t:Build",
+            "/p:BuildDistributionPackages=true",
+            "/p:Configuration=$env:BUILD_CONFIGURATION",
+            "/p:TargetRid=$env:TARGET_RIDS",
+            "/p:BundleVersion=ci-bundlepayload",
+            "/p:PackDcpPackage=true",
+            "/p:ContinuousIntegrationBuild=true",
+            "/p:AspireCliChannel=$env:ASPIRE_CLI_CHANNEL",
+            "/bl:$env:GITHUB_WORKSPACE/artifacts/log/$env:BUILD_CONFIGURATION/BuildNativeBundle.binlog"
+          )
+          if (-not [string]::IsNullOrWhiteSpace($env:VERSION_OVERRIDE_ARG)) {
+            # The caller supplies whitespace-separated switches without spaces in values,
+            # e.g. /p:VersionSuffix=pr.123.gabcdef12 /p:DotNetFinalVersionKind=prerelease.
+            $arguments += $env:VERSION_OVERRIDE_ARG.Trim() -split '\s+'
+          }
+
+          & $dotnetScript @arguments
           if ($LASTEXITCODE -ne 0) {
             exit $LASTEXITCODE
           }
 
-      - name: Verify Native AOT Dashboard warnings
+      - name: Smoke test packaged native tray
+        shell: pwsh
+        env:
+          TRAY_RID: ${{ matrix.targets.rids }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $rid = $env:TRAY_RID
+          $hostOs = if ($IsWindows) { 'win' } elseif ($IsMacOS) { 'osx' } else { 'linux' }
+          $hostArch = [Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString().ToLowerInvariant()
+          if ($rid -ne "$hostOs-$hostArch") {
+            Write-Host "Skipping packaged tray launch check for $rid on $hostOs-$hostArch."
+            return
+          }
+          ./eng/scripts/test-native-tray.ps1 `
+            -ArchivePath "artifacts/bundle/aspire-ci-bundlepayload-$rid.tar.gz" `
+            -Rid $rid
+
+      - name: Smoke test bundled Native AOT TerminalHost
+        if: ${{ !contains(matrix.targets.rids, 'musl') && ((runner.arch == 'ARM64' && endsWith(matrix.targets.rids, 'arm64')) || (runner.arch == 'X64' && endsWith(matrix.targets.rids, 'x64'))) }}
         shell: pwsh
         run: >
-          ./eng/scripts/verify-native-dashboard-warnings.ps1
-          -BuildLog "${{ github.workspace }}/artifacts/log/${{ inputs.configuration }}/BuildBundleDeps.log"
-
-      - name: Build bundle payload archive
-        run: >
-          ${{ runner.os == 'Windows' && './dotnet.cmd' || './dotnet.sh' }}
-          msbuild
-          eng/Bundle.proj
-          /restore
-          /p:Configuration=${{ inputs.configuration }}
-          /p:TargetRid=${{ matrix.targets.rids }}
-          /p:BundleVersion=ci-bundlepayload
-          /p:SkipNativeBuild=true
-          /p:ContinuousIntegrationBuild=true
-          /bl:${{ github.workspace }}/artifacts/log/${{ inputs.configuration }}/BundlePayload.binlog
-          ${{ inputs.versionOverrideArg }}
-
-      - name: Build CLI packages
-        run: >
-          ${{ runner.os == 'Windows' && './build.cmd' || './build.sh' }}
-          -ci
-          -build
-          -pack
-          -restore
-          -configuration ${{ inputs.configuration }}
-          /bl:${{ github.workspace }}/artifacts/log/${{ inputs.configuration }}/BuildCli.binlog
-          /p:ContinuousIntegrationBuild=true
-          /p:SkipManagedBuild=true
-          /p:TargetRids=${{ matrix.targets.rids }}
-          /p:BundlePayloadPath=${{ github.workspace }}/artifacts/bundle/aspire-ci-bundlepayload-${{ matrix.targets.rids }}.tar.gz
-          /p:AspireCliChannel=${{ env.ASPIRE_CLI_CHANNEL }}
-          ${{ inputs.versionOverrideArg }}
+          ./eng/scripts/test-native-terminalhost.ps1
+          -TerminalHostPath "$env:GITHUB_WORKSPACE/artifacts/bundle/$env:TARGET_RIDS/terminalhost/Aspire.TerminalHost${{ runner.os == 'Windows' && '.exe' || '' }}"
 
       - name: Verify CLI tool nupkg
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
 
-          $rid = '${{ matrix.targets.rids }}'
+          $rid = $env:TARGET_RIDS
           $archiveExtension = if ($rid.StartsWith('win-')) { 'zip' } else { 'tar.gz' }
-          $archive = @(Get-ChildItem -Path 'artifacts/packages/${{ inputs.configuration }}' -Filter "aspire-cli-$rid-*.$archiveExtension" -Recurse -File -ErrorAction SilentlyContinue)
+          $archive = @(Get-ChildItem -Path "artifacts/packages/$env:BUILD_CONFIGURATION" -Filter "aspire-cli-$rid-*.$archiveExtension" -Recurse -File -ErrorAction SilentlyContinue)
           if ($archive.Count -ne 1) {
             throw "Expected exactly one CLI archive for $rid, but found $($archive.Count): $($archive.FullName -join ', ')"
           }
 
           eng/scripts/verify-cli-tool-nupkg.ps1 `
-            -PackagesDir artifacts/packages/${{ inputs.configuration }} `
+            -PackagesDir "artifacts/packages/$env:BUILD_CONFIGURATION" `
             -Rid $rid `
             -ArchivePath $archive[0].FullName
+
+      - name: Check Windows tray desktop availability
+        id: windows_tray_desktop
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $session = [Diagnostics.Process]::GetCurrentProcess().SessionId
+          $explorer = @(Get-Process -Name explorer -ErrorAction SilentlyContinue |
+            Where-Object { $_.SessionId -eq $session })
+          $available = [Environment]::UserInteractive -and $session -ne 0 -and $explorer.Count -gt 0
+          if ($available) {
+            # Explorer in another desktop or a locked input desktop cannot support modal UI smoke.
+            Add-Type -TypeDefinition @'
+          using System;
+          using System.Runtime.InteropServices;
+          public static class AspireTrayDesktopProbe
+          {
+              [DllImport("user32.dll", EntryPoint = "FindWindowW", CharSet = CharSet.Unicode)]
+              private static extern IntPtr FindWindow(string className, string windowName);
+              [DllImport("user32.dll")]
+              private static extern IntPtr OpenInputDesktop(uint flags, [MarshalAs(UnmanagedType.Bool)] bool inherit, uint access);
+              [DllImport("user32.dll")]
+              [return: MarshalAs(UnmanagedType.Bool)]
+              private static extern bool CloseDesktop(IntPtr desktop);
+              public static bool IsAvailable()
+              {
+                  if (FindWindow("Shell_TrayWnd", null) == IntPtr.Zero) return false;
+                  var desktop = OpenInputDesktop(0, false, 0x0001);
+                  return desktop != IntPtr.Zero && CloseDesktop(desktop);
+              }
+          }
+          '@
+            $available = [AspireTrayDesktopProbe]::IsAvailable()
+          }
+          "available=$($available.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+          if (-not $available) {
+            $notice = 'Windows native tray smoke was not run: an interactive Explorer/input desktop is unavailable. Native publishing and payload verification remain enabled; validate UI on a Windows desktop.'
+            Write-Output "::warning::$notice"
+            "### Windows tray UI validation`n`n$notice" >> $env:GITHUB_STEP_SUMMARY
+          }
+
+      - name: Report skipped Windows ARM64 tray smoke
+        if: runner.os == 'Windows' && matrix.targets.rids == 'win-arm64'
+        shell: pwsh
+        run: |
+          $notice = 'Windows ARM64 native tray UI smoke is temporarily disabled on GitHub-hosted runners: notification icon registration fails in native ARM64 and emulated x64 SDK controls despite a responsive Explorer. The root cause remains unresolved. Native publishing and payload verification remain enabled; native UI behavior is not validated by this job.'
+          Write-Output "::warning::$notice"
+          "### Windows ARM64 tray UI validation`n`n$notice" >> $env:GITHUB_STEP_SUMMARY
+
+      # Temporarily disabled on Windows ARM64 GitHub-hosted runners: notification icon
+      # registration fails for both native ARM64 and emulated x64 SDK controls even
+      # with a responsive Explorer. Root cause remains unresolved.
+      # Native publishing and payload verification still run.
+      # https://github.com/microsoft/aspire/actions/runs/35373950404/job/105696457894
+      - name: Smoke Windows native tray
+        if: runner.os == 'Windows' && matrix.targets.rids != 'win-arm64' && steps.windows_tray_desktop.outputs.available == 'true'
+        shell: pwsh
+        env:
+          TRAY_RID: ${{ matrix.targets.rids }}
+          TRAY_CONFIGURATION: ${{ inputs.configuration }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $rid = $env:TRAY_RID
+          $archive = @(Get-ChildItem -Path "artifacts/packages/$env:TRAY_CONFIGURATION" -Filter "aspire-cli-$rid-*.zip" -Recurse -File)
+          if ($archive.Count -ne 1) {
+            throw "Expected exactly one native CLI archive for $rid."
+          }
+          $scratch = [IO.Directory]::CreateTempSubdirectory('aspire-tray-ci-').FullName
+          try {
+            eng/scripts/tray-registration-control/run.ps1 -Architecture ($rid -replace '^win-', '') -CompareArchitectures:($rid -eq 'win-arm64')
+            Expand-Archive -LiteralPath $archive[0].FullName -DestinationPath (Join-Path $scratch 'cli')
+            $cli = Join-Path $scratch 'cli/aspire.exe'
+            & tar -xzf "artifacts/bundle/aspire-ci-bundlepayload-$rid.tar.gz" -C $scratch "$rid/tray"
+            if ($LASTEXITCODE -ne 0) { throw 'Could not extract native tray smoke payload.' }
+            src/Aspire.Tray/Windows/publish.ps1 `
+              -Architecture ($rid -replace '^win-', '') `
+              -Configuration $env:TRAY_CONFIGURATION `
+              -PublishDirectory (Join-Path $scratch "$rid/tray") `
+              -SkipPublish -CliPath $cli -SmokeSeconds 60
+          }
+          finally {
+            Remove-Item -LiteralPath $scratch -Recurse -Force
+          }
 
       - name: Verify CLI npm package
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
 
-          $rid = '${{ matrix.targets.rids }}'
+          $rid = $env:TARGET_RIDS
           $archiveExtension = if ($rid.StartsWith('win-')) { 'zip' } else { 'tar.gz' }
-          $archive = @(Get-ChildItem -Path 'artifacts/packages/${{ inputs.configuration }}' -Filter "aspire-cli-$rid-*.$archiveExtension" -Recurse -File -ErrorAction SilentlyContinue)
+          $archive = @(Get-ChildItem -Path "artifacts/packages/$env:BUILD_CONFIGURATION" -Filter "aspire-cli-$rid-*.$archiveExtension" -Recurse -File -ErrorAction SilentlyContinue)
           if ($archive.Count -ne 1) {
             throw "Expected exactly one CLI archive for $rid, but found $($archive.Count): $($archive.FullName -join ', ')"
           }
 
           eng/scripts/verify-cli-npm-package.ps1 `
-            -PackagesDir artifacts/packages/${{ inputs.configuration }} `
+            -PackagesDir "artifacts/packages/$env:BUILD_CONFIGURATION" `
             -Rid $rid `
             -ArchivePath $archive[0].FullName
 
@@ -172,7 +257,14 @@ jobs:
             artifacts/packages/${{ inputs.configuration }}/Shipping/Aspire.Hosting.Orchestration.${{ matrix.targets.rids }}.*.nupkg
             artifacts/packages/${{ inputs.configuration }}/Shipping/Aspire.Dashboard.Sdk.${{ matrix.targets.rids }}.*.nupkg
             artifacts/packages/${{ inputs.configuration }}/Shipping/Aspire.Cli.*.nupkg
-            artifacts/packages/${{ inputs.configuration }}/Shipping/microsoft-aspire-cli*.tgz
+          if-no-files-found: error
+          retention-days: 15
+
+      - name: Upload CLI npm packages
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: cli-npm-packages-${{ matrix.targets.rids }}
+          path: artifacts/packages/${{ inputs.configuration }}/Shipping/microsoft-aspire-cli*.tgz
           if-no-files-found: error
           retention-days: 15
 

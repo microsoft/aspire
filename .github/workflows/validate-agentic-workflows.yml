@@ -18,6 +18,7 @@ on:
       - .github/aw/actions-lock.json
       - .github/actionlint.yaml
       - .github/workflows/validate-agentic-workflows.yml
+      - .github/workflows/auto-sec/*.js
 
 permissions:
   contents: read
@@ -25,6 +26,7 @@ permissions:
 jobs:
   validate:
     name: Compile, lint, and test agentic workflows
+    if: ${{ github.repository == 'microsoft/aspire' }}
     runs-on: ubuntu-latest
 
     steps:
@@ -36,9 +38,9 @@ jobs:
       # workflows are byte-for-byte comparable with what a contributor generates locally; see
       # .github/workflows/README.md.
       - name: Install gh-aw extension
-        uses: github/gh-aw-actions/setup-cli@f3b81cdb3070066a47faa9bdf440f4f1dc78b1f0 # v0.89.17
+        uses: github/gh-aw-actions/setup-cli@53d0749e19424a918acd82b4d140264ce48f2f14 # v1.2.2
         with:
-          version: v0.89.17
+          version: v1.2.2
 
       - name: Compile agentic workflows (schema and action-pin validation)
         env:
@@ -46,8 +48,10 @@ jobs:
         run: |
           # Purging catches source deletions that leave orphaned generated workflows. Refreshing
           # action pins ensures a committed edit to actions-lock.json cannot survive validation.
+          # Match local generation even in forks or checkouts without a canonical origin remote.
           gh aw compile --purge --force-refresh-action-pins \
-            --validate --no-check-update
+            --validate --no-check-update --schedule-seed microsoft/aspire
+          node .github/workflows/auto-sec/publication-guard.js
 
       - name: Verify generated files are up to date
         run: |
@@ -63,7 +67,9 @@ jobs:
           fi
 
       - name: Lint generated agentic workflows
-        run: gh aw lint --shellcheck
+        # gh aw lint scans every workflow in the directory by default, including
+        # handwritten ones that ci.yml's actionlint gate owns. Lint only generated files.
+        run: gh aw lint --shellcheck .github/workflows/*.lock.yml .github/workflows/agentics-maintenance*.yml
 
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:

@@ -10,6 +10,7 @@ From your AppHost directory, add the `Aspire.Hosting.PostgreSQL` integration wit
 
 ```bash
 aspire add Aspire.Hosting.PostgreSQL
+aspire add Aspire.Hosting.Dotnet
 ```
 
 ## Usage example
@@ -21,7 +22,7 @@ In the AppHost, add a PostgreSQL resource and reference it from another resource
 ```csharp
 var db = builder.AddPostgres("pgsql").AddDatabase("mydb");
 
-var myService = builder.AddProject<Projects.MyService>()
+var myService = builder.AddDotnetProject("myservice", "../MyService/MyService.csproj")
                        .WithReference(db);
 ```
 

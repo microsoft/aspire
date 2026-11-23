@@ -27,3 +27,24 @@ updates:
       interval: "weekly"
     cooldown:
       default-days: 7
+  # The create-video agent skill: the packages of its file-based apps (Directory.Packages.props, for video.cs
+  # and the recorder) and the voice's npm package. They run on the user's machine, outside the build, so they follow
+  # the latest stable versions.
+  - package-ecosystem: "nuget"
+    directory: "/.agents/skills/create-video/scripts"
+    groups:
+      create-video:
+        patterns: ["*"]
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 7
+  - package-ecosystem: "npm"
+    directory: "/.agents/skills/create-video/scripts/tts"
+    groups:
+      create-video-npm:
+        patterns: ["*"]
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 7

@@ -148,25 +148,25 @@ function stubDebugSessionEvents(): {
     start: (session: vscode.DebugSession) => void;
     terminate: (session: vscode.DebugSession) => void;
 } {
-    let startDebugSession: ((session: vscode.DebugSession) => void) | undefined;
-    let terminateDebugSession: ((session: vscode.DebugSession) => void) | undefined;
+    const startDebugSessions: Array<(session: vscode.DebugSession) => void> = [];
+    const terminateDebugSessions: Array<(session: vscode.DebugSession) => void> = [];
     sinon.stub(vscode.debug, 'onDidStartDebugSession').callsFake(listener => {
-        startDebugSession = listener;
+        startDebugSessions.push(listener);
         return { dispose: () => { } };
     });
     sinon.stub(vscode.debug, 'onDidTerminateDebugSession').callsFake(listener => {
-        terminateDebugSession = listener;
+        terminateDebugSessions.push(listener);
         return { dispose: () => { } };
     });
 
     return {
         start: session => {
-            assert.ok(startDebugSession);
-            startDebugSession(session);
+            assert.ok(startDebugSessions.length > 0);
+            startDebugSessions.forEach(listener => listener(session));
         },
         terminate: session => {
-            assert.ok(terminateDebugSession);
-            terminateDebugSession(session);
+            assert.ok(terminateDebugSessions.length > 0);
+            terminateDebugSessions.forEach(listener => listener(session));
         },
     };
 }

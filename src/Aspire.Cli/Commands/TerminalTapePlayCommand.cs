@@ -37,12 +37,13 @@ internal sealed class TerminalTapePlayCommand : BaseCommand
         Description = TerminalCommandStrings.TapeFileDescription,
         Required = true
     };
-    private readonly Option<int?> _replicaOption = new("--replica", "-r")
-    {
-        Description = TerminalCommandStrings.ReplicaOptionDescription
-    };
     private readonly OptionWithLegacy<FileInfo?> _appHostOption =
         new("--apphost", "--project", SharedCommandStrings.AppHostOptionDescription);
+    // Keep legacy numeric selection consistent with terminal attach.
+    private readonly Option<int?> _replicaOption = new("--replica", "-r")
+    {
+        Hidden = true
+    };
     private readonly Option<int> _timeoutOption = new("--timeout")
     {
         Description = TerminalCommandStrings.TapeTimeoutDescription,
@@ -62,8 +63,8 @@ internal sealed class TerminalTapePlayCommand : BaseCommand
         _timeProvider = timeProvider;
         Arguments.Add(_resourceArgument);
         Options.Add(_tapeFileOption);
-        Options.Add(_replicaOption);
         Options.Add(_appHostOption);
+        Options.Add(_replicaOption);
         Options.Add(_timeoutOption);
     }
 
@@ -133,7 +134,7 @@ internal sealed class TerminalTapePlayCommand : BaseCommand
         {
             // A false IsAlive only means no producer is currently attached, not permanent exit.
             // DCP can attach after startup or a recycle, even when ExitCode describes a previous cycle.
-            // Refresh the selected replica's endpoint without reprompting or resetting the playback budget.
+            // Refresh only the selected replica's endpoint without resetting the playback budget.
             while (!replica.IsAlive)
             {
                 await Task.Delay(TimeSpan.FromMilliseconds(100), _timeProvider, playback.Token).ConfigureAwait(false);

@@ -53,4 +53,44 @@ public sealed class TargetLocationInterceptorTests
     {
         Assert.False(TargetLocationInterceptor.InterceptTargetLocation("http://localhost/", "http://localhost:8888/", out _));
     }
+
+    [Theory]
+    [InlineData("/", true)]
+    [InlineData("/resources", true)]
+    [InlineData("/resources/frontend", true)]
+    [InlineData("/RESOURCES/frontend", true)]
+    [InlineData("/parameters", true)]
+    [InlineData("/graph", true)]
+    [InlineData("/graph/other", false)]
+    [InlineData("/structuredlogs", false)]
+    [InlineData("/traces/detail/abc", false)]
+    [InlineData("/consolelogs/resource/frontend", false)]
+    public void IsResourceServicePath_ReturnsWhetherPageRequiresResourceService(string path, bool expected)
+    {
+        Assert.Equal(expected, TargetLocationInterceptor.IsResourceServicePath(path));
+    }
+
+    // The previous experience keeps main's behavior, where only the resources root needs the resource service.
+    [Theory]
+    [InlineData("/", "/structuredlogs")]
+    [InlineData("/resources/frontend", "/structuredlogs")]
+    [InlineData("/legacy", "/legacy/structuredlogs")]
+    [InlineData("/legacy/", "/legacy/structuredlogs")]
+    [InlineData("/LEGACY", "/legacy/structuredlogs")]
+    [InlineData("/legacy/resources", "/legacy/structuredlogs")]
+    [InlineData("/legacy/Resources/", "/legacy/structuredlogs")]
+    [InlineData("/legacy/structuredlogs", null)]
+    [InlineData("/legacy/traces", null)]
+    [InlineData("/structuredlogs", null)]
+    public void GetStandaloneLocation_KeepsTheRequestedExperience(string path, string? expected)
+    {
+        Assert.Equal(expected, TargetLocationInterceptor.GetStandaloneLocation(path));
+    }
+
+    [Fact]
+    public void InterceptTargetLocation_LegacyRoot_RedirectsToLegacyStructuredLogs()
+    {
+        Assert.True(TargetLocationInterceptor.InterceptTargetLocation("http://localhost", "http://localhost/legacy", out var newTargetLocation));
+        Assert.Equal(TargetLocationInterceptor.LegacyStructuredLogsPath, newTargetLocation);
+    }
 }

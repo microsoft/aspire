@@ -1,8 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREPIPELINES001
-#pragma warning disable ASPIREAZURE001
 #pragma warning disable ASPIREPIPELINES003
 
 using Aspire.Hosting.ApplicationModel;
@@ -16,6 +14,9 @@ namespace Aspire.Hosting.Azure.AppContainers;
 /// </summary>
 public class AzureContainerAppResource : AzureProvisioningResource
 {
+    /// <inheritdoc/>
+    public override string ResourceTypeDisplayName => "Azure Container App";
+
     /// <summary>
     /// Initializes a new instance of the <see cref="AzureContainerAppResource"/> class.
     /// </summary>

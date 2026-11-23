@@ -1,0 +1,56 @@
+﻿---
+apiVersion: "apps/v1"
+kind: "Deployment"
+metadata:
+  name: "myapp-deployment"
+  labels:
+    app.kubernetes.io/name: "{{ .Chart.Name }}"
+    app.kubernetes.io/component: "myapp"
+    app.kubernetes.io/instance: "{{ .Release.Name }}"
+spec:
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: "{{ .Chart.Name }}"
+        app.kubernetes.io/component: "myapp"
+        app.kubernetes.io/instance: "{{ .Release.Name }}"
+    spec:
+      containers:
+        - image: "nginx:alpine"
+          name: "myapp"
+          env:
+            - name: "APP_VALUE"
+              valueFrom:
+                fileKeyRef:
+                  volumeName: "generated-env"
+                  path: "app.env"
+                  key: "SOURCE_KEY"
+                  optional: false
+          imagePullPolicy: "IfNotPresent"
+      initContainers:
+        - command:
+            - "sh"
+            - "-ec"
+          image: "docker.io/library/busybox:1.37@sha256:bdf57e528e45e4433820e045b29b4597825a1c9e38353532d90a01445013f82e"
+          name: "prepare-env"
+          args:
+            - "printf \"SOURCE_KEY='generated-value'\\nOTHER_KEY='other-value'\\n\" > /out/app.env"
+          volumeMounts:
+            - name: "generated-env"
+              mountPath: "/out"
+          imagePullPolicy: "IfNotPresent"
+      volumes:
+        - name: "generated-env"
+          emptyDir: {}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: "{{ .Chart.Name }}"
+      app.kubernetes.io/component: "myapp"
+      app.kubernetes.io/instance: "{{ .Release.Name }}"
+  replicas: 1
+  revisionHistoryLimit: 3
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+    type: "RollingUpdate"

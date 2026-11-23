@@ -20,13 +20,13 @@ public class AspireFluentDataGrid<TGridItem> : FluentDataGrid<TGridItem>
     [Inject]
     public required IStringLocalizer<ControlsStrings> Loc { get; init; }
 
-    /// <summary>
-    /// Refreshes virtualized data and renders this grid when the refresh originates outside a Blazor event.
-    /// </summary>
-    public async Task RefreshDataAndRenderAsync()
+    protected override void BuildRenderTree(RenderTreeBuilder builder)
     {
-        await RefreshDataAsync(force: true);
-        StateHasChanged();
+        builder.AddContent(0, (RenderFragment)(gridBuilder => base.BuildRenderTree(gridBuilder)));
+        builder.OpenElement(1, "aspire-grid-tooltips");
+        builder.AddAttribute(2, "grid", Id);
+        builder.AddAttribute(3, "hidden", true);
+        builder.CloseElement();
     }
 
     private void RenderLoadingContent(RenderTreeBuilder builder)

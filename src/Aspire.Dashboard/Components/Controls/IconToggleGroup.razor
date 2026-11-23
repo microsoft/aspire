@@ -1,0 +1,78 @@
+@typeparam TValue
+
+@* A row of icon buttons that choose one value, with the chosen option's name next to them. Each button's name is
+   its accessible label and its tooltip; the pressed state tells which one is chosen. *@
+<div class="icon-toggle-group @(Prominent ? "prominent" : null) @(ShowOptionText ? "labeled" : null) @(ShowSelectedOptionText ? "selected-labeled" : null)" role="group" aria-label="@Label">
+    @if (ShowLabel)
+    {
+        <span class="icon-toggle-label" aria-hidden="true">@Label</span>
+    }
+    <div class="icon-toggle-buttons">
+        @foreach (var option in Options)
+        {
+            var isSelected = EqualityComparer<TValue>.Default.Equals(option.Value, Value);
+            <button type="button"
+                    class="icon-toggle @(isSelected ? "selected" : null)"
+                    aria-pressed="@(isSelected.ToString().ToLowerInvariant())"
+                    aria-label="@option.Text"
+                    data-tooltip="@option.Text"
+                    @onclick="@(() => SelectAsync(option.Value))">
+                <span class="icon-toggle-icon">
+                    <FluentIcon Value="@option.Icon" Width="@(Prominent ? "22px" : "20px")" Color="Color.Custom" CustomColor="currentColor" />
+                    @if (option.BadgeText is not null)
+                    {
+                        <span class="icon-toggle-badge" aria-hidden="true">@option.BadgeText</span>
+                    }
+                </span>
+                @if (ShowOptionText || (ShowSelectedOptionText && isSelected))
+                {
+                    <span class="icon-toggle-option-text">@option.Text</span>
+                }
+            </button>
+        }
+    </div>
+    @if (ShowCurrentLabel)
+    {
+        <span class="icon-toggle-current" aria-hidden="true">@Options.FirstOrDefault(o => EqualityComparer<TValue>.Default.Equals(o.Value, Value))?.Text</span>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public required string Label { get; set; }
+
+    [Parameter, EditorRequired]
+    public required IReadOnlyList<IconToggleOption<TValue>> Options { get; set; }
+
+    [Parameter]
+    public TValue? Value { get; set; }
+
+    [Parameter]
+    public EventCallback<TValue> ValueChanged { get; set; }
+
+    [Parameter]
+    public bool ShowLabel { get; set; }
+
+    [Parameter]
+    public bool ShowCurrentLabel { get; set; } = true;
+
+    [Parameter]
+    public bool Prominent { get; set; }
+
+    [Parameter]
+    public bool ShowOptionText { get; set; }
+
+    [Parameter]
+    public bool ShowSelectedOptionText { get; set; }
+
+    private async Task SelectAsync(TValue value)
+    {
+        if (EqualityComparer<TValue>.Default.Equals(value, Value))
+        {
+            return;
+        }
+
+        Value = value;
+        await ValueChanged.InvokeAsync(value);
+    }
+}

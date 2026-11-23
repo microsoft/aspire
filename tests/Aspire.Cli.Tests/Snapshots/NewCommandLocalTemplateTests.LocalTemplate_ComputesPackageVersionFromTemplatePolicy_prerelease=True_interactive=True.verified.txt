@@ -1,0 +1,10 @@
+﻿{
+  NuGet.Config:
+<configuration>
+  <packageSources><clear /><add key="template-feed" value="../feed" /></packageSources>
+  <packageSourceMapping>
+    <clear /><packageSource key="template-feed"><package pattern="Aspire.Hosting.Dotnet" /></packageSource>
+  </packageSourceMapping>
+</configuration>,
+  versions.json: {"sdk":"13.6.3","integration":"13.6.3-preview.10"}
+}

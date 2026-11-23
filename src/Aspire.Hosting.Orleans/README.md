@@ -10,6 +10,7 @@ From your AppHost directory, add the `Aspire.Hosting.Orleans` integration with t
 
 ```bash
 aspire add Aspire.Hosting.Orleans
+aspire add Aspire.Hosting.Dotnet
 ```
 
 ## Usage example
@@ -27,10 +28,10 @@ var orleans = builder.AddOrleans("my-app")
                      .WithClustering(clusteringTable)
                      .WithGrainStorage("Default", grainStorage);
 
-builder.AddProject<Projects.OrleansServer>("silo")
+builder.AddDotnetProject("silo", "../OrleansServer/OrleansServer.csproj")
        .WithReference(orleans);
 
-builder.AddProject<Projects.OrleansClient>("frontend")
+builder.AddDotnetProject("frontend", "../OrleansClient/OrleansClient.csproj")
        .WithReference(orleans.AsClient());
 ```
 

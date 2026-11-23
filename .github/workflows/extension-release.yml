@@ -513,6 +513,10 @@ jobs:
         with:
           client-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
           private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
+          # contents pushes the release branch; pull-requests creates or updates
+          # the draft release pull request and creates or applies its trigger label.
+          permission-contents: write
+          permission-pull-requests: write
 
       - name: Create draft pull request
         if: ${{ !inputs.dry_run }}

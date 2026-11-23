@@ -1,13 +1,10 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Microsoft.AspNetCore.InternalTesting;
-using Microsoft.Extensions.Configuration;
 using Aspire.Cli.Agents;
 using Aspire.Cli.Agents.ClaudeCode;
-using Aspire.Cli.Agents.Playwright;
-using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
+using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Logging.Abstractions;
 using Semver;
 
@@ -15,121 +12,131 @@ namespace Aspire.Cli.Tests.Agents;
 
 public class ClaudeCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
 {
-    [Fact]
-    public async Task ApplyAsync_WithMalformedMcpJson_ThrowsInvalidOperationException()
+    [Theory]
+    [InlineData("{ invalid json content")]
+    [InlineData("")]
+    [InlineData("""{"mcpServers":{"aspire":{"command":"custom-aspire"}}}""")]
+    public async Task ScanAsync_WithMcpConfiguration_DetectsInstalledCliWithoutModifyingFile(string content)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".mcp.json");
+        await File.WriteAllTextAsync(configPath, content);
+        var runner = new FakeClaudeCodeCliRunner(new SemVersion(1, 0, 0));
+        var scanner = new ClaudeCodeAgentEnvironmentScanner(runner,
+            TestExecutionContextHelper.CreateExecutionContext(workspace.WorkspaceRoot),
+            NullLogger<ClaudeCodeAgentEnvironmentScanner>.Instance);
+        var context = new AgentEnvironmentScanContext
+        {
+            WorkingDirectory = workspace.WorkspaceRoot,
+            RepositoryRoot = workspace.WorkspaceRoot
+        };
+
+        var environments = await scanner.ScanAsync(context, CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal(AgentEnvironment.ClaudeCode, environments);
+        Assert.Equal(content, await File.ReadAllTextAsync(configPath));
+    }
+
+    [Theory]
+    [InlineData(".", false)]
+    [InlineData("subdir", false)]
+    [InlineData(".", true)]
+    [InlineData("subdir", true)]
+    public async Task ScanAsync_WithProjectDirectory_DetectsClaudeWithoutCallingRunner(string relativeWorkingDirectory, bool trailingRootSeparator)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         workspace.CreateDirectory(".claude");
-
-        // Create a malformed .mcp.json at the workspace root
-        var mcpJsonPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".mcp.json");
-        await File.WriteAllTextAsync(mcpJsonPath, "{ invalid json content");
-
-        var claudeCodeCliRunner = new FakeClaudeCodeCliRunner(new SemVersion(1, 0, 0));
-        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
-        var scanner = new ClaudeCodeAgentEnvironmentScanner(claudeCodeCliRunner, CreatePlaywrightCliInstaller(), executionContext, NullLogger<ClaudeCodeAgentEnvironmentScanner>.Instance);
-        var context = CreateScanContext(workspace.WorkspaceRoot);
-
-        await scanner.ScanAsync(context, CancellationToken.None).DefaultTimeout();
-
-        // The scan should succeed (HasServerConfigured catches JsonException)
-        Assert.NotEmpty(context.Applicators);
-        var aspireApplicator = context.Applicators.First(a => a.Description.Contains("Aspire MCP"));
-
-        // Applying should throw with a descriptive message
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => aspireApplicator.ApplyAsync(CancellationToken.None)).DefaultTimeout();
-        Assert.Contains(mcpJsonPath, ex.Message);
-        Assert.Contains("malformed JSON", ex.Message);
-    }
-
-    [Fact]
-    public async Task ApplyAsync_WithEmptyMcpJson_ThrowsInvalidOperationException()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        workspace.CreateDirectory(".claude");
-
-        // Create an empty .mcp.json
-        var mcpJsonPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".mcp.json");
-        await File.WriteAllTextAsync(mcpJsonPath, "");
-
-        var claudeCodeCliRunner = new FakeClaudeCodeCliRunner(new SemVersion(1, 0, 0));
-        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
-        var scanner = new ClaudeCodeAgentEnvironmentScanner(claudeCodeCliRunner, CreatePlaywrightCliInstaller(), executionContext, NullLogger<ClaudeCodeAgentEnvironmentScanner>.Instance);
-        var context = CreateScanContext(workspace.WorkspaceRoot);
-
-        await scanner.ScanAsync(context, CancellationToken.None).DefaultTimeout();
-
-        Assert.NotEmpty(context.Applicators);
-        var aspireApplicator = context.Applicators.First(a => a.Description.Contains("Aspire MCP"));
-
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => aspireApplicator.ApplyAsync(CancellationToken.None)).DefaultTimeout();
-        Assert.Contains(mcpJsonPath, ex.Message);
-    }
-
-    [Fact]
-    public async Task ApplyAsync_WithMalformedMcpJson_DoesNotOverwriteFile()
-    {
-        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        workspace.CreateDirectory(".claude");
-
-        // Create a malformed .mcp.json with content the user may want to preserve
-        var mcpJsonPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".mcp.json");
-        var originalContent = "{ \"mcpServers\": { \"my-server\": { \"command\": \"test\" } }";
-        await File.WriteAllTextAsync(mcpJsonPath, originalContent);
-
-        var claudeCodeCliRunner = new FakeClaudeCodeCliRunner(new SemVersion(1, 0, 0));
-        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
-        var scanner = new ClaudeCodeAgentEnvironmentScanner(claudeCodeCliRunner, CreatePlaywrightCliInstaller(), executionContext, NullLogger<ClaudeCodeAgentEnvironmentScanner>.Instance);
-        var context = CreateScanContext(workspace.WorkspaceRoot);
-
-        await scanner.ScanAsync(context, CancellationToken.None).DefaultTimeout();
-
-        Assert.NotEmpty(context.Applicators);
-        var aspireApplicator = context.Applicators.First(a => a.Description.Contains("Aspire MCP"));
-
-        await Assert.ThrowsAsync<InvalidOperationException>(
-            () => aspireApplicator.ApplyAsync(CancellationToken.None)).DefaultTimeout();
-
-        // The original file content should be preserved
-        var currentContent = await File.ReadAllTextAsync(mcpJsonPath);
-        Assert.Equal(originalContent, currentContent);
-    }
-
-    private static AgentEnvironmentScanContext CreateScanContext(
-        DirectoryInfo workingDirectory)
-    {
-        return new AgentEnvironmentScanContext
+        var workingDirectory = relativeWorkingDirectory == "." ? workspace.WorkspaceRoot : workspace.CreateDirectory(relativeWorkingDirectory);
+        var homeDirectory = workspace.CreateDirectory("fake-home");
+        var runner = new FakeClaudeCodeCliRunner(null);
+        var scanner = new ClaudeCodeAgentEnvironmentScanner(runner,
+            TestExecutionContextHelper.CreateExecutionContext(workingDirectory, homeDirectory: homeDirectory),
+            NullLogger<ClaudeCodeAgentEnvironmentScanner>.Instance);
+        var context = new AgentEnvironmentScanContext
         {
             WorkingDirectory = workingDirectory,
-            RepositoryRoot = workingDirectory
+            RepositoryRoot = trailingRootSeparator
+                ? new DirectoryInfo(workspace.WorkspaceRoot.FullName + Path.DirectorySeparatorChar)
+                : workspace.WorkspaceRoot
         };
+        var before = Directory.GetFileSystemEntries(workspace.WorkspaceRoot.FullName, "*", SearchOption.AllDirectories);
+
+        var environments = await scanner.ScanAsync(context, CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal(AgentEnvironment.ClaudeCode, environments);
+        Assert.False(runner.WasCalled);
+        Assert.Equal(before, Directory.GetFileSystemEntries(workspace.WorkspaceRoot.FullName, "*", SearchOption.AllDirectories));
     }
 
-    private static CliExecutionContext CreateExecutionContext(DirectoryInfo workingDirectory)
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ScanAsync_IgnoresHomeAndDirectoriesAboveRepositoryRoot(bool directoryIsHome)
     {
-        return TestExecutionContextHelper.CreateExecutionContext(
-            workingDirectory,
-            debugMode: false,
-            homeDirectory: workingDirectory);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        workspace.CreateDirectory(".claude");
+        var childDirectory = workspace.CreateDirectory("subdir");
+        var homeDirectory = directoryIsHome ? workspace.WorkspaceRoot : workspace.CreateDirectory("fake-home");
+        var runner = new FakeClaudeCodeCliRunner(null);
+        var scanner = new ClaudeCodeAgentEnvironmentScanner(runner,
+            TestExecutionContextHelper.CreateExecutionContext(childDirectory, homeDirectory: homeDirectory),
+            NullLogger<ClaudeCodeAgentEnvironmentScanner>.Instance);
+        var context = new AgentEnvironmentScanContext
+        {
+            WorkingDirectory = childDirectory,
+            RepositoryRoot = directoryIsHome ? workspace.WorkspaceRoot : childDirectory
+        };
+
+        var environments = await scanner.ScanAsync(context, CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal(AgentEnvironment.None, environments);
+        Assert.True(runner.WasCalled);
     }
 
-    private static PlaywrightCliInstaller CreatePlaywrightCliInstaller()
+    [Theory]
+    [InlineData(".", false)]
+    [InlineData(".", true)]
+    [InlineData("sibling", false)]
+    [InlineData("sibling", true)]
+    [InlineData("selected-sibling", false)]
+    [InlineData("selected-sibling", true)]
+    public async Task ScanAsync_WithWorkingDirectoryOutsideRoot_UsesSelectedWorkspaceRoot(string relativeWorkingDirectory, bool rootHasProjectDirectory)
     {
-        return new PlaywrightCliInstaller(
-            new FakeNpmRunner(),
-            new FakeNpmProvenanceChecker(),
-            new FakePlaywrightCliRunner(),
-            new TestInteractionService(),
-            new ConfigurationBuilder().Build(),
-            NullLogger<PlaywrightCliInstaller>.Instance);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var selectedRoot = workspace.CreateDirectory("selected");
+        var workingDirectory = relativeWorkingDirectory == "." ? workspace.WorkspaceRoot : workspace.CreateDirectory(relativeWorkingDirectory);
+        Directory.CreateDirectory(Path.Combine(workingDirectory.FullName, ".claude"));
+        if (rootHasProjectDirectory)
+        {
+            Directory.CreateDirectory(Path.Combine(selectedRoot.FullName, ".claude"));
+        }
+        var homeDirectory = workspace.CreateDirectory("fake-home");
+        var runner = new FakeClaudeCodeCliRunner(null);
+        var scanner = new ClaudeCodeAgentEnvironmentScanner(runner,
+            TestExecutionContextHelper.CreateExecutionContext(workingDirectory, homeDirectory: homeDirectory),
+            NullLogger<ClaudeCodeAgentEnvironmentScanner>.Instance);
+        var context = new AgentEnvironmentScanContext
+        {
+            WorkingDirectory = workingDirectory,
+            RepositoryRoot = selectedRoot
+        };
+        var before = Directory.GetFileSystemEntries(workspace.WorkspaceRoot.FullName, "*", SearchOption.AllDirectories);
+
+        var environments = await scanner.ScanAsync(context, CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal(rootHasProjectDirectory ? AgentEnvironment.ClaudeCode : AgentEnvironment.None, environments);
+        Assert.Equal(!rootHasProjectDirectory, runner.WasCalled);
+        Assert.Equal(before, Directory.GetFileSystemEntries(workspace.WorkspaceRoot.FullName, "*", SearchOption.AllDirectories));
     }
 
     private sealed class FakeClaudeCodeCliRunner(SemVersion? version) : IClaudeCodeCliRunner
     {
+        public bool WasCalled { get; private set; }
+
         public Task<SemVersion?> GetVersionAsync(CancellationToken cancellationToken)
         {
+            WasCalled = true;
+
             return Task.FromResult(version);
         }
     }

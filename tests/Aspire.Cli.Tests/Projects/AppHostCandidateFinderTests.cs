@@ -10,6 +10,7 @@ using Aspire.Cli.Tests.Utils;
 using Aspire.Tests;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.Projects;
@@ -529,10 +530,10 @@ public class AppHostCandidateFinderTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task FindCandidateFilesAsync_DefaultFiltered_WithRealGitRepository_ComposesGitignoreMatchingAndSkipList()
     {
-        await GitTestHelper.EnsureGitAvailableAsync();
+        await GitTestHelper.EnsureGitAvailableAsync(outputHelper);
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        await workspace.InitializeGitAsync().DefaultTimeout();
-        await GitTestHelper.ConfigureGitIdentityAsync(workspace.WorkspaceRoot.FullName);
+        await workspace.InitializeGitAsync();
+        await GitTestHelper.ConfigureGitIdentityAsync(workspace.WorkspaceRoot.FullName, outputHelper);
 
         var trackedAppHost = await WriteFileAsync(workspace.WorkspaceRoot, "App/AppHost.csproj");
         var ignoredAppHost = await WriteFileAsync(workspace.WorkspaceRoot, "legacy/AppHost.csproj");
@@ -540,10 +541,11 @@ public class AppHostCandidateFinderTests(ITestOutputHelper outputHelper)
         var untrackedTypeScriptAppHost = await WriteFileAsync(workspace.WorkspaceRoot, "samples/apphost.ts");
         await File.WriteAllTextAsync(Path.Combine(workspace.WorkspaceRoot.FullName, ".gitignore"), "legacy/\n");
 
-        await GitTestHelper.RunGitAsync(workspace.WorkspaceRoot.FullName, "add", "App/AppHost.csproj", ".gitignore");
-        await GitTestHelper.RunGitAsync(workspace.WorkspaceRoot.FullName, "commit", "-m", "init");
+        await GitTestHelper.RunGitAsync(workspace.WorkspaceRoot.FullName, outputHelper, "add", "App/AppHost.csproj", ".gitignore");
+        await GitTestHelper.RunGitAsync(workspace.WorkspaceRoot.FullName, outputHelper, "commit", "-m", "init");
 
-        var finder = CreateFinderWithRealGit(workspace.WorkspaceRoot);
+        using var loggerFactory = LoggerFactory.Create(builder => builder.SetMinimumLevel(LogLevel.Debug).AddXunit(outputHelper));
+        var finder = CreateFinderWithRealGit(workspace.WorkspaceRoot, loggerFactory);
 
         var result = await finder.FindCandidateFilesAsync(workspace.WorkspaceRoot, ["AppHost.csproj", "apphost.ts"], nugetCachePath: null, AppHostDiscoveryScope.DefaultFiltered, CancellationToken.None).DefaultTimeout();
 
@@ -560,18 +562,19 @@ public class AppHostCandidateFinderTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task FindCandidateFilesAsync_DefaultFiltered_WithRealGitRepository_ScopesSubdirectorySearch()
     {
-        await GitTestHelper.EnsureGitAvailableAsync();
+        await GitTestHelper.EnsureGitAvailableAsync(outputHelper);
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
-        await workspace.InitializeGitAsync().DefaultTimeout();
-        await GitTestHelper.ConfigureGitIdentityAsync(workspace.WorkspaceRoot.FullName);
+        await workspace.InitializeGitAsync();
+        await GitTestHelper.ConfigureGitIdentityAsync(workspace.WorkspaceRoot.FullName, outputHelper);
 
         var scopedAppHost = await WriteFileAsync(workspace.WorkspaceRoot, "src/App/AppHost.csproj");
         var outsideAppHost = await WriteFileAsync(workspace.WorkspaceRoot, "Other/AppHost.csproj");
-        await GitTestHelper.RunGitAsync(workspace.WorkspaceRoot.FullName, "add", "src/App/AppHost.csproj", "Other/AppHost.csproj");
-        await GitTestHelper.RunGitAsync(workspace.WorkspaceRoot.FullName, "commit", "-m", "init");
+        await GitTestHelper.RunGitAsync(workspace.WorkspaceRoot.FullName, outputHelper, "add", "src/App/AppHost.csproj", "Other/AppHost.csproj");
+        await GitTestHelper.RunGitAsync(workspace.WorkspaceRoot.FullName, outputHelper, "commit", "-m", "init");
 
         var searchDirectory = new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "src"));
-        var finder = CreateFinderWithRealGit(workspace.WorkspaceRoot);
+        using var loggerFactory = LoggerFactory.Create(builder => builder.SetMinimumLevel(LogLevel.Debug).AddXunit(outputHelper));
+        var finder = CreateFinderWithRealGit(workspace.WorkspaceRoot, loggerFactory);
 
         var result = await finder.FindCandidateFilesAsync(searchDirectory, ["AppHost.csproj"], nugetCachePath: null, AppHostDiscoveryScope.DefaultFiltered, CancellationToken.None).DefaultTimeout();
 
@@ -586,12 +589,12 @@ public class AppHostCandidateFinderTests(ITestOutputHelper outputHelper)
         return new AppHostCandidateFinder(gitRepository ?? new TestGitRepository(), new TestEnvironment(), profilingTelemetry ?? CreateProfilingTelemetry(), NullLogger<AppHostCandidateFinder>.Instance);
     }
 
-    private static AppHostCandidateFinder CreateFinderWithRealGit(DirectoryInfo workingDirectory)
+    private static AppHostCandidateFinder CreateFinderWithRealGit(DirectoryInfo workingDirectory, ILoggerFactory loggerFactory)
     {
         var executionContext = CreateExecutionContext(workingDirectory);
         var profilingTelemetry = CreateProfilingTelemetry();
-        var gitRepository = new GitRepository(executionContext, new TestEnvironment(), NullLogger<GitRepository>.Instance, profilingTelemetry);
-        return new AppHostCandidateFinder(gitRepository, new TestEnvironment(), profilingTelemetry, NullLogger<AppHostCandidateFinder>.Instance);
+        var gitRepository = new GitRepository(executionContext, new TestEnvironment(), loggerFactory.CreateLogger<GitRepository>(), profilingTelemetry);
+        return new AppHostCandidateFinder(gitRepository, new TestEnvironment(), profilingTelemetry, loggerFactory.CreateLogger<AppHostCandidateFinder>());
     }
 
     private static TestGitRepository CreateGitRepository(params string[] includedPaths)

@@ -317,6 +317,33 @@ public class TelemetryApiServiceTests
         Assert.Contains(spans, s => DecodeSpanId(s.SpanId) == "long-ok-span");
     }
 
+    [Theory]
+    [InlineData(3, new[] { "span1b", "span2a", "span2b" })]
+    [InlineData(10, new[] { "span1a", "span1b", "span2a", "span2b" })]
+    [InlineData(0, new string[0])]
+    public async Task GetSpans_WithLimit_ReturnsMostRecentSpansAcrossTraces(int limit, string[] expectedSpanIds)
+    {
+        using var repositoryContext = SqliteRepositoryTestHelpers.CreateTemporaryTelemetryRepository();
+        var repository = repositoryContext.Repository;
+        await AddSpansToRepository(repository, [
+            CreateSpan(traceId: "trace1", spanId: "span1a", startTime: s_testTime, endTime: s_testTime.AddSeconds(1)),
+            CreateSpan(traceId: "trace1", spanId: "span1b", startTime: s_testTime.AddSeconds(1), endTime: s_testTime.AddSeconds(2))
+        ]);
+        await AddSpansToRepository(repository, [
+            CreateSpan(traceId: "trace2", spanId: "span2a", startTime: s_testTime.AddMinutes(1), endTime: s_testTime.AddMinutes(1).AddSeconds(1)),
+            CreateSpan(traceId: "trace2", spanId: "span2b", startTime: s_testTime.AddMinutes(1).AddSeconds(1), endTime: s_testTime.AddMinutes(1).AddSeconds(2))
+        ]);
+
+        var service = CreateService(repository);
+
+        var result = await service.GetSpansAsync(resourceNames: null, traceId: null, hasError: null, limit: limit, cancellationToken: CancellationToken.None);
+
+        Assert.NotNull(result);
+        Assert.Equal(4, result.TotalCount);
+        Assert.Equal(expectedSpanIds.Length, result.ReturnedCount);
+        Assert.Equal(expectedSpanIds, GetAllSpans(result).Select(s => DecodeSpanId(s.SpanId)));
+    }
+
     [Fact]
     public async Task GetLogs_WithLimit_ReturnsMostRecentLogs()
     {

@@ -1,0 +1,18 @@
+﻿{
+  global/.agents/skills/playwright-cli/SKILL.md: existing skill,
+  global/.agents/skills/playwright-cli/stale.md: existing reference,
+  global/.claude/skills/playwright-cli/SKILL.md: existing skill,
+  global/.claude/skills/playwright-cli/stale.md: existing reference,
+  global/.github/skills/playwright-cli/SKILL.md: existing skill,
+  global/.github/skills/playwright-cli/stale.md: existing reference,
+  global/.opencode/skills/playwright-cli/SKILL.md: existing skill,
+  global/.opencode/skills/playwright-cli/stale.md: existing reference,
+  project/.agents/skills/playwright-cli/SKILL.md: generated skill,
+  project/.agents/skills/playwright-cli/references/commands.md: generated commands,
+  project/.claude/skills/playwright-cli/SKILL.md: generated skill,
+  project/.claude/skills/playwright-cli/references/commands.md: generated commands,
+  project/.github/skills/playwright-cli/SKILL.md: existing skill,
+  project/.github/skills/playwright-cli/stale.md: existing reference,
+  project/.opencode/skills/playwright-cli/SKILL.md: existing skill,
+  project/.opencode/skills/playwright-cli/stale.md: existing reference
+}

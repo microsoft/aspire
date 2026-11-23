@@ -87,7 +87,7 @@ public sealed class AzureResourceScopeDeploymentTests(ITestOutputHelper output)
             output.WriteLine($"Looking for apphost.cs at: {appHostFilePath}");
 
             var content = File.ReadAllText(appHostFilePath);
-            var packageVersion = GetPackageVersionFromAppHostSdkDirective(content);
+            var packageVersion = GetPackageVersionFromAppHostPackageDirective(content);
 
             content = InsertAfterFileDirectives(content, $$"""
 #:package Aspire.Hosting.Azure.AppContainers@{{packageVersion}}
@@ -110,7 +110,7 @@ messaging.AddServiceBusQueue("{{queueName}}");
 builder.Build().Run();
 """;
 
-            content = content.Replace(buildRunPattern, replacement);
+            content = DotnetProjectDeploymentHelpers.ReplaceExactlyOnce(content, buildRunPattern, replacement);
             File.WriteAllText(appHostFilePath, content);
 
             output.WriteLine($"Modified apphost.cs with scoped existing Service Bus resource");
@@ -171,23 +171,41 @@ builder.Build().Run();
         }
     }
 
-    private static string GetPackageVersionFromAppHostSdkDirective(string appHostContent)
+    [Theory]
+    [InlineData("#:package Aspire.Hosting.AppHost@17.0.0-dev\n", "17.0.0-dev")]
+    [InlineData("#:package Aspire.Hosting.Dotnet@17.0.0-dev\r\n#:package Aspire.Hosting.AppHost@17.0.0-dev+abc123\r\n", "17.0.0-dev")]
+    [InlineData("#:package Aspire.Hosting.AppHost@17.0.0  \n", "17.0.0")]
+    public void GetPackageVersionFromAppHostPackageDirectiveReadsVersion(string content, string expectedVersion)
     {
-        const string sdkDirectivePrefix = "#:sdk Aspire.AppHost.Sdk@";
+        Assert.Equal(expectedVersion, GetPackageVersionFromAppHostPackageDirective(content));
+    }
+
+    [Fact]
+    public void GetPackageVersionFromAppHostPackageDirectiveRequiresAppHostPackage()
+    {
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            GetPackageVersionFromAppHostPackageDirective("#:package Aspire.Hosting.Dotnet@17.0.0-dev\n"));
+        Assert.Equal("Expected apphost.cs to contain an Aspire.Hosting.AppHost package directive.", exception.Message);
+    }
+
+    private static string GetPackageVersionFromAppHostPackageDirective(string appHostContent)
+    {
+        // Single-file templates pin the runtime as "#:package Aspire.Hosting.AppHost@17.0.0-dev+abc123".
+        const string packageDirectivePrefix = "#:package Aspire.Hosting.AppHost@";
 
         foreach (var line in appHostContent.Split('\n'))
         {
-            if (!line.StartsWith(sdkDirectivePrefix, StringComparison.Ordinal))
+            if (!line.StartsWith(packageDirectivePrefix, StringComparison.Ordinal))
             {
                 continue;
             }
 
-            var version = line[sdkDirectivePrefix.Length..].Trim();
+            var version = line[packageDirectivePrefix.Length..].Trim();
             var buildMetadataIndex = version.IndexOf('+', StringComparison.Ordinal);
             return buildMetadataIndex >= 0 ? version[..buildMetadataIndex] : version;
         }
 
-        throw new InvalidOperationException("Expected apphost.cs to contain an Aspire.AppHost.Sdk directive.");
+        throw new InvalidOperationException("Expected apphost.cs to contain an Aspire.Hosting.AppHost package directive.");
     }
 
     private static string InsertAfterFileDirectives(string content, string text)

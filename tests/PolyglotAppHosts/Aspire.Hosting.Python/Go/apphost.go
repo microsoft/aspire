@@ -9,7 +9,7 @@ import (
 func main() {
 	builder, err := aspire.CreateBuilder()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	builder.AddPythonApp("python-script", ".", "main.py")
@@ -31,14 +31,14 @@ func main() {
 		Args:    []string{"sync"},
 	})
 	if err = uvicorn.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	app, err := builder.Build()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 	if err := app.Run(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 }

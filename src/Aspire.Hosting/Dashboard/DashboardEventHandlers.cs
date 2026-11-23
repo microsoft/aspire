@@ -309,9 +309,7 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
                         // Other endpoints are for the dashboard UI. There are typically dashboard UI endpoints for http and https.
                         // Order these before non-browser usable endpoints.
                         url.DisplayText = $"Dashboard ({endpoint.EndpointName})";
-#pragma warning disable CS0618 // DisplayOrder is obsolete but must still be set for compatibility.
                         url.DisplayOrder = 1;
-#pragma warning restore CS0618
 
                         // Append the browser token to the URL as a query string parameter if token is configured
                         if (!string.IsNullOrEmpty(browserToken))
@@ -454,6 +452,7 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
 
         context.EnvironmentVariables[KnownAspNetCoreConfigNames.Environment] = environment;
         context.EnvironmentVariables[DashboardConfigNames.ResourceServiceUrlName.EnvVarName] = resourceServiceUrl;
+        context.EnvironmentVariables[DashboardConfigNames.DashboardLaunchContextName.EnvVarName] = KnownDashboardLaunchContexts.AppHost;
         SetEnvironmentVariableWithFallback(
             context,
             DashboardConfigNames.DashboardApplicationName,
@@ -463,6 +462,7 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
             context,
             DashboardConfigNames.DashboardDataDirectoryName,
             DashboardConfigNames.DashboardDataDirectoryName.ConfigKey);
+        ResolveDashboardDataDirectory(context);
         SetEnvironmentVariableWithFallback(
             context,
             DashboardConfigNames.DashboardPersistenceModeName,
@@ -551,7 +551,7 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
             if (sessionPort.Split(':') is { Length: 2 } parts &&
                 int.TryParse(parts[1], CultureInfo.InvariantCulture, out var port))
             {
-                context.EnvironmentVariables[DashboardConfigNames.DebugSessionPortName.EnvVarName] = port;
+                context.EnvironmentVariables[DashboardConfigNames.Legacy.DebugSessionPortName.EnvVarName] = port;
             }
             else
             {
@@ -560,7 +560,7 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
         }
         if (configuration["DEBUG_SESSION_TOKEN"] is { Length: > 0 } sessionToken)
         {
-            context.EnvironmentVariables[DashboardConfigNames.DebugSessionTokenName.EnvVarName] = sessionToken;
+            context.EnvironmentVariables[DashboardConfigNames.Legacy.DebugSessionTokenName.EnvVarName] = sessionToken;
         }
         if (configuration[KnownConfigNames.DcpInstanceIdPrefix] is { Length: > 0 } sessionDcpInstanceIdPrefix)
         {
@@ -568,15 +568,39 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
             // stable dashboard-specific suffix so dashboard telemetry can use the
             // same scoped DCP authorization path as other IDE endpoint requests.
             var separator = sessionDcpInstanceIdPrefix.EndsWith('-') ? string.Empty : "-";
-            context.EnvironmentVariables[DashboardConfigNames.DebugSessionDcpInstanceIdName.EnvVarName] = sessionDcpInstanceIdPrefix + separator + "dashboard";
+            context.EnvironmentVariables[DashboardConfigNames.Legacy.DebugSessionDcpInstanceIdName.EnvVarName] = sessionDcpInstanceIdPrefix + separator + "dashboard";
         }
         if (configuration["DEBUG_SESSION_SERVER_CERTIFICATE"] is { Length: > 0 } sessionCertificate)
         {
-            context.EnvironmentVariables[DashboardConfigNames.DebugSessionServerCertificateName.EnvVarName] = sessionCertificate;
+            context.EnvironmentVariables[DashboardConfigNames.Legacy.DebugSessionServerCertificateName.EnvVarName] = sessionCertificate;
         }
         if (options.TelemetryOptOut is { } optOutValue)
         {
-            context.EnvironmentVariables[DashboardConfigNames.DebugSessionTelemetryOptOutName.EnvVarName] = optOutValue;
+            context.EnvironmentVariables[DashboardConfigNames.Legacy.DebugSessionTelemetryOptOutName.EnvVarName] = optOutValue;
+        }
+    }
+
+    // The dashboard process runs with its own install directory as the working directory, so a relative
+    // data directory (from either the config key or the forwarded environment alias) is resolved against
+    // the AppHost directory. Otherwise data would be written under the dashboard bundle, which may be read-only.
+    private void ResolveDashboardDataDirectory(EnvironmentCallbackContext context)
+    {
+        if (configuration["AppHost:Directory"] is not { Length: > 0 } appHostDirectory)
+        {
+            return;
+        }
+
+        // Automatic forwarding preserves the configured key's spelling, so match it case-insensitively.
+        var envVarName = DashboardConfigNames.DashboardDataDirectoryName.EnvVarName;
+        foreach (var name in context.EnvironmentVariables.Keys.ToList())
+        {
+            if (string.Equals(name, envVarName, StringComparison.OrdinalIgnoreCase) &&
+                context.EnvironmentVariables[name] is string dataDirectory &&
+                !string.IsNullOrWhiteSpace(dataDirectory) &&
+                !Path.IsPathFullyQualified(dataDirectory))
+            {
+                context.EnvironmentVariables[name] = Path.GetFullPath(dataDirectory, appHostDirectory);
+            }
         }
     }
 

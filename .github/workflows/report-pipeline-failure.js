@@ -1,5 +1,5 @@
-// Nightly-pipeline failure reporter, used by deployment-tests.yml and
-// tests-daily-smoke.yml. Invoked from an actions/github-script step via report().
+// Scheduled-pipeline failure reporter, used by deployment-tests.yml,
+// tests-daily-smoke.yml, and the weekly update-actionlint.yml. Invoked from an actions/github-script step via report().
 //
 // These scheduled pipelines otherwise fail silently — GitHub only emails whoever
 // last edited the workflow file. This reporter files a single deduplicated issue
@@ -42,13 +42,13 @@ function buildMarker(workflowFile) {
 }
 
 function buildIssueTitle(displayName) {
-    return `Nightly run failing: ${displayName}`;
+    return `Scheduled run failing: ${displayName}`;
 }
 
 // Builds the static issue body. Each failed run is recorded as a comment (see
 // report()), so the body is a fixed description written once at filing.
 function buildIssueBody({ marker, displayName, workflowFile, cc = '' }) {
-    const lead = `The scheduled workflow [\`${workflowFile}\`](../../actions/workflows/${workflowFile}) (**${displayName}**) is failing on its nightly run.`;
+    const lead = `The scheduled workflow [\`${workflowFile}\`](../../actions/workflows/${workflowFile}) (**${displayName}**) is failing on its scheduled run.`;
 
     return tracking.buildBody({
         marker,

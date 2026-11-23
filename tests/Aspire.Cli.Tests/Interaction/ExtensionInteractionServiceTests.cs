@@ -17,6 +17,87 @@ namespace Aspire.Cli.Tests.Interaction;
 
 public class ExtensionInteractionServiceTests(ITestOutputHelper outputHelper)
 {
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task PromptForStringAsync_Secret_UsesMaskedPrompt(bool hasSecretPromptsCapability, bool required)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var output = new StringBuilder();
+        var console = new TestAnsiConsoleWithInput(
+            AnsiConsole.Create(new AnsiConsoleSettings
+            {
+                Ansi = AnsiSupport.No,
+                ColorSystem = ColorSystemSupport.NoColors,
+                Interactive = InteractionSupport.Yes,
+                Out = new AnsiConsoleOutput(new StringWriter(output))
+            }),
+            new StringReader("y\n"));
+        var consoleInteractionService = new ConsoleInteractionService(
+            new ConsoleEnvironment(console, console, TextReader.Null),
+            workspace.CreateExecutionContext(),
+            TestHelpers.CreateInteractiveHostEnvironment(),
+            new EnvironmentProcessPathProvider(),
+            NullLoggerFactory.Instance,
+            new ConsoleLogBufferContext());
+        var secretPromptCalls = 0;
+        var regularPromptCalls = 0;
+        var backchannel = new TestExtensionBackchannel
+        {
+            HasCapabilityAsyncCallback = (capability, _) =>
+            {
+                Assert.Equal(KnownCapabilities.SecretPrompts, capability);
+                return Task.FromResult(hasSecretPromptsCapability);
+            },
+            PromptForSecretStringAsyncCallback = (_, _, promptRequired) =>
+            {
+                secretPromptCalls++;
+                Assert.Equal(required, promptRequired);
+                return Task.FromResult("y");
+            },
+            PromptForStringAsyncCallback = (_, _, _, _) =>
+            {
+                regularPromptCalls++;
+                return Task.FromResult("unmasked");
+            }
+        };
+        using var interactionService = new ExtensionInteractionService(
+            consoleInteractionService, backchannel, extensionPromptEnabled: true,
+            NullLogger<ExtensionInteractionService>.Instance);
+
+        var result = await interactionService.PromptForStringAsync("Secret:", isSecret: true, required: required).DefaultTimeout();
+
+        Assert.Equal("y", result);
+        Assert.Equal(0, regularPromptCalls);
+        Assert.Equal(hasSecretPromptsCapability ? 1 : 0, secretPromptCalls);
+        Assert.Equal(hasSecretPromptsCapability ? "" : $"Secret: *{Environment.NewLine}", output.ToString());
+    }
+
+    [Fact]
+    public async Task DisplaySourceTrustWarning_NotifiesExtensionOnlyOnce()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var messages = new List<string>();
+        var backchannel = new TestExtensionBackchannel
+        {
+            DisplayMessageAsyncCallback = (_, message) =>
+            {
+                messages.Add(message);
+                return Task.CompletedTask;
+            }
+        };
+        using var interaction = CreateExtensionInteractionService(workspace, backchannel);
+        var executionContext = workspace.CreateExecutionContext();
+
+        interaction.DisplaySourceTrustWarning(executionContext);
+        interaction.DisplaySourceTrustWarning(executionContext);
+        await interaction.FlushAsync();
+
+        Assert.Equal([SharedCommandStrings.SourceTrustWarning], messages);
+    }
+
     [Fact]
     public async Task DisplayMessage_DoesNotRenderTerminalHyperlinksToDebugConsoleCapturedOutput()
     {
@@ -101,13 +182,19 @@ public class ExtensionInteractionServiceTests(ITestOutputHelper outputHelper)
             });
     }
 
-    [Fact]
-    public async Task TryDisplayCommandFailureAsync_WithError_CombinesDiagnosticLogActions()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task TryDisplayCommandFailureAsync_WithError_CombinesDiagnosticLogActions(bool allowMarkup)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var cliLogFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, "aspire.cli.log");
         var appHostLogFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cli.log");
         string? capturedError = null;
+        const string expectedError = "The project could not be built.\nSee https://docs.example/help?team=[platform].";
+        var errorMessage = allowMarkup
+            ? "[bold]The project could not be built.[/]\nSee [link]https://docs.example/help?team=[[platform]][/]."
+            : expectedError;
         IReadOnlyList<InteractionMessageAction>? capturedActions = null;
         var displayedLogNotification = false;
         var backchannel = new TestExtensionBackchannel
@@ -128,14 +215,15 @@ public class ExtensionInteractionServiceTests(ITestOutputHelper outputHelper)
         using var interactionService = CreateExtensionInteractionService(workspace, backchannel);
 
         var displayed = await interactionService.TryDisplayCommandFailureAsync(
-            "The project could not be built.",
+            errorMessage,
             cliLogFilePath,
             appHostLogFilePath,
+            allowMarkup,
             CancellationToken.None);
         await interactionService.FlushAsync();
 
         Assert.True(displayed);
-        Assert.Equal("The project could not be built.", capturedError);
+        Assert.Equal(expectedError, capturedError);
         Assert.Collection(
             Assert.IsAssignableFrom<IReadOnlyList<InteractionMessageAction>>(capturedActions),
             action =>
@@ -174,6 +262,7 @@ public class ExtensionInteractionServiceTests(ITestOutputHelper outputHelper)
             errorMessage: null,
             logFilePath,
             appHostCliLogFilePath: null,
+            allowMarkup: false,
             CancellationToken.None);
         await interactionService.FlushAsync();
 
@@ -220,6 +309,7 @@ public class ExtensionInteractionServiceTests(ITestOutputHelper outputHelper)
             "The project could not be built.",
             Path.Combine(workspace.WorkspaceRoot.FullName, "aspire.cli.log"),
             appHostCliLogFilePath: null,
+            allowMarkup: false,
             CancellationToken.None);
         await interactionService.FlushAsync();
 
@@ -306,6 +396,67 @@ public class ExtensionInteractionServiceTests(ITestOutputHelper outputHelper)
 
         Assert.True(cancellationMessageCalled.Task.IsCompletedSuccessfully);
         Assert.False(displayMessageCalled);
+    }
+
+    [Fact]
+    public async Task PromptForSelectionAsync_GroupingFallsBackToExistingFlatExtensionChoices()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        SelectionChoice[] choices = [new("Same (same) - first"), new("Same (same) - second")];
+        IReadOnlyList<string>? capturedChoices = null;
+        var backchannel = new TestExtensionBackchannel
+        {
+            PromptForSelectionAsyncCallback = (_, labels) =>
+            {
+                capturedChoices = labels;
+                return Task.FromResult(labels[1]);
+            }
+        };
+        using var interaction = CreateExtensionInteractionService(workspace, backchannel);
+
+        var selected = await interaction.PromptForSelectionAsync("Select:", choices, choice => $"[bold]{choice.Label}[/]",
+            _ => throw new InvalidOperationException("Flat extension fallback must not evaluate grouping."),
+            _ => throw new InvalidOperationException("Flat extension fallback must not evaluate terminal labels."));
+
+        Assert.Equal(["Same (same) - first", "Same (same) - second"], capturedChoices);
+        Assert.Same(choices[1], selected);
+    }
+
+    [Fact]
+    public async Task PromptForSelectionAsync_DisabledExtensionPromptsRetainConsoleGrouping()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.Yes,
+            Interactive = InteractionSupport.Yes,
+            Out = new AnsiConsoleOutput(new StringWriter()),
+            Enrichment = new ProfileEnrichment { UseDefaultEnrichers = false }
+        });
+        var inputConsole = new TestAnsiConsoleWithInput(console,
+            [new('\0', ConsoleKey.DownArrow, false, false, false), new('\r', ConsoleKey.Enter, false, false, false)]);
+        var consoleInteraction = new ConsoleInteractionService(
+            new ConsoleEnvironment(inputConsole, inputConsole, TextReader.Null),
+            workspace.CreateExecutionContext(), TestHelpers.CreateInteractiveHostEnvironment(),
+            new EnvironmentProcessPathProvider(), NullLoggerFactory.Instance, new ConsoleLogBufferContext());
+        var backchannel = new TestExtensionBackchannel
+        {
+            PromptForSelectionAsyncCallback = (_, _) => throw new InvalidOperationException("Console prompts must not use extension RPC.")
+        };
+        using var interaction = new ExtensionInteractionService(consoleInteraction, backchannel,
+            extensionPromptEnabled: false, logger: NullLogger<ExtensionInteractionService>.Instance);
+        SelectionChoice[] choices = [new("Same (same) - first"), new("Same (same) - second")];
+        var groupedChoices = 0;
+
+        var selected = await interaction.PromptForSelectionAsync("Select:", choices, choice => choice.Label,
+            choice =>
+            {
+                groupedChoices++;
+                return new SelectionChoiceGroup(choice.Label, "Source");
+            }, _ => "Same - Observable services");
+
+        Assert.Equal(2, groupedChoices);
+        Assert.Same(choices[1], selected);
     }
 
     [Fact]

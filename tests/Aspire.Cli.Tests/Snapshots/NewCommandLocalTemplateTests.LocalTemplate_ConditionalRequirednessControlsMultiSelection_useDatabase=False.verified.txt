@@ -1,0 +1,6 @@
+﻿{
+  settings.txt:
+Database enabled: False
+Features: []
+
+}

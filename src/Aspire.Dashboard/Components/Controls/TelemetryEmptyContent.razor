@@ -1,0 +1,13 @@
+<div class="telemetry-empty-content">
+    <div class="aspire-empty-message">@ChildContent</div>
+    @if (!DataSource.TelemetryRepository.IsReadOnly && !DataSource.TelemetryRepository.HasReceivedTelemetry)
+    {
+        <div class="telemetry-help-message" @onclick:stopPropagation="true" @onkeydown:stopPropagation="true">
+            <div>@Loc[nameof(Resources.Dialogs.TelemetryHelpMessage)]</div>
+            <div>
+                @Loc[nameof(Resources.Dialogs.TelemetryHelpMoreInformation)] <FluentButton Class="telemetry-help-button aspire-link-button" Appearance="ButtonAppearance.Transparent"
+                             OnClick="OpenHelpAsync" aria-haspopup="dialog">@Loc[nameof(Resources.Dialogs.TelemetryHelpButtonText)]</FluentButton>.
+            </div>
+        </div>
+    }
+</div>

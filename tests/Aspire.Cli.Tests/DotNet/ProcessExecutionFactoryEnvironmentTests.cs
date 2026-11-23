@@ -8,15 +8,138 @@ using Aspire.Cli.Tests.Acquisition;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Hosting;
+using Aspire.TestUtilities;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging.Testing;
 
 namespace Aspire.Cli.Tests.DotNet;
 
 [Collection(EnvVarMutatingTestCollection.Name)]
-public sealed class ProcessExecutionFactoryEnvironmentTests
+public sealed class ProcessExecutionFactoryEnvironmentTests(ITestOutputHelper outputHelper)
 {
     private const string SelectionOrigin = "explicit-launch-configuration";
     private const string ControlEnvVarName = "ASPIRE_TEST_PROCESS_EXECUTION_FACTORY_CONTROL";
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task CreateExecution_LoggingSuppressionPreservesCallbacksWithoutRawTraceOutput(bool suppressLogging)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        const string diagnostic = "https://user:password@feed.example/index.json?sig=token";
+        var script = ProcessTestHelpers.CreateScript(workspace.WorkspaceRoot, "diagnostics",
+            $"printf '%s\\n' '{diagnostic}'\nprintf '%s\\n' '{diagnostic}' >&2",
+            $"@echo off\r\necho {diagnostic}\r\n1>&2 echo {diagnostic}");
+        var logger = new FakeLogger<ProcessExecutionFactory>();
+        Assert.True(logger.IsEnabled(LogLevel.Trace));
+        var stdout = new List<string>();
+        var stderr = new List<string>();
+        var factory = new ProcessExecutionFactory(new TestEnvironment(), logger);
+        await using var execution = factory.CreateExecution(script, [], null, workspace.WorkspaceRoot, new ProcessInvocationOptions
+        {
+            SuppressLogging = suppressLogging,
+            StandardOutputCallback = stdout.Add,
+            StandardErrorCallback = stderr.Add
+        });
+
+        Assert.True(await execution.StartAsync(TestContext.Current.CancellationToken));
+        Assert.Equal(0, await execution.WaitForExitAsync(TestContext.Current.CancellationToken));
+        Assert.Equal([diagnostic], stdout);
+        Assert.Equal([diagnostic], stderr);
+        var traceMessages = logger.Collector.GetSnapshot()
+            .Where(record => record.Level == LogLevel.Trace && record.Message.Contains(diagnostic, StringComparison.Ordinal))
+            .Select(record => record.Message);
+        if (suppressLogging)
+        {
+            Assert.Empty(logger.Collector.GetSnapshot());
+        }
+        else
+        {
+            Assert.Equal(2, traceMessages.Count());
+        }
+    }
+
+    [Fact]
+    public async Task CreateExecution_FromStartInfo_PreservesRawArguments()
+    {
+        var output = new List<string>();
+        var startInfo = new ProcessStartInfo("dotnet")
+        {
+            Arguments = "--version",
+            WorkingDirectory = WorkingDirectory.FullName
+        };
+        await using var execution = CreateFactory().CreateExecution(startInfo, new ProcessInvocationOptions
+        {
+            StandardOutputCallback = output.Add
+        });
+        Assert.True(await execution.StartAsync(TestContext.Current.CancellationToken));
+        Assert.Equal(0, await execution.WaitForExitAsync(TestContext.Current.CancellationToken));
+        Assert.Matches(@"^\d+\.\d+\.\d+", Assert.Single(output));
+    }
+
+    [Fact]
+    public void SetCommand_WindowsBatchShim_RepresentsEmptyArgumentsDirectly()
+    {
+        var startInfo = new ProcessStartInfo();
+
+        ProcessStartInfoHelper.SetCommand(startInfo, @"C:\tools\npm.cmd", ["before", "", "after"], isWindows: true);
+
+        Assert.Equal(
+            "/D /V:OFF /S /C \"\"%ASPIRE_COMMAND_SHIM_PATH%\" \"%ASPIRE_COMMAND_SHIM_ARGUMENT_0%\" \"\" \"%ASPIRE_COMMAND_SHIM_ARGUMENT_2%\"\"",
+            startInfo.Arguments);
+        Assert.Empty(startInfo.ArgumentList);
+    }
+
+    [Fact]
+    public void SetCommand_WindowsBatchShim_EncodesQuotesAndTrailingBackslashes()
+    {
+        var startInfo = new ProcessStartInfo();
+        string[] arguments = ["a \"quoted\" value", "backslash\\\"quote", @"C:\tools\trailing\"];
+
+        ProcessStartInfoHelper.SetCommand(startInfo, @"C:\tools\npm.cmd", arguments, isWindows: true);
+
+        Assert.Equal(
+            ["a \"\"quoted\"\" value", "backslash\\\\\"\"quote", @"C:\tools\trailing\\"],
+            Enumerable.Range(0, arguments.Length).Select(index => startInfo.Environment[$"ASPIRE_COMMAND_SHIM_ARGUMENT_{index}"]));
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task CreateExecution_WindowsBatchShim_PreservesLiteralArgumentText()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "Windows batch commands require cmd.exe.");
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var directory = workspace.WorkspaceRoot.CreateSubdirectory("literal %TEMP%! with spaces");
+        await File.WriteAllTextAsync(Path.Combine(directory.FullName, "argv.cjs"),
+            "for (const arg of process.argv.slice(2)) console.log(arg);");
+        var shim = ProcessTestHelpers.CreateScript(directory, "npm", "exit 0",
+            """
+            @echo off
+            node "%~dp0argv.cjs" %*
+            """);
+        string[] arguments =
+        [
+            "literal %PATH%! & value", "", "a^b|c",
+            "a \"quoted\" value", "quoted \"& text\" remains literal",
+            "backslash\\\"quote", @"C:\tools\trailing\"
+        ];
+        var startInfo = new ProcessStartInfo { WorkingDirectory = directory.FullName };
+        ProcessStartInfoHelper.SetCommand(startInfo, shim, arguments, isWindows: true);
+        var output = new List<string>();
+        await using var execution = CreateFactory().CreateExecution(startInfo, new ProcessInvocationOptions
+        {
+            StandardOutputCallback = line =>
+            {
+                output.Add(line);
+                outputHelper.WriteLine(line);
+            },
+            StandardErrorCallback = outputHelper.WriteLine
+        });
+        Assert.True(await execution.StartAsync(TestContext.Current.CancellationToken));
+        Assert.Equal(0, await execution.WaitForExitAsync(TestContext.Current.CancellationToken));
+        Assert.Equal(arguments, output);
+    }
 
     [Fact]
     public void InvocationScopedEnvVarNames_ContainsExpectedVariables()

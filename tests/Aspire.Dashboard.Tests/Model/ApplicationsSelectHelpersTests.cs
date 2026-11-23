@@ -62,6 +62,109 @@ public sealed class ResourcesSelectHelpersTests
     }
 
     [Fact]
+    public void GetResource_ShortenedGuidInstanceId_GetInstance()
+    {
+        var appVMs = ResourcesSelectHelpers.CreateResources(new List<OtlpResource>
+        {
+            CreateOtlpResource(name: "dotnet-cli", instanceId: "aaaaaaaa-bbbb-cccc-dddd-eeee6a764b7d"),
+            CreateOtlpResource(name: "dotnet-cli", instanceId: "aaaaaaaa-bbbb-cccc-dddd-eeee12345678")
+        });
+
+        var app = appVMs.GetResource(NullLogger.Instance, "dotnet-cli-6a764b7d", canSelectGrouping: true, null!);
+
+        Assert.Equal("dotnet-cli-6a764b7d", app.Name);
+        Assert.Equal("dotnet-cli-aaaaaaaa-bbbb-cccc-dddd-eeee6a764b7d", app.Id!.InstanceId);
+        Assert.Equal(OtlpResourceType.Instance, app.Id.Type);
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public void GetResource_ShortenedGuidInstanceIdMatchesResourceName_PreferExactMatch(bool isReplicaSet, bool canSelectGrouping)
+    {
+        var resources = new List<OtlpResource>
+        {
+            CreateOtlpResource(name: "dotnet-cli", instanceId: "aaaaaaaa-bbbb-cccc-dddd-eeee6a764b7d"),
+            CreateOtlpResource(name: "dotnet-cli", instanceId: "aaaaaaaa-bbbb-cccc-dddd-eeee12345678"),
+            CreateOtlpResource(name: "dotnet-cli-6a764b7d", instanceId: "other-instance")
+        };
+        if (isReplicaSet)
+        {
+            resources.Add(CreateOtlpResource(name: "dotnet-cli-6a764b7d", instanceId: "another-instance"));
+        }
+        var appVMs = ResourcesSelectHelpers.CreateResources(resources);
+        var expected = appVMs.Single(app => app.Id!.ReplicaSetName == "dotnet-cli-6a764b7d" && app.Id.Type != OtlpResourceType.Instance);
+        var testSink = new TestSink();
+        using var factory = LoggerFactory.Create(b => b.AddProvider(new TestLoggerProvider(testSink)));
+
+        var app = appVMs.GetResource(factory.CreateLogger("Test"), "dotnet-cli-6a764b7d", canSelectGrouping, null!);
+
+        Assert.Same(expected, app);
+        Assert.Empty(testSink.Writes);
+
+        var replica = appVMs.Single(app => app.Id!.InstanceId == "dotnet-cli-aaaaaaaa-bbbb-cccc-dddd-eeee6a764b7d");
+        Assert.Same(replica, appVMs.GetResource(NullLogger.Instance, replica.Id!.InstanceId, canSelectGrouping, null!));
+    }
+
+    [Fact]
+    public void GetResource_ShortenedGuidInstanceIdMatchesDisabledGroup_GetInstance()
+    {
+        var appVMs = ResourcesSelectHelpers.CreateResources(new List<OtlpResource>
+        {
+            CreateOtlpResource(name: "dotnet-cli", instanceId: "aaaaaaaa-bbbb-cccc-dddd-eeee6a764b7d"),
+            CreateOtlpResource(name: "dotnet-cli", instanceId: "aaaaaaaa-bbbb-cccc-dddd-eeee12345678"),
+            CreateOtlpResource(name: "dotnet-cli-6a764b7d", instanceId: "other-instance"),
+            CreateOtlpResource(name: "dotnet-cli-6a764b7d", instanceId: "another-instance")
+        });
+        var expected = appVMs.Single(app => app.Id!.InstanceId == "dotnet-cli-aaaaaaaa-bbbb-cccc-dddd-eeee6a764b7d");
+
+        var app = appVMs.GetResource(NullLogger.Instance, "dotnet-cli-6a764b7d", canSelectGrouping: false, null!);
+
+        Assert.Same(expected, app);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void GetResource_ShortenedGuidInstanceIdCollision_UseFirstAndLogWarning(bool canSelectGrouping)
+    {
+        var appVMs = ResourcesSelectHelpers.CreateResources(new List<OtlpResource>
+        {
+            CreateOtlpResource(name: "dotnet-cli", instanceId: "aaaaaaaa-bbbb-cccc-dddd-eeee6a764b7d"),
+            CreateOtlpResource(name: "dotnet-cli", instanceId: "11111111-2222-3333-4444-55556a764b7d")
+        });
+        var instances = appVMs.Where(app => app.Id!.Type == OtlpResourceType.Instance).ToList();
+        Assert.Collection(instances,
+            app =>
+            {
+                Assert.Equal("dotnet-cli-6a764b7d", app.Name);
+                Assert.Equal("dotnet-cli-aaaaaaaa-bbbb-cccc-dddd-eeee6a764b7d", app.Id!.InstanceId);
+            },
+            app =>
+            {
+                Assert.Equal("dotnet-cli-6a764b7d", app.Name);
+                Assert.Equal("dotnet-cli-11111111-2222-3333-4444-55556a764b7d", app.Id!.InstanceId);
+            });
+
+        var testSink = new TestSink();
+        using var factory = LoggerFactory.Create(b => b.AddProvider(new TestLoggerProvider(testSink)));
+        var logger = factory.CreateLogger("Test");
+
+        var app = appVMs.GetResource(logger, "dotnet-cli-6a764b7d", canSelectGrouping, null!);
+
+        Assert.Same(instances[0], app);
+        Assert.Equal(LogLevel.Warning, Assert.Single(testSink.Writes).LogLevel);
+
+        foreach (var instance in instances)
+        {
+            Assert.Same(instance, appVMs.GetResource(logger, instance.Id!.InstanceId, canSelectGrouping, null!));
+        }
+
+        Assert.Single(testSink.Writes);
+    }
+
+    [Fact]
     public void GetResource_NullInstanceId_GetInstance()
     {
         // Arrange

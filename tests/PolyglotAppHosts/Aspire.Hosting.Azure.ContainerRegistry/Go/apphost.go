@@ -9,14 +9,14 @@ import (
 func main() {
 	builder, err := aspire.CreateBuilder()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	registry := builder.AddAzureContainerRegistry("containerregistry").
 		WithPurgeTask("0 1 * * *", &aspire.WithPurgeTaskOptions{
 			Filter:   aspire.StringPtr("samples:*"),
 			Ago:      aspire.Float64Ptr(7),
-			Keep:     aspire.Float64Ptr(5),
+			Keep:     aspire.IntPtr(5),
 			TaskName: aspire.StringPtr("purge-samples"),
 		})
 	_ = registry.ConfigureInfrastructure(func(infrastructure aspire.AzureResourceInfrastructure) {
@@ -24,7 +24,7 @@ func main() {
 		service.Tags().Set("provisioning-proxy", "go")
 	})
 	if err = registry.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	environment := builder.AddAzureContainerAppEnvironment("environment")
@@ -34,17 +34,17 @@ func main() {
 		aspire.AzureContainerRegistryRoleAcrPush,
 	})
 	if err = environment.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	registryFromEnvironment := environment.GetAzureContainerRegistry()
 	registryFromEnvironment.WithPurgeTask("0 2 * * *", &aspire.WithPurgeTaskOptions{
 		Filter: aspire.StringPtr("environment:*"),
 		Ago:    aspire.Float64Ptr(14),
-		Keep:   aspire.Float64Ptr(2),
+		Keep:   aspire.IntPtr(2),
 	})
 	if err = registryFromEnvironment.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	app, err := builder.Build()

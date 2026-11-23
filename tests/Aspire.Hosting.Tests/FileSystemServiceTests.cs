@@ -1,8 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREFILESYSTEM001 // Type is for evaluation purposes only
-
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
@@ -11,6 +10,25 @@ namespace Aspire.Hosting.Tests;
 [Trait("Partition", "2")]
 public class FileSystemServiceTests
 {
+    [Theory]
+    [InlineData(typeof(IFileSystemService))]
+    [InlineData(typeof(ITempFileSystemService))]
+    [InlineData(typeof(TempDirectory))]
+    [InlineData(typeof(TempFile))]
+    public void FileSystemTypes_AreStable(Type type)
+    {
+        Assert.Empty(type.GetCustomAttributes(typeof(ExperimentalAttribute), inherit: false));
+    }
+
+    [Fact]
+    public void FileSystemServiceProperty_IsStable()
+    {
+        var property = typeof(IDistributedApplicationBuilder).GetProperty(nameof(IDistributedApplicationBuilder.FileSystemService));
+
+        Assert.NotNull(property);
+        Assert.Empty(property.GetCustomAttributes(typeof(ExperimentalAttribute), inherit: false));
+    }
+
     private static IConfiguration CreateConfiguration(bool preserveTempFiles = false)
     {
         var configDict = new Dictionary<string, string?>();

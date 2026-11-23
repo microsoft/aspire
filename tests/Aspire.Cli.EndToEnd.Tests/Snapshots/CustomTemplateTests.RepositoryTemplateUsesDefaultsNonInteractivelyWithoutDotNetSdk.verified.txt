@@ -1,0 +1,11 @@
+﻿{
+  PromptDemo.txt:
+Name: PromptDemo
+Greeting: Hello from template defaults
+Kind: api
+Features: web
+,
+  README.txt:
+Optional template content.
+
+}

@@ -59,6 +59,8 @@ public class DotnetProjectRunPropertiesResolverTests(ITestOutputHelper outputHel
                 <RunCommand>dotnet</RunCommand>
                 <RunArguments>exec app.dll</RunArguments>
                 <RunWorkingDirectory>bin</RunWorkingDirectory>
+                <TargetPath>$(MSBuildProjectDirectory)/bin/app.dll</TargetPath>
+                <UseAppHost>false</UseAppHost>
               </PropertyGroup>
               <Target Name="ComputeRunArguments">
                 <Warning Text="A build diagnostic." />
@@ -74,6 +76,13 @@ public class DotnetProjectRunPropertiesResolverTests(ITestOutputHelper outputHel
             NullLogger.Instance,
             TestContext.Current.CancellationToken);
 
-        Assert.Equal(new("dotnet", "exec app.dll", Path.Combine(workspace.Path, "bin")), result);
+        Assert.Equal(
+            new(
+                "dotnet",
+                "exec app.dll",
+                Path.Combine(workspace.Path, "bin"),
+                Path.Combine(workspace.Path, "bin", "app.dll"),
+                UseAppHost: false),
+            result);
     }
 }

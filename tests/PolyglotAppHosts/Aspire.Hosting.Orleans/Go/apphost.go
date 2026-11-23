@@ -9,7 +9,7 @@ import (
 func main() {
 	builder, err := aspire.CreateBuilder()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	provider := builder.AddConnectionString("provider", &aspire.AddConnectionStringOptions{
@@ -35,20 +35,20 @@ func main() {
 	silo := builder.AddContainer("silo", "redis")
 	silo.WithOrleansReference(orleans)
 	if err = silo.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	client := builder.AddContainer("client", "redis")
 	client.WithOrleansClientReference(orleansClient)
 	if err = client.Err(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	app, err := builder.Build()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 	if err := app.Run(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 }

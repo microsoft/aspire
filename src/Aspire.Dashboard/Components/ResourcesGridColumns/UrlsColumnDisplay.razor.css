@@ -44,10 +44,18 @@
     min-width: 28px;
     min-height: 0;
     padding: 1px 14px;
-    border-radius: var(--borderRadiusLarge);
-    font-size: var(--fontSizeBase200);
+    border-radius: var(--aspire-radius-small);
+    font-size: var(--aspire-font-size-secondary);
     line-height: var(--lineHeightBase200);
-    font-weight: var(--fontWeightRegular);
+    font-weight: var(--aspire-font-weight-regular);
+}
+
+/* A quiet count keeps the brand color for links and the primary action. */
+::deep .url-button-neutral {
+    padding: 1px 8px;
+    border-radius: var(--aspire-radius-round);
+    font-size: inherit;
+    line-height: inherit;
 }
 
 ::deep.url-list {

@@ -2,44 +2,129 @@
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="zh-Hant" original="../Layout.resx">
     <body>
-      <trans-unit id="DashboardRunSelectAccessibleLabel">
+      <trans-unit id="DashboardRunMenuAccessibleLabel">
         <source>Select run: {0}</source>
-        <target state="new">Select run: {0}</target>
+        <target state="translated">選取執行: {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardRunMenuCurrent">
+        <source>Live run</source>
+        <target state="translated">即時執行</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardRunMenuHelp">
+        <source>Learn about runs</source>
+        <target state="translated">了解執行</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardRunMenuHelpTooltip">
+        <source>Switch between the live run and read-only data from previous runs. Pin a run to keep it from being automatically deleted.</source>
+        <target state="translated">在即時執行與先前執行的唯讀資料之間切換。釘選執行即可避免系統自動刪除。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardRunMenuIncompatibleTooltip">
+        <source>This run can't be viewed because it was created by an incompatible version of the dashboard.</source>
+        <target state="translated">無法檢視此執行，因為建立此執行的儀表板版本不相容。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardRunMenuPin">
+        <source>Pin run</source>
+        <target state="translated">釘選執行</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardRunMenuTitle">
+        <source>Select dashboard run</source>
+        <target state="translated">選取儀表板執行</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardRunMenuUnpin">
+        <source>Unpin run</source>
+        <target state="translated">取消釘選執行</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardRunSelectAccessibleLabel">
+        <source>Recordings, viewing {0}</source>
+        <target state="translated">錄製內容，檢視 {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardRunSelectCurrent">
-        <source>Live run</source>
-        <target state="new">Live run</target>
+        <source>Live view</source>
+        <target state="translated">即時檢視</target>
         <note />
       </trans-unit>
+      <trans-unit id="DashboardRunSelectDayAgo">
+        <source>1 day ago</source>
+        <target state="translated">1 天前</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardRunSelectDaysAgo">
+        <source>{0} days ago</source>
+        <target state="translated">{0} 天前</target>
+        <note>{0} is the number of days</note>
+      </trans-unit>
       <trans-unit id="DashboardRunSelectHelp">
-        <source>Learn about runs</source>
-        <target state="new">Learn about runs</target>
+        <source>Learn about recordings</source>
+        <target state="translated">了解錄製內容</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardRunSelectHelpTooltip">
-        <source>Switch between the live run and read-only data from previous runs. Pin a run to keep it from being automatically deleted.</source>
-        <target state="new">Switch between the live run and read-only data from previous runs. Pin a run to keep it from being automatically deleted.</target>
+        <source>Switch between the live view and read-only recordings of previous runs. Protect a recording from deletion to keep it when older recordings are automatically removed.</source>
+        <target state="translated">在即時檢視與先前執行的唯讀錄製內容之間切換。保護錄製內容免遭刪除，讓系統自動移除較舊的錄製內容時仍能保留該錄製內容。</target>
         <note />
       </trans-unit>
+      <trans-unit id="DashboardRunSelectHoursAgo">
+        <source>{0}h ago</source>
+        <target state="translated">{0} 小時前</target>
+        <note>{0} is the number of hours</note>
+      </trans-unit>
       <trans-unit id="DashboardRunSelectIncompatibleTooltip">
-        <source>This run can't be viewed because it was created by an incompatible version of the dashboard.</source>
-        <target state="new">This run can't be viewed because it was created by an incompatible version of the dashboard.</target>
+        <source>This recording can't be viewed because it was created by an incompatible version of the dashboard.</source>
+        <target state="translated">無法檢視此錄製內容，因為建立此執行的儀表板版本不相容。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardRunSelectMinuteAgo">
+        <source>1 minute ago</source>
+        <target state="translated">1 分鐘前</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardRunSelectMinutesAgo">
+        <source>{0} minutes ago</source>
+        <target state="translated">{0} 分鐘前</target>
+        <note>{0} is the number of minutes</note>
+      </trans-unit>
+      <trans-unit id="DashboardRunSelectMomentAgo">
+        <source>a moment ago</source>
+        <target state="translated">剛剛</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardRunSelectNoRecordings">
+        <source>No existing recordings</source>
+        <target state="translated">沒有現有的錄製內容</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardRunSelectPin">
-        <source>Pin run</source>
-        <target state="new">Pin run</target>
+        <source>Protect from deletion</source>
+        <target state="translated">防止刪除</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardRunSelectRecordings">
+        <source>Past recordings</source>
+        <target state="translated">過去的錄製內容</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardRunSelectTitle">
-        <source>Select dashboard run</source>
-        <target state="new">Select dashboard run</target>
+        <source>Recordings</source>
+        <target state="translated">錄製內容</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardRunSelectUnpin">
-        <source>Unpin run</source>
-        <target state="new">Unpin run</target>
+        <source>Allow deletion</source>
+        <target state="translated">允許刪除</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ExtensionsPageDescription">
+        <source>Extend the dashboard with views and tools for your app.</source>
+        <target state="translated">擴充應用程式的儀表板，加入檢視和工具。</target>
         <note />
       </trans-unit>
       <trans-unit id="MainLayoutAspire">
@@ -48,8 +133,8 @@
         <note />
       </trans-unit>
       <trans-unit id="MainLayoutAspireDashboardHelpLink">
-        <source>Help</source>
-        <target state="translated">說明</target>
+        <source>Dashboard documentation</source>
+        <target state="translated">儀表板文件</target>
         <note />
       </trans-unit>
       <trans-unit id="MainLayoutAspireRepoLink">
@@ -57,14 +142,24 @@
         <target state="translated">Aspire 存放庫</target>
         <note />
       </trans-unit>
+      <trans-unit id="MainLayoutHelp">
+        <source>Help</source>
+        <target state="translated">說明</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MainLayoutKeyboardShortcuts">
+        <source>Keyboard shortcuts</source>
+        <target state="translated">鍵盤快速鍵</target>
+        <note />
+      </trans-unit>
       <trans-unit id="MainLayoutLaunchAIAgents">
         <source>AI agents</source>
-        <target state="new">AI agents</target>
+        <target state="translated">AI 代理程式</target>
         <note />
       </trans-unit>
       <trans-unit id="MainLayoutLaunchNotifications">
         <source>Notifications</source>
-        <target state="new">Notifications</target>
+        <target state="translated">通知</target>
         <note />
       </trans-unit>
       <trans-unit id="MainLayoutLaunchSettings">
@@ -74,7 +169,7 @@
       </trans-unit>
       <trans-unit id="MainLayoutNotificationCenterTitle">
         <source>Notifications</source>
-        <target state="new">Notifications</target>
+        <target state="translated">通知</target>
         <note />
       </trans-unit>
       <trans-unit id="MainLayoutSettingsDialogClose">
@@ -118,13 +213,38 @@
         <note />
       </trans-unit>
       <trans-unit id="NavMenuConsoleLogsTab">
-        <source>Console</source>
-        <target state="translated">主控台</target>
+        <source>Console logs</source>
+        <target state="translated">主控台記錄</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NavMenuExtensionsTab">
+        <source>Extensions</source>
+        <target state="translated">延伸模組</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NavMenuGraphTab">
+        <source>Graph</source>
+        <target state="translated">圖表</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NavMenuLandmark">
+        <source>Main navigation</source>
+        <target state="translated">主要瀏覽</target>
         <note />
       </trans-unit>
       <trans-unit id="NavMenuMetricsTab">
         <source>Metrics</source>
         <target state="translated">計量</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NavMenuNoParameters">
+        <source>No parameters</source>
+        <target state="translated">無參數</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NavMenuParametersTab">
+        <source>Parameters</source>
+        <target state="translated">參數</target>
         <note />
       </trans-unit>
       <trans-unit id="NavMenuResourcesTab">
@@ -133,18 +253,33 @@
         <note />
       </trans-unit>
       <trans-unit id="NavMenuStructuredLogsTab">
-        <source>Structured</source>
-        <target state="translated">結構化</target>
+        <source>Structured logs</source>
+        <target state="translated">結構化記錄</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NavMenuTelemetrySourcesTab">
+        <source>Telemetry sources</source>
+        <target state="translated">遙測來源</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NavMenuTerminalsTab">
+        <source>Terminals</source>
+        <target state="translated">終端機</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NavMenuTagsTab">
+        <source>Tags</source>
+        <target state="translated">標籤</target>
         <note />
       </trans-unit>
       <trans-unit id="NavMenuToggleCollapse">
         <source>Collapse navigation to icons</source>
-        <target state="new">Collapse navigation to icons</target>
+        <target state="translated">將導覽折疊為圖示</target>
         <note />
       </trans-unit>
       <trans-unit id="NavMenuToggleExpand">
         <source>Expand navigation labels</source>
-        <target state="new">Expand navigation labels</target>
+        <target state="translated">展開瀏覽標籤</target>
         <note />
       </trans-unit>
       <trans-unit id="NavMenuTracesTab">
@@ -155,6 +290,411 @@
       <trans-unit id="PageLayoutViewFilters">
         <source>View filters</source>
         <target state="translated">檢視篩選</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="PlaceholderPageComingSoon">
+        <source>Coming soon</source>
+        <target state="translated">即將推出</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceHeaderAllResources">
+        <source>All resources</source>
+        <target state="translated">所有資源</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceHeaderNotFound">
+        <source>Resource not found</source>
+        <target state="translated">找不到資源</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceHeaderSelectedParameters">
+        <source>{0} selected parameters</source>
+        <target state="translated">{0} 個已選取的參數</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceHeaderSelectedResources">
+        <source>{0} selected resources</source>
+        <target state="translated">{0} 選取資源</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceHeaderShowReplacement">
+        <source>Show {0}</source>
+        <target state="translated">顯示 {0}</target>
+        <note>{0} is a resource's name. Links from a replica that was replaced, such as after a restart, to the replicas of the same resource that run now.</note>
+      </trans-unit>
+      <trans-unit id="ResourceHeaderStarted">
+        <source>Started</source>
+        <target state="translated">已開始</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceHeaderStopped">
+        <source>Stopped</source>
+        <target state="translated">已停止</target>
+        <note>Precedes how long ago a stopped resource stopped, such as "Stopped 1 minute ago".</note>
+      </trans-unit>
+      <trans-unit id="ResourcePaneActivityContext">
+        <source>{0}: incoming server and consumer spans in the last 5 minutes ({1} to {2}). Latest span started {3}. Refreshed {4}. Open this resource's traces with the same time window. Trace counts and span kinds can differ.</source>
+        <target state="translated">{0}: 過去 5 分鐘內傳入的伺服器和取用者範圍 ({1} 至 {2})。最新範圍的開始時間為 {3}。已重新整理 {4}。在相同的時間範圍內開啟此資源的追蹤。追蹤計數和範圍類型可能不同。</target>
+        <note>{0} is the resource name, {1}-{2} the measured window, {3} the latest span start and {4} the refresh time.</note>
+      </trans-unit>
+      <trans-unit id="ResourcePaneActivityCount">
+        <source>{0} incoming</source>
+        <target state="translated">{0} 個傳入</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneActivityFailures">
+        <source>{0} failed</source>
+        <target state="translated">{0} 個失敗</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneActivityP95">
+        <source>p95 {0}</source>
+        <target state="translated">p95 {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneActivitySampled">
+        <source>Only the newest 5,000 incoming spans across resources were sampled. Counts are minimums and p95 describes this sample.</source>
+        <target state="translated">僅針對資源中最新的 5,000 個傳入範圍進行取樣。計數為最低值，P95 會描述此樣本。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneActivitySampledCount">
+        <source>{0}+ incoming</source>
+        <target state="translated">{0}+ 個傳入</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneActivitySampledFailures">
+        <source>{0}+ failed</source>
+        <target state="translated">超過 {0} 個失敗</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneActivitySampledP95">
+        <source>Sample p95 {0}</source>
+        <target state="translated">範例 p95 {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneActivitySamples">
+        <source>{0} valid duration samples. P95 appears after at least 20 samples.</source>
+        <target state="translated">{0} 個有效的持續時間樣本。至少收集 20 個樣本後才會顯示 P95。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneChildOf">
+        <source>Child of {0}</source>
+        <target state="translated">{0} 的子系</target>
+        <note>{0} is the parent resource name. This is hierarchy, not a dependency.</note>
+      </trans-unit>
+      <trans-unit id="ResourcePaneClose">
+        <source>Hide resource list</source>
+        <target state="translated">隱藏資源清單</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneCollapse">
+        <source>Collapse resource list</source>
+        <target state="translated">摺疊資源清單</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneCountPlural">
+        <source>{0} resources</source>
+        <target state="translated">{0} 個資源</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneCountSingular">
+        <source>{0} resource</source>
+        <target state="translated">{0} 個資源</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneDependsOn">
+        <source>Depends on {0}</source>
+        <target state="translated">取決於 {0}</target>
+        <note>{0} lists logical resource names that this resource waits for.</note>
+      </trans-unit>
+      <trans-unit id="ResourcePaneExpand">
+        <source>Expand resource list</source>
+        <target state="translated">展開資源清單</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneFilterDone">
+        <source>OK</source>
+        <target state="translated">確定</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneFilterReset">
+        <source>Reset</source>
+        <target state="translated">重設</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneGroupReorderUnavailable">
+        <source>Clear search and filters, and try reordering groups again.</source>
+        <target state="translated">清除搜尋和篩選，然後再次嘗試重新排序群組。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneGrouping">
+        <source>Group resources</source>
+        <target state="translated">群組資源</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneGroupingNone">
+        <source>None</source>
+        <target state="translated">無</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneGroupingResourceType">
+        <source>Resource type</source>
+        <target state="translated">資源類型</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneGroupingState">
+        <source>State</source>
+        <target state="translated">狀態</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneLandmark">
+        <source>Resources</source>
+        <target state="translated">資源</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneMixedCount">
+        <source>{0}, {1}</source>
+        <target state="translated">{0}，{1}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneMovedAfter">
+        <source>{0} moved after {1}.</source>
+        <target state="translated">{0} 已移至 {1} 之後。</target>
+        <note>{0} is the moved resource name; {1} is the target resource name.</note>
+      </trans-unit>
+      <trans-unit id="ResourcePaneMovedBefore">
+        <source>{0} moved before {1}.</source>
+        <target state="translated">{0} 已移至 {1} 之前。</target>
+        <note>{0} is the moved resource name; {1} is the target resource name.</note>
+      </trans-unit>
+      <trans-unit id="ResourcePaneNestedCount">
+        <source>Nested resources: {0}</source>
+        <target state="translated">巢狀資源數: {0}</target>
+        <note>{0} is the number of resources nested under a collapsed resource in the resource list.</note>
+      </trans-unit>
+      <trans-unit id="ResourcePaneNoMetrics">
+        <source>No metrics are currently available for this resource. Select to open its metrics view.</source>
+        <target state="translated">目前沒有可用於此資源的計量。選取以開啟計量檢視。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneNoStructuredLogs">
+        <source>No structured logs are currently available for this resource. Select to open its logs view.</source>
+        <target state="translated">目前沒有可用於此資源的結構化記錄。選取以開啟記錄檢視。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneNoTagsDescription">
+        <source>Add tags to a resource from its overview to group related resources here.</source>
+        <target state="translated">從資源概觀頁面新增標籤，將相關資源分組到這裡。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneNoTagsTitle">
+        <source>No tags yet</source>
+        <target state="translated">尚未有標籤</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneNoTraces">
+        <source>No traces are currently available for this resource. Select to open its traces view.</source>
+        <target state="translated">目前沒有可用於此資源的追蹤記錄。選取以開啟追蹤檢視。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneOpen">
+        <source>Show resource list</source>
+        <target state="translated">顯示資源清單</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneParameterCountPlural">
+        <source>{0} parameters</source>
+        <target state="translated">{0} 個參數</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneParameterCountSingular">
+        <source>{0} parameter</source>
+        <target state="translated">{0} 個參數</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneParameterNoConsoleLogs">
+        <source>Parameters do not produce console logs. Select to view this parameter's overview.</source>
+        <target state="translated">參數不會產生主控台記錄。選取此參數以查看概觀。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneParameterNoMetrics">
+        <source>Parameters do not produce metrics. Select to view this parameter's overview.</source>
+        <target state="translated">參數不會產生計量。選取此參數以查看概觀。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneParameterNoStructuredLogs">
+        <source>Parameters do not produce structured logs. Select to view this parameter's overview.</source>
+        <target state="translated">參數不會產生結構化記錄。選取此參數以查看概觀。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneParameterNoTerminal">
+        <source>Parameters do not support terminal sessions. Select to view this parameter's overview.</source>
+        <target state="translated">參數不支援終端機工作階段。選取此參數以查看概觀。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneParameterNoTraces">
+        <source>Parameters do not produce traces. Select to view this parameter's overview.</source>
+        <target state="translated">參數不會產生追蹤。選取此參數以查看概觀。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneReferences">
+        <source>References {0}</source>
+        <target state="translated">參考 {0}</target>
+        <note>{0} lists logical resource names referenced by this resource. A reference does not imply waiting for startup.</note>
+      </trans-unit>
+      <trans-unit id="ResourcePaneReorderUnavailable">
+        <source>Clear search, filters and grouping, and move resources within the same parent.</source>
+        <target state="translated">清除搜尋、篩選條件和群組設定，並在同一個父項目中移動資源。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneResize">
+        <source>Resize resource list</source>
+        <target state="translated">調整資源清單大小</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneResourceActions">
+        <source>Actions for {0}</source>
+        <target state="translated">{0} 的動作</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneSelectionAddHint">
+        <source>Add/remove</source>
+        <target state="translated">新增/移除</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneSelectionCommandChord">
+        <source>⌘ + click</source>
+        <target state="translated">⌘ + 按一下</target>
+        <note>Resource selection gesture, displayed in a keycap. The symbol refers to the macOS Command key.</note>
+      </trans-unit>
+      <trans-unit id="ResourcePaneSelectionCommandDescription">
+        <source>To add or remove a resource, hold Command while clicking. To select a range, hold Shift while clicking.</source>
+        <target state="translated">若要新增或移除資源，請在點擊時按住 [Command 鍵]。若要選取範圍，請在點擊時按住 [Shift 鍵]。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneSelectionControlChord">
+        <source>Ctrl + click</source>
+        <target state="translated">CTRL + 點擊</target>
+        <note>Resource selection gesture, displayed in a keycap.</note>
+      </trans-unit>
+      <trans-unit id="ResourcePaneSelectionControlDescription">
+        <source>To add or remove a resource, hold Control while clicking. To select a range, hold Shift while clicking.</source>
+        <target state="translated">若要新增或移除資源，請在點擊時按住 [Control 鍵]。若要選取範圍，請在點擊時按住 [Shift 鍵]。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneSelectionRangeChord">
+        <source>Shift + click</source>
+        <target state="translated">Shift + 點擊</target>
+        <note>Resource range selection gesture, displayed in a keycap.</note>
+      </trans-unit>
+      <trans-unit id="ResourcePaneSelectionRangeHint">
+        <source>Select range</source>
+        <target state="translated">選取範圍</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneTagGroupLabel">
+        <source>{0}, {1}</source>
+        <target state="translated">{0}，{1}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneTagGroupToggle">
+        <source>Expand or collapse {0}</source>
+        <target state="translated">展開或摺疊 {0}</target>
+        <note>{0} is the group name</note>
+      </trans-unit>
+      <trans-unit id="ResourcePaneTelemetryOnly">
+        <source>Telemetry sources</source>
+        <target state="translated">遙測來源</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneTelemetryOnlyGroup">
+        <source>Telemetry sources</source>
+        <target state="translated">遙測來源</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneUntaggedGroup">
+        <source>Untagged</source>
+        <target state="translated">已取消標記</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcePaneUnviewedErrors">
+        <source>{0} unviewed error logs</source>
+        <target state="translated">{0} 個未檢視的錯誤記錄</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceStartedAgeDays">
+        <source>{0}d ago</source>
+        <target state="translated">{0} 天前</target>
+        <note>Short relative start time shown in a resource row. {0} is the number of days</note>
+      </trans-unit>
+      <trans-unit id="ResourceStartedAgeHours">
+        <source>{0}h ago</source>
+        <target state="translated">{0} 小時前</target>
+        <note>Short relative start time shown in a resource row. {0} is the number of hours</note>
+      </trans-unit>
+      <trans-unit id="ResourceStartedAgeMinutes">
+        <source>{0}m ago</source>
+        <target state="translated">{0} 分鐘前</target>
+        <note>Short relative start time shown in a resource row. {0} is the number of minutes</note>
+      </trans-unit>
+      <trans-unit id="ResourceStartedAgeNow">
+        <source>now</source>
+        <target state="translated">現在</target>
+        <note>Short relative start time shown in a resource row, for a resource started less than a minute ago</note>
+      </trans-unit>
+      <trans-unit id="ResourceTabHome">
+        <source>Home</source>
+        <target state="translated">首頁</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceTabOverview">
+        <source>Overview</source>
+        <target state="translated">概觀</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceTabUnavailable">
+        <source>Not available for this resource</source>
+        <target state="translated">無法在此資源中使用</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceTabsLandmark">
+        <source>Resource views</source>
+        <target state="translated">資源檢視</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceTabsMore">
+        <source>More views</source>
+        <target state="translated">更多檢視</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TelemetryHeaderAllSources">
+        <source>All sources</source>
+        <target state="translated">所有來源</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TelemetryHeaderSelectedSources">
+        <source>{0} sources selected</source>
+        <target state="translated">已選取 {0} 個來源</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TelemetryPaneCountPlural">
+        <source>{0} telemetry sources</source>
+        <target state="translated">{0} 個遙測來源</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TelemetryPaneCountSingular">
+        <source>{0} telemetry source</source>
+        <target state="translated">{0} 遙測來源</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TelemetryPaneNoSources">
+        <source>No telemetry sources</source>
+        <target state="translated">沒有遙測來源</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalsPageDescription">
+        <source>Open and switch between the terminals of your resources from one place.</source>
+        <target state="translated">從單一位置開啟資源的終端機，並在不同終端機之間切換。</target>
         <note />
       </trans-unit>
     </body>

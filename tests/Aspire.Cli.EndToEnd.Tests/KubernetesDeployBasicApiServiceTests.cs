@@ -70,12 +70,14 @@ public sealed class KubernetesDeployBasicApiServiceTests(ITestOutputHelper outpu
                 var registryEndpoint = builder.AddParameter("registryendpoint");
                 var registry = builder.AddContainerRegistry("registry", registryEndpoint);
 
+                {{(useProjectV2 ? "" : "#pragma warning disable CS0618 // Retain legacy project deployment alongside the modern scenario.")}}
                 var api = {{(useProjectV2
                     ? $"builder.AddDotnetProject(\"{serverName}\", \"../{ProjectName}.ApiService/{ProjectName}.ApiService.csproj\")"
                     : $"builder.AddProject<Projects.{ProjectName}_ApiService>(\"{serverName}\")")}}
                     .WithRemoteImageName("{{imageName}}")
                     .WithRemoteImageTag("{{imageTag}}")
                     .WithExternalHttpEndpoints();
+                {{(useProjectV2 ? "" : "#pragma warning restore CS0618")}}
 
                 builder.AddKubernetesEnvironment("env")
                     .WithHelm(helm =>
@@ -110,7 +112,8 @@ public sealed class KubernetesDeployBasicApiServiceTests(ITestOutputHelper outpu
                 apiClientPackages: [],
                 appHostCode: appHostCode,
                 apiProgramCode: apiProgramCode,
-                output: output);
+                output: output,
+                useLegacyProjectResources: !useProjectV2);
 
             // =====================================================================
             // Phase 3: Run aspire deploy interactively
@@ -141,6 +144,15 @@ public sealed class KubernetesDeployBasicApiServiceTests(ITestOutputHelper outpu
                 localPort: 18080,
                 testPath: "/test-deployment",
                 expectedResponse: response);
+
+            // The dashboard image has no printenv executable, so resolve the ready pod's ConfigMap-backed environment.
+            await auto.RunCommandAsync(
+                $"test \"$(kubectl get pods -n {k8sNamespace} -l app.kubernetes.io/component=env-dashboard " +
+                "-o jsonpath='{.items[*].spec.containers[?(@.name==\"env-dashboard\")].envFrom[*].configMapRef.name}')\" " +
+                "= 'env-dashboard-config' && " +
+                $"test \"$(kubectl get configmap env-dashboard-config -n {k8sNamespace} " +
+                "-o jsonpath='{.data.ASPIRE_DASHBOARD_TELEMETRY_OPTOUT}')\" = 'true'",
+                counter);
 
             // =====================================================================
             // Phase 5: Cleanup

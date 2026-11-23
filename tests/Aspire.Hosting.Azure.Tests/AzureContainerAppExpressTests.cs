@@ -2,7 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREACAEXPRESS001
-#pragma warning disable ASPIREPIPELINES001
+#pragma warning disable ASPIREAZURE003
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure.AppContainers;
@@ -97,6 +97,44 @@ public class AzureContainerAppExpressTests(ITestOutputHelper testOutputHelper)
         await Verify(expressBicep, "bicep").AppendContentAsFile(standardBicep, "bicep", "standard");
     }
 
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task AsExpressRejectsInternalLoadBalancerWhenGeneratingBicep(bool expressFirst, bool existing)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
+        var vnet = builder.AddAzureVirtualNetwork("vnet");
+        var subnet = vnet.AddSubnet("container-apps-subnet", "10.0.0.0/23");
+        var environment = builder.AddAzureContainerAppEnvironment("env");
+        if (expressFirst)
+        {
+            environment.AsExpress().WithDelegatedSubnet(subnet).WithInternalLoadBalancer(vnet);
+        }
+        else
+        {
+            environment.WithDelegatedSubnet(subnet).WithInternalLoadBalancer(vnet).AsExpress();
+        }
+        if (existing)
+        {
+            environment.AsExisting(builder.AddParameter("existing-name"), builder.AddParameter("existing-resource-group"));
+        }
+
+        var exception = Assert.Throws<InvalidOperationException>(environment.Resource.GetBicepTemplateString);
+
+        Assert.Equal(
+            "Azure Container Apps Express environment 'env' cannot use an internal load balancer because the required static IP output is unavailable for Express environments. " +
+            "Remove AsExpress() to use a workload profiles environment with internal networking.",
+            exception.Message);
+
+        using var application = builder.Build();
+        var pipelineException = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => ExecuteBeforeStartHooksAsync(application, default));
+
+        Assert.Equal(exception.Message, pipelineException.Message);
+    }
+
     [Fact]
     public async Task AsExpressPublishesExistingEnvironment()
     {
@@ -173,7 +211,9 @@ public class AzureContainerAppExpressTests(ITestOutputHelper testOutputHelper)
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, testOutputHelper);
         builder.AddAzureContainerAppEnvironment("env").AsExpress();
+#pragma warning disable CS0618 // Retain legacy ProjectResource Azure publishing/provisioning contracts with synthetic metadata.
         var project = builder.AddProject("api", "api.csproj", options => options.ExcludeLaunchProfile = true)
+#pragma warning restore CS0618
             .WithHttpEndpoint(targetPort: 8080)
             .WithExternalHttpEndpoints();
         if (replicas is { } count)
@@ -201,7 +241,9 @@ public class AzureContainerAppExpressTests(ITestOutputHelper testOutputHelper)
         builder.AddAzureContainerAppEnvironment("env").AsExpress();
         var secret = builder.AddParameter("api-key", secret: true);
         var storage = builder.AddAzureStorage("storage");
+#pragma warning disable CS0618 // Retain legacy ProjectResource Azure publishing/provisioning contracts with synthetic metadata.
         var project = builder.AddProject("api", "api.csproj", options => options.ExcludeLaunchProfile = true)
+#pragma warning restore CS0618
             .WithHttpEndpoint(targetPort: 8080)
             .WithExternalHttpEndpoints()
             .WithEnvironment("API_KEY", secret)
@@ -249,7 +291,7 @@ public class AzureContainerAppExpressTests(ITestOutputHelper testOutputHelper)
                 app.Template.Scale.MinReplicas = minimum;
                 app.Configuration.Ingress.TargetPort = port;
                 app.Configuration.Ingress.ClientCertificateMode = ContainerAppIngressClientCertificateMode.Ignore;
-                app.Configuration.Ingress.StickySessionsAffinity = StickySessionAffinity.None;
+                app.Configuration.Ingress.StickySessionAffinity = StickySessionAffinity.None;
                 app.Configuration.Dapr.IsEnabled = false;
                 app.Template.Scale.Rules.Add(new ContainerAppScaleRule
                 {

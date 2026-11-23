@@ -97,17 +97,6 @@ public class GoPublicApiTests
         Assert.Equal("go", app.Resource.Command);
     }
 
-    [Fact]
-    public async Task AddGoAppDefaultArgsAreRunDot()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create();
-        var app = builder.AddGoApp("api", builder.AppHostDirectory);
-
-        var args = await ArgumentEvaluator.GetArgumentListAsync(app.Resource);
-
-        Assert.Equal(["run", "."], args);
-    }
-
     // ---- packagePath --------------------------------------------------------
 
     [Fact]
@@ -296,18 +285,20 @@ public class GoPublicApiTests
                          .WithModTidy()
                          .WithModTidy();
 
-        // Only one tidy sibling should have been created
+        // Only one tidy resource should have been created
         var tidyResources = builder.Resources.Where(r => r.Name == "api-mod-tidy").ToList();
         Assert.Single(tidyResources);
     }
 
     [Fact]
-    public void WithModTidyCreatesSiblingResource()
+    public void WithModTidyCreatesChildResource()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
-        builder.AddGoApp("api", builder.AppHostDirectory).WithModTidy();
+        var app = builder.AddGoApp("api", builder.AppHostDirectory).WithModTidy();
 
-        Assert.Contains(builder.Resources, r => r.Name == "api-mod-tidy");
+        var tidyResource = Assert.Single(builder.Resources, r => r.Name == "api-mod-tidy");
+        Assert.True(tidyResource.TryGetAnnotationsOfType<ResourceRelationshipAnnotation>(out var relationships));
+        Assert.Contains(relationships, relationship => relationship.Type == "Parent" && relationship.Resource == app.Resource);
     }
 
     // ---- WithModVendor ------------------------------------------------------

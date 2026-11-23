@@ -162,7 +162,9 @@ public class RadiusExtensionsTests
         string image, string? expectedRegistry, string expectedImage, string expectedTag)
     {
         using var builder = Aspire.Hosting.Utils.TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+#pragma warning disable CS0618 // Retain legacy ProjectResource image and metadata interoperability with Radius.
         var project = builder.AddProject<ParseImageReferenceProjectMetadata>("webapp");
+#pragma warning restore CS0618
 
         project.WithContainerImage(image);
 
@@ -172,16 +174,23 @@ public class RadiusExtensionsTests
         Assert.Equal(expectedTag, annotation.Tag);
     }
 
-    [Fact]
-    public void WithContainerImage_ReplacesExistingAnnotation()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void WithContainerImage_ReplacesExistingAnnotation(bool useDotnetProject)
     {
         // The documented contract on WithContainerImage is that a second call overrides the
         // first (matches the LastOrDefault() lookup the publisher uses). Pin that here too.
         using var builder = Aspire.Hosting.Utils.TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
-        var project = builder.AddProject<ParseImageReferenceProjectMetadata>("webapp");
-
-        project.WithContainerImage("redis:6");
-        project.WithContainerImage("ghcr.io/owner/repo:v2");
+#pragma warning disable CS0618 // Keep concrete legacy and modern fluent overloads in the shared image-replacement contract.
+        IResourceBuilder<IDotnetProgramResource> project = useDotnetProject
+            ? builder.AddDotnetProject("webapp", "webapp.csproj", options => options.ExcludeLaunchProfile = true)
+                .WithContainerImage("redis:6")
+                .WithContainerImage("ghcr.io/owner/repo:v2")
+            : builder.AddProject<ParseImageReferenceProjectMetadata>("webapp")
+                .WithContainerImage("redis:6")
+                .WithContainerImage("ghcr.io/owner/repo:v2");
+#pragma warning restore CS0618
 
         var annotation = project.Resource.Annotations.OfType<ContainerImageAnnotation>().Single();
         Assert.Equal("ghcr.io", annotation.Registry);

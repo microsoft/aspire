@@ -1,0 +1,52 @@
+﻿{
+  "Request": {
+    "description": "Tools for field technicians.",
+    "metadata": {
+      "aspire-managed-by": "Aspire.Hosting.Foundry",
+      "aspire-configuration-hash": "{configurationHash}",
+      "aspire-schema-version": "1"
+    },
+    "tools": [
+      {
+        "type": "azure_ai_search",
+        "name": "knowledge-base",
+        "description": "Search the internal knowledge base.",
+        "azure_ai_search": {
+          "indexes": [
+            {
+              "project_connection_id": "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.CognitiveServices/accounts/account/projects/my-project/connections/search",
+              "index_name": "docs"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "Returned": {
+    "metadata": {
+      "aspire-managed-by": "Aspire.Hosting.Foundry",
+      "aspire-configuration-hash": "{configurationHash}",
+      "aspire-schema-version": "1"
+    },
+    "id": "field-tools:1",
+    "name": "field-tools",
+    "version": "1",
+    "description": "Tools for field technicians.",
+    "created_at": 0,
+    "tools": [
+      {
+        "type": "azure_ai_search",
+        "name": "knowledge-base",
+        "description": "Search the internal knowledge base.",
+        "azure_ai_search": {
+          "indexes": [
+            {
+              "project_connection_id": "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.CognitiveServices/accounts/account/projects/my-project/connections/search",
+              "index_name": "docs"
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,81 @@
+@using Aspire.Dashboard.Model
+@using Aspire.Dashboard.Resources
+@using Metrics = Aspire.Dashboard.Resources.Metrics
+
+@inject IStringLocalizer<Metrics> Loc
+@inject IStringLocalizer<ControlsStrings> ControlsStringsLoc
+
+@if (PageViewModel.Instruments is null)
+{
+    return;
+}
+
+@if (IncludeLabel)
+{
+    <label for="metric-groups-filter">@Loc[nameof(Metrics.MetricsGroupsLabel)]</label>
+}
+
+<div class="metric-groups-filter-row">
+    <FluentTextInput TextInputType="TextInputType.Search"
+                     Id="metric-groups-filter"
+                     Placeholder="@ControlsStringsLoc[nameof(ControlsStrings.FilterPlaceholder)]"
+                     aria-label="@ControlsStringsLoc[nameof(ControlsStrings.FilterPlaceholder)]"
+                     Class="metric-groups-search"
+                     Immediate="true"
+                     ImmediateDelay="@FluentUIExtensions.InputDelay"
+                     AutoComplete="off"
+                     @bind-Value="PageViewModel.TextFilter"
+                     @bind-Value:after="OnTextFilterChanged">
+        <StartTemplate>
+            <FluentIcon Value="@(new Icons.Regular.Size16.Search())" Color="Color.Primary" />
+        </StartTemplate>
+    </FluentTextInput>
+</div>
+
+@{
+    var groups = GetGroups();
+    var allLabel = Loc[nameof(Metrics.MetricsAllInstrumentsTitle)];
+    var isAllSelected = PageViewModel is { ShowAll: true, ShowFilterResults: false, SelectedInstrument: null };
+}
+
+<nav class="metric-groups" aria-label="@Loc[nameof(Metrics.MetricsGroupsLabel)]">
+    @* Shows every instrument, grouped by meter, like the resource list's "All resources" row. *@
+    <a class="metric-group metric-group-all @(isAllSelected ? "selected" : null)"
+       href="@GetGroupUrl(Pages.Metrics.MetricGroupKind.All, null)"
+       aria-current="@(isAllSelected ? "page" : null)"
+       data-tooltip="@allLabel"
+       @onclick="@(() => SelectGroupAsync(Pages.Metrics.MetricGroupKind.All, null))"
+       @onclick:preventDefault="true">
+        <FluentIcon Value="@s_allIcon" Width="16px" Color="Color.Custom" CustomColor="currentColor" />
+        <span class="metric-group-name">@allLabel</span>
+        <span class="metric-group-count">@GetAllCount()</span>
+    </a>
+    <div class="metric-groups-divider" role="presentation"></div>
+
+    @if (groups.Count == 0)
+    {
+        <div class="metric-groups-empty">@Loc[nameof(Metrics.MetricsNoMatchingInstruments)]</div>
+    }
+
+    @foreach (var group in groups)
+    {
+        var isSelected = IsSelected(group);
+        <a @key="group.Key"
+           class="metric-group @(isSelected ? "selected" : null) @(group.IsPinned ? "pinned" : null)"
+           href="@GetGroupUrl(group.IsPinned ? Pages.Metrics.MetricGroupKind.Pinned : Pages.Metrics.MetricGroupKind.Meter, group.MeterName)"
+           aria-current="@(isSelected ? "page" : null)"
+           data-tooltip="@group.Name"
+           @onclick="@(() => SelectGroupAsync(group.IsPinned ? Pages.Metrics.MetricGroupKind.Pinned : Pages.Metrics.MetricGroupKind.Meter, group.MeterName))"
+           @onclick:preventDefault="true">
+            <FluentIcon Value="@(group.IsPinned ? s_pinnedIcon : s_meterIcon)" Color="Color.Custom" CustomColor="currentColor" />
+            <span class="metric-group-name">@group.Name</span>
+            <span class="metric-group-count">@group.InstrumentCount</span>
+        </a>
+
+        @if (group.IsPinned)
+        {
+            @* Separates the user's own group from the meters reported by the app. *@
+            <div class="metric-groups-divider" role="presentation"></div>
+        }
+    }
+</nav>

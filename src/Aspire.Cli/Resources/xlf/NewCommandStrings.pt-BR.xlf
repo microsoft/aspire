@@ -2,6 +2,11 @@
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="pt-BR" original="../NewCommandStrings.resx">
     <body>
+      <trans-unit id="BuiltInTemplates">
+        <source>Built-in templates</source>
+        <target state="translated">Modelos internos</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ChannelOptionDescription">
         <source>Channel to use for templates (stable, daily)</source>
         <target state="translated">Canal a ser usado para modelos (estável, diariamente)</target>
@@ -12,29 +17,39 @@
         <target state="translated">Canal a ser usado para modelos (estável, preparo, diariamente)</target>
         <note />
       </trans-unit>
+      <trans-unit id="ConfiguredTemplateConflictingOptions">
+        <source>Templates from configured sources cannot be combined with --source, --version, --channel, or --language.</source>
+        <target state="translated">Os modelos de fontes configuradas não podem ser combinados com --source, --version, --channel ou --language.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="CreateProjectDirectlyInSelectedFolderChoice">
         <source>Directly in the selected folder</source>
-        <target state="new">Directly in the selected folder</target>
+        <target state="translated">Diretamente na pasta selecionada</target>
         <note />
       </trans-unit>
       <trans-unit id="CreateProjectNameSubdirectoryChoice">
         <source>In a subdirectory named '{0}' in the selected folder</source>
-        <target state="new">In a subdirectory named '{0}' in the selected folder</target>
+        <target state="translated">Em um subdiretório chamado '{0}' na pasta selecionada</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
         <source>Create a new app from an Aspire starter template</source>
-        <target state="needs-review-translation">Criar um projeto Aspire.</target>
+        <target state="translated">Crie um novo aplicativo com base em um modelo inicial Aspire</target>
         <note />
       </trans-unit>
       <trans-unit id="EnterTheOutputPath">
         <source>Enter the output path</source>
-        <target state="new">Enter the output path</target>
+        <target state="translated">Insira o caminho de saída</target>
         <note />
       </trans-unit>
       <trans-unit id="EnterTheProjectName">
         <source>Enter the project name</source>
         <target state="translated">Insira o nome do projeto</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InvalidConfiguredTemplateSource">
+        <source>Expected a source object with an absolute 'path', or a 'repository' and optional 'ref'/'path'. Use 'aspire template source add' to configure a source.</source>
+        <target state="translated">Espera-se um objeto de fonte com um 'path' absoluto, ou um 'repository' e um 'ref'/'path' opcional. Use 'aspire template source add' para configurar uma origem.</target>
         <note />
       </trans-unit>
       <trans-unit id="InvalidProjectName">
@@ -44,57 +59,82 @@
       </trans-unit>
       <trans-unit id="LanguageOptionDescription">
         <source>The programming language for the AppHost</source>
-        <target state="new">The programming language for the AppHost</target>
+        <target state="translated">A linguagem de programação para o AppHost</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="LocalTemplateCreationFailed">
+        <source>Could not create the local template ({0}): {1}</source>
+        <target state="translated">Não foi possível criar o modelo local ({0}): {1}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="LocalTemplateLoadFailed">
+        <source>Could not load the local template: {0}</source>
+        <target state="translated">Não foi possível carregar o modelo local: {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="LocalTemplateSelectionRequiresInteraction">
+        <source>The directory contains multiple templates. Run interactively to select one, or point --template-path at a single template directory.</source>
+        <target state="translated">O diretório contém vários modelos. Execute interativamente para selecionar um ou aponte --template-path em um único diretório de modelos.</target>
         <note />
       </trans-unit>
       <trans-unit id="NameArgumentDescription">
         <source>The name of the project to create</source>
-        <target state="needs-review-translation">O nome do projeto a ser criado.</target>
+        <target state="translated">O nome do projeto a ser criado</target>
         <note />
       </trans-unit>
       <trans-unit id="NoChannelFoundMatching">
         <source>No channel found matching '{0}'. Valid options are: {1}.</source>
-        <target state="new">No channel found matching '{0}'. Valid options are: {1}.</target>
+        <target state="translated">Nenhum canal correspondente a '{0}' encontrado. As opções válidas são: {1}.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NoConfiguredTemplateSources">
+        <source>No usable template sources are configured. Use 'aspire template source add &lt;name&gt;' with '--path' or '--repository'. Sources are stored globally.</source>
+        <target state="translated">Nenhuma fonte de modelo utilizável está configurada. Use 'aspire template source add &lt;name&gt;' com '--path' ou '--repository'. As fontes são armazenadas globalmente.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NoLocalTemplatesFound">
+        <source>No .NET templates were found in '{0}'. Expected a .template.config/template.json file in the directory or one of its subdirectories.</source>
+        <target state="translated">Nenhum modelo .NET foi encontrado no '{0}'. Esperado um arquivo .template.config/template.json no diretório ou em um de seus subdiretórios.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoMatchingLocalTemplatePackage">
         <source>No matching local Aspire.ProjectTemplates package was found for Aspire CLI version '{0}'. Build and stage matching packages with localhive.sh (macOS/Linux) or localhive.ps1 (Windows), set ASPIRE_CLI_PACKAGES to a directory containing the package, or explicitly choose feed-backed templates with --channel, --source, or --version.</source>
-        <target state="new">No matching local Aspire.ProjectTemplates package was found for Aspire CLI version '{0}'. Build and stage matching packages with localhive.sh (macOS/Linux) or localhive.ps1 (Windows), set ASPIRE_CLI_PACKAGES to a directory containing the package, or explicitly choose feed-backed templates with --channel, --source, or --version.</target>
+        <target state="translated">Nenhum local correspondente ao Aspire. O pacote ProjectTemplates foi encontrado para Aspire versão CLI '{0}'. Crie e prepare pacotes correspondentes com localhive.sh (macOS/Linux) ou localhive.ps1 (Windows), defina ASPIRE_CLI_PACKAGES como um diretório que contenha o pacote ou escolha explicitamente modelos baseados em feed com --channel, --source ou --version.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoPackageChannelsAvailable">
         <source>No package channels are available.</source>
-        <target state="new">No package channels are available.</target>
+        <target state="translated">Não há canais de pacotes disponíveis.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoTemplateVersionsFoundInChannel">
         <source>No template versions found in channel '{0}'.</source>
-        <target state="new">No template versions found in channel '{0}'.</target>
+        <target state="translated">Nenhuma versão de modelo foi encontrada no canal '{0}'.</target>
         <note />
       </trans-unit>
       <trans-unit id="NonInteractiveTemplateRequired">
         <source>A template must be specified when running in non-interactive mode. Use 'aspire new &lt;template&gt;'.</source>
-        <target state="new">A template must be specified when running in non-interactive mode. Use 'aspire new &lt;template&gt;'.</target>
+        <target state="translated">Um modelo deve ser especificado ao executar no modo não interativo. Use 'aspirar a novos &lt;template&gt;'.</target>
         <note />
       </trans-unit>
       <trans-unit id="OutputArgumentDescription">
         <source>The output path for the project</source>
-        <target state="needs-review-translation">O caminho de saída para o projeto.</target>
+        <target state="translated">O caminho de saída para o projeto</target>
         <note />
       </trans-unit>
       <trans-unit id="OutputDirectoryNotEmptyNonInteractive">
         <source>The output directory '{0}' already exists and is not empty. Specify --output with a different location.</source>
-        <target state="new">The output directory '{0}' already exists and is not empty. Specify --output with a different location.</target>
+        <target state="translated">O diretório de saída '{0}' já existe e não está vazio. Especifique --output com um local diferente.</target>
         <note />
       </trans-unit>
       <trans-unit id="OutputDirectoryNotEmptyInteractive">
         <source>The output directory '{0}' already exists and is not empty. Specify a different location.</source>
-        <target state="new">The output directory '{0}' already exists and is not empty. Specify a different location.</target>
+        <target state="translated">O diretório de saída '{0}' já existe e não está vazio. Especifique um local diferente.</target>
         <note />
       </trans-unit>
       <trans-unit id="OutputPathContainsInvalidCharacters">
         <source>The output path '{0}' contains invalid characters.</source>
-        <target state="new">The output path '{0}' contains invalid characters.</target>
+        <target state="translated">O caminho de saída de ‘{0}’ contém caracteres inválidos.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResolvingTemplateVersion">
@@ -114,22 +154,232 @@
       </trans-unit>
       <trans-unit id="SelectProjectCreationLocation">
         <source>Where do you want the project to be created?</source>
-        <target state="new">Where do you want the project to be created?</target>
+        <target state="translated">Onde você quer que o projeto seja criado?</target>
         <note />
       </trans-unit>
       <trans-unit id="SourceArgumentDescription">
         <source>The NuGet source to use for the project templates</source>
-        <target state="needs-review-translation">A origem do NuGet a ser usada para os modelos de projeto.</target>
+        <target state="translated">A origem do NuGet a ser usada para os modelos de projeto</target>
         <note />
       </trans-unit>
       <trans-unit id="SourceDirectoryNotFound">
         <source>The local NuGet source directory '{0}' does not exist.</source>
-        <target state="new">The local NuGet source directory '{0}' does not exist.</target>
+        <target state="translated">O diretório de origem local do NuGet '{0}' não existe.</target>
         <note />
       </trans-unit>
       <trans-unit id="SourceWithCredentialsCannotBePersisted">
         <source>The --source URL includes credentials, a query string, or a fragment and cannot be written to the project's NuGet.config. Configure credentials with NuGet credential providers or user-level NuGet configuration, then pass the feed URL without embedded secrets.</source>
-        <target state="new">The --source URL includes credentials, a query string, or a fragment and cannot be written to the project's NuGet.config. Configure credentials with NuGet credential providers or user-level NuGet configuration, then pass the feed URL without embedded secrets.</target>
+        <target state="translated">A URL de --source inclui credenciais, uma cadeia de consulta ou um fragmento e não pode ser gravada no NuGet.config do projeto. Configure as credenciais usando provedores de credenciais do NuGet ou a configuração do NuGet no nível do usuário. Em seguida, passe a URL do feed sem segredos incorporados.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateCommandDescription">
+        <source>Manage project templates.</source>
+        <target state="translated">Gerenciar modelos de projeto.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateDirectoryNotFound">
+        <source>The template directory '{0}' does not exist.</source>
+        <target state="translated">O diretório de modelo "{0}" não existe.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplatePathConflictingOptions">
+        <source>--template-path and --template-repository require non-empty values and cannot be combined with a template subcommand, --source, --version, --channel, or --language.</source>
+        <target state="translated">--template-path e --template-repository exigem valores não vazios e não podem ser combinados com um subcomando de modelo, --source, --version, --channel ou --language.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplatePathOptionDescription">
+        <source>Path to an unpacked .NET template package directory (relative to the repository when --template-repository is specified)</source>
+        <target state="translated">Caminho para um diretório de pacote de modelo .NET desempacotado (relativo ao repositório quando --template-repository é especificado)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateRepositoryGitExited">
+        <source>Git failed with exit code {0}: {1}</source>
+        <target state="translated">O Git falhou com o código de saída {0}: {1}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateRepositoryGitFailed">
+        <source>Could not access the template repository: {0}</source>
+        <target state="translated">Não foi possível acessar o repositório de modelos: {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateRepositoryGitUnavailable">
+        <source>Git could not be started. Install Git and ensure it is on PATH.</source>
+        <target state="translated">Não foi possível iniciar o Git. Instale o Git e verifique se ele está no PATH.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateRepositoryOptionDescription">
+        <source>Clone a Git repository containing templates; --template-path is relative to its root</source>
+        <target state="translated">Clonar um repositório Git que contém modelos; --template-path é relativo à raiz</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateRepositoryPathInvalid">
+        <source>Template repository paths must be relative and stay within the repository without traversing symbolic links.</source>
+        <target state="translated">Os caminhos do repositório de modelos devem ser relativos e permanecer dentro do repositório, sem passar por links simbólicos.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateRepositoryRefNotFound">
+        <source>Could not resolve template repository ref '{0}' to a commit SHA. Specify a branch, tag, or full commit SHA.</source>
+        <target state="translated">Não foi possível resolver a referência do repositório de modelos "{0}" para um SHA de confirmação. Especifique uma branch, uma tag ou um SHA de commit completo.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateRepositoryRefOptionDescription">
+        <source>Template repository branch, tag, or full commit SHA (requires --template-repository; defaults to the remote HEAD)</source>
+        <target state="translated">Branch, tag ou SHA de commit completo do repositório de modelos (requer --template-repository; o padrão é o HEAD remoto)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateRepositoryRefRequiresRepository">
+        <source>--template-repository-ref requires --template-repository and a non-empty ref value.</source>
+        <target state="translated">--template-repository-ref requer --template-repository e um valor de referência não vazio.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceAddDescription">
+        <source>Add a named template source to global configuration after confirming you trust it.</source>
+        <target state="translated">Adicionar uma origem de modelos nomeada à configuração global após confirmar que você confia nela.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceAdded">
+        <source>Template source '{0}' added to global configuration.</source>
+        <target state="translated">A fonte de modelo '{0}' foi adicionada à configuração global.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceAlreadyExists">
+        <source>A template source with this name already exists. Remove it before adding a replacement.</source>
+        <target state="translated">Já existe uma fonte de modelo com esse nome. Remova-a antes de adicionar uma substituição.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceCannotExtendString">
+        <source>This source is a string. Delete it with 'aspire config delete {0} --global' before setting object fields.</source>
+        <target state="translated">Esta fonte é uma cadeia de caracteres. Exclua-a com 'aspire config delete {0} --global' antes de definir os campos da fonte.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceCommandDescription">
+        <source>Manage global template sources.</source>
+        <target state="translated">Gerenciar fontes de modelos globais.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceConfigurationHeader">
+        <source>Configuration</source>
+        <target state="translated">Configuração</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceDisplayNameInvalid">
+        <source>Expected a display name string without control characters, or null to use the source alias.</source>
+        <target state="translated">É esperada uma cadeia de caracteres de nome de exibição sem caracteres de controle ou nula para usar o alias de origem.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceExplanation">
+        <source>One or more template sources are configured. A template source lets an organization share Aspire templates to customize your development experience.</source>
+        <target state="translated">Uma ou mais fontes de modelo estão configuradas. Uma origem de modelo permite que uma organização compartilhe modelos do Aspire para personalizar sua experiência de desenvolvimento.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceInvalidRepository">
+        <source>Expected an HTTPS or SSH Git repository URL without passwords, tokens, queries, or fragments. SSH usernames are allowed.</source>
+        <target state="translated">Esperava-se uma URL de repositório Git em HTTPS ou SSH sem senhas, tokens, consultas ou fragmentos. Nomes de usuário SSH são permitidos.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceLegacyConfiguration">
+        <source>Template sources require aspire.config.json. Run 'aspire config info' to migrate your legacy global configuration, then retry.</source>
+        <target state="translated">As fontes de modelo exigem aspire.config.json. Execute 'aspire config info' para migrar sua configuração global herdada e tente novamente.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceListDescription">
+        <source>List named template sources without discovering templates.</source>
+        <target state="translated">Listar fontes de modelos nomeadas sem descobrir modelos.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceListEmpty">
+        <source>No template sources are configured. Use 'aspire template source add' to add one.</source>
+        <target state="translated">Nenhuma fonte de modelo está configurada. Use 'aspire template source add' para adicionar um.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceMissingLocation">
+        <source>Specify an absolute 'path' for a local source or 'repository' for a Git source. 'ref' requires 'repository'.</source>
+        <target state="translated">Especifique um "caminho" absoluto para uma origem local ou um "repositório" para uma origem Git. 'ref' requer 'repository'.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceNameDescription">
+        <source>The name of the template source.</source>
+        <target state="translated">O nome da fonte do modelo.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceNameRequired">
+        <source>Template source names must be 1-64 ASCII letters, digits, dots, hyphens, or underscores, starting with a letter or digit.</source>
+        <target state="translated">Os nomes das fontes de modelos devem conter 1 a 64 caracteres ASCII entre letras, dígitos, pontos, hifens ou sublinhados e começar com uma letra ou um dígito.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceNotFound">
+        <source>Template source '{0}' was not found in global configuration.</source>
+        <target state="translated">A '{0}' de origem do modelo não foi encontrada na configuração global.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourcePathDescription">
+        <source>An absolute local template directory, or a repository-relative directory when --repository is specified.</source>
+        <target state="translated">Um diretório de modelo local com caminho absoluto ou um diretório relativo ao repositório quando --repository é especificado.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceReadFailed">
+        <source>Could not read global template sources. Check the configuration file's JSON format and file permissions.</source>
+        <target state="translated">Não foi possível ler fontes de modelo globais. Verifique o formato JSON do arquivo de configuração e as permissões do arquivo.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceRefDescription">
+        <source>A Git branch, tag, or full commit SHA (requires --repository; defaults to HEAD).</source>
+        <target state="translated">Um GIT branch, marca ou SHA completo de commit (requer --repository; o padrão é HEAD).</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceRemoveDescription">
+        <source>Remove a named template source from global configuration.</source>
+        <target state="translated">Remover uma fonte de modelo nomeada da configuração global.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceRemoved">
+        <source>Template source '{0}' removed from global configuration.</source>
+        <target state="translated">A fonte de modelo '{0}' foi removida da configuração global.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceRepositoryDescription">
+        <source>An HTTPS or SSH Git repository URL containing templates.</source>
+        <target state="translated">Uma URL de repositório Git em HTTPS ou SSH que contenha modelos.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceSearchFailed">
+        <source>Could not search template source '{0}': {1}</source>
+        <target state="translated">Não foi possível pesquisar a fonte do modelo '{0}': {1}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceSettingInvalid">
+        <source>Invalid template setting '{0}': {1}</source>
+        <target state="translated">Definição do modelo inválida ‘{0}’: {1}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceStringRequired">
+        <source>Expected a nonempty string without control characters.</source>
+        <target state="translated">Esperava-se uma cadeia de caracteres não vazia e sem caracteres de controle.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceTrustPrompt">
+        <source>Do you trust template source '{0}' ({1})?</source>
+        <target state="translated">Você confia na origem de modelos '{0}' ({1})?</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceUnknownField">
+        <source>Unknown source field. Use 'path', 'repository', 'ref', or 'displayName'.</source>
+        <target state="translated">Campo de origem desconhecido. Use 'path', 'repository', 'ref' ou 'displayName'.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceWriteFailed">
+        <source>Could not update global template sources. Check the configuration file's JSON format and file permissions.</source>
+        <target state="translated">Não foi possível atualizar as fontes de modelo global. Verifique o formato JSON do arquivo de configuração e as permissões do arquivo.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceYesOptionDescription">
+        <source>Trust the template source and skip confirmation.</source>
+        <target state="translated">Confiar na origem de modelos e pular a confirmação.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourcesMustBeObject">
+        <source>The global 'templateSources' setting must be an object containing named template sources.</source>
+        <target state="translated">A configuração global 'templateSources' deve ser um objeto que contenha fontes de modelo nomeadas.</target>
         <note />
       </trans-unit>
       <trans-unit id="UsePrereleaseTemplates">
@@ -139,7 +389,7 @@
       </trans-unit>
       <trans-unit id="VersionArgumentDescription">
         <source>The version of the project templates to use</source>
-        <target state="needs-review-translation">A versão dos modelos de projeto a serem usados.</target>
+        <target state="translated">A versão dos modelos de projeto a serem usados</target>
         <note />
       </trans-unit>
     </body>

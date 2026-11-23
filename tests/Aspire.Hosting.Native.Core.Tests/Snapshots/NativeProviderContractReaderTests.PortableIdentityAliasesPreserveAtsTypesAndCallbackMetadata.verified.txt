@@ -1,0 +1,78 @@
+﻿[
+  {
+    Capability: {
+      CapabilityId: example/configure,
+      MethodName: configure,
+      QualifiedMethodName: configure,
+      Description: Configure a resource.,
+      IsExperimental: true,
+      IsObsolete: false,
+      Parameters: [
+        {
+          Name: resource,
+          Type: {
+            TypeId: example/Resource,
+            Category: Handle,
+            IsInterface: false,
+            IsReadOnly: false,
+            IsResourceBuilder: false,
+            IsDistributedApplicationBuilder: false,
+            IsDistributedApplication: false
+          },
+          IsOptional: false,
+          IsNullable: false,
+          IsCallback: false
+        },
+        {
+          Name: callback,
+          Type: {
+            TypeId: callback,
+            Category: Callback,
+            IsInterface: false,
+            IsReadOnly: false,
+            IsResourceBuilder: false,
+            IsDistributedApplicationBuilder: false,
+            IsDistributedApplication: false
+          },
+          IsOptional: false,
+          IsNullable: false,
+          IsCallback: true,
+          CallbackParameters: [
+            {
+              Name: value,
+              Type: {
+                TypeId: string,
+                IsInterface: false,
+                IsReadOnly: false,
+                IsResourceBuilder: false,
+                IsDistributedApplicationBuilder: false,
+                IsDistributedApplication: false
+              }
+            }
+          ],
+          CallbackReturnType: {
+            TypeId: string,
+            IsInterface: false,
+            IsReadOnly: false,
+            IsResourceBuilder: false,
+            IsDistributedApplicationBuilder: false,
+            IsDistributedApplication: false
+          }
+        }
+      ],
+      ReturnType: {
+        TypeId: example/Resource,
+        Category: Handle,
+        IsInterface: false,
+        IsReadOnly: false,
+        IsResourceBuilder: false,
+        IsDistributedApplicationBuilder: false,
+        IsDistributedApplication: false
+      },
+      TargetTypeId: example/Resource,
+      TargetParameterName: resource,
+      ReturnsBuilder: false,
+      RunSyncOnBackgroundThread: false
+    }
+  }
+]

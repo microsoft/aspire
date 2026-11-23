@@ -7,6 +7,7 @@ using System.Globalization;
 using System.Text.Json;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
@@ -79,26 +80,40 @@ internal abstract class IntegrationDiscoveryCommand : BaseCommand
 
             (NuGetPackage Package, PackageChannel Channel)[] packagesWithChannels;
             IReadOnlySet<string> polyglotCompatibleIds = ImmutableHashSet<string>.Empty;
+            bool searchLimitReached;
+            IReadOnlyList<string> failedSources;
             if (applyPolyglotFilter)
             {
                 // Resolve the integration list and the polyglot allow-list in a single discovery pass.
-                var (discoveredPackages, discoveredPolyglotIds) = await InteractionService.ShowStatusAsync(
+                var result = await InteractionService.ShowStatusAsync(
                     AddCommandStrings.SearchingForAspirePackages,
                     async () => await _integrationPackageSearchService.GetIntegrationPackagesWithPolyglotCompatibilityAsync(workingDirectory, configuredChannel, cancellationToken));
-                packagesWithChannels = discoveredPackages.ToArray();
-                polyglotCompatibleIds = discoveredPolyglotIds;
+                packagesWithChannels = result.Packages.ToArray();
+                polyglotCompatibleIds = result.PolyglotCompatibleIds;
+                searchLimitReached = result.LimitReached;
+                failedSources = result.FailedSources;
             }
             else
             {
-                packagesWithChannels = (await InteractionService.ShowStatusAsync(
+                var result = await InteractionService.ShowStatusAsync(
                     AddCommandStrings.SearchingForAspirePackages,
-                    async () => await _integrationPackageSearchService.GetIntegrationPackagesWithChannelsAsync(workingDirectory, configuredChannel, cancellationToken)))
-                    .ToArray();
+                    async () => await _integrationPackageSearchService.GetIntegrationPackagesWithChannelsAsync(workingDirectory, configuredChannel, cancellationToken));
+                packagesWithChannels = result.Packages.ToArray();
+                searchLimitReached = result.LimitReached;
+                failedSources = result.FailedSources;
             }
+
+            if (searchLimitReached)
+            {
+                InteractionService.DisplayNuGetSearchLimitWarning();
+            }
+
+            InteractionService.DisplayNuGetSearchFailureWarnings(failedSources);
 
             var packagesWithShortName = packagesWithChannels
                 .Select(IntegrationPackageSearchService.GenerateFriendlyName)
-                .OrderBy(p => p.FriendlyName, new CommunityToolkitFirstComparer())
+                .OrderByDescending(p => PackageIdFilters.IsOfficialIntegrationPackageId(p.Package.Id))
+                .ThenBy(p => p.FriendlyName, StringComparer.OrdinalIgnoreCase)
                 .ToArray();
 
             var polyglotFilterRemovedAllIntegrations = false;
@@ -155,7 +170,10 @@ internal abstract class IntegrationDiscoveryCommand : BaseCommand
             .Select(IntegrationPackageSearchService.SelectPreferredIntegrationPackage);
 
         var orderedMatches = searchTerm is null
-            ? matches.OrderBy(p => p.FriendlyName, new CommunityToolkitFirstComparer()).ThenBy(p => p.Package.Id, StringComparer.OrdinalIgnoreCase)
+            ? matches
+                .OrderByDescending(p => PackageIdFilters.IsOfficialIntegrationPackageId(p.Package.Id))
+                .ThenBy(p => p.FriendlyName, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(p => p.Package.Id, StringComparer.OrdinalIgnoreCase)
             : matches;
 
         var results = orderedMatches

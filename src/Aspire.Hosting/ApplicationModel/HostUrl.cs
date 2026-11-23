@@ -9,8 +9,8 @@ using Microsoft.Extensions.Options;
 namespace Aspire.Hosting.ApplicationModel;
 
 /// <summary>
-/// Represents a URL on the host machine. When referenced in a container resource, localhost will be
-/// replaced with the configured container host name.
+/// Represents a URL on the host machine. When referenced in a container resource, localhost (including
+/// <c>*.localhost</c> host names such as <c>*.dev.localhost</c>) will be replaced with the configured container host name.
 /// </summary>
 public record HostUrl(string Url) : IExpressionValue, IValueProvider, IManifestExpressionProvider
 {
@@ -62,20 +62,7 @@ public record HostUrl(string Url) : IExpressionValue, IValueProvider, IManifestE
                         // If we're running with the container tunnel enabled, we need to lookup the port on the tunnel that corresponds to the
                         // target port on the host machine.
 
-                        targetEndpoint = model.Resources.Where(r => !r.IsContainer())
-                            .OfType<IResourceWithEndpoints>()
-                            .Select(r =>
-                            {
-                                // Find if the resource has a host endpoint with a port matching the one from the request
-                                if (r.Annotations.OfType<EndpointAnnotation>().FirstOrDefault(ep => MatchesHostPort(ep, uri.Port)) is EndpointAnnotation ep)
-                                {
-                                    // Return the corresponding endpoint for the container network context. This will be used to determine the port to use when connecting from the container to the host machine.
-                                    return r.GetEndpoint(ep.Name, networkContext);
-                                }
-
-                                return null;
-                            })
-                            .FirstOrDefault(ep => ep is not null);
+                        targetEndpoint = GetEndpointReference(model, uri.Port, networkContext);
                     }
 
                     if (targetEndpoint is { })
@@ -147,10 +134,29 @@ public record HostUrl(string Url) : IExpressionValue, IValueProvider, IManifestE
         }
     }
 
+    /// <summary>
+    /// Finds the first host endpoint matching a port in the requested network context.
+    /// </summary>
+    internal static EndpointReference? GetEndpointReference(DistributedApplicationModel model, int port, NetworkIdentifier networkContext)
+    {
+        foreach (var resource in model.Resources.Where(resource => !resource.IsContainer()).OfType<IResourceWithEndpoints>())
+        {
+            var endpoint = resource.Annotations.OfType<EndpointAnnotation>().FirstOrDefault(endpoint => MatchesHostPort(endpoint, port));
+            if (endpoint is not null)
+            {
+                return resource.GetEndpoint(endpoint.Name, networkContext);
+            }
+        }
+
+        return null;
+    }
+
     internal static bool MatchesHostPort(EndpointAnnotation endpoint, int port)
     {
         return endpoint.DefaultNetworkID == KnownNetworkIdentifiers.LocalhostNetwork && endpoint.Port == port;
     }
 
-    private static bool IsLocalHost(string host) => host is "localhost" or "127.0.0.1" or "::1" or "[::1]";
+    // *.localhost names (for example *.dev.localhost) also resolve to the host's loopback address.
+    private static bool IsLocalHost(string host) =>
+        EndpointHostHelpers.IsLocalhostOrLocalhostTld(host) || host is "127.0.0.1" or "::1" or "[::1]";
 }

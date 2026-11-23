@@ -4,22 +4,22 @@
     <body>
       <trans-unit id="CallCommand_Description">
         <source>Call an MCP tool on a running resource</source>
-        <target state="new">Call an MCP tool on a running resource</target>
+        <target state="translated">调用正在运行资源上的 MCP 工具</target>
         <note />
       </trans-unit>
       <trans-unit id="CallCommand_InputOptionDescription">
         <source>JSON input to pass to the tool</source>
-        <target state="new">JSON input to pass to the tool</target>
+        <target state="translated">要传递给工具的 JSON 输入</target>
         <note />
       </trans-unit>
       <trans-unit id="CallCommand_ResourceArgumentDescription">
         <source>The name of the resource that exposes the MCP tool</source>
-        <target state="new">The name of the resource that exposes the MCP tool</target>
+        <target state="translated">公开 MCP 工具的资源的名称</target>
         <note />
       </trans-unit>
       <trans-unit id="CallCommand_ToolArgumentDescription">
         <source>The name of the MCP tool to call</source>
-        <target state="new">The name of the MCP tool to call</target>
+        <target state="translated">要调用的 MCP 工具的名称</target>
         <note />
       </trans-unit>
       <trans-unit id="DeprecatedCommandWarning">
@@ -29,7 +29,7 @@
       </trans-unit>
       <trans-unit id="Description">
         <source>Interact with MCP (Model Context Protocol) tools exposed by Aspire resources</source>
-        <target state="needs-review-translation">管理 MCP (模型上下文协议)服务器。(已弃用，请使用 "agent")</target>
+        <target state="translated">与 Aspire 资源公开的 MCP (模型上下文协议)工具进行交互</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_AdditionalOptionsSelectPrompt">
@@ -59,7 +59,7 @@
       </trans-unit>
       <trans-unit id="InitCommand_Description">
         <source>Initialize MCP server configuration for detected agent environments (deprecated, use 'agent init')</source>
-        <target state="needs-review-translation">初始化检测到的智能体环境的 MCP 服务器配置。(已弃用，请使用 "agent init")</target>
+        <target state="translated">初始化检测到的智能体环境的 MCP 服务器配置(已弃用，请使用 "agent init")</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_DetectingAgentEnvironments">
@@ -89,17 +89,17 @@
       </trans-unit>
       <trans-unit id="StartCommand_Description">
         <source>Start the MCP (Model Context Protocol) server (deprecated, use 'agent mcp')</source>
-        <target state="needs-review-translation">启动 MCP (模型上下文协议)服务器。(已弃用，请使用 "agent mcp")</target>
+        <target state="translated">启动 MCP (模型上下文协议)服务器(已弃用，请使用 "agent mcp")</target>
         <note />
       </trans-unit>
       <trans-unit id="ToolsCommand_Description">
         <source>List MCP tools exposed by running resources</source>
-        <target state="new">List MCP tools exposed by running resources</target>
+        <target state="translated">列出正在运行资源公开的 MCP 工具</target>
         <note />
       </trans-unit>
       <trans-unit id="ToolsCommand_FormatOptionDescription">
         <source>Output format (Table or Json)</source>
-        <target state="new">Output format (Table or Json)</target>
+        <target state="translated">输出格式(表格或 Json)</target>
         <note />
       </trans-unit>
     </body>

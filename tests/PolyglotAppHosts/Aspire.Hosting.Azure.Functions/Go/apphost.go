@@ -9,13 +9,13 @@ import (
 func main() {
 	builder, err := aspire.CreateBuilder()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 
 	// ── 1. AddAzureFunctionsProject (path-based overload) ───────────────────────
 	funcApp := builder.AddAzureFunctionsProject("myfunc", "../MyFunctions/MyFunctions.csproj")
 	if funcApp.Err() != nil {
-		log.Fatalf(aspire.FormatError(funcApp.Err()))
+		log.Fatal(aspire.FormatError(funcApp.Err()))
 	}
 
 	// ── 2. WithHostStorage — specify custom Azure Storage for Functions host ────
@@ -27,9 +27,9 @@ func main() {
 		AddAzureFunctionsProject("chained-func", "../OtherFunc/OtherFunc.csproj").
 		WithHostStorage(storage).
 		WithEnvironment("MY_KEY", "my-value").
-		WithHttpEndpoint(&aspire.WithHttpEndpointOptions{Port: aspire.Float64Ptr(7071)})
+		WithHttpEndpoint(&aspire.WithHttpEndpointOptions{Port: aspire.IntPtr(7071)})
 	if chainedFunc.Err() != nil {
-		log.Fatalf(aspire.FormatError(chainedFunc.Err()))
+		log.Fatal(aspire.FormatError(chainedFunc.Err()))
 	}
 
 	// ── 4. WithReference from base builder — standard resource references ───────
@@ -38,9 +38,9 @@ func main() {
 
 	app, err := builder.Build()
 	if err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 	if err := app.Run(); err != nil {
-		log.Fatalf(aspire.FormatError(err))
+		log.Fatal(aspire.FormatError(err))
 	}
 }

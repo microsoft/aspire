@@ -11,6 +11,9 @@ internal sealed class TestPackagingService : IPackagingService
     public Func<CancellationToken, Task<IEnumerable<PackageChannel>>>? GetChannelsAsyncCallback { get; set; }
     public string? LastRequestedChannelName { get; private set; }
 
+    public PackageChannel GetImplicitChannel()
+        => PackageChannel.CreateImplicitChannel(new FakeNuGetPackageCache(), new TestFeatures(), NullLogger.Instance);
+
     /// <summary>
     /// Optional callback to control the reason returned by
     /// <see cref="GetStagingChannelUnavailableReason"/>. When <see langword="null"/> (the default),
@@ -29,7 +32,7 @@ internal sealed class TestPackagingService : IPackagingService
         }
 
         // Default: Return a fake channel with template packages
-        var testChannel = PackageChannel.CreateImplicitChannel(new FakeNuGetPackageCache(), new TestFeatures(), NullLogger.Instance);
+        var testChannel = GetImplicitChannel();
         return Task.FromResult<IEnumerable<PackageChannel>>(new[] { testChannel });
     }
 

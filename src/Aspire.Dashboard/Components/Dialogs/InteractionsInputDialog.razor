@@ -10,7 +10,7 @@
     <ChildContent>
         @if (!string.IsNullOrEmpty(Content.Message))
         {
-            <div class="interaction-message">
+            <div class="interaction-message markdown-container">
                 @((MarkupString)Content.Message)
             </div>
         }
@@ -33,6 +33,7 @@
                                 *@
                                 <FluentTextInput @ref="@_elementRefs[input.ViewModel]"
                                                  Id="@input.ViewModel.ElementId"
+                                                 autofocus="@IsFirstInput(input.ViewModel)"
                                                  Class="aspire-input"
                                                  @bind-Value="input.ViewModel.Value"
                                                  Placeholder="@input.ViewModel.Input.Placeholder"
@@ -56,6 +57,7 @@
                                 *@
                                 <FluentTextInput @ref="@_elementRefs[input.ViewModel]"
                                                  Id="@input.ViewModel.ElementId"
+                                                 autofocus="@IsFirstInput(input.ViewModel)"
                                                  Class="aspire-input"
                                                  @bind-Value="input.ViewModel.Value"
                                                  Placeholder="@input.ViewModel.Input.Placeholder"
@@ -72,7 +74,7 @@
                                         {
                                             <FluentButton Appearance="ButtonAppearance.Transparent"
                                                           IconOnly="true"
-                                                          Title="@(input.ViewModel.IsSecretTextVisible ? ControlsStringsLoc[nameof(ControlsStrings.GridValueMaskHideValue)] : ControlsStringsLoc[nameof(ControlsStrings.GridValueMaskShowValue)])"
+                                                          data-tooltip="@(input.ViewModel.IsSecretTextVisible ? ControlsStringsLoc[nameof(ControlsStrings.GridValueMaskHideValue)] : ControlsStringsLoc[nameof(ControlsStrings.GridValueMaskShowValue)])" aria-label="@(input.ViewModel.IsSecretTextVisible ? ControlsStringsLoc[nameof(ControlsStrings.GridValueMaskHideValue)] : ControlsStringsLoc[nameof(ControlsStrings.GridValueMaskShowValue)])"
                                                           OnClick="@(() => ToggleSecretTextVisibilityAsync(input.ViewModel))"
                                                           Class="aspire-icon-button secret-text-toggle-button">
                                                 <FluentIcon Value="@GetSecretTextIcon(input.ViewModel)" Color="Color.Primary" />
@@ -95,6 +97,7 @@
                                 {
                                     <FluentSelect @key="input.ViewModel.InputKey"
                                                   Id="@input.ViewModel.ElementId"
+                                                  autofocus="@IsFirstInput(input.ViewModel)"
                                                   TOption="SelectViewModel<string>" TValue="string"
                                                   Class="aspire-input"
                                                   @ref="@_elementRefs[input.ViewModel]"
@@ -104,11 +107,14 @@
                                                   Items="input.ViewModel.SelectOptions"
                                                   OptionValue="@((SelectViewModel<string>? vm) => vm?.Id)"
                                                   OptionText="@((SelectViewModel<string>? vm) => vm?.Name)"
-                                                  OptionTitle="@((SelectViewModel<string> vm) => DashboardUIHelpers.ResolveTooltip(vm.Name))"
                                                   Height="250px"
                                                   Position="SelectPosition.Below"
                                                   Disabled="input.ViewModel.InputDisabled"
                                                   aria-describedby="@input.DescriptionId">
+                                        <OptionTemplate Context="optionContext">
+                                            <span hidden data-tooltip-option="@DashboardUIHelpers.ResolveTooltip(optionContext.Name)"></span>
+                                            @optionContext.Name
+                                        </OptionTemplate>
                                     </FluentSelect>
                                 }
                                 else
@@ -120,13 +126,16 @@
                                                  ValueExpression="@(() => input.ViewModel.Value)"
                                                  IncludeInputSlot="false">
                                         <CascadingValue Name="HideFluentField" Value="@true" IsFixed="true">
-                                            <FluentCombobox @key="input.ViewModel.InputKey"
+                                            @* Parse freeform entries as text while retaining option keys and labels in SelectedItems. *@
+                                            <FluentCombobox TOption="SelectViewModel<string>" TValue="string"
+                                                            @key="input.ViewModel.InputKey"
                                                             Id="@input.ViewModel.ElementId"
-                                                            TOption="SelectViewModel<string>" TValue="SelectViewModel<string>"
+                                                            autofocus="@IsFirstInput(input.ViewModel)"
                                                             Class="aspire-input"
                                                             @ref="@_elementRefs[input.ViewModel]"
-                                                            @bind-Value="input.ViewModel.SelectedOption"
-                                                            @bind-Value:after="@(() => UpdateChoiceValueState(input.ViewModel))"
+                                                            SelectedItems="@(input.ViewModel.SelectedOption is { } selectedOption ? [selectedOption] : [])"
+                                                            SelectedItemsChanged="@(options => OnChoiceSelectionChanged(input.ViewModel, options))"
+                                                            OptionValue="@((SelectViewModel<string>? option) => option?.Id)"
                                                             @bind-ImmediateText:get="input.ViewModel.SelectedOption?.Name ?? input.ViewModel.Value"
                                                             @bind-ImmediateText:set="@(text => OnChoiceTextChanged(input.ViewModel, text))"
                                                             Immediate="true"
@@ -135,7 +144,6 @@
                                                             Required="input.ViewModel.Input.Required"
                                                             Items="@input.ViewModel.FilteredOptions()"
                                                             OptionText="@((SelectViewModel<string>? vm) => vm?.Name)"
-                                                            OptionTitle="@((SelectViewModel<string> vm) => DashboardUIHelpers.ResolveTooltip(vm.Name))"
                                                             Height="250px"
                                                             Position="SelectPosition.Below"
                                                             Disabled="input.ViewModel.InputDisabled"
@@ -146,6 +154,7 @@
                                                     <FreeOptionOutput />
                                                 </FreeOption>
                                                 <OptionTemplate Context="optionContext">
+                                                    <span hidden data-tooltip-option="@DashboardUIHelpers.ResolveTooltip(optionContext.Name)"></span>
                                                     <FluentHighlighter Text="@optionContext.Name" HighlightedText="@input.ViewModel.Value" />
                                                 </OptionTemplate>
                                             </FluentCombobox>
@@ -161,6 +170,7 @@
                                                    Context="input">
                                 <FluentCheckbox @ref="@_elementRefs[input.ViewModel]"
                                                 Id="@input.ViewModel.ElementId"
+                                                autofocus="@IsFirstInput(input.ViewModel)"
                                                 Class="aspire-checkbox"
                                                 @bind-Value="input.ViewModel.IsChecked"
                                                 Label="@input.ViewModel.Input.Label"
@@ -177,6 +187,7 @@
                                                    Context="input">
                                 <FluentNumberInput TValue="int?"
                                                    Id="@input.ViewModel.ElementId"
+                                                   autofocus="@IsFirstInput(input.ViewModel)"
                                                    @ref="@_elementRefs[input.ViewModel]"
                                                    Class="aspire-input"
                                                    @bind-Value="input.ViewModel.NumberValue"
@@ -220,6 +231,7 @@
                                     else
                                     {
                                         <FluentButton Id="@inputId" Appearance="ButtonAppearance.Primary" Class="aspire-button"
+                                                      AutoFocus="@IsFirstInput(input.ViewModel)"
                                                       IconStart="@(new Icons.Regular.Size16.FolderOpen())"
                                                       Disabled="input.ViewModel.InputDisabled"
                                                       aria-label="@input.ViewModel.Input.Label"

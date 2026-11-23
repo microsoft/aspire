@@ -15,6 +15,7 @@ namespace Aspire.Hosting;
 [JsonSerializable(typeof(EndpointsManifest))]
 [JsonSerializable(typeof(DevelopmentManifest))]
 [JsonSerializable(typeof(MSBuildPropertiesOutput))]
+[JsonSerializable(typeof(string))]
 [JsonSourceGenerationOptions(
     WriteIndented = true)]
 internal partial class ManifestJsonContext : JsonSerializerContext

@@ -1630,9 +1630,9 @@ public static class ResourceExtensions
         // Collect raw (unresolved) environment variable and argument values
         var rawValues = await GatherRawEnvironmentAndArgumentValuesAsync(resource, executionContext, options, cancellationToken).ConfigureAwait(false);
 
-        foreach (var value in rawValues)
+        if (rawValues.Count > 0)
         {
-            CollectDependenciesFromValue(value, dependencies, newDependencies, visited, executionContext);
+            CollectDependenciesFromValues(rawValues, dependencies, newDependencies, visited, executionContext);
         }
     }
 
@@ -1780,16 +1780,17 @@ public static class ResourceExtensions
     }
 
     /// <summary>
-    /// Recursively collects resource dependencies from a value using <see cref="IValueWithReferences"/>.
+    /// Recursively collects resource dependencies from values using <see cref="IValueWithReferences"/>.
     /// </summary>
-    private static void CollectDependenciesFromValue(
-        object? value,
+    private static void CollectDependenciesFromValues(
+        List<object> values,
         HashSet<IResource> dependencies,
         HashSet<IResource> newDependencies,
         HashSet<object> visitedValues,
         DistributedApplicationExecutionContext executionContext)
     {
-        VisitReferences(value, visitedValues, reference =>
+        // Share one visitor across the values instead of allocating a closure and delegate for each value.
+        Action<object> collectDependency = reference =>
         {
             if (reference is HostUrl hostUrl)
             {
@@ -1799,7 +1800,12 @@ public static class ResourceExtensions
             {
                 newDependencies.Add(resource);
             }
-        });
+        };
+
+        foreach (var value in values)
+        {
+            VisitReferences(value, visitedValues, collectDependency);
+        }
     }
 
     /// <summary>
@@ -1823,6 +1829,32 @@ public static class ResourceExtensions
         }
 
         return [.. references];
+    }
+
+    /// <summary>
+    /// Gets endpoint references from unresolved configuration, normalizing legacy host URLs.
+    /// </summary>
+    internal static IReadOnlyList<EndpointReference> GetEndpointReferences(
+        this IExecutionConfigurationGathererContext context,
+        DistributedApplicationModel model,
+        NetworkIdentifier networkContext)
+    {
+        var references = new List<EndpointReference>();
+        foreach (var reference in context.GetReferences<object>())
+        {
+            if (reference is EndpointReference endpoint)
+            {
+                references.Add(endpoint);
+            }
+            else if (reference is HostUrl hostUrl &&
+                HostUrl.TryGetLocalHostPort(hostUrl.Url, out var port) &&
+                HostUrl.GetEndpointReference(model, port, networkContext) is { } legacyEndpoint)
+            {
+                references.Add(legacyEndpoint);
+            }
+        }
+
+        return references;
     }
 
     private static IEnumerable<object> GetUnresolvedValues(IExecutionConfigurationGathererContext context)

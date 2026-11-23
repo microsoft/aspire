@@ -1,0 +1,10 @@
+﻿🚨 Only use sources you trust. Content from these sources can run code on your machine.
+[?25lSelect an integration to add:
+
+[1m  nuget.org[0m
+  > redis (Aspire.Hosting.Redis)
+[1m  [0m[1mhttps://example.test/other[0m
+    postgres (Aspire.Hosting.Postgres)
+
+(Type to search)
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[?25hSelect an integration to add: redis (Aspire.Hosting.Redis)

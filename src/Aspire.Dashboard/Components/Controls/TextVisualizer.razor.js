@@ -1,15 +1,19 @@
 import hljs from '/js/highlight-11.11.1.min.js'
 
+function highlightLine(element) {
+    const text = element.getAttribute("data-content");
+    const language = element.getAttribute("data-language");
+    element.innerHTML = hljs.highlight(text, { language }).value;
+    element.classList.add("hljs");
+}
+
 function createObserver() {
     let highlightObserver = new MutationObserver((mutations) => {
         mutations.forEach((mutation) => {
-            // If the data-content attribute changes, the content for this line's span has changed and so
-            // we need to re-highlight it.
-            if (mutation.attributeName === "data-content") {
-                const target = mutation.target;
-                const text = target.getAttribute("data-content");
-                const language = target.getAttribute("data-language");
-                target.innerHTML = hljs.highlight(language, text).value;
+            // A format change can reuse the same span without changing its content.
+            if ((mutation.attributeName === "data-content" || mutation.attributeName === "data-language") &&
+                mutation.target.classList.contains("highlight-line")) {
+                highlightLine(mutation.target);
             }
 
             // On initial open, it's possible that the Virtualize component renders elements after its initial render. There is no hook
@@ -18,7 +22,10 @@ function createObserver() {
                 for (let i = 0; i < mutation.addedNodes.length; i++) {
                     let node = mutation.addedNodes[i];
                     if (node.classList && node.classList.contains("highlight-line")) {
-                        hljs.highlightElement(node);
+                        highlightLine(node);
+                    }
+                    if (node.querySelectorAll) {
+                        node.querySelectorAll(".highlight-line").forEach(highlightLine);
                     }
                 }
             }
@@ -44,14 +51,15 @@ export function connectObserver(container) {
 
     const existingElementsToHighlight = container.getElementsByClassName("highlight-line");
     for (let i = 0; i < existingElementsToHighlight.length; i++) {
-        hljs.highlightElement(existingElementsToHighlight[i]);
+        highlightLine(existingElementsToHighlight[i]);
     }
 
     var highlightObserver = createObserver();
     highlightObserver.observe(container, {
         childList: true,
         subtree: true,
-        attributes: true
+        attributes: true,
+        attributeFilter: ["data-content", "data-language"]
     });
     container.highlightObserver = highlightObserver;
 }

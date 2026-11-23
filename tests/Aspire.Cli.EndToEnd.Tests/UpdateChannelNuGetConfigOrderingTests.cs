@@ -1,14 +1,20 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
+using System.IO.Compression;
+using System.Text.Json.Nodes;
+using System.Xml.Linq;
 using Aspire.Cli.EndToEnd.Tests.Helpers;
 using Hex1b.Automation;
+using Hex1b.Input;
 using Xunit;
 
 namespace Aspire.Cli.EndToEnd.Tests;
 
 /// <summary>
-/// Regression test for https://github.com/microsoft/aspire/issues/15891.
+/// Regression tests for channel-update NuGet policy and restore ordering
+/// (https://github.com/microsoft/aspire/issues/15891).
 /// </summary>
 /// <remarks>
 /// <para>
@@ -23,23 +29,209 @@ namespace Aspire.Cli.EndToEnd.Tests;
 /// </para>
 /// <para>
 /// The fix in <c>ProjectUpdater</c> passes <c>--no-restore</c> on every per-package add
-/// and runs a single <c>dotnet restore</c> after every package edit has been applied,
-/// so the packageSourceMapping never sees a half-updated reference graph. This test
+/// and validates the complete graph only when <c>--dry-run</c> is requested,
+/// so the packageSourceMapping never sees a half-updated reference graph. These tests
 /// exercises that invariant end-to-end against the LocalHive channel — the bug fires
 /// for any <c>Explicit</c> channel (daily, staging, PR hives, local), and LocalHive is
 /// the only channel a source-build E2E run can deterministically control.
 /// </para>
 /// <para>
+/// Configured-channel cases also run against PR archives and verify feed-only updates,
+/// including preview approval and rejection without an explicit channel option.
+/// </para>
+/// <para>
 /// This lives in its own test class (separate from <see cref="ChannelUpdateWorkflowTests"/>)
-/// so CI's per-class job split puts the regression on its own runner — failures point
-/// directly at the issue without sharing a budget with unrelated channel tests.
+/// so CI's per-class job split isolates NuGet policy regressions from unrelated channel tests.
 /// </para>
 /// </remarks>
 public sealed class UpdateChannelNuGetConfigOrderingTests(ITestOutputHelper output)
 {
     [Fact]
     [CaptureWorkspaceOnFailure]
-    public async Task AspireUpdate_AppliesPkgEditsBeforeRestore_OnSourceMapping()
+    public async Task AspireUpdate_DryRunRestoresSourcesAndRejectsWarmCacheOnlyDependencies()
+    {
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
+        Assert.SkipUnless(strategy.Mode is CliInstallMode.LocalHive or CliInstallMode.LocalArchive,
+            "Channel validation requires packages from a current CLI archive.");
+        var channel = CliE2ETestHelpers.PrepareLocalChannel(
+            repoRoot, strategy, ["Aspire.AppHost.Sdk.", "Aspire.Hosting.Redis."]);
+        var sdkVersion = channel?.SdkVersion ?? strategy.ExpectedVersion;
+        Assert.NotNull(sdkVersion);
+        var hiveLabel = strategy.Mode == CliInstallMode.LocalHive ? "local" : strategy.LocalArchiveHiveLabel;
+
+        using var workspace = TemporaryWorkspace.Create(output);
+        var root = workspace.WorkspaceRoot.FullName;
+        const string dependencyId = "Contoso.UpdateValidation.Dependency";
+        const string dependencyVersion = "1.0.0";
+        var feed = workspace.CreateDirectory("dependency-feed");
+        var packagePath = Path.Combine(feed.FullName, $"{dependencyId}.{dependencyVersion}.nupkg");
+        using (var archive = ZipFile.Open(packagePath, ZipArchiveMode.Create))
+        {
+            await using (var writer = new StreamWriter(archive.CreateEntry($"{dependencyId}.nuspec").Open()))
+            {
+                await writer.WriteAsync($"""
+                    <?xml version="1.0"?>
+                    <package>
+                      <metadata>
+                        <id>{dependencyId}</id>
+                        <version>{dependencyVersion}</version>
+                        <authors>Aspire Tests</authors>
+                        <description>Detects validation that reuses the ambient package cache.</description>
+                      </metadata>
+                    </package>
+                    """);
+            }
+            archive.CreateEntry("lib/net10.0/_._");
+        }
+
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(
+            repoRoot, strategy, output, mountDockerSocket: false, workspace: workspace);
+        var counter = new SequenceCounter();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.InstallAspireCliAsync(strategy, counter);
+        await auto.RunCommandAsync("export NUGET_PACKAGES=\"$ASPIRE_E2E_WORKSPACE/.nuget-packages\"", counter);
+
+        var projectPath = Path.Combine(root, "AppHost.csproj");
+        // The exact version range resolves successfully but still needs a source edit to become
+        // the selected version. Both successful and failed validation must roll that edit back.
+        await File.WriteAllTextAsync(projectPath, $$"""
+            <Project Sdk="Aspire.AppHost.Sdk/{{sdkVersion}}">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+                <NuGetAudit>false</NuGetAudit>
+                <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+              </PropertyGroup>
+              <ItemGroup>
+                <PackageReference Include="Aspire.Hosting.Redis" Version="[{{sdkVersion}}]" />
+                <PackageReference Include="{{dependencyId}}" Version="{{dependencyVersion}}" />
+              </ItemGroup>
+            </Project>
+            """);
+        var configPath = Path.Combine(root, "aspire.config.json");
+        await File.WriteAllTextAsync(configPath, $$"""
+            {
+              "appHost": { "path": "AppHost.csproj" },
+              "channel": "stable",
+              "sdk": { "version": "{{sdkVersion}}" },
+              "configSource": { "optOut": true },
+              "features": { "updateNotificationsEnabled": false }
+            }
+            """);
+        var nugetPath = Path.Combine(root, "nuget.config");
+        new XDocument(new XElement("configuration",
+            new XElement("packageSources",
+                new XElement("clear"),
+                new XElement("add", new XAttribute("key", "dependency"),
+                    new XAttribute("value", CliE2ETestHelpers.ToContainerPath(feed.FullName, workspace))),
+                new XElement("add", new XAttribute("key", "nuget.org"),
+                    new XAttribute("value", "https://api.nuget.org/v3/index.json")))))
+            .Save(nugetPath);
+        await auto.RunCommandAsync(
+            $"dotnet nuget add source \"$HOME/.aspire/hives/{hiveLabel}/packages\" --name seed-local --configfile nuget.config",
+            counter);
+        await auto.RunCommandAsync("dotnet restore AppHost.csproj --force --no-http-cache", counter, TimeSpan.FromMinutes(3));
+        // Channel selection must supply the hive for candidate validation and persist it only
+        // during apply. The original SDK and application closure remain warm in the user cache.
+        await auto.RunCommandAsync("dotnet nuget remove source seed-local --configfile nuget.config", counter);
+        var originals = new Dictionary<string, byte[]>();
+        foreach (var path in new[] { projectPath, configPath, nugetPath, Path.Combine(root, "packages.lock.json") })
+        {
+            originals.Add(path, await File.ReadAllBytesAsync(path));
+        }
+
+        var dryRunCommand = $"aspire update --apphost AppHost.csproj --channel {hiveLabel} --dry-run";
+        await auto.RunCommandAsync(dryRunCommand + " --non-interactive", counter, TimeSpan.FromMinutes(3));
+        await AssertOriginalsAsync();
+        Assert.Empty(Directory.GetFiles(root, "*.aspire-backup*"));
+
+        var backupPath = projectPath + ".aspire-backup";
+        const string previousBackup = "Previous recovery data must not be overwritten without consent.";
+        await File.WriteAllTextAsync(backupPath, previousBackup);
+        await auto.RunCommandAsync(dryRunCommand + " --yes --non-interactive; printf '%s' \"$?\" > dry-run-exit.txt",
+            counter, TimeSpan.FromMinutes(3));
+        await AssertValidationFailedAsync();
+        await AssertOriginalsAsync();
+        Assert.Equal(previousBackup, await File.ReadAllTextAsync(backupPath));
+
+        await auto.TypeAsync(dryRunCommand + " --yes; printf '%s' \"$?\" > dry-run-exit.txt");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("Replace the existing backups with the current file contents?", timeout: TimeSpan.FromMinutes(3));
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
+        await AssertValidationFailedAsync();
+        await AssertOriginalsAsync();
+        Assert.Equal(previousBackup, await File.ReadAllTextAsync(backupPath));
+
+        await auto.ClearScreenAsync(counter);
+        await auto.TypeAsync(dryRunCommand);
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("Replace the existing backups with the current file contents?", timeout: TimeSpan.FromMinutes(3));
+        await auto.KeyAsync(Hex1bKey.Y);
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(3));
+        await AssertOriginalsAsync();
+        Assert.Empty(Directory.GetFiles(root, "*.aspire-backup*"));
+
+        // Remove the only feed copy while retaining the extracted package. An ordinary warm
+        // restore still succeeds, but validation must download into its own empty package folder.
+        File.Delete(packagePath);
+        await auto.RunCommandAsync("dotnet restore AppHost.csproj --locked-mode --force --no-http-cache", counter, TimeSpan.FromMinutes(3));
+        var cachedDependency = Path.Combine(root, ".nuget-packages", dependencyId.ToLowerInvariant(), dependencyVersion);
+        Assert.True(File.Exists(Path.Combine(cachedDependency, ".nupkg.metadata")));
+        // Validation restore outputs are redirected to private storage, so the project's own
+        // restore outputs must be untouched even when validation fails.
+        var assetsPath = Path.Combine(root, "obj", "project.assets.json");
+        var originalAssets = await File.ReadAllBytesAsync(assetsPath);
+        await auto.RunCommandAsync(
+            dryRunCommand + " --non-interactive --log-level debug > dry-run-output.txt 2>&1; printf '%s' \"$?\" > dry-run-exit.txt",
+            counter, TimeSpan.FromMinutes(3));
+        await AssertValidationFailedAsync();
+        // Failed validation displays the native restore output, for example:
+        //   error NU1101: Unable to find package Contoso.UpdateValidation.Dependency. No packages exist with this id in source(s): ...
+        Assert.Contains($"NU1101: Unable to find package {dependencyId}",
+            await File.ReadAllTextAsync(Path.Combine(root, "dry-run-output.txt")));
+        Assert.Equal(originalAssets, await File.ReadAllBytesAsync(assetsPath));
+        await AssertOriginalsAsync();
+        Assert.Empty(Directory.GetFiles(root, "*.aspire-backup*"));
+        Assert.True(File.Exists(Path.Combine(cachedDependency, ".nupkg.metadata")));
+
+        // With neither a source nor a cache entry, an accidental application restore would
+        // fail. Applying the explicit channel update must still persist its confirmed edits.
+        await auto.RunCommandAsync(
+            $"mv .nuget-packages/{dependencyId.ToLowerInvariant()}/{dependencyVersion} unavailable-dependency-cache", counter);
+        await auto.RunCommandAsync(
+            $"aspire update --apphost AppHost.csproj --channel {hiveLabel} --yes --non-interactive",
+            counter, TimeSpan.FromMinutes(3));
+        var updatedProject = XDocument.Load(projectPath);
+        Assert.Equal(sdkVersion, updatedProject.Descendants("PackageReference")
+            .Single(reference => (string?)reference.Attribute("Include") == "Aspire.Hosting.Redis").Attribute("Version")!.Value);
+        var updatedConfig = JsonNode.Parse(await File.ReadAllTextAsync(configPath))!;
+        Assert.Equal(hiveLabel, updatedConfig["channel"]!.GetValue<string>());
+        Assert.Equal(sdkVersion, updatedConfig["sdk"]!["version"]!.GetValue<string>());
+        Assert.Single(XDocument.Load(nugetPath).Descendants("packageSources").Elements("add"),
+            source => ((string?)source.Attribute("value"))?.EndsWith($"/hives/{hiveLabel}/packages", StringComparison.Ordinal) == true);
+        Assert.Empty(Directory.GetFiles(root, "*.aspire-backup*"));
+
+        async Task AssertOriginalsAsync()
+        {
+            foreach (var (path, original) in originals)
+            {
+                Assert.Equal(original, await File.ReadAllBytesAsync(path));
+            }
+        }
+
+        async Task AssertValidationFailedAsync()
+        {
+            Assert.Equal(CliExitCodes.FailedToUpgradeProject.ToString(CultureInfo.InvariantCulture),
+                await File.ReadAllTextAsync(Path.Combine(root, "dry-run-exit.txt")));
+        }
+    }
+
+    [Fact]
+    [CaptureWorkspaceOnFailure]
+    public async Task AspireUpdate_AppliesAllPackageEdits_OnSourceMapping()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var strategy = CliInstallStrategy.Detect(output.WriteLine);
@@ -86,7 +278,7 @@ public sealed class UpdateChannelNuGetConfigOrderingTests(ITestOutputHelper outp
 
         // Run aspire init non-interactively to scaffold a single-file C# AppHost. We'll
         // overwrite the generated apphost.cs and nuget.config below to set up the bug
-        // pre-condition (stable Aspire packages + only nuget.org configured).
+        // pre-condition (stable Aspire packages + mapped nuget.org source).
         await auto.TypeAsync("aspire init --language csharp");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("Created aspire.config.json", timeout: TimeSpan.FromMinutes(2));
@@ -120,11 +312,9 @@ public sealed class UpdateChannelNuGetConfigOrderingTests(ITestOutputHelper outp
             builder.Build().Run();
             """);
 
-        // 2. nuget.config: only nuget.org, no Aspire feed, no packageSourceMapping. This is
-        //    the file shape from the issue. The CLI's NuGetConfigMerger will rewrite it to
-        //    add the local feed plus a <packageSourceMapping> pinning Aspire* to that feed —
-        //    that rewrite is exactly what triggers the regression on the per-package restores
-        //    when the fix is missing.
+        // 2. Start with mapping enabled: the CLI only extends existing mapping policy.
+        //    Adding the local Aspire* mapping must not trigger restore while other Aspire
+        //    references still require their old nuget.org versions.
         await File.WriteAllTextAsync(nugetConfigPath,
             """
             <?xml version="1.0" encoding="utf-8"?>
@@ -133,6 +323,9 @@ public sealed class UpdateChannelNuGetConfigOrderingTests(ITestOutputHelper outp
                 <clear />
                 <add key="nuget.org" value="https://api.nuget.org/v3/index.json" protocolVersion="3" />
               </packageSources>
+              <packageSourceMapping>
+                <packageSource key="nuget.org"><package pattern="*" /></packageSource>
+              </packageSourceMapping>
             </configuration>
             """);
 
@@ -156,8 +349,7 @@ public sealed class UpdateChannelNuGetConfigOrderingTests(ITestOutputHelper outp
 
         // Without the fix this is where the test would fail: NuGet would emit NU1103 on
         // the first per-package restore and "Update successful!" would never appear before
-        // the timeout. With the fix all package edits land first, then the single deferred
-        // restore sees a coherent reference graph and succeeds.
+        // the timeout. All package edits must land without implicitly restoring the graph.
         await auto.WaitUntilTextAsync("Update successful!", timeout: TimeSpan.FromMinutes(3));
         await auto.WaitForSuccessPromptAsync(counter);
 
@@ -165,8 +357,8 @@ public sealed class UpdateChannelNuGetConfigOrderingTests(ITestOutputHelper outp
         var updatedAppHostCs = await File.ReadAllTextAsync(appHostCsPath);
         var updatedNuGetConfig = await File.ReadAllTextAsync(nugetConfigPath);
 
-        // Pre-condition was actually exercised: nuget.config gained a packageSourceMapping
-        // for Aspire*. If this assertion fails it means the rewrite never happened and the
+        // Pre-condition was actually exercised: nuget.config gained an Aspire* mapping.
+        // If this assertion fails it means the rewrite never happened and the
         // test isn't actually guarding the bug.
         Assert.Contains("packageSourceMapping", updatedNuGetConfig, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Aspire", updatedNuGetConfig, StringComparison.Ordinal);
@@ -202,5 +394,141 @@ public sealed class UpdateChannelNuGetConfigOrderingTests(ITestOutputHelper outp
         catch
         {
         }
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    [CaptureWorkspaceOnFailure]
+    public async Task AspireUpdate_ConfiguredChannel_PreviewsNuGetPolicyBeforeApplying(bool accept)
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
+        if (strategy.Mode is not (CliInstallMode.LocalHive or CliInstallMode.PullRequest or CliInstallMode.LocalArchive))
+        {
+            Assert.Skip("Configured channel updates require a current source build. Run with ASPIRE_E2E_ARCHIVE or in pull request CI.");
+        }
+
+        using var workspace = TemporaryWorkspace.Create(output);
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(
+            repoRoot, strategy, output, mountDockerSocket: false, workspace: workspace);
+        var counter = new SequenceCounter();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, cancellationToken);
+
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.InstallAspireCliAsync(strategy, counter);
+        await auto.RunCommandAsync("aspire config set features.updateNotificationsEnabled false -g", counter);
+
+        const string channelName = "configured-update";
+        // A separate hive name distinguishes the configured channel from the running CLI's identity.
+        // Reuse the installed packages so PR archive runs need no locally packed repository output.
+        await auto.RunCommandAsync(
+            "package_path=$(find \"$HOME/.aspire/hives\" -type f -name 'Aspire.Hosting.*.nupkg' -print -quit) && " +
+            "test -n \"$package_path\" && " +
+            $"mkdir -p \"$HOME/.aspire/hives/{channelName}\" && " +
+            $"ln -s \"$(dirname \"$package_path\")\" \"$HOME/.aspire/hives/{channelName}/packages\"",
+            counter);
+
+        const string projectName = "ConfiguredChannelApp";
+        await auto.AspireNewCSharpEmptyAppHostAsync(projectName, counter);
+
+        var projectPath = Path.Combine(workspace.WorkspaceRoot.FullName, projectName);
+        var appHostPath = Path.Combine(projectPath, "apphost.cs");
+        var configPath = Path.Combine(projectPath, "aspire.config.json");
+        var nugetConfigPath = Path.Combine(projectPath, "nuget.config");
+        var restoreMarkerPath = Path.Combine(projectPath, "native-restore.txt");
+        await File.WriteAllTextAsync(Path.Combine(projectPath, "Directory.Build.targets"), """
+            <Project>
+              <Target Name="RecordConfiguredChannelRestore" AfterTargets="Restore">
+                <WriteLinesToFile File="$(MSBuildThisFileDirectory)native-restore.txt"
+                                  Lines="restored" Overwrite="true" />
+              </Target>
+            </Project>
+            """, cancellationToken);
+        var originalAppHost = await File.ReadAllBytesAsync(appHostPath, cancellationToken);
+        var appHostVersion = CliE2ETestHelpers.GetAppHostVersion(
+            await File.ReadAllTextAsync(appHostPath, cancellationToken));
+        var configuration = JsonNode.Parse(await File.ReadAllTextAsync(configPath, cancellationToken))!.AsObject();
+        configuration["channel"] = channelName;
+        configuration["sdk"] ??= new JsonObject();
+        configuration["sdk"]!["version"] = appHostVersion;
+        await File.WriteAllTextAsync(configPath, configuration.ToJsonString(), cancellationToken);
+
+        // Keep package versions and SDK metadata current: changing only feed policy must still
+        // trigger preview and persistence without a validation restore rather than reporting "up to date".
+        await File.WriteAllTextAsync(nugetConfigPath, """
+            <configuration>
+              <packageSources>
+                <clear />
+                <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
+              </packageSources>
+              <packageSourceMapping>
+                <clear />
+                <packageSource key="nuget.org"><package pattern="*" /></packageSource>
+              </packageSourceMapping>
+            </configuration>
+            """, cancellationToken);
+        var originalConfig = await File.ReadAllBytesAsync(configPath, cancellationToken);
+        var originalNuGetConfig = await File.ReadAllBytesAsync(nugetConfigPath, cancellationToken);
+
+        await auto.RunCommandAsync($"cd {projectName}", counter);
+        await auto.ClearScreenAsync(counter);
+        await auto.TypeAsync("aspire update --nuget-config-dir .");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync(
+            $"Using channel '{channelName}' from Aspire configuration. Pass --channel to override.",
+            timeout: TimeSpan.FromMinutes(2));
+        await auto.WaitUntilTextAsync("Perform updates?", timeout: TimeSpan.FromMinutes(2));
+        await auto.TypeAsync("y");
+
+        await auto.WaitUntilAsync(
+            snapshot => snapshot.ContainsText("Apply these changes to NuGet.config?") &&
+                snapshot.ContainsText($"/hives/{channelName}/packages") &&
+                snapshot.ContainsText("Aspire*"),
+            timeout: TimeSpan.FromMinutes(1),
+            description: "configured-channel feed and mapping preview");
+        Assert.Equal(originalAppHost, await File.ReadAllBytesAsync(appHostPath, cancellationToken));
+        Assert.Equal(originalConfig, await File.ReadAllBytesAsync(configPath, cancellationToken));
+        Assert.Equal(originalNuGetConfig, await File.ReadAllBytesAsync(nugetConfigPath, cancellationToken));
+        Assert.False(File.Exists(restoreMarkerPath));
+
+        // Spectre confirmation consumes one character; an extra Enter can reach the shell.
+        await auto.TypeAsync(accept ? "y" : "n");
+        if (accept)
+        {
+            await auto.WaitUntilTextAsync("Update successful!", timeout: TimeSpan.FromMinutes(3));
+        }
+        await auto.WaitForSuccessPromptAsync(counter);
+
+        Assert.Equal(originalAppHost, await File.ReadAllBytesAsync(appHostPath, cancellationToken));
+        Assert.Equal(originalConfig, await File.ReadAllBytesAsync(configPath, cancellationToken));
+        if (!accept)
+        {
+            Assert.Equal(originalNuGetConfig, await File.ReadAllBytesAsync(nugetConfigPath, cancellationToken));
+            Assert.False(File.Exists(restoreMarkerPath));
+            return;
+        }
+
+        Assert.False(File.Exists(restoreMarkerPath));
+        var nugetConfig = XDocument.Load(nugetConfigPath);
+        var sources = nugetConfig.Root!.Element("packageSources")!.Elements("add").ToArray();
+        Assert.Equal(2, sources.Length);
+        var channelSource = Assert.Single(sources,
+            source => source.Attribute("value")!.Value.EndsWith($"/hives/{channelName}/packages", StringComparison.Ordinal));
+        var publicSource = Assert.Single(sources, source => source.Attribute("key")!.Value == "nuget.org");
+        Assert.Equal("https://api.nuget.org/v3/index.json", publicSource.Attribute("value")!.Value);
+
+        var mappings = nugetConfig.Root.Element("packageSourceMapping")!.Elements("packageSource").ToArray();
+        Assert.Equal(2, mappings.Length);
+        var channelMapping = Assert.Single(mappings,
+            mapping => mapping.Attribute("key")!.Value == channelSource.Attribute("key")!.Value);
+        Assert.Equal(["Aspire*"], channelMapping.Elements("package").Select(package => package.Attribute("pattern")!.Value));
+        var publicMapping = Assert.Single(mappings, mapping => mapping.Attribute("key")!.Value == "nuget.org");
+        Assert.Equal(["*"], publicMapping.Elements("package").Select(package => package.Attribute("pattern")!.Value));
+
+        // Restore again without the CLI's temporary preview to validate the persisted policy.
+        await auto.RunCommandAsync("dotnet restore apphost.cs --force", counter, timeout: TimeSpan.FromMinutes(3));
     }
 }

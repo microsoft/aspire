@@ -120,16 +120,19 @@ In your AppHost project, install the Aspire Azure Storage Hosting library with [
 
 ```dotnetcli
 dotnet add package Aspire.Hosting.Azure.Storage
+dotnet add package Aspire.Hosting.Dotnet
 ```
 
 Then, in the _AppHost.cs_ file of `AppHost`, add a Blob Storage connection and consume the connection using the following methods:
 
 ```csharp
-var blobs = builder.ExecutionContext.IsPublishMode
+using Aspire.Hosting.ApplicationModel;
+
+IResourceBuilder<IResourceWithConnectionString> blobs = builder.ExecutionContext.IsPublishMode
     ? builder.AddAzureStorage("storage").AddBlobs("blobs")
     : builder.AddConnectionString("blobs");
 
-var myService = builder.AddProject<Projects.MyService>()
+var myService = builder.AddDotnetProject("myservice", "../MyService/MyService.csproj")
                        .WithReference(blobs);
 ```
 

@@ -1,5 +1,3 @@
-#pragma warning disable ASPIRECONNECTIONSTRINGS001
-
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
@@ -99,9 +97,7 @@ public static class QdrantBuilderExtensions
                 c.DisplayLocation = UrlDisplayLocation.DetailsOnly;
             })
             .WithUrlForEndpoint(QdrantServerResource.HttpEndpointName, c => c.DisplayText = "Qdrant (HTTP)")
-#pragma warning disable CS0618 // DisplayOrder is obsolete but must still be set to prioritize this URL.
             .WithUrlForEndpoint(QdrantServerResource.HttpEndpointName, e => new ResourceUrlAnnotation() { Url = "/dashboard", DisplayText = "Manage", DisplayOrder = 1 });
-#pragma warning restore CS0618
     }
 
     /// <summary>

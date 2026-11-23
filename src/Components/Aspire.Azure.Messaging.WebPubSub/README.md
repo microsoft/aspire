@@ -111,12 +111,19 @@ You can also setup the [WebPubSubServiceClientOptions](https://learn.microsoft.c
 
 ## AppHost extensions
 
+In the AppHost project, install the hosting and .NET project integrations:
+
+```dotnetcli
+dotnet add package Aspire.Hosting.Azure.WebPubSub
+dotnet add package Aspire.Hosting.Dotnet
+```
+
 In your AppHost project, add a Web PubSub connection and consume the connection using the following methods:
 
 ```csharp
 var webPubSub = builder.AddAzureWebPubSub("wps");
 
-var myService = builder.AddProject<Projects.MyService>()
+var myService = builder.AddDotnetProject("myservice", "../MyService/MyService.csproj")
                        .WithReference(webPubSub);
 ```
 

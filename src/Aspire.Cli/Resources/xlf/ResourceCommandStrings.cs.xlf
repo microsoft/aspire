@@ -4,62 +4,62 @@
     <body>
       <trans-unit id="ArgumentRequired">
         <source>The '{0}' argument is required.</source>
-        <target state="new">The '{0}' argument is required.</target>
+        <target state="translated">Argument {0} je povinný.</target>
         <note />
       </trans-unit>
       <trans-unit id="AvailableResourceCommands">
         <source>Available resource commands:</source>
-        <target state="new">Available resource commands:</target>
+        <target state="translated">Dostupné příkazy prostředků:</target>
         <note />
       </trans-unit>
       <trans-unit id="CommandDescription">
         <source>Execute a command on a resource (e.g. start, stop, restart)</source>
-        <target state="needs-review-translation">Spusťte příkaz pro prostředek.</target>
+        <target state="translated">Spusťte příkaz pro prostředek (např. start, stop, restart).</target>
         <note />
       </trans-unit>
       <trans-unit id="CommandNameArgumentDescription">
         <source>The name of the command to execute (e.g. start, stop, restart)</source>
-        <target state="needs-review-translation">Název příkazu, který se má spustit</target>
+        <target state="translated">Název příkazu, který se má spustit (např. start, stop, restart).</target>
         <note />
       </trans-unit>
       <trans-unit id="CommandResourceArgumentDescription">
         <source>The name of the resource to execute the command on</source>
-        <target state="needs-review-translation">Název prostředku, na kterém se má příkaz provést</target>
+        <target state="translated">Název prostředku, na kterém se má příkaz provést</target>
         <note />
       </trans-unit>
       <trans-unit id="CommandSpecificHelpAllowedValues">
         <source>Allowed values: {0}.</source>
-        <target state="new">Allowed values: {0}.</target>
+        <target state="translated">Povolené hodnoty: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="CommandSpecificHelpCommandOptions">
         <source>Command options:</source>
-        <target state="new">Command options:</target>
+        <target state="translated">Možnosti příkazu:</target>
         <note />
       </trans-unit>
       <trans-unit id="CommandSpecificHelpDefaultValue">
         <source>Default: {0}.</source>
-        <target state="new">Default: {0}.</target>
+        <target state="translated">Výchozí hodnota: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="CommandSpecificHelpDelimiterHint">
         <source>Use `-- --{0}{1}` to pass this command option.</source>
-        <target state="new">Use `-- --{0}{1}` to pass this command option.</target>
+        <target state="translated">Pokud chcete předat tuto možnost příkazu, použijte -- --{0}{1}.</target>
         <note />
       </trans-unit>
       <trans-unit id="CommandSpecificHelpRequired">
         <source>Required.</source>
-        <target state="new">Required.</target>
+        <target state="translated">Povinné nastavení.</target>
         <note />
       </trans-unit>
       <trans-unit id="CommandSpecificHelpUsageSyntax">
         <source>aspire resource {0} {1} [options] [[--] &lt;command-options&gt;...]</source>
-        <target state="new">aspire resource {0} {1} [options] [[--] &lt;command-options&gt;...]</target>
+        <target state="translated">Aspire Resource {0} {1} [options] [[--] &lt;command-options&gt;...]</target>
         <note />
       </trans-unit>
       <trans-unit id="CommandSpecificHelpValuePlaceholder">
         <source>value</source>
-        <target state="new">value</target>
+        <target state="translated">hodnota</target>
         <note />
       </trans-unit>
       <trans-unit id="SelectAppHostAction">

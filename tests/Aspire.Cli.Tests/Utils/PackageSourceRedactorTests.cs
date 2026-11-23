@@ -40,4 +40,50 @@ public class PackageSourceRedactorTests
     {
         Assert.Equal(expected, PackageSourceRedactor.RedactForDisplay(source));
     }
+
+    [Theory]
+    [InlineData(
+        "  HTTPS://user:secret@HOST.example/Feed?sig=secret  ",
+        "HTTPS://user:secret@HOST.example/Feed?sig=secret",
+        "Restore failed for https://***@host.example/Feed.")]
+    [InlineData(
+        "  HTTPS://user:secret@HOST.example/Feed?sig=secret  ",
+        "https://user:secret@host.example/Feed?sig=secret",
+        "Restore failed for https://***@host.example/Feed.")]
+    [InlineData(
+        "  https://user:p#word@host/  ",
+        "https://user:p#word@host/",
+        "Restore failed for <unparseable http source>.")]
+    [InlineData(
+        "https://[::1]/feed?sig=secret",
+        "https://[::1]/feed?sig=secret",
+        "Restore failed for https://[::1]/feed.")]
+    public void RedactOccurrences_RedactsNormalizedDiagnosticSpellings(
+        string source,
+        string diagnosticSpelling,
+        string expected)
+    {
+        var result = PackageSourceRedactor.RedactOccurrences(
+            $"Restore failed for {diagnosticSpelling}.",
+            [source]);
+
+        Assert.Equal(expected, result);
+    }
+
+    [Fact]
+    public void RedactOccurrences_RedactsKnownCredentialsInDerivedResourceUrls()
+    {
+        const string source =
+            "https://user:p%40ss@feed.example.com/v3/index.json?sig=secret&se=expiry#fragment";
+        const string diagnostic =
+            "GET https://user:p%40ss@cdn.example.com/v3-flatcontainer/package/index.json" +
+            "?se=expiry&cache=hit&sig=secret#fragment; secret remains ordinary text.";
+
+        var result = PackageSourceRedactor.RedactOccurrences(diagnostic, [source]);
+
+        Assert.Equal(
+            "GET https://***@cdn.example.com/v3-flatcontainer/package/index.json" +
+            "?***&cache=hit&***#***; secret remains ordinary text.",
+            result);
+    }
 }

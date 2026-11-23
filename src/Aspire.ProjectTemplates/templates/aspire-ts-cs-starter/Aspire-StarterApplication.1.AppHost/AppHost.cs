@@ -4,7 +4,7 @@ var builder = DistributedApplication.CreateBuilder(args);
 var cache = builder.AddRedis("cache");
 
 #endif
-var server = builder.AddProject<Projects.GeneratedClassNamePrefix_Server>("server")
+var server = builder.AddDotnetProject("server", "../Aspire-StarterApplication.1.Server/Aspire-StarterApplication.1.Server.csproj")
 #if UseRedisCache
     .WithReference(cache)
     .WaitFor(cache)

@@ -71,6 +71,7 @@ function makePr(overrides = {}) {
     authorAvatarUrl: null,
     createdAt: isoAgo(2 * dayMs),
     readyForReviewAt: null,
+    firstReadyForReviewAt: isoAgo(2 * dayMs),
     updatedAt: isoAgo(dayMs),
     baseRef: "main",
     milestone: null,
@@ -175,6 +176,109 @@ test("computeFocusItems keys focus identity by host so same-slug PRs on differen
     "https://ghe.example.com/microsoft/aspire/pull/500",
     "https://github.com/microsoft/aspire/pull/500",
   ]);
+});
+
+test("computeFocusItems breaks first-readiness ties by ordinal host, repository, and PR number", () => {
+  const firstReadyForReviewAt = isoAgo(3 * dayMs);
+  const make = (host, repository, number) => makePr({
+    firstReadyForReviewAt, repository, number, url: `https://${host}/${repository}/pull/${number}`,
+  });
+  const ordered = [
+    make("ghe.example.com", "microsoft/aspire", 1),
+    make("github.com", "Microsoft/Aspire", 2),
+    make("github.com", "microsoft/aspire", 10),
+    make("github.com", "microsoft/dcp", 1),
+  ];
+  for (const input of [ordered, [...ordered].reverse(), [ordered[2], ordered[0], ordered[3], ordered[1]]]) {
+    const focus = computeFocusItems(createAttentionBuckets(input, "joperezr"));
+    assert.deepEqual(focus.map((item) => item.pullRequest.url), ordered.map((pr) => pr.url));
+  }
+});
+
+test("computeFocusItems promotes exact case-insensitive priority labels", () => {
+  for (const label of ["fixes-ci", "urgent-review", "FiXeS-CI", "URGENT-REVIEW"]) {
+    const older = makePr({ number: 1, firstReadyForReviewAt: isoAgo(5 * dayMs) });
+    const priority = makePr({ number: 2, labels: [label], firstReadyForReviewAt: isoAgo(dayMs) });
+    const lookalikes = ["fixes-ci-extra", "not-urgent-review", " fixes-ci", "urgent-review "]
+      .map((label, index) => makePr({ number: index + 3, labels: [label], firstReadyForReviewAt: older.firstReadyForReviewAt }));
+
+    const focus = computeFocusItems(createAttentionBuckets([older, ...lookalikes, priority]));
+
+    assert.deepEqual(focus.map((item) => item.pullRequest.number), [2, 1, 3, 4, 5, 6], label);
+  }
+});
+
+test("computeFocusItems preserves deterministic readiness order within equal priority groups", () => {
+  const firstReadyForReviewAt = isoAgo(3 * dayMs);
+  const ordered = [
+    makePr({ number: 9, labels: ["urgent-review"], firstReadyForReviewAt: isoAgo(4 * dayMs) }),
+    makePr({ number: 10, labels: ["fixes-ci"], firstReadyForReviewAt, url: "https://ghe.example.com/microsoft/aspire/pull/10" }),
+    makePr({ number: 2, labels: ["fixes-ci", "urgent-review"], firstReadyForReviewAt }),
+    makePr({ number: 3, labels: ["urgent-review"], firstReadyForReviewAt }),
+    makePr({ number: 1, repository: "microsoft/dcp", url: "https://github.com/microsoft/dcp/pull/1", labels: ["fixes-ci"], firstReadyForReviewAt }),
+    makePr({ number: 8, firstReadyForReviewAt: isoAgo(5 * dayMs) }),
+    makePr({ number: 6, firstReadyForReviewAt }),
+    makePr({ number: 7, firstReadyForReviewAt }),
+  ];
+  for (const input of [ordered, ordered.toReversed()]) {
+    const focus = computeFocusItems(createAttentionBuckets(input));
+    assert.deepEqual(focus.map((item) => [item.pullRequest.repository, item.pullRequest.number]),
+      ordered.map((pr) => [pr.repository, pr.number]));
+  }
+});
+
+test("priority labels do not bypass Needs attention eligibility", () => {
+  const blockers = [
+    { draft: true },
+    { mergeableState: "dirty" },
+    { labels: ["needs-author-action"] },
+    { labels: ["no-merge"] },
+    { checks: { state: "failure" } },
+    { review: { state: "changes_requested", lastReviewedAt: isoAgo(hourMs) } },
+    { review: { state: "reviewed", unresolvedThreadCount: 1, lastReviewedAt: isoAgo(hourMs) } },
+    { author: "external-contributor" },
+    { author: "dependabot[bot]", authorType: "Bot" },
+    { firstReadyForReviewAt: null },
+  ];
+  for (const label of ["fixes-ci", "urgent-review"]) {
+    for (const blocker of blockers) {
+      const blocked = makePr({ ...blocker, labels: [label, ...(blocker.labels ?? [])] });
+      const eligible = makePr({ number: 2 });
+      const focus = computeFocusItems(createAttentionBuckets([blocked, eligible]));
+      assert.deepEqual(focus.map((item) => item.pullRequest.number), [2], `${label}: ${JSON.stringify(blocker)}`);
+    }
+  }
+});
+
+test("blocked PRs return at their original first-readiness priority", () => {
+  const older = makePr({ number: 1, firstReadyForReviewAt: isoAgo(5 * dayMs) });
+  const newer = makePr({ number: 2, url: "https://github.com/microsoft/aspire/pull/2", firstReadyForReviewAt: isoAgo(3 * dayMs) });
+  const blockers = [
+    { draft: true },
+    { mergeableState: "dirty" },
+    { labels: ["needs-author-action"] },
+    { labels: ["no-merge"] },
+    { checks: { state: "failure" } },
+    { review: { state: "changes_requested", lastReviewedAt: isoAgo(hourMs) } },
+    { review: { state: "reviewed", unresolvedThreadCount: 1, lastReviewedAt: isoAgo(hourMs) } },
+  ];
+  for (const blocker of blockers) {
+    const blocked = makePr({ ...older, ...blocker });
+    const focus = computeFocusItems(createAttentionBuckets([newer, blocked], "joperezr"));
+    assert.deepEqual(focus.map((item) => item.pullRequest.number), [2]);
+    const returned = makePr({ ...older, updatedAt: new Date().toISOString() });
+    const restored = computeFocusItems(createAttentionBuckets([newer, returned], "joperezr"));
+    assert.deepEqual(restored.map((item) => item.pullRequest.number), [1, 2]);
+  }
+});
+
+test("focus omits unavailable first readiness and explains it without using updatedAt or PR age", () => {
+  const unavailable = makePr({ firstReadyForReviewAt: null, isMine: true });
+  const buckets = createAttentionBuckets([unavailable], "davidfowl");
+  const focus = computeFocusItems(buckets);
+  assert.deepEqual(focus, []);
+  const exclusions = computeFocusExclusionItems([unavailable], buckets, focus, "davidfowl");
+  assert.equal(exclusions[0].reason.kind, "readiness-unavailable");
 });
 
 test("computeFocusItems retains review-debt PRs through the full createAttentionBuckets pipeline", () => {
@@ -473,4 +577,12 @@ test("createIssueSignals leads with the highest-priority action pill", () => {
   // login has no "bot" substring (normalizeIssue now carries authorType for issues).
   const botTyped = makeIssue({ number: 6, author: "dependa", authorType: "Bot" });
   assert.ok(createIssueSignals(botTyped).some((s) => s.label === "bot"));
+});
+
+test("issue repository labels retain their kind for tooltip explanations", () => {
+  const signals = createIssueSignals(makeIssue({ labels: ["review debt", "custom"] }));
+  assert.deepEqual(signals.filter((signal) => signal.kind === "repo-label"), [
+    { label: "review debt", tone: "accent", kind: "repo-label" },
+    { label: "custom", tone: "accent", kind: "repo-label" },
+  ]);
 });

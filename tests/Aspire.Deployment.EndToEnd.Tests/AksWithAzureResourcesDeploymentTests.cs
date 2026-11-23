@@ -128,7 +128,7 @@ public sealed class AksWithAzureResourcesDeploymentTests(ITestOutputHelper outpu
 
                 // Insert AKS environment and Azure resources AFTER CreateBuilder
                 // so variables are available when apiservice references them.
-                content = content.Replace(
+                content = DotnetProjectDeploymentHelpers.ReplaceExactlyOnce(content,
                     "var builder = DistributedApplication.CreateBuilder(args);",
                     """
 var builder = DistributedApplication.CreateBuilder(args);
@@ -149,9 +149,10 @@ var blobs = storage.AddBlobs("blobs");
 """);
 
                 // Wire Azure resources to the API service
-                content = content.Replace(
-                    "builder.AddProject<Projects." + projectName + "_ApiService>(\"apiservice\")",
-                    "builder.AddProject<Projects." + projectName + "_ApiService>(\"apiservice\")\n    .WithReference(vault)\n    .WithReference(blobs)");
+                var apiServiceDeclaration = $"builder.AddDotnetProject(\"apiservice\", \"../{projectName}.ApiService/{projectName}.ApiService.csproj\")";
+                content = DotnetProjectDeploymentHelpers.ReplaceExactlyOnce(content,
+                    apiServiceDeclaration,
+                    $"{apiServiceDeclaration}\n    .WithReference(vault)\n    .WithReference(blobs)");
 
                 File.WriteAllText(appHostFilePath, content);
 

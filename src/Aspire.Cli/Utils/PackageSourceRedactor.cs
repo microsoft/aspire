@@ -4,8 +4,11 @@
 namespace Aspire.Cli.Utils;
 
 /// <summary>
-/// Helpers for rendering NuGet package sources in user-visible output without leaking credentials.
+/// Helpers for best-effort redaction of credentials in NuGet package source output.
 /// </summary>
+/// <remarks>
+/// Redaction is best effort to reduce sensitive data in output, not a security guarantee.
+/// </remarks>
 internal static class PackageSourceRedactor
 {
     private const string UnparseableHttpSentinel = "<unparseable http source>";
@@ -68,5 +71,119 @@ internal static class PackageSourceRedactor
         };
 
         return builder.Uri.ToString();
+    }
+
+    /// <summary>
+    /// Replaces credential-bearing package source occurrences in captured process output with
+    /// display-safe forms.
+    /// </summary>
+    public static string RedactOccurrences(string value, IReadOnlyList<string> sensitiveSources)
+    {
+        if (string.IsNullOrEmpty(value) || sensitiveSources.Count == 0)
+        {
+            return value;
+        }
+
+        var replacements = sensitiveSources
+            .SelectMany(GetDiagnosticReplacements)
+            .DistinctBy(static replacement => replacement.Spelling, StringComparer.Ordinal)
+            .OrderByDescending(static replacement => replacement.Spelling.Length);
+
+        foreach (var (spelling, replacement) in replacements)
+        {
+            value = value.Replace(spelling, replacement, StringComparison.Ordinal);
+        }
+
+        return value;
+    }
+
+    private static IEnumerable<(string Spelling, string Replacement)> GetDiagnosticReplacements(string source)
+    {
+        var displaySource = RedactForDisplay(source);
+        foreach (var spelling in GetDiagnosticSpellings(source))
+        {
+            yield return (spelling, displaySource);
+
+            foreach (var replacement in GetCredentialComponentReplacements(spelling))
+            {
+                yield return replacement;
+            }
+        }
+    }
+
+    private static IEnumerable<string> GetDiagnosticSpellings(string source)
+    {
+        if (source.Length > 0)
+        {
+            yield return source;
+        }
+
+        var trimmedSource = source.Trim();
+        if (trimmedSource.Length == 0)
+        {
+            yield break;
+        }
+
+        yield return trimmedSource;
+
+        // NuGet diagnostics can render the parsed URI rather than the original configuration text.
+        // For example, `HTTPS://user:secret@HOST/Feed?sig=secret` can be emitted as
+        // `https://user:secret@host/Feed?sig=secret`.
+        if (Uri.TryCreate(trimmedSource, UriKind.Absolute, out var uri) &&
+            (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps))
+        {
+            yield return uri.AbsoluteUri;
+        }
+    }
+
+    private static IEnumerable<(string Spelling, string Replacement)> GetCredentialComponentReplacements(
+        string sourceSpelling)
+    {
+        var trimmedSource = sourceSpelling.Trim();
+        if (!Uri.TryCreate(trimmedSource, UriKind.Absolute, out var uri) ||
+            (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+        {
+            yield break;
+        }
+
+        // Extract delimiter-qualified components from a validated source such as:
+        //   https://user:password@host/v3/index.json?sig=secret&se=expiry#fragment
+        // Matching the delimiters avoids replacing bare credential values in unrelated text while
+        // still protecting the same material when NuGet reports another protocol resource URL.
+        var schemeDelimiter = trimmedSource.IndexOf("://", StringComparison.Ordinal);
+        var authorityStart = schemeDelimiter >= 0 ? schemeDelimiter + 3 : 0;
+        var authorityEnd = trimmedSource.IndexOfAny(['/', '?', '#'], authorityStart);
+        if (authorityEnd < 0)
+        {
+            authorityEnd = trimmedSource.Length;
+        }
+
+        if (schemeDelimiter >= 0 && !string.IsNullOrEmpty(uri.UserInfo))
+        {
+            var authority = trimmedSource[authorityStart..authorityEnd];
+            var userInfoEnd = authority.LastIndexOf('@');
+            if (userInfoEnd > 0)
+            {
+                yield return ($"://{authority[..userInfoEnd]}@", "://***@");
+            }
+        }
+
+        var queryStart = trimmedSource.IndexOf('?', authorityEnd);
+        var fragmentStart = trimmedSource.IndexOf('#', authorityEnd);
+        if (queryStart >= 0 && (fragmentStart < 0 || queryStart < fragmentStart))
+        {
+            var queryEnd = fragmentStart >= 0 ? fragmentStart : trimmedSource.Length;
+            foreach (var parameter in trimmedSource[(queryStart + 1)..queryEnd]
+                .Split('&', StringSplitOptions.RemoveEmptyEntries))
+            {
+                yield return ($"?{parameter}", "?***");
+                yield return ($"&{parameter}", "&***");
+            }
+        }
+
+        if (fragmentStart >= 0 && fragmentStart + 1 < trimmedSource.Length)
+        {
+            yield return (trimmedSource[fragmentStart..], "#***");
+        }
     }
 }

@@ -24,7 +24,7 @@ public static class ResourcesSelectHelpers
         }
         else if (instanceIdMatches.Count == 0)
         {
-            // Fallback to matching on resource name. This is commonly used when there is only one instance of the resource.
+            // Match exact resource/group names before display names so shortened instance IDs cannot shadow another resource.
             var replicaSetMatches = allowedMatches.Where(e => e.Id?.Type != OtlpResourceType.Instance && string.Equals(name, e.Id?.ReplicaSetName, StringComparisons.ResourceName)).ToList();
 
             if (replicaSetMatches.Count == 1)
@@ -33,8 +33,23 @@ public static class ResourcesSelectHelpers
             }
             else if (replicaSetMatches.Count == 0)
             {
-                // No matches found so return the passed in fallback.
-                return SingleMatch(resources, logger, name, fallbackViewModel, fallback: true);
+                // The displayed resource name is persisted in the URL. For replicated resources with GUID instance IDs,
+                // e.g. "dotnet-cli-6a764b7d", this contains the shortened instance ID produced by OtlpHelpers.GetResourceName.
+                var displayNameMatches = allowedMatches.Where(e => string.Equals(name, e.Name, StringComparisons.ResourceName)).ToList();
+
+                if (displayNameMatches.Count == 1)
+                {
+                    return SingleMatch(resources, logger, name, displayNameMatches[0]);
+                }
+                else if (displayNameMatches.Count == 0)
+                {
+                    // No matches found so return the passed in fallback.
+                    return SingleMatch(resources, logger, name, fallbackViewModel, fallback: true);
+                }
+                else
+                {
+                    return MultipleMatches(allowedMatches, logger, name, displayNameMatches);
+                }
             }
             else
             {

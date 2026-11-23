@@ -2,7 +2,9 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics.CodeAnalysis;
+using Aspire.Dashboard.Components.Dialogs;
 using Aspire.Dashboard.Resources;
+using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
 using Microsoft.FluentUI.AspNetCore.Components;
@@ -18,6 +20,9 @@ public sealed class DashboardDialogService(
     IStringLocalizer<Dialogs> dialogsLoc,
     DimensionManager dimensionManager)
 {
+    private readonly AsyncLock _confirmationLock = new();
+    private int _confirmationGeneration;
+
     private string CloseButtonText => dialogsLoc[nameof(Dialogs.DialogCloseButtonText)];
 
     /// <summary>
@@ -29,6 +34,15 @@ public sealed class DashboardDialogService(
     /// Gets a value indicating whether the viewport is in desktop mode.
     /// </summary>
     public bool IsDesktop => dimensionManager.ViewportInformation.IsDesktop;
+
+    public Task<DashboardDialogReference> ShowManageDataAsync() =>
+        ShowDialogAsync<ManageDataDialog>(new DialogParameters
+        {
+            Title = dialogsLoc[nameof(Dialogs.ManageDataDialogTitle)],
+            PrimaryAction = CloseButtonText,
+            SecondaryAction = string.Empty,
+            Width = "800px"
+        });
 
     /// <summary>
     /// Shows a dialog with the specified content and parameters.
@@ -91,7 +105,20 @@ public sealed class DashboardDialogService(
     /// <returns>The dialog result.</returns>
     public async Task<DialogResult> ShowConfirmationAsync(string message)
     {
+        // Commands can run concurrently, but their confirmation dialogs must not stack.
+        var generation = Volatile.Read(ref _confirmationGeneration);
+        using var confirmation = await _confirmationLock.LockAsync().ConfigureAwait(true);
+        if (generation != Volatile.Read(ref _confirmationGeneration))
+        {
+            return DialogResult.Cancel();
+        }
+
         return await dialogService.ShowConfirmationAsync(message).ConfigureAwait(false);
+    }
+
+    internal void CancelPendingConfirmations()
+    {
+        Interlocked.Increment(ref _confirmationGeneration);
     }
 
     /// <summary>

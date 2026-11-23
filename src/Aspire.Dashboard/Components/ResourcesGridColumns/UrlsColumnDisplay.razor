@@ -14,7 +14,7 @@ else if (DisplayedUrls.Count == 1)
 else if (DisplayedUrls.Count > 1)
 {
     <div class="url-container" @onclick:stopPropagation="true" @onkeydown:stopPropagation="true">
-        <FluentOverflow TItem="DisplayedUrl" Items="@DisplayedUrls" Class="url-overflow" MaxRenderedItems="@MaxRenderedOverflowItems" Threshold="0">
+        <FluentOverflow TItem="DisplayedUrl" Items="@DisplayedUrls" Class="url-overflow" MaxRenderedItems="@MaxRenderedItems" Threshold="0">
             <ItemTemplate Context="displayedUrl">
                 <div behavior="@(ReferenceEquals(displayedUrl, DisplayedUrls[0]) ? "ellipsis" : null)">
                     @WriteUrl(displayedUrl)
@@ -22,7 +22,10 @@ else if (DisplayedUrls.Count > 1)
             </ItemTemplate>
             <MoreTemplate Context="overflow">
                 <div @onclick:stopPropagation="true" @onkeydown:stopPropagation="true" style="display:inherit;">
-                    <FluentButton Appearance="ButtonAppearance.Primary" OnClick="() => _popoverVisible = !_popoverVisible" Class="url-button">
+                    <FluentButton Appearance="@(UseNeutralOverflowButton ? ButtonAppearance.Default : ButtonAppearance.Primary)"
+                                  OnClick="() => _popoverVisible = !_popoverVisible"
+                                  Class="@(UseNeutralOverflowButton ? "url-button url-button-neutral" : "url-button")"
+                                  aria-label="@($"{Loc[nameof(Resources.Columns.UrlsColumnDisplayOverflowTitle)]}: {overflow.OverflowCount}")">
                         @($"+{overflow.OverflowCount}")
                     </FluentButton>
                 </div>
@@ -56,13 +59,18 @@ else if (DisplayedUrls.Count > 1)
 @code {
     RenderFragment WriteUrl(DisplayedUrl displayedUrl)
     {
+        var text = GetDisplayText(displayedUrl);
+        var tooltip = GetTooltipText(displayedUrl);
         if (displayedUrl.Url != null)
         {
-            return @<a href="@displayedUrl.Url" target="_blank" title="@GetTooltipText(displayedUrl)" @onclick:stopPropagation="true" @onkeydown:stopPropagation="true">@displayedUrl.Text</a>;
+            // The text and tooltip are masked, but the link opens the full address.
+            return @<a href="@displayedUrl.Url" target="_blank" data-tooltip="@tooltip" @onclick:stopPropagation="true" @onkeydown:stopPropagation="true">@text</a>;
         }
         else
         {
-            return @<span title="@GetTooltipText(displayedUrl)">@displayedUrl.Text</span>;
+            // An address that can't be opened, such as tcp://, takes keyboard focus like a link would, so its full
+            // value can be read in the tooltip when the column cuts it short.
+            return @<span tabindex="0" data-tooltip="@tooltip" aria-label="@(text == tooltip ? tooltip : $"{text}: {tooltip}")">@text</span>;
         }
     }
 }

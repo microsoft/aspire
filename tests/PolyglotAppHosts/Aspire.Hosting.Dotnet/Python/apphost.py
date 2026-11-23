@@ -5,7 +5,7 @@ with create_builder() as builder:
     project = builder.add_dotnet_project(
         "project",
         "./src/Project/Project.csproj",
-        options={"LaunchProfileName": "https"},
+        options={"launchProfileName": "https"},
     )
     project.with_replicas(2)
     project.disable_forwarded_headers()

@@ -32,6 +32,7 @@ var funcApp = builder.AddAzureFunctionsProject<Projects.AzureFunctionsEndToEnd_F
     .WithReference(blob)
     .WithReference(queue);
 
+#pragma warning disable CS0618 // Preserve the staged Azure Functions end-to-end scenario until #21345.
 builder.AddProject<Projects.AzureFunctionsEndToEnd_ApiService>("apiservice")
     .WithExternalHttpEndpoints()
     .WithReference(eventHub).WaitFor(eventHub)
@@ -42,5 +43,6 @@ builder.AddProject<Projects.AzureFunctionsEndToEnd_ApiService>("apiservice")
     .WithReference(queue)
     .WithReference(blob)
     .WithReference(funcApp);
+#pragma warning restore CS0618
 
 builder.Build().Run();

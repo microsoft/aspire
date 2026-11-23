@@ -1,8 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <!-- MongoDB.EntityFrameworkCore does not support EF Core 10 yet, so only target net8.0 and net9.0 -->
-    <TargetFrameworks>$(DefaultTargetFramework);net9.0</TargetFrameworks>
+    <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
     <IsPackable>true</IsPackable>
     <PackageTags>$(ComponentEfCorePackageTags)  MongoDB</PackageTags>
     <PackageIconFullPath>$(SharedDir)MongoDB_300px.png</PackageIconFullPath>
@@ -29,10 +28,6 @@
     <PackageReference Include="Polly.Extensions" />
     <PackageReference Include="MongoDB.Driver.Core.Extensions.DiagnosticSources" />
     <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
-    <!-- Older MongoDB.Driver versions permit Snappier >= 1.0.0. Require the patched
-         version for consumers without changing the framework-specific provider versions.
-         https://github.com/advisories/GHSA-pggp-6c3x-2xmx -->
-    <PackageReference Include="Snappier" VersionOverride="1.3.1" />
   </ItemGroup>
 
 </Project>

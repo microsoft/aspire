@@ -7,6 +7,7 @@ using Aspire.Cli.Agents.Hooks;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
+using Aspire.Shared.Telemetry;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Commands;
@@ -24,7 +25,7 @@ namespace Aspire.Cli.Commands;
 /// The opt-out (<c>ASPIRE_CLI_TELEMETRY_OPTOUT</c>) and the suppression of the generic
 /// <c>aspire/cli/main</c> span for this command path are handled in
 /// <see cref="TelemetryManager"/> and <c>Program</c> before the host is built. When telemetry is
-/// opted out no reported provider is created, so <see cref="AspireCliTelemetry.StartReportedActivity(string, System.Diagnostics.ActivityKind)"/>
+/// opted out no reported provider is created, so <see cref="AspireTelemetryBase.StartReportedActivity(string, System.Diagnostics.ActivityKind)"/>
 /// returns <see langword="null"/> here and the command is a no-op.
 /// </remarks>
 internal sealed class AgentTelemetryCommand : BaseCommand
@@ -35,7 +36,6 @@ internal sealed class AgentTelemetryCommand : BaseCommand
     private readonly AgentTelemetryHook _hook;
     private readonly IEnvironment _environment;
     private readonly ConsoleEnvironment _console;
-    private readonly IServiceProvider _services;
     private readonly ILogger _logger;
     private readonly Option<bool> _hookOption = new(AgentTelemetryProtocol.HookOptionName) { Hidden = true };
     private readonly Option<bool> _drainOption = new(AgentTelemetryProtocol.DrainOptionName) { Hidden = true };
@@ -90,14 +90,13 @@ internal sealed class AgentTelemetryCommand : BaseCommand
     };
 
     public AgentTelemetryCommand(CommonCommandServices services, TelemetryManager telemetryManager,
-        AgentTelemetryHook hook, IEnvironment environment, ConsoleEnvironment console, IServiceProvider serviceProvider)
+        AgentTelemetryHook hook, IEnvironment environment, ConsoleEnvironment console)
         : base(AgentTelemetryProtocol.TelemetryCommandName, AgentCommandStrings.AgentTelemetryCommand_Description, services)
     {
         _telemetryManager = telemetryManager;
         _hook = hook;
         _environment = environment;
         _console = console;
-        _services = serviceProvider;
         _logger = services.LoggerFactory.CreateLogger<AgentTelemetryCommand>();
 
         // This command is an implementation detail of the agent hook scripts, not a user-facing
@@ -139,7 +138,7 @@ internal sealed class AgentTelemetryCommand : BaseCommand
                     _telemetryManager.Initialize();
                     if (_telemetryManager.HasAzureMonitor)
                     {
-                        await AgentTelemetryUploader.DrainAsync(TelemetryManager.GetTelemetryStoragePath(),
+                        await AgentTelemetryUploader.DrainAsync(AspireTelemetryExporter.GetTelemetryStoragePath("cli"),
                             AgentTelemetryUploader.LockPath, cancellationToken).ConfigureAwait(false);
                     }
                 }
@@ -190,13 +189,7 @@ internal sealed class AgentTelemetryCommand : BaseCommand
         // attached; in that case this is a no-op, which is the desired behavior.
         using (var activity = Telemetry.StartReportedActivity(TelemetryConstants.Activities.AgentTelemetry))
         {
-            if (activity is not null)
-            {
-                foreach (var (name, value) in tags)
-                {
-                    activity.SetTag(name, value);
-                }
-            }
+            Telemetry.SetActivityProperties(activity, tags.Select(static tag => new KeyValuePair<string, object?>(tag.Name, tag.Value)));
         }
 
         await Telemetry.CompleteInternalMicrosoftDiagnosticsAsync().ConfigureAwait(false);
@@ -206,7 +199,7 @@ internal sealed class AgentTelemetryCommand : BaseCommand
         }
         if (manager.HasAzureMonitor)
         {
-            await AgentTelemetryUploader.EnsureRunningAsync(_services).ConfigureAwait(false);
+            AgentTelemetryUploader.EnsureRunning();
         }
     }
 

@@ -1,6 +1,8 @@
 ﻿parameters: {}
 secrets: {}
 config:
+  env_dashboard:
+    ASPIRE_DASHBOARD_TELEMETRY_OPTOUT: "true"
   myapp:
     BOOL_TRUE: "true"
     BOOL_FALSE: "false"

@@ -12,6 +12,12 @@ namespace Aspire.Hosting;
 /// </summary>
 internal static class BlazorDotNetCliRunner
 {
+    public static string GetExecutablePath() =>
+        GetExecutablePath(Environment.GetEnvironmentVariable("DOTNET_HOST_PATH"));
+
+    internal static string GetExecutablePath(string? dotnetHostPath) =>
+        dotnetHostPath is { Length: > 0 } ? dotnetHostPath : "dotnet";
+
     public static async Task<BlazorDotNetCliResult> RunAsync(
         string projectPath,
         string command,
@@ -19,9 +25,23 @@ internal static class BlazorDotNetCliRunner
         bool machineReadableOutput,
         CancellationToken cancellationToken)
     {
-        var executablePath = Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") is { Length: > 0 } dotnetHostPath
-            ? dotnetHostPath
-            : "dotnet";
+        return await RunAsync(
+            GetExecutablePath(),
+            projectPath,
+            command,
+            arguments,
+            machineReadableOutput,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    public static async Task<BlazorDotNetCliResult> RunAsync(
+        string executablePath,
+        string projectPath,
+        string command,
+        IReadOnlyList<string> arguments,
+        bool machineReadableOutput,
+        CancellationToken cancellationToken)
+    {
         var argumentList = new List<string>(arguments.Count + 2)
         {
             command,

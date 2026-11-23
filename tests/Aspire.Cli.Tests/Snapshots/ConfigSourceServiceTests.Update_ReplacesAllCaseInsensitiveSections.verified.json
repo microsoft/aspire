@@ -1,0 +1,19 @@
+﻿{
+  "configSource": {
+    "repository": "https://git.example/organization/config",
+    "path": "teams/platform.json",
+    "appliedVersion": "version-2"
+  },
+  "SKILLSOURCES": {
+    "first": {
+      "repository": "example/updated"
+    }
+  },
+  "skillSources": {
+    "second": {
+      "repository": "example/second",
+      "openCodeV1Catalog": null,
+      "custom": "remote"
+    }
+  }
+}

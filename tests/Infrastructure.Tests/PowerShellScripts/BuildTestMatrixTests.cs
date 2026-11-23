@@ -57,6 +57,28 @@ public class BuildTestMatrixTests : IDisposable
 
     [Fact]
     [RequiresTools(["pwsh"])]
+    public async Task PreservesProjectLevelNonBlockingTestFailures()
+    {
+        var artifactsDir = Path.Combine(_workspace.Path, "artifacts");
+        Directory.CreateDirectory(artifactsDir);
+
+        TestDataBuilder.CreateTestsMetadataJson(
+            Path.Combine(artifactsDir, "NonGating.tests-metadata.json"),
+            projectName: "NonGating",
+            testProjectPath: "tests/NonGating/NonGating.csproj",
+            nonBlockingTestFailures: true);
+
+        var outputFile = Path.Combine(_workspace.Path, "matrix.json");
+
+        var result = await RunScript(artifactsDir, outputFile);
+
+        result.EnsureSuccessful();
+        var entry = Assert.Single(ParseCanonicalMatrix(outputFile).Tests);
+        Assert.True(entry.Properties["nonBlockingTestFailures"]);
+    }
+
+    [Fact]
+    [RequiresTools(["pwsh"])]
     public async Task GeneratesMatrixFromMultipleProjects()
     {
         // Arrange

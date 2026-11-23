@@ -19,6 +19,7 @@ From your AppHost directory, add the `Aspire.Hosting.Rust` integration with the 
 
 ```bash
 aspire add Aspire.Hosting.Rust
+aspire add Aspire.Hosting.Dotnet
 ```
 
 ## Usage example
@@ -34,7 +35,7 @@ var rustApi = builder.AddRustApp("api", "../rust-api")
     .WithHttpEndpoint(env: "PORT")
     .WithExternalHttpEndpoints();
 
-builder.AddProject<Projects.Frontend>("frontend")
+builder.AddDotnetProject("frontend", "../Frontend/Frontend.csproj")
     .WithReference(rustApi)
     .WaitFor(rustApi);
 

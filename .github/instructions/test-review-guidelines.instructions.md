@@ -1,3 +1,7 @@
+---
+applyTo: "tests/**/*.cs"
+---
+
 # Test Review Guidelines: Flaky Test Patterns
 
 When reviewing test code or writing new tests, watch for these common patterns that lead to flaky tests. These patterns apply broadly across the Aspire test suite and are useful for **code review**, **test authoring**, and **root cause analysis** of intermittent failures.

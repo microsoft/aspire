@@ -4,37 +4,37 @@
     <body>
       <trans-unit id="ReconnectFailedText">
         <source>Failed to rejoin.&lt;br /&gt;Please retry or reload the page.</source>
-        <target state="new">Failed to rejoin.&lt;br /&gt;Please retry or reload the page.</target>
+        <target state="translated">无法重新加入。&lt;br /&gt;请重试或重新加载页面。</target>
         <note />
       </trans-unit>
       <trans-unit id="ReconnectFirstAttemptText">
         <source>Rejoining the server...</source>
-        <target state="new">Rejoining the server...</target>
+        <target state="translated">正在重新加入服务器...</target>
         <note />
       </trans-unit>
       <trans-unit id="ReconnectRepeatedAttemptText">
         <source>Rejoin failed... trying again in &lt;span id="components-seconds-to-next-attempt"&gt;&lt;/span&gt; seconds.</source>
-        <target state="new">Rejoin failed... trying again in &lt;span id="components-seconds-to-next-attempt"&gt;&lt;/span&gt; seconds.</target>
+        <target state="translated">重新加入失败... 请在 &lt;span id="components-seconds-to-next-attempt"&gt;&lt;/span&gt; 秒后重试。</target>
         <note />
       </trans-unit>
       <trans-unit id="ReconnectRetryButtonText">
         <source>Retry</source>
-        <target state="new">Retry</target>
+        <target state="translated">重试</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceServiceReconnectDisconnectedText">
         <source>Lost connection to the AppHost. Attempting to reconnect...</source>
-        <target state="new">Lost connection to the AppHost. Attempting to reconnect...</target>
+        <target state="translated">已丢失与 AppHost 的连接。正在尝试重新连接...</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceServiceReconnectRetryButtonText">
         <source>Retry</source>
-        <target state="new">Retry</target>
+        <target state="translated">重试</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceServiceReconnectUnsupportedText">
         <source>{0} app requires dashboard {2} or later.&lt;br /&gt;&lt;br /&gt;See &lt;a href="{1}" target="_blank" rel="noreferrer noopener"&gt;upgrade Aspire&lt;/a&gt; for more information.</source>
-        <target state="new">{0} app requires dashboard {2} or later.&lt;br /&gt;&lt;br /&gt;See &lt;a href="{1}" target="_blank" rel="noreferrer noopener"&gt;upgrade Aspire&lt;/a&gt; for more information.</target>
+        <target state="translated">{0} 应用需要 仪表板 {2} 或更高版本。&lt;br /&gt;&lt;br /&gt;有关详细信息 &lt;a href="{1}" target="_blank" rel="noreferrer noopener"&gt;请参阅升级Aspire&lt;/a&gt;。</target>
         <note />
       </trans-unit>
     </body>

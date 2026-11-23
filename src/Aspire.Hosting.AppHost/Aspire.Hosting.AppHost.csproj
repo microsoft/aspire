@@ -67,19 +67,19 @@
 
   <Target Name="IncludeTasksInPackage"
           DependsOnTargets="BuildAllTasksTFMs">
-    <!-- Get the output paths for the tasks project for both net8.0 and net472 -->
-    <MSBuild Projects="..\Aspire.Hosting.Tasks\Aspire.Hosting.Tasks.csproj" Targets="GetTargetPath" Properties="TargetFramework=net8.0">
-      <Output TaskParameter="TargetOutputs" PropertyName="AspireHostingTasksNet80File" />
+    <!-- Get the output paths for the tasks project for both net10.0 and net472 -->
+    <MSBuild Projects="..\Aspire.Hosting.Tasks\Aspire.Hosting.Tasks.csproj" Targets="GetTargetPath" Properties="TargetFramework=net10.0">
+      <Output TaskParameter="TargetOutputs" PropertyName="AspireHostingTasksNet100File" />
     </MSBuild>
     <MSBuild Projects="..\Aspire.Hosting.Tasks\Aspire.Hosting.Tasks.csproj" Targets="GetTargetPath" Properties="TargetFramework=net472">
       <Output TaskParameter="TargetOutputs" PropertyName="AspireHostingTasksNet472File" />
     </MSBuild>
 
-    <Error Condition="'$(AspireHostingTasksNet80File)' == ''" Text="Could not find Aspire.Hosting.Tasks.dll for net8.0." />
+    <Error Condition="'$(AspireHostingTasksNet100File)' == ''" Text="Could not find Aspire.Hosting.Tasks.dll for net10.0." />
     <Error Condition="'$(AspireHostingTasksNet472File)' == ''" Text="Could not find Aspire.Hosting.Tasks.dll for net472." />
 
     <ItemGroup>
-      <None Include="$(AspireHostingTasksNet80File)" Pack="True" PackagePath="tools/net8.0" />
+      <None Include="$(AspireHostingTasksNet100File)" Pack="True" PackagePath="tools/net10.0" />
       <None Include="$(AspireHostingTasksNet472File)" Pack="True" PackagePath="tools/net472" />
     </ItemGroup>
   </Target>

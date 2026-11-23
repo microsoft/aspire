@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREMCP001
 #pragma warning disable ASPIRETERMINAL001
 
 using System.Globalization;
@@ -340,7 +339,7 @@ public static class PostgresBuilderExtensions
     ///    .WithPgWeb();
     /// var db = postgres.AddDatabase("db");
     ///
-    /// var api = builder.AddProject&lt;Projects.Api&gt;("api")
+    /// var api = builder.AddDotnetProject("api", "../Api/Api.csproj")
     ///   .WithReference(db);
     ///
     /// builder.Build().Run();
@@ -476,13 +475,11 @@ public static class PostgresBuilderExtensions
             {
                 resourceBuilder.WithRelationship(postgresResource, KnownRelationshipTypes.Manages);
 
-#pragma warning disable CS0618 // DisplayOrder is obsolete but must still be set to prioritize this URL.
                 resourceBuilder.ApplicationBuilder.CreateResourceBuilder(postgresResource).WithUrlForEndpoint(endpoint, url =>
                 {
                     url.DisplayText = displayText;
                     url.DisplayOrder = 1;
                 });
-#pragma warning restore CS0618
             }
 
             return Task.CompletedTask;

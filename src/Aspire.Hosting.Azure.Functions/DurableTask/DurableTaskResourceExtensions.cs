@@ -153,9 +153,7 @@ public static class DurableTaskResourceExtensions
                .WithUrlForEndpoint("dashboard", c =>
                {
                    c.DisplayText = "Manage";
-#pragma warning disable CS0618 // DisplayOrder is obsolete but must still be set to prioritize this URL.
                    c.DisplayOrder = 1;
-#pragma warning restore CS0618
                })
                .WithAnnotation(new ContainerImageAnnotation
                {
@@ -236,7 +234,7 @@ public static class DurableTaskResourceExtensions
                 var notifications = e.Services.GetRequiredService<ResourceNotificationService>();
 
                 var url = builder.Resource.IsEmulator
-                    ? await ReferenceExpression.Create($"{r.Parent.EmulatorDashboardEndpoint}/subscriptions/default/schedulers/default/taskhubs/{r.TaskHubName}").GetValueAsync(ct).ConfigureAwait(false)
+                    ? await ReferenceExpression.Create($"{r.Parent.EmulatorDashboardEndpoint}/subscriptions/local/schedulers/emulator/taskhubs/{r.TaskHubName}/orchestrations").GetValueAsync(ct).ConfigureAwait(false)
                     : null;
 
                 await notifications.PublishUpdateAsync(r, snapshot => snapshot with

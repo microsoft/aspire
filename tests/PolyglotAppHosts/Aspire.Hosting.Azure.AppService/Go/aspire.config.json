@@ -3,11 +3,9 @@
     "path": "apphost.go",
     "language": "go"
   },
-  "features": {
-    "experimentalPolyglotGo": true
-  },
   "packages": {
     "Aspire.Hosting.Azure.Provisioning.AppService": "",
-    "Aspire.Hosting.Azure.AppService": ""
+    "Aspire.Hosting.Azure.AppService": "",
+    "Aspire.Hosting.Dotnet": ""
   }
 }

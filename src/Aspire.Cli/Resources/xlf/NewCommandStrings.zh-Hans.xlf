@@ -2,6 +2,11 @@
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="zh-Hans" original="../NewCommandStrings.resx">
     <body>
+      <trans-unit id="BuiltInTemplates">
+        <source>Built-in templates</source>
+        <target state="translated">内置模板</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ChannelOptionDescription">
         <source>Channel to use for templates (stable, daily)</source>
         <target state="translated">用于模板的频道(稳定、每日)</target>
@@ -12,29 +17,39 @@
         <target state="translated">用于模板的频道(稳定、暂存、每日)</target>
         <note />
       </trans-unit>
+      <trans-unit id="ConfiguredTemplateConflictingOptions">
+        <source>Templates from configured sources cannot be combined with --source, --version, --channel, or --language.</source>
+        <target state="translated">来自已配置源的模板不能与 --source、--version、--channel 或 --language 组合使用。</target>
+        <note />
+      </trans-unit>
       <trans-unit id="CreateProjectDirectlyInSelectedFolderChoice">
         <source>Directly in the selected folder</source>
-        <target state="new">Directly in the selected folder</target>
+        <target state="translated">直接在所选文件夹中</target>
         <note />
       </trans-unit>
       <trans-unit id="CreateProjectNameSubdirectoryChoice">
         <source>In a subdirectory named '{0}' in the selected folder</source>
-        <target state="new">In a subdirectory named '{0}' in the selected folder</target>
+        <target state="translated">在所选文件夹内名为“{0}”的子目录中</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
         <source>Create a new app from an Aspire starter template</source>
-        <target state="needs-review-translation">创建新的 Aspire 项目。</target>
+        <target state="translated">使用 Aspire 初学者模板创建新应用</target>
         <note />
       </trans-unit>
       <trans-unit id="EnterTheOutputPath">
         <source>Enter the output path</source>
-        <target state="new">Enter the output path</target>
+        <target state="translated">输入输出路径</target>
         <note />
       </trans-unit>
       <trans-unit id="EnterTheProjectName">
         <source>Enter the project name</source>
         <target state="translated">输入项目名称</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InvalidConfiguredTemplateSource">
+        <source>Expected a source object with an absolute 'path', or a 'repository' and optional 'ref'/'path'. Use 'aspire template source add' to configure a source.</source>
+        <target state="translated">应为一个源对象，包含绝对 "path"，或包含 "repository" 及可选的 "ref"/"path"。使用 "aspire template source add" 配置源。</target>
         <note />
       </trans-unit>
       <trans-unit id="InvalidProjectName">
@@ -44,57 +59,82 @@
       </trans-unit>
       <trans-unit id="LanguageOptionDescription">
         <source>The programming language for the AppHost</source>
-        <target state="new">The programming language for the AppHost</target>
+        <target state="translated">适用于 AppHost 的编程语言</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="LocalTemplateCreationFailed">
+        <source>Could not create the local template ({0}): {1}</source>
+        <target state="translated">无法创建本地模板({0}): {1}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="LocalTemplateLoadFailed">
+        <source>Could not load the local template: {0}</source>
+        <target state="translated">无法加载本地模板: {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="LocalTemplateSelectionRequiresInteraction">
+        <source>The directory contains multiple templates. Run interactively to select one, or point --template-path at a single template directory.</source>
+        <target state="translated">该目录包含多个模板。请以交互方式运行以选择一个模板，或者将 --template-path 指向单个模板目录。</target>
         <note />
       </trans-unit>
       <trans-unit id="NameArgumentDescription">
         <source>The name of the project to create</source>
-        <target state="needs-review-translation">要创建的项目的名称。</target>
+        <target state="translated">要创建的项目的名称</target>
         <note />
       </trans-unit>
       <trans-unit id="NoChannelFoundMatching">
         <source>No channel found matching '{0}'. Valid options are: {1}.</source>
-        <target state="new">No channel found matching '{0}'. Valid options are: {1}.</target>
+        <target state="translated">找不到与“{0}”匹配的通道。有效选项为: {1}。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NoConfiguredTemplateSources">
+        <source>No usable template sources are configured. Use 'aspire template source add &lt;name&gt;' with '--path' or '--repository'. Sources are stored globally.</source>
+        <target state="translated">未配置可用的模板源。使用 "aspire template source add &lt;name&gt;" 并指定 "--path" 或 "--repository"。源将全局存储。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NoLocalTemplatesFound">
+        <source>No .NET templates were found in '{0}'. Expected a .template.config/template.json file in the directory or one of its subdirectories.</source>
+        <target state="translated">在 '{0}' 中找不到 .NET 模板。该目录或其子目录中应包含 .template.config/template.json 文件。</target>
         <note />
       </trans-unit>
       <trans-unit id="NoMatchingLocalTemplatePackage">
         <source>No matching local Aspire.ProjectTemplates package was found for Aspire CLI version '{0}'. Build and stage matching packages with localhive.sh (macOS/Linux) or localhive.ps1 (Windows), set ASPIRE_CLI_PACKAGES to a directory containing the package, or explicitly choose feed-backed templates with --channel, --source, or --version.</source>
-        <target state="new">No matching local Aspire.ProjectTemplates package was found for Aspire CLI version '{0}'. Build and stage matching packages with localhive.sh (macOS/Linux) or localhive.ps1 (Windows), set ASPIRE_CLI_PACKAGES to a directory containing the package, or explicitly choose feed-backed templates with --channel, --source, or --version.</target>
+        <target state="translated">找不到与 Aspire CLI 版本“{0}”匹配的本地 Aspire.ProjectTemplates 包。使用 localhive.sh (macOS/Linux)或 localhive.ps1 (Windows)生成和暂存匹配包，将 ASPIRE_CLI_PACKAGES 设置为包含该包的目录，或使用 --channel、--source 或 --version 显式选择源支持的模板。</target>
         <note />
       </trans-unit>
       <trans-unit id="NoPackageChannelsAvailable">
         <source>No package channels are available.</source>
-        <target state="new">No package channels are available.</target>
+        <target state="translated">没有可用的包通道。</target>
         <note />
       </trans-unit>
       <trans-unit id="NoTemplateVersionsFoundInChannel">
         <source>No template versions found in channel '{0}'.</source>
-        <target state="new">No template versions found in channel '{0}'.</target>
+        <target state="translated">在频道“{0}”中找不到模板版本。</target>
         <note />
       </trans-unit>
       <trans-unit id="NonInteractiveTemplateRequired">
         <source>A template must be specified when running in non-interactive mode. Use 'aspire new &lt;template&gt;'.</source>
-        <target state="new">A template must be specified when running in non-interactive mode. Use 'aspire new &lt;template&gt;'.</target>
+        <target state="translated">在非交互模式下运行时，必须指定模板。使用 'aspire new &lt;template&gt;'。</target>
         <note />
       </trans-unit>
       <trans-unit id="OutputArgumentDescription">
         <source>The output path for the project</source>
-        <target state="needs-review-translation">项目的输出路径。</target>
+        <target state="translated">项目的输出路径</target>
         <note />
       </trans-unit>
       <trans-unit id="OutputDirectoryNotEmptyNonInteractive">
         <source>The output directory '{0}' already exists and is not empty. Specify --output with a different location.</source>
-        <target state="new">The output directory '{0}' already exists and is not empty. Specify --output with a different location.</target>
+        <target state="translated">输出目录“{0}”已存在且不为空。为 --output 指定其他位置。</target>
         <note />
       </trans-unit>
       <trans-unit id="OutputDirectoryNotEmptyInteractive">
         <source>The output directory '{0}' already exists and is not empty. Specify a different location.</source>
-        <target state="new">The output directory '{0}' already exists and is not empty. Specify a different location.</target>
+        <target state="translated">输出目录 '{0}' 已存在且不为空。请指定其他位置。</target>
         <note />
       </trans-unit>
       <trans-unit id="OutputPathContainsInvalidCharacters">
         <source>The output path '{0}' contains invalid characters.</source>
-        <target state="new">The output path '{0}' contains invalid characters.</target>
+        <target state="translated">输出路径“{0}”包含无效字符。</target>
         <note />
       </trans-unit>
       <trans-unit id="ResolvingTemplateVersion">
@@ -114,22 +154,232 @@
       </trans-unit>
       <trans-unit id="SelectProjectCreationLocation">
         <source>Where do you want the project to be created?</source>
-        <target state="new">Where do you want the project to be created?</target>
+        <target state="translated">你希望在何处创建项目?</target>
         <note />
       </trans-unit>
       <trans-unit id="SourceArgumentDescription">
         <source>The NuGet source to use for the project templates</source>
-        <target state="needs-review-translation">要用于项目模板的 NuGet 源。</target>
+        <target state="translated">要用于项目模板的 NuGet 源</target>
         <note />
       </trans-unit>
       <trans-unit id="SourceDirectoryNotFound">
         <source>The local NuGet source directory '{0}' does not exist.</source>
-        <target state="new">The local NuGet source directory '{0}' does not exist.</target>
+        <target state="translated">本地 NuGet 源目录“{0}”不存在。</target>
         <note />
       </trans-unit>
       <trans-unit id="SourceWithCredentialsCannotBePersisted">
         <source>The --source URL includes credentials, a query string, or a fragment and cannot be written to the project's NuGet.config. Configure credentials with NuGet credential providers or user-level NuGet configuration, then pass the feed URL without embedded secrets.</source>
-        <target state="new">The --source URL includes credentials, a query string, or a fragment and cannot be written to the project's NuGet.config. Configure credentials with NuGet credential providers or user-level NuGet configuration, then pass the feed URL without embedded secrets.</target>
+        <target state="translated">--source URL 包括凭据、查询字符串或片段，并且无法写入项目的 NuGet.config。使用 NuGet 凭据提供程序或用户级 NuGet 配置来配置凭据，然后传递不包含嵌入机密的源 URL。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateCommandDescription">
+        <source>Manage project templates.</source>
+        <target state="translated">管理项目模板。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateDirectoryNotFound">
+        <source>The template directory '{0}' does not exist.</source>
+        <target state="translated">模板目录 '{0}' 不存在。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplatePathConflictingOptions">
+        <source>--template-path and --template-repository require non-empty values and cannot be combined with a template subcommand, --source, --version, --channel, or --language.</source>
+        <target state="translated">--template-path 和 --template-repository 的值不能为空，并且不能与模板子命令、--source、--version、--channel 或 --language 结合使用。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplatePathOptionDescription">
+        <source>Path to an unpacked .NET template package directory (relative to the repository when --template-repository is specified)</source>
+        <target state="translated">指向已解包的 .NET 模板包目录的路径(指定 --template-repository 时，为相对于存储库的路径)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateRepositoryGitExited">
+        <source>Git failed with exit code {0}: {1}</source>
+        <target state="translated">Git 失败，退出代码 {0}: {1}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateRepositoryGitFailed">
+        <source>Could not access the template repository: {0}</source>
+        <target state="translated">无法访问模板存储库: {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateRepositoryGitUnavailable">
+        <source>Git could not be started. Install Git and ensure it is on PATH.</source>
+        <target state="translated">无法启动 Git。请安装 Git，并确保其位于 PATH 中。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateRepositoryOptionDescription">
+        <source>Clone a Git repository containing templates; --template-path is relative to its root</source>
+        <target state="translated">克隆包含模板的 Git 存储库；--template-path 是相对于其根目录的路径</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateRepositoryPathInvalid">
+        <source>Template repository paths must be relative and stay within the repository without traversing symbolic links.</source>
+        <target state="translated">模板存储库路径必须是相对路径，并且必须位于存储库内，而不能跨越符号链接。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateRepositoryRefNotFound">
+        <source>Could not resolve template repository ref '{0}' to a commit SHA. Specify a branch, tag, or full commit SHA.</source>
+        <target state="translated">无法将模板存储库引用 '{0}' 解析为提交 SHA。请指定分支、标记或完整的提交 SHA。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateRepositoryRefOptionDescription">
+        <source>Template repository branch, tag, or full commit SHA (requires --template-repository; defaults to the remote HEAD)</source>
+        <target state="translated">模板存储库的分支、标记或完整提交 SHA (需要 --template-repository；默认为远程 HEAD)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateRepositoryRefRequiresRepository">
+        <source>--template-repository-ref requires --template-repository and a non-empty ref value.</source>
+        <target state="translated">--template-repository-ref 需要同时指定 --template-repository 和非空的引用值。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceAddDescription">
+        <source>Add a named template source to global configuration after confirming you trust it.</source>
+        <target state="translated">确认信任后，将命名模板源添加到全局配置中。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceAdded">
+        <source>Template source '{0}' added to global configuration.</source>
+        <target state="translated">模板源“{0}”已添加到全局配置。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceAlreadyExists">
+        <source>A template source with this name already exists. Remove it before adding a replacement.</source>
+        <target state="translated">已存在使用此名称的模板源。请先将其移除，再添加替换项。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceCannotExtendString">
+        <source>This source is a string. Delete it with 'aspire config delete {0} --global' before setting object fields.</source>
+        <target state="translated">此源是字符串。在设置对象字段之前，请使用 "aspire config delete {0} --global" 将其删除。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceCommandDescription">
+        <source>Manage global template sources.</source>
+        <target state="translated">管理全局模板源。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceConfigurationHeader">
+        <source>Configuration</source>
+        <target state="translated">配置</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceDisplayNameInvalid">
+        <source>Expected a display name string without control characters, or null to use the source alias.</source>
+        <target state="translated">应为不含控制字符的显示名称字符串，或为 null 以使用源别名。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceExplanation">
+        <source>One or more template sources are configured. A template source lets an organization share Aspire templates to customize your development experience.</source>
+        <target state="translated">配置了一个或多个模板源。模板源允许组织共享 Aspire 模板，以自定义你的开发体验。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceInvalidRepository">
+        <source>Expected an HTTPS or SSH Git repository URL without passwords, tokens, queries, or fragments. SSH usernames are allowed.</source>
+        <target state="translated">应为不含密码、令牌、查询或片段的 HTTPS 或 SSH Git 存储库 URL。允许使用 SSH 用户名。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceLegacyConfiguration">
+        <source>Template sources require aspire.config.json. Run 'aspire config info' to migrate your legacy global configuration, then retry.</source>
+        <target state="translated">模板源需要 aspire.config.json。运行 "aspire config info" 迁移旧版全局配置，然后重试。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceListDescription">
+        <source>List named template sources without discovering templates.</source>
+        <target state="translated">列出命名模板源而不发现模板。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceListEmpty">
+        <source>No template sources are configured. Use 'aspire template source add' to add one.</source>
+        <target state="translated">未配置模板源。使用 "aspire template source add" 添加一个。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceMissingLocation">
+        <source>Specify an absolute 'path' for a local source or 'repository' for a Git source. 'ref' requires 'repository'.</source>
+        <target state="translated">为本地源指定绝对 "path"，或为 Git 源指定 "repository"。"ref" 需要 "repository"。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceNameDescription">
+        <source>The name of the template source.</source>
+        <target state="translated">模板源的名称。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceNameRequired">
+        <source>Template source names must be 1-64 ASCII letters, digits, dots, hyphens, or underscores, starting with a letter or digit.</source>
+        <target state="translated">模板源名称必须是 1-64 个 ASCII 字母、数字、点、连字符或下划线，以字母或数字开头。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceNotFound">
+        <source>Template source '{0}' was not found in global configuration.</source>
+        <target state="translated">在全局配置中找不到模板源“{0}”。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourcePathDescription">
+        <source>An absolute local template directory, or a repository-relative directory when --repository is specified.</source>
+        <target state="translated">绝对本地模板目录；若指定 --repository，则为相对于存储库的目录。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceReadFailed">
+        <source>Could not read global template sources. Check the configuration file's JSON format and file permissions.</source>
+        <target state="translated">无法读取全局模板源。检查配置文件的 JSON 格式和文件权限。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceRefDescription">
+        <source>A Git branch, tag, or full commit SHA (requires --repository; defaults to HEAD).</source>
+        <target state="translated">Git 分支、标记或完整提交 SHA (需要 --repository；默认为 HEAD)。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceRemoveDescription">
+        <source>Remove a named template source from global configuration.</source>
+        <target state="translated">从全局配置中删除命名模板源。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceRemoved">
+        <source>Template source '{0}' removed from global configuration.</source>
+        <target state="translated">模板源“{0}”已从全局配置中移除。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceRepositoryDescription">
+        <source>An HTTPS or SSH Git repository URL containing templates.</source>
+        <target state="translated">包含模板的 HTTPS 或 SSH Git 存储库 URL。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceSearchFailed">
+        <source>Could not search template source '{0}': {1}</source>
+        <target state="translated">无法搜索模板源“{0}”: {1}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceSettingInvalid">
+        <source>Invalid template setting '{0}': {1}</source>
+        <target state="translated">模板设置“{0}”无效: {1}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceStringRequired">
+        <source>Expected a nonempty string without control characters.</source>
+        <target state="translated">应为不含控制字符的非空字符串。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceTrustPrompt">
+        <source>Do you trust template source '{0}' ({1})?</source>
+        <target state="translated">你信任模板源“{0}”({1})吗?</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceUnknownField">
+        <source>Unknown source field. Use 'path', 'repository', 'ref', or 'displayName'.</source>
+        <target state="translated">源字段未知。使用 'path'、'repository'、'ref' 或 'displayName'。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceWriteFailed">
+        <source>Could not update global template sources. Check the configuration file's JSON format and file permissions.</source>
+        <target state="translated">无法更新全局模板源。检查配置文件的 JSON 格式和文件权限。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourceYesOptionDescription">
+        <source>Trust the template source and skip confirmation.</source>
+        <target state="translated">信任模板源，并跳过确认。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplateSourcesMustBeObject">
+        <source>The global 'templateSources' setting must be an object containing named template sources.</source>
+        <target state="translated">全局 "templateSources" 设置必须是包含命名模板源的对象。</target>
         <note />
       </trans-unit>
       <trans-unit id="UsePrereleaseTemplates">
@@ -139,7 +389,7 @@
       </trans-unit>
       <trans-unit id="VersionArgumentDescription">
         <source>The version of the project templates to use</source>
-        <target state="needs-review-translation">要使用的项目模板的版本。</target>
+        <target state="translated">要使用的项目模板的版本</target>
         <note />
       </trans-unit>
     </body>

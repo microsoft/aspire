@@ -4,7 +4,8 @@
 <FluentButton Appearance="ButtonAppearance.Default"
               Class="pause-incoming-data-button"
               Disabled="@Disabled"
-              Title="@(IsPaused ? Loc[nameof(ControlsStrings.ResumeButtonTitle)] : Loc[nameof(ControlsStrings.PauseButtonTitle)])"
+              data-tooltip="@(IsPaused ? Loc[nameof(ControlsStrings.ResumeButtonTitle)] : Loc[nameof(ControlsStrings.PauseButtonTitle)])"
+              aria-label="@(IsPaused ? Loc[nameof(ControlsStrings.ResumeButtonTitle)] : Loc[nameof(ControlsStrings.PauseButtonTitle)])"
               OnClick="@OnTogglePauseCoreAsync">
     @if (IsPaused)
     {

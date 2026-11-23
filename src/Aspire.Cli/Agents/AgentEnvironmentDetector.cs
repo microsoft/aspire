@@ -9,15 +9,16 @@ namespace Aspire.Cli.Agents;
 internal sealed class AgentEnvironmentDetector(IEnumerable<IAgentEnvironmentScanner> scanners) : IAgentEnvironmentDetector
 {
     /// <inheritdoc />
-    public async Task<AgentEnvironmentApplicator[]> DetectAsync(
+    public async Task<AgentEnvironment> DetectAsync(
         AgentEnvironmentScanContext context,
         CancellationToken cancellationToken)
     {
+        var environments = AgentEnvironment.None;
         foreach (var scanner in scanners)
         {
-            await scanner.ScanAsync(context, cancellationToken);
+            environments |= await scanner.ScanAsync(context, cancellationToken);
         }
 
-        return [.. context.Applicators];
+        return environments;
     }
 }

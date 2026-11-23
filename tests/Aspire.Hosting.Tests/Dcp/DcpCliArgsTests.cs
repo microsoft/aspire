@@ -43,12 +43,23 @@ public class DcpCliArgsTests
     }
 
     [Fact]
+    public void TestDcpContainerTunnelBaseImagePopulatesConfig()
+    {
+        var builder = DistributedApplication.CreateBuilder([
+            "--dcp-container-tunnel-base-image", "example.com/tunnel-base:custom",
+            ]);
+
+        Assert.Equal("example.com/tunnel-base:custom", builder.Configuration["DcpPublisher:ContainerTunnelBaseImage"]);
+    }
+
+    [Fact]
     public void TestDcpOptionsPopulated()
     {
         var builder = DistributedApplication.CreateBuilder(
             [
             "--dcp-cli-path", "/not/a/valid/path",
             "--dcp-container-runtime", "not-a-valid-container-runtime",
+            "--dcp-container-tunnel-base-image", "example.com/tunnel-base:custom",
             "--dcp-dependency-check-timeout", "42",
             "--dcp-dashboard-path", "/not/a/valid/path"
             ]);
@@ -57,9 +68,22 @@ public class DcpCliArgsTests
         var dcpOptions = app.Services.GetRequiredService<IOptions<DcpOptions>>().Value;
 
         Assert.Equal("not-a-valid-container-runtime", dcpOptions.ContainerRuntime);
+        Assert.Equal("example.com/tunnel-base:custom", dcpOptions.ContainerTunnelBaseImage);
         Assert.Equal(42, dcpOptions.DependencyCheckTimeout);
         Assert.Equal("/not/a/valid/path", dcpOptions.CliPath);
         Assert.Equal("/not/a/valid/path", dcpOptions.DashboardPath);
+    }
+
+    [Fact]
+    public void KnownConfigContainerTunnelBaseImagePopulatesDcpOptions()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        builder.Configuration[KnownConfigNames.ContainerTunnelBaseImage] = "example.com/tunnel-base:custom";
+
+        using var app = builder.Build();
+        var dcpOptions = app.Services.GetRequiredService<IOptions<DcpOptions>>().Value;
+
+        Assert.Equal("example.com/tunnel-base:custom", dcpOptions.ContainerTunnelBaseImage);
     }
 
     [Fact]

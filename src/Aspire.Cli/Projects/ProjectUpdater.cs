@@ -6,9 +6,12 @@ using System.Globalization;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Xml;
+using System.Xml.Linq;
 using Aspire.Cli.Configuration;
+using Aspire.Cli.Diagnostics;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
@@ -26,20 +29,108 @@ internal interface IProjectUpdater
     Task<ProjectUpdateResult> UpdateProjectAsync(UpdatePackagesContext context, CancellationToken cancellationToken = default);
 }
 
-internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDotNetCliRunner runner, IInteractionService interactionService, IMemoryCache cache, CliExecutionContext executionContext, FallbackProjectParser fallbackParser) : IProjectUpdater
+internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDotNetCliRunner runner, IInteractionService interactionService, IMemoryCache cache, CliExecutionContext executionContext, FallbackProjectParser fallbackParser, BundleNuGetService nuGetService, FileLoggerProvider fileLoggerProvider) : IProjectUpdater
 {
     public async Task<ProjectUpdateResult> UpdateProjectAsync(UpdatePackagesContext context, CancellationToken cancellationToken = default)
     {
         var projectFile = context.AppHostFile;
         var channel = context.Channel;
-        logger.LogDebug("Fetching '{AppHostPath}' items and properties.", projectFile.FullName);
-
-        var (projectSteps, fallbackUsed) = await interactionService.ShowStatusAsync(UpdateCommandStrings.AnalyzingProjectStatus, () => GetUpdateStepsAsync(projectFile, channel, cancellationToken));
-        var projectUpdateSteps = projectSteps.ToArray();
-        var updateSteps = projectUpdateSteps.Concat(context.AdditionalUpdateSteps).ToArray();
-
-        if (updateSteps.Length == 0)
+        if (context.DryRun && (!context.HasExplicitChannel || channel.Type != PackageChannelType.Explicit))
         {
+            throw new ProjectUpdaterException(UpdateCommandStrings.DryRunRequiresChannel);
+        }
+        using var dryRunRestore = context.DryRun ? new DryRunRestoreDirectory(executionContext.AspireHomeDirectory) : null;
+        logger.LogDebug("Fetching '{AppHostPath}' items and properties.", projectFile.FullName);
+        var ambientSettings = nuGetService.GetNuGetSettings(projectFile.DirectoryName!, cancellationToken);
+        var originalConfigurations = new Dictionary<string, byte[]?>(StringComparers.FileSystemPath);
+        foreach (var path in ambientSettings.ConfigPaths)
+        {
+            var normalizedPath = PathNormalizer.ResolveToFilesystemPath(path);
+            originalConfigurations.TryAdd(normalizedPath,
+                await DotNetAppHostUpdateTransaction.ReadAsync(normalizedPath, cancellationToken));
+        }
+
+        // Planning uses the current project's ambient policy and cache. Only the candidate
+        // restore must work cold; hiding the current SDK here also hides its imported declarations.
+        var restoreConfiguration = await ReadRestoreConfigurationForUpdateAsync(
+            context, allowFailedEvaluation: true, cancellationToken);
+        var hasExplicitChannelPolicy = context.HasExplicitChannel && channel.Type == PackageChannelType.Explicit;
+        var restoreConfigurationDeferred = hasExplicitChannelPolicy && restoreConfiguration is null;
+        // An unresolved SDK permits discovery through a provisional policy, not permission to
+        // persist it. Reevaluate the real project after SDK repair inside the transaction.
+        var configuration = hasExplicitChannelPolicy
+            ? channel.Name == PackageChannelNames.Stable && executionContext.NuGetServiceIndexOverride is null
+                ? DotNetAppHostNuGetConfigBuilder.BuildStable(
+                    ambientSettings, AppHostWorkloadId.Create(projectFile.DirectoryName!), channel)
+                : nuGetService.BuildChannelConfiguration(
+                    projectFile.Directory!,
+                    AppHostWorkloadId.Create(projectFile.DirectoryName!),
+                    channel,
+                    packageSourceOverride: null,
+                    executionContext.NuGetServiceIndexOverride,
+                    cancellationToken)
+            : null;
+        if (configuration is { HasSourcePolicyChanges: false })
+        {
+            if (!channel.ConfigureGlobalPackagesFolder)
+            {
+                configuration = null;
+            }
+            else
+            {
+                var (wasProvided, selectedDirectory, _) = PromptBinding.Resolve(context.NuGetConfigDirBinding);
+                var targetDirectory = wasProvided && selectedDirectory is not null
+                    ? new DirectoryInfo(selectedDirectory)
+                    : DotNetAppHostNuGetConfigMerger.GetRecommendedNuGetConfigDirectory(configuration.Settings.ConfigPaths, projectFile.Directory!);
+                var candidate = await new DotNetAppHostNuGetConfigMerger(nuGetService).PrepareAsync(
+                    targetDirectory, configuration, channel.ShouldCreateNuGetConfig(),
+                    CliPathHelper.StagingNuGetPackagesFolderName, cancellationToken);
+                if (candidate is null)
+                {
+                    configuration = null;
+                }
+            }
+        }
+        if (configuration is not null && !channel.ShouldCreateNuGetConfig())
+        {
+            var targetDirectory = DotNetAppHostNuGetConfigMerger.GetRecommendedNuGetConfigDirectory(configuration.Settings.ConfigPaths, projectFile.Directory!);
+            if (!targetDirectory.Exists || !DotNetAppHostNuGetConfigMerger.TryFindNuGetConfigInDirectory(targetDirectory, out _))
+            {
+                // Stable must not create a local config. Discovery must therefore retain the
+                // same ambient policy that the subsequent native restore will use.
+                configuration = null;
+            }
+        }
+
+        // Discovery must see the proposed policy before an existing channel mapping can
+        // block the target SDK. Persistence consumes this same desired configuration.
+        using var preview = configuration is null || !configuration.HasSourcePolicyChanges
+            ? NuGetPackageOperationConfiguration.Ambient(
+                projectFile.Directory!, nuGetService.GetNuGetSettings(projectFile.DirectoryName!, cancellationToken).CacheIdentity)
+            : await nuGetService.CreateConfigurationPreviewAsync(
+                projectFile.Directory!, configuration, globalPackagesFolder: null, cancellationToken);
+
+        var updatePlan = await interactionService.ShowStatusAsync(
+            UpdateCommandStrings.AnalyzingProjectStatus,
+            () => GetUpdateStepsAsync(projectFile, channel, preview, dryRunRestore?.EnvironmentVariables, cancellationToken));
+        var projectUpdateSteps = updatePlan.UpdateSteps.ToArray();
+        var updateSteps = projectUpdateSteps.Concat(context.AdditionalUpdateSteps).ToArray();
+        updatePlan.AmbientPolicies[projectFile.DirectoryName!] = ambientSettings.CacheIdentity;
+        foreach (var (path, content) in originalConfigurations)
+        {
+            updatePlan.OriginalFiles[path] = content;
+        }
+        foreach (var file in context.AdditionalUpdateSteps.SelectMany(static step => step.Files))
+        {
+            await CaptureFileAsync(updatePlan, file, cancellationToken);
+        }
+
+        if (updateSteps.Length == 0 && configuration is null && !context.DryRun)
+        {
+            if (restoreConfigurationDeferred)
+            {
+                await ReadRestoreConfigurationForUpdateAsync(context, allowFailedEvaluation: false, cancellationToken);
+            }
             logger.LogInformation("No updates required for project: {ProjectFile}", projectFile.FullName);
             interactionService.DisplayMessage(KnownEmojis.CheckMarkButton, UpdateCommandStrings.ProjectUpToDateMessage);
             return new ProjectUpdateResult { UpdatedApplied = false };
@@ -50,6 +141,7 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
         // Group update steps by project for better visual organization
         var updateStepsByProject = updateSteps
             .OfType<PackageUpdateStep>()
+            .Where(_ => !context.DryRun)
             .GroupBy(step => step.ProjectFile.FullName)
             .ToList();
 
@@ -71,25 +163,26 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
         }
 
         // Show config and repository tool edits in the same confirmation as package edits.
-        foreach (var updateStep in updateSteps.Where(step => step is not PackageUpdateStep))
+        foreach (var updateStep in updateSteps.Where(step => !context.DryRun && step is not PackageUpdateStep))
         {
             interactionService.DisplayMessage(KnownEmojis.Package, updateStep.GetFormattedDisplayText(), allowMarkup: true);
             interactionService.DisplayEmptyLine();
         }
 
         // Display warning if fallback parsing was used
-        if (fallbackUsed)
+        if (updatePlan.FallbackParsing)
         {
-            interactionService.DisplayMessage(KnownEmojis.Warning, $"[yellow]{UpdateCommandStrings.FallbackParsingWarning}[/]", allowMarkup: true);
+            interactionService.DisplayMessage(KnownEmojis.PoliceCarLight, $"[yellow]{UpdateCommandStrings.FallbackParsingWarning}[/]", allowMarkup: true);
             interactionService.DisplayEmptyLine();
         }
 
-        if (!await interactionService.PromptConfirmAsync(UpdateCommandStrings.PerformUpdatesPrompt, context.ConfirmBinding, cancellationToken: cancellationToken))
+        if (!context.DryRun && !await interactionService.PromptConfirmAsync(UpdateCommandStrings.PerformUpdatesPrompt, context.ConfirmBinding, cancellationToken: cancellationToken))
         {
             return new ProjectUpdateResult { UpdatedApplied = false };
         }
 
-        if (projectUpdateSteps.Length > 0 && channel.Type == PackageChannelType.Explicit)
+        DotNetAppHostNuGetConfigMergerCandidate? configurationCandidate = null;
+        if (configuration is { } desiredConfiguration)
         {
             var (configPathsExitCode, configPaths) = await runner.GetNuGetConfigPathsAsync(projectFile.Directory!, new(), cancellationToken);
 
@@ -98,25 +191,7 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
                 throw new ProjectUpdaterException(UpdateCommandStrings.FailedDiscoverNuGetConfig);
             }
 
-            var configPathDirectories = configPaths.Select(Path.GetDirectoryName).ToArray();
-            var fallbackNuGetConfigDirectory = executionContext.WorkingDirectory.FullName;
-
-            // If there is one or zero config paths we assume that we should use
-            // the fallback (there should always be one, but just for exhaustivenss).
-            // If there is more than one we just make sure that the first on in the list
-            // isn't a global config (on Windows with .NET and VS installed you'll have 3
-            // global config files but the first one should be the NuGet in AppData).
-            // The final rule should never ever be invoked, its just to get around CS8846
-            // which does not evaluate when statements for exhaustiveness.
-            var recommendedNuGetConfigFileDirectory = configPathDirectories switch
-            {
-                { Length: 0 or 1 } => fallbackNuGetConfigDirectory,
-                var p when p.Length > 1 => IsGlobalNuGetConfig(p[0]!) ? fallbackNuGetConfigDirectory : p[0],
-
-                // CS8846 error if we don't put this rule here even though we do "when"
-                // above - this is corner case in C# evalutation of switch statements.
-                _ => throw new InvalidOperationException(UpdateCommandStrings.UnexpectedCodePath)
-            };
+            var recommendedNuGetConfigDirectory = DotNetAppHostNuGetConfigMerger.GetRecommendedNuGetConfigDirectory(configPaths, projectFile.Directory!);
 
             if (!channel.ShouldCreateNuGetConfig())
             {
@@ -126,11 +201,16 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
                 // create a fresh one and don't prompt for a location, because dropping a
                 // <clear/>-based config here would wipe the user's other feeds.
                 // See: https://github.com/microsoft/aspire/issues/18124
-                var candidateDirectory = new DirectoryInfo(recommendedNuGetConfigFileDirectory!);
-                if (NuGetConfigMerger.TryFindNuGetConfigInDirectory(candidateDirectory, out _))
+                var candidateDirectory = recommendedNuGetConfigDirectory;
+                if (DotNetAppHostNuGetConfigMerger.TryFindNuGetConfigInDirectory(candidateDirectory, out _))
                 {
                     interactionService.DisplayEmptyLine();
-                    await NuGetConfigMerger.CreateOrUpdateAsync(candidateDirectory, channel, (_, orig, proposed, ct) => AnalyzeAndConfirmNuGetConfigChanges(context, orig, proposed, ct), cancellationToken: cancellationToken);
+                    var (accepted, candidate) = await PrepareNuGetConfigurationAsync(candidateDirectory, desiredConfiguration, context, cancellationToken);
+                    if (!accepted)
+                    {
+                        return new ProjectUpdateResult { UpdatedApplied = false };
+                    }
+                    configurationCandidate = candidate;
                 }
             }
             else
@@ -140,9 +220,12 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
                 // Carry the recommended directory as the default on the binding.
                 // The original binding (from UpdateCommand) may not have a default because
                 // the recommended directory is computed here, after NuGet config discovery.
-                var nugetConfigDirBinding = context.NuGetConfigDirBinding.WithDefault(recommendedNuGetConfigFileDirectory);
+                var nugetConfigDirBinding = context.NuGetConfigDirBinding.WithDefault(recommendedNuGetConfigDirectory.FullName);
 
-                var selectedPathForNewNuGetConfigFile = await interactionService.PromptForFilePathAsync(
+                var (directoryProvided, directoryValue, directoryDefault) = PromptBinding.Resolve(nugetConfigDirBinding);
+                var selectedPathForNewNuGetConfigFile = context.DryRun
+                    ? directoryProvided && directoryValue is not null ? directoryValue : directoryDefault!
+                    : await interactionService.PromptForFilePathAsync(
                     promptText: UpdateCommandStrings.WhichDirectoryNuGetConfigPrompt,
                     binding: nugetConfigDirBinding,
                     validator: null,
@@ -151,60 +234,200 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
                     cancellationToken: cancellationToken);
 
                 var nugetConfigDirectory = new DirectoryInfo(selectedPathForNewNuGetConfigFile);
-                await NuGetConfigMerger.CreateOrUpdateAsync(nugetConfigDirectory, channel, (_, orig, proposed, ct) => AnalyzeAndConfirmNuGetConfigChanges(context, orig, proposed, ct), cancellationToken: cancellationToken);
+                var (accepted, candidate) = await PrepareNuGetConfigurationAsync(nugetConfigDirectory, desiredConfiguration, context, cancellationToken);
+                if (!accepted)
+                {
+                    return new ProjectUpdateResult { UpdatedApplied = false };
+                }
+                configurationCandidate = candidate;
             }
         }
 
-        interactionService.DisplayEmptyLine();
-
-        await interactionService.ShowStatusAsync(
-            UpdateCommandStrings.ApplyingUpdates,
-            async () =>
-            {
-                foreach (var updateStep in updateSteps)
-                {
-                    interactionService.DisplaySubtleMessage(string.Format(CultureInfo.InvariantCulture, UpdateCommandStrings.ExecutingUpdateStepFormat, updateStep.Description));
-                    await updateStep.Callback();
-                }
-
-                return 0;
-            });
-
-        if (projectUpdateSteps.Length == 0)
+        if (configurationCandidate is not null)
         {
-            // Manifest-only edits do not require an AppHost restore.
-            return new ProjectUpdateResult { UpdatedApplied = true };
+            updatePlan.OriginalFiles.TryAdd(
+                PathNormalizer.ResolveToFilesystemPath(configurationCandidate.TargetFile.FullName),
+                configurationCandidate.OriginalContent?.ToArray());
         }
-
-        // Run a single restore *after* every package edit has been applied. Per-package
-        // 'dotnet package add' calls use --no-restore (see UpdatePackageReferenceInProject)
-        // because, for Explicit channels, NuGetConfigMerger has already rewritten nuget.config
-        // earlier in this method to add a packageSourceMapping pinning Aspire* to the channel's
-        // feed. Restoring after the *first* package add (the old behavior) would run NuGet
-        // against a half-updated reference graph: the package just bumped exists in the new
-        // feed, but the rest are still on their previous (often stable) versions which may
-        // not be carried by that feed. Mapping then blocks the fallback to nuget.org, producing
-        // NU1103 for every not-yet-bumped Aspire reference. Deferring the restore until all
-        // edits are applied means every Aspire* reference resolves against versions that
-        // exist in the configured feed.
-        // Restoring the AppHost project transitively restores referenced projects, so a single
-        // restore here covers both traditional PackageReference and Directory.Packages.props
-        // (CPM) update paths. The 'dotnet restore' command accepts both .csproj and file-based
-        // (apphost.cs) program files as the positional argument.
-        // See https://github.com/dotnet/aspire/issues/15891.
-        await interactionService.ShowStatusAsync(
-            UpdateCommandStrings.RestoringPackagesAfterUpdate,
-            async () =>
+        var candidateSteps = projectUpdateSteps.Where(static step => step is PackageUpdateStep).ToArray();
+        await using var transaction = new DotNetAppHostUpdateTransaction(updatePlan.OriginalFiles);
+        try
+        {
+            await transaction.VerifyAsync(cancellationToken);
+            if (context.DryRun)
             {
-                var restoreExitCode = await runner.RestoreAsync(projectFile, new(), cancellationToken);
+                await transaction.PrepareBackupsAsync(
+                    candidateSteps.SelectMany(static step => step.Files), interactionService, context.SupportsInteractiveInput, cancellationToken);
+            }
+            using var restorePreview = restoreConfigurationDeferred || (configurationCandidate is null && dryRunRestore is null)
+                ? null
+                : await DotNetAppHostRestorePreview.CreateAsync(
+                    nuGetService, configurationCandidate, restoreConfiguration!, projectFile,
+                    updatePlan.ProjectRestoreTargets, dryRunRestore?.RestoreOutputDirectory, cancellationToken);
+            // SDK acquisition needs the frozen candidate hierarchy but not evaluated MSBuild
+            // restore targets. Those are unavailable until the missing SDK has been repaired.
+            using var repairReplacement = restoreConfigurationDeferred && configurationCandidate is not null
+                ? await TemporaryNuGetConfigFile.CreatePreviewAsync(
+                    configurationCandidate.TargetFile, configurationCandidate.ProposedContent, cancellationToken)
+                : null;
+            using var repairConfiguration = repairReplacement is null
+                ? null
+                : await nuGetService.CreateConfigurationPreviewAsync(
+                    projectFile.Directory!, configurationCandidate!.TargetFile, repairReplacement.ConfigFile, cancellationToken);
+            var candidatePackageConfiguration = restorePreview?.RootConfiguration ?? repairConfiguration ?? preview;
+            var requiresRestore = candidateSteps.Length > 0 || configurationCandidate is not null || context.DryRun;
 
+            if (requiresRestore && updatePlan.UsesAppHostSdk && updatePlan.TargetSdkVersion is { } targetSdkVersion)
+            {
+                // SDK acquisition precedes MSBuild targets. Install only the selected SDK through
+                // the candidate policy. Dry runs use an isolated resolver cache as well as an
+                // isolated graph restore, leaving the developer's package folders untouched.
+                await interactionService.ShowStatusAsync(
+                    UpdateCommandStrings.PreparingSdkForUpdateStatus,
+                    async () =>
+                    {
+                        await nuGetService.AcquirePackageAsync(
+                            ("Aspire.AppHost.Sdk", targetSdkVersion), candidatePackageConfiguration,
+                            dryRunRestore?.PackagesDirectory ?? nuGetService.GetGlobalPackagesFolder(projectFile.Directory!),
+                            bypassCaches: context.DryRun, cancellationToken);
+                        return 0;
+                    });
+            }
+
+            var sdkRepairStep = restoreConfigurationDeferred
+                ? candidateSteps.OfType<PackageUpdateStep>().FirstOrDefault(static step => step.PackageId == "Aspire.AppHost.Sdk")
+                : null;
+            if (sdkRepairStep is not null)
+            {
+                await interactionService.ShowStatusAsync(
+                    context.DryRun ? UpdateCommandStrings.DryRunValidating : UpdateCommandStrings.ApplyingUpdates,
+                    async () =>
+                    {
+                        interactionService.DisplaySubtleMessage(string.Format(
+                            CultureInfo.InvariantCulture, UpdateCommandStrings.ExecutingUpdateStepFormat, sdkRepairStep.Description));
+                        await transaction.ApplyAsync(sdkRepairStep.Files, sdkRepairStep.Callback, cancellationToken);
+                        return 0;
+                    });
+            }
+            if (restoreConfigurationDeferred)
+            {
+                restoreConfiguration = await ReadRestoreConfigurationForUpdateAsync(
+                    context, allowFailedEvaluation: false, cancellationToken, dryRunRestore?.EnvironmentVariables);
+            }
+            using var repairedRestorePreview = restoreConfigurationDeferred && (configurationCandidate is not null || dryRunRestore is not null)
+                ? await DotNetAppHostRestorePreview.CreateAsync(
+                    nuGetService, configurationCandidate, restoreConfiguration!, projectFile,
+                    updatePlan.ProjectRestoreTargets, dryRunRestore?.RestoreOutputDirectory, cancellationToken)
+                : null;
+
+            interactionService.DisplayEmptyLine();
+            await interactionService.ShowStatusAsync(
+                context.DryRun ? UpdateCommandStrings.DryRunValidating : UpdateCommandStrings.ApplyingUpdates,
+                async () =>
+                {
+                    foreach (var updateStep in candidateSteps)
+                    {
+                        if (ReferenceEquals(updateStep, sdkRepairStep))
+                        {
+                            continue;
+                        }
+                        interactionService.DisplaySubtleMessage(string.Format(CultureInfo.InvariantCulture, UpdateCommandStrings.ExecutingUpdateStepFormat, updateStep.Description));
+                        await transaction.ApplyAsync(updateStep.Files, updateStep.Callback, cancellationToken);
+                    }
+                    return 0;
+                });
+
+            if (requiresRestore && (!hasExplicitChannelPolicy || context.DryRun))
+            {
+                // Validate the complete updated graph, not old versions against a new feed or a
+                // half-updated graph. Native restore retains each referenced project's own settings.
+                // Redact before buffering or logging, using both the candidate hierarchy and
+                // referenced projects' settings, just as in-process NuGet operations do.
+                // Redaction is best effort to reduce sensitive data in logs, not a security guarantee.
+                // Default log access relies on filesystem permissions: owner-only on Unix and inherited ACLs on Windows.
+                var sensitiveSources = updatePlan.AmbientPolicies.Keys
+                    .SelectMany(directory => nuGetService.GetNuGetSettings(directory, cancellationToken).SensitiveSourceValues)
+                    .Concat(updatePlan.SensitiveSourceValues)
+                    .Concat(nuGetService.GetNuGetSettings(candidatePackageConfiguration.EffectiveWorkingDirectory.FullName, cancellationToken).SensitiveSourceValues)
+                    .Concat(restorePreview?.GetSensitiveSourceValues(nuGetService, cancellationToken) ?? [])
+                    .Concat(repairedRestorePreview?.GetSensitiveSourceValues(nuGetService, cancellationToken) ?? [])
+                    .Distinct(StringComparer.Ordinal)
+                    .ToArray();
+                var restoreOutput = new OutputCollector(fileLoggerProvider, CliLogFormat.Categories.Package);
+                var restoreExitCode = await interactionService.ShowStatusAsync(
+                    UpdateCommandStrings.RestoringPackagesAfterUpdate,
+                    async () =>
+                    {
+                        await transaction.VerifyAsync(cancellationToken);
+                        return await runner.RestoreAsync(projectFile, new()
+                        {
+                            // ChildProcess traces raw output before callbacks run. Only the redacted
+                            // callback messages may reach the logger, including at Trace verbosity.
+                            SuppressLogging = true,
+                            StandardOutputCallback = line =>
+                            {
+                                var redacted = PackageSourceRedactor.RedactOccurrences(line, sensitiveSources);
+                                restoreOutput.AppendOutput(redacted);
+                            },
+                            StandardErrorCallback = line =>
+                            {
+                                var redacted = PackageSourceRedactor.RedactOccurrences(line, sensitiveSources);
+                                restoreOutput.AppendError(redacted);
+                            },
+                            NuGetRestoreTargetsFile = restorePreview?.TargetsFile ?? repairedRestorePreview?.TargetsFile,
+                            IsolatedRestorePackagesDirectory = dryRunRestore is null ? null : new DirectoryInfo(dryRunRestore.PackagesDirectory),
+                            EnvironmentVariables = dryRunRestore?.EnvironmentVariables
+                        }, cancellationToken);
+                    });
                 if (restoreExitCode != 0)
                 {
-                    throw new ProjectUpdaterException(string.Format(CultureInfo.InvariantCulture, UpdateCommandStrings.FailedToRestoreAfterUpdateFormat, projectFile.FullName));
+                    interactionService.DisplayLines(restoreOutput.GetLines());
+                    throw new ProjectUpdaterException(string.Format(CultureInfo.InvariantCulture, UpdateCommandStrings.FailedToRestoreAfterUpdateFormat, channel.Name, projectFile.FullName));
                 }
+            }
 
-                return 0;
-            });
+            await transaction.VerifyAsync(cancellationToken);
+            if (context.DryRun)
+            {
+                await transaction.DisposeAsync();
+                interactionService.DisplaySuccess(UpdateCommandStrings.DryRunSuccessful);
+                return new ProjectUpdateResult { UpdatedApplied = false };
+            }
+            foreach (var (directory, policyIdentity) in updatePlan.AmbientPolicies)
+            {
+                if (!string.Equals(policyIdentity,
+                    nuGetService.GetNuGetSettings(directory, cancellationToken).CacheIdentity, StringComparison.Ordinal))
+                {
+                    throw new ProjectUpdaterException(string.Format(
+                        CultureInfo.CurrentCulture, UpdateCommandStrings.UpdateCandidatePolicyChangedFormat, directory));
+                }
+            }
+            if (configurationCandidate is not null)
+            {
+                await transaction.ApplyPreparedAsync(configurationCandidate.TargetFile, configurationCandidate.ProposedContent,
+                    writeStarting => DotNetAppHostNuGetConfigMerger.ApplyAsync(configurationCandidate, writeStarting, cancellationToken), cancellationToken);
+            }
+            foreach (var updateStep in projectUpdateSteps.Where(static step => step is not PackageUpdateStep).Concat(context.AdditionalUpdateSteps))
+            {
+                interactionService.DisplaySubtleMessage(string.Format(CultureInfo.InvariantCulture, UpdateCommandStrings.ExecutingUpdateStepFormat, updateStep.Description));
+                await transaction.ApplyAsync(updateStep.Files, updateStep.Callback, cancellationToken);
+            }
+            await transaction.VerifyAsync(cancellationToken);
+            transaction.Commit();
+        }
+        catch (Exception updateFailure)
+        {
+            try
+            {
+                await transaction.DisposeAsync();
+            }
+            catch (Exception rollbackFailure)
+            {
+                throw new AggregateException(
+                    UpdateCommandStrings.UpdateCandidateRollbackFailed, updateFailure, rollbackFailure);
+            }
+            throw;
+        }
 
         interactionService.DisplayEmptyLine();
 
@@ -212,22 +435,84 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
         return new ProjectUpdateResult { UpdatedApplied = true };
     }
 
-    private static bool IsGlobalNuGetConfig(string path)
+    private async Task<DotNetRestoreSettings?> ReadRestoreConfigurationForUpdateAsync(
+        UpdatePackagesContext context,
+        bool allowFailedEvaluation,
+        CancellationToken cancellationToken,
+        IReadOnlyDictionary<string, string>? environmentVariables = null)
     {
-        if (Environment.OSVersion.Platform == PlatformID.Win32NT)
+        if (!context.HasExplicitChannel || context.Channel.Type != PackageChannelType.Explicit)
         {
-            return path.StartsWith(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), StringComparison.Ordinal);
+            return null;
         }
-        else
+
+        var settings = allowFailedEvaluation
+            ? await DotNetRestoreConfiguration.TryReadAsync(runner, context.AppHostFile, cancellationToken, environmentVariables)
+            : await DotNetRestoreConfiguration.ReadAsync(runner, context.AppHostFile, cancellationToken, environmentVariables);
+        if (settings is null)
         {
-            var globalNuGetFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".nuget");
-            return path.StartsWith(globalNuGetFolder, StringComparison.Ordinal);
+            logger.LogWarning(
+                "Could not evaluate restore policy for '{ProjectFile}'. Validation is deferred until the SDK is repaired.",
+                context.AppHostFile.FullName);
+            return null;
         }
+
+        if (!settings.UsesAmbientConfiguration)
+        {
+            throw new ProjectUpdaterException(string.Format(
+                CultureInfo.CurrentCulture,
+                UpdateCommandStrings.ChannelUpdateRequiresAmbientNuGetConfigurationFormat,
+                context.Channel.Name,
+                context.AppHostFile.FullName,
+                string.Join(", ", settings.ConfigurationOverrides)));
+        }
+
+        return settings;
     }
 
-    private async Task<(IEnumerable<UpdateStep> UpdateSteps, bool FallbackUsed)> GetUpdateStepsAsync(FileInfo projectFile, PackageChannel channel, CancellationToken cancellationToken)
+    private async Task<(bool Accepted, DotNetAppHostNuGetConfigMergerCandidate? Candidate)> PrepareNuGetConfigurationAsync(
+        DirectoryInfo targetDirectory,
+        NuGetConfiguration configuration,
+        UpdatePackagesContext context,
+        CancellationToken cancellationToken)
     {
-        var context = new UpdateContext(projectFile, channel);
+        var candidate = await new DotNetAppHostNuGetConfigMerger(nuGetService).PrepareAsync(
+            targetDirectory,
+            configuration,
+            context.Channel.ShouldCreateNuGetConfig(),
+            context.Channel.ConfigureGlobalPackagesFolder ? CliPathHelper.StagingNuGetPackagesFolderName : null,
+            cancellationToken);
+        if (candidate is null)
+        {
+            return (true, null);
+        }
+
+        if (context.DryRun)
+        {
+            return (true, candidate);
+        }
+
+        if (!await AnalyzeAndConfirmNuGetConfigChanges(
+            context, candidate.GetOriginalDocument(), candidate.GetProposedDocument(), cancellationToken))
+        {
+            return (false, null);
+        }
+
+        return (true, candidate);
+    }
+
+    private async Task<UpdateContext> GetUpdateStepsAsync(
+        FileInfo projectFile,
+        PackageChannel channel,
+        NuGetPackageOperationConfiguration? packageConfiguration,
+        IReadOnlyDictionary<string, string>? updateEnvironmentVariables,
+        CancellationToken cancellationToken)
+    {
+        var context = new UpdateContext(projectFile, channel)
+        {
+            PackageConfiguration = packageConfiguration,
+            UpdateEnvironmentVariables = updateEnvironmentVariables
+        };
 
         var appHostAnalyzeStep = new AnalyzeStep(UpdateCommandStrings.AnalyzeAppHost, () => AnalyzeAppHostAsync(context, cancellationToken));
         context.AnalyzeSteps.Enqueue(appHostAnalyzeStep);
@@ -242,7 +527,7 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
         // can live above a nested AppHost, so use the nearest config rather than only checking the
         // project directory. If no config is present, skip the rewrite: creating one is the
         // responsibility of `aspire init`.
-        if (channel.ShouldPersistChannelName() && projectFile.Directory is { } projectDirectory)
+        if (projectFile.Directory is { } projectDirectory)
         {
             var configPath = ConfigurationHelper.FindNearestConfigFilePath(projectDirectory);
             var targetSdkVersion = context.TargetSdkVersion;
@@ -252,7 +537,12 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
             {
                 var existingChannel = existingConfig["channel"];
                 var existingSdkVersion = existingConfig["sdk:version"] ?? existingConfig["sdkVersion"];
-                var channelChanged = !string.Equals(existingChannel, channel.Name, StringComparisons.CliInputOrOutput);
+                // Explicit stable returns to ambient policy; an implicit update does not
+                // change the user's channel selection. Both still synchronize SDK metadata.
+                var targetChannel = channel.Type is PackageChannelType.Implicit
+                    ? existingChannel
+                    : channel.ShouldPersistChannelName() ? channel.Name : null;
+                var channelChanged = !string.Equals(existingChannel, targetChannel, StringComparisons.CliInputOrOutput);
                 var sdkVersionChanged = !string.Equals(existingSdkVersion, targetSdkVersion, StringComparison.OrdinalIgnoreCase);
 
                 if (channelChanged || sdkVersionChanged)
@@ -264,7 +554,7 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
                             CultureInfo.InvariantCulture,
                             UpdateCommandStrings.UpdateChannelStepDescriptionFormat,
                             existingChannel ?? UpdateCommandStrings.ChannelNonePlaceholder,
-                            channel.Name));
+                            targetChannel ?? UpdateCommandStrings.ChannelNonePlaceholder));
                     }
                     if (sdkVersionChanged)
                     {
@@ -276,42 +566,63 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
                             targetSdkVersion));
                     }
 
+                    var configRoot = ConfigurationHelper.GetConfigRootDirectory(projectDirectory);
+                    FileInfo[] configFiles =
+                    [
+                        new(configPath),
+                        new(Path.Combine(configRoot.FullName, AspireConfigFile.FileName))
+                    ];
+                    foreach (var file in configFiles)
+                    {
+                        await CaptureFileAsync(context, file, cancellationToken);
+                    }
                     context.UpdateSteps.Enqueue(new ProjectConfigUpdateStep(
                         string.Join("; ", descriptions),
                         () =>
                         {
-                            // Re-discover inside the callback so a config deleted after analysis is
-                            // not recreated behind the user's back. LoadOrCreate intentionally
-                            // migrates a legacy .aspire/settings.json during this mutating command.
-                            var currentConfigPath = ConfigurationHelper.FindNearestConfigFilePath(projectDirectory);
-                            if (currentConfigPath is null)
-                            {
-                                return Task.CompletedTask;
-                            }
-
-                            var configRoot = ConfigurationHelper.GetConfigRootDirectory(projectDirectory);
+                            // The transaction validates the planned files before this callback.
+                            // Keep that root frozen rather than editing a newly discovered config.
+                            // LoadOrCreate migrates legacy .aspire/settings.json during commit.
                             var configToSave = AspireConfigFile.LoadOrCreate(configRoot.FullName);
-                            configToSave.Channel = channel.Name;
+                            configToSave.Channel = targetChannel;
                             configToSave.SdkVersion = targetSdkVersion;
                             configToSave.Save(configRoot.FullName);
                             return Task.CompletedTask;
                         },
                         existingChannel,
-                        channel.Name,
+                        targetChannel,
                         existingSdkVersion,
-                        targetSdkVersion));
+                        targetSdkVersion)
+                    {
+                        Files = configFiles
+                    });
                 }
             }
         }
 
-        return (context.UpdateSteps, context.FallbackParsing);
+        return context;
     }
+
+    private static async Task CaptureFileAsync(UpdateContext context, FileInfo file, CancellationToken cancellationToken)
+    {
+        var path = PathNormalizer.ResolveToFilesystemPath(file.FullName);
+        if (!context.OriginalFiles.ContainsKey(path))
+        {
+            context.OriginalFiles.Add(path,
+                await DotNetAppHostUpdateTransaction.ReadAsync(path, cancellationToken));
+        }
+    }
+
+    private static FileInfo[] GetSdkUpdateFiles(FileInfo projectFile)
+        => DetectCentralPackageManagement(projectFile).DirectoryPackagesPropsFile is { } propsFile
+            ? [projectFile, propsFile]
+            : [projectFile];
 
     private const string ItemsAndPropertiesCacheKeyPrefix = "ItemsAndProperties";
 
     private async Task<JsonDocument> GetItemsAndPropertiesAsync(FileInfo projectFile, CancellationToken cancellationToken)
     {
-        return await GetItemsAndPropertiesAsync(projectFile, ["PackageReference", "ProjectReference"], ["AspireHostingSDKVersion", "ManagePackageVersionsCentrally"], cancellationToken);
+        return await GetItemsAndPropertiesAsync(projectFile, ["PackageReference", "ProjectReference"], ["AspireHostingSDKVersion", "ManagePackageVersionsCentrally", "NuGetRestoreTargets", "_UsingAspireAppHostSdk", "_AspireAppHostPackageVersion", "DirectoryBuildPropsPath", "DirectoryBuildTargetsPath", "MSBuildAllProjects", "MSBuildProjectFullPath", "RestoreAdditionalProjectSources"], cancellationToken);
     }
 
     private async Task<JsonDocument> GetItemsAndPropertiesAsync(FileInfo projectFile, string[] items, string[] properties, CancellationToken cancellationToken)
@@ -323,7 +634,13 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
 
         var (exitCode, document) = await cache.GetOrCreateAsync(cacheKey, async entry =>
         {
-            return await runner.GetProjectItemsAndPropertiesAsync(projectFile, items, properties, targets: [], new(), cancellationToken);
+            return await runner.GetProjectItemsAndPropertiesAsync(projectFile, items, properties, targets: [], new()
+            {
+                NoRestore = true,
+                ExcludeRestorePackageImports = true,
+                // Evaluated source properties may contain credentials, including on failed probes.
+                SuppressLogging = true
+            }, cancellationToken);
         });
 
         if (exitCode != 0 || document is null)
@@ -336,7 +653,7 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
 
     private async Task<JsonDocument> GetItemsAndPropertiesWithFallbackAsync(FileInfo projectFile, UpdateContext context, CancellationToken cancellationToken)
     {
-        return await GetItemsAndPropertiesWithFallbackAsync(projectFile, ["PackageReference", "ProjectReference"], ["AspireHostingSDKVersion", "ManagePackageVersionsCentrally"], context, cancellationToken);
+        return await GetItemsAndPropertiesWithFallbackAsync(projectFile, ["PackageReference", "ProjectReference"], ["AspireHostingSDKVersion", "ManagePackageVersionsCentrally", "NuGetRestoreTargets", "_UsingAspireAppHostSdk", "_AspireAppHostPackageVersion", "DirectoryBuildPropsPath", "DirectoryBuildTargetsPath", "MSBuildAllProjects", "MSBuildProjectFullPath", "RestoreAdditionalProjectSources"], context, cancellationToken);
     }
 
     private async Task<JsonDocument> GetItemsAndPropertiesWithFallbackAsync(FileInfo projectFile, string[] items, string[] properties, UpdateContext context, CancellationToken cancellationToken)
@@ -382,10 +699,12 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
 
     private async Task<NuGetPackageCli?> GetLatestVersionOfPackageAsync(UpdateContext context, string packageId, bool throwIfNotFound = true, CancellationToken cancellationToken = default)
     {
-        var cacheKey = $"LatestPackage-{packageId}";
+        var cacheKey = $"LatestPackage-{packageId}-{context.AppHostProjectFile.DirectoryName}-{context.Channel.Name}-{context.PackageConfiguration?.CacheIdentity}";
         var latestPackage = await cache.GetOrCreateAsync(cacheKey, async entry =>
         {
-            var packages = await context.Channel.GetPackagesAsync(packageId, context.AppHostProjectFile.Directory!, cancellationToken);
+            var packages = context.PackageConfiguration is { } configuration
+                ? await context.Channel.GetPackagesAsync(packageId, configuration, cancellationToken)
+                : await context.Channel.GetPackagesAsync(packageId, context.AppHostProjectFile.Directory!, cancellationToken);
             // Filter out packages with invalid semantic versions and find the latest valid one
             var latestPackage = packages
                 .Where(p => SemVersion.TryParse(p.Version, SemVersionStyles.Strict, out _))
@@ -411,11 +730,60 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
     private async Task AnalyzeAppHostSdkAsync(UpdateContext context, CancellationToken cancellationToken)
     {
         logger.LogDebug("Analyzing App Host SDK for: {AppHostFile}", context.AppHostProjectFile.FullName);
+        foreach (var file in GetSdkUpdateFiles(context.AppHostProjectFile))
+        {
+            await CaptureFileAsync(context, file, cancellationToken);
+        }
 
+        // The evaluated marker also recognizes SDKs imported from Directory.Build.props.
+        // Older SDKs do not set it, so retain source detection for their declarations.
+        using var sourceDocument = fallbackParser.ParseProject(context.AppHostProjectFile);
+        var sourceRoot = sourceDocument.RootElement;
+        var usesSdk = sourceRoot.GetProperty("Properties").GetProperty("_UsingAspireAppHostSdk").GetString() == "true";
+        var hasSourceSdk = usesSdk;
+        XDocument? sourceXml = null;
+        if (!string.Equals(context.AppHostProjectFile.Extension, ".cs", StringComparison.OrdinalIgnoreCase))
+        {
+            sourceXml = XDocument.Load(context.AppHostProjectFile.FullName);
+            hasSourceSdk = GetUnconditionalSdkDeclarations(sourceXml).Any();
+            usesSdk = hasSourceSdk;
+        }
         var itemsAndPropertiesDocument = await GetItemsAndPropertiesWithFallbackAsync(context.AppHostProjectFile, context, cancellationToken);
+        if (context.FallbackParsing && sourceXml is not null
+            && GetSdkDeclarations(sourceXml).Any(element => !IsUnconditionalSdkDeclaration(element)))
+        {
+            throw new ProjectUpdaterException(string.Format(CultureInfo.InvariantCulture,
+                UpdateCommandStrings.ConditionalSdkEvaluationRequiredFormat, context.AppHostProjectFile.FullName));
+        }
         var propertiesElement = itemsAndPropertiesDocument.RootElement.GetProperty("Properties");
-        var sdkVersionElement = propertiesElement.GetProperty("AspireHostingSDKVersion");
-        var sdkVersion = sdkVersionElement.GetString();
+        usesSdk |= propertiesElement.TryGetProperty("_UsingAspireAppHostSdk", out var marker)
+            && string.Equals(marker.GetString(), "true", StringComparison.OrdinalIgnoreCase);
+        var sdkVersion = propertiesElement.GetProperty("AspireHostingSDKVersion").GetString();
+        // Package-only targets synthesize this version from their own package. An older SDK
+        // supplies a separate version without the newer marker; locate its imported declaration.
+        var hasLegacySdkVersion = !string.IsNullOrEmpty(sdkVersion)
+            && (!propertiesElement.TryGetProperty("_AspireAppHostPackageVersion", out var packageVersion)
+                || !string.Equals(sdkVersion, packageVersion.GetString(), StringComparison.OrdinalIgnoreCase));
+        var importedSdkFile = hasSourceSdk
+            || (!usesSdk && !hasLegacySdkVersion)
+            ? null
+            : FindImportedSdkDeclaration(context.AppHostProjectFile, propertiesElement, required: usesSdk);
+        if (importedSdkFile is not null)
+        {
+            await CaptureFileAsync(context, importedSdkFile, cancellationToken);
+        }
+        usesSdk |= importedSdkFile is not null;
+        var items = itemsAndPropertiesDocument.RootElement.GetProperty("Items");
+        var hasAppHostPackage = items.TryGetProperty("PackageReference", out var packages)
+            && packages.EnumerateArray().Any(package => string.Equals(package.GetProperty("Identity").GetString(),
+                "Aspire.Hosting.AppHost", StringComparison.OrdinalIgnoreCase));
+        if (!usesSdk && hasAppHostPackage)
+        {
+            context.UsesAppHostSdk = false;
+            context.TargetSdkVersion = (await GetLatestVersionOfPackageAsync(context,
+                "Aspire.Hosting.AppHost", cancellationToken: cancellationToken))?.Version;
+            return;
+        }
 
         var latestSdkPackage = await GetLatestVersionOfPackageAsync(context, "Aspire.AppHost.Sdk", cancellationToken: cancellationToken);
         context.TargetSdkVersion = latestSdkPackage?.Version;
@@ -445,12 +813,94 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
 
         var sdkUpdateStep = new PackageUpdateStep(
             string.Format(CultureInfo.InvariantCulture, UpdateCommandStrings.UpdatePackageFormat, "Aspire.AppHost.Sdk", sdkVersion ?? "unknown", latestSdkPackage?.Version),
-            () => UpdateSdkVersionInAppHostAsync(context.AppHostProjectFile, latestSdkPackage!, interactionService, migrationInfo),
+            async () =>
+            {
+                if (importedSdkFile is not null)
+                {
+                    await UpdateImportedSdkVersionAsync(importedSdkFile, latestSdkPackage!.Version);
+                    var (hasPackageReference, hasPackageVersion) = DetectLegacyAppHostReferences(context.AppHostProjectFile);
+                    await RemoveLegacyAppHostPackageReferencesAsync(context.AppHostProjectFile, hasPackageReference, hasPackageVersion);
+                }
+                else
+                {
+                    await UpdateSdkVersionInAppHostAsync(context.AppHostProjectFile, latestSdkPackage!, interactionService, migrationInfo);
+                }
+            },
             "Aspire.AppHost.Sdk",
             sdkVersion ?? "unknown",
             latestSdkPackage?.Version ?? "unknown",
-            context.AppHostProjectFile);
+            importedSdkFile ?? context.AppHostProjectFile)
+        {
+            Files = importedSdkFile is null
+                ? GetSdkUpdateFiles(context.AppHostProjectFile)
+                : [.. GetSdkUpdateFiles(context.AppHostProjectFile), importedSdkFile]
+        };
         context.UpdateSteps.Enqueue(sdkUpdateStep);
+    }
+
+    private static FileInfo? FindImportedSdkDeclaration(FileInfo projectFile, JsonElement properties, bool required)
+    {
+        var candidates = new HashSet<string>(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+        if (!string.Equals(projectFile.Extension, ".cs", StringComparison.OrdinalIgnoreCase))
+        {
+            candidates.Add(projectFile.FullName);
+        }
+        foreach (var property in new[] { "DirectoryBuildPropsPath", "DirectoryBuildTargetsPath", "MSBuildAllProjects" })
+        {
+            if (properties.TryGetProperty(property, out var value) && value.GetString() is { } paths)
+            {
+                foreach (var path in paths.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                {
+                    candidates.Add(Path.GetFullPath(path, projectFile.Directory!.FullName));
+                }
+            }
+        }
+
+        var documents = candidates.Where(File.Exists)
+            .Select(path => (Path: path, Document: XDocument.Load(path))).ToArray();
+        var declarations = documents.Where(file => GetUnconditionalSdkDeclarations(file.Document).Any())
+            .Select(file => file.Path).ToArray();
+        if (declarations.Length == 0 && documents.Any(file => GetSdkDeclarations(file.Document).Any()))
+        {
+            throw new ProjectUpdaterException(string.Format(CultureInfo.InvariantCulture,
+                UpdateCommandStrings.ConditionalSdkExplicitEditRequiredFormat, projectFile.FullName));
+        }
+        if (declarations.Length > 1 || (required && declarations.Length == 0))
+        {
+            throw new ProjectUpdaterException($"Could not uniquely locate the imported Aspire.AppHost.Sdk declaration for '{projectFile.FullName}'. Found {declarations.Length} declaring files; update the imported SDK version explicitly.");
+        }
+        return declarations.Length == 0 ? null : new FileInfo(declarations[0]);
+    }
+
+    private static IEnumerable<XElement> GetSdkDeclarations(XDocument document)
+        => document.Descendants().Where(element =>
+            (element == document.Root && element.Name.LocalName == "Project"
+                && ContainsAspireAppHostSdk(element.Attribute("Sdk")?.Value ?? string.Empty))
+            || (element.Parent == document.Root
+                && ((element.Name.LocalName == "Import" && ContainsAspireAppHostSdk(element.Attribute("Sdk")?.Value ?? string.Empty))
+                    || (element.Name.LocalName == "Sdk" && string.Equals(element.Attribute("Name")?.Value, AspireAppHostSdkName, StringComparison.OrdinalIgnoreCase)))));
+
+    private static bool IsUnconditionalSdkDeclaration(XElement element)
+        => element.AncestorsAndSelf().All(node => string.IsNullOrWhiteSpace(node.Attribute("Condition")?.Value));
+
+    private static IEnumerable<XElement> GetUnconditionalSdkDeclarations(XDocument document)
+        => GetSdkDeclarations(document).Where(IsUnconditionalSdkDeclaration);
+
+    private static async Task UpdateImportedSdkVersionAsync(FileInfo file, string version)
+    {
+        var document = XDocument.Load(file.FullName, LoadOptions.PreserveWhitespace);
+        foreach (var element in GetUnconditionalSdkDeclarations(document))
+        {
+            if (element.Name.LocalName == "Project" && element.Attribute("Sdk") is { } sdk && ContainsAspireAppHostSdk(sdk.Value))
+            {
+                sdk.Value = UpdateAspireAppHostSdkVersion(sdk.Value, version);
+            }
+            else
+            {
+                element.SetAttributeValue("Version", version);
+            }
+        }
+        await File.WriteAllTextAsync(file.FullName, document.ToString(SaveOptions.DisableFormatting));
     }
 
     private static void EnqueueLegacyAppHostCleanupStepIfNeeded(UpdateContext context)
@@ -473,7 +923,10 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
                 // user-visible "current version" to display - report it as implicit.
                 "implicit",
                 "(removed)",
-                projectFile);
+                projectFile)
+            {
+                Files = GetSdkUpdateFiles(projectFile)
+            };
             context.UpdateSteps.Enqueue(step);
             return;
         }
@@ -720,10 +1173,27 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
         {
             // Migrate from old format to new format
             // Old format: <Sdk Name="Aspire.AppHost.Sdk" Version="..." />
-            var sdkNode = projectNode.SelectSingleNode("Sdk[@Name='Aspire.AppHost.Sdk']");
+            var sdkNode = projectNode.SelectNodes("Sdk[@Name='Aspire.AppHost.Sdk']")!.Cast<XmlNode>()
+                .FirstOrDefault(node => string.IsNullOrWhiteSpace(node.Attributes?["Condition"]?.Value));
             if (sdkNode is null)
             {
-                throw new ProjectUpdaterException(string.Format(CultureInfo.InvariantCulture, UpdateCommandStrings.CouldNotFindSdkElementFormat, projectFile.FullName));
+                var imports = projectNode.SelectNodes("Import")!.Cast<XmlNode>()
+                    .Where(node => ContainsAspireAppHostSdk(node.Attributes?["Sdk"]?.Value ?? string.Empty)
+                        && string.IsNullOrWhiteSpace(node.Attributes?["Condition"]?.Value)).ToArray();
+                if (imports.Length == 0)
+                {
+                    throw new ProjectUpdaterException(string.Format(CultureInfo.InvariantCulture, UpdateCommandStrings.CouldNotFindSdkElementFormat, projectFile.FullName));
+                }
+                foreach (var import in imports)
+                {
+                    var version = projectDocument.CreateAttribute("Version");
+                    version.Value = package.Version;
+                    import.Attributes!.SetNamedItem(version);
+                }
+                RemovePackageReference(projectNode, "Aspire.Hosting.AppHost");
+                projectDocument.Save(projectFile.FullName);
+                RemovePackageVersionFromDirectoryPackagesProps(projectFile, "Aspire.Hosting.AppHost");
+                return;
             }
 
             // Set the new format: <Project Sdk="Aspire.AppHost.Sdk/version">
@@ -880,7 +1350,7 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
         var fileContent = await File.ReadAllTextAsync(projectFile.FullName);
 
         // Look for the #:sdk Aspire.AppHost.Sdk@<version> directive
-        var match = SdkDirectiveRegex().Match(fileContent);
+        var match = SdkDirectiveRegex().Match(FallbackProjectParser.GetDirectivePreamble(fileContent));
 
         if (!match.Success)
         {
@@ -890,26 +1360,28 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
 
         // Replace the matched SDK directive with the new version
         var newDirective = $"#:sdk Aspire.AppHost.Sdk@{package.Version}";
-        var updatedContent = SdkDirectiveRegex().Replace(fileContent, newDirective, 1);
+        var directiveOffset = match.Value.IndexOf("#:sdk", StringComparison.Ordinal);
+        var directiveLength = match.Value.TrimEnd().Length - directiveOffset;
+        var directiveStart = match.Index + directiveOffset;
+        var updatedContent = fileContent.Remove(directiveStart, directiveLength).Insert(directiveStart, newDirective);
 
         // The new SDK pulls Aspire.Hosting.AppHost in implicitly, so a leftover
         // explicit `#:package Aspire.Hosting.AppHost@<version>` directive in the
         // same file is redundant. Strip it here so the SDK-bump path matches
         // the csproj migration in UpdateSdkVersionInProjectAppHostAsync. The
         // SDK-already-current path goes through EnqueueLegacyAppHostCleanupStepIfNeeded.
-        updatedContent = LegacyAppHostPackageDirectiveRegex().Replace(updatedContent, string.Empty);
+        updatedContent = RemoveLegacyAppHostPackageDirectives(updatedContent);
 
         await File.WriteAllTextAsync(projectFile.FullName, updatedContent);
     }
 
-    [GeneratedRegex(@"#:sdk\s+Aspire\.AppHost\.Sdk@(?:[\d\.\-a-zA-Z]+|\*)")]
-    internal static partial Regex SdkDirectiveRegex();
+    internal static Regex SdkDirectiveRegex() => FallbackProjectParser.SdkDirectiveRegex();
 
     // Matches a whole line of the form "#:package Aspire.Hosting.AppHost@<version>"
     // (case-insensitive on the package id), including trailing line break, so the
     // whole directive can be removed without leaving a blank line behind. NuGet
     // package IDs are case-insensitive (https://learn.microsoft.com/nuget/concepts/package-identifier).
-    [GeneratedRegex(@"^[ \t]*#:package\s+Aspire\.Hosting\.AppHost@\S+[ \t]*\r?\n?", RegexOptions.IgnoreCase | RegexOptions.Multiline)]
+    [GeneratedRegex(@"^[ \t]*#:package[ \t]+(?i:Aspire\.Hosting\.AppHost)@(?:[\d.\-+a-zA-Z]+|\*)[ \t]*\r?$(?:\n)?", RegexOptions.Multiline)]
     internal static partial Regex LegacyAppHostPackageDirectiveRegex();
 
     private static bool HasLegacyAppHostPackageDirective(FileInfo projectFile)
@@ -917,7 +1389,7 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
         try
         {
             var fileContent = File.ReadAllText(projectFile.FullName);
-            return LegacyAppHostPackageDirectiveRegex().IsMatch(fileContent);
+            return LegacyAppHostPackageDirectiveRegex().IsMatch(FallbackProjectParser.GetDirectivePreamble(fileContent));
         }
         catch
         {
@@ -930,12 +1402,23 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
     private static async Task RemoveLegacyAppHostPackageDirectiveAsync(FileInfo projectFile)
     {
         var fileContent = await File.ReadAllTextAsync(projectFile.FullName);
-        var updatedContent = LegacyAppHostPackageDirectiveRegex().Replace(fileContent, string.Empty);
+        var updatedContent = RemoveLegacyAppHostPackageDirectives(fileContent);
 
         if (!string.Equals(fileContent, updatedContent, StringComparison.Ordinal))
         {
             await File.WriteAllTextAsync(projectFile.FullName, updatedContent);
         }
+    }
+
+    private static string RemoveLegacyAppHostPackageDirectives(string content)
+    {
+        var matches = LegacyAppHostPackageDirectiveRegex().Matches(FallbackProjectParser.GetDirectivePreamble(content));
+        foreach (var match in matches.Reverse())
+        {
+            var offset = match.Value.IndexOf("#:package", StringComparison.Ordinal);
+            content = content.Remove(match.Index + offset, Math.Min(match.Length - offset, content.Length - match.Index - offset));
+        }
+        return content;
     }
 
     private async Task AnalyzeProjectAsync(FileInfo projectFile, UpdateContext context, CancellationToken cancellationToken)
@@ -945,6 +1428,16 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
             // Project already analyzed, skip
             return;
         }
+        foreach (var file in GetSdkUpdateFiles(projectFile))
+        {
+            await CaptureFileAsync(context, file, cancellationToken);
+        }
+        var settings = nuGetService.GetNuGetSettings(projectFile.DirectoryName!, cancellationToken);
+        context.AmbientPolicies.TryAdd(projectFile.DirectoryName!, settings.CacheIdentity);
+        foreach (var path in settings.ConfigPaths)
+        {
+            await CaptureFileAsync(context, new FileInfo(path), cancellationToken);
+        }
 
         // Use fallback wrapper for AppHost project, normal method for others
         var itemsAndPropertiesDocument = IsAppHostProject(projectFile, context.AppHostProjectFile)
@@ -953,8 +1446,36 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
 
         // Check if this project has ManagePackageVersionsCentrally set to false
         var usesCentralPackageManagement = true;
+        var evaluatedProjectFile = projectFile;
         if (itemsAndPropertiesDocument.RootElement.TryGetProperty("Properties", out var propertiesElement))
         {
+            if (propertiesElement.TryGetProperty("RestoreAdditionalProjectSources", out var additionalSources))
+            {
+                // -getProperty returns an already MSBuild-unescaped list, for example:
+                // https://user:p%40ss@feed.example/v3/index.json?sig=a%3Bb;https://other.example/feed
+                // Split the list without URI-decoding it again, which would corrupt encoded credentials.
+                foreach (var source in (additionalSources.GetString() ?? string.Empty)
+                    .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                {
+                    if (PackageSourceOverrideMappings.HasCredentialMaterial(source))
+                    {
+                        context.SensitiveSourceValues.Add(source);
+                    }
+                }
+            }
+            if (string.Equals(projectFile.Extension, ".cs", StringComparison.OrdinalIgnoreCase) &&
+                propertiesElement.TryGetProperty("MSBuildProjectFullPath", out var evaluatedPath) &&
+                evaluatedPath.GetString() is { Length: > 0 } path)
+            {
+                // File-based evaluation reports apphost.cs.csproj as both MSBuildProjectFullPath
+                // and a direct package's DefiningProjectFullPath. Its directives belong to apphost.cs,
+                // while packages defined by any other file must still update their real import.
+                evaluatedProjectFile = new FileInfo(path);
+            }
+            context.ProjectRestoreTargets[projectFile.FullName] =
+                propertiesElement.TryGetProperty("NuGetRestoreTargets", out var restoreTargets)
+                    ? restoreTargets.GetString() ?? string.Empty
+                    : string.Empty;
             if (propertiesElement.TryGetProperty("ManagePackageVersionsCentrally", out var managePkgVersionsElement))
             {
                 var managePkgVersionsValue = managePkgVersionsElement.GetString();
@@ -991,7 +1512,9 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
             {
                 var packageId = packageReference.GetProperty("Identity").GetString() ?? throw new ProjectUpdaterException(UpdateCommandStrings.PackageReferenceNoIdentity);
 
-                if (!IsUpdatablePackage(packageId))
+                if (!IsUpdatablePackage(packageId)
+                    && !(string.Equals(packageId, "Aspire.Hosting.AppHost", StringComparison.OrdinalIgnoreCase)
+                        && IsAppHostProject(projectFile, context.AppHostProjectFile) && !context.UsesAppHostSdk))
                 {
                     continue;
                 }
@@ -1002,12 +1525,20 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
                 }
                 else
                 {
+                    var definingFile = projectFile;
+                    if (packageReference.TryGetProperty("DefiningProjectFullPath", out var definingPath)
+                        && definingPath.GetString() is { Length: > 0 } path)
+                    {
+                        var declaredFile = new FileInfo(path);
+                        definingFile = IsAppHostProject(declaredFile, evaluatedProjectFile) ? projectFile : declaredFile;
+                    }
+                    await CaptureFileAsync(context, definingFile, cancellationToken);
                     // Traditional package management - Version should be in PackageReference
                     if (!packageReference.TryGetProperty("Version", out var versionElement))
                     {
                         // Version attribute is missing - treat as wildcard
                         var packageVersion = "*";
-                        await AnalyzePackageForTraditionalManagementAsync(packageId, packageVersion, projectFile, context, cancellationToken);
+                        await AnalyzePackageForTraditionalManagementAsync(packageId, packageVersion, projectFile, definingFile, context, cancellationToken);
                     }
                     else
                     {
@@ -1017,7 +1548,7 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
                             // Version is * or empty - treat as wildcard
                             packageVersion = "*";
                         }
-                        await AnalyzePackageForTraditionalManagementAsync(packageId, packageVersion, projectFile, context, cancellationToken);
+                        await AnalyzePackageForTraditionalManagementAsync(packageId, packageVersion, projectFile, definingFile, context, cancellationToken);
                     }
                 }
             }
@@ -1050,7 +1581,7 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
         return new CentralPackageManagementInfo(false, null);
     }
 
-    private async Task AnalyzePackageForTraditionalManagementAsync(string packageId, string packageVersion, FileInfo projectFile, UpdateContext context, CancellationToken cancellationToken)
+    private async Task AnalyzePackageForTraditionalManagementAsync(string packageId, string packageVersion, FileInfo projectFile, FileInfo definingFile, UpdateContext context, CancellationToken cancellationToken)
     {
         var latestPackage = await GetLatestVersionOfPackageAsync(context, packageId, throwIfNotFound: false, cancellationToken: cancellationToken);
 
@@ -1070,11 +1601,16 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
 
         var updateStep = new PackageUpdateStep(
             string.Format(CultureInfo.InvariantCulture, UpdateCommandStrings.UpdatePackageFormat, packageId, packageVersion, latestPackage.Version),
-            () => UpdatePackageReferenceInProject(projectFile, latestPackage, cancellationToken),
+            () => IsAppHostProject(definingFile, projectFile)
+                ? UpdatePackageReferenceInProject(projectFile, latestPackage, context.UpdateEnvironmentVariables, cancellationToken)
+                : UpdateImportedPackageReferenceAsync(definingFile, latestPackage),
             packageId,
             packageVersion,
             latestPackage.Version,
-            projectFile);
+            projectFile)
+        {
+            Files = [definingFile]
+        };
         context.UpdateSteps.Enqueue(updateStep);
     }
 
@@ -1110,11 +1646,15 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
             packageId,
             currentVersion,
             latestPackage.Version,
-            projectFile);
+            projectFile)
+        {
+            Files = [directoryPackagesPropsFile]
+        };
         context.UpdateSteps.Enqueue(updateStep);
     }
 
-    private async Task<string?> GetPackageVersionFromDirectoryPackagesPropsAsync(string packageId, FileInfo directoryPackagesPropsFile, FileInfo projectFile, CancellationToken cancellationToken)
+    private async Task<string?> GetPackageVersionFromDirectoryPackagesPropsAsync(
+        string packageId, FileInfo directoryPackagesPropsFile, FileInfo projectFile, CancellationToken cancellationToken)
     {
         try
         {
@@ -1184,7 +1724,8 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
         return expression.Substring(2, expression.Length - 3);
     }
 
-    private async Task<string?> ResolveMSBuildPropertyAsync(string propertyName, FileInfo projectFile, CancellationToken cancellationToken)
+    private async Task<string?> ResolveMSBuildPropertyAsync(
+        string propertyName, FileInfo projectFile, CancellationToken cancellationToken)
     {
         try
         {
@@ -1231,27 +1772,51 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
         await Task.CompletedTask;
     }
 
-    private async Task UpdatePackageReferenceInProject(FileInfo projectFile, NuGetPackageCli package, CancellationToken cancellationToken)
+    private async Task UpdatePackageReferenceInProject(
+        FileInfo projectFile, NuGetPackageCli package, IReadOnlyDictionary<string, string>? environmentVariables, CancellationToken cancellationToken)
     {
         // Pass --no-restore here so each per-package edit only mutates the project / file-based AppHost.
-        // A single restore is performed once *all* update steps have completed (see UpdateProjectAsync).
-        // Restoring per-package would run NuGet against a half-updated reference graph, which is fatal
-        // when the channel's nuget.config (already merged earlier in UpdateProjectAsync for Explicit
-        // channels) contains a packageSourceMapping pinning Aspire* to a feed that does not carry the
-        // not-yet-bumped versions. See https://github.com/dotnet/aspire/issues/15891.
+        // Validation, when requested, runs once all update steps have completed.
+        // Restoring per-package would validate a half-updated graph against the candidate channel.
+        // See https://github.com/dotnet/aspire/issues/15891.
         var exitCode = await runner.AddPackageAsync(
             projectFilePath: projectFile,
             packageName: package.Id,
             packageVersion: package.Version,
             nugetSource: null,
             noRestore: true,
-            options: new(),
+            options: new() { EnvironmentVariables = environmentVariables },
             cancellationToken: cancellationToken);
 
         if (exitCode != 0)
         {
             throw new ProjectUpdaterException(string.Format(CultureInfo.InvariantCulture, UpdateCommandStrings.FailedUpdatePackageReferenceFormat, package.Id, projectFile.FullName));
         }
+    }
+
+    private static Task UpdateImportedPackageReferenceAsync(FileInfo definingFile, NuGetPackageCli package)
+    {
+        // dotnet package add only rewrites the project itself. Updating an imported declaration
+        // there would leave its old version in the shared props file and introduce a duplicate.
+        var document = XDocument.Load(definingFile.FullName, LoadOptions.PreserveWhitespace);
+        var references = document.Descendants().Where(element => element.Name.LocalName == "PackageReference"
+            && string.Equals(element.Attribute("Include")?.Value, package.Id, StringComparison.OrdinalIgnoreCase)).ToArray();
+        if (references.Length != 1)
+        {
+            throw new ProjectUpdaterException($"Expected one declaration of '{package.Id}' in '{definingFile.FullName}', found {references.Length}.");
+        }
+        var reference = references[0];
+        var versionElement = reference.Elements().FirstOrDefault(element => element.Name.LocalName == "Version");
+        if (versionElement is not null && reference.Attribute("Version") is null)
+        {
+            versionElement.Value = package.Version;
+        }
+        else
+        {
+            reference.SetAttributeValue("Version", package.Version);
+        }
+        document.Save(definingFile.FullName);
+        return Task.CompletedTask;
     }
 
     private async Task<bool> AnalyzeAndConfirmNuGetConfigChanges(UpdatePackagesContext context, XmlDocument? originalDocument, XmlDocument proposedDocument, CancellationToken cancellationToken)
@@ -1462,6 +2027,68 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
             }
             interactionService.DisplayEmptyLine();
         }
+
+        // A local mapping can reference an inherited feed without copying its URL or
+        // credentials. Include these mapping-only changes in the ordinary approval.
+        var displayedSourceKeys = changes.AddedFeeds.Concat(changes.RemovedFeeds).Concat(changes.RetainedFeeds)
+            .Select(static feed => feed.Key).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var mappingChange in changes.MappingChanges.Where(change =>
+            !displayedSourceKeys.Contains(change.SourceKey) && changes.ProposedMappings.ContainsKey(change.SourceKey)))
+        {
+            interactionService.DisplayPlainText(string.Format(CultureInfo.InvariantCulture, UpdateCommandStrings.RetainedFeedFormat, mappingChange.SourceKey));
+            foreach (var pattern in mappingChange.AddedPatterns)
+            {
+                interactionService.DisplayPlainText(string.Format(CultureInfo.InvariantCulture, UpdateCommandStrings.MappingAddedFormat, pattern));
+            }
+            foreach (var pattern in mappingChange.RemovedPatterns)
+            {
+                interactionService.DisplayPlainText(string.Format(CultureInfo.InvariantCulture, UpdateCommandStrings.MappingRemovedFormat, pattern));
+            }
+            interactionService.DisplayEmptyLine();
+        }
+    }
+    private sealed class DryRunRestoreDirectory : IDisposable
+    {
+        private readonly TemporaryCacheDirectory _directory;
+        internal DirectoryInfo Directory { get; }
+        // Validation restore outputs, including lockfiles, are written here instead of the project tree.
+        internal DirectoryInfo RestoreOutputDirectory { get; }
+
+        internal DryRunRestoreDirectory(DirectoryInfo aspireHomeDirectory)
+        {
+            var root = Path.Combine(aspireHomeDirectory.FullName, "cache", "update-validation");
+            DirectoryHelper.CreateWithOwnerOnlyPermissions(root);
+            _directory = TemporaryCacheDirectory.Create(root, "restore",
+                static path =>
+                {
+                    if (System.IO.Directory.Exists(path))
+                    {
+                        System.IO.Directory.Delete(path, recursive: true);
+                    }
+                },
+                File.Delete);
+            Directory = new DirectoryInfo(_directory.FullName);
+            try
+            {
+                Directory.CreateSubdirectory("fallback-packages");
+                RestoreOutputDirectory = Directory.CreateSubdirectory("restore-output");
+            }
+            catch
+            {
+                _directory.Dispose();
+                throw;
+            }
+        }
+
+        internal string PackagesDirectory => Path.Combine(Directory.FullName, "packages");
+        internal IReadOnlyDictionary<string, string> EnvironmentVariables => new Dictionary<string, string>
+        {
+            ["NUGET_PACKAGES"] = PackagesDirectory,
+            ["NUGET_HTTP_CACHE_PATH"] = Path.Combine(Directory.FullName, "http-cache"),
+            ["NUGET_FALLBACK_PACKAGES"] = Path.Combine(Directory.FullName, "fallback-packages")
+        };
+
+        public void Dispose() => _directory.Dispose();
     }
 }
 
@@ -1490,15 +2117,24 @@ internal sealed class UpdateContext(FileInfo appHostProjectFile, PackageChannel 
 {
     public FileInfo AppHostProjectFile { get; } = appHostProjectFile;
     public PackageChannel Channel { get; } = channel;
+    public NuGetPackageOperationConfiguration? PackageConfiguration { get; init; }
+    public IReadOnlyDictionary<string, string>? UpdateEnvironmentVariables { get; init; }
     public ConcurrentQueue<UpdateStep> UpdateSteps { get; } = new();
     public ConcurrentQueue<AnalyzeStep> AnalyzeSteps { get; } = new();
     public HashSet<string> VisitedProjects { get; } = new();
+    public Dictionary<string, string> ProjectRestoreTargets { get; } = new(StringComparers.FileSystemPath);
+    public Dictionary<string, string> AmbientPolicies { get; } = new(StringComparers.FileSystemPath);
+    public HashSet<string> SensitiveSourceValues { get; } = new(StringComparer.Ordinal);
+    public Dictionary<string, byte[]?> OriginalFiles { get; } = new(StringComparers.FileSystemPath);
     public bool FallbackParsing { get; set; }
+    public bool UsesAppHostSdk { get; set; } = true;
     public string? TargetSdkVersion { get; set; }
 }
 
 internal abstract record UpdateStep(string Description, Func<Task> Callback)
 {
+    public virtual IReadOnlyList<FileInfo> Files { get; init; } = [];
+
     /// <summary>
     /// Gets the formatted display text using Spectre Console markup for enhanced visual presentation.
     /// </summary>
@@ -1516,6 +2152,8 @@ internal record PackageUpdateStep(
     string NewVersion,
     FileInfo ProjectFile) : UpdateStep(Description, Callback)
 {
+    public override IReadOnlyList<FileInfo> Files { get; init; } = [ProjectFile];
+
     public override string GetFormattedDisplayText()
     {
         return $"[bold yellow]{PackageId.EscapeMarkup()}[/] [bold green]{CurrentVersion.EscapeMarkup()}[/] to [bold green]{NewVersion.EscapeMarkup()}[/]";
@@ -1530,7 +2168,7 @@ internal record ProjectConfigUpdateStep(
     string Description,
     Func<Task> Callback,
     string? CurrentChannel,
-    string NewChannel,
+    string? NewChannel,
     string? CurrentSdkVersion,
     string NewSdkVersion) : UpdateStep(Description, Callback)
 {
@@ -1542,7 +2180,10 @@ internal record ProjectConfigUpdateStep(
             var currentChannel = string.IsNullOrEmpty(CurrentChannel)
                 ? $"[grey]{UpdateCommandStrings.ChannelNonePlaceholder.EscapeMarkup()}[/]"
                 : $"[bold green]{CurrentChannel.EscapeMarkup()}[/]";
-            changes.Add($"[bold yellow]aspire.config.json#channel[/] {currentChannel} to [bold green]{NewChannel.EscapeMarkup()}[/]");
+            var newChannel = string.IsNullOrEmpty(NewChannel)
+                ? $"[grey]{UpdateCommandStrings.ChannelNonePlaceholder.EscapeMarkup()}[/]"
+                : $"[bold green]{NewChannel.EscapeMarkup()}[/]";
+            changes.Add($"[bold yellow]aspire.config.json#channel[/] {currentChannel} to {newChannel}");
         }
 
         if (!string.Equals(CurrentSdkVersion, NewSdkVersion, StringComparison.OrdinalIgnoreCase))

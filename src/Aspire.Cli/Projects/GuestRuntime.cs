@@ -8,7 +8,6 @@ using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Aspire.TypeSystem;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Projects;
 
@@ -23,6 +22,7 @@ internal sealed class GuestRuntime
     private readonly FileLoggerProvider? _fileLoggerProvider;
     private readonly IEnvironment _environment;
     private readonly ProfilingTelemetry _profilingTelemetry;
+    private readonly IProcessExecutionFactory _processExecutionFactory;
     private readonly CommandSpec[]? _installDependencies;
 
     /// <summary>
@@ -32,6 +32,7 @@ internal sealed class GuestRuntime
     /// <param name="logger">Logger for debugging output.</param>
     /// <param name="environment">The environment abstraction for OS detection.</param>
     /// <param name="profilingTelemetry">Profiling telemetry for child-process diagnostics.</param>
+    /// <param name="processExecutionFactory">Factory for owned guest processes and dependency commands.</param>
     /// <param name="fileLoggerProvider">Optional file logger for writing output to disk.</param>
     /// <param name="installDependencies">
     /// Optional internal command sequence that replaces <see cref="RuntimeSpec.InstallDependencies"/>.
@@ -41,6 +42,7 @@ internal sealed class GuestRuntime
         ILogger logger,
         IEnvironment environment,
         ProfilingTelemetry profilingTelemetry,
+        IProcessExecutionFactory processExecutionFactory,
         FileLoggerProvider? fileLoggerProvider = null,
         CommandSpec[]? installDependencies = null)
     {
@@ -52,12 +54,13 @@ internal sealed class GuestRuntime
         _fileLoggerProvider = fileLoggerProvider;
         _environment = environment;
         _profilingTelemetry = profilingTelemetry;
+        _processExecutionFactory = processExecutionFactory;
         _installDependencies = installDependencies
             ?? (spec.InstallDependencies is null ? null : [spec.InstallDependencies]);
     }
 
-    public GuestRuntime(RuntimeSpec spec, ILogger logger, Func<string, string?> commandResolver, IEnvironment environment, ProfilingTelemetry profilingTelemetry, FileLoggerProvider? fileLoggerProvider = null)
-        : this(spec, logger, environment, profilingTelemetry, fileLoggerProvider)
+    public GuestRuntime(RuntimeSpec spec, ILogger logger, Func<string, string?> commandResolver, IEnvironment environment, ProfilingTelemetry profilingTelemetry, IProcessExecutionFactory processExecutionFactory, FileLoggerProvider? fileLoggerProvider = null)
+        : this(spec, logger, environment, profilingTelemetry, processExecutionFactory, fileLoggerProvider)
     {
         ArgumentNullException.ThrowIfNull(commandResolver);
     }
@@ -647,9 +650,7 @@ internal sealed class GuestRuntime
         _spec.Language,
         _logger,
         fileLoggerProvider: _fileLoggerProvider,
-        // The launcher logs each guest stdout/stderr line itself, so the execution factory is given
-        // a NullLogger to avoid double-logging those lines.
-        processExecutionFactory: new ProcessExecutionFactory(_environment, NullLogger<ProcessExecutionFactory>.Instance));
+        processExecutionFactory: _processExecutionFactory);
 
     /// <summary>
     /// Replaces placeholders in command arguments with actual values.

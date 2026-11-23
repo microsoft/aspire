@@ -12,7 +12,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="$(SharedDir)OverloadResolutionPriorityAttribute.cs" Link="Utils\OverloadResolutionPriorityAttribute.cs" />
+    <Compile Include="$(SharedDir)PublishValidationExtensions.cs" Link="PublishValidationExtensions.cs" />
   </ItemGroup>
 
   <ItemGroup>

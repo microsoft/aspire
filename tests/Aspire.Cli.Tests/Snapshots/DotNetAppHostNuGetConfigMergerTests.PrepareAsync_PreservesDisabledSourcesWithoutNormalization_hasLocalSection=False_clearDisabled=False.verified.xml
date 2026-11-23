@@ -1,0 +1,14 @@
+﻿<configuration>
+  <packageSourceMapping>
+    <clear />
+    <packageSource key="company">
+      <package pattern="*" />
+    </packageSource>
+    <packageSource key="aspire-test">
+      <package pattern="Aspire*" />
+    </packageSource>
+  </packageSourceMapping>
+  <packageSources>
+    <add key="aspire-test" value="https://new.example/v3/index.json" />
+  </packageSources>
+</configuration>

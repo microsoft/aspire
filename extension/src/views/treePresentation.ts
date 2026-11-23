@@ -2,17 +2,19 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { ResourceState, HealthStatus, StateStyle } from '../editor/resourceConstants';
-import { compareResourceCommands, getParameterValueDescription, getResourceStateDescription } from '../utils/resourceDisplay';
+import { compareResourceCommands, getParameterValueDescription, getResourceSource, getResourceStateDescription } from '../utils/resourceDisplay';
 import {
     tooltipType,
     tooltipState,
     tooltipHealth,
+    tooltipSource,
     tooltipEndpoints,
     resourceDescriptionHealth,
     resourceDescriptionExitCode,
 } from '../loc/strings';
 import { isLinkableUrl } from '../utils/urlSchemes';
 import { ResourceCommandJson, ResourceJson } from '../data/AppHostDataRepository';
+import { launchConfigurationTypePropertyName } from '../debugger/debuggerInstallHints';
 
 export const integratedBrowserOpenCommand = 'workbench.action.browser.open';
 export const terminalEnabledPropertyName = 'terminal.enabled';
@@ -97,9 +99,63 @@ export function getParentResourceName(resource: ResourceJson): string | null {
     return resource.properties?.['resource.parentName'] ?? null;
 }
 
-export function getResourceContextValue(resource: ResourceJson): string {
+export function getResourceSourcePaths(resource: ResourceJson, appHostPath?: string): string[] {
+    // An explicitly empty source opts out of inference, matching ResourceSource.GetSourceModel.
+    if (resource.properties?.['resource.source'] === '') {
+        return [];
+    }
+
+    const appHostDirectory = appHostPath ? path.dirname(appHostPath) : undefined;
+    const projectPath = resource.properties?.['project.path']?.trim();
+    const sourcePath = resource.properties?.['resource.sourcePath']?.trim();
+    // Tools also publish executable.path for their launcher, not for the tool's source.
+    const hasNonFilesystemSource = Boolean(resource.properties?.['container.image']?.trim() || resource.properties?.['tool.package']?.trim());
+    const executablePath = hasNonFilesystemSource ? undefined : resource.properties?.['executable.path']?.trim();
+    const executableWorkDir = resource.properties?.['executable.workDir']?.trim();
+    const hasLaunchConfigurationType = Boolean(resource.properties?.[launchConfigurationTypePropertyName]?.trim());
+    const executableDirectory = executableWorkDir && path.isAbsolute(executableWorkDir)
+        ? executableWorkDir
+        : appHostDirectory
+            ? path.resolve(appHostDirectory, executableWorkDir || '.')
+            : undefined;
+
+    // resource.source is display text (e.g. "OpenAI" or "frontend/http"), not a path contract.
+    // For {"executable.path":"./run.cmd","executable.workDir":"/repo/worker"},
+    // the command is relative to the worker directory, not the AppHost.
+    const sourceValues = [
+        { source: projectPath, directory: appHostDirectory },
+        { source: sourcePath, directory: appHostDirectory },
+        {
+            // Older hosts only identify language launchers when the resource is eligible for debugging.
+            source: !sourcePath && !hasLaunchConfigurationType && executablePath && (path.isAbsolute(executablePath) || executablePath.includes(path.sep) || executablePath.includes('/'))
+                ? executablePath
+                : undefined,
+            directory: executableDirectory,
+        },
+        // PATH commands such as npm have no local executable source; open their declared working directory.
+        { source: !sourcePath && executablePath ? executableWorkDir : undefined, directory: appHostDirectory },
+    ];
+    return sourceValues.flatMap(({ source, directory }) => {
+        const trimmedSource = source?.trim();
+        if (!trimmedSource) {
+            return [];
+        }
+
+        return path.isAbsolute(trimmedSource)
+            ? [path.resolve(trimmedSource)]
+            : directory
+                ? [path.resolve(directory, trimmedSource)]
+                : [];
+    });
+}
+
+export function getResourceContextValue(resource: ResourceJson, canAttachDebugger: boolean = false, appHostPath?: string): string {
     const commands = resource.commands;
     const parts = ['resource'];
+    // Render from metadata, like AppHost source; disk availability is checked only on invocation.
+    if (getResourceSourcePaths(resource, appHostPath).length > 0) {
+        parts.push('canOpenSource');
+    }
     if (hasEnabledCommand(commands, 'start') || hasEnabledCommand(commands, 'resource-start')) {
         parts.push('canStart');
     }
@@ -111,6 +167,9 @@ export function getResourceContextValue(resource: ResourceJson): string {
     }
     if (isTerminalEnabled(resource)) {
         parts.push('canOpenTerminal');
+    }
+    if (canAttachDebugger) {
+        parts.push('canAttachDebugger');
     }
     return parts.join(':');
 }
@@ -230,6 +289,10 @@ export function buildResourceDescription(resource: ResourceJson): string {
     if (exitCode != null && exitCode !== 0) {
         parts.push(resourceDescriptionExitCode(exitCode));
     }
+    const source = getResourceSource(resource);
+    if (source) {
+        parts.push(source);
+    }
     return parts.join(' · ');
 }
 
@@ -257,6 +320,12 @@ export function buildResourceTooltip(resource: ResourceJson): vscode.MarkdownStr
                 md.appendMarkdown(`${icon} ${name}: ${report.status ?? 'Unknown'}${report.description ? ` - ${report.description}` : ''}\n\n`);
             }
         }
+    }
+    const source = getResourceSource(resource);
+    if (source) {
+        md.appendMarkdown(`${tooltipSource} `);
+        md.appendText(source);
+        md.appendMarkdown('\n\n');
     }
     const urls = getLinkableResourceUrls(resource);
     if (urls.length > 0) {

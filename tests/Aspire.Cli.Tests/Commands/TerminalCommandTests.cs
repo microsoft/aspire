@@ -4,6 +4,7 @@
 using System.Text.Json;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Commands;
+using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Hosting.Backchannel;
 using Aspire.Cli.Tests.Utils;
@@ -163,53 +164,70 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
         }
     }
 
-    [Fact]
-    public async Task TerminalCommand_WhenReplicaIndexOutOfRange_ReturnsInvalidCommand()
+    [Theory]
+    [InlineData("terminal attach myresource --replica 0")]
+    [InlineData("terminal attach myresource -r 1")]
+    [InlineData("terminal tape play myresource --tape-file probe.tape --replica 0")]
+    [InlineData("terminal tape play myresource --tape-file probe.tape -r 1")]
+    public void TerminalCommand_LegacyReplicaOptionsAreAcceptedButHidden(string arguments)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var result = provider.GetRequiredService<RootCommand>().Parse(arguments);
+
+        Assert.Empty(result.Errors);
+        var replicaOption = Assert.Single(result.CommandResult.Command.Options, option => option.Name == "--replica");
+        Assert.True(replicaOption.Hidden);
+        Assert.Contains("-r", replicaOption.Aliases);
+    }
+
+    [Theory]
+    [InlineData("--replica")]
+    [InlineData("-r")]
+    public async Task TerminalAttachCommand_UnavailableLegacyReplica_ReturnsInvalidCommand(string option)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var interaction = new TestInteractionService();
         var (provider, _) = CreateProviderWithBackchannel(
             workspace,
             backchannel =>
             {
-                backchannel.ResourceSnapshots = [CreateSnapshot("myresource")];
-                backchannel.TerminalInfoResponse = new GetTerminalInfoResponse
+                backchannel.ResourceSnapshots =
+                [
+                    CreateSnapshot("myresource-abc123", "myresource"),
+                    CreateSnapshot("myresource-def456", "myresource")
+                ];
+                backchannel.TerminalInfoResponse = new()
                 {
                     IsAvailable = true,
                     Replicas =
                     [
-                        new TerminalReplicaInfo
-                        {
-                            ReplicaIndex = 0,
-                            Label = "myresource-0",
-                            ConsumerUdsPath = "/tmp/does-not-exist-0.sock",
-                            IsAlive = true
-                        },
-                        new TerminalReplicaInfo
-                        {
-                            ReplicaIndex = 1,
-                            Label = "myresource-1",
-                            ConsumerUdsPath = "/tmp/does-not-exist-1.sock",
-                            IsAlive = true
-                        }
+                        new() { ReplicaIndex = 0, Label = "myresource-0", ConsumerUdsPath = "unused", IsAlive = true },
+                        new() { ReplicaIndex = 1, Label = "myresource-1", ConsumerUdsPath = "unused", IsAlive = true }
                     ]
                 };
-            });
+            },
+            options => options.InteractionServiceFactory = _ => interaction);
         using (provider)
         {
-            var command = provider.GetRequiredService<RootCommand>();
-            var result = command.Parse("terminal attach myresource --replica 99");
-            var exitCode = await result.InvokeAsync().DefaultTimeout();
+            var result = provider.GetRequiredService<RootCommand>().Parse(
+                $"terminal attach myresource {option} 7");
 
-            Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+            Assert.Empty(result.Errors);
+            Assert.Equal(CliExitCodes.InvalidCommand, await result.InvokeAsync().DefaultTimeout());
+            Assert.Equal(
+                [string.Format(TerminalCommandStrings.ReplicaNotFound, 7, "myresource", "0, 1")],
+                interaction.DisplayedErrors);
         }
     }
 
     [Fact]
     public async Task TerminalCommand_DisplayNameMatchesParentResource()
     {
-        // Replicated resources share a DisplayName equal to the parent resource that
-        // carries the TerminalAnnotation. Passing the parent name on the CLI must
-        // resolve to the same canonical name when looking up terminal info.
+        // Terminal discovery still requires the parent model name for a singleton
+        // whose DCP instance name differs from its display name.
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         string? capturedResourceName = null;
 
@@ -219,8 +237,7 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
             {
                 bc.ResourceSnapshots =
                 [
-                    CreateSnapshot("myresource-0", displayName: "myresource"),
-                    CreateSnapshot("myresource-1", displayName: "myresource")
+                    CreateSnapshot("myresource-0", displayName: "myresource")
                 ];
                 bc.TerminalInfoResponse = new GetTerminalInfoResponse
                 {
@@ -246,17 +263,25 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
         }
     }
 
-    [Fact]
-    public async Task TerminalCommand_NonInteractiveMultiReplicaWithoutFlag_ReturnsInvalidCommand()
+    [Theory]
+    [InlineData("")]
+    [InlineData(" --non-interactive")]
+    public async Task TerminalCommand_AmbiguousDisplayName_ReturnsInvalidCommandWithoutPrompting(string options)
     {
-        // When stdin or stdout is redirected and the resource has more than one replica,
-        // the command must require --replica explicitly (rather than try to prompt).
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var interaction = new TestInteractionService
+        {
+            PromptForSelectionCallback = (_, _, _, _) => throw new InvalidOperationException("Unexpected replica prompt.")
+        };
         var (provider, _) = CreateProviderWithBackchannel(
             workspace,
             backchannel =>
             {
-                backchannel.ResourceSnapshots = [CreateSnapshot("myresource")];
+                backchannel.ResourceSnapshots =
+                [
+                    CreateSnapshot("myresource-abc123", "myresource"),
+                    CreateSnapshot("myresource-def456", "myresource")
+                ];
                 backchannel.TerminalInfoResponse = new GetTerminalInfoResponse
                 {
                     IsAvailable = true,
@@ -278,16 +303,18 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
                         }
                     ]
                 };
-            });
+            },
+            options => options.InteractionServiceFactory = _ => interaction);
         using (provider)
         {
             var command = provider.GetRequiredService<RootCommand>();
-            var result = command.Parse("terminal attach myresource");
-            // Tests run with both stdout and stdin redirected (xUnit pipes them), so
-            // Console.IsInputRedirected and Console.IsOutputRedirected are both true.
+            var result = command.Parse("terminal attach myresource" + options);
             var exitCode = await result.InvokeAsync().DefaultTimeout();
 
             Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+            Assert.Equal(
+                [string.Format(TerminalCommandStrings.ResourceAmbiguous, "myresource", "myresource-abc123, myresource-def456")],
+                interaction.DisplayedErrors);
         }
     }
 

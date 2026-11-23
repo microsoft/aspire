@@ -34,16 +34,16 @@ max-daily-ai-credits: -1
 # ──────────────────────────────────────────────────────────
 # To change the target milestone, update the MILESTONE value
 # in the env block below, then run:
-#   gh aw compile
+#   gh aw compile --schedule-seed microsoft/aspire
 # ──────────────────────────────────────────────────────────
 
 env:
   PRODUCT: "Aspire"
   REPO: "microsoft/aspire"
   DOCS_REPO: "microsoft/aspire.dev"
-  MILESTONE_START: "2026-08-19"
-  MILESTONE: "13.6"
-  PREVIOUS_MILESTONE: "13.5"
+  MILESTONE_START: "2026-09-30"
+  MILESTONE: "17.0"
+  PREVIOUS_MILESTONE: "13.6"
   RELEASE_NOTES_URL: "https://aka.ms/aspire/update-latest"
   BATCH_SIZE: "20"
 
@@ -54,6 +54,7 @@ on:
 
 jobs:
   fetch-data:
+    if: github.repository == 'microsoft/aspire'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -72,6 +73,68 @@ jobs:
           BATCH_SIZE="${{ env.BATCH_SIZE }}"
           DATA_DIR="/tmp/gh-aw/pr-data"
           mkdir -p "$DATA_DIR"
+
+          # Run `gh pr list` with bounded retry. The large (--limit 5000)
+          # GraphQL queries below occasionally hit a transient 502/504 from
+          # GitHub's GraphQL gateway or get a truncated response body. Retry
+          # only those transient failures (4 attempts, 15s/30s/60s backoff);
+          # Invalid JSON after a successful command is retryable even if gh
+          # printed warnings. Other command errors and valid non-array JSON
+          # fail immediately. Usage: gh_pr_list_with_retry OUT ARGS...
+          gh_pr_list_with_retry() {
+            local out="$1"; shift
+            local delays=(15 30 60)
+            local attempt=1
+            local diagnostics err validation_err
+            diagnostics=$(mktemp -d)
+            err="$diagnostics/gh.stderr"
+            validation_err="$diagnostics/jq.stderr"
+            while true; do
+              local status=0 validation_status=0
+              local transient=false
+              : > "$validation_err"
+              if gh pr list "$@" > "$out" 2> "$err"; then
+                if jq -s -e 'if length == 1 and (.[0] | type == "array") then true else error("Expected exactly one JSON array") end' \
+                    "$out" > /dev/null 2> "$validation_err"; then
+                  tr '\r' '\n' < "$err" | sed 's/##\[/##\\[/g; s/^/gh stderr: /' >&2
+                  rm -f "$err" "$validation_err"
+                  rmdir "$diagnostics"
+                  return 0
+                else
+                  validation_status=$?
+                fi
+                if ! jq -s -e 'length > 0' "$out" > /dev/null 2>&1; then
+                  transient=true
+                fi
+              else
+                status=$?
+                # Examples: "HTTP 502: Bad Gateway", "unexpected end of JSON input".
+                if grep -qE 'HTTP 5[0-9][0-9]|unexpected end of JSON input' "$err"; then
+                  transient=true
+                fi
+              fi
+
+              echo "gh pr list attempt $attempt failed for $out (gh exit=$status, jq exit=$validation_status)" >&2
+              tr '\r' '\n' < "$err" | sed 's/##\[/##\\[/g; s/^/gh stderr: /' >&2
+              tr '\r' '\n' < "$validation_err" | sed 's/##\[/##\\[/g; s/^/jq stderr: /' >&2
+              # PR bodies can be large and contain workflow-command syntax.
+              # Bound the preview and prefix every line, including CR-delimited lines.
+              # Legacy "##[command]" markers are recognized even after a prefix.
+              echo "Response preview (first 4096 bytes of $(wc -c < "$out") bytes):" >&2
+              head -c 4096 "$out" | tr '\r' '\n' | sed 's/##\[/##\\[/g; s/^/stdout: /' >&2
+              printf '\n' >&2
+              if [ "$transient" != true ] || [ "$attempt" -gt "${#delays[@]}" ]; then
+                rm -f "$err" "$validation_err"
+                rmdir "$diagnostics"
+                echo "::error::gh pr list failed after $attempt attempt(s)"
+                return 1
+              fi
+              local delay="${delays[$((attempt - 1))]}"
+              echo "::warning::gh pr list attempt $attempt failed with a transient error; retrying in ${delay}s"
+              sleep "$delay"
+              attempt=$((attempt + 1))
+            done
+          }
 
           # 0. Clone the memory branch to read existing state (prs/, changes/,
           #    feedback-issue.json). The full content is copied to
@@ -143,11 +206,13 @@ jobs:
           rm -f "$CLONE_ERR"
 
           # 1. Fetch ALL merged PRs in milestone, sorted by merge date ascending
-          gh pr list --repo "$REPO" --state merged --limit 5000 \
+          gh_pr_list_with_retry "$DATA_DIR/all-milestone-prs.raw.json" \
+            --repo "$REPO" --state merged --limit 5000 \
             --search "milestone:$MILESTONE" \
-            --json number,title,body,author,mergedBy,mergedAt,labels,additions,deletions,changedFiles \
-            | jq 'sort_by(.mergedAt)' \
+            --json number,title,body,author,mergedBy,mergedAt,labels,additions,deletions,changedFiles
+          jq 'sort_by(.mergedAt)' "$DATA_DIR/all-milestone-prs.raw.json" \
             > "$DATA_DIR/all-milestone-prs.json"
+          rm -f "$DATA_DIR/all-milestone-prs.raw.json"
 
           TOTAL=$(jq length "$DATA_DIR/all-milestone-prs.json")
           echo "Total merged PRs in milestone: $TOTAL"
@@ -225,11 +290,13 @@ jobs:
             DOCS_MERGED_RANGE="merged:${MILESTONE_START}..${BATCH_CUTOFF}"
             echo "Capping docs PRs to merged on or before $BATCH_CUTOFF (batch is full)"
           fi
-          gh pr list --repo "$DOCS_REPO" --state merged --limit 5000 \
+          gh_pr_list_with_retry "$DATA_DIR/all-docs-prs.raw.json" \
+            --repo "$DOCS_REPO" --state merged --limit 5000 \
             --search "$DOCS_MERGED_RANGE" \
-            --json number,title,body,author,mergedBy,mergedAt,labels,additions,deletions,changedFiles,files \
-            | jq 'sort_by(.mergedAt)' \
+            --json number,title,body,author,mergedBy,mergedAt,labels,additions,deletions,changedFiles,files
+          jq 'sort_by(.mergedAt)' "$DATA_DIR/all-docs-prs.raw.json" \
             > "$DATA_DIR/all-docs-prs.json"
+          rm -f "$DATA_DIR/all-docs-prs.raw.json"
 
           DOCS_TOTAL=$(jq length "$DATA_DIR/all-docs-prs.json")
           echo "Total docs PRs merged since $MILESTONE_START: $DOCS_TOTAL"
@@ -318,7 +385,7 @@ jobs:
           name: changelog-data
           path: /tmp/gh-aw/
 
-if: github.repository_owner == 'microsoft' && needs.fetch-data.outputs.has-work == 'true'
+if: github.repository == 'microsoft/aspire' && needs.fetch-data.outputs.has-work == 'true'
 
 permissions:
   contents: read
@@ -520,7 +587,7 @@ previous entries. A companion feedback issue collects editorial comments.
 
 <!-- Keep the hardcoded values below in sync with the env block above. -->
 > **Note:** `${PRODUCT}`, `${REPO}`, `${DOCS_REPO}`, `${MILESTONE_START}`, `${MILESTONE}`, `${PREVIOUS_MILESTONE}`, `${RELEASE_NOTES_URL}`, and `${BATCH_SIZE}` refer to values set in the workflow's
-> `env` block (currently **`Aspire`**, **`microsoft/aspire`**, **`microsoft/aspire.dev`**, **`2026-08-19`**, **`13.6`**, **`13.5`**, **`https://aka.ms/aspire/update-latest`**, and **`20`**). All file names,
+> `env` block (currently **`Aspire`**, **`microsoft/aspire`**, **`microsoft/aspire.dev`**, **`2026-09-30`**, **`17.0`**, **`13.6`**, **`https://aka.ms/aspire/update-latest`**, and **`20`**). All file names,
 > titles, and references below derive from those values.
 
 ## Important: available tools

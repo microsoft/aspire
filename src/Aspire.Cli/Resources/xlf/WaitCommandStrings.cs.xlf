@@ -4,7 +4,7 @@
     <body>
       <trans-unit id="Description">
         <source>Wait for a resource to reach a target status</source>
-        <target state="new">Wait for a resource to reach a target status</target>
+        <target state="translated">Počkejte, až prostředek dosáhne cílového stavu.</target>
         <note />
       </trans-unit>
       <trans-unit id="InvalidStatusValue">
@@ -14,12 +14,12 @@
       </trans-unit>
       <trans-unit id="ResourceArgumentDescription">
         <source>The name of the resource to wait for</source>
-        <target state="new">The name of the resource to wait for</target>
+        <target state="translated">Název prostředku, na který se má čekat.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceEnteredFailedState">
         <source>Resource '{0}' entered a failed state: {1}</source>
-        <target state="needs-review-translation">Prostředek {0} vstoupil do stavu selhání: {1}.</target>
+        <target state="translated">Prostředek {0} přešel do stavu selhání: {1}</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceNotFound">

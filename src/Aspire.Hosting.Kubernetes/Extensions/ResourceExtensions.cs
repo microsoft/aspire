@@ -87,7 +87,11 @@ internal static class ResourceExtensions
                 : kvp.Value.Expression   // All secret values are strings
                   ?? string.Empty;
 
-            secret.StringData[kvp.Key] = expression.EnsureStringOutput();
+            // Quote the evaluated result so JSON or other embedded quotes remain valid YAML.
+            expression = expression.EnsureStringOutput();
+            secret.StringData[kvp.Key] = expression.ContainsHelmExpression()
+                ? expression.ToQuotedHelmTemplateExpression()
+                : expression;
             processedKeys.Add(kvp.Key);
         }
 
@@ -119,7 +123,12 @@ internal static class ResourceExtensions
                              : kvp.Value.Expression   // All configmap values are strings
                                ?? string.Empty;
 
-            configMap.Data[kvp.Key] = expression.EnsureStringOutput();
+            // Values can contain JSON, quotes, or newlines. YAML quoting must apply to
+            // the complete Helm result, not to the unevaluated substitution.
+            expression = expression.EnsureStringOutput();
+            configMap.Data[kvp.Key] = expression.ContainsHelmExpression()
+                ? expression.ToQuotedHelmTemplateExpression()
+                : expression;
             processedKeys.Add(kvp.Key);
         }
 
@@ -431,7 +440,6 @@ internal static class ResourceExtensions
         return container;
     }
 
-#pragma warning disable ASPIREPROBES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
     private static ContainerV1 WithContainerProbes(this ContainerV1 container, KubernetesResource context)
     {
         if (context.Probes.Count == 0)
@@ -459,7 +467,6 @@ internal static class ResourceExtensions
 
         return container;
     }
-#pragma warning restore ASPIREPROBES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
     private static PersistentVolumeClaim CreatePersistentVolumeClaim(KubernetesResource context, VolumeMountV1 volume)
     {

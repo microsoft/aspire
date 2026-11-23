@@ -108,7 +108,7 @@ public sealed class AksMultipleNodePoolsDeploymentTests(ITestOutputHelper output
 
             // Insert the Azure Kubernetes Environment with multiple node pools AFTER CreateBuilder
             // so workerPool variable is available when apiservice references it.
-            content = content.Replace(
+            content = DotnetProjectDeploymentHelpers.ReplaceExactlyOnce(content,
                 "var builder = DistributedApplication.CreateBuilder(args);",
                 """
 var builder = DistributedApplication.CreateBuilder(args);
@@ -117,13 +117,16 @@ var builder = DistributedApplication.CreateBuilder(args);
 var aks = builder.AddAzureKubernetesEnvironment("aks")
     .WithSystemNodePool("Standard_D2as_v5", minCount: 1, maxCount: 2);
 
+// The first user pool is the default. Explicit pinning must select a different pool.
+aks.AddNodePool("general", "Standard_D2as_v5", 1, 1);
 var workerPool = aks.AddNodePool("workers", "Standard_D2as_v5", 1, 3);
 """);
 
             // Pin apiservice to the worker node pool
-            content = content.Replace(
-                "builder.AddProject<Projects." + projectName + "_ApiService>(\"apiservice\")",
-                "builder.AddProject<Projects." + projectName + "_ApiService>(\"apiservice\")\n    .WithNodePool(workerPool)");
+            var apiServiceDeclaration = $"builder.AddDotnetProject(\"apiservice\", \"../{projectName}.ApiService/{projectName}.ApiService.csproj\")";
+            content = DotnetProjectDeploymentHelpers.ReplaceExactlyOnce(content,
+                apiServiceDeclaration,
+                $"{apiServiceDeclaration}\n    .WithNodePool(workerPool)");
 
             File.WriteAllText(appHostFilePath, content);
 
@@ -171,7 +174,7 @@ var workerPool = aks.AddNodePool("workers", "Standard_D2as_v5", 1, 3);
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(6));
 
-            // Step 13: Verify node pools exist (system + workers)
+            // Step 13: Verify node pools exist (system + general + workers)
             output.WriteLine("Step 13: Verifying node pools...");
             await auto.TypeAsync($"az aks nodepool list -g {resourceGroupName} --cluster-name $AKS_NAME --query \"[].{{name:name,vmSize:vmSize,mode:mode,count:count}}\" -o table");
             await auto.EnterAsync();
@@ -185,6 +188,17 @@ var workerPool = aks.AddNodePool("workers", "Standard_D2as_v5", 1, 3);
 
             // Step 15: Verify API pod is on a worker pool node
             output.WriteLine("Step 15: Verifying API pod scheduling on workers pool...");
+            // Placement alone can pass by chance or through the default user pool.
+            // Check the deployed scheduling constraint as well as the selected node.
+            await DotnetProjectDeploymentHelpers.RunScriptAsync(auto, counter, """
+                set -euo pipefail
+                kubectl get deployment --all-namespaces -l app.kubernetes.io/component=apiservice -o json |
+                    jq -e '.items | length == 1 and all(.[]; .spec.template.spec.nodeSelector.agentpool == "workers")'
+                kubectl get pods --all-namespaces -l app.kubernetes.io/component=apiservice -o json |
+                    jq -e '.items | length > 0 and all(.[]; .spec.nodeSelector.agentpool == "workers")'
+                kubectl get deployment --all-namespaces -l app.kubernetes.io/component=webfrontend -o json |
+                    jq -e '.items | length == 1 and all(.[]; .spec.template.spec.nodeSelector.agentpool == "general")'
+                """, TimeSpan.FromSeconds(30));
             await auto.TypeAsync("[ -n \"$NS\" ] || { echo 'ERROR: namespace not set'; exit 1; }; " +
                       "POD_NODE=$(kubectl get pods -n \"$NS\" -l app.kubernetes.io/component=apiservice -o jsonpath='{.items[0].spec.nodeName}') && " +
                       "[ -n \"$POD_NODE\" ] || { echo 'ERROR: apiservice pod node not found'; exit 1; }; " +

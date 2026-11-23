@@ -1,0 +1,6 @@
+﻿[?25lSelect an integration to add:
+
+> redis (Aspire.Hosting.Redis)
+
+(Type to search)
+[2K[1A[2K[1A[2K[1A[2K[1A[2K[?25hSelect an integration to add: redis (Aspire.Hosting.Redis)

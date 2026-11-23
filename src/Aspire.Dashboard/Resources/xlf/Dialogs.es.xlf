@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="es" original="../Dialogs.resx">
     <body>
@@ -25,28 +25,28 @@ This command configures skill files for your AI agent. The skill files tell the 
 Once connected, agents can start your app, check resource health, fetch logs and traces, and more.
 
 For more information about using AI agents with Aspire, such as setting up skills, see [AI coding agents]({0}).</source>
-        <target state="new">Aspire gives AI coding agents deep observability into your app using the same information visible in the dashboard. Agents use telemetry to diagnose issues faster and verify fixes with confidence. 🚀
+        <target state="translated">Aspire proporciona a los agentes de programación con IA una observabilidad detallada de tu aplicación mediante la misma información que aparece en el panel. Los agentes usan la telemetría para diagnosticar problemas más rápido y verificar las correcciones con confianza. 🚀
 
-- 📦 Resource state, health checks, and relationships
-- 🖥️ Console logs
-- 📊 Distributed traces
-- 🪵 Structured logs
+- 📦 Estado de los recursos, comprobaciones de estado y relaciones
+- 🖥️ Registros de la consola
+- 📊 Seguimientos distribuidos
+- 🪵 Registros estructurados
 
-## Getting started
+## Introducción
 
-AI agents access dashboard telemetry through the Aspire CLI. If you haven't installed it yet, [install the Aspire CLI]({1}).
+Los agentes de IA acceden a la telemetría del panel mediante la CLI de Aspire. Si aún no la has instalado, [instale la CLI de Aspire]({1}).
 
-Initialize AI agent support in your project with:
+Inicialice la compatibilidad del agente de IA en el proyecto con:
 
 ```bash
 aspire agent init
 ```
 
-This command configures skill files for your AI agent. The skill files tell the agent how to use Aspire CLI commands like [`aspire logs`](https://aspire.dev/reference/cli/commands/aspire-logs/) and [`aspire otel traces`](https://aspire.dev/reference/cli/commands/aspire-otel-traces/).
+Este comando configura los archivos de aptitud para el agente de inteligencia artificial. Estos archivos indican al agente cómo usar comandos de la CLI de Aspire, como [`aspire logs`](https://aspire.dev/reference/cli/commands/aspire-logs/) y [`aspire otel traces`](https://aspire.dev/reference/cli/commands/aspire-otel-traces/).
 
-Once connected, agents can start your app, check resource health, fetch logs and traces, and more.
+Una vez conectado, los agentes pueden iniciar la aplicación, comprobar el estado de los recursos, capturar registros y seguimientos, etc.
 
-For more information about using AI agents with Aspire, such as setting up skills, see [AI coding agents]({0}).</target>
+Para obtener más información sobre el uso de agentes de IA con Aspire, incluida la configuración de aptitudes, consulta [Agentes de programación con IA]({0}).</target>
         <note>{0} is the learn more URL, {1} is the install CLI URL</note>
       </trans-unit>
       <trans-unit id="AIAgentsDialogStandaloneDescription">
@@ -68,29 +68,244 @@ aspire otel logs --dashboard-url {0}
 This is one example of how AI agents can access telemetry for your app. See [`aspire otel`](https://aspire.dev/reference/cli/commands/aspire-otel/) and [`aspire export`](https://aspire.dev/reference/cli/commands/aspire-export/).
 
 For more information about using AI agents with the dashboard, including setting up skills, see [Standalone dashboard and AI coding agents]({1}).</source>
-        <target state="new">Aspire gives AI coding agents deep observability into your app using the same information visible in the dashboard. Agents use telemetry to diagnose issues faster and verify fixes with confidence. 🚀
+        <target state="translated">Aspire proporciona a los agentes de programación con IA una observabilidad detallada de tu aplicación mediante la misma información que aparece en el panel. Los agentes usan la telemetría para diagnosticar problemas más rápido y verificar las correcciones con confianza. 🚀
 
-- 📊 Distributed traces
-- 🔗 Trace spans
-- 🪵 Structured logs
-- 🗂️ Zip file export
+- 📊 Seguimientos distribuidos
+- 🔗 Intervalos de traza
+- 🪵 Registros estructurados
+- 🗂️ Exportación de archivos ZIP
 
-AI agents access dashboard telemetry using the Aspire CLI. [Install the Aspire CLI]({2}) if you haven't already.
+Los agentes de IA acceden a la telemetría del panel mediante la CLI de Aspire. [Instalación de la CLI de Aspire]({2}) si aún no lo ha hecho.
 
-Use Aspire CLI commands to retrieve telemetry data directly in your terminal:
+Use los comandos de la CLI de Aspire para recuperar datos de telemetría directamente en el terminal:
 
 ```bash
-aspire otel logs --dashboard-url {0}
+registros de aspire --dashboard-url {0}
 ```
 
-This is one example of how AI agents can access telemetry for your app. See [`aspire otel`](https://aspire.dev/reference/cli/commands/aspire-otel/) and [`aspire export`](https://aspire.dev/reference/cli/commands/aspire-export/).
+Este es un ejemplo de cómo los agentes de inteligencia artificial pueden acceder a la telemetría de la aplicación. Consulte [`aspire otel`](https://aspire.dev/reference/cli/commands/aspire-otel/) y [`aspire export`](https://aspire.dev/reference/cli/commands/aspire-export/).
 
-For more information about using AI agents with the dashboard, including setting up skills, see [Standalone dashboard and AI coding agents]({1}).</target>
+Para obtener más información sobre el uso de agentes de IA con el panel, incluida la configuración de habilidades, consulta [Panel independiente y agentes de programación con IA]({1}).</target>
         <note>{0} is the dashboard URL, {1} is the learn more URL, {2} is the install CLI URL</note>
       </trans-unit>
       <trans-unit id="AIAgentsDialogTitle">
         <source>AI agents</source>
-        <target state="new">AI agents</target>
+        <target state="translated">Agentes de IA</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackBack">
+        <source>Back</source>
+        <target state="translated">Atrás</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackContinue">
+        <source>Continue</source>
+        <target state="translated">Continuar</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackCopied">
+        <source>Feedback copied to the clipboard.</source>
+        <target state="translated">Comentarios copiados en el Portapapeles.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackCopiedAndOpened">
+        <source>Feedback copied. Paste it into the GitHub discussion to share it.</source>
+        <target state="translated">Comentarios copiados. Péguelo en la discusión de GitHub para compartirlo.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackCopy">
+        <source>Copy feedback</source>
+        <target state="translated">Copiar comentarios</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackCopyAndOpen">
+        <source>Copy and open discussion</source>
+        <target state="translated">Copiar y abrir discusión</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackCopyFailed">
+        <source>The clipboard could not be accessed. Copy the preview manually.</source>
+        <target state="translated">No se pudo tener acceso al Portapapeles. Copie la vista previa manualmente.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackCopyOpenAndSwitch">
+        <source>Open new discussion and switch</source>
+        <target state="translated">Abrir nueva discusión y cambiar</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackDescription">
+        <source>Your answers stay in this browser until you copy them. GitHub opens in a new tab so you can review and submit the feedback yourself.</source>
+        <target state="translated">Sus respuestas permanecen en este explorador hasta que las copie. GitHub se abre en una nueva pestaña para que pueda revisar y enviar los comentarios usted mismo.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackDialogTitle">
+        <source>Share dashboard feedback</source>
+        <target state="translated">Compartir comentarios del panel</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackDifficultiesLabel">
+        <source>What was harder or less clear than in the previous dashboard?</source>
+        <target state="translated">¿Qué fue más difícil o menos claro que en el panel anterior?</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackDurationLabel">
+        <source>How long have you used the new dashboard?</source>
+        <target state="translated">¿Cuánto tiempo ha usado el nuevo panel?</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackDurationLessThanOneHour">
+        <source>Less than an hour</source>
+        <target state="translated">Menos de una hora</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackDurationMoreThanOneWeek">
+        <source>More than a week</source>
+        <target state="translated">Más de una semana</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackDurationNotSpecified">
+        <source>I'd rather not say</source>
+        <target state="translated">Prefiero no decirlo</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackDurationOneDay">
+        <source>About a day</source>
+        <target state="translated">Acerca de un día</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackDurationTwoToSevenDays">
+        <source>2 to 7 days</source>
+        <target state="translated">De 2 a 7 días</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackMarkdownTitle">
+        <source>Dashboard experience feedback</source>
+        <target state="translated">Comentarios sobre la experiencia del panel</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackMissingLabel">
+        <source>What is missing from the new dashboard?</source>
+        <target state="translated">¿Qué falta en el nuevo panel?</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackModeAppHost">
+        <source>With an AppHost</source>
+        <target state="translated">Con un AppHost</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackModeLabel">
+        <source>How do you run the dashboard?</source>
+        <target state="translated">¿Cómo se ejecuta el panel?</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackModeStandalone">
+        <source>Standalone, for telemetry only</source>
+        <target state="translated">Independiente, solo para telemetría</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackOtherPlaceholder">
+        <source>Tell us what happened</source>
+        <target state="translated">Díganos qué ha ocurrido</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackPreviewDisclosure">
+        <source>Preview copied feedback</source>
+        <target state="translated">Vista previa de los comentarios copiados</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackPreviewLabel">
+        <source>Your feedback</source>
+        <target state="translated">Sus comentarios</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackPromptIgnore">
+        <source>Don't ask again</source>
+        <target state="translated">No volver a preguntar</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackPromptMessage">
+        <source>We'd love your feedback on the new experience.</source>
+        <target state="translated">Nos encantaría conocer sus comentarios sobre la nueva experiencia.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackPromptShare">
+        <source>Share feedback</source>
+        <target state="translated">Compartir comentarios</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackPromptTitle">
+        <source>Welcome to the new Aspire dashboard!</source>
+        <target state="translated">Le damos la bienvenida al nuevo panel de Aspire.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackReasonFindingApplicationUrls">
+        <source>I couldn't find my application URLs</source>
+        <target state="translated">No pude encontrar las direcciones URL de mi aplicación</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackReasonMissingFeature">
+        <source>A feature I need is missing</source>
+        <target state="translated">Falta una característica que necesito</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackReasonNavigation">
+        <source>It was hard to find my way around</source>
+        <target state="translated">Me ha resultado difícil encontrar mi camino</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackReasonOther">
+        <source>Another reason</source>
+        <target state="translated">Otro motivo</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackReasonPerformanceOrAccessibility">
+        <source>It was slow or hard to use with assistive technology</source>
+        <target state="translated">Fue lento o difícil de usar con tecnología de asistencia</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackReasonTelemetryWorkflow">
+        <source>The telemetry workflow didn't work for me</source>
+        <target state="translated">El flujo de trabajo de telemetría no funcionó para mí</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackReasonTerminals">
+        <source>The terminals didn't work for me</source>
+        <target state="translated">Los terminales no funcionaron para mí</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackReasonsLabel">
+        <source>What made you go back? Select all that apply.</source>
+        <target state="translated">¿Qué le hizo volver atrás? Seleccione todo lo que sea aplicable.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackSkipAndSwitch">
+        <source>Skip and switch</source>
+        <target state="translated">Omitir y cambiar</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackStepOneTitle">
+        <source>Why are you going back to the previous dashboard?</source>
+        <target state="translated">¿Por qué va a volver al panel anterior?</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackStepProgress">
+        <source>Step {0} of 2</source>
+        <target state="translated">Paso {0} de 2</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackStepTwoDescription">
+        <source>Both questions are optional, but your answers help us decide what to improve.</source>
+        <target state="translated">Ambas preguntas son opcionales, pero sus respuestas nos ayudan a decidir qué mejorar.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackStepTwoTitle">
+        <source>Is there anything else you want to tell us?</source>
+        <target state="translated">¿Hay algo más que quiera decirnos?</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DashboardFeedbackSwitchToLegacy">
+        <source>Switch to previous dashboard</source>
+        <target state="translated">Cambiar al panel anterior</target>
         <note />
       </trans-unit>
       <trans-unit id="DialogCloseButtonText">
@@ -155,12 +370,12 @@ For more information about using AI agents with the dashboard, including setting
       </trans-unit>
       <trans-unit id="FilterDialogDatePlaceholder">
         <source>e.g. 2024-01-15T09:30:00</source>
-        <target state="new">e.g. 2024-01-15T09:30:00</target>
+        <target state="translated">Por ejemplo, 2024-01-15T09:30:00</target>
         <note />
       </trans-unit>
       <trans-unit id="FilterDialogDateValueLabel">
         <source>Date and time</source>
-        <target state="new">Date and time</target>
+        <target state="translated">Fecha y hora</target>
         <note />
       </trans-unit>
       <trans-unit id="FilterDialogDisableAll">
@@ -185,7 +400,7 @@ For more information about using AI agents with the dashboard, including setting
       </trans-unit>
       <trans-unit id="FilterDialogInvalidDate">
         <source>Invalid date format</source>
-        <target state="new">Invalid date format</target>
+        <target state="translated">Formato de fecha no válido</target>
         <note />
       </trans-unit>
       <trans-unit id="FilterDialogParameterInputLabel">
@@ -195,7 +410,7 @@ For more information about using AI agents with the dashboard, including setting
       </trans-unit>
       <trans-unit id="FilterDialogPickDateButtonTitle">
         <source>Pick date and time</source>
-        <target state="new">Pick date and time</target>
+        <target state="translated">Elegir fecha y hora</target>
         <note />
       </trans-unit>
       <trans-unit id="FilterDialogRemoveFilterButtonText">
@@ -250,7 +465,7 @@ For more information about using AI agents with the dashboard, including setting
       </trans-unit>
       <trans-unit id="GenAILLMBadgeText">
         <source>LLM</source>
-        <target state="new">LLM</target>
+        <target state="translated">LLM</target>
         <note />
       </trans-unit>
       <trans-unit id="GenAIMessageCategoryMessage">
@@ -305,7 +520,7 @@ For more information about using AI agents with the dashboard, including setting
       </trans-unit>
       <trans-unit id="GenAIMessageTreeLabel">
         <source>Generative AI messages</source>
-        <target state="new">Generative AI messages</target>
+        <target state="translated">Mensajes de IA generativos</target>
         <note />
       </trans-unit>
       <trans-unit id="GenAINAText">
@@ -370,12 +585,12 @@ For more information about using AI agents with the dashboard, including setting
       </trans-unit>
       <trans-unit id="GenAIToolCallButtonText">
         <source>Tool call</source>
-        <target state="new">Tool call</target>
+        <target state="translated">Llamada de herramienta</target>
         <note />
       </trans-unit>
       <trans-unit id="GenAIToolDefinitionButtonText">
         <source>Tool definition</source>
-        <target state="new">Tool definition</target>
+        <target state="translated">Definición de herramienta</target>
         <note />
       </trans-unit>
       <trans-unit id="GenAIToolNoParameters">
@@ -410,17 +625,27 @@ For more information about using AI agents with the dashboard, including setting
       </trans-unit>
       <trans-unit id="GenAIUnexpectedOrTruncatedContent">
         <source>Unexpected or truncated message content.</source>
-        <target state="new">Unexpected or truncated message content.</target>
+        <target state="translated">Contenido de mensaje inesperado o truncado.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HelpDialogAspireDocumentationDescription">
+        <source>Get started with Aspire, its integrations and deployment.</source>
+        <target state="translated">Empiece a trabajar con Aspire, sus integraciones e implementaciones.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HelpDialogAspireDocumentationTitle">
+        <source>Aspire documentation</source>
+        <target state="translated">Documentación de Aspire</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogCategoryNavigation">
-        <source>Site-wide navigation</source>
-        <target state="translated">Navegación en todo el sitio</target>
+        <source>General</source>
+        <target state="translated">General</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogCategoryPageNavigation">
-        <source>Page navigation</source>
-        <target state="translated">Navegación de páginas</target>
+        <source>Dashboard navigation</source>
+        <target state="translated">Navegación del panel</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogCategoryPanels">
@@ -428,9 +653,69 @@ For more information about using AI agents with the dashboard, including setting
         <target state="translated">Paneles</target>
         <note />
       </trans-unit>
+      <trans-unit id="HelpDialogCategoryResourceGraph">
+        <source>Resource graph</source>
+        <target state="translated">Gráfico de recurso</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HelpDialogCategoryTelemetry">
+        <source>Logs &amp; telemetry</source>
+        <target state="translated">Registros y telemetría</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HelpDialogCommunityHeading">
+        <source>Community and support</source>
+        <target state="translated">Comunidad y soporte técnico</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HelpDialogDashboardDocumentationDescription">
+        <source>Guides and reference for using the Aspire dashboard.</source>
+        <target state="translated">Guías y referencia para usar el panel de Aspire.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HelpDialogDashboardFeedbackDescription">
+        <source>Share feedback about the evolving dashboard experience.</source>
+        <target state="translated">Comparta comentarios sobre la experiencia en evolución del panel.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HelpDialogDashboardFeedbackTitle">
+        <source>Dashboard feedback</source>
+        <target state="translated">Comentarios del panel</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HelpDialogDashboardVersion">
+        <source>Aspire dashboard version {0}</source>
+        <target state="translated">Versión del panel de Información de Aspire {0}</target>
+        <note />
+      </trans-unit>
       <trans-unit id="HelpDialogDecreasePanelSize">
         <source>Decrease panel size</source>
         <target state="translated">Reducir el tamaño del panel</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HelpDialogDiscordDescription">
+        <source>Chat with the Aspire team and community.</source>
+        <target state="translated">Chatee con el equipo de Aspire y la comunidad.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HelpDialogDiscordTitle">
+        <source>Discord</source>
+        <target state="translated">Discord</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HelpDialogDocumentationTab">
+        <source>Documentation</source>
+        <target state="translated">Documentación</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HelpDialogGameDescription">
+        <source>In the resource graph, select Play Aspire Outage, or focus the graph and press O, to play a game starring your resources. Press Esc to return to the graph.</source>
+        <target state="translated">En el gráfico de recurso, seleccione Reproducir Aspire Outage o ponga el foco en el gráfico y pulse O para jugar a un juego protagonizado por sus recursos. Pulse Esc para volver al gráfico.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HelpDialogGameTitle">
+        <source>Aspire Outage</source>
+        <target state="translated">Aspire Outage</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogGetHelpLinkText">
@@ -439,38 +724,63 @@ For more information about using AI agents with the dashboard, including setting
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogGoToConsoleLogs">
-        <source>Go to Console Logs</source>
-        <target state="translated">Ir a Registros de consola</target>
+        <source>Console logs (all resources)</source>
+        <target state="translated">Registros de consola (todos los recursos)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HelpDialogGoToExtensions">
+        <source>Extensions</source>
+        <target state="translated">Extensiones</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HelpDialogGoToGraph">
+        <source>Resource graph</source>
+        <target state="translated">Resource Graph</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogGoToHelp">
-        <source>Go to Help</source>
-        <target state="translated">Ir a Ayuda</target>
+        <source>Keyboard shortcuts</source>
+        <target state="translated">Métodos abreviados de teclado</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogGoToMetrics">
-        <source>Go to Metrics</source>
-        <target state="translated">Ir a Métricas</target>
+        <source>Metrics</source>
+        <target state="translated">Métricas</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HelpDialogGoToParameters">
+        <source>Parameters</source>
+        <target state="translated">Parámetros</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogGoToResources">
-        <source>Go to Resources</source>
-        <target state="translated">Ir a Recursos</target>
+        <source>Resources</source>
+        <target state="translated">Recursos</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogGoToSettings">
-        <source>Go to Settings</source>
-        <target state="translated">Ir a Configuración</target>
+        <source>Settings</source>
+        <target state="translated">Configuración</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogGoToStructuredLogs">
-        <source>Go to Structured Logs</source>
-        <target state="translated">Ir a Registros estructurados</target>
+        <source>Structured logs</source>
+        <target state="translated">Registros estructurados</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HelpDialogGoToTelemetrySources">
+        <source>Telemetry sources</source>
+        <target state="translated">Orígenes de telemetría</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HelpDialogGoToTerminals">
+        <source>Terminals</source>
+        <target state="translated">Terminales</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogGoToTraces">
-        <source>Go to Traces</source>
-        <target state="translated">Ir a Seguimientos</target>
+        <source>Traces</source>
+        <target state="translated">Trazas</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogIncreasePanelSize">
@@ -483,10 +793,45 @@ For more information about using AI agents with the dashboard, including setting
         <target state="translated">Métodos abreviados de teclado</target>
         <note />
       </trans-unit>
+      <trans-unit id="HelpDialogLearnHeading">
+        <source>Learn</source>
+        <target state="translated">Aprender</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HelpDialogOpensInNewTab">
+        <source>Opens in a new tab</source>
+        <target state="translated">Se abre en una nueva pestaña</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HelpDialogPlayGame">
+        <source>Play Aspire Outage, when the graph has focus</source>
+        <target state="translated">Juegue a Aspire Outage cuando el gráfico tenga el foco</target>
+        <note>Aspire Outage is the name of a game.</note>
+      </trans-unit>
+      <trans-unit id="HelpDialogRepoDescription">
+        <source>Source code, releases and issues on GitHub.</source>
+        <target state="translated">Código fuente, versiones y problemas en GitHub.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HelpDialogReportIssueDescription">
+        <source>Found a bug or have an idea? Open an issue on GitHub.</source>
+        <target state="translated">¿Ha encontrado un error o tiene una idea? Abrir una incidencia en GitHub.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HelpDialogReportIssueTitle">
+        <source>Report an issue</source>
+        <target state="translated">Informar de un problema</target>
+        <note />
+      </trans-unit>
       <trans-unit id="HelpDialogResetPanelSize">
         <source>Reset panel sizes</source>
         <target state="translated">Restablecer tamaños del panel</target>
         <note />
+      </trans-unit>
+      <trans-unit id="HelpDialogShortcutsHint">
+        <source>Use shortcuts outside text fields and terminal input. Panel shortcuts apply to an open details panel. Press {0} in a terminal to focus its controls before using dashboard shortcuts.</source>
+        <target state="translated">Use accesos directos fuera de los campos de texto y la entrada del terminal. Los accesos directos de panel se aplican a un panel de detalles abierto. Presione {0} en un terminal para enfocar sus controles antes de usar los accesos directos del panel.</target>
+        <note>{0} is the F6 key, rendered as a keyboard key.</note>
       </trans-unit>
       <trans-unit id="HelpDialogTogglePanelOpen">
         <source>Close panel</source>
@@ -499,8 +844,8 @@ For more information about using AI agents with the dashboard, including setting
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogToggleTerminalDock">
-        <source>Toggle terminal</source>
-        <target state="new">Toggle terminal</target>
+        <source>Toggle terminal dock</source>
+        <target state="translated">Alternar base de terminal</target>
         <note />
       </trans-unit>
       <trans-unit id="InteractionButtonCancel">
@@ -520,32 +865,32 @@ For more information about using AI agents with the dashboard, including setting
       </trans-unit>
       <trans-unit id="InteractionFileExceedsMaxSize">
         <source>Exceeds the maximum size of {0}</source>
-        <target state="new">Exceeds the maximum size of {0}</target>
+        <target state="translated">Supera el tamaño máximo de {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="InteractionFilePlaceholder">
         <source>Choose a file</source>
-        <target state="new">Choose a file</target>
+        <target state="translated">Elegir un archivo</target>
         <note />
       </trans-unit>
       <trans-unit id="InteractionFilePlaceholderMultiple">
         <source>Choose files</source>
-        <target state="new">Choose files</target>
+        <target state="translated">Elegir archivos</target>
         <note />
       </trans-unit>
       <trans-unit id="InteractionFileUploadFailed">
         <source>Upload failed</source>
-        <target state="new">Upload failed</target>
+        <target state="translated">Error en la carga</target>
         <note />
       </trans-unit>
       <trans-unit id="ManageDataAllDataCheckboxLabel">
         <source>All data</source>
-        <target state="new">All data</target>
+        <target state="translated">Todos los datos</target>
         <note />
       </trans-unit>
       <trans-unit id="ManageDataDataTypeForResourceCheckboxLabel">
         <source>{0} for {1}</source>
-        <target state="new">{0} for {1}</target>
+        <target state="translated">{0} para {1}</target>
         <note>{0} is the data type display name. {1} is the parent resource display name.</note>
       </trans-unit>
       <trans-unit id="ManageDataDialogTitle">
@@ -610,17 +955,17 @@ For more information about using AI agents with the dashboard, including setting
       </trans-unit>
       <trans-unit id="NotificationCenterDismissAll">
         <source>Dismiss all</source>
-        <target state="new">Dismiss all</target>
+        <target state="translated">Descartar todo</target>
         <note />
       </trans-unit>
       <trans-unit id="NotificationCenterEmpty">
         <source>No notifications</source>
-        <target state="new">No notifications</target>
+        <target state="translated">No hay notificaciones</target>
         <note />
       </trans-unit>
       <trans-unit id="NotificationEntryDismiss">
         <source>Dismiss notification</source>
-        <target state="new">Dismiss notification</target>
+        <target state="translated">Descartar notificación</target>
         <note />
       </trans-unit>
       <trans-unit id="OpenInTextVisualizer">
@@ -638,9 +983,39 @@ For more information about using AI agents with the dashboard, including setting
         <target state="translated">Esperando a que se cargue el intervalo {0} ...</target>
         <note>{0} is a span ID</note>
       </trans-unit>
+      <trans-unit id="SettingsDialogAppearanceGroup">
+        <source>Appearance</source>
+        <target state="translated">Apariencia</target>
+        <note />
+      </trans-unit>
       <trans-unit id="SettingsDialogDarkTheme">
         <source>Dark</source>
         <target state="translated">Oscuro</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SettingsDialogDashboardExperience">
+        <source>Dashboard experience</source>
+        <target state="translated">Experiencia del panel</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SettingsDialogDashboardExperienceDescription">
+        <source>Choose which dashboard experience to use.</source>
+        <target state="translated">Elija qué experiencia de panel usar.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SettingsDialogDashboardExperienceNew">
+        <source>New dashboard</source>
+        <target state="translated">Nuevo panel</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SettingsDialogDashboardExperiencePrevious">
+        <source>Previous dashboard</source>
+        <target state="translated">Panel anterior</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SettingsDialogDashboardExperienceSelectorLabel">
+        <source>Experience</source>
+        <target state="translated">Experiencia</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogDashboardLogsAndTelemetry">
@@ -648,14 +1023,39 @@ For more information about using AI agents with the dashboard, including setting
         <target state="translated">Registros de recursos y telemetría</target>
         <note />
       </trans-unit>
+      <trans-unit id="SettingsDialogDataAndTelemetryGroup">
+        <source>Data and telemetry</source>
+        <target state="translated">Datos y telemetría</target>
+        <note />
+      </trans-unit>
       <trans-unit id="SettingsDialogDotNetRuntimeVersion">
         <source>Runtime: {0}</source>
         <target state="translated">Runtime: {0}</target>
         <note>{0} is the .NET runtime version</note>
       </trans-unit>
+      <trans-unit id="SettingsDialogExperienceGroup">
+        <source>Dashboard experience</source>
+        <target state="translated">Experiencia del panel</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SettingsDialogGroupOverview">
+        <source>Overview layout</source>
+        <target state="translated">Diseño de información general</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SettingsDialogGroupOverviewSummary">
+        <source>Summary</source>
+        <target state="translated">Resumen</target>
+        <note />
+      </trans-unit>
       <trans-unit id="SettingsDialogLanguage">
         <source>Language</source>
         <target state="translated">Idioma</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SettingsDialogLanguageAndTimeGroup">
+        <source>Language and time</source>
+        <target state="translated">Idioma y hora</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogLanguagePageReloads">
@@ -666,6 +1066,21 @@ For more information about using AI agents with the dashboard, including setting
       <trans-unit id="SettingsDialogLightTheme">
         <source>Light</source>
         <target state="translated">Claro</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SettingsDialogResourceListDensity">
+        <source>Resource list density</source>
+        <target state="translated">Densidad de la lista de recursos</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SettingsDialogResourceListDensityComfortable">
+        <source>Comfortable</source>
+        <target state="translated">Cómodo</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SettingsDialogResourceListDensityCompact">
+        <source>Compact</source>
+        <target state="translated">Compacto</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogSystemTheme">
@@ -695,22 +1110,22 @@ For more information about using AI agents with the dashboard, including setting
       </trans-unit>
       <trans-unit id="SettingsDialogTimeFormat">
         <source>Time format</source>
-        <target state="new">Time format</target>
+        <target state="translated">Formato de hora</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogTimeFormatSystem">
         <source>System</source>
-        <target state="new">System</target>
+        <target state="translated">Sistema</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogTimeFormatTwelveHour">
         <source>12-hour</source>
-        <target state="new">12-hour</target>
+        <target state="translated">12 horas</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogTimeFormatTwentyFourHour">
         <source>24-hour</source>
-        <target state="new">24-hour</target>
+        <target state="translated">24 horas</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogVersion">
@@ -743,14 +1158,96 @@ For more information about using AI agents with the dashboard, including setting
         <target state="translated">Quitar todo</target>
         <note />
       </trans-unit>
+      <trans-unit id="TelemetryHelpApiKeyDescription">
+        <source>Set OTEL_EXPORTER_OTLP_HEADERS to x-otlp-api-key=&lt;your-api-key&gt;, replacing &lt;your-api-key&gt; with the dashboard's configured OTLP API key.</source>
+        <target state="translated">Establezca OTEL_EXPORTER_OTLP_HEADERS en x-otlp-api-key=&lt;your-api-key&gt;, sustituyendo &lt;your-api-key&gt; por la clave de API de OTLP configurada en el panel.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TelemetryHelpButtonText">
+        <source>Add telemetry</source>
+        <target state="translated">Agregar telemetría</target>
+        <note>Inline link following TelemetryHelpMoreInformation. Opens the telemetry setup dialog.</note>
+      </trans-unit>
+      <trans-unit id="TelemetryHelpCertificateDescription">
+        <source>Configure your OTLP exporter to present a client certificate trusted by the dashboard. Use your SDK's OTLP exporter settings to specify the certificate and private key.</source>
+        <target state="translated">Configure el exportador de OTLP para que presente un certificado de cliente en el que confíe el panel. Use la configuración del exportador de OTLP del SDK para especificar el certificado y la clave privada.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TelemetryHelpContainerDescription">
+        <source>The dashboard is running in a container. Access it from the host using port forwarding.</source>
+        <target state="translated">El panel se ejecuta en un contenedor. Acceda a él desde el host mediante el enrutamiento de puerto.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TelemetryHelpDialogTitle">
+        <source>Add telemetry</source>
+        <target state="translated">Agregar telemetría</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TelemetryHelpEndpointHeader">
+        <source>Dashboard endpoint</source>
+        <target state="translated">Punto de conexión del panel</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TelemetryHelpImportDescription">
+        <source>### 📥 Import telemetry from a file
+
+Import previously exported telemetry or OTLP JSON files by selecting **{0}** in the **{1}** dialog.</source>
+        <target state="translated">### 📥 Importar telemetría desde un archivo
+
+Importe archivos JSON de telemetría u OTLP exportados anteriormente seleccionando **{0}** en el cuadro de diálogo **{1}**.</target>
+        <note>Markdown. {0} is the localized import button text, {1} is the localized data management dialog title.</note>
+      </trans-unit>
+      <trans-unit id="TelemetryHelpIntroduction">
+        <source>Visualize logs, traces, and metrics in the dashboard. To see telemetry, first send it to the dashboard using OTLP or manually import telemetry JSON files.
+
+### 📡 Send telemetry from your app
+
+Configure your app to export logs, traces, and metrics using [OTLP]({0}).</source>
+        <target state="translated">Visualice registros, seguimientos y métricas en el panel. Para ver la telemetría, envíela primero al panel mediante OTLP o importe manualmente los archivos JSON de telemetría.
+
+### 📡 Enviar telemetría desde la aplicación
+
+Configure la aplicación para exportar registros, seguimientos y métricas mediante [OTLP]({0}).</target>
+        <note>Markdown. {0} is the OTLP specification URL.</note>
+      </trans-unit>
+      <trans-unit id="TelemetryHelpManageDataLink">
+        <source>Learn about managing dashboard data</source>
+        <target state="translated">Más información sobre la administración de datos del panel</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TelemetryHelpMessage">
+        <source>Configure your app to send telemetry to the dashboard.</source>
+        <target state="translated">Configure su aplicación para enviar telemetría al panel.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TelemetryHelpMoreInformation">
+        <source>For setup instructions, see</source>
+        <target state="translated">Para obtener instrucciones de configuración, consulte</target>
+        <note>Followed by the TelemetryHelpButtonText inline link and a period.</note>
+      </trans-unit>
+      <trans-unit id="TelemetryHelpNoEndpointsDescription">
+        <source>No OTLP endpoints are configured. To receive live telemetry, configure an OTLP endpoint when starting the dashboard.</source>
+        <target state="translated">No hay ningún punto de conexión OTLP configurado. Para recibir telemetría en directo, configure un punto de conexión de OTLP al iniciar el panel.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TelemetryHelpProtocolHeader">
+        <source>Protocol</source>
+        <target state="translated">Protocolo</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TelemetryHelpSendTelemetryLink">
+        <source>Connect your app to the dashboard</source>
+        <target state="translated">Conecte su aplicación al panel</target>
+        <note />
+      </trans-unit>
       <trans-unit id="TextVisualizerDialogJsonFormat">
         <source>JSON</source>
-        <target state="needs-review-translation">Formato JSON</target>
+        <target state="translated">JSON</target>
         <note />
       </trans-unit>
       <trans-unit id="TextVisualizerDialogMarkdownFormat">
         <source>Markdown</source>
-        <target state="new">Markdown</target>
+        <target state="translated">Markdown</target>
         <note />
       </trans-unit>
       <trans-unit id="TextVisualizerDialogPlaintextFormat">
@@ -758,9 +1255,14 @@ For more information about using AI agents with the dashboard, including setting
         <target state="translated">Sin formato</target>
         <note />
       </trans-unit>
+      <trans-unit id="TextVisualizerDialogSqlFormat">
+        <source>SQL</source>
+        <target state="translated">SQL</target>
+        <note />
+      </trans-unit>
       <trans-unit id="TextVisualizerDialogXmlFormat">
         <source>XML</source>
-        <target state="needs-review-translation">Formato XML</target>
+        <target state="translated">XML</target>
         <note />
       </trans-unit>
       <trans-unit id="TextVisualizerSecretWarningAcknowledge">
@@ -770,7 +1272,7 @@ For more information about using AI agents with the dashboard, including setting
       </trans-unit>
       <trans-unit id="TextVisualizerSecretWarningDescription">
         <source>Confirm you want to show this value. Once confirmed, the text visualizer in the browser will show values automatically</source>
-        <target state="needs-review-translation">Confirme que quiere mostrar el valor. En el futuro, al abrir el visualizador de texto se mostrarán automáticamente todos los valores</target>
+        <target state="translated">Confirme que desea mostrar este valor. Una vez confirmado, el visualizador de texto del explorador mostrará los valores automáticamente</target>
         <note />
       </trans-unit>
       <trans-unit id="TextVisualizerSecretWarningTitle">
@@ -781,6 +1283,11 @@ For more information about using AI agents with the dashboard, including setting
       <trans-unit id="TextVisualizerSelectFormatType">
         <source>Select format</source>
         <target state="translated">Seleccionar formato</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TextVisualizerWordWrap">
+        <source>Word wrap</source>
+        <target state="translated">Ajuste automático de línea</target>
         <note />
       </trans-unit>
     </body>

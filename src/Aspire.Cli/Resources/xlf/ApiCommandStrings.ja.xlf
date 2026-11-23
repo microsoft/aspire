@@ -4,112 +4,112 @@
     <body>
       <trans-unit id="ApiNotFound">
         <source>API item '{0}' not found. Use 'aspire docs api search' or 'aspire docs api list &lt;scope&gt;' to find available identifiers.</source>
-        <target state="new">API item '{0}' not found. Use 'aspire docs api search' or 'aspire docs api list &lt;scope&gt;' to find available identifiers.</target>
+        <target state="translated">API 項目 '{0}' が見つかりません。'aspire docs api search' または 'aspire docs api list &lt;scope&gt;' を使用して、利用可能な識別子を確認します。</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
         <source>Browse and search Aspire API reference documentation from aspire.dev</source>
-        <target state="new">Browse and search Aspire API reference documentation from aspire.dev</target>
+        <target state="translated">aspire.dev から Aspire API リファレンス ドキュメントを参照して検索する</target>
         <note />
       </trans-unit>
       <trans-unit id="FormatOptionDescription">
         <source>Output format (Table or Json)</source>
-        <target state="new">Output format (Table or Json)</target>
+        <target state="translated">出力形式 (テーブルまたは JSON)</target>
         <note />
       </trans-unit>
       <trans-unit id="FoundApiEntries">
         <source>Found {0} API entries under '{1}'.</source>
-        <target state="new">Found {0} API entries under '{1}'.</target>
+        <target state="translated">'{1}' の下 {0} 件のAPI エントリが見つかりました。</target>
         <note />
       </trans-unit>
       <trans-unit id="FoundSearchResults">
         <source>Found {0} API results for '{1}'.</source>
-        <target state="new">Found {0} API results for '{1}'.</target>
+        <target state="translated">'{0}' の API 結果が {1} 件見つかりました。</target>
         <note />
       </trans-unit>
       <trans-unit id="GetDescription">
         <source>Get the markdown for an API reference item by its identifier</source>
-        <target state="new">Get the markdown for an API reference item by its identifier</target>
+        <target state="translated">識別子で API リファレンス項目の Markdown を取得する</target>
         <note />
       </trans-unit>
       <trans-unit id="HeaderGroup">
         <source>Group</source>
-        <target state="new">Group</target>
+        <target state="translated">グループ</target>
         <note />
       </trans-unit>
       <trans-unit id="HeaderId">
         <source>Id</source>
-        <target state="new">Id</target>
+        <target state="translated">ID</target>
         <note />
       </trans-unit>
       <trans-unit id="HeaderKind">
         <source>Kind</source>
-        <target state="new">Kind</target>
+        <target state="translated">分類</target>
         <note />
       </trans-unit>
       <trans-unit id="HeaderLanguage">
         <source>Language</source>
-        <target state="new">Language</target>
+        <target state="translated">言語</target>
         <note />
       </trans-unit>
       <trans-unit id="HeaderName">
         <source>Name</source>
-        <target state="new">Name</target>
+        <target state="translated">名前</target>
         <note />
       </trans-unit>
       <trans-unit id="HeaderScore">
         <source>Score</source>
-        <target state="new">Score</target>
+        <target state="translated">スコア</target>
         <note />
       </trans-unit>
       <trans-unit id="IdArgumentDescription">
         <source>The API identifier (for example, 'csharp/aspire.azure.ai.inference/aspireazureaiinferenceextensions')</source>
-        <target state="new">The API identifier (for example, 'csharp/aspire.azure.ai.inference/aspireazureaiinferenceextensions')</target>
+        <target state="translated">API 識別子 (例: 'csharp/aspire.azure.ai.inference/aspireazureaiinferenceextensions')</target>
         <note />
       </trans-unit>
       <trans-unit id="LanguageOptionDescription">
         <source>Limit results to a specific API language</source>
-        <target state="new">Limit results to a specific API language</target>
+        <target state="translated">結果を特定の API 言語に限定する</target>
         <note />
       </trans-unit>
       <trans-unit id="LimitOptionDescription">
         <source>Maximum number of search results to return (default: 5, max: 10)</source>
-        <target state="new">Maximum number of search results to return (default: 5, max: 10)</target>
+        <target state="translated">返される検索結果の最大数 (既定値: 5、最大値: 10)</target>
         <note />
       </trans-unit>
       <trans-unit id="ListDescription">
         <source>List API entries under a parent scope</source>
-        <target state="new">List API entries under a parent scope</target>
+        <target state="translated">親スコープの下にある API エントリを一覧表示する</target>
         <note />
       </trans-unit>
       <trans-unit id="LoadingApiDocumentation">
         <source>Loading API documentation...</source>
-        <target state="new">Loading API documentation...</target>
+        <target state="translated">API ドキュメントを読み込んでいます...</target>
         <note />
       </trans-unit>
       <trans-unit id="NoApiEntriesFound">
         <source>No API entries found under '{0}'.</source>
-        <target state="new">No API entries found under '{0}'.</target>
+        <target state="translated">'{0}' の下に API エントリが見つかりません。</target>
         <note />
       </trans-unit>
       <trans-unit id="NoResultsFound">
         <source>No API results found for '{0}'. Try different search terms.</source>
-        <target state="new">No API results found for '{0}'. Try different search terms.</target>
+        <target state="translated">'{0}' の API 結果が見つかりませんでした。別の検索語句でお試しください。</target>
         <note />
       </trans-unit>
       <trans-unit id="QueryArgumentDescription">
         <source>The search query</source>
-        <target state="new">The search query</target>
+        <target state="translated">検索クエリ</target>
         <note />
       </trans-unit>
       <trans-unit id="ScopeArgumentDescription">
         <source>The parent API scope to browse (for example, 'csharp' or 'typescript/aspire.hosting.azure.appconfiguration')</source>
-        <target state="new">The parent API scope to browse (for example, 'csharp' or 'typescript/aspire.hosting.azure.appconfiguration')</target>
+        <target state="translated">参照する親 API スコープ (例: 'csharp' または 'typescript/aspire.hosting.azure.appconfiguration')</target>
         <note />
       </trans-unit>
       <trans-unit id="SearchDescription">
         <source>Search Aspire API reference documentation by keywords</source>
-        <target state="new">Search Aspire API reference documentation by keywords</target>
+        <target state="translated">キーワードを指定して Aspire API リファレンス ドキュメントを検索します</target>
         <note />
       </trans-unit>
     </body>

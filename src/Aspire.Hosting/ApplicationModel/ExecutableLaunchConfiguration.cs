@@ -42,8 +42,9 @@ public static class KnownLaunchConfigurationTypes
     /// The .NET project launch configuration type.
     /// </summary>
     /// <remarks>
-    /// This type is reserved for resources that carry <see cref="IProjectMetadata"/>. Aspire hands the
-    /// project path and launch profile to the IDE, which owns building and launching the project.
+    /// This type is reserved for resources that carry <see cref="IProjectMetadata"/>. Aspire hands the project
+    /// path and launch profile to the IDE. The type indicates that the IDE can launch the resource; it does not
+    /// guarantee whether the IDE builds the project before launch.
     /// </remarks>
     public const string Project = "project";
 
@@ -111,9 +112,10 @@ public class ExecutableLaunchConfiguration(string type)
 /// The launch configuration used for .NET projects and file-based C# apps.
 /// </summary>
 /// <remarks>
-/// By default, the IDE builds and launches the project itself. When <see cref="SuppressBuild"/> is
-/// <see langword="true"/>, the IDE launches output produced by an external or coordinated build.
-/// The resource must carry <see cref="IProjectMetadata"/>.
+/// The IDE launches the resource described by <see cref="IProjectMetadata"/>. When <see cref="SuppressBuild"/> is
+/// <see langword="true"/>, the IDE launches output produced by an external or coordinated build. When it is
+/// <see langword="false"/>, Aspire does not ask the IDE to suppress its normal build behavior, but Aspire may still
+/// prebuild the project before sending the launch request.
 /// </remarks>
 [Experimental("ASPIREEXTENSION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public sealed class ProjectLaunchConfiguration() : ExecutableLaunchConfiguration(KnownLaunchConfigurationTypes.Project)

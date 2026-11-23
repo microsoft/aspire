@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIRECONTAINERRUNTIME001
 #pragma warning disable ASPIREPROJECTS001
 
@@ -13,6 +12,7 @@ using Aspire.Hosting.Docker.Resources.ServiceNodes;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Publishing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.Docker;
@@ -23,6 +23,9 @@ namespace Aspire.Hosting.Docker;
 [AspireExport(ExposeProperties = true)]
 public class DockerComposeServiceResource : Resource, IResourceWithParent<DockerComposeEnvironmentResource>
 {
+    /// <inheritdoc/>
+    public override string ResourceTypeDisplayName => "Docker Compose Service";
+
     private readonly IResource _targetResource;
     private readonly DockerComposeEnvironmentResource _composeEnvironmentResource;
 
@@ -110,7 +113,7 @@ public class DockerComposeServiceResource : Resource, IResourceWithParent<Docker
     /// <inheritdoc/>
     public DockerComposeEnvironmentResource Parent => _composeEnvironmentResource;
 
-    internal async Task<Service> BuildComposeServiceAsync()
+    internal async Task<Service> BuildComposeServiceAsync(IConfiguration configuration)
     {
         var composeService = new Service
         {
@@ -125,7 +128,7 @@ public class DockerComposeServiceResource : Resource, IResourceWithParent<Docker
         SetContainerName(composeService);
         SetEntryPoint(composeService);
         SetPullPolicy(composeService);
-        await AddEnvironmentVariablesAndCommandLineArgsAsync(composeService).ConfigureAwait(false);
+        await AddEnvironmentVariablesAndCommandLineArgsAsync(composeService, configuration).ConfigureAwait(false);
         AddPorts(composeService);
         AddVolumes(composeService);
         SetDependsOn(composeService);
@@ -215,13 +218,13 @@ public class DockerComposeServiceResource : Resource, IResourceWithParent<Docker
         }
     }
 
-    private async Task AddEnvironmentVariablesAndCommandLineArgsAsync(Service composeService)
+    private async Task AddEnvironmentVariablesAndCommandLineArgsAsync(Service composeService, IConfiguration configuration)
     {
         var env = new Dictionary<string, string>();
 
         foreach (var kv in EnvironmentVariables)
         {
-            var value = await this.ProcessValueAsync(kv.Value).ConfigureAwait(false);
+            var value = await this.ProcessValueAsync(kv.Value, configuration).ConfigureAwait(false);
 
             env[kv.Key] = value?.ToString() ?? string.Empty;
         }
@@ -238,7 +241,7 @@ public class DockerComposeServiceResource : Resource, IResourceWithParent<Docker
 
         foreach (var arg in Args)
         {
-            var value = await this.ProcessValueAsync(arg).ConfigureAwait(false);
+            var value = await this.ProcessValueAsync(arg, configuration).ConfigureAwait(false);
 
             if (value is not string str)
             {

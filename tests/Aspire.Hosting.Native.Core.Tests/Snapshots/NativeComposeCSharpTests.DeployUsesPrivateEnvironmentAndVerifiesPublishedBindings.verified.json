@@ -1,0 +1,111 @@
+﻿{
+  "state": {
+    "schemaVersion": 1,
+    "projectName": "comparison-project",
+    "services": [
+      {
+        "resource": "cache",
+        "service": "cache",
+        "state": "running",
+        "health": "healthy",
+        "endpoints": []
+      },
+      {
+        "resource": "web",
+        "service": "web",
+        "state": "running",
+        "health": "healthy",
+        "endpoints": [
+          {
+            "name": "http",
+            "hostIp": "127.0.0.1",
+            "port": 49152,
+            "url": "http://127.0.0.1:49152"
+          }
+        ]
+      }
+    ]
+  },
+  "calls": [
+    {
+      "executable": "docker",
+      "arguments": [
+        "compose",
+        "version",
+        "--short"
+      ],
+      "workingDirectory": "/app/published",
+      "timeout": "00:00:30"
+    },
+    {
+      "executable": "docker",
+      "arguments": [
+        "info",
+        "--format",
+        "{{json .ServerVersion}}"
+      ],
+      "workingDirectory": "/app/published",
+      "timeout": "00:00:30"
+    },
+    {
+      "executable": "docker",
+      "arguments": [
+        "compose",
+        "--ansi",
+        "never",
+        "--env-file",
+        "/dev/null",
+        "-p",
+        "comparison-project",
+        "-f",
+        "/app/published/compose.yaml",
+        "config",
+        "--quiet"
+      ],
+      "workingDirectory": "/app/published",
+      "timeout": "00:00:30"
+    },
+    {
+      "executable": "docker",
+      "arguments": [
+        "compose",
+        "--ansi",
+        "never",
+        "--env-file",
+        "/dev/null",
+        "-p",
+        "comparison-project",
+        "-f",
+        "/app/published/compose.yaml",
+        "up",
+        "--build",
+        "--detach",
+        "--wait",
+        "--wait-timeout",
+        "120"
+      ],
+      "workingDirectory": "/app/published",
+      "timeout": "00:04:00"
+    },
+    {
+      "executable": "docker",
+      "arguments": [
+        "compose",
+        "--ansi",
+        "never",
+        "--env-file",
+        "/dev/null",
+        "-p",
+        "comparison-project",
+        "-f",
+        "/app/published/compose.yaml",
+        "ps",
+        "--all",
+        "--format",
+        "json"
+      ],
+      "workingDirectory": "/app/published",
+      "timeout": "00:00:30"
+    }
+  ]
+}

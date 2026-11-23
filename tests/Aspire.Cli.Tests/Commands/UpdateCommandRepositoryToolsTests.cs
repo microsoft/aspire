@@ -20,6 +20,50 @@ namespace Aspire.Cli.Tests.Commands;
 
 public class UpdateCommandRepositoryToolsTests(ITestOutputHelper outputHelper)
 {
+    [Fact]
+    public async Task Update_DryRunDoesNotOfferCliSelfUpdate()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHost = new FileInfo(Path.Combine(workspace.Path, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHost.FullName, "<Project Sdk=\"Microsoft.NET.Sdk\" />");
+        var interaction = new TestInteractionService
+        {
+            ConfirmCallback = (_, _) => throw new InvalidOperationException("Dry runs must not prompt to update.")
+        };
+        var validated = false;
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            ConfigureUpdates(options, interaction);
+            options.ProjectLocatorFactory = _ => new TestProjectLocator
+            {
+                FindAppHostProjectFilesAsyncCallback = (_, _, _, skipValidation) =>
+                {
+                    Assert.True(skipValidation);
+                    return Task.FromResult(new List<FileInfo> { appHost });
+                },
+                UseOrFindAppHostProjectFileAsyncCallback = (_, _, _) => throw new InvalidOperationException("Dry runs must not validate through the locator.")
+            };
+            options.ProjectUpdaterFactory = _ => new TestProjectUpdater
+            {
+                UpdateProjectAsyncCallback = (context, _) =>
+                {
+                    Assert.True(context.DryRun);
+                    Assert.Empty(context.AdditionalUpdateSteps);
+                    validated = true;
+                    return Task.FromResult(new ProjectUpdateResult { UpdatedApplied = false });
+                }
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var result = await provider.GetRequiredService<RootCommand>()
+            .Parse("update --channel stable --dry-run --non-interactive").InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, result);
+        Assert.True(validated);
+        Assert.Empty(interaction.BooleanPromptCalls);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -385,17 +429,25 @@ public class UpdateCommandRepositoryToolsTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData(true, true, 0)]
-    [InlineData(true, true, 1)]
-    [InlineData(true, false, 0)]
-    [InlineData(false, true, 0)]
-    [InlineData(false, false, 0)]
-    public async Task Update_AppliesManifestAndProjectEditsTogetherBeforeRestore(bool confirmUpdates, bool projectNeedsUpdates, int restoreExitCode)
+    [InlineData(true, true, true, 0, false)]
+    [InlineData(true, true, true, 1, true)]
+    [InlineData(true, false, true, 0, false)]
+    [InlineData(true, false, true, 1, true)]
+    [InlineData(true, true, false, 0, false)]
+    [InlineData(true, false, false, 0, false)]
+    [InlineData(false, true, true, 0, false)]
+    [InlineData(false, false, true, 0, false)]
+    [InlineData(true, true, true, 0, true)]
+    [InlineData(true, false, true, 0, true)]
+    [InlineData(false, true, false, 0, true)]
+    public async Task Update_ChannelUpdatesToolsOnlyInApplyMode(
+        bool confirmUpdates, bool projectNeedsUpdates, bool confirmConfiguration, int restoreExitCode, bool dryRun)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var directory = workspace.WorkspaceRoot;
         var (dotnetManifest, npmManifest) = await CreateManifestsAsync(directory);
         const string targetVersion = "13.6.0-pr.20295.test";
+        const string targetSource = "https://example.invalid/daily/v3/index.json";
         var projectVersion = projectNeedsUpdates ? "13.4.0" : targetVersion;
         var appHostDirectory = workspace.CreateDirectory(Path.Combine("src", "AppHost"));
         var appHost = new FileInfo(Path.Combine(appHostDirectory.FullName, "AppHost.csproj"));
@@ -433,6 +485,12 @@ public class UpdateCommandRepositoryToolsTests(ITestOutputHelper outputHelper)
                 <clear />
                 <add key="Existing" value="https://example.invalid/existing/v3/index.json" />
               </packageSources>
+              <packageSourceMapping>
+                <clear />
+                <packageSource key="Existing">
+                  <package pattern="*" />
+                </packageSource>
+              </packageSourceMapping>
             </configuration>
             """);
         var lockPath = Path.Combine(directory.FullName, "package-lock.json");
@@ -447,10 +505,11 @@ public class UpdateCommandRepositoryToolsTests(ITestOutputHelper outputHelper)
         var interaction = new TestInteractionService();
         interaction.ConfirmCallback = (prompt, _) =>
         {
+            AssertFilesUnchanged([.. originals.Keys]);
             if (prompt != UpdateCommandStrings.PerformUpdatesPrompt)
             {
                 Assert.Equal(UpdateCommandStrings.ApplyChangesToNuGetConfig, prompt);
-                return false;
+                return confirmConfiguration;
             }
 
             Assert.Contains(interaction.DisplayedMessages, message =>
@@ -461,17 +520,18 @@ public class UpdateCommandRepositoryToolsTests(ITestOutputHelper outputHelper)
                 Assert.Contains(interaction.DisplayedMessages, message => message.Message.Contains("Aspire.Hosting.Redis", StringComparison.Ordinal));
                 Assert.Contains(interaction.DisplayedMessages, message => message.Message.Contains("aspire.config.json#sdk.version", StringComparison.Ordinal));
             }
-            foreach (var (path, original) in originals)
-            {
-                Assert.Equal(original, File.ReadAllBytes(path));
-            }
             return confirmUpdates;
         };
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             ConfigureUpdates(options, interaction);
+            options.NuGetClientFactory = _ => new FakeNuGetClient
+            {
+                GetSettingsCallback = NuGetTestHelper.CreateClient().GetSettings
+            };
             options.ProjectLocatorFactory = _ => new TestProjectLocator
             {
+                GetAppHostFromSettingsAsyncCallback = _ => Task.FromResult<FileInfo?>(appHost),
                 UseOrFindAppHostProjectFileAsyncCallback = (_, _, _) => Task.FromResult<FileInfo?>(appHost)
             };
             options.PackagingServiceFactory = _ => new TestPackagingService
@@ -479,7 +539,7 @@ public class UpdateCommandRepositoryToolsTests(ITestOutputHelper outputHelper)
                 GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>(
                 [
                     new PackageChannel(PackageChannelNames.Daily, PackageChannelQuality.Both,
-                        [new PackageMapping("Aspire*", "https://example.invalid/daily/v3/index.json")],
+                        [new PackageMapping("Aspire*", targetSource)],
                         new FakeNuGetPackageCache(), new TestFeatures(), NullLogger.Instance,
                         pinnedVersion: targetVersion)
                 ])
@@ -502,49 +562,67 @@ public class UpdateCommandRepositoryToolsTests(ITestOutputHelper outputHelper)
                     }
                     """)),
                 GetNuGetConfigPathsAsyncCallback = (_, _, _) => (0, [nugetPath]),
-                RestoreAsyncCallback = (_, _, _) =>
+                RestoreAsyncCallback = (file, options, _) =>
                 {
                     restoreCalls++;
-                    AssertFilesUpdated();
+                    Assert.Equal(appHost.FullName, file.FullName);
+                    AssertProjectPackagesUpdated();
+                    AssertFilesUnchanged(dotnetManifest, npmManifest, configPath, nugetPath, lockPath);
+                    Assert.NotNull(options.NuGetRestoreTargetsFile);
+                    Assert.Equal([targetSource], NuGetTestHelper.GetEligiblePackageSources(
+                        options.NuGetRestoreTargetsFile.DirectoryName!, "Aspire.AppHost.Sdk"));
+                    Assert.Equal([targetSource], NuGetTestHelper.GetEligiblePackageSources(
+                        options.NuGetRestoreTargetsFile.DirectoryName!, "Aspire.Hosting.Redis"));
                     return restoreExitCode;
                 }
             };
         });
         using var provider = services.BuildServiceProvider();
 
+        // The real multi-file update transaction needs headroom for filesystem contention in full-suite runs.
         var result = await provider.GetRequiredService<RootCommand>()
-            .Parse("update --channel daily").InvokeAsync().DefaultTimeout();
+            .Parse(dryRun ? "update --channel daily --dry-run --non-interactive" : "update --channel daily")
+            .InvokeAsync().DefaultTimeout(TestConstants.LongTimeoutDuration);
 
-        Assert.Equal(restoreExitCode == 0 ? CliExitCodes.Success : CliExitCodes.FailedToUpgradeProject, result);
-        Assert.Single(interaction.BooleanPromptCalls, call => call.PromptText == UpdateCommandStrings.PerformUpdatesPrompt);
-        Assert.Equal(confirmUpdates && projectNeedsUpdates ? 2 : 1, interaction.BooleanPromptCalls.Count);
-        Assert.Equal(confirmUpdates && projectNeedsUpdates ? 1 : 0, restoreCalls);
-        if (confirmUpdates)
+        var updatesApplied = !dryRun && confirmUpdates && confirmConfiguration;
+        Assert.Equal(dryRun && restoreExitCode != 0 ? CliExitCodes.FailedToUpgradeProject : CliExitCodes.Success, result);
+        Assert.Equal(dryRun ? 0 : confirmUpdates ? 2 : 1, interaction.BooleanPromptCalls.Count);
+        Assert.Equal(dryRun ? 1 : 0, restoreCalls);
+        if (updatesApplied)
         {
-            AssertFilesUpdated();
+            AssertProjectPackagesUpdated();
+            Assert.Equal(targetVersion, JsonNode.Parse(await File.ReadAllTextAsync(dotnetManifest))!["tools"]!["aspire.cli"]!["version"]!.GetValue<string>());
+            Assert.Equal("^" + targetVersion, JsonNode.Parse(await File.ReadAllTextAsync(npmManifest))!["devDependencies"]![RepositoryToolUpdater.NpmPackageId]!.GetValue<string>());
+            var config = JsonNode.Parse(await File.ReadAllTextAsync(configPath))!;
+            Assert.Equal(targetVersion, config["sdk"]!["version"]!.GetValue<string>());
+            Assert.Equal("daily", config["channel"]!.GetValue<string>());
+            Assert.Equal([targetSource], NuGetTestHelper.GetEligiblePackageSources(directory.FullName, "Aspire.AppHost.Sdk"));
+            Assert.Equal([targetSource], NuGetTestHelper.GetEligiblePackageSources(directory.FullName, "Aspire.Hosting.Redis"));
+            Assert.Equal(["https://example.invalid/existing/v3/index.json"], NuGetTestHelper.GetEligiblePackageSources(directory.FullName, "Unrelated.Package"));
             Assert.Contains(UpdateCommandStrings.RepositoryToolsUpdated, interaction.DisplayedSuccess);
         }
         else
         {
-            foreach (var (path, original) in originals)
-            {
-                Assert.Equal(original, await File.ReadAllBytesAsync(path));
-            }
+            AssertFilesUnchanged([.. originals.Keys]);
+            Assert.Equal(dryRun && restoreExitCode == 0 ? [UpdateCommandStrings.DryRunSuccessful] : Array.Empty<string>(),
+                interaction.DisplayedSuccess);
         }
-        Assert.Equal(originals[nugetPath], await File.ReadAllBytesAsync(nugetPath));
         Assert.Equal(originals[lockPath], await File.ReadAllBytesAsync(lockPath));
 
-        void AssertFilesUpdated()
+        void AssertFilesUnchanged(params string[] paths)
         {
-            Assert.Equal(targetVersion, JsonNode.Parse(File.ReadAllText(dotnetManifest))!["tools"]!["aspire.cli"]!["version"]!.GetValue<string>());
-            Assert.Equal("^" + targetVersion, JsonNode.Parse(File.ReadAllText(npmManifest))!["devDependencies"]![RepositoryToolUpdater.NpmPackageId]!.GetValue<string>());
+            foreach (var path in paths)
+            {
+                Assert.Equal(originals[path], File.ReadAllBytes(path));
+            }
+        }
+
+        void AssertProjectPackagesUpdated()
+        {
             Assert.Equal("Aspire.AppHost.Sdk/" + targetVersion, XDocument.Load(appHost.FullName).Root!.Attribute("Sdk")!.Value);
             var packages = XDocument.Load(packagesPath).Descendants("PackageVersion").ToArray();
             Assert.Equal(targetVersion, packages.Single(package => package.Attribute("Include")!.Value == "Aspire.Hosting.Redis").Attribute("Version")!.Value);
             Assert.Equal("1.0.0", packages.Single(package => package.Attribute("Include")!.Value == "Unrelated.Package").Attribute("Version")!.Value);
-            var config = JsonNode.Parse(File.ReadAllText(configPath))!;
-            Assert.Equal(targetVersion, config["sdk"]!["version"]!.GetValue<string>());
-            Assert.Equal("daily", config["channel"]!.GetValue<string>());
         }
     }
 

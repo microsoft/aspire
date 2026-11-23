@@ -137,6 +137,73 @@ public class ReleaseScriptFunctionTests(ITestOutputHelper testOutput)
         Assert.Equal(expectedUrl, result.Output.Trim());
     }
 
+    [Fact]
+    public async Task GetLatestStableVersion_ReturnsNormalizedGitHubLatestReleaseTag()
+    {
+        using var env = new TestEnvironment();
+        using var cmd = new ScriptFunctionCommand(
+            s_releaseScript,
+            """
+            secure_curl() {
+                [[ "$1" == "https://github.com/microsoft/aspire/releases/latest" ]] || { echo "unexpected url: $1" >&2; return 1; }
+                [[ "$6" == "HEAD" ]] || { echo "unexpected method: $6" >&2; return 1; }
+                printf 'HTTP/2 302\r\nlocation: https://github.com/microsoft/aspire/releases/tag/v13.5.4\r\n\r\nHTTP/2 200\r\n'
+            }
+            get_latest_stable_version
+            """,
+            env,
+            _testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        result.EnsureSuccessful();
+        Assert.Equal("13.5.4", result.Output.Trim());
+    }
+
+    [Fact]
+    public async Task GetLatestStableVersion_NoRedirect_ReturnsFailure()
+    {
+        // GitHub responding 200 without a Location header (no redirect at all) must fail cleanly
+        // so the caller can fall back to the stable channel URL, rather than misparsing garbage.
+        using var env = new TestEnvironment();
+        using var cmd = new ScriptFunctionCommand(
+            s_releaseScript,
+            """
+            secure_curl() {
+                printf 'HTTP/2 200\r\n\r\n'
+            }
+            get_latest_stable_version
+            """,
+            env,
+            _testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        Assert.NotEqual(0, result.ExitCode);
+    }
+
+    [Fact]
+    public async Task GetLatestStableVersion_PrereleaseRedirectTarget_ReturnsFailure()
+    {
+        // A "latest release" redirect that unexpectedly points at a prerelease tag must be rejected,
+        // not passed through as a stable version.
+        using var env = new TestEnvironment();
+        using var cmd = new ScriptFunctionCommand(
+            s_releaseScript,
+            """
+            secure_curl() {
+                printf 'HTTP/2 302\r\nlocation: https://github.com/microsoft/aspire/releases/tag/v13.6.0-preview.1\r\n\r\n'
+            }
+            get_latest_stable_version
+            """,
+            env,
+            _testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        Assert.NotEqual(0, result.ExitCode);
+    }
+
     [Theory]
     [InlineData("13.3.0-dev")]
     [InlineData("13.3.0-preview.1.25366.3")]
@@ -436,12 +503,11 @@ public class ReleaseScriptFunctionTests(ITestOutputHelper testOutput)
         using var env = new TestEnvironment();
         var cliPath = Path.Combine(env.TempDirectory, "aspire");
         var capturePath = Path.Combine(env.TempDirectory, "setup-args.txt");
-        await File.WriteAllTextAsync(cliPath, ($$"""
+        await FileHelper.WriteExecutableFileAsync(cliPath, ($$"""
             #!/bin/sh
             printf '%s\n' "$@" > "{{capturePath}}"
             exit 23
             """).ReplaceLineEndings("\n"));
-        FileHelper.MakeExecutable(cliPath);
 
         using var cmd = new ScriptFunctionCommand(
             s_releaseScript,
@@ -610,7 +676,7 @@ public class ReleaseScriptFunctionTests(ITestOutputHelper testOutput)
         Directory.CreateDirectory(mockBinDir);
 
         var mockCurl = Path.Combine(mockBinDir, "curl");
-        await File.WriteAllTextAsync(mockCurl,
+        await FileHelper.WriteExecutableFileAsync(mockCurl,
             """
             #!/bin/bash
             # Mock curl that returns HTML content-type headers for HEAD requests
@@ -624,7 +690,6 @@ public class ReleaseScriptFunctionTests(ITestOutputHelper testOutput)
             done
             exit 0
             """);
-        FileHelper.MakeExecutable(mockCurl);
 
         using var cmd = new ScriptFunctionCommand(
             s_releaseScript,
@@ -647,7 +712,7 @@ public class ReleaseScriptFunctionTests(ITestOutputHelper testOutput)
         Directory.CreateDirectory(mockBinDir);
 
         var mockCurl = Path.Combine(mockBinDir, "curl");
-        await File.WriteAllTextAsync(mockCurl,
+        await FileHelper.WriteExecutableFileAsync(mockCurl,
             """
             #!/bin/bash
             # Mock curl that returns binary content-type headers for HEAD requests
@@ -661,7 +726,6 @@ public class ReleaseScriptFunctionTests(ITestOutputHelper testOutput)
             done
             exit 0
             """);
-        FileHelper.MakeExecutable(mockCurl);
 
         using var cmd = new ScriptFunctionCommand(
             s_releaseScript,

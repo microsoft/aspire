@@ -3,6 +3,7 @@
 
 using System.Diagnostics;
 using System.Globalization;
+using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.ApplicationModel;
 
@@ -52,6 +53,38 @@ public sealed class EndpointReference : IExpressionValue, IManifestExpressionPro
     /// Gets the name of the endpoint associated with the endpoint reference.
     /// </summary>
     public string EndpointName { get; }
+
+    /// <summary>
+    /// Gets a deferred comma-separated list of browser-facing origins associated with this endpoint.
+    /// </summary>
+    /// <remarks>
+    /// Origins use finalized URL customization and are independent of this reference's service-discovery
+    /// network context. Origins are distinct and ordered by display preference. The allocated
+    /// HTTP(S) endpoint origin is included after display origins, even if its display links are removed.
+    /// An endpoint without HTTP(S) origins resolves to an empty string.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// backend.WithEnvironment("ALLOWED_ORIGINS", frontend.GetEndpoint("https").BrowserOrigins);
+    /// </code>
+    /// </example>
+    public EndpointReferenceExpression BrowserOrigins => Property(EndpointProperty.BrowserOrigins);
+
+    /// <summary>
+    /// Gets the deferred primary browser-facing origin associated with this endpoint.
+    /// </summary>
+    /// <remarks>
+    /// Returns the first origin in <see cref="BrowserOrigins"/>, following finalized URL display ordering.
+    /// The allocated HTTP(S) endpoint origin is used when no display origins remain.
+    /// An endpoint without HTTP(S) origins resolves to an empty string. This value is independent
+    /// of this reference's service-discovery network context.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// frontend.WithEnvironment("PUBLIC_ORIGIN", frontend.GetEndpoint("https").PrimaryBrowserOrigin);
+    /// </code>
+    /// </example>
+    public EndpointReferenceExpression PrimaryBrowserOrigin => Property(EndpointProperty.PrimaryBrowserOrigin);
 
     /// <summary>
     /// Gets or sets a custom error message to be thrown when the endpoint annotation is not found.
@@ -145,6 +178,8 @@ public sealed class EndpointReference : IExpressionValue, IManifestExpressionPro
             EndpointProperty.TargetPort => Binding("targetPort"),
             EndpointProperty.HostAndPort => $"{Binding("host")}:{Binding("port")}",
             EndpointProperty.TlsEnabled => Binding("tlsEnabled"),
+            EndpointProperty.BrowserOrigins => Binding("browserOrigins"),
+            EndpointProperty.PrimaryBrowserOrigin => Binding("primaryBrowserOrigin"),
             _ => throw new InvalidOperationException($"The property '{property}' is not supported for the endpoint '{EndpointName}'.")
         };
 
@@ -362,12 +397,42 @@ public class EndpointReferenceExpression(EndpointReference endpointReference, En
 
         return Property switch
         {
+            EndpointProperty.BrowserOrigins or EndpointProperty.PrimaryBrowserOrigin =>
+                await ResolveBrowserOriginsAsync().ConfigureAwait(false),
             EndpointProperty.Scheme => new(Endpoint.Scheme),
             EndpointProperty.TlsEnabled => Endpoint.TlsEnabled ? bool.TrueString : bool.FalseString,
             EndpointProperty.IPV4Host when networkContext == KnownNetworkIdentifiers.LocalhostNetwork => "127.0.0.1",
             EndpointProperty.TargetPort when Endpoint.TargetPort is int port => new(port.ToString(CultureInfo.InvariantCulture)),
             _ => await ResolveValueWithAllocatedAddress().ConfigureAwait(false)
         };
+
+        async ValueTask<string> ResolveBrowserOriginsAsync()
+        {
+            var snapshot = Endpoint.EndpointAnnotation.BrowserUrlsSnapshot;
+            if (!snapshot.IsValueSet && ResourceUrlsCallbackScope.CurrentResource is { } callbackResource)
+            {
+                throw new InvalidOperationException(
+                    $"The URL callback for resource '{callbackResource.Name}' cannot resolve browser origins for endpoint '{Endpoint.EndpointName}' " +
+                    $"on resource '{Endpoint.Resource.Name}' before its URLs are finalized. Read browser origins after URL callbacks complete, " +
+                    "for example in a ResourceEndpointsAllocatedEvent handler.");
+            }
+            var urls = await snapshot.GetValueAsync(cancellationToken).ConfigureAwait(false);
+            var origins = urls.Select(url => new Uri(url.Url, UriKind.Absolute))
+                .Where(uri => uri.Scheme is "http" or "https")
+                .Select(BrowserOriginHelpers.GetOrigin);
+            // Display customization may replace or remove every link. Preserve the physical
+            // endpoint as an additional origin without restoring its dashboard link. Read the
+            // current allocation on each resolution so facade reconnects cannot leave a stale origin.
+            if (Endpoint.EndpointAnnotation.AllocatedEndpoint is { UriScheme: "http" or "https" } allocatedEndpoint)
+            {
+                var allocatedOrigin = BrowserOriginHelpers.GetOrigin(new Uri(allocatedEndpoint.UriString, UriKind.Absolute));
+                origins = origins.Where(origin => !string.Equals(origin, allocatedOrigin, StringComparison.Ordinal))
+                    .Append(allocatedOrigin);
+            }
+            return Property == EndpointProperty.PrimaryBrowserOrigin
+                ? origins.FirstOrDefault() ?? string.Empty
+                : string.Join(",", origins.Distinct(StringComparer.Ordinal));
+        }
 
         async ValueTask<string?> ResolveValueWithAllocatedAddress()
         {
@@ -436,5 +501,11 @@ public enum EndpointProperty
     /// <summary>
     /// Whether TLS is enabled on the endpoint. Returns <see cref="bool.TrueString"/> or <see cref="bool.FalseString"/>.
     /// </summary>
-    TlsEnabled
+    TlsEnabled,
+
+    /// <summary>Comma-separated browser-facing origins for this endpoint.</summary>
+    BrowserOrigins,
+
+    /// <summary>The primary browser-facing origin for this endpoint.</summary>
+    PrimaryBrowserOrigin
 }

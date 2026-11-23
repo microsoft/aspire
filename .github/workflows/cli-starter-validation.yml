@@ -32,15 +32,21 @@ permissions:
 jobs:
   validate:
     name: Validate
+    if: ${{ github.repository == 'microsoft/aspire' }}
     runs-on: ${{ inputs.runner }}
     # Shared budget for every caller of this reusable workflow. The validation script can spend
-    # up to four startup waits (run + start for two templates) and three resource waits, which is
-    # 27 minutes on the current Windows ARM64 input set before template creation, package add, log
+    # up to six startup waits (run + start for three templates) and five resource waits, which is
+    # 42 minutes on the current Windows ARM64 input set before template creation, package add, log
     # collection, and artifact upload. Keep the job timeout above that aggregate budget.
-    timeout-minutes: 45
+    timeout-minutes: 60
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
+      - name: Configure NuGet package cache (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Write-Output "NUGET_PACKAGES=${{ github.workspace }}/.nuget/packages" >> $env:GITHUB_ENV
+
       - name: Checkout PR head
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -56,6 +62,44 @@ jobs:
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '22'
+
+      - name: Setup Go
+        shell: pwsh
+        # Download the official toolchain directly so this lane needs no additional action pin.
+        # Verify the archive using the checksum published by https://go.dev/dl/?mode=json.
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          $os = switch ('${{ runner.os }}') {
+            'Windows' { 'windows' }
+            'macOS' { 'darwin' }
+            'Linux' { 'linux' }
+            default { throw 'Unsupported runner OS' }
+          }
+          $arch = switch ('${{ runner.arch }}') {
+            'X64' { 'amd64' }
+            'ARM64' { 'arm64' }
+            default { throw 'Unsupported runner architecture' }
+          }
+          $releases = Invoke-RestMethod 'https://go.dev/dl/?mode=json&include=all'
+          $release = $releases | Where-Object version -EQ 'go1.26.10'
+          $archive = @($release.files | Where-Object { $_.os -eq $os -and $_.arch -eq $arch -and $_.kind -eq 'archive' })
+          if ($archive.Count -ne 1) { throw "Expected one Go archive for $os/$arch" }
+          $download = Join-Path $env:RUNNER_TEMP $archive[0].filename
+          Invoke-WebRequest "https://go.dev/dl/$($archive[0].filename)" -OutFile $download
+          if ((Get-FileHash $download -Algorithm SHA256).Hash -ne $archive[0].sha256) {
+            throw 'Go archive checksum mismatch'
+          }
+          $destination = Join-Path $env:RUNNER_TEMP 'starter-go'
+          New-Item -ItemType Directory -Path $destination -Force | Out-Null
+          if ($os -eq 'windows') {
+            Expand-Archive $download -DestinationPath $destination
+          } else {
+            tar -xzf $download -C $destination
+          }
+          $goBin = Join-Path $destination 'go/bin'
+          $goBin >> $env:GITHUB_PATH
+          & (Join-Path $goBin 'go') version
 
       - name: Install Aspire CLI from PR dogfood script
         shell: pwsh
@@ -73,7 +117,7 @@ jobs:
       - name: Create starter app and validate startup
         # Leave headroom above the script's aggregate wait budget so slower runs can still finish
         # template creation, aspire add, and cleanup instead of being cancelled mid-validation.
-        timeout-minutes: 40
+        timeout-minutes: 55
         shell: pwsh
         env:
           PR_NUMBER: ${{ inputs.prNumber }}

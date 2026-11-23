@@ -37,6 +37,7 @@ From your AppHost directory, add the `Aspire.Hosting.Java` integration with the 
 
 ```bash
 aspire add Aspire.Hosting.Java
+aspire add Aspire.Hosting.Dotnet
 ```
 
 ## Usage example
@@ -53,7 +54,7 @@ var builder = DistributedApplication.CreateBuilder(args);
 var catalog = builder.AddSpringBootApp("catalog", "../catalog")
     .WithExternalHttpEndpoints();
 
-builder.AddProject<Projects.Frontend>("frontend")
+builder.AddDotnetProject("frontend", "../Frontend/Frontend.csproj")
     .WithReference(catalog)
     .WaitFor(catalog);
 

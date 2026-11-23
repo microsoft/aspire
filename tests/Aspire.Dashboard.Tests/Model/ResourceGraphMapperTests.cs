@@ -30,7 +30,7 @@ public class ResourceGraphMapperTests
         };
 
         // Act
-        var dto = ResourceGraphMapper.MapResource(resource1, resources.Values, resources, new TestStringLocalizer<Columns>(), showHiddenResources: false, _iconResolver);
+        var dto = ResourceGraphMapper.MapResource(resource1, resources.Values, resources, new TestStringLocalizer<Columns>(), showHiddenResources: false, _iconResolver, []);
 
         // Assert
         var referencedName = Assert.Single(dto.ReferencedNames);
@@ -52,7 +52,7 @@ public class ResourceGraphMapperTests
         };
 
         // Act
-        var dto = ResourceGraphMapper.MapResource(resource1, resources.Values, resources, new TestStringLocalizer<Columns>(), showHiddenResources: false, _iconResolver);
+        var dto = ResourceGraphMapper.MapResource(resource1, resources.Values, resources, new TestStringLocalizer<Columns>(), showHiddenResources: false, _iconResolver, []);
 
         // Assert
         Assert.Collection(dto.ReferencedNames,
@@ -71,7 +71,7 @@ public class ResourceGraphMapperTests
         };
 
         // Act
-        var dto = ResourceGraphMapper.MapResource(resource, resources.Values, resources, new TestStringLocalizer<Columns>(), showHiddenResources: false, _iconResolver);
+        var dto = ResourceGraphMapper.MapResource(resource, resources.Values, resources, new TestStringLocalizer<Columns>(), showHiddenResources: false, _iconResolver, []);
 
         // Assert
         Assert.Empty(dto.ReferencedNames);
@@ -90,10 +90,27 @@ public class ResourceGraphMapperTests
         };
 
         // Act
-        var dto = ResourceGraphMapper.MapResource(resource1, resources.Values, resources, new TestStringLocalizer<Columns>(), showHiddenResources: true, _iconResolver);
+        var dto = ResourceGraphMapper.MapResource(resource1, resources.Values, resources, new TestStringLocalizer<Columns>(), showHiddenResources: true, _iconResolver, []);
 
         // Assert
         Assert.Contains("hidden-app", dto.ReferencedNames);
+    }
+
+    [Fact]
+    public void MapResource_HiddenResource_IsMarkedHidden()
+    {
+        // Arrange
+        var resource = ModelTestHelpers.CreateResource("hidden-app", displayName: "hidden-app", hidden: true);
+        var resources = new Dictionary<string, ResourceViewModel>
+        {
+            [resource.Name] = resource,
+        };
+
+        // Act
+        var dto = ResourceGraphMapper.MapResource(resource, resources.Values, resources, new TestStringLocalizer<Columns>(), showHiddenResources: true, _iconResolver, []);
+
+        // Assert
+        Assert.True(dto.IsHidden);
     }
 
     [Fact]
@@ -111,7 +128,7 @@ public class ResourceGraphMapperTests
         };
 
         // Act
-        var dto = ResourceGraphMapper.MapResource(resource, resources.Values, resources, new TestStringLocalizer<Columns>(), showHiddenResources: false, _iconResolver);
+        var dto = ResourceGraphMapper.MapResource(resource, resources.Values, resources, new TestStringLocalizer<Columns>(), showHiddenResources: false, _iconResolver, []);
 
         // Assert
         Assert.Null(dto.EndpointUrl);
@@ -133,7 +150,7 @@ public class ResourceGraphMapperTests
         };
 
         // Act
-        var dto = ResourceGraphMapper.MapResource(resource, resources.Values, resources, new TestStringLocalizer<Columns>(), showHiddenResources: false, _iconResolver);
+        var dto = ResourceGraphMapper.MapResource(resource, resources.Values, resources, new TestStringLocalizer<Columns>(), showHiddenResources: false, _iconResolver, []);
 
         // Assert - non-parameter resources should always have endpoint text (even if "No endpoints")
         Assert.NotNull(dto.EndpointText);
@@ -154,9 +171,25 @@ public class ResourceGraphMapperTests
             [parameter.Name] = parameter,
         };
 
-        var dto = ResourceGraphMapper.MapResource(resource, [resource], resources, new TestStringLocalizer<Columns>(), showHiddenResources: false, _iconResolver);
+        var dto = ResourceGraphMapper.MapResource(resource, [resource], resources, new TestStringLocalizer<Columns>(), showHiddenResources: false, _iconResolver, []);
 
         Assert.Empty(dto.ReferencedNames);
+    }
+
+    [Fact]
+    public void MapResource_Tags_UseDedicatedTagColors()
+    {
+        var resource = ModelTestHelpers.CreateResource("app");
+        var resources = new Dictionary<string, ResourceViewModel> { [resource.Name] = resource };
+        var backendColor = ColorGenerator.TagInstance.GetColorVariableByKey("Backend");
+        var frontendColor = ColorGenerator.TagInstance.GetColorVariableByKey("Frontend");
+
+        var dto = ResourceGraphMapper.MapResource(resource, resources.Values, resources, new TestStringLocalizer<Columns>(), showHiddenResources: false, _iconResolver, ["backend", "Frontend"]);
+
+        Assert.Collection(dto.Tags,
+            tag => Assert.Equal(new ResourceTagDto("backend", backendColor), tag),
+            tag => Assert.Equal(new ResourceTagDto("Frontend", frontendColor), tag));
+        Assert.Equal(ColorGenerator.Instance.GetColorVariableByKey(resource.Name), dto.ResourceIcon.Color);
     }
 
     [Fact]

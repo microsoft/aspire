@@ -14,8 +14,6 @@ public abstract class NewUpAndBuildStandaloneTemplateTestsBase(ITestOutputHelper
 
         var buildEnvToUse = sdk switch
         {
-            TestSdk.Net8 => BuildEnvironment.ForNet8SdkOnly,
-            TestSdk.Net9 => BuildEnvironment.ForNet9SdkOnly,
             TestSdk.Net10 => BuildEnvironment.ForNet10SdkOnly,
             TestSdk.Net11 => BuildEnvironment.ForNet11SdkOnly,
             TestSdk.Net11WithAllSupportedRuntimes => BuildEnvironment.ForNet11SdkWithAllSupportedRuntimes,
@@ -117,12 +115,10 @@ public abstract class NewUpAndBuildStandaloneTemplateTestsBase(ITestOutputHelper
         Assert.Equal(tfm == TestTargetFramework.Net11, importsContent.Contains("@using Microsoft.AspNetCore.Components.Endpoints", StringComparison.Ordinal));
 
         var errorPageContent = await File.ReadAllTextAsync(Path.Combine(webProjectDirectory, "Components", "Pages", "Error.razor"));
-        Assert.Equal(tfm is TestTargetFramework.Net10 or TestTargetFramework.Net11, errorPageContent.Contains("[PersistentState]", StringComparison.Ordinal));
+        Assert.True(errorPageContent.Contains("[PersistentState]", StringComparison.Ordinal));
 
         var navMenuContent = await File.ReadAllTextAsync(Path.Combine(webProjectDirectory, "Components", "Layout", "NavMenu.razor"));
-        var expectedNavMenuScript = tfm == TestTargetFramework.Net8
-            ? "<script type=\"module\" src=\"Components/Layout/NavMenu.razor.js\"></script>"
-            : "<script type=\"module\" src=\"@Assets[\"Components/Layout/NavMenu.razor.js\"]\"></script>";
+        const string expectedNavMenuScript = "<script type=\"module\" src=\"@Assets[\"Components/Layout/NavMenu.razor.js\"]\"></script>";
         Assert.Contains(expectedNavMenuScript, navMenuContent, StringComparison.Ordinal);
         Assert.Contains("id=\"nav-scrollable\"", navMenuContent, StringComparison.Ordinal);
         Assert.False(navMenuContent.Contains("onclick=", StringComparison.Ordinal));

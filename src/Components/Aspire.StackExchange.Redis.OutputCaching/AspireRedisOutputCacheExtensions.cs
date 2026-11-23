@@ -101,6 +101,8 @@ public static class AspireRedisOutputCacheExtensions
 
     private static void AddRedisOutputCacheCore(this IHostApplicationBuilder builder, Action<RedisOutputCacheOptions, IServiceProvider> configureRedisOptions)
     {
+        builder.Services.AddOutputCache();
+
         builder.Services.AddStackExchangeRedisOutputCache(static _ => { });
 
         builder.Services.AddOptions<RedisOutputCacheOptions>() // note that RedisOutputCacheOptions doesn't support named options

@@ -4,7 +4,7 @@
     <body>
       <trans-unit id="ClearCacheOptionDescription">
         <source>Clear the deployment cache associated with the current environment and do not save deployment state</source>
-        <target state="new">Clear the deployment cache associated with the current environment and do not save deployment state</target>
+        <target state="translated">Limpe o cache de implantação do ambiente atual e não salve o estado da implantação</target>
         <note />
       </trans-unit>
       <trans-unit id="DeploymentCanceled">
@@ -14,7 +14,7 @@
       </trans-unit>
       <trans-unit id="Description">
         <source>Deploy an AppHost to its deployment targets</source>
-        <target state="needs-review-translation">Implante o conteúdo de um Aspire AppHost em seus destinos de implantação definidos. (Versão Prévia)</target>
+        <target state="translated">Implante um AppHost nos destinos de implantação</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationCompletedPrefix">
@@ -29,7 +29,7 @@
       </trans-unit>
       <trans-unit id="OutputPathArgumentDescription">
         <source>The optional output path for deployment artifacts</source>
-        <target state="needs-review-translation">O caminho de saída opcional para artefatos de implantação.</target>
+        <target state="translated">O caminho de saída opcional para artefatos de implantação</target>
         <note />
       </trans-unit>
     </body>

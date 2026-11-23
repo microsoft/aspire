@@ -5,6 +5,7 @@ using System.CommandLine;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
+using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Commands.Sdk;
@@ -111,12 +112,11 @@ internal sealed class SdkGenerateCommand : BaseCommand
         var integrationAssemblyName = IntegrationAssemblyNameResolver.Resolve(integrationProject);
 
         // Use a temporary directory for the AppHost server
-        var tempDir = Path.Combine(Path.GetTempPath(), "aspire-sdk-gen", Guid.NewGuid().ToString("N")[..8]);
-        Directory.CreateDirectory(tempDir);
+        var tempDir = CliPathHelper.CreateSdkWorkingDirectory(ExecutionContext.AspireHomeDirectory).FullName;
 
         try
         {
-            var appHostServerProject = await _appHostServerProjectFactory.CreateAsync(tempDir, cancellationToken);
+            var appHostServerProject = await _appHostServerProjectFactory.CreateForSdkCommandsAsync(tempDir, restoreRootConfigDirectory: null, cancellationToken);
 
             // Get code generation package for the target language
             var codeGenPackage = await _languageDiscovery.GetPackageForLanguageAsync(languageInfo.LanguageId, cancellationToken);
@@ -154,7 +154,7 @@ internal sealed class SdkGenerateCommand : BaseCommand
                 return CliExitCodes.FailedToBuildArtifacts;
             }
 
-            await using var serverSession = _serverSessionFactory.Create(appHostServerProject, environmentVariables: null, debug: false, gracefulShutdownSignaler: null, shutdownService: null, isolateConsole: false, cancellationToken);
+            await using var serverSession = _serverSessionFactory.Create(appHostServerProject, environmentVariables: null, debug: false, gracefulShutdownSignaler: null, shutdownService: null, isolateConsole: false, ownsProject: true, cancellationToken);
             // Short-lived RPC session: StartAsync() spawns the server. We never observe the
             // exit-code task (WaitForExitAsync) because disposal flows the exit code through the
             // activity scope and the only failure mode we care about surfaces via the RPC call below.
@@ -197,10 +197,7 @@ internal sealed class SdkGenerateCommand : BaseCommand
             // Clean up temp directory
             try
             {
-                if (Directory.Exists(tempDir))
-                {
-                    Directory.Delete(tempDir, recursive: true);
-                }
+                await FileDeleteHelper.DeleteDirectoryWithRetryAsync(tempDir, TimeProvider.System, CancellationToken.None).ConfigureAwait(false);
             }
             catch (Exception ex)
             {

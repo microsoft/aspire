@@ -50,14 +50,14 @@ steps:
       Write-Host "##vso[task.setvariable variable=WinGetIsPrereleaseInStablePackage]$isPrereleaseInStablePackage"
     displayName: 🟣Set version ${{ parameters.version }}
 
-  # The standalone wingetcreate executable is framework-dependent. Exercise it
-  # in regular builds so an upstream target-framework change is caught before
-  # the release pipeline attempts a public submission.
+  # wingetcreate is framework-dependent and still targets .NET 9. Scope major
+  # roll-forward to its process so it runs on our .NET 10 baseline. Probe it in
+  # regular builds before the release pipeline attempts a public submission.
   - task: UseDotNet@2
-    displayName: '🟣Install .NET 9 runtime for wingetcreate'
+    displayName: '🟣Install .NET 10 runtime for wingetcreate'
     inputs:
       packageType: 'runtime'
-      version: '9.0.x'
+      version: '10.0.x'
 
   - pwsh: |
       $ErrorActionPreference = 'Stop'
@@ -69,6 +69,8 @@ steps:
         exit $LASTEXITCODE
       }
     displayName: '🟣Verify wingetcreate'
+    env:
+      DOTNET_ROLL_FORWARD: Major
 
   - pwsh: |
       # Probe-only: do not attempt to install/repair winget here. The 1ES `1es-windows-2022`

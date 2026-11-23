@@ -1,0 +1,18 @@
+﻿{
+  "preference": true,
+  "mcpServers": {
+    "aspire": {
+      "command": "aspire",
+      "args": [
+        "agent",
+        "mcp"
+      ],
+      "env": {
+        "CUSTOM": "keep"
+      }
+    },
+    "other": {
+      "command": "other"
+    }
+  }
+}

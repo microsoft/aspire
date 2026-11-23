@@ -19,9 +19,9 @@ if (!app.Environment.IsDevelopment())
     app.UseExceptionHandler("/Error");
     // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
     app.UseHsts();
+    app.UseHttpsRedirection();
 }
 
-app.UseHttpsRedirection();
 app.UseStaticFiles();
 
 app.UseRouting();
@@ -50,7 +50,7 @@ app.MapGet("/negotiate/notification", ([FromKeyedServices(Constants.Notification
 });
 
 // handle events for chat
-app.Map($"/eventhandler/{Constants.ChatHubName}", async ([FromKeyedServices(Constants.ChatHubName)] WebPubSubServiceClient service, HttpContext context, ILogger logger) =>
+app.Map($"/eventhandler/{Constants.ChatHubName}", async ([FromKeyedServices(Constants.ChatHubName)] WebPubSubServiceClient service, HttpContext context, ILogger<Program> logger) =>
 {
     context.Response.Headers["WebHook-Allowed-Origin"] = "*";
     if (context.Request.Method == "OPTIONS")
@@ -65,11 +65,11 @@ app.Map($"/eventhandler/{Constants.ChatHubName}", async ([FromKeyedServices(Cons
         return;
     }
     context.Response.StatusCode = 200;
-    var userId = context.Request.Headers["ce-userId"];
+    var connectionId = context.Request.Headers["ce-connectionId"];
     if (eventType == "azure.webpubsub.sys.connected")
     {
-        logger.LogInformation($"[SYSTEM] {userId} joined.");
-        await service.SendToAllAsync($"[SYSTEM] {userId} joined.");
+        logger.LogInformation("[SYSTEM] {ConnectionId} joined.", connectionId.ToString());
+        await service.SendToAllAsync($"[SYSTEM] {connectionId} joined.");
     }
 });
 

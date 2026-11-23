@@ -1,8 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREFILESYSTEM001 // Type is for evaluation purposes only
-
 using System.IO.Pipelines;
 using System.Text;
 using System.Text.Json;

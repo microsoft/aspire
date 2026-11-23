@@ -130,7 +130,7 @@ public sealed class AksVnetWithAzureResourcesDeploymentTests(ITestOutputHelper o
 
                 // Insert full infrastructure AFTER CreateBuilder so variables
                 // are available when apiservice references them.
-                content = content.Replace(
+                content = DotnetProjectDeploymentHelpers.ReplaceExactlyOnce(content,
                     "var builder = DistributedApplication.CreateBuilder(args);",
                     """
 var builder = DistributedApplication.CreateBuilder(args);
@@ -160,9 +160,10 @@ var blobs = storage.AddBlobs("blobs");
 """);
 
                 // Add WithReference and WithNodePool to apiservice
-                content = content.Replace(
-                    "builder.AddProject<Projects." + projectName + "_ApiService>(\"apiservice\")",
-                    "builder.AddProject<Projects." + projectName + "_ApiService>(\"apiservice\")\n    .WithReference(vault)\n    .WithReference(blobs)\n    .WithNodePool(workerPool)");
+                var apiServiceDeclaration = $"builder.AddDotnetProject(\"apiservice\", \"../{projectName}.ApiService/{projectName}.ApiService.csproj\")";
+                content = DotnetProjectDeploymentHelpers.ReplaceExactlyOnce(content,
+                    apiServiceDeclaration,
+                    $"{apiServiceDeclaration}\n    .WithReference(vault)\n    .WithReference(blobs)\n    .WithNodePool(workerPool)");
 
                 // Add required using directive for WithNodePool
                 content = "using Aspire.Hosting.Kubernetes.Extensions;\n" + content;

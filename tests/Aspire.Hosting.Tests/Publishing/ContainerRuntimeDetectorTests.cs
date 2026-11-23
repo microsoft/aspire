@@ -8,12 +8,23 @@ namespace Aspire.Hosting.Tests.Publishing;
 public class ContainerRuntimeDetectorTests
 {
     [Fact]
+    public async Task CheckRuntimeAsync_CanceledToken_DoesNotReturnMissingRuntime()
+    {
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+        var executable = $"aspire-missing-runtime-{Guid.NewGuid():N}";
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            ContainerRuntimeDetector.CheckRuntimeAsync(executable, cancellationToken: cancellation.Token));
+    }
+
+    [Fact]
     public void FindBestRuntime_PrefersRunningOverInstalled()
     {
         var runtimes = new[]
         {
-            new ContainerRuntimeInfo { Executable = "docker", Name = "Docker", IsInstalled = true, IsRunning = false, IsDefault = true },
-            new ContainerRuntimeInfo { Executable = "podman", Name = "Podman", IsInstalled = true, IsRunning = true, IsDefault = false }
+            new ContainerRuntimeInfo { Key = "docker", Executable = "docker", Name = "Docker", IsInstalled = true, IsRunning = false, Priority = 0 },
+            new ContainerRuntimeInfo { Key = "podman", Executable = "podman", Name = "Podman", IsInstalled = true, IsRunning = true, Priority = 1 }
         };
 
         var best = ContainerRuntimeDetector.FindBestRuntime(runtimes);
@@ -26,8 +37,8 @@ public class ContainerRuntimeDetectorTests
     {
         var runtimes = new[]
         {
-            new ContainerRuntimeInfo { Executable = "docker", Name = "Docker", IsInstalled = false, IsRunning = false, IsDefault = true },
-            new ContainerRuntimeInfo { Executable = "podman", Name = "Podman", IsInstalled = true, IsRunning = false, IsDefault = false }
+            new ContainerRuntimeInfo { Key = "docker", Executable = "docker", Name = "Docker", IsInstalled = false, IsRunning = false, Priority = 0 },
+            new ContainerRuntimeInfo { Key = "podman", Executable = "podman", Name = "Podman", IsInstalled = true, IsRunning = false, Priority = 1 }
         };
 
         var best = ContainerRuntimeDetector.FindBestRuntime(runtimes);
@@ -40,8 +51,8 @@ public class ContainerRuntimeDetectorTests
     {
         var runtimes = new[]
         {
-            new ContainerRuntimeInfo { Executable = "docker", Name = "Docker", IsInstalled = true, IsRunning = true, IsDefault = true },
-            new ContainerRuntimeInfo { Executable = "podman", Name = "Podman", IsInstalled = true, IsRunning = true, IsDefault = false }
+            new ContainerRuntimeInfo { Key = "docker", Executable = "docker", Name = "Docker", IsInstalled = true, IsRunning = true, Priority = 0 },
+            new ContainerRuntimeInfo { Key = "podman", Executable = "podman", Name = "Podman", IsInstalled = true, IsRunning = true, Priority = 1 }
         };
 
         var best = ContainerRuntimeDetector.FindBestRuntime(runtimes);
@@ -62,7 +73,7 @@ public class ContainerRuntimeDetectorTests
     {
         var runtimes = new[]
         {
-            new ContainerRuntimeInfo { Executable = "podman", Name = "Podman", IsInstalled = true, IsRunning = true, IsDefault = false }
+            new ContainerRuntimeInfo { Key = "podman", Executable = "podman", Name = "Podman", IsInstalled = true, IsRunning = true, Priority = 1 }
         };
 
         var best = ContainerRuntimeDetector.FindBestRuntime(runtimes);
@@ -75,8 +86,8 @@ public class ContainerRuntimeDetectorTests
     {
         var runtimes = new[]
         {
-            new ContainerRuntimeInfo { Executable = "docker", Name = "Docker", IsInstalled = false, IsRunning = false, IsDefault = true },
-            new ContainerRuntimeInfo { Executable = "podman", Name = "Podman", IsInstalled = false, IsRunning = false, IsDefault = false }
+            new ContainerRuntimeInfo { Key = "docker", Executable = "docker", Name = "Docker", IsInstalled = false, IsRunning = false, Priority = 0 },
+            new ContainerRuntimeInfo { Key = "podman", Executable = "podman", Name = "Podman", IsInstalled = false, IsRunning = false, Priority = 1 }
         };
 
         var best = ContainerRuntimeDetector.FindBestRuntime(runtimes);
@@ -94,7 +105,7 @@ public class ContainerRuntimeDetectorTests
         }
         """;
 
-        var info = ContainerRuntimeDetector.ParseVersionOutput(json);
+        var info = ContainerRuntimeProbe.ParseVersionOutput(json);
 
         Assert.Equal(new Version(28, 0, 1), info.ClientVersion);
         Assert.Equal(new Version(27, 5, 0), info.ServerVersion);
@@ -112,7 +123,7 @@ public class ContainerRuntimeDetectorTests
         }
         """;
 
-        var info = ContainerRuntimeDetector.ParseVersionOutput(json);
+        var info = ContainerRuntimeProbe.ParseVersionOutput(json);
 
         Assert.Equal(new Version(29, 1, 3), info.ClientVersion);
         Assert.False(info.IsDockerDesktop);
@@ -127,7 +138,7 @@ public class ContainerRuntimeDetectorTests
         }
         """;
 
-        var info = ContainerRuntimeDetector.ParseVersionOutput(json);
+        var info = ContainerRuntimeProbe.ParseVersionOutput(json);
 
         Assert.Equal(new Version(4, 9, 3), info.ClientVersion);
         Assert.Null(info.ServerVersion);
@@ -139,7 +150,7 @@ public class ContainerRuntimeDetectorTests
     {
         var text = "podman version 5.2.1";
 
-        var info = ContainerRuntimeDetector.ParseVersionOutput(text);
+        var info = ContainerRuntimeProbe.ParseVersionOutput(text);
 
         Assert.Equal(new Version(5, 2, 1), info.ClientVersion);
     }
@@ -147,7 +158,7 @@ public class ContainerRuntimeDetectorTests
     [Fact]
     public void ParseVersionOutput_NullInput_ReturnsDefault()
     {
-        var info = ContainerRuntimeDetector.ParseVersionOutput(null);
+        var info = ContainerRuntimeProbe.ParseVersionOutput(null);
 
         Assert.Null(info.ClientVersion);
         Assert.Null(info.ServerVersion);
@@ -157,7 +168,7 @@ public class ContainerRuntimeDetectorTests
     [Fact]
     public void ParseVersionOutput_EmptyInput_ReturnsDefault()
     {
-        var info = ContainerRuntimeDetector.ParseVersionOutput("");
+        var info = ContainerRuntimeProbe.ParseVersionOutput("");
 
         Assert.Null(info.ClientVersion);
     }
@@ -172,7 +183,7 @@ public class ContainerRuntimeDetectorTests
         }
         """;
 
-        var info = ContainerRuntimeDetector.ParseVersionOutput(json);
+        var info = ContainerRuntimeProbe.ParseVersionOutput(json);
 
         Assert.Equal("windows", info.ServerOs);
     }

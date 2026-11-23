@@ -486,7 +486,7 @@ public class FilterDialogTests : DashboardTestContext
 
         await cut.Find("#filter-dialog-text-value").FocusInAsync(new());
         await cut.Find("#filter-dialog-text-value").TriggerEventAsync("ontextimmediate", new ChangeEventArgs { Value = typedValue });
-        await cut.Find("#filter-dialog-text-value").TriggerEventAsync("ondropdownchange", new DropdownEventArgs { SelectedOptions = "" });
+        await cut.Find("#filter-dialog-text-value").TriggerEventAsync("ondropdownchange", new DropdownEventArgs { SelectedOptions = "", FreeformValue = typedValue });
         await cut.Find("#filter-dialog-text-value").FocusOutAsync(new());
 
         Assert.Equal(typedValue, Assert.IsType<FilterDialogFormModel>(cut.Instance.EditContext.Model).Value);
@@ -530,7 +530,7 @@ public class FilterDialogTests : DashboardTestContext
             }));
         });
 
-        var datePickerButton = Assert.Single(cut.FindComponents<FluentButton>(), button => button.Instance.Title == "Pick date and time");
+        var datePickerButton = Assert.Single(cut.FindComponents<FluentButton>(), button => button.Find("fluent-button").GetAttribute("data-tooltip") == "Pick date and time");
         Assert.True(datePickerButton.Instance.IconOnly);
         Assert.Equal(ButtonType.Button, datePickerButton.Instance.Type);
         Assert.Contains("aspire-icon-button", datePickerButton.Instance.Class);

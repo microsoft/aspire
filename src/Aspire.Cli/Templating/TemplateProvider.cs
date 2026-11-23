@@ -25,9 +25,9 @@ internal sealed class TemplateProvider : ITemplateProvider
         return _factories.SelectMany(static f => f.GetTemplates());
     }
 
-    public async Task<IEnumerable<ITemplate>> GetTemplatesAsync(CancellationToken cancellationToken = default)
+    public async Task<IEnumerable<ITemplate>> GetTemplatesAsync(TemplateSource? source, CancellationToken cancellationToken = default)
     {
-        var templates = await Task.WhenAll(_factories.Select(f => f.GetTemplatesAsync(cancellationToken)));
+        var templates = await Task.WhenAll(_factories.Select(f => f.GetTemplatesAsync(source, cancellationToken)));
         return templates.SelectMany(static t => t);
     }
 

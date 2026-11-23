@@ -1,6 +1,6 @@
 ﻿<FluentButton Appearance="@Appearance"
               Disabled="Disabled"
-              Title="@(Value is true ? CheckedTitle : UncheckedTitle)"
+              data-tooltip="@(Value is true ? CheckedTitle : UncheckedTitle)"
               aria-label="@(Value is true ? CheckedTitle : UncheckedTitle)"
               OnClick="@(() => OnToggleInternalAsync())"
               IconEnd="@(Value is true ? CheckedIcon : UncheckedIcon)"

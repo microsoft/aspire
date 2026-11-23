@@ -16,6 +16,7 @@ From your AppHost directory, add the `Aspire.Hosting.Azure.ConnectorNamespace` i
 
 ```bash
 aspire add Aspire.Hosting.Azure.ConnectorNamespace
+aspire add Aspire.Hosting.Dotnet
 ```
 
 ## Usage example
@@ -49,7 +50,7 @@ var outlook = connectorNamespace.AddConnection(
             TenantId = "22222222-2222-2222-2222-222222222222"
         });
 
-builder.AddProject<Projects.Worker>("worker")
+builder.AddDotnetProject("worker", "../Worker/Worker.csproj")
     .WithReference(outlook);
 
 connectorNamespace.AddMcpServerConfig("outlook-mcp")

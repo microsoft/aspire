@@ -40,8 +40,9 @@ resource my_ace_law 'Microsoft.OperationalInsights/workspaces@2025-02-01' = {
   tags: tags
 }
 
-resource my_ace 'Microsoft.App/managedEnvironments@2025-07-01' = {
+resource my_ace 'Microsoft.App/managedEnvironments@2026-07-01' = {
   name: take('myace${uniqueString(resourceGroup().id)}', 24)
+  tags: tags
   location: location
   properties: {
     appLogsConfiguration: {
@@ -58,7 +59,6 @@ resource my_ace 'Microsoft.App/managedEnvironments@2025-07-01' = {
       }
     ]
   }
-  tags: tags
 }
 
 resource aspireDashboard 'Microsoft.App/managedEnvironments/dotNetComponents@2025-10-02-preview' = {
@@ -69,35 +69,35 @@ resource aspireDashboard 'Microsoft.App/managedEnvironments/dotNetComponents@202
   parent: my_ace
 }
 
-resource my_ace_storageVolume 'Microsoft.Storage/storageAccounts@2024-01-01' = {
+resource my_ace_storageVolume 'Microsoft.Storage/storageAccounts@2026-06-01' = {
   name: take('myacesv${resourceToken}', 24)
-  kind: 'StorageV2'
+  tags: tags
   location: location
-  sku: {
-    name: 'Standard_LRS'
-  }
   properties: {
     largeFileSharesState: 'Enabled'
     minimumTlsVersion: 'TLS1_2'
   }
-  tags: tags
+  sku: {
+    name: 'Standard_LRS'
+  }
+  kind: 'StorageV2'
 }
 
-resource storageVolumeFileService 'Microsoft.Storage/storageAccounts/fileServices@2024-01-01' = {
+resource storageVolumeFileService 'Microsoft.Storage/storageAccounts/fileServices@2026-06-01' = {
   name: 'default'
   parent: my_ace_storageVolume
 }
 
-resource shares_volumes_druid_0 'Microsoft.Storage/storageAccounts/fileServices/shares@2024-01-01' = {
+resource shares_volumes_druid_0 'Microsoft.Storage/storageAccounts/fileServices/shares@2026-06-01' = {
   name: take('${toLower('druid')}-${toLower('druid_shared')}', 60)
   properties: {
-    enabledProtocols: 'SMB'
     shareQuota: 1024
+    enabledProtocols: 'SMB'
   }
   parent: storageVolumeFileService
 }
 
-resource managedStorage_volumes_druid_0 'Microsoft.App/managedEnvironments/storages@2025-07-01' = {
+resource managedStorage_volumes_druid_0 'Microsoft.App/managedEnvironments/storages@2026-07-01' = {
   name: take('${toLower('druid')}-${toLower('druid_shared')}-${resourceToken}', 32)
   properties: {
     azureFile: {
@@ -110,16 +110,16 @@ resource managedStorage_volumes_druid_0 'Microsoft.App/managedEnvironments/stora
   parent: my_ace
 }
 
-resource shares_volumes_druid_1 'Microsoft.Storage/storageAccounts/fileServices/shares@2024-01-01' = {
+resource shares_volumes_druid_1 'Microsoft.Storage/storageAccounts/fileServices/shares@2026-06-01' = {
   name: take('${toLower('druid')}-${toLower('coordinator_var')}', 60)
   properties: {
-    enabledProtocols: 'SMB'
     shareQuota: 1024
+    enabledProtocols: 'SMB'
   }
   parent: storageVolumeFileService
 }
 
-resource managedStorage_volumes_druid_1 'Microsoft.App/managedEnvironments/storages@2025-07-01' = {
+resource managedStorage_volumes_druid_1 'Microsoft.App/managedEnvironments/storages@2026-07-01' = {
   name: take('${toLower('druid')}-${toLower('coordinator_var')}-${resourceToken}', 32)
   properties: {
     azureFile: {
@@ -132,16 +132,16 @@ resource managedStorage_volumes_druid_1 'Microsoft.App/managedEnvironments/stora
   parent: my_ace
 }
 
-resource shares_bindmounts_druid_0 'Microsoft.Storage/storageAccounts/fileServices/shares@2024-01-01' = {
+resource shares_bindmounts_druid_0 'Microsoft.Storage/storageAccounts/fileServices/shares@2026-06-01' = {
   name: take('${toLower('druid')}-${toLower('bm0')}', 60)
   properties: {
-    enabledProtocols: 'SMB'
     shareQuota: 1024
+    enabledProtocols: 'SMB'
   }
   parent: storageVolumeFileService
 }
 
-resource managedStorage_bindmounts_druid_0 'Microsoft.App/managedEnvironments/storages@2025-07-01' = {
+resource managedStorage_bindmounts_druid_0 'Microsoft.App/managedEnvironments/storages@2026-07-01' = {
   name: take('${toLower('druid')}-${toLower('bm0')}-${resourceToken}', 32)
   properties: {
     azureFile: {
@@ -175,3 +175,5 @@ output AZURE_CONTAINER_APPS_ENVIRONMENT_NAME string = my_ace.name
 output AZURE_CONTAINER_APPS_ENVIRONMENT_ID string = my_ace.id
 
 output AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN string = my_ace.properties.defaultDomain
+
+output AZURE_CONTAINER_APPS_ENVIRONMENT_LOCATION string = toLower(replace(my_ace.location, ' ', ''))

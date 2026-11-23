@@ -27,6 +27,8 @@ namespace Aspire.Hosting
 
         public Azure.BicepOutputReference NameOutputReference { get { throw null; } }
 
+        public override string ResourceTypeDisplayName { get { throw null; } }
+
         public ApplicationModel.ReferenceExpression UriExpression { get { throw null; } }
 
         [System.Diagnostics.CodeAnalysis.MemberNotNullWhen(true, "ConnectionStringSecretOutput")]
@@ -51,10 +53,10 @@ namespace Aspire.Hosting
         [AspireExport]
         public static ApplicationModel.IResourceBuilder<AzureCosmosDBResource> AddAzureCosmosDB(this IDistributedApplicationBuilder builder, string name) { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addContainer dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addContainer dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureCosmosDBContainerResource> AddContainer(this ApplicationModel.IResourceBuilder<Azure.AzureCosmosDBDatabaseResource> builder, string name, System.Collections.Generic.IEnumerable<string> partitionKeyPaths, string? containerName = null) { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addContainer dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal addContainer dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureCosmosDBContainerResource> AddContainer(this ApplicationModel.IResourceBuilder<Azure.AzureCosmosDBDatabaseResource> builder, string name, string partitionKeyPath, string? containerName = null) { throw null; }
 
         [AspireExport]
@@ -65,20 +67,22 @@ namespace Aspire.Hosting
         public static ApplicationModel.IResourceBuilder<AzureCosmosDBResource> AddDatabase(this ApplicationModel.IResourceBuilder<AzureCosmosDBResource> builder, string databaseName) { throw null; }
 
         [AspireExport(RunSyncOnBackgroundThread = true)]
+        public static ApplicationModel.IResourceBuilder<AzureCosmosDBResource> RunAsClassicEmulator(this ApplicationModel.IResourceBuilder<AzureCosmosDBResource> builder, System.Action<ApplicationModel.IResourceBuilder<Azure.AzureCosmosDBEmulatorResource>>? configureContainer = null) { throw null; }
+
+        [AspireExport(RunSyncOnBackgroundThread = true)]
         public static ApplicationModel.IResourceBuilder<AzureCosmosDBResource> RunAsEmulator(this ApplicationModel.IResourceBuilder<AzureCosmosDBResource> builder, System.Action<ApplicationModel.IResourceBuilder<Azure.AzureCosmosDBEmulatorResource>>? configureContainer = null) { throw null; }
 
         [AspireExport(RunSyncOnBackgroundThread = true)]
-        [System.Diagnostics.CodeAnalysis.Experimental("ASPIRECOSMOSDB001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        [System.Obsolete("Use RunAsEmulator instead.")]
         public static ApplicationModel.IResourceBuilder<AzureCosmosDBResource> RunAsPreviewEmulator(this ApplicationModel.IResourceBuilder<AzureCosmosDBResource> builder, System.Action<ApplicationModel.IResourceBuilder<Azure.AzureCosmosDBEmulatorResource>>? configureContainer = null) { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withAccessKeyAuthentication dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withAccessKeyAuthentication dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<AzureCosmosDBResource> WithAccessKeyAuthentication(this ApplicationModel.IResourceBuilder<AzureCosmosDBResource> builder, ApplicationModel.IResourceBuilder<Azure.IAzureKeyVaultResource> keyVaultBuilder) { throw null; }
 
-        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withAccessKeyAuthentication dispatcher export.")]
+        [AspireExportIgnore(Reason = "Polyglot AppHosts use the internal withAccessKeyAuthentication dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<AzureCosmosDBResource> WithAccessKeyAuthentication(this ApplicationModel.IResourceBuilder<AzureCosmosDBResource> builder) { throw null; }
 
         [AspireExport]
-        [System.Diagnostics.CodeAnalysis.Experimental("ASPIRECOSMOSDB001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureCosmosDBEmulatorResource> WithDataExplorer(this ApplicationModel.IResourceBuilder<Azure.AzureCosmosDBEmulatorResource> builder, int? port = null) { throw null; }
 
         [AspireExport]
@@ -116,6 +120,8 @@ namespace Aspire.Hosting.Azure
 
         public System.Collections.Generic.IReadOnlyList<string> PartitionKeyPaths { get { throw null; } set { } }
 
+        public override string ResourceTypeDisplayName { get { throw null; } }
+
         System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, ApplicationModel.ReferenceExpression>> ApplicationModel.IResourceWithConnectionString.GetConnectionProperties() { throw null; }
 
         void IResourceWithAzureFunctionsConfig.ApplyAzureFunctionsConfiguration(System.Collections.Generic.IDictionary<string, object> target, string connectionName) { }
@@ -132,15 +138,19 @@ namespace Aspire.Hosting.Azure
 
         public AzureCosmosDBResource Parent { get { throw null; } }
 
+        public override string ResourceTypeDisplayName { get { throw null; } }
+
         System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, ApplicationModel.ReferenceExpression>> ApplicationModel.IResourceWithConnectionString.GetConnectionProperties() { throw null; }
 
         void IResourceWithAzureFunctionsConfig.ApplyAzureFunctionsConfiguration(System.Collections.Generic.IDictionary<string, object> target, string connectionName) { }
     }
 
-    public partial class AzureCosmosDBEmulatorResource : ApplicationModel.ContainerResource, ApplicationModel.IResource
+    public partial class AzureCosmosDBEmulatorResource : ApplicationModel.ContainerResource
     {
         public AzureCosmosDBEmulatorResource(AzureCosmosDBResource innerResource) : base(default!, default) { }
 
         public override ApplicationModel.ResourceAnnotationCollection Annotations { get { throw null; } }
+
+        public override string ResourceTypeDisplayName { get { throw null; } }
     }
 }

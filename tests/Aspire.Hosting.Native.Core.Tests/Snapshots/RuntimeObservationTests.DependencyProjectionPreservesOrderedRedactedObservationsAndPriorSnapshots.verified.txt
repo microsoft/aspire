@@ -1,0 +1,73 @@
+﻿{
+  Initial: {
+    Version: 5,
+    GenerationId: Guid_1,
+    Resources: [
+      {
+        ResourceId: Guid_2,
+        Name: a-producer,
+        TypeId: example/producer,
+        State: Running,
+        Healthy: true,
+        Urls: [
+          http://localhost:8000
+        ],
+        Commands: [
+          {
+            Name: a-stop,
+            DisplayName: Stop
+          },
+          {
+            Name: z-refresh,
+            DisplayName: Refresh [REDACTED]
+          }
+        ],
+        ConfigurationRevision: 1,
+        AppliedConfigurationRevision: 1,
+        ConfigurationStatus: Succeeded
+      },
+      {
+        ResourceId: Guid_3,
+        Name: z-producer,
+        TypeId: example/producer,
+        State: Starting,
+        Healthy: false,
+        Urls: null,
+        Commands: null,
+        ConfigurationRevision: 1,
+        AppliedConfigurationRevision: 1,
+        ConfigurationStatus: Succeeded
+      }
+    ]
+  },
+  Updated: {
+    Version: 6,
+    GenerationId: Guid_1,
+    Resources: [
+      {
+        ResourceId: Guid_2,
+        Name: a-producer,
+        TypeId: example/producer,
+        State: Stopped,
+        Healthy: false,
+        Urls: null,
+        Commands: null,
+        ConfigurationRevision: 1,
+        AppliedConfigurationRevision: 1,
+        ConfigurationStatus: Succeeded
+      },
+      {
+        ResourceId: Guid_3,
+        Name: z-producer,
+        TypeId: example/producer,
+        State: Starting,
+        Healthy: false,
+        Urls: null,
+        Commands: null,
+        ConfigurationRevision: 1,
+        AppliedConfigurationRevision: 1,
+        ConfigurationStatus: Succeeded
+      }
+    ]
+  }
+}

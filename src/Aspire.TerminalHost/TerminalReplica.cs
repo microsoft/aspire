@@ -426,7 +426,8 @@ internal sealed class TerminalReplica : IAsyncDisposable
             ConsumerUdsPath,
             downstream,
             _consumerListenerLogger,
-            upstream.ReportConsumerListenerFailure);
+            upstream.ReportConsumerListenerFailure,
+            upstream.ConnectedTask);
 
         try
         {

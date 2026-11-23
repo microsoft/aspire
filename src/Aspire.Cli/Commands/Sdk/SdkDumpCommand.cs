@@ -164,7 +164,7 @@ internal sealed class SdkDumpCommand : BaseCommand
     private Task<IAppHostServerProject> CreateCapabilityScannerProjectAsync(string tempDir, CancellationToken cancellationToken)
     {
         var repoRoot = AspireRepositoryDetector.DetectRepositoryRoot(tempDir);
-        return _appHostServerProjectFactory.CreateAsync(tempDir, restoreRootConfigDirectory: repoRoot, cancellationToken);
+        return _appHostServerProjectFactory.CreateForSdkCommandsAsync(tempDir, restoreRootConfigDirectory: repoRoot, cancellationToken);
     }
 
     private async Task<int> DumpCapabilitiesAsync(
@@ -173,7 +173,7 @@ internal sealed class SdkDumpCommand : BaseCommand
         OutputFormat format,
         CancellationToken cancellationToken)
     {
-        var tempDirectory = Directory.CreateTempSubdirectory("aspire-sdk-dump-");
+        var tempDirectory = CliPathHelper.CreateSdkWorkingDirectory(ExecutionContext.AspireHomeDirectory);
         var tempDir = tempDirectory.FullName;
 
         try
@@ -200,7 +200,7 @@ internal sealed class SdkDumpCommand : BaseCommand
                 return CliExitCodes.FailedToBuildArtifacts;
             }
 
-            await using var serverSession = _serverSessionFactory.Create(appHostServerProject, environmentVariables: null, debug: false, gracefulShutdownSignaler: null, shutdownService: null, isolateConsole: false, cancellationToken);
+            await using var serverSession = _serverSessionFactory.Create(appHostServerProject, environmentVariables: null, debug: false, gracefulShutdownSignaler: null, shutdownService: null, isolateConsole: false, ownsProject: true, cancellationToken);
             // Short-lived RPC session: StartAsync() spawns the server. We never observe the
             // exit-code task (WaitForExitAsync) because disposal flows the exit code through the
             // activity scope and the only failure mode we care about surfaces via the RPC call below.
@@ -254,10 +254,7 @@ internal sealed class SdkDumpCommand : BaseCommand
             // Clean up temp directory
             try
             {
-                if (Directory.Exists(tempDir))
-                {
-                    Directory.Delete(tempDir, recursive: true);
-                }
+                await FileDeleteHelper.DeleteDirectoryWithRetryAsync(tempDir, TimeProvider.System, CancellationToken.None).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -272,7 +269,7 @@ internal sealed class SdkDumpCommand : BaseCommand
         OutputFormat format,
         CancellationToken cancellationToken)
     {
-        var tempDirectory = Directory.CreateTempSubdirectory("aspire-sdk-dump-");
+        var tempDirectory = CliPathHelper.CreateSdkWorkingDirectory(ExecutionContext.AspireHomeDirectory);
         var tempDir = tempDirectory.FullName;
 
         try
@@ -299,7 +296,7 @@ internal sealed class SdkDumpCommand : BaseCommand
                 return CliExitCodes.FailedToBuildArtifacts;
             }
 
-            await using var serverSession = _serverSessionFactory.Create(appHostServerProject, environmentVariables: null, debug: false, gracefulShutdownSignaler: null, shutdownService: null, isolateConsole: false, cancellationToken);
+            await using var serverSession = _serverSessionFactory.Create(appHostServerProject, environmentVariables: null, debug: false, gracefulShutdownSignaler: null, shutdownService: null, isolateConsole: false, ownsProject: true, cancellationToken);
             // Short-lived RPC session: StartAsync() spawns the server. We never observe the
             // exit-code task (WaitForExitAsync) because disposal flows the exit code through the
             // activity scope and the only failure mode we care about surfaces via the RPC call below.
@@ -333,10 +330,7 @@ internal sealed class SdkDumpCommand : BaseCommand
         {
             try
             {
-                if (Directory.Exists(tempDir))
-                {
-                    Directory.Delete(tempDir, recursive: true);
-                }
+                await FileDeleteHelper.DeleteDirectoryWithRetryAsync(tempDir, TimeProvider.System, CancellationToken.None).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -389,7 +383,7 @@ internal sealed class SdkDumpCommand : BaseCommand
         capabilities.Diagnostics.RemoveAll(d => d.Severity == "Info");
 
         var packageVersions = integrations
-            .Where(i => i.IsPackageReference)
+            .Where(i => i.Source == IntegrationSource.Nuget)
             .Select(i => new PackageInfo { Name = i.Name, Version = i.Version! })
             .ToList();
         if (packageVersions.Count > 0)

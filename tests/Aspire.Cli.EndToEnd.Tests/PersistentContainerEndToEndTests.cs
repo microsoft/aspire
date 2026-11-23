@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.EndToEnd.Tests.Helpers;
-using Aspire.TestUtilities;
 using Hex1b.Automation;
 using Xunit;
 
@@ -13,7 +12,6 @@ public sealed class PersistentContainerEndToEndTests(ITestOutputHelper output)
     private const string ProjectName = "PersistenceE2E";
 
     [Fact]
-    [QuarantinedTest("https://github.com/microsoft/aspire/issues/17995")]
     [CaptureWorkspaceOnFailure]
     public async Task PersistentContainersPreserveDataAcrossAppHostRuns()
     {
@@ -47,7 +45,7 @@ public sealed class PersistentContainerEndToEndTests(ITestOutputHelper output)
                 .RunAsEmulator(container => container.WithPersistentLifetime());
             var blobs = storage.AddBlobs("blobs");
 
-            builder.AddProject<Projects.{{ProjectName}}_ApiService>("server")
+            builder.AddDotnetProject("server", "../{{ProjectName}}.ApiService/{{ProjectName}}.ApiService.csproj")
                 .WithReference(redis)
                 .WithReference(postgresDatabase)
                 .WithReference(blobs)

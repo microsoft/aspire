@@ -4,7 +4,7 @@
     <body>
       <trans-unit id="Description">
         <source>Generate deployment artifacts for an AppHost</source>
-        <target state="needs-review-translation">Genera artefatti della distribuzione per un AppHost Aspire. (Anteprima)</target>
+        <target state="translated">Genera artefatti della distribuzione per un AppHost</target>
         <note />
       </trans-unit>
       <trans-unit id="GeneratingArtifacts">
@@ -19,7 +19,7 @@
       </trans-unit>
       <trans-unit id="NoBuildArgumentDescription">
         <source>Do not build or restore the project before running</source>
-        <target state="new">Do not build or restore the project before running</target>
+        <target state="translated">Non compilare o ripristinare il progetto prima dell'esecuzione</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationCompletedPrefix">
@@ -34,12 +34,12 @@
       </trans-unit>
       <trans-unit id="OutputPathArgumentDescription">
         <source>The output path for the generated artifacts. Defaults to the AppHost directory's 'aspire-output' folder if not specified.</source>
-        <target state="needs-review-translation">Percorso di output per gli artefatti generati. Se non viene specificato alcun valore, l'impostazione predefinita è './aspire-output'.</target>
+        <target state="translated">Percorso di output per gli artefatti generati. Se non viene specificato alcun valore, l'impostazione predefinita è la cartella 'aspire-output' della directory AppHost.</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectArgumentDescription">
         <source>The path to the Aspire AppHost project file or a directory to search</source>
-        <target state="needs-review-translation">Percorso del file di un progetto AppHost di Aspire.</target>
+        <target state="translated">Il percorso del file di progetto Aspire AppHost o una directory in cui eseguire la ricerca</target>
         <note />
       </trans-unit>
       <trans-unit id="SelectAPublisher">

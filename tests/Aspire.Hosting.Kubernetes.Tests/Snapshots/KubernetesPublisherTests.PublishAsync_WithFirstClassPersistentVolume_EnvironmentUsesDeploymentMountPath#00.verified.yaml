@@ -8,8 +8,8 @@ metadata:
     app.kubernetes.io/component: "api"
     app.kubernetes.io/instance: "{{ .Release.Name }}"
 data:
-  OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY: "{{ .Values.config.api.OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY }}"
-  MEDIA_PATH: "{{ .Values.config.api.MEDIA_PATH }}"
-  OTEL_EXPORTER_OTLP_ENDPOINT: "{{ .Values.config.api.OTEL_EXPORTER_OTLP_ENDPOINT }}"
-  OTEL_EXPORTER_OTLP_PROTOCOL: "{{ .Values.config.api.OTEL_EXPORTER_OTLP_PROTOCOL }}"
-  OTEL_SERVICE_NAME: "{{ .Values.config.api.OTEL_SERVICE_NAME }}"
+  OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY: {{ tpl "{{ .Values.config.api.OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY }}" . | quote }}
+  MEDIA_PATH: {{ tpl "{{ .Values.config.api.MEDIA_PATH }}" . | quote }}
+  OTEL_EXPORTER_OTLP_ENDPOINT: {{ tpl "{{ .Values.config.api.OTEL_EXPORTER_OTLP_ENDPOINT }}" . | quote }}
+  OTEL_EXPORTER_OTLP_PROTOCOL: {{ tpl "{{ .Values.config.api.OTEL_EXPORTER_OTLP_PROTOCOL }}" . | quote }}
+  OTEL_SERVICE_NAME: {{ tpl "{{ .Values.config.api.OTEL_SERVICE_NAME }}" . | quote }}

@@ -22,6 +22,7 @@
          This defaults to true for backward compatibility but can be set to false to disable the behavior.
          This is particularly useful in file-based apps where metadata cannot be set on individual ProjectReference items. -->
     <TreatProjectReferencesAsResources Condition="'$(TreatProjectReferencesAsResources)' == ''">true</TreatProjectReferencesAsResources>
+    <AspireUseCliBundle Condition="'$(AspireUseCliBundle)' == '' and ('$(MSBuildProjectExtension)' == '.csproj' or '$(MSBuildProjectExtension)' == '.cs' or '$(FileBasedProgram)' == 'true')">true</AspireUseCliBundle>
     <AspireUseCliBundle Condition="'$(AspireUseCliBundle)' == ''">false</AspireUseCliBundle>
   </PropertyGroup>
 
@@ -48,6 +49,20 @@
 
   <Target Name="__WarnOnMininumVsVersionMissing" BeforeTargets="PrepareForBuild" Condition="'$(BuildingInsideVisualStudio)' == 'true' and $([MSBuild]::VersionLessThan('$(MSBuildVersion)', '17.10.0'))">
     <Warning Code="ASPIRE003" Text="$(MSBuildProjectName) is an Aspire AppHost project that requires Visual Studio version 17.10 or above to work correctly. You are using version $(MSBuildVersion)." HelpLink="https://aka.ms/aspire/diagnostics/aspire003" />
+  </Target>
+
+  <!--
+  Aspire.AppHost.Sdk is obsolete. Project Resource v2 (AddDotnetProject) replaces the automatic
+  ProjectReference-as-resource behavior, and the Aspire CLI bundle replaces the implicit
+  Dashboard/DCP package references. Projects should migrate to the plain Microsoft.NET.Sdk with an
+  explicit Aspire.Hosting.AppHost PackageReference. This warning can be suppressed by setting
+  $(SuppressAspireAppHostSdkObsoleteWarning) to true, but doing so is only intended as a temporary
+  migration aid.
+  -->
+  <Target Name="__WarnOnAspireAppHostSdkObsolete" BeforeTargets="PrepareForBuild" Condition="'$(_UsingAspireAppHostSdk)' == 'true' and '$(SuppressAspireAppHostSdkObsoleteWarning)' != 'true' and !$([System.Text.RegularExpressions.Regex]::IsMatch('$(NoWarn)', '(?i)(^|[;,\s])ASPIRE012($|[;,\s])'))">
+    <Warning Code="ASPIRE012"
+             Text="$(MSBuildProjectName) uses the Aspire.AppHost.Sdk, which is obsolete but remains available for staged migration. Switch the project's Sdk attribute to Microsoft.NET.Sdk, add explicit PackageReference items for Aspire.Hosting.AppHost and Aspire.Hosting.Dotnet, and migrate C# resource ProjectReference items to AddDotnetProject calls. See https://aka.ms/aspire/diagnostics/aspire012 for migration guidance."
+             HelpLink="https://aka.ms/aspire/diagnostics/aspire012" />
   </Target>
 
   <PropertyGroup>

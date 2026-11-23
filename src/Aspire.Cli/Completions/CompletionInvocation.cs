@@ -27,43 +27,7 @@ internal static class CompletionInvocation
             return false;
         }
 
-        // Recognize the command before startup, including global options placed before it.
-        // Use the actual option metadata so values such as "--log-file completions" are
-        // not mistaken for a request to generate a script.
-        for (var i = 0; i < args.Length; i++)
-        {
-            var token = args[i];
-            var separator = token.IndexOfAny(['=', ':']);
-            var name = separator < 0 ? token : token[..separator];
-            if (name is CommonOptionNames.Version or CommonOptionNames.VersionShort or
-                CommonOptionNames.Help or CommonOptionNames.HelpShort or CommonOptionNames.HelpAlt or
-                CommonOptionNames.HelpSlash or CommonOptionNames.HelpAltSlash)
-            {
-                continue;
-            }
-
-            if (!token.StartsWith('-'))
-            {
-                return token == "completions";
-            }
-
-            // This option is normally registered only by extension hosts, but it must
-            // still select the completion path before any extension connection is made.
-            var option = RootCommand.GlobalOptions.Append(RootCommand.StartDebugSessionOption)
-                .FirstOrDefault(o => o.Name == name || o.Aliases.Contains(name));
-            if (option is null)
-            {
-                return false;
-            }
-
-            if (separator < 0 && option.Arity.MaximumNumberOfValues > 0 &&
-                (option is not Option<bool> || i + 1 < args.Length && bool.TryParse(args[i + 1], out _)))
-            {
-                i++;
-            }
-        }
-
-        return false;
+        return RootCommand.MatchesCommandPath(args, "completions");
     }
 
     internal static int WriteSuggestions(System.CommandLine.RootCommand command, string[] args, TextWriter output, TextWriter error)

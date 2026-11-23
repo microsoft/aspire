@@ -1,0 +1,22 @@
+﻿{
+  "Run": "diagnostics/run.json",
+  "Evidence": "evidence.json",
+  "CollectionOutcome": "collection-outcome.json",
+  "AllJobs": "diagnostics/all-jobs.json",
+  "FailedJobs": "diagnostics/failed-jobs.json",
+  "RetryPatterns": "diagnostics/retry-patterns.json",
+  "TriggeringMerge": "diagnostics/triggering-merge-pr.json",
+  "LastSuccessfulMainRun": "diagnostics/last-successful-main-run.json",
+  "CandidateMerges": "diagnostics/candidate-merges.json",
+  "CandidateHistoryStatus": "diagnostics/candidate-merge-history-status.json",
+  "PullRequestFiles": "diagnostics/pr-files.json",
+  "PullRequestMetadata": "diagnostics/pr-metadata.json",
+  "Artifacts": "diagnostics/artifacts.json",
+  "SelectedTestArtifacts": "diagnostics/selected-test-result-artifacts.json",
+  "PriorCauseIndex": "history/cause-index.json",
+  "Summary": "analysis-summary.md",
+  "PriorCausesDirectory": "history/causes",
+  "JobLog": "diagnostics/job-123.0.log",
+  "JobAnnotations": "diagnostics/annotations-123.0.json",
+  "PriorCause": "history/causes/network-timeout.json"
+}

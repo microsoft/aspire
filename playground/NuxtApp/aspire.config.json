@@ -1,0 +1,17 @@
+{
+  "appHost": {
+    "path": "apphost.mts",
+    "language": "typescript/nodejs"
+  },
+  "features": {
+    "experimentalHostingIntegrations": true
+  },
+  "packages": {
+    "Aspire.Hosting.JavaScript": "",
+    "Aspire.Hosting.Docker": "",
+    "@aspire/nuxt": {
+      "source": "npm",
+      "path": "../../src/Aspire.Hosting.Nuxt/dist/src/host.js"
+    }
+  }
+}

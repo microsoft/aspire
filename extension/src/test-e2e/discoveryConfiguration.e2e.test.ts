@@ -66,6 +66,27 @@ suite('Aspire workspace discovery and configuration E2E', function () {
         assert.ok(restored.state.workspaceAppHostCandidatePaths.some(candidate => isSamePath(candidate, getPrimaryAppHostProjectPath())));
     });
 
+    test('does not show a nonexistent configured AppHost omitted by aspire ls', async () => {
+        await openAspireView();
+        await waitForRepositoryIdle();
+        await waitForSelectedWorkspaceAppHost();
+
+        const missingAppHostPath = path.join(getWorkspaceRoot(), 'AspireE2E.AppHost', 'AspireE2E_AppHost.csproj');
+        assert.strictEqual(fs.existsSync(missingAppHostPath), false);
+        writeWorkspaceAppHostConfig({ appHost: { path: path.relative(getWorkspaceRoot(), missingAppHostPath) } });
+
+        const before = getCommandInvocationCount('aspire-vscode.refreshAppHosts');
+        await executeE2eControlCommand({ name: 'refreshAppHosts' });
+        await waitForCommandOutcome('aspire-vscode.refreshAppHosts', 'success', 60000, before);
+        const discovered = await waitForRepositoryIdle(60000);
+
+        assert.strictEqual(discovered.state.hasError, false);
+        assert.deepStrictEqual(
+            discovered.state.workspaceAppHostCandidatePaths.map(candidate => path.normalize(candidate).toLowerCase()),
+            [path.normalize(getPrimaryAppHostProjectPath()).toLowerCase()]);
+        assert.ok(isSamePath(discovered.state.workspaceAppHostPath ?? '', getPrimaryAppHostProjectPath()));
+    });
+
     test('handles malformed, JSONC, absolute, and legacy AppHost configuration files', async () => {
         await openAspireView();
         await waitForRepositoryIdle();

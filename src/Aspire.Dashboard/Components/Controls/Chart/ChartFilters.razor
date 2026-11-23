@@ -60,4 +60,16 @@
             </div>
         </div>
     }
+    else if (IsCounter)
+    {
+        <div class="metrics-filters-section">
+            <h5>@Loc[nameof(ControlsStrings.ChartContainerOptionsHeader)]</h5>
+            <div>
+                <FluentSwitch Class="table-switch counter-change-per-interval-switch"
+                              Label="@Loc[nameof(ControlsStrings.ChartContainerShowChangePerIntervalLabel)]"
+                              Value="@ShowChangePerInterval"
+                              ValueChanged="@OnShowChangePerIntervalChangedAsync"/>
+            </div>
+        </div>
+    }
 </div>

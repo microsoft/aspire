@@ -5,25 +5,14 @@ using System.Diagnostics;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
-using StreamJsonRpc;
 
 namespace Aspire.Cli.Commands;
 
 /// <summary>
-/// Classifies expected follow disconnects from the AppHost auxiliary backchannel.
+/// Writes status messages when a followed AppHost connection ends.
 /// </summary>
 internal static class AppHostFollowDisconnectHelpers
 {
-    /// <summary>
-    /// Determines whether an exception represents an expected disconnect.
-    /// </summary>
-    internal static bool IsExpectedDisconnect(Exception ex)
-    {
-        return ex is ConnectionLostException
-            || ex is ObjectDisposedException
-            || ex is OperationCanceledException { InnerException: ConnectionLostException };
-    }
-
     /// <summary>
     /// Determines whether the AppHost process has exited.
     /// </summary>

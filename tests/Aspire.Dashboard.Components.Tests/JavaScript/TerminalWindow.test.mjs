@@ -109,15 +109,15 @@ function register(key = "terminal", url = "https://localhost/dashboard/terminal-
 const flushNotifications = () => new Promise(resolve => setImmediate(resolve));
 
 for (const [firstKey, secondKey] of [
-    ["resource:a.b:0", "resource:a_b:0"],
-    ["resource:a:b:0", "resource:a_b:0"],
-    ["resource:a/b:0", "resource:a_b:0"],
-    ["resource:caf\u00e9:0", "resource:caf\u00e8:0"],
-    ["resource:a%3Ab:0", "resource:a:b:0"],
+    ["resource:a.b", "resource:a_b"],
+    ["resource:a:b", "resource:a_b"],
+    ["resource:a/b", "resource:a_b"],
+    ["resource:caf\u00e9", "resource:caf\u00e8"],
+    ["resource:a%3Ab", "resource:a:b"],
 ]) {
     test(`distinct keys keep separate windows: ${firstKey} and ${secondKey}`, () => {
-        const firstUrl = "https://localhost/dashboard/terminal-window/resource/first/0";
-        const secondUrl = "https://localhost/dashboard/terminal-window/resource/second/0";
+        const firstUrl = "https://localhost/dashboard/terminal-window/resource/first";
+        const secondUrl = "https://localhost/dashboard/terminal-window/resource/second-instance";
         assert.equal(open(firstKey, firstUrl), "opened");
         assert.equal(open(secondKey, secondUrl), "opened");
 
@@ -140,8 +140,8 @@ for (const [firstKey, secondKey] of [
 }
 
 test("the same key retains its handle and focuses without navigation after launcher replacement", () => {
-    const key = "resource:a.b:0";
-    const firstUrl = "https://localhost/dashboard/terminal-window/resource/a.b/0";
+    const key = "resource:a.b";
+    const firstUrl = "https://localhost/dashboard/terminal-window/resource/a.b";
     const nextUrl = `${firstUrl}?fontSize=16`;
     assert.equal(open(key, firstUrl), "opened");
     const first = calls[0];
@@ -267,7 +267,7 @@ test("a replacement adopts all requested surviving handles without clicks, focus
     old.button.click();
     await flushNotifications();
     terminalWindows.unregisterTerminalWindowButton(old.id);
-    const unrelated = register("resource:first:0");
+    const unrelated = register("resource:first");
     unrelated.button.click();
     await flushNotifications();
     const current = register("first");
@@ -289,7 +289,7 @@ test("a replacement adopts all requested surviving handles without clicks, focus
     }
     poll();
     await flushNotifications();
-    assert.deepEqual(notifications.slice(5), [["OnTerminalWindowClosedAsync", "resource:first:0"]]);
+    assert.deepEqual(notifications.slice(5), [["OnTerminalWindowClosedAsync", "resource:first"]]);
     assert.equal(poll, null);
 });
 

@@ -43,17 +43,12 @@ if (!app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 
 #endif
-#if (Framework == "net8.0")
-app.UseStaticFiles();
-#endif
 app.UseAntiforgery();
 
 app.UseOutputCache();
 
-#if (Framework != "net8.0")
 app.MapStaticAssets();
 
-#endif
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 

@@ -9,27 +9,27 @@
       </trans-unit>
       <trans-unit id="DashboardDisabledExceptionMessage">
         <source>The dashboard is not enabled for this application.</source>
-        <target state="new">The dashboard is not enabled for this application.</target>
+        <target state="translated">没有为此应用程序启用仪表板。</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardTestingPublishModeExceptionMessage">
         <source>Dashboard testing is not supported in publish mode.</source>
-        <target state="new">Dashboard testing is not supported in publish mode.</target>
+        <target state="translated">发布模式下不支持仪表板测试。</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardUrlApplicationNotStartedExceptionMessage">
         <source>The application must be started before retrieving the dashboard URL.</source>
-        <target state="new">The application must be started before retrieving the dashboard URL.</target>
+        <target state="translated">在检索仪表板 URL 之前，必须启动应用程序。</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardUrlPublishModeExceptionMessage">
         <source>The dashboard URL is not available in publish mode.</source>
-        <target state="new">The dashboard URL is not available in publish mode.</target>
+        <target state="translated">仪表板 URL 在发布模式下不可用。</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardUrlUnavailableExceptionMessage">
         <source>The dashboard URL is not available.</source>
-        <target state="new">The dashboard URL is not available.</target>
+        <target state="translated">仪表板 URL 不可用。</target>
         <note />
       </trans-unit>
       <trans-unit id="EndpointForResourceNotFoundExceptionMessage">

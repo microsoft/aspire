@@ -1000,6 +1000,73 @@ suite('Launch Profile Tests', () => {
             assert.deepStrictEqual(Object.keys(result!.profiles), ['fromProperties']);
         });
 
+        for (const projectExtension of ['.fsproj', '.vbproj', '.VBPROJ']) {
+            test(`reads Properties/launchSettings.json for ${projectExtension} projects`, async () => {
+                const languageProjectPath = path.join(path.dirname(projectPath), `TestProject${projectExtension}`);
+                fs.writeFileSync(launchSettingsPath, JSON.stringify({
+                    profiles: { fromProperties: { commandName: 'Project' } }
+                }));
+
+                const result = await readLaunchSettings(languageProjectPath);
+
+                assert.deepStrictEqual(result?.profileOrder, ['fromProperties']);
+                assert.strictEqual(result?.sourceDirectory, path.dirname(launchSettingsPath));
+            });
+        }
+
+        test('prefers VB My Project profiles over Properties and project run.json profiles', async () => {
+            const vbProjectPath = path.join(path.dirname(projectPath), 'TestProject.vbproj');
+            const myProjectPath = path.join(path.dirname(projectPath), 'My Project', 'launchSettings.json');
+            fs.mkdirSync(path.dirname(myProjectPath));
+            fs.writeFileSync(myProjectPath, JSON.stringify({
+                profiles: {
+                    preferred: { commandName: 'Project', commandLineArgs: '--from-my-project' },
+                    named: { commandName: 'Project', commandLineArgs: '--named' }
+                }
+            }));
+            fs.writeFileSync(launchSettingsPath, JSON.stringify({
+                profiles: { fallback: { commandName: 'Project' } }
+            }));
+            fs.writeFileSync(path.join(path.dirname(projectPath), 'TestProject.run.json'), JSON.stringify({
+                profiles: { runJson: { commandName: 'Project' } }
+            }));
+
+            const result = await readLaunchSettings(vbProjectPath);
+
+            assert.deepStrictEqual(result?.profileOrder, ['preferred', 'named']);
+            assert.strictEqual(result?.sourceDirectory, path.dirname(myProjectPath));
+            assert.strictEqual(determineDefaultLaunchProfile(result).profile?.commandLineArgs, '--from-my-project');
+            assert.strictEqual(determineBaseLaunchProfile({
+                type: 'project-with-external-build.v1',
+                project_path: vbProjectPath,
+                launch_profile: 'named'
+            }, result).profile?.commandLineArgs, '--named');
+        });
+
+        test('preserves VB project run.json fallback when neither conventional profile file exists', async () => {
+            const vbProjectPath = path.join(path.dirname(projectPath), 'TestProject.vbproj');
+            fs.writeFileSync(path.join(path.dirname(projectPath), 'TestProject.run.json'), JSON.stringify({
+                profiles: { runJson: { commandName: 'Project' } }
+            }));
+
+            const result = await readLaunchSettings(vbProjectPath);
+
+            assert.deepStrictEqual(result?.profileOrder, ['runJson']);
+            assert.strictEqual(result?.sourceDirectory, path.dirname(projectPath));
+        });
+
+        test('does not hide invalid preferred VB profiles by falling back to Properties', async () => {
+            const vbProjectPath = path.join(path.dirname(projectPath), 'TestProject.vbproj');
+            const myProjectPath = path.join(path.dirname(projectPath), 'My Project', 'launchSettings.json');
+            fs.mkdirSync(path.dirname(myProjectPath));
+            fs.writeFileSync(myProjectPath, '{ invalid json');
+            fs.writeFileSync(launchSettingsPath, JSON.stringify({
+                profiles: { fallback: { commandName: 'Project' } }
+            }));
+
+            assert.strictEqual(await readLaunchSettings(vbProjectPath), null);
+        });
+
         test('returns null when launch settings file has invalid JSON', async () => {
             fs.writeFileSync(launchSettingsPath, '{ invalid json content');
 

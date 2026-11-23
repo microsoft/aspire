@@ -26,6 +26,10 @@ public partial class LogLevelSelect : ComponentBase
     [CascadingParameter]
     public required ViewportInformation ViewportInformation { get; set; }
 
+    // Created once. A new id on each render makes the page's frequent re-renders replace the select, which closes it while
+    // the user is choosing a level.
+    private readonly string _logLevelSelectId = $"log-level-select-{Guid.NewGuid():N}";
+
     private async Task HandleSelectedLogLevelChangedInternalAsync()
     {
         await LogLevelChanged.InvokeAsync(LogLevel);

@@ -4,7 +4,7 @@
     <body>
       <trans-unit id="BannerArgumentDescription">
         <source>Display the animated Aspire CLI welcome banner</source>
-        <target state="needs-review-translation">Afficher la bannière d’accueil animée Aspire CLI.</target>
+        <target state="translated">Afficher la bannière de bienvenue animée de l'interface de ligne de commande Aspire</target>
         <note />
       </trans-unit>
       <trans-unit id="BannerVersionFormat">
@@ -19,42 +19,42 @@
       </trans-unit>
       <trans-unit id="CliWaitForDebuggerArgumentDescription">
         <source>Wait for a debugger to attach before executing the command</source>
-        <target state="needs-review-translation">Attendez qu’un débogueur s’attache avant d’exécuter la commande.</target>
+        <target state="translated">Attendre qu'un débogueur s'attache avant d'exécuter la commande</target>
         <note />
       </trans-unit>
       <trans-unit id="CompletionScriptDescription">
         <source>Write a shell completion script to standard output</source>
-        <target state="new">Write a shell completion script to standard output</target>
+        <target state="translated">Écrire un script de saisie semi-automatique du shell dans la sortie standard</target>
         <note />
       </trans-unit>
       <trans-unit id="CompletionShellDescription">
         <source>Shell to generate a script for (bash, fish, pwsh, zsh). Defaults to SHELL, or pwsh on Windows.</source>
-        <target state="new">Shell to generate a script for (bash, fish, pwsh, zsh). Defaults to SHELL, or pwsh on Windows.</target>
+        <target state="translated">Interpréteur de commandes pour générer un script (bash, fish, pwsh ou zsh). Par défaut, SHELL ou pwsh sous Windows.</target>
         <note />
       </trans-unit>
       <trans-unit id="CompletionShellRequired">
         <source>Could not detect a supported shell. Specify bash, fish, pwsh, or zsh: aspire completions script &lt;shell&gt;.</source>
-        <target state="new">Could not detect a supported shell. Specify bash, fish, pwsh, or zsh: aspire completions script &lt;shell&gt;.</target>
+        <target state="translated">Nous n’avons pas pu détecter un interpréteur de commandes pris en charge. Spécifiez bash, fish, pwsh ou zsh: aspire completions script &lt;shell&gt;.</target>
         <note />
       </trans-unit>
       <trans-unit id="CompletionsDescription">
         <source>Generate shell completion scripts</source>
-        <target state="new">Generate shell completion scripts</target>
+        <target state="translated">Générer des scripts de saisie semi-automatique du shell</target>
         <note />
       </trans-unit>
       <trans-unit id="DebugArgumentDescription">
         <source>Enable debug logging to the console</source>
-        <target state="needs-review-translation">Activez la journalisation de débogage dans la console.</target>
+        <target state="translated">Activer la journalisation de débogage vers la console</target>
         <note />
       </trans-unit>
       <trans-unit id="DebugLevelArgumentDescription">
         <source>Set the minimum log level for console output (Trace, Debug, Information, Warning, Error, Critical)</source>
-        <target state="new">Set the minimum log level for console output (Trace, Debug, Information, Warning, Error, Critical)</target>
+        <target state="translated">Définit le niveau de journalisation minimal pour la sortie console (Trace, Débogage, Information, Avertissement, Erreur, Critique)</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
         <source>The Aspire CLI can be used to create, run, and publish Aspire-based applications</source>
-        <target state="needs-review-translation">L’interface CLI Aspire peut être utilisée pour créer, exécuter et publier des applications basées sur Aspire.</target>
+        <target state="translated">L'interface de ligne de commande Aspire peut être utilisée pour créer, exécuter et publier des applications basées sur Aspire</target>
         <note />
       </trans-unit>
       <trans-unit id="FirstTimeUseTelemetryNotice">
@@ -64,37 +64,37 @@
 The Aspire CLI collects usage data. It is collected by Microsoft and is used to help us improve your experience. You can opt out of telemetry by setting the ASPIRE_CLI_TELEMETRY_OPTOUT environment variable to '1' or 'true' using your preferred shell.
 
 Read more about Aspire CLI telemetry: {0}</source>
-        <target state="new">Telemetry
+        <target state="translated">Télémétrie
 ---------
 
-The Aspire CLI collects usage data. It is collected by Microsoft and is used to help us improve your experience. You can opt out of telemetry by setting the ASPIRE_CLI_TELEMETRY_OPTOUT environment variable to '1' or 'true' using your preferred shell.
+L’interface CLI Aspire collecte des données d’utilisation. Microsoft les collecte et les utilise pour nous aider à améliorer votre expérience. Vous pouvez désactiver la télémétrie en définissant la variable d’environnement ASPIRE_CLI_TELEMETRY_OPTOUT sur la valeur « 1 » ou « true » à l’aide de votre shell préféré.
 
-Read more about Aspire CLI telemetry: {0}</target>
+Découvrir plus d’informations sur la télémétrie de l’interface CLI Aspire : {0}</target>
         <note>{0} is a clickable URL</note>
       </trans-unit>
       <trans-unit id="IdentityOverrideNotice">
         <source>Aspire CLI is emulating identity '{0}' version '{1}'. Behavior may differ from the installed build; identity was overridden via environment variables or the install sidecar.</source>
-        <target state="new">Aspire CLI is emulating identity '{0}' version '{1}'. Behavior may differ from the installed build; identity was overridden via environment variables or the install sidecar.</target>
+        <target state="translated">L’interface CLI Aspire émule l’identité « {0} » dans la version « {1} ». Le comportement peut différer de celui de la version installée, l’identité a été remplacée via des variables d’environnement ou le sidecar d’installation.</target>
         <note />
       </trans-unit>
       <trans-unit id="InvalidCompletionRequest">
         <source>Expected [suggest] or [suggest:&lt;cursor&gt;] followed by one command-line string, with the cursor inside that string.</source>
-        <target state="new">Expected [suggest] or [suggest:&lt;cursor&gt;] followed by one command-line string, with the cursor inside that string.</target>
+        <target state="translated">[suggest] ou [suggest :&lt;cursor&gt;] attendu suivi d’une chaîne de ligne de commande, avec le curseur à l’intérieur de cette chaîne.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoLogoArgumentDescription">
         <source>Suppress the startup banner and telemetry notice</source>
-        <target state="needs-review-translation">Supprimer la bannière de démarrage et la notification de télémétrie.</target>
+        <target state="translated">Supprimer la bannière de démarrage et la notification de télémétrie</target>
         <note />
       </trans-unit>
       <trans-unit id="NonInteractiveArgumentDescription">
         <source>Run the command in non-interactive mode, disabling all interactive prompts and spinners</source>
-        <target state="new">Run the command in non-interactive mode, disabling all interactive prompts and spinners</target>
+        <target state="translated">Exécutez la commande en mode non interactif, en désactivant toutes les invites interactives et tous les indicateurs de progression</target>
         <note />
       </trans-unit>
       <trans-unit id="WaitForDebuggerArgumentDescription">
         <source>Wait for a debugger to attach before executing the command</source>
-        <target state="needs-review-translation">Attendez qu’un débogueur s’attache avant d’exécuter la commande.</target>
+        <target state="translated">Attendre qu'un débogueur s'attache avant d'exécuter la commande</target>
         <note />
       </trans-unit>
       <trans-unit id="WaitingForDebugger">

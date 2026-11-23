@@ -17,6 +17,7 @@
     <AspireProjectOrPackageReference Include="Aspire.Hosting.Azure" />
     <AspireProjectOrPackageReference Include="Aspire.Hosting.Foundry" />
     <AspireProjectOrPackageReference Include="Aspire.Hosting.AppHost" />
+    <AspireProjectOrPackageReference Include="Aspire.Hosting.Dotnet" />
     <ProjectReference Include="..\FoundryEndToEnd.WebStory\FoundryEndToEnd.WebStory.csproj" />
   </ItemGroup>
 

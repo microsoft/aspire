@@ -691,7 +691,8 @@ public class LsCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync(new InvocationConfiguration(), cancellationTokenSource.Token).DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, exitCode);
-        Assert.Single(interactionService.DisplayedCancellations);
+        var cancellation = Assert.Single(interactionService.DisplayedCancellations);
+        Assert.Null(cancellation.Message);
     }
 
     [Fact]
