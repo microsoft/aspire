@@ -651,7 +651,15 @@ public sealed partial class SqliteTelemetryRepository
                 return "1 = 1";
             }
             parameters.Add(parameterName, (int)severity);
-            return BuildNumericPredicate("l.severity", filter.Condition, parameterName);
+            var predicate = BuildNumericPredicate("l.severity", filter.Condition, parameterName);
+            // Unspecified severities are stored as None, which sorts above every actual log level.
+            if (severity is >= LogLevel.Trace and <= LogLevel.Critical &&
+                filter.Condition is FilterCondition.GreaterThan or FilterCondition.GreaterThanOrEqual)
+            {
+                return $"({predicate} AND l.severity <= {(int)LogLevel.Critical})";
+            }
+
+            return predicate;
         }
 
         if (filter.Field == nameof(OtlpLogEntry.TimeStamp))

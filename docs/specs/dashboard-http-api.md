@@ -199,7 +199,7 @@ List structured logs with optional filtering.
 
 **Severity Values:** `Trace`, `Debug`, `Information`, `Warning`, `Error`, `Critical`
 
-The severity filter uses "greater than or equal" logic. For example, `severity=Error` returns both Error and Critical logs.
+For `Debug` through `Critical`, the filter includes logs at or above the given level and excludes logs with unspecified severity. For example, `severity=Error` returns Error and Critical logs. Omitting `severity` or specifying `Trace` includes all severities, including unspecified.
 
 **Response:** `200 OK`
 
