@@ -2656,7 +2656,7 @@ test("frontend manifest, lockfile, minified bundle and backend use the exact pai
     const lockfile = JSON.parse(await readFile(new URL("package-lock.json", dashboard), "utf8"));
     const bundle = await readFile(new URL("dist/index.min.js", assets), "utf8");
     const version = manifest.dependencies["@hex1b/web-terminal"];
-    assert.equal(version, "0.173.0");
+    assert.equal(version, "0.176.0");
     assert.equal(bundle.split(/\r?\n/, 1)[0], `// @hex1b/web-terminal ${version}; minified with Terser. See ../LICENSE.`);
     assert.equal(lockfile.packages[""].dependencies["@hex1b/web-terminal"], version);
     assert.equal(lockfile.packages["node_modules/@hex1b/web-terminal"].version, version);
@@ -2666,7 +2666,7 @@ test("frontend manifest, lockfile, minified bundle and backend use the exact pai
     assert.equal(mcp.servers.hex1b.args[0], `Hex1b.McpServer@${version}`);
 
     // Central package rows have the form:
-    //   <PackageVersion Include="Hex1b" Version="0.173.0" />
+    //   <PackageVersion Include="Hex1b" Version="0.176.0" />
     // Match each exact Include value;
     // whitespace, attribute order and either XML quote style are allowed.
     const packages = await readFile(new URL("../../Directory.Packages.props", dashboard), "utf8");

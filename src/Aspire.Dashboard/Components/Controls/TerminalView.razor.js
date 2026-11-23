@@ -727,7 +727,7 @@ async function mountClient(state, generation, controller) {
                 if (state.disconnected && /^View disconnected \([\s\S]*\)\. Attach another view to reconnect\.$/.test(message)) {
                     return;
                 }
-                // Hex1b 0.173.0 prefixes nonfatal inspection/action errors, e.g.
+                // Hex1b prefixes nonfatal inspection/action errors, e.g.
                 // "Scrollbar: Terminal disconnected before the marker operation completed."
                 // These can arrive after onClose; only unprefixed renderer/worker errors
                 // imply that a disconnected projection is unusable.
