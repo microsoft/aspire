@@ -197,7 +197,7 @@ Before publishing, the release pipeline validates that exactly one pointer tarba
 
 Re-runs after partial success should use `SkipNpmRidPublish=true` only when ESRP successfully published every RID package for the selected version, `SkipNpmPointerPublish=true` only when ESRP successfully published the pointer package, and both flags together only after the entire npm publish path has completed. Duplicate-version validation is delegated to ESRP rather than a pipeline `npm view` preflight.
 
-Stable Aspire npm releases publish through npm's default `latest` dist-tag because MicroBuild's npm publish template does not currently expose a dist-tag parameter. The isolated release job cannot query the current public `@microsoft/aspire-cli@latest` version. Release managers must set both `SkipNpmRidPublish=true` and `SkipNpmPointerPublish=true` for older servicing releases to avoid moving `latest` backward.
+Stable Aspire npm releases publish through npm's default `latest` dist-tag because MicroBuild's npm publish template does not currently expose a dist-tag parameter. Aspire follows a tip-only release policy: after shipping a version, no earlier version is released. No registry query or replacement tag policy is needed to prevent publishing an older version.
 
 MicroBuild's npm publish template documentation does not currently expose an npm `dist-tag` parameter. Non-dry-run prerelease npm publishing is blocked until preview packages can be submitted under a non-`latest` tag; release managers can still use `DryRun=true` to inspect the npm publish set without submitting packages.
 
