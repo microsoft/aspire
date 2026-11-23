@@ -13,7 +13,7 @@
         }
         firstItem = false;
 
-        var isActive = item.LinkMatchRegex is not null && item.LinkMatchRegex.IsMatch($"/{NavigationManager.ToBaseRelativePath(NavigationManager.Uri)}");
+        var isActive = item.IsActive ?? (item.LinkMatchRegex is not null && item.LinkMatchRegex.IsMatch($"/{NavigationManager.ToBaseRelativePath(NavigationManager.Uri)}"));
         var isDisabled = item.DisabledText is not null && !isActive;
         var menuItemAttributes = new Dictionary<string, object>
         {
@@ -29,7 +29,10 @@
            treatment without needing a separate sibling element. *@
         <FluentMenuItem OnClick="@(async () => { CloseNavMenu(); await item.OnClick(); })" Disabled="@isDisabled" Class="@(isActive ? "mobile-nav-menu-item-active" : null)" AdditionalAttributes="@menuItemAttributes">
             <span>@item.Text</span>
-
+            @if (item.ErrorCount > 0)
+            {
+                <FluentBadge Class="mobile-nav-menu-error-count" Appearance="BadgeAppearance.Tint" Circular="true">@item.ErrorCount</FluentBadge>
+            }
             @{
                 var renderedIcon = isActive ? item.ActiveIcon ?? item.Icon : item.Icon;
             }

@@ -1,6 +1,7 @@
 ﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.RegularExpressions;
 using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Tests.Shared;
@@ -11,6 +12,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.JSInterop;
 using Xunit;
+using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
 namespace Aspire.Dashboard.Components.Tests.Layout;
 
@@ -136,7 +138,36 @@ public class MobileNavMenuTests : DashboardTestContext
         Assert.Equal(MainLayout.NavigationButtonId, argument);
     }
 
-    private IRenderedComponent<MobileNavMenu> RenderMobileNavMenu(string currentUrl, Action? closeNavMenu = null, bool isNavMenuOpen = true, bool hasResourceTerminals = false, bool hasResourceService = true)
+    [Fact]
+    public async Task PageEntries_AreListedFirstWithTheirActiveStateAndErrorCount()
+    {
+        var menuClosed = false;
+        var overviewClicked = false;
+        IEnumerable<MobileNavMenuEntry> pageEntries =
+        [
+            new("Home", () => Task.CompletedTask, new Icons.Regular.Size24.Home(), ActiveIcon: new Icons.Filled.Size24.Home(), IsActive: false),
+            new("Overview", () => { overviewClicked = true; return Task.CompletedTask; }, new Icons.Regular.Size24.Board(), IsActive: false),
+            // An explicit active state wins over the entry's URL pattern.
+            new("Structured logs", () => Task.CompletedTask, new Icons.Regular.Size24.SlideTextSparkle(), ActiveIcon: new Icons.Filled.Size24.SlideTextSparkle(),
+                LinkMatchRegex: new Regex("^/$"), IsActive: true, ErrorCount: 3)
+        ];
+        var cut = RenderMobileNavMenu(DashboardUrls.HomeUrl(), () => menuClosed = true, pageEntries: () => pageEntries);
+
+        Assert.Equal(
+            ["Home", "Overview", "Structured logs", Resources.Layout.MainLayoutAspireRepoLink],
+            cut.FindAll("fluent-menu-item").Select(item => item.GetAttribute("data-tooltip")).Take(4));
+        AssertMenuItemIsActive(cut, "Structured logs");
+        Assert.Equal("3", Assert.Single(cut.FindAll(".mobile-nav-menu-error-count")).TextContent.Trim());
+
+        var overviewItem = cut.FindAll("fluent-menu-item").Single(item => item.GetAttribute("data-tooltip") == "Overview");
+        await cut.InvokeAsync(() => overviewItem.TriggerEvent("onmenuitemchange",
+            new MenuItemEventArgs { Id = overviewItem.Id, Text = overviewItem.TextContent }));
+
+        Assert.True(menuClosed);
+        Assert.True(overviewClicked);
+    }
+
+    private IRenderedComponent<MobileNavMenu> RenderMobileNavMenu(string currentUrl, Action? closeNavMenu = null, bool isNavMenuOpen = true, bool hasResourceTerminals = false, bool hasResourceService = true, Func<IEnumerable<MobileNavMenuEntry>>? pageEntries = null)
     {
         FluentUISetupHelpers.AddCommonDashboardServices(this);
         Services.AddSingleton<IDashboardClient>(new TestDashboardClient(isEnabled: hasResourceService));
@@ -159,6 +190,7 @@ public class MobileNavMenuTests : DashboardTestContext
             builder.Add(p => p.IsAgentHelpEnabled, false);
             builder.Add(p => p.LaunchNotificationsAsync, () => Task.CompletedTask);
             builder.Add(p => p.LaunchSettingsAsync, () => Task.CompletedTask);
+            builder.Add(p => p.PageEntries, pageEntries);
         });
     }
 

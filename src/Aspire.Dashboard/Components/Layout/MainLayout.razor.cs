@@ -543,6 +543,23 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
     /// </summary>
     internal event Action? HomeNavigationStarting;
 
+    // The entries the current page lists at the top of the narrow layout's navigation menu, such as the resource views
+    // that the desktop header shows as tabs. The menu evaluates them each time it renders, so they reflect the page's
+    // current state without the page re-rendering this layout.
+    private Func<IEnumerable<MobileNavMenuEntry>>? _pageNavMenuEntries;
+
+    internal void SetPageNavMenuEntries(Func<IEnumerable<MobileNavMenuEntry>> entries) => _pageNavMenuEntries = entries;
+
+    // Only clears the entries if they're still the caller's, so a page being disposed doesn't remove the entries of the
+    // page that replaced it.
+    internal void ClearPageNavMenuEntries(Func<IEnumerable<MobileNavMenuEntry>>? entries)
+    {
+        if (entries is not null && ReferenceEquals(_pageNavMenuEntries, entries))
+        {
+            _pageNavMenuEntries = null;
+        }
+    }
+
     // Whether the dashboard's home, "/", is showing: the table of every resource.
     private bool IsHome =>
         NavigationManager.ToBaseRelativePath(NavigationManager.ToAbsoluteUri(NavigationManager.Uri).GetLeftPart(UriPartial.Path)).Trim('/').Length == 0;

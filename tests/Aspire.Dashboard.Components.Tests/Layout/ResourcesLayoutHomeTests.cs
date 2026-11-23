@@ -172,9 +172,10 @@ public class ResourcesLayoutHomeTests : DashboardTestContext
         Assert.False(cut.Find(".resources-layout").ClassList.Contains("drawer-open"));
     }
 
-    // A narrow home selects the Home tab. Overview opens the overview of all resources, and Home goes back.
+    // A narrow layout has no tab strip: home and the views are listed in the main navigation menu. Home is current
+    // while the drawer shows the resource list. Overview opens the overview of all resources, and Home goes back.
     [Fact]
-    public async Task NarrowHome_SelectsTheHomeTabAndOverviewOpensTheOverview()
+    public async Task NarrowHome_NavMenuSelectsHomeAndOverviewOpensTheOverview()
     {
         var desktop = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         var narrow = desktop with { IsDesktop = false };
@@ -186,29 +187,34 @@ public class ResourcesLayoutHomeTests : DashboardTestContext
         var cut = Render<CascadingValue<ViewportInformation>>(p => p.Add(v => v.Value, desktop).AddChildContent<ResourcesLayout>());
         var layout = cut.FindComponent<ResourcesLayout>();
         cut.WaitForAssertion(() => Assert.True(layout.Instance.IsLoaded));
-        // The wide layout goes home from the brand instead.
-        Assert.Empty(cut.FindAll("#resource-tab-home"));
 
         cut.Render(p => p.Add(v => v.Value, narrow).AddChildContent<ResourcesLayout>());
+        Assert.Empty(cut.FindAll(".resources-tab-header"));
         Assert.True(cut.Find(".resources-layout").ClassList.Contains("drawer-open"));
         Assert.Equal("true", cut.Find(".resources-layout").GetAttribute("data-list-home"));
-        Assert.Equal(["resource-tab-home"], cut.FindAll(".resources-tab-header [aria-current='page']").Select(t => t.Id));
-        Assert.Equal("resource-tab-home", cut.FindAll(".resources-tab-header a.resource-tab")[0].Id);
+        Assert.Equal(
+            [Resources.Layout.ResourceTabHome, Resources.Layout.ResourceTabOverview, Resources.Layout.NavMenuConsoleLogsTab,
+                Resources.StructuredLogs.StructuredLogsHeader, Resources.Layout.NavMenuTracesTab, Resources.Layout.NavMenuMetricsTab],
+            layout.Instance.GetMobileNavMenuEntries().Select(e => e.Text));
+        Assert.Equal([Resources.Layout.ResourceTabHome], GetActiveEntries());
         Assert.Equal(ResourceTab.Overview, layout.Instance.CurrentTab);
 
-        // Clicking the current tab opens its content.
-        await cut.Find("#tab-Overview").ClickAsync(new MouseEventArgs());
+        // Choosing the current tab opens its content.
+        await cut.InvokeAsync(GetEntry(Resources.Layout.ResourceTabOverview).OnClick);
         cut.Render(p => p.Add(v => v.Value, narrow).AddChildContent<ResourcesLayout>());
         Assert.Equal("resources", navigation.ToBaseRelativePath(navigation.Uri));
         Assert.False(cut.Find(".resources-layout").ClassList.Contains("drawer-open"));
         Assert.Null(cut.Find(".resources-layout").GetAttribute("data-list-home"));
-        Assert.Equal(["tab-Overview"], cut.FindAll(".resources-tab-header [aria-current='page']").Select(t => t.Id));
+        Assert.Equal([Resources.Layout.ResourceTabOverview], GetActiveEntries());
 
-        await cut.Find("#resource-tab-home").ClickAsync(new MouseEventArgs());
+        await cut.InvokeAsync(GetEntry(Resources.Layout.ResourceTabHome).OnClick);
         cut.Render(p => p.Add(v => v.Value, narrow).AddChildContent<ResourcesLayout>());
         Assert.Equal(string.Empty, navigation.ToBaseRelativePath(navigation.Uri));
         Assert.True(cut.Find(".resources-layout").ClassList.Contains("drawer-open"));
-        Assert.Equal(["resource-tab-home"], cut.FindAll(".resources-tab-header [aria-current='page']").Select(t => t.Id));
+        Assert.Equal([Resources.Layout.ResourceTabHome], GetActiveEntries());
+
+        MobileNavMenuEntry GetEntry(string text) => layout.Instance.GetMobileNavMenuEntries().Single(e => e.Text == text);
+        IEnumerable<string> GetActiveEntries() => layout.Instance.GetMobileNavMenuEntries().Where(e => e.IsActive == true).Select(e => e.Text);
     }
 
     [Fact]

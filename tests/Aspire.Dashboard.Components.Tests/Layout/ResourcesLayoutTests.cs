@@ -878,12 +878,10 @@ public class ResourcesLayoutTests : DashboardTestContext
         });
     }
 
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public async Task SelectedResource_StatusRemainsInFooterAndFollowsUpdates(bool isDesktop)
+    [Fact]
+    public async Task SelectedResource_StatusRemainsInFooterAndFollowsUpdates()
     {
-        var viewport = new ViewportInformation(IsDesktop: isDesktop, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         var changes = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
         ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
             initialResources: [ModelTestHelpers.CreateResource("api", state: KnownResourceState.Running, resourceType: KnownResourceTypes.Project)],
@@ -905,6 +903,20 @@ public class ResourcesLayoutTests : DashboardTestContext
 
         cut.WaitForAssertion(() => Assert.Equal("Exited", cut.Find(".resource-footer-status .state-pill").TextContent.Trim()));
         Assert.Equal(["api"], cut.Instance.SelectedResourceNames);
+    }
+
+    [Fact]
+    public void Narrow_SelectedResourceHasNoFooter()
+    {
+        var viewport = new ViewportInformation(IsDesktop: false, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("api", state: KnownResourceState.Running, resourceType: KnownResourceTypes.Project)],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        Services.GetRequiredService<NavigationManager>().NavigateTo("/resources/api");
+        var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
+
+        cut.WaitForAssertion(() => Assert.Equal(["api"], cut.Instance.SelectedResourceNames));
+        Assert.Empty(cut.FindAll("footer"));
     }
 
     [Fact]
@@ -1538,7 +1550,7 @@ public class ResourcesLayoutTests : DashboardTestContext
     [Fact]
     public async Task TerminalTab_NavigatesWithinTheSelectionAndFallsBackForNonTerminalResources()
     {
-        var viewport = new ViewportInformation(IsDesktop: false, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
         ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
             initialResources:
@@ -1549,13 +1561,14 @@ public class ResourcesLayoutTests : DashboardTestContext
             ], resourceChannelProvider: () => channel));
         var navigation = Services.GetRequiredService<NavigationManager>();
         navigation.NavigateTo(DashboardUrls.ResourceOverviewUrl("shell"));
+        var header = Render<SectionOutlet>(p => p.Add(p => p.SectionName, MainLayout.HeaderContextSectionName));
         var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
         cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
         Assert.True(cut.Instance.IsTabAvailable(ResourceTab.Terminal));
-        await cut.Find("#tab-Terminal").ClickAsync(new MouseEventArgs());
+        await header.Find("#tab-Terminal").ClickAsync(new MouseEventArgs());
         Assert.Equal("http://localhost/resources/shell?terminal=true", navigation.Uri);
         cut.Render();
-        Assert.Equal("page", cut.Find("#tab-Terminal").GetAttribute("aria-current"));
+        Assert.Equal("page", header.Find("#tab-Terminal").GetAttribute("aria-current"));
 
         cut.Find(".resource-row-link[aria-label='other-shell']").Click();
         Assert.Equal("http://localhost/resources/other-shell?terminal=true", navigation.Uri);
@@ -1566,24 +1579,25 @@ public class ResourcesLayoutTests : DashboardTestContext
         Assert.Equal("http://localhost/resources/api", navigation.Uri);
         cut.Render();
         Assert.False(cut.Instance.IsTabAvailable(ResourceTab.Terminal));
-        Assert.Empty(cut.FindAll("#tab-Terminal"));
+        Assert.Empty(header.FindAll("#tab-Terminal"));
     }
 
     [Fact]
     public async Task TerminalTab_FocusAndOverviewPreservePaneQueryAndFragment()
     {
-        var viewport = new ViewportInformation(IsDesktop: false, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
             initialResources: [TerminalSetupHelpers.CreateTerminalResource("shell")],
             resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
         var navigation = Services.GetRequiredService<NavigationManager>();
         navigation.NavigateTo("/resources/shell?pane=tags#output");
+        var header = Render<SectionOutlet>(p => p.Add(p => p.SectionName, MainLayout.HeaderContextSectionName));
         var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
         cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
-        await cut.Find("#tab-Terminal").ClickAsync(new MouseEventArgs());
+        await header.Find("#tab-Terminal").ClickAsync(new MouseEventArgs());
         Assert.Equal("http://localhost/resources/shell?pane=tags&terminal=true#output", navigation.Uri);
         cut.Render();
-        await cut.Find("#tab-Overview").ClickAsync(new MouseEventArgs());
+        await header.Find("#tab-Overview").ClickAsync(new MouseEventArgs());
         Assert.Equal("http://localhost/resources/shell?pane=tags#output", navigation.Uri);
     }
 
@@ -1591,19 +1605,19 @@ public class ResourcesLayoutTests : DashboardTestContext
     public void Tabs_KeepOverviewForAResourceThatIsNotFound()
     {
         // A replica that was replaced leaves its pages' URLs behind. Its overview says it wasn't found, so the tab stays
-        // as the way back to it from the resource's console logs. The tabs render in this component below the desktop
-        // breakpoint (on desktop they're in the app header).
-        var viewport = new ViewportInformation(IsDesktop: false, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        // as the way back to it from the resource's console logs.
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
             initialResources: [ModelTestHelpers.CreateResource("api")],
             resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
         Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.ConsoleLogsUrl("api-replaced"));
 
+        var header = Render<SectionOutlet>(p => p.Add(p => p.SectionName, MainLayout.HeaderContextSectionName));
         var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
 
         cut.WaitForAssertion(() => Assert.Equal(
-            ["resource-tab-home", "tab-Overview", "tab-Console", "tab-StructuredLogs", "tab-Traces", "tab-Metrics"],
-            cut.FindAll(".resources-tab-header a.resource-tab").Select(t => t.Id)));
+            ["tab-Overview", "tab-Console", "tab-StructuredLogs", "tab-Traces", "tab-Metrics"],
+            header.FindAll(".resources-tab-header a.resource-tab").Select(t => t.Id)));
     }
 
     [Fact]
@@ -1636,7 +1650,7 @@ public class ResourcesLayoutTests : DashboardTestContext
     [Fact]
     public async Task Tabs_ShowTheSelectionsPagesAsLinksAndNeverDisableThoseWithoutTelemetry()
     {
-        var viewport = new ViewportInformation(IsDesktop: false, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
         ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
             initialResources: [ModelTestHelpers.CreateResource("api"), ModelTestHelpers.CreateResource("worker")],
@@ -1644,58 +1658,57 @@ public class ResourcesLayoutTests : DashboardTestContext
         var navigation = Services.GetRequiredService<NavigationManager>();
         navigation.NavigateTo(DashboardUrls.AddResourceSelection(DashboardUrls.ConsoleLogsUrl(), ["api", "worker"]));
 
+        var header = Render<SectionOutlet>(p => p.Add(p => p.SectionName, MainLayout.HeaderContextSectionName));
         var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
 
         cut.WaitForAssertion(() => Assert.Equal(
-            ["resource-tab-home", "tab-Overview", "tab-Console", "tab-StructuredLogs", "tab-Traces", "tab-Metrics"],
-            cut.FindAll(".resources-tab-header a.resource-tab").Select(t => t.Id)));
+            ["tab-Overview", "tab-Console", "tab-StructuredLogs", "tab-Traces", "tab-Metrics"],
+            header.FindAll(".resources-tab-header a.resource-tab").Select(t => t.Id)));
         // Each tab links to its page for the selection, so it can be opened in a new browser tab.
         Assert.Equal(
             [
-                DashboardUrls.HomeUrl(),
                 ResourcesLayout.GetTabUrl(ResourceTab.Overview, ["api", "worker"]),
                 ResourcesLayout.GetTabUrl(ResourceTab.Console, ["api", "worker"]),
                 ResourcesLayout.GetTabUrl(ResourceTab.StructuredLogs, ["api", "worker"]),
                 ResourcesLayout.GetTabUrl(ResourceTab.Traces, ["api", "worker"]),
                 ResourcesLayout.GetTabUrl(ResourceTab.Metrics, ["api", "worker"])
             ],
-            cut.FindAll(".resources-tab-header a.resource-tab").Select(t => t.GetAttribute("href")));
-        Assert.Equal(["tab-Console"], cut.FindAll(".resources-tab-header a[aria-current='page']").Select(t => t.Id));
+            header.FindAll(".resources-tab-header a.resource-tab").Select(t => t.GetAttribute("href")));
+        Assert.Equal(["tab-Console"], header.FindAll(".resources-tab-header a[aria-current='page']").Select(t => t.Id));
         // The resources send no telemetry, so their telemetry tabs are flagged unavailable but stay enabled.
         Assert.Equal(
             ["tab-StructuredLogs", "tab-Traces", "tab-Metrics"],
-            cut.FindAll(".resources-tab-header a[data-tooltip]").Select(t => t.Id));
+            header.FindAll(".resources-tab-header a[data-tooltip]").Select(t => t.Id));
 
         // Selecting an unavailable tab still navigates.
-        await cut.Find("#tab-Traces").ClickAsync(new MouseEventArgs());
+        await header.Find("#tab-Traces").ClickAsync(new MouseEventArgs());
         Assert.Equal("http://localhost/traces?resource=api&resource=worker", navigation.Uri);
         cut.Render();
 
-        await cut.Find("#tab-Overview").ClickAsync(new MouseEventArgs());
+        await header.Find("#tab-Overview").ClickAsync(new MouseEventArgs());
         Assert.Equal("http://localhost/resources?resource=api&resource=worker", navigation.Uri);
     }
 
     [Fact]
     public async Task Tabs_ModifiedClickLeavesTheLinkToTheBrowser()
     {
-        // The tab strip is inline on narrow viewports; on desktop it's in the app's header, which isn't rendered here.
-        var viewport = new ViewportInformation(IsDesktop: false, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
             initialResources: [ModelTestHelpers.CreateResource("api")],
             resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
         var navigation = Services.GetRequiredService<NavigationManager>();
         navigation.NavigateTo(DashboardUrls.ResourceOverviewUrl("api"));
+        var header = Render<SectionOutlet>(p => p.Add(p => p.SectionName, MainLayout.HeaderContextSectionName));
         var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
         cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
 
         // A click with a modifier opens the link in a new browser tab or window, so the layout doesn't navigate.
-        await cut.Find("#tab-Console").ClickAsync(new MouseEventArgs { CtrlKey = true });
-        await cut.Find("#tab-Console").ClickAsync(new MouseEventArgs { ShiftKey = true });
-        await cut.Find("#tab-Console").ClickAsync(new MouseEventArgs { MetaKey = true });
-        await cut.Find("#resource-tab-home").ClickAsync(new MouseEventArgs { CtrlKey = true });
+        await header.Find("#tab-Console").ClickAsync(new MouseEventArgs { CtrlKey = true });
+        await header.Find("#tab-Console").ClickAsync(new MouseEventArgs { ShiftKey = true });
+        await header.Find("#tab-Console").ClickAsync(new MouseEventArgs { MetaKey = true });
         Assert.Equal("http://localhost/resources/api", navigation.Uri);
 
-        await cut.Find("#tab-Console").ClickAsync(new MouseEventArgs());
+        await header.Find("#tab-Console").ClickAsync(new MouseEventArgs());
         Assert.Equal("http://localhost/consolelogs/resource/api", navigation.Uri);
     }
 

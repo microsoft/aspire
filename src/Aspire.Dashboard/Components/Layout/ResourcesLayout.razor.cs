@@ -56,6 +56,9 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private readonly List<MenuButtonItem> _paneMenuItems = [];
     private readonly ResourcesPage.ResourcesViewModel _filter = new() { SelectedViewKind = ResourcesPage.ResourceViewKind.Table };
     private readonly string _tabOverflowRegistrationId = Guid.NewGuid().ToString("N");
+    // Registered with the main layout, which lists these views in the narrow layout's navigation menu. It's created
+    // once so the layout can tell whether the registered entries are still this layout's when it's disposed.
+    private Func<IEnumerable<MobileNavMenuEntry>>? _mobileNavMenuEntries;
     // Blazor compares event handlers and delegates by reference when it diffs a render. A lambda created for each row
     // on each render would make every row's handlers, buttons and menus look changed, so each resource's handlers
     // are created once and reused across renders (see RowHandlers). They're keyed by the resource's unique name, not
@@ -506,8 +509,11 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         if (!ReferenceEquals(MainLayout, _subscribedMainLayout))
         {
             _subscribedMainLayout?.HomeNavigationStarting -= OnHomeNavigationStarting;
+            _subscribedMainLayout?.ClearPageNavMenuEntries(_mobileNavMenuEntries);
             _subscribedMainLayout = MainLayout;
             _subscribedMainLayout?.HomeNavigationStarting += OnHomeNavigationStarting;
+            _mobileNavMenuEntries ??= GetMobileNavMenuEntries;
+            _subscribedMainLayout?.SetPageNavMenuEntries(_mobileNavMenuEntries);
         }
         if (!ViewportInformation.IsDesktop)
         {
@@ -748,7 +754,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     }
 
     private IList<MenuButtonItem> GetOverflowMenuItems() =>
-        GetTabMenuItems(includeHome: false).Where(item => _overflowTabIds.Contains(item.Id!.Replace("-menu-item", string.Empty, StringComparison.Ordinal))).ToList();
+        GetTabMenuItems().Where(item => _overflowTabIds.Contains(item.Id!.Replace("-menu-item", string.Empty, StringComparison.Ordinal))).ToList();
 
     /// <summary>
     /// Called by the pane resizer after the user resizes the resource list.
@@ -2888,13 +2894,6 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
     private static string GetTabId(ResourceTab tab) => $"tab-{tab}";
 
-    // The narrow layout's Home tab.
-    private const string HomeTabId = "resource-tab-home";
-
-    // A narrow layout has no room for the brand, so its tab strip goes home instead. Without the resource service there's
-    // no home to go to (see Home).
-    private bool ShowsHomeTab(bool isDesktop) => !isDesktop && DashboardClient.IsEnabled;
-
     // Goes home as the brand does, which clears the stored selection.
     private Task GoHomeAsync()
     {
@@ -2921,9 +2920,6 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
         return OpenTabAsync(tab);
     }
-
-    private Task OnHomeTabClickAsync(MouseEventArgs e) =>
-        IsPlainClick(e) && !IsResourceListShownAsHome && _homeNavigation is null ? GoHomeAsync() : Task.CompletedTask;
 
     private static bool IsPlainClick(MouseEventArgs e) => e.Button == 0 && !e.CtrlKey && !e.ShiftKey && !e.AltKey && !e.MetaKey;
 
@@ -2979,9 +2975,9 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         }
     }
 
-    // Opens a tab chosen from the strip, the overflow menu or the compact menu. It waits for a home navigation in
-    // flight, and its URL is worked out when it's chosen: the strip and menus can have been rendered for the selection
-    // before home's.
+    // Opens a tab chosen from the strip, one of its menus or the narrow layout's navigation menu. It waits for a home
+    // navigation in flight, and its URL is worked out when it's chosen: the strip and menus can have been rendered for
+    // the selection before home's.
     private Task OpenTabAsync(ResourceTab tab)
     {
         if (_homeNavigation is not null)
@@ -2996,27 +2992,11 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             : Task.CompletedTask;
     }
 
-    // Mirrors GetTabs() as a dropdown for narrow layouts, where the tab row no longer fits and would otherwise need its
-    // own horizontal scrollbar (see the "resource-tabs-nav" container query in the stylesheet).
-
-    private IList<MenuButtonItem> GetTabMenuItems(bool includeHome)
+    // Mirrors GetTabs() as a dropdown for when the tab row no longer fits and would otherwise need its own horizontal
+    // scrollbar (see the "resource-tabs-nav" container query in the stylesheet).
+    private IList<MenuButtonItem> GetTabMenuItems()
     {
         var items = new List<MenuButtonItem>();
-
-        if (includeHome)
-        {
-            var homeIsActive = IsResourceListShownAsHome;
-            items.Add(new MenuButtonItem
-            {
-                Id = $"{HomeTabId}-menu-item",
-                Class = "resource-tab-menu-item",
-                Text = Loc[nameof(Resources.Layout.ResourceTabHome)],
-                StartIcon = homeIsActive ? new Icons.Filled.Size24.Home() : new Icons.Regular.Size24.Home(),
-                Role = MenuItemRole.Radio,
-                Checked = homeIsActive,
-                OnClick = GoHomeAsync
-            });
-        }
 
         foreach (var tab in GetTabs())
         {
@@ -3042,6 +3022,40 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         return items;
     }
 
+    // A narrow layout has no room for the tab strip, so home and the views are listed at the top of the main
+    // navigation menu instead (see MainLayout.SetPageNavMenuEntries). The menu evaluates this each time it renders, so it
+    // shows the current selection's views. Without the resource service there's no home to go to (see IsResourceListHome).
+    internal IEnumerable<MobileNavMenuEntry> GetMobileNavMenuEntries()
+    {
+        if (DashboardClient.IsEnabled)
+        {
+            var homeIsActive = IsResourceListShownAsHome;
+            yield return new MobileNavMenuEntry(
+                Loc[nameof(Resources.Layout.ResourceTabHome)],
+                () => homeIsActive || _homeNavigation is not null ? Task.CompletedTask : GoHomeAsync(),
+                new Icons.Regular.Size24.Home(),
+                ActiveIcon: new Icons.Filled.Size24.Home(),
+                IsActive: homeIsActive);
+        }
+
+        foreach (var tab in GetTabs())
+        {
+            if (!tab.IsVisible)
+            {
+                continue;
+            }
+
+            // Like the tab strip, no view is current while home's resource list covers the content.
+            var isActive = tab.Tab == CurrentTab && !IsResourceListShownAsHome;
+            yield return new MobileNavMenuEntry(
+                tab.Text,
+                () => isActive && _homeNavigation is null ? Task.CompletedTask : OpenTabAsync(tab.Tab),
+                tab.Icon,
+                IsActive: isActive,
+                ErrorCount: tab.ErrorCount);
+        }
+    }
+
     internal static string GetStateClass(ResourceViewModel resource) =>
         resource.IsParameter && resource.HasMissingParameterValueState()
             ? "state-warning"
@@ -3060,6 +3074,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         _isDisposed = true;
         _cts.Cancel();
         _subscribedMainLayout?.HomeNavigationStarting -= OnHomeNavigationStarting;
+        _subscribedMainLayout?.ClearPageNavMenuEntries(_mobileNavMenuEntries);
         TagStore.Changed -= OnTagsChanged;
         ViewPreferences.Changed -= OnViewPreferencesChanged;
         OrderStore.Changed -= OnOrderChanged;

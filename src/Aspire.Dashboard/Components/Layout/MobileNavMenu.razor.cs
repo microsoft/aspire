@@ -23,6 +23,12 @@ public partial class MobileNavMenu : ComponentBase, IAsyncDisposable
     [Parameter, EditorRequired]
     public required bool IsNavMenuOpen { get; set; }
 
+    /// <summary>
+    /// Entries the current page lists before the dashboard's own, such as its views.
+    /// </summary>
+    [Parameter]
+    public Func<IEnumerable<MobileNavMenuEntry>>? PageEntries { get; set; }
+
     [Parameter]
     public bool HasResourceTerminals { get; set; }
 
@@ -141,6 +147,14 @@ public partial class MobileNavMenu : ComponentBase, IAsyncDisposable
 
     private IEnumerable<MobileNavMenuEntry> GetMobileNavMenuEntries()
     {
+        if (PageEntries is not null)
+        {
+            foreach (var entry in PageEntries())
+            {
+                yield return entry;
+            }
+        }
+
         if (DashboardClient.IsEnabled)
         {
             if (HasResourceTerminals)

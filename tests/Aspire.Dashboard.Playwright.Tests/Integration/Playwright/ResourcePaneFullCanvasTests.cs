@@ -77,7 +77,11 @@ public sealed class ResourcePaneFullCanvasTests(ResourceTagPaneTests.TaggedResou
             await Assertions.Expect(page.Locator(".resource-pane")).ToBeVisibleAsync();
             await Assertions.Expect(page.Locator(".resource-row-all .resource-row-link")).ToHaveAttributeAsync("aria-current", "page");
             await Assertions.Expect(page.GetByRole(AriaRole.Button, new() { Name = Resources.Layout.ResourcePaneClose, Exact = true })).ToHaveCountAsync(0);
-            await Assertions.Expect(page.Locator("#resource-tab-home")).ToHaveAttributeAsync("aria-current", "page");
+            // Home is current in the navigation menu, which lists the views a narrow layout has no room for.
+            var menu = await ResourcePaneNavigation.OpenNavMenuAsync(page);
+            await Assertions.Expect(ResourcePaneNavigation.NavMenuItem(menu, Resources.Layout.ResourceTabHome)).ToHaveAttributeAsync("aria-current", "page");
+            await page.Keyboard.PressAsync("Escape");
+            await Assertions.Expect(menu).ToBeHiddenAsync();
             await page.SetViewportSizeAsync(1440, 900);
             await Assertions.Expect(page.Locator(".pane-full-canvas")).ToBeVisibleAsync();
             await Assertions.Expect(page.Locator(".drawer-open")).ToHaveCountAsync(0);
@@ -90,7 +94,7 @@ public sealed class ResourcePaneFullCanvasTests(ResourceTagPaneTests.TaggedResou
     [InlineData(390, 844)]
     [InlineData(768, 1024)]
     [OuterloopTest("Resource-intensive Playwright browser test")]
-    public async Task NarrowHomeTab_GoesHomeAndOverviewOpensTheOverview(int width, int height)
+    public async Task NarrowNavMenu_HomeGoesHomeAndOverviewOpensTheOverview(int width, int height)
     {
         await RunTestAsync(async page =>
         {
@@ -98,28 +102,35 @@ public sealed class ResourcePaneFullCanvasTests(ResourceTagPaneTests.TaggedResou
             await page.EmulateMediaAsync(new() { ReducedMotion = ReducedMotion.Reduce });
             await page.GotoAsync("/resources/tag-a");
             var layout = page.Locator(".resources-layout");
-            var home = page.Locator("#resource-tab-home");
-            var overview = page.Locator("#tab-Overview");
-            await Assertions.Expect(home).Not.ToHaveAttributeAsync("aria-current", "page");
+            await Assertions.Expect(layout).ToHaveAttributeAsync("data-pane-interactions-ready", "true");
+            // A narrow layout has no tab strip. Home and the views are listed in the navigation menu instead.
+            await Assertions.Expect(page.Locator(".resources-tab-header")).ToHaveCountAsync(0);
 
-            await home.ClickAsync();
+            var menu = await ResourcePaneNavigation.OpenNavMenuAsync(page);
+            await Assertions.Expect(Home()).Not.ToHaveAttributeAsync("aria-current", "page");
+            await Assertions.Expect(Overview()).ToHaveAttributeAsync("aria-current", "page");
+            await Home().ClickAsync();
+            await Assertions.Expect(menu).ToBeHiddenAsync();
             await Assertions.Expect(page).ToHaveURLAsync(ResourcePaneNavigation.HomeUrl);
             await Assertions.Expect(layout).ToHaveClassAsync(new Regex("drawer-open"));
-            await Assertions.Expect(page.Locator("#resource-tab-home")).ToHaveAttributeAsync("aria-current", "page");
-            await Assertions.Expect(page.Locator("#tab-Overview")).Not.ToHaveAttributeAsync("aria-current", "page");
 
-            await overview.ClickAsync();
+            await ResourcePaneNavigation.OpenNavMenuAsync(page);
+            await Assertions.Expect(Home()).ToHaveAttributeAsync("aria-current", "page");
+            await Assertions.Expect(Overview()).Not.ToHaveAttributeAsync("aria-current", "page");
+            await Overview().ClickAsync();
             await Assertions.Expect(page).ToHaveURLAsync(new Regex("/resources$"));
             await Assertions.Expect(layout).Not.ToHaveClassAsync(new Regex("drawer-open"));
-            await Assertions.Expect(page.Locator("#tab-Overview")).ToHaveAttributeAsync("aria-current", "page");
 
-            // The strip is re-created at home, and keyboard focus moves to its Home tab.
-            await home.FocusAsync();
+            await ResourcePaneNavigation.OpenNavMenuAsync(page);
+            await Assertions.Expect(Overview()).ToHaveAttributeAsync("aria-current", "page");
+            await Home().FocusAsync();
             await page.Keyboard.PressAsync("Enter");
             await Assertions.Expect(page).ToHaveURLAsync(ResourcePaneNavigation.HomeUrl);
             await Assertions.Expect(layout).ToHaveClassAsync(new Regex("drawer-open"));
-            await Assertions.Expect(page.Locator("#resource-tab-home")).ToBeFocusedAsync();
             await Assertions.Expect(page.Locator("#blazor-error-ui")).Not.ToBeVisibleAsync();
+
+            ILocator Home() => ResourcePaneNavigation.NavMenuItem(menu, Resources.Layout.ResourceTabHome);
+            ILocator Overview() => ResourcePaneNavigation.NavMenuItem(menu, Resources.Layout.ResourceTabOverview);
         });
     }
 
