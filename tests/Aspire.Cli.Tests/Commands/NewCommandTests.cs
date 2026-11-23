@@ -1455,6 +1455,21 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         AssertSourceOverrideNuGetConfig(Path.Combine(workspace.WorkspaceRoot.FullName, "output"), sourceOverride);
     }
 
+    [Fact]
+    public async Task NewCommandWritesAgentInstructionsBesideConfiguredAppHost()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        using var provider = CreateServiceCollection(workspace).BuildServiceProvider();
+        var result = provider.GetRequiredService<NewCommand>().Parse(
+            "new aspire-empty --name TestApp --output ./output --language csharp --localhost-tld false --suppress-agent-init");
+
+        Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
+        var newLine = Environment.NewLine;
+        Assert.Equal(
+            $"# Agent instructions{newLine}{newLine}{AgentInstructionsFile.CreateSection("apphost.cs", [], newLine)}{newLine}",
+            await File.ReadAllTextAsync(Path.Combine(workspace.WorkspaceRoot.FullName, "output", AgentInstructionsFile.FileName)));
+    }
+
     [Theory]
     [InlineData("https://user:token@example.invalid/v3/index.json")]
     [InlineData("https://example.invalid/v3/index.json?sig=token")]

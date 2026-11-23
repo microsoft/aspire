@@ -7,6 +7,31 @@
         <target state="translated">Proje oluşturulduktan sonra AI destekli aracı ortam yapılandırmasını durdurun</target>
         <note />
       </trans-unit>
+      <trans-unit id="AgentInstructionsFileAppended">
+        <source>Added an Aspire section with the start flow of this AppHost to the existing {0}. The rest of the file was not changed.</source>
+        <target state="new">Added an Aspire section with the start flow of this AppHost to the existing {0}. The rest of the file was not changed.</target>
+        <note>{0} is the path of the AGENTS.md file.</note>
+      </trans-unit>
+      <trans-unit id="AgentInstructionsFileCreated">
+        <source>Created {0} with the start flow of this AppHost for coding agents.</source>
+        <target state="new">Created {0} with the start flow of this AppHost for coding agents.</target>
+        <note>{0} is the path of the AGENTS.md file.</note>
+      </trans-unit>
+      <trans-unit id="AgentInstructionsFileSkippedMalformedSection">
+        <source>Left {0} unchanged because its Aspire section has no end marker. Add '{1}' after the section, or remove the section, to let the Aspire CLI update it.</source>
+        <target state="new">Left {0} unchanged because its Aspire section has no end marker. Add '{1}' after the section, or remove the section, to let the Aspire CLI update it.</target>
+        <note>{0} is the path of the AGENTS.md file. {1} is the end marker comment.</note>
+      </trans-unit>
+      <trans-unit id="AgentInstructionsFileUpdated">
+        <source>Updated the Aspire section of {0}.</source>
+        <target state="new">Updated the Aspire section of {0}.</target>
+        <note>{0} is the path of the AGENTS.md file.</note>
+      </trans-unit>
+      <trans-unit id="AgentInstructionsFileWriteFailed">
+        <source>Failed to write {0}: {1}</source>
+        <target state="new">Failed to write {0}: {1}</target>
+        <note>{0} is the path of the AGENTS.md file. {1} is the error message.</note>
+      </trans-unit>
       <trans-unit id="AppHostNotRunning">
         <source>No running AppHost found. Use 'aspire run' to start one first.</source>
         <target state="translated">Çalışan AppHost bulunamadı. Önce birini başlatmak için 'aspire run' komutunu kullanın.</target>

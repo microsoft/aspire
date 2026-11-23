@@ -269,7 +269,7 @@ internal sealed class AgentInitCommand : BaseCommand
         return CommandResult.FromExitCode(result.ExitCode);
     }
 
-    private async Task<DirectoryInfo> GetConfigurationDirectoryAsync(CancellationToken cancellationToken)
+    private async Task<FileInfo?> FindAppHostAsync(CancellationToken cancellationToken)
     {
         // Discover the AppHost without the advisory configuration-source checks performed
         // by UseOrFindAppHostProjectFileAsync. Agent setup only consumes saved settings.
@@ -288,12 +288,12 @@ internal sealed class AgentInitCommand : BaseCommand
                     cancellationToken: cancellationToken),
                 // Without interactive input there is no way to choose between several AppHosts, and
                 // agent init has no AppHost option. The AppHost only supplies optional skill-source
-                // settings, so fall back to the working directory as when no AppHost is found.
+                // settings and the AGENTS.md start flow, so continue as when no AppHost is found.
                 _ => null
             };
         }
 
-        return appHost?.Directory ?? ExecutionContext.WorkingDirectory;
+        return appHost;
     }
 
     private async Task<DirectoryInfo> PromptForWorkspaceRootAsync(ParseResult parseResult, CancellationToken cancellationToken)
@@ -336,6 +336,12 @@ internal sealed class AgentInitCommand : BaseCommand
         PromptBinding<bool> removeSkillCopiesBinding,
         CancellationToken cancellationToken)
     {
+        // Chained flows (`aspire new`, `aspire init`) pass the directory of the app they created. Standalone
+        // runs discover the AppHost at most once because discovery can prompt for a selection.
+        var discoverAppHost = configurationDirectory is null;
+        Task<FileInfo?>? discoveredAppHost = null;
+        Task<FileInfo?> GetDiscoveredAppHostAsync() => discoveredAppHost ??= FindAppHostAsync(cancellationToken);
+
         var (agentsProvided, requestedAgents) = agentsBinding.Resolve();
         IReadOnlyList<IAgentClient> selectedClients;
         if (agentsProvided && requestedAgents is not null)
@@ -404,7 +410,7 @@ internal sealed class AgentInitCommand : BaseCommand
         string? skillConfigurationError = null;
         if (showSkillWarnings)
         {
-            configurationDirectory ??= await GetConfigurationDirectoryAsync(cancellationToken);
+            configurationDirectory ??= (await GetDiscoveredAppHostAsync())?.Directory ?? ExecutionContext.WorkingDirectory;
             try
             {
                 skillSources = SkillSource.Resolve(configurationDirectory, new FileInfo(_configurationService.GetSettingsFilePath(isGlobal: true)));
@@ -737,6 +743,19 @@ internal sealed class AgentInitCommand : BaseCommand
             scope,
             cancellationToken);
 
+        // --- Phase 7: Describe the start flow and the installed skills in AGENTS.md ---
+        // AGENTS.md is a project file, so global setup, which leaves the project untouched, skips it.
+        if (scope is AgentConfigurationScope.Project)
+        {
+            hasErrors |= !await WriteAgentInstructionsAsync(
+                workspaceRoot,
+                discoverAppHost ? null : configurationDirectory,
+                discoverAppHost ? GetDiscoveredAppHostAsync : null,
+                GetAspireSkillsRegisteredClients(registrationResults, skillSources).Any(),
+                installedSkills,
+                cancellationToken);
+        }
+
         if (hasErrors)
         {
             InteractionService.DisplayMessage(KnownEmojis.PoliceCarLight, AgentCommandStrings.ConfigurationCompletedWithErrors);
@@ -778,6 +797,36 @@ internal sealed class AgentInitCommand : BaseCommand
         {
             await ConfigureTelemetryHooksAsync(telemetryHookClients, cancellationToken);
         }
+    }
+
+    private async Task<bool> WriteAgentInstructionsAsync(
+        DirectoryInfo workspaceRoot,
+        DirectoryInfo? appConfigurationDirectory,
+        Func<Task<FileInfo?>>? discoverAppHostAsync,
+        bool aspireSkillsRegistered,
+        IReadOnlyList<InstalledSkillSummaryItem> installedSkills,
+        CancellationToken cancellationToken)
+    {
+        // Agents read AGENTS.md from the workspace root they are opened in, so the file goes there and
+        // names the AppHost relative to it. The AppHost comes from the configuration the app was created
+        // with (for example a solution's AppHost project chained from `aspire init`), then from the
+        // workspace root, and only standalone runs fall back to discovery.
+        var appHostPath = (appConfigurationDirectory is null ? null : AgentInstructionsFile.GetConfiguredAppHostPath(appConfigurationDirectory))
+            ?? AgentInstructionsFile.GetConfiguredAppHostPath(workspaceRoot)
+            ?? (discoverAppHostAsync is null ? null : (await discoverAppHostAsync())?.FullName);
+        if (appHostPath is null)
+        {
+            // Without an AppHost there is no start flow to describe. Agent setup commonly precedes
+            // `aspire init` in a repository, so this is not worth a message.
+            return true;
+        }
+
+        List<AgentInstructionsSkill> skills = aspireSkillsRegistered ? [.. AgentInstructionsFile.AspireSkillsPluginSkills] : [];
+        skills.AddRange(SkillDefinition.CliDefined
+            .Where(skill => installedSkills.Any(installed => skill.HasName(installed.SkillName)))
+            .Select(skill => new AgentInstructionsSkill(skill.Name, skill.AgentInstructionsJob)));
+
+        return await AgentInstructionsFile.WriteAndReportAsync(InteractionService, workspaceRoot, appHostPath, skills, cancellationToken);
     }
 
     private static IEnumerable<IAgentClient> GetAspireSkillsRegisteredClients(

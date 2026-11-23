@@ -160,6 +160,59 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
+    [InlineData("project")]
+    [InlineData("global")]
+    public async Task AgentInit_WritesAgentInstructionsWithInstalledSkillsForProjectScope(string scope)
+    {
+        using var context = new AgentConfigurationTestContext(outputHelper);
+        await AgentConfigurationTestContext.WriteAsync(Path.Combine(context.Project.FullName, AspireConfigFile.FileName), """
+            {"appHost":{"path":"src/AppHost/apphost.cs"}}
+            """);
+        using var provider = context.CreateServiceCollection(outputHelper, options =>
+        {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateNonInteractiveHostEnvironment();
+        }).BuildServiceProvider();
+        var result = provider.GetRequiredService<RootCommand>().Parse(
+            $"agent init --agents copilot --scope {scope} --skills aspire --non-interactive");
+
+        Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
+        var agentInstructionsPath = Path.Combine(context.Project.FullName, AgentInstructionsFile.FileName);
+        if (scope == "global")
+        {
+            Assert.False(File.Exists(agentInstructionsPath));
+            return;
+        }
+
+        var newLine = Environment.NewLine;
+        Assert.Equal(
+            $"# Agent instructions{newLine}{newLine}{AgentInstructionsFile.CreateSection("src/AppHost/apphost.cs", AgentInstructionsFile.AspireSkillsPluginSkills, newLine)}{newLine}",
+            await File.ReadAllTextAsync(agentInstructionsPath));
+    }
+
+    [Fact]
+    public async Task AgentInit_WritesAgentInstructionsForDiscoveredAppHostWithoutUninstalledSkills()
+    {
+        using var context = new AgentConfigurationTestContext(outputHelper);
+        var appHost = new FileInfo(Path.Combine(context.Project.FullName, "App.AppHost", "App.AppHost.csproj"));
+        using var provider = context.CreateServiceCollection(outputHelper, options =>
+        {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateNonInteractiveHostEnvironment();
+            options.ProjectLocatorFactory = _ => new TestProjectLocator
+            {
+                GetAppHostFromSettingsAsyncCallback = _ => Task.FromResult<FileInfo?>(appHost)
+            };
+        }).BuildServiceProvider();
+        var result = provider.GetRequiredService<RootCommand>().Parse(
+            "agent init --agents copilot --scope project --skills none --mcp --non-interactive");
+
+        Assert.Equal(CliExitCodes.Success, await result.InvokeAsync().DefaultTimeout());
+        var newLine = Environment.NewLine;
+        Assert.Equal(
+            $"# Agent instructions{newLine}{newLine}{AgentInstructionsFile.CreateSection("App.AppHost/App.AppHost.csproj", [], newLine)}{newLine}",
+            await File.ReadAllTextAsync(Path.Combine(context.Project.FullName, AgentInstructionsFile.FileName)));
+    }
+
+    [Theory]
     [InlineData(null)]
     [InlineData("9.0.302")]
     public async Task AgentInit_UsesAppHostSettingsWithoutUsableSdk(string? highestDetectedVersion)

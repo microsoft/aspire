@@ -554,5 +554,50 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("UsingAppHost", resourceCulture);
             }
         }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Created {0} with the start flow of this AppHost for coding agents..
+        /// </summary>
+        internal static string AgentInstructionsFileCreated {
+            get {
+                return ResourceManager.GetString("AgentInstructionsFileCreated", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Added an Aspire section with the start flow of this AppHost to the existing {0}. The rest of the file was not changed..
+        /// </summary>
+        internal static string AgentInstructionsFileAppended {
+            get {
+                return ResourceManager.GetString("AgentInstructionsFileAppended", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Updated the Aspire section of {0}..
+        /// </summary>
+        internal static string AgentInstructionsFileUpdated {
+            get {
+                return ResourceManager.GetString("AgentInstructionsFileUpdated", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Left {0} unchanged because its Aspire section has no end marker. Add &apos;{1}&apos; after the section, or remove the section, to let the Aspire CLI update it..
+        /// </summary>
+        internal static string AgentInstructionsFileSkippedMalformedSection {
+            get {
+                return ResourceManager.GetString("AgentInstructionsFileSkippedMalformedSection", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Failed to write {0}: {1}.
+        /// </summary>
+        internal static string AgentInstructionsFileWriteFailed {
+            get {
+                return ResourceManager.GetString("AgentInstructionsFileWriteFailed", resourceCulture);
+            }
+        }
     }
 }

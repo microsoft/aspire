@@ -66,6 +66,10 @@ a source that resolves to a single template.
 Existing non-empty output directories are rejected. Project name and output
 selection use the existing new-command prompting and validation helpers.
 Optional agent initialization still applies; `--suppress-agent-init` skips it.
+As with built-in templates, when the generated `aspire.config.json` names an
+AppHost, `aspire new` writes the AppHost start flow for coding agents to an
+`AGENTS.md` at the output root. A template that ships its own `AGENTS.md` keeps
+it; the CLI appends a delimited Aspire section instead of overwriting the file.
 
 ## Source trust
 
