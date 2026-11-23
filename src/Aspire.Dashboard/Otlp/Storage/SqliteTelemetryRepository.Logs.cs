@@ -402,7 +402,10 @@ public sealed partial class SqliteTelemetryRepository
         };
     }
 
-    private OverviewLogs GetOverviewLogsFromDatabase(List<ResourceKey> resourceKeys, int recentCount, bool errorsOnly, CancellationToken cancellationToken)
+    private OverviewLogs GetOverviewLogsFromDatabase(List<ResourceKey> resourceKeys, int recentCount, bool errorsOnly, CancellationToken cancellationToken) =>
+        MaterializeOverviewLogs(ReadOverviewLogRows(resourceKeys, recentCount, errorsOnly, cancellationToken));
+
+    internal List<OverviewLogRecord> ReadOverviewLogRows(List<ResourceKey> resourceKeys, int recentCount, bool errorsOnly, CancellationToken cancellationToken)
     {
         using var connection = _database.OpenConnection();
         using var interrupt = connection.RegisterInterrupt(cancellationToken);
@@ -422,7 +425,7 @@ public sealed partial class SqliteTelemetryRepository
 
         // Keep the aggregate and the preview in one statement so new or trimmed entries can't move the page.
         // The preview only needs the message and severity; don't join attributes or materialize structured logs.
-        var rows = connection.Query<OverviewLogRecord>($"""
+        return connection.Query<OverviewLogRecord>($"""
             WITH log_counts AS (
                 SELECT COUNT(*) AS TotalCount,
                     COUNT(*) FILTER (WHERE l.severity = @Warning) AS WarningCount,
@@ -443,15 +446,19 @@ public sealed partial class SqliteTelemetryRepository
             LEFT JOIN recent_logs p ON 1 = 1
             ORDER BY p.timestamp_ticks DESC, p.log_id;
             """, parameters).AsList();
+    }
 
+    internal OverviewLogs MaterializeOverviewLogs(List<OverviewLogRecord> rows)
+    {
         var counts = rows[0];
         var recent = new List<OverviewLog>(rows.Count);
         foreach (var row in rows)
         {
-            if (row.InternalId is { } id)
+            // A resource can be deleted after the rows are buffered, invalidating its cached metadata.
+            if (row.InternalId is { } id && row.ResourceId is { } resourceId && GetCachedResource(resourceId) is { } resource)
             {
                 recent.Add(new OverviewLog(id, new DateTime(row.TimestampTicks!.Value, DateTimeKind.Utc),
-                    (LogLevel)row.Severity!.Value, row.Message!, GetCachedResource(row.ResourceId!.Value)!));
+                    (LogLevel)row.Severity!.Value, row.Message!, resource));
             }
         }
 

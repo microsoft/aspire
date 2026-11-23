@@ -3,6 +3,7 @@
 
 using System.Diagnostics;
 using System.Threading.Channels;
+using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.Otlp;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
@@ -1890,6 +1891,45 @@ public abstract class LogTests : TelemetryRepositoryTestBase
 
 public sealed class SqliteLogTests(ITestOutputHelper testOutputHelper) : LogTests(testOutputHelper)
 {
+    [Fact]
+    public async Task GetOverviewLogs_ResourceDeletedAfterRead_SkipsMissingPreviewRow()
+    {
+        using var context = await CreateRepositoryAsync();
+        var repository = Assert.IsType<SqliteTelemetryRepository>(context.Repository);
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var time = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        await repository.AddLogsAsync(new AddContext(), [
+            CreateErrorLogs("remaining", time),
+            CreateErrorLogs("deleted", time.AddSeconds(1))
+        ]);
+
+        var rows = repository.ReadOverviewLogRows([], recentCount: 5, errorsOnly: true, cancellationToken);
+        await repository.ClearSelectedSignalsAsync(new()
+        {
+            ["deleted-TestId"] = [AspireDataType.Resource]
+        });
+
+        var overview = repository.MaterializeOverviewLogs(rows);
+
+        Assert.Equal((2, 0, 2), (overview.TotalCount, overview.WarningCount, overview.ErrorCount));
+        var log = Assert.Single(overview.Recent);
+        Assert.Equal("remaining error", log.Message);
+        Assert.Equal(new ResourceKey("remaining", "TestId"), log.Resource.ResourceKey);
+
+        static ResourceLogs CreateErrorLogs(string name, DateTime time) => new()
+        {
+            Resource = CreateResource(name: name, instanceId: "TestId"),
+            ScopeLogs =
+            {
+                new ScopeLogs
+                {
+                    Scope = CreateScope(),
+                    LogRecords = { CreateLogRecord(time: time, message: $"{name} error", severity: SeverityNumber.Error) }
+                }
+            }
+        };
+    }
+
     [Fact]
     public async Task GetLogSummaries_MoreThanSqliteVariableLimit_ReturnsTraceDisplayData()
     {
