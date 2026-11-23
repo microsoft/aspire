@@ -1441,6 +1441,41 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task DescribeCommand_JsonFormat_IgnoresOtlpEndpointNotSetByAppHost()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        var requestCount = 0;
+        using var handler = new MockHttpMessageHandler(_ =>
+        {
+            Interlocked.Increment(ref requestCount);
+            return new HttpResponseMessage(HttpStatusCode.InternalServerError);
+        });
+        // The effective environment of an executable includes variables inherited from the AppHost process, and a
+        // container's includes ENV from its image. Those entries are not from the spec, so OTLP isn't configured.
+        using var provider = CreateDescribeTestServices(workspace, outputWriter,
+        [
+            new()
+            {
+                Name = "script",
+                DisplayName = "script",
+                ResourceType = "Executable",
+                State = "Running",
+                EnvironmentVariables = [new() { Name = "OTEL_EXPORTER_OTLP_ENDPOINT", Value = "http://localhost:4317", IsFromSpec = false }]
+            }
+        ], configureConnection: ConfigureDashboardApi, httpClientFactory: new MockHttpClientFactory(handler));
+
+        var exitCode = await provider.GetRequiredService<RootCommand>().Parse("describe --format json").InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal(0, requestCount);
+        var output = JsonSerializer.Deserialize(string.Join("", outputWriter.Logs), ResourcesCommandJsonContext.RelaxedEscaping.ResourcesOutput);
+        Assert.NotNull(output);
+        var resource = Assert.Single(output.Resources);
+        Assert.Null(resource.TelemetryReceived);
+    }
+
+    [Fact]
     public async Task DescribeCommand_JsonFormat_OmitsTelemetryStatusWhenDashboardApiFails()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

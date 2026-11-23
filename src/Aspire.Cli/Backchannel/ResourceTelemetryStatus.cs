@@ -43,8 +43,12 @@ internal sealed class ResourceTelemetryStatus
     }
 
     private static bool IsOtlpExporterConfigured(ResourceSnapshot snapshot) =>
-        // An explicitly empty endpoint disables export; a null value means the value wasn't captured.
+        // Only the AppHost's own setting counts. The snapshot carries the effective environment, which for executables
+        // includes variables inherited from the AppHost process (for example the endpoint `aspire run` profiling sets)
+        // and for containers includes ENV from the image; those are marked IsFromSpec = false. An explicitly empty
+        // endpoint disables export; a null value means the value wasn't captured.
         snapshot.EnvironmentVariables.Any(e =>
+            e.IsFromSpec &&
             string.Equals(e.Name, KnownOtelConfigNames.ExporterOtlpEndpoint, StringComparison.Ordinal) &&
             e.Value is not { Length: 0 });
 

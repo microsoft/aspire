@@ -269,9 +269,13 @@ internal sealed class DescribeCommand : BaseCommand
             // The telemetry status is a point-in-time read, so it is reported for snapshots only, not --follow.
             var telemetryStatus = await ResourceTelemetryStatus.TryGetAsync(connection, snapshots, _httpClientFactory, _logger, cancellationToken).ConfigureAwait(false);
             var resourceList = ResourceSnapshotMapper.MapToResourceJsonList(snapshots, dashboardBaseUrl, includeDisabledCommands: includeDisabledCommands);
-            foreach (var (resourceJson, snapshot) in resourceList.Zip(snapshots))
+            if (telemetryStatus is not null)
             {
-                resourceJson.TelemetryReceived = telemetryStatus?.GetTelemetryReceived(snapshot);
+                // MapToResourceJsonList preserves the order of its input, so each entry pairs with its snapshot.
+                foreach (var (resourceJson, snapshot) in resourceList.Zip(snapshots))
+                {
+                    resourceJson.TelemetryReceived = telemetryStatus.GetTelemetryReceived(snapshot);
+                }
             }
 
             var output = new ResourcesOutput { Resources = resourceList.ToArray() };

@@ -387,7 +387,7 @@ Progress and informational messages go to stderr, so redirection captures only M
 | `exitCode` | Process exit code, when the resource has exited. |
 | `healthStatus` | Current health status, when available. |
 | `dashboardUrl` | Dashboard URL for the resource, when available. |
-| `telemetryReceived` | Whether the dashboard has received any telemetry from the resource. Present only in snapshot output (not `--follow`), when the AppHost configured OTLP export for the resource (`OTEL_EXPORTER_OTLP_ENDPOINT` is set) and the dashboard telemetry API could be read. `false` usually means the app doesn't register an OpenTelemetry SDK, or hasn't done any work yet. |
+| `telemetryReceived` | Whether the dashboard has received any telemetry from the resource. Present only in snapshot output (not `--follow`), when the AppHost configured OTLP export for the resource (the AppHost set `OTEL_EXPORTER_OTLP_ENDPOINT` on it; an inherited or image-defined value doesn't count) and the dashboard telemetry API could be read. `false` usually means the app doesn't register an OpenTelemetry SDK, or hasn't done any work yet. |
 | `relationships` | Related resources as `{ "type": "...", "resourceName": "..." }`. |
 | `urls` | Endpoint objects with `name`, `displayName`, `url`, and `isInternal`. |
 | `volumes` | Volume objects with `source`, `target`, `mountType`, and `isReadOnly`. |
