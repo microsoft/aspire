@@ -268,7 +268,7 @@ internal sealed class TestRunCoordinator(
         try
         {
             var outcome = await RunCollectorAsync(resource.Name, testingContext, outputPath,
-                resourceCompletion, collector, cancellationToken).ConfigureAwait(false);
+                resourceCompletion, collector, annotation.Timeout, cancellationToken).ConfigureAwait(false);
             Publish(new TestRunEvent
             {
                 Collection = state with
@@ -287,8 +287,11 @@ internal sealed class TestRunCoordinator(
     }
 
     private async Task<(bool Passed, string? Error)> RunCollectorAsync(string resourceName, TestingContext testingContext, string outputPath,
-        Task<bool> resourceCompletion, Func<ResourceTestingContext, Task> collector, CancellationToken cancellationToken)
+        Task<bool> resourceCompletion, Func<ResourceTestingContext, Task> collector, TimeSpan timeout, CancellationToken cancellationToken)
     {
+        using var deadline = timeout == Timeout.InfiniteTimeSpan ? null : new CancellationTokenSource(timeout, timeProvider);
+        using var linked = deadline is null ? null : CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token);
+        var collectionCancellation = linked?.Token ?? cancellationToken;
         var hasFailedResult = false;
         var context = new ResourceTestingContext(testingContext, resourceName, outputPath, result =>
         {
@@ -302,17 +305,23 @@ internal sealed class TestRunCoordinator(
             };
             hasFailedResult |= published.IsFailure();
             Publish(new TestRunEvent { Result = published });
-        }, resourceCompletion, cancellationToken);
+        }, resourceCompletion, collectionCancellation);
         // Avoid running a collector's synchronous prefix on the resource startup path.
-        var task = Task.Run(() => collector(context), cancellationToken);
+        var task = Task.Run(() => collector(context), collectionCancellation);
         string? error = null;
         try
         {
-            await task.WaitAsync(cancellationToken).ConfigureAwait(false);
+            await task.WaitAsync(collectionCancellation).ConfigureAwait(false);
+            collectionCancellation.ThrowIfCancellationRequested();
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             throw;
+        }
+        catch (OperationCanceledException ex) when (deadline?.IsCancellationRequested is true)
+        {
+            logger.LogError(ex, "Test result collection timed out for resource '{ResourceName}' after {Timeout}.", resourceName, timeout);
+            error = $"Test result collection timed out for resource '{resourceName}' after {timeout}.";
         }
         catch (Exception ex)
         {
@@ -321,7 +330,7 @@ internal sealed class TestRunCoordinator(
         }
         finally
         {
-            // A non-cooperative callback may outlive cancellation. Close publication before
+            // A non-cooperative callback may outlive cancellation or its deadline. Close publication before
             // aggregate completion so its late results cannot change the finalized report.
             context.Close();
             ObserveFaults(task);

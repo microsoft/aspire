@@ -416,7 +416,7 @@ internal sealed class TestRunReporter
                 TestCommandStrings.SummaryHeader, FormatOutcome(status)), allowMarkup: true);
             if (_results.Count > 0)
             {
-                var totals = ResultSummary();
+                var totals = ResultSummary(status);
                 _interaction.DisplayMessage(KnownEmojis.Microscope, string.Format(CultureInfo.CurrentCulture,
                     TestCommandStrings.PublishedSummary, FormatCount(totals.Passed, "green"),
                     FormatCount(totals.Failed, "red"), FormatCount(totals.Skipped, "yellow")), allowMarkup: true);
@@ -500,26 +500,63 @@ internal sealed class TestRunReporter
         SummaryPath = SummaryPath,
         StartedAt = _startedAt,
         CompletedAt = _completedAt,
-        Status = status,
         CliExitCode = exitCode,
         Error = error,
-        Resources = OrderedResources(),
-        TestResults = _results.OrderBy(r => r.ResourceName, StringComparers.ResourceName).ToArray(),
-        Collections = _collections.Values.OrderBy(c => c.ResourceName, StringComparers.ResourceName).ToArray(),
-        PublishedResults = ResultSummary()
+        TestResults = ResourceReports(),
+        TestSummary = ResultSummary(status)
     };
 
-    private PublishedResultSummary ResultSummary() => new()
+    private TestSummary ResultSummary(string outcome) => new()
     {
+        Outcome = outcome,
         Passed = _results.Count(r => r.Outcome == "passed"),
         Failed = _results.Count(r => r.IsFailure()),
         Skipped = _results.Count(r => r.Outcome == "skipped")
     };
 
-    private TestResourceState[] OrderedResources() => _resources.Values
-        .OrderBy(r => r.ResourceName, StringComparers.ResourceName)
-        .ThenBy(r => r.ResourceId, StringComparers.ResourceName)
-        .ToArray();
+    private Dictionary<string, TestResourceReport> ResourceReports() => _resources.Values
+        .GroupBy(r => r.ResourceName, StringComparers.ResourceName)
+        .OrderBy(group => group.Key, StringComparers.ResourceName)
+        .ToDictionary(group => group.Key, group =>
+        {
+            var replicas = group.OrderBy(r => r.ResourceId, StringComparers.ResourceName).ToArray();
+            var expectedReplicas = replicas[0].ExpectedReplicas;
+            var single = expectedReplicas == 1 && replicas.Length == 1 ? replicas[0] : null;
+            _collections.TryGetValue(group.Key, out var collection);
+            var outcome = replicas.Any(r => r.Outcome == "failed") ? "failed"
+                : replicas.Length == expectedReplicas && replicas.All(r => r.Outcome == "passed") ? "passed"
+                : _completed || replicas.Any(r => r.Outcome == "incomplete") ? "incomplete" : "pending";
+            // Different replica exits have no single authoritative exit code. Keep every
+            // instance below rather than choose one code or let a name-keyed entry overwrite it.
+            var exitCodes = replicas.Select(r => r.ExitCode).Distinct().ToArray();
+            return new TestResourceReport
+            {
+                ResourceId = single?.ResourceId,
+                State = replicas.All(r => StringComparers.ResourceState.Equals(r.State, replicas[0].State)) ? replicas[0].State : null,
+                ExitCode = replicas.Length == expectedReplicas && exitCodes.Length == 1 ? exitCodes[0] : null,
+                Outcome = outcome,
+                ExpectedReplicas = expectedReplicas,
+                CollectorStatus = collection?.Status,
+                CollectorError = collection?.Error,
+                OutputPath = collection?.OutputPath,
+                TestCases = _results.Where(r => StringComparers.ResourceName.Equals(r.ResourceName, group.Key))
+                    .Select(r => new TestCaseReport
+                    {
+                        Name = r.Name,
+                        Outcome = r.Outcome,
+                        DurationMilliseconds = r.DurationMilliseconds,
+                        Message = r.Message
+                    }).ToArray(),
+                Replicas = single is null
+                    ? replicas.Where(r => r.ResourceId is not null).ToDictionary(r => r.ResourceId!, r => new TestReplicaReport
+                    {
+                        State = r.State,
+                        ExitCode = r.ExitCode,
+                        Outcome = r.Outcome
+                    }, StringComparer.Ordinal)
+                    : null
+            };
+        }, StringComparers.ResourceName);
 
     private static string Key(string resourceName, string? resourceId) => $"{resourceName}\0{resourceId}";
 
@@ -596,23 +633,51 @@ internal sealed class TestRunReporter
 
 internal sealed class TestRunSummary
 {
-    public int SchemaVersion { get; init; } = 1;
+    public int SchemaVersion { get; init; } = 2;
     public string? RunId { get; init; }
     public string? OutputPath { get; init; }
     public string? SummaryPath { get; init; }
     public DateTimeOffset StartedAt { get; init; }
     public DateTimeOffset? CompletedAt { get; init; }
-    public required string Status { get; init; }
     public int? CliExitCode { get; init; }
     public string? Error { get; init; }
-    public TestResourceState[] Resources { get; init; } = [];
-    public PublishedTestResult[] TestResults { get; init; } = [];
-    public TestCollectionState[] Collections { get; init; } = [];
-    public PublishedResultSummary PublishedResults { get; init; } = new();
+    public Dictionary<string, TestResourceReport> TestResults { get; init; } = new(StringComparers.ResourceName);
+    public required TestSummary TestSummary { get; init; }
 }
 
-internal sealed class PublishedResultSummary
+internal sealed class TestResourceReport
 {
+    public string? ResourceId { get; init; }
+    public string? State { get; init; }
+    public int? ExitCode { get; init; }
+    public required string Outcome { get; init; }
+    public int ExpectedReplicas { get; init; }
+    public string? CollectorStatus { get; init; }
+    public string? CollectorError { get; init; }
+    public string? OutputPath { get; init; }
+    public TestCaseReport[] TestCases { get; init; } = [];
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public Dictionary<string, TestReplicaReport>? Replicas { get; init; }
+}
+
+internal sealed class TestReplicaReport
+{
+    public string? State { get; init; }
+    public int? ExitCode { get; init; }
+    public required string Outcome { get; init; }
+}
+
+internal sealed class TestCaseReport
+{
+    public required string Name { get; init; }
+    public required string Outcome { get; init; }
+    public double? DurationMilliseconds { get; init; }
+    public string? Message { get; init; }
+}
+
+internal sealed class TestSummary
+{
+    public required string Outcome { get; init; }
     public int Passed { get; init; }
     public int Failed { get; init; }
     public int Skipped { get; init; }

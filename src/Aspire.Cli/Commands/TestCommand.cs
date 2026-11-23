@@ -431,11 +431,14 @@ internal sealed class TestCommand : BaseCommand
         var now = _timeProvider.GetUtcNow();
         var summary = new TestRunSummary
         {
-            Status = result.ExitCode switch
+            TestSummary = new TestSummary
             {
-                CliExitCodes.Cancelled => "cancelled",
-                CliExitCodes.WaitTimeout => "timedOut",
-                _ => "failed"
+                Outcome = result.ExitCode switch
+                {
+                    CliExitCodes.Cancelled => "cancelled",
+                    CliExitCodes.WaitTimeout => "timedOut",
+                    _ => "failed"
+                }
             },
             StartedAt = now,
             CompletedAt = now,

@@ -81,7 +81,8 @@ public sealed class ResourceTestingContext
     /// process completion. It shares the run's completion tracking, handles resources that already
     /// finished, and waits for late exit-code notifications. Collector completion itself is not awaited.
     /// The default token still observes <see cref="CancellationToken"/>, including command deadlines
-    /// and interruption. A supplied token cannot disable run cancellation, and cancelling this wait
+    /// and interruption, as well as any configured collector timeout. A supplied token cannot disable
+    /// this cancellation, and cancelling this wait
     /// does not cancel the shared resource-completion task or other waiters.
     /// </remarks>
     /// <exception cref="OperationCanceledException">Collection has been cancelled.</exception>

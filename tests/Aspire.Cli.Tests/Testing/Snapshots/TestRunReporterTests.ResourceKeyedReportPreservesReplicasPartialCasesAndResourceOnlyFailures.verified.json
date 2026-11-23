@@ -1,0 +1,94 @@
+﻿{
+  "schemaVersion": 2,
+  "runId": "run-id",
+  "outputPath": "output-directory",
+  "summaryPath": "summary-file",
+  "startedAt": "2000-01-01T00:00:00\u002B00:00",
+  "completedAt": "2000-01-01T00:00:00\u002B00:00",
+  "cliExitCode": 23,
+  "error": null,
+  "testResults": {
+    "go-tests": {
+      "resourceId": null,
+      "state": null,
+      "exitCode": null,
+      "outcome": "failed",
+      "expectedReplicas": 2,
+      "collectorStatus": "completed",
+      "collectorError": null,
+      "outputPath": null,
+      "testCases": [
+        {
+          "name": "TestHealth",
+          "outcome": "passed",
+          "durationMilliseconds": 12,
+          "message": null
+        },
+        {
+          "name": "TestHealth",
+          "outcome": "failed",
+          "durationMilliseconds": null,
+          "message": "second replica failed"
+        }
+      ],
+      "replicas": {
+        "go-2": {
+          "state": "Exited",
+          "exitCode": 1,
+          "outcome": "failed"
+        },
+        "shared-id": {
+          "state": "Finished",
+          "exitCode": 0,
+          "outcome": "passed"
+        }
+      }
+    },
+    "python-tests": {
+      "resourceId": "shared-id",
+      "state": "Finished",
+      "exitCode": 0,
+      "outcome": "passed",
+      "expectedReplicas": 1,
+      "collectorStatus": "failed",
+      "collectorError": "report was truncated",
+      "outputPath": null,
+      "testCases": [
+        {
+          "name": "test_checkout",
+          "outcome": "skipped",
+          "durationMilliseconds": null,
+          "message": "optional fixture"
+        }
+      ]
+    },
+    "script": {
+      "resourceId": "script-1",
+      "state": "Exited",
+      "exitCode": 5,
+      "outcome": "failed",
+      "expectedReplicas": 1,
+      "collectorStatus": "notConfigured",
+      "collectorError": null,
+      "outputPath": null,
+      "testCases": []
+    },
+    "unavailable-collector": {
+      "resourceId": "unknown-1",
+      "state": "Finished",
+      "exitCode": 0,
+      "outcome": "passed",
+      "expectedReplicas": 1,
+      "collectorStatus": null,
+      "collectorError": null,
+      "outputPath": null,
+      "testCases": []
+    }
+  },
+  "testSummary": {
+    "outcome": "failed",
+    "passed": 1,
+    "failed": 1,
+    "skipped": 1
+  }
+}

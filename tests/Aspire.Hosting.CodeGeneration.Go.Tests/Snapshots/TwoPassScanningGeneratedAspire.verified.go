@@ -3693,7 +3693,8 @@ type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	// definition or ordinary runs. The context supplies a private resource output
 	// destination. Configure runner report paths independently and stage collected
 	// artifacts into this destination at runtime. Repeated calls replace the
-	// collector while preserving the existing run context and output directory.
+	// collector while preserving the existing timeout, run context and output
+	// directory.
 	//
 	// Parameters:
 	//   - options: Optional parameters; see [WithTestingOption].
@@ -3705,6 +3706,28 @@ type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
 	// release.
 	WithTesting(options ...WithTestingOption) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+
+	// WithTestingTimeout configures the runtime result collector deadline for an
+	// existing test resource.
+	//
+	// Call after WithTesting or a framework helper that marks the resource for
+	// testing. The existing collector and output context are preserved. The default
+	// is no collector deadline. A finite deadline starts when the collector is
+	// scheduled, including any wait for resource completion inside it. It does not
+	// limit resource startup or execution, and overall run cancellation still
+	// applies.
+	//
+	// Parameters:
+	//   - timeout: The collector timeout in milliseconds; -1 disables the collector
+	//     deadline.
+	//
+	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	WithTestingTimeout(timeout float64) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 
 	// WithTrait adds immutable, non-sensitive metadata to a resource. Repeated
 	// names add multiple values.
@@ -6470,6 +6493,23 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithTesting(op
 	return s
 }
 
+// WithTestingTimeout configures the runtime result collector deadline for an
+// existing test resource.
+func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithTestingTimeout(timeout float64) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
+	if s.Err() != nil {
+		return s
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["timeout"] = serializeValue(timeout)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTestingTimeout", reqArgs); err != nil {
+		s.setErr(err)
+	}
+	return s
+}
+
 // WithTrait adds immutable, non-sensitive metadata to a resource. Repeated
 // names add multiple values.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithTrait(name string, value string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
@@ -7880,7 +7920,8 @@ type CSharpAppResource interface {
 	// definition or ordinary runs. The context supplies a private resource output
 	// destination. Configure runner report paths independently and stage collected
 	// artifacts into this destination at runtime. Repeated calls replace the
-	// collector while preserving the existing run context and output directory.
+	// collector while preserving the existing timeout, run context and output
+	// directory.
 	//
 	// Parameters:
 	//   - options: Optional parameters; see [WithTestingOption].
@@ -7892,6 +7933,28 @@ type CSharpAppResource interface {
 	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
 	// release.
 	WithTesting(options ...WithTestingOption) CSharpAppResource
+
+	// WithTestingTimeout configures the runtime result collector deadline for an
+	// existing test resource.
+	//
+	// Call after WithTesting or a framework helper that marks the resource for
+	// testing. The existing collector and output context are preserved. The default
+	// is no collector deadline. A finite deadline starts when the collector is
+	// scheduled, including any wait for resource completion inside it. It does not
+	// limit resource startup or execution, and overall run cancellation still
+	// applies.
+	//
+	// Parameters:
+	//   - timeout: The collector timeout in milliseconds; -1 disables the collector
+	//     deadline.
+	//
+	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	WithTestingTimeout(timeout float64) CSharpAppResource
 
 	// WithTrait adds immutable, non-sensitive metadata to a resource. Repeated
 	// names add multiple values.
@@ -10288,6 +10351,23 @@ func (s *cSharpAppResource) WithTesting(options ...WithTestingOption) CSharpAppR
 		}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTesting", reqArgs); err != nil {
+		s.setErr(err)
+	}
+	return s
+}
+
+// WithTestingTimeout configures the runtime result collector deadline for an
+// existing test resource.
+func (s *cSharpAppResource) WithTestingTimeout(timeout float64) CSharpAppResource {
+	if s.Err() != nil {
+		return s
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["timeout"] = serializeValue(timeout)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTestingTimeout", reqArgs); err != nil {
 		s.setErr(err)
 	}
 	return s
@@ -12710,7 +12790,8 @@ type ContainerRegistryResource interface {
 	// definition or ordinary runs. The context supplies a private resource output
 	// destination. Configure runner report paths independently and stage collected
 	// artifacts into this destination at runtime. Repeated calls replace the
-	// collector while preserving the existing run context and output directory.
+	// collector while preserving the existing timeout, run context and output
+	// directory.
 	//
 	// Parameters:
 	//   - options: Optional parameters; see [WithTestingOption].
@@ -12722,6 +12803,28 @@ type ContainerRegistryResource interface {
 	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
 	// release.
 	WithTesting(options ...WithTestingOption) ContainerRegistryResource
+
+	// WithTestingTimeout configures the runtime result collector deadline for an
+	// existing test resource.
+	//
+	// Call after WithTesting or a framework helper that marks the resource for
+	// testing. The existing collector and output context are preserved. The default
+	// is no collector deadline. A finite deadline starts when the collector is
+	// scheduled, including any wait for resource completion inside it. It does not
+	// limit resource startup or execution, and overall run cancellation still
+	// applies.
+	//
+	// Parameters:
+	//   - timeout: The collector timeout in milliseconds; -1 disables the collector
+	//     deadline.
+	//
+	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	WithTestingTimeout(timeout float64) ContainerRegistryResource
 
 	// WithTrait adds immutable, non-sensitive metadata to a resource. Repeated
 	// names add multiple values.
@@ -14053,6 +14156,23 @@ func (s *containerRegistryResource) WithTesting(options ...WithTestingOption) Co
 		}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTesting", reqArgs); err != nil {
+		s.setErr(err)
+	}
+	return s
+}
+
+// WithTestingTimeout configures the runtime result collector deadline for an
+// existing test resource.
+func (s *containerRegistryResource) WithTestingTimeout(timeout float64) ContainerRegistryResource {
+	if s.Err() != nil {
+		return s
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["timeout"] = serializeValue(timeout)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTestingTimeout", reqArgs); err != nil {
 		s.setErr(err)
 	}
 	return s
@@ -15399,7 +15519,8 @@ type ContainerResource interface {
 	// definition or ordinary runs. The context supplies a private resource output
 	// destination. Configure runner report paths independently and stage collected
 	// artifacts into this destination at runtime. Repeated calls replace the
-	// collector while preserving the existing run context and output directory.
+	// collector while preserving the existing timeout, run context and output
+	// directory.
 	//
 	// Parameters:
 	//   - options: Optional parameters; see [WithTestingOption].
@@ -15411,6 +15532,28 @@ type ContainerResource interface {
 	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
 	// release.
 	WithTesting(options ...WithTestingOption) ContainerResource
+
+	// WithTestingTimeout configures the runtime result collector deadline for an
+	// existing test resource.
+	//
+	// Call after WithTesting or a framework helper that marks the resource for
+	// testing. The existing collector and output context are preserved. The default
+	// is no collector deadline. A finite deadline starts when the collector is
+	// scheduled, including any wait for resource completion inside it. It does not
+	// limit resource startup or execution, and overall run cancellation still
+	// applies.
+	//
+	// Parameters:
+	//   - timeout: The collector timeout in milliseconds; -1 disables the collector
+	//     deadline.
+	//
+	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	WithTestingTimeout(timeout float64) ContainerResource
 
 	// WithTrait adds immutable, non-sensitive metadata to a resource. Repeated
 	// names add multiple values.
@@ -18168,6 +18311,23 @@ func (s *containerResource) WithTesting(options ...WithTestingOption) ContainerR
 		}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTesting", reqArgs); err != nil {
+		s.setErr(err)
+	}
+	return s
+}
+
+// WithTestingTimeout configures the runtime result collector deadline for an
+// existing test resource.
+func (s *containerResource) WithTestingTimeout(timeout float64) ContainerResource {
+	if s.Err() != nil {
+		return s
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["timeout"] = serializeValue(timeout)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTestingTimeout", reqArgs); err != nil {
 		s.setErr(err)
 	}
 	return s
@@ -21690,7 +21850,8 @@ type DotnetToolResource interface {
 	// definition or ordinary runs. The context supplies a private resource output
 	// destination. Configure runner report paths independently and stage collected
 	// artifacts into this destination at runtime. Repeated calls replace the
-	// collector while preserving the existing run context and output directory.
+	// collector while preserving the existing timeout, run context and output
+	// directory.
 	//
 	// Parameters:
 	//   - options: Optional parameters; see [WithTestingOption].
@@ -21702,6 +21863,28 @@ type DotnetToolResource interface {
 	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
 	// release.
 	WithTesting(options ...WithTestingOption) DotnetToolResource
+
+	// WithTestingTimeout configures the runtime result collector deadline for an
+	// existing test resource.
+	//
+	// Call after WithTesting or a framework helper that marks the resource for
+	// testing. The existing collector and output context are preserved. The default
+	// is no collector deadline. A finite deadline starts when the collector is
+	// scheduled, including any wait for resource completion inside it. It does not
+	// limit resource startup or execution, and overall run cancellation still
+	// applies.
+	//
+	// Parameters:
+	//   - timeout: The collector timeout in milliseconds; -1 disables the collector
+	//     deadline.
+	//
+	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	WithTestingTimeout(timeout float64) DotnetToolResource
 
 	// WithToolIgnoreExistingFeeds configures the tool to use only the specified
 	// package sources, ignoring existing NuGet configuration.
@@ -24136,6 +24319,23 @@ func (s *dotnetToolResource) WithTesting(options ...WithTestingOption) DotnetToo
 		}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTesting", reqArgs); err != nil {
+		s.setErr(err)
+	}
+	return s
+}
+
+// WithTestingTimeout configures the runtime result collector deadline for an
+// existing test resource.
+func (s *dotnetToolResource) WithTestingTimeout(timeout float64) DotnetToolResource {
+	if s.Err() != nil {
+		return s
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["timeout"] = serializeValue(timeout)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTestingTimeout", reqArgs); err != nil {
 		s.setErr(err)
 	}
 	return s
@@ -26927,7 +27127,8 @@ type ExecutableResource interface {
 	// definition or ordinary runs. The context supplies a private resource output
 	// destination. Configure runner report paths independently and stage collected
 	// artifacts into this destination at runtime. Repeated calls replace the
-	// collector while preserving the existing run context and output directory.
+	// collector while preserving the existing timeout, run context and output
+	// directory.
 	//
 	// Parameters:
 	//   - options: Optional parameters; see [WithTestingOption].
@@ -26939,6 +27140,28 @@ type ExecutableResource interface {
 	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
 	// release.
 	WithTesting(options ...WithTestingOption) ExecutableResource
+
+	// WithTestingTimeout configures the runtime result collector deadline for an
+	// existing test resource.
+	//
+	// Call after WithTesting or a framework helper that marks the resource for
+	// testing. The existing collector and output context are preserved. The default
+	// is no collector deadline. A finite deadline starts when the collector is
+	// scheduled, including any wait for resource completion inside it. It does not
+	// limit resource startup or execution, and overall run cancellation still
+	// applies.
+	//
+	// Parameters:
+	//   - timeout: The collector timeout in milliseconds; -1 disables the collector
+	//     deadline.
+	//
+	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	WithTestingTimeout(timeout float64) ExecutableResource
 
 	// WithTrait adds immutable, non-sensitive metadata to a resource. Repeated
 	// names add multiple values.
@@ -29305,6 +29528,23 @@ func (s *executableResource) WithTesting(options ...WithTestingOption) Executabl
 	return s
 }
 
+// WithTestingTimeout configures the runtime result collector deadline for an
+// existing test resource.
+func (s *executableResource) WithTestingTimeout(timeout float64) ExecutableResource {
+	if s.Err() != nil {
+		return s
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["timeout"] = serializeValue(timeout)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTestingTimeout", reqArgs); err != nil {
+		s.setErr(err)
+	}
+	return s
+}
+
 // WithTrait adds immutable, non-sensitive metadata to a resource. Repeated
 // names add multiple values.
 func (s *executableResource) WithTrait(name string, value string) ExecutableResource {
@@ -30441,7 +30681,8 @@ type ExternalServiceResource interface {
 	// definition or ordinary runs. The context supplies a private resource output
 	// destination. Configure runner report paths independently and stage collected
 	// artifacts into this destination at runtime. Repeated calls replace the
-	// collector while preserving the existing run context and output directory.
+	// collector while preserving the existing timeout, run context and output
+	// directory.
 	//
 	// Parameters:
 	//   - options: Optional parameters; see [WithTestingOption].
@@ -30453,6 +30694,28 @@ type ExternalServiceResource interface {
 	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
 	// release.
 	WithTesting(options ...WithTestingOption) ExternalServiceResource
+
+	// WithTestingTimeout configures the runtime result collector deadline for an
+	// existing test resource.
+	//
+	// Call after WithTesting or a framework helper that marks the resource for
+	// testing. The existing collector and output context are preserved. The default
+	// is no collector deadline. A finite deadline starts when the collector is
+	// scheduled, including any wait for resource completion inside it. It does not
+	// limit resource startup or execution, and overall run cancellation still
+	// applies.
+	//
+	// Parameters:
+	//   - timeout: The collector timeout in milliseconds; -1 disables the collector
+	//     deadline.
+	//
+	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	WithTestingTimeout(timeout float64) ExternalServiceResource
 
 	// WithTrait adds immutable, non-sensitive metadata to a resource. Repeated
 	// names add multiple values.
@@ -31811,6 +32074,23 @@ func (s *externalServiceResource) WithTesting(options ...WithTestingOption) Exte
 		}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTesting", reqArgs); err != nil {
+		s.setErr(err)
+	}
+	return s
+}
+
+// WithTestingTimeout configures the runtime result collector deadline for an
+// existing test resource.
+func (s *externalServiceResource) WithTestingTimeout(timeout float64) ExternalServiceResource {
+	if s.Err() != nil {
+		return s
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["timeout"] = serializeValue(timeout)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTestingTimeout", reqArgs); err != nil {
 		s.setErr(err)
 	}
 	return s
@@ -35105,7 +35385,8 @@ type ParameterResource interface {
 	// definition or ordinary runs. The context supplies a private resource output
 	// destination. Configure runner report paths independently and stage collected
 	// artifacts into this destination at runtime. Repeated calls replace the
-	// collector while preserving the existing run context and output directory.
+	// collector while preserving the existing timeout, run context and output
+	// directory.
 	//
 	// Parameters:
 	//   - options: Optional parameters; see [WithTestingOption].
@@ -35117,6 +35398,28 @@ type ParameterResource interface {
 	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
 	// release.
 	WithTesting(options ...WithTestingOption) ParameterResource
+
+	// WithTestingTimeout configures the runtime result collector deadline for an
+	// existing test resource.
+	//
+	// Call after WithTesting or a framework helper that marks the resource for
+	// testing. The existing collector and output context are preserved. The default
+	// is no collector deadline. A finite deadline starts when the collector is
+	// scheduled, including any wait for resource completion inside it. It does not
+	// limit resource startup or execution, and overall run cancellation still
+	// applies.
+	//
+	// Parameters:
+	//   - timeout: The collector timeout in milliseconds; -1 disables the collector
+	//     deadline.
+	//
+	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	WithTestingTimeout(timeout float64) ParameterResource
 
 	// WithTrait adds immutable, non-sensitive metadata to a resource. Repeated
 	// names add multiple values.
@@ -36584,6 +36887,23 @@ func (s *parameterResource) WithTesting(options ...WithTestingOption) ParameterR
 		}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTesting", reqArgs); err != nil {
+		s.setErr(err)
+	}
+	return s
+}
+
+// WithTestingTimeout configures the runtime result collector deadline for an
+// existing test resource.
+func (s *parameterResource) WithTestingTimeout(timeout float64) ParameterResource {
+	if s.Err() != nil {
+		return s
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["timeout"] = serializeValue(timeout)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTestingTimeout", reqArgs); err != nil {
 		s.setErr(err)
 	}
 	return s
@@ -38690,7 +39010,8 @@ type ProjectResource interface {
 	// definition or ordinary runs. The context supplies a private resource output
 	// destination. Configure runner report paths independently and stage collected
 	// artifacts into this destination at runtime. Repeated calls replace the
-	// collector while preserving the existing run context and output directory.
+	// collector while preserving the existing timeout, run context and output
+	// directory.
 	//
 	// Parameters:
 	//   - options: Optional parameters; see [WithTestingOption].
@@ -38702,6 +39023,28 @@ type ProjectResource interface {
 	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
 	// release.
 	WithTesting(options ...WithTestingOption) ProjectResource
+
+	// WithTestingTimeout configures the runtime result collector deadline for an
+	// existing test resource.
+	//
+	// Call after WithTesting or a framework helper that marks the resource for
+	// testing. The existing collector and output context are preserved. The default
+	// is no collector deadline. A finite deadline starts when the collector is
+	// scheduled, including any wait for resource completion inside it. It does not
+	// limit resource startup or execution, and overall run cancellation still
+	// applies.
+	//
+	// Parameters:
+	//   - timeout: The collector timeout in milliseconds; -1 disables the collector
+	//     deadline.
+	//
+	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	WithTestingTimeout(timeout float64) ProjectResource
 
 	// WithTrait adds immutable, non-sensitive metadata to a resource. Repeated
 	// names add multiple values.
@@ -41103,6 +41446,23 @@ func (s *projectResource) WithTesting(options ...WithTestingOption) ProjectResou
 	return s
 }
 
+// WithTestingTimeout configures the runtime result collector deadline for an
+// existing test resource.
+func (s *projectResource) WithTestingTimeout(timeout float64) ProjectResource {
+	if s.Err() != nil {
+		return s
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["timeout"] = serializeValue(timeout)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTestingTimeout", reqArgs); err != nil {
+		s.setErr(err)
+	}
+	return s
+}
+
 // WithTrait adds immutable, non-sensitive metadata to a resource. Repeated
 // names add multiple values.
 func (s *projectResource) WithTrait(name string, value string) ProjectResource {
@@ -42866,9 +43226,9 @@ type ResourceTestingContext interface {
 	// handles resources that already finished, and waits for late exit-code
 	// notifications. Collector completion itself is not awaited. The default token
 	// still observes CancellationToken, including command deadlines and
-	// interruption. A supplied token cannot disable run cancellation, and
-	// cancelling this wait does not cancel the shared resource-completion task or
-	// other waiters.
+	// interruption, as well as any configured collector timeout. A supplied token
+	// cannot disable this cancellation, and cancelling this wait does not cancel
+	// the shared resource-completion task or other waiters.
 	//
 	// Parameters:
 	//   - options: Optional parameters; see [WaitForCompletionAsyncOption].
@@ -45046,7 +45406,8 @@ type TestDatabaseResource interface {
 	// definition or ordinary runs. The context supplies a private resource output
 	// destination. Configure runner report paths independently and stage collected
 	// artifacts into this destination at runtime. Repeated calls replace the
-	// collector while preserving the existing run context and output directory.
+	// collector while preserving the existing timeout, run context and output
+	// directory.
 	//
 	// Parameters:
 	//   - options: Optional parameters; see [WithTestingOption].
@@ -45058,6 +45419,28 @@ type TestDatabaseResource interface {
 	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
 	// release.
 	WithTesting(options ...WithTestingOption) TestDatabaseResource
+
+	// WithTestingTimeout configures the runtime result collector deadline for an
+	// existing test resource.
+	//
+	// Call after WithTesting or a framework helper that marks the resource for
+	// testing. The existing collector and output context are preserved. The default
+	// is no collector deadline. A finite deadline starts when the collector is
+	// scheduled, including any wait for resource completion inside it. It does not
+	// limit resource startup or execution, and overall run cancellation still
+	// applies.
+	//
+	// Parameters:
+	//   - timeout: The collector timeout in milliseconds; -1 disables the collector
+	//     deadline.
+	//
+	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	WithTestingTimeout(timeout float64) TestDatabaseResource
 
 	// WithTrait adds immutable, non-sensitive metadata to a resource. Repeated
 	// names add multiple values.
@@ -47820,6 +48203,23 @@ func (s *testDatabaseResource) WithTesting(options ...WithTestingOption) TestDat
 	return s
 }
 
+// WithTestingTimeout configures the runtime result collector deadline for an
+// existing test resource.
+func (s *testDatabaseResource) WithTestingTimeout(timeout float64) TestDatabaseResource {
+	if s.Err() != nil {
+		return s
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["timeout"] = serializeValue(timeout)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTestingTimeout", reqArgs); err != nil {
+		s.setErr(err)
+	}
+	return s
+}
+
 // WithTrait adds immutable, non-sensitive metadata to a resource. Repeated
 // names add multiple values.
 func (s *testDatabaseResource) WithTrait(name string, value string) TestDatabaseResource {
@@ -49617,7 +50017,8 @@ type TestRedisResource interface {
 	// definition or ordinary runs. The context supplies a private resource output
 	// destination. Configure runner report paths independently and stage collected
 	// artifacts into this destination at runtime. Repeated calls replace the
-	// collector while preserving the existing run context and output directory.
+	// collector while preserving the existing timeout, run context and output
+	// directory.
 	//
 	// Parameters:
 	//   - options: Optional parameters; see [WithTestingOption].
@@ -49629,6 +50030,28 @@ type TestRedisResource interface {
 	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
 	// release.
 	WithTesting(options ...WithTestingOption) TestRedisResource
+
+	// WithTestingTimeout configures the runtime result collector deadline for an
+	// existing test resource.
+	//
+	// Call after WithTesting or a framework helper that marks the resource for
+	// testing. The existing collector and output context are preserved. The default
+	// is no collector deadline. A finite deadline starts when the collector is
+	// scheduled, including any wait for resource completion inside it. It does not
+	// limit resource startup or execution, and overall run cancellation still
+	// applies.
+	//
+	// Parameters:
+	//   - timeout: The collector timeout in milliseconds; -1 disables the collector
+	//     deadline.
+	//
+	// Returns: The resource builder.
+	//
+	// # Experimental
+	//
+	// Notice: This API is EXPERIMENTAL and may be changed or removed in a later
+	// release.
+	WithTestingTimeout(timeout float64) TestRedisResource
 
 	// WithTrait adds immutable, non-sensitive metadata to a resource. Repeated
 	// names add multiple values.
@@ -52860,6 +53283,23 @@ func (s *testRedisResource) WithTesting(options ...WithTestingOption) TestRedisR
 		}
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTesting", reqArgs); err != nil {
+		s.setErr(err)
+	}
+	return s
+}
+
+// WithTestingTimeout configures the runtime result collector deadline for an
+// existing test resource.
+func (s *testRedisResource) WithTestingTimeout(timeout float64) TestRedisResource {
+	if s.Err() != nil {
+		return s
+	}
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["timeout"] = serializeValue(timeout)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTestingTimeout", reqArgs); err != nil {
 		s.setErr(err)
 	}
 	return s

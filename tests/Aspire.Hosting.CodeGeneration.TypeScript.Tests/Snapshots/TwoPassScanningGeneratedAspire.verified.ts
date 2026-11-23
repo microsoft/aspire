@@ -8730,7 +8730,8 @@ export interface ResourceTestingContext {
      * process completion. It shares the run's completion tracking, handles resources that already
      * finished, and waits for late exit-code notifications. Collector completion itself is not awaited.
      * The default token still observes `CancellationToken`, including command deadlines
-     * and interruption. A supplied token cannot disable run cancellation, and cancelling this wait
+     * and interruption, as well as any configured collector timeout. A supplied token cannot disable
+     * this cancellation, and cancelling this wait
      * does not cancel the shared resource-completion task or other waiters.
      * @param options Additional options.
      * @returns True if resource execution passed; otherwise false. Published test results do not affect this value.
@@ -8780,7 +8781,8 @@ export interface ResourceTestingContextPromise extends PromiseLike<ResourceTesti
      * process completion. It shares the run's completion tracking, handles resources that already
      * finished, and waits for late exit-code notifications. Collector completion itself is not awaited.
      * The default token still observes `CancellationToken`, including command deadlines
-     * and interruption. A supplied token cannot disable run cancellation, and cancelling this wait
+     * and interruption, as well as any configured collector timeout. A supplied token cannot disable
+     * this cancellation, and cancelling this wait
      * does not cancel the shared resource-completion task or other waiters.
      * @param options Additional options.
      * @returns True if resource execution passed; otherwise false. Published test results do not affect this value.
@@ -8855,7 +8857,8 @@ class ResourceTestingContextImpl implements ResourceTestingContext {
      * process completion. It shares the run's completion tracking, handles resources that already
      * finished, and waits for late exit-code notifications. Collector completion itself is not awaited.
      * The default token still observes `CancellationToken`, including command deadlines
-     * and interruption. A supplied token cannot disable run cancellation, and cancelling this wait
+     * and interruption, as well as any configured collector timeout. A supplied token cannot disable
+     * this cancellation, and cancelling this wait
      * does not cancel the shared resource-completion task or other waiters.
      * @param options Additional options.
      * @returns True if resource execution passed; otherwise false. Published test results do not affect this value.
@@ -13736,12 +13739,24 @@ export interface ContainerRegistryResource {
      * The callback runs at runtime alongside the resource, not during model definition or ordinary runs.
      * The context supplies a private resource output destination. Configure runner report paths independently
      * and stage collected artifacts into this destination at runtime.
-     * Repeated calls replace the collector while preserving the existing run context and output directory.
+     * Repeated calls replace the collector while preserving the existing timeout, run context and output directory.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
      */
     withTesting(options?: WithTestingOptions): ContainerRegistryResourcePromise;
+    /**
+     * Configures the runtime result collector deadline for an existing test resource.
+     *
+     * Call after `WithTesting``1` or a framework helper that marks the resource for testing.
+     * The existing collector and output context are preserved. The default is no collector deadline.
+     * A finite deadline starts when the collector is scheduled, including any wait for resource completion
+     * inside it. It does not limit resource startup or execution, and overall run cancellation still applies.
+     * @param timeout The collector timeout in milliseconds; -1 disables the collector deadline.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withTestingTimeout(timeout: number): ContainerRegistryResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -14124,12 +14139,24 @@ export interface ContainerRegistryResourcePromise extends PromiseLike<ContainerR
      * The callback runs at runtime alongside the resource, not during model definition or ordinary runs.
      * The context supplies a private resource output destination. Configure runner report paths independently
      * and stage collected artifacts into this destination at runtime.
-     * Repeated calls replace the collector while preserving the existing run context and output directory.
+     * Repeated calls replace the collector while preserving the existing timeout, run context and output directory.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
      */
     withTesting(options?: WithTestingOptions): ContainerRegistryResourcePromise;
+    /**
+     * Configures the runtime result collector deadline for an existing test resource.
+     *
+     * Call after `WithTesting``1` or a framework helper that marks the resource for testing.
+     * The existing collector and output context are preserved. The default is no collector deadline.
+     * A finite deadline starts when the collector is scheduled, including any wait for resource completion
+     * inside it. It does not limit resource startup or execution, and overall run cancellation still applies.
+     * @param timeout The collector timeout in milliseconds; -1 disables the collector deadline.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withTestingTimeout(timeout: number): ContainerRegistryResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -15097,7 +15124,7 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
      * The callback runs at runtime alongside the resource, not during model definition or ordinary runs.
      * The context supplies a private resource output destination. Configure runner report paths independently
      * and stage collected artifacts into this destination at runtime.
-     * Repeated calls replace the collector while preserving the existing run context and output directory.
+     * Repeated calls replace the collector while preserving the existing timeout, run context and output directory.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -15105,6 +15132,31 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
     withTesting(options?: WithTestingOptions): ContainerRegistryResourcePromise {
         const callback = options?.callback;
         return new ContainerRegistryResourcePromiseImpl(this._withTestingInternal(callback), this._client);
+    }
+
+    /** @internal */
+    private async _withTestingTimeoutInternal(timeout: number): Promise<ContainerRegistryResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, timeout };
+        const result = await this._client.invokeCapability<ContainerRegistryResourceHandle>(
+            'Aspire.Hosting/withTestingTimeout',
+            rpcArgs
+        );
+        return new ContainerRegistryResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the runtime result collector deadline for an existing test resource.
+     *
+     * Call after `WithTesting``1` or a framework helper that marks the resource for testing.
+     * The existing collector and output context are preserved. The default is no collector deadline.
+     * A finite deadline starts when the collector is scheduled, including any wait for resource completion
+     * inside it. It does not limit resource startup or execution, and overall run cancellation still applies.
+     * @param timeout The collector timeout in milliseconds; -1 disables the collector deadline.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withTestingTimeout(timeout: number): ContainerRegistryResourcePromise {
+        return new ContainerRegistryResourcePromiseImpl(this._withTestingTimeoutInternal(timeout), this._client);
     }
 
     /** @internal */
@@ -15729,6 +15781,7 @@ const ContainerRegistryResourcePromiseImpl = $aspireCreateFluentPromiseClass<Con
     ["withDisplayOrder"]: () => ContainerRegistryResourcePromiseImpl,
     ["withTerminal"]: () => ContainerRegistryResourcePromiseImpl,
     ["withTesting"]: () => ContainerRegistryResourcePromiseImpl,
+    ["withTestingTimeout"]: () => ContainerRegistryResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => ContainerRegistryResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => ContainerRegistryResourcePromiseImpl,
     ["getResourceName"]: null,
@@ -16505,12 +16558,24 @@ export interface ContainerResource {
      * The callback runs at runtime alongside the resource, not during model definition or ordinary runs.
      * The context supplies a private resource output destination. Configure runner report paths independently
      * and stage collected artifacts into this destination at runtime.
-     * Repeated calls replace the collector while preserving the existing run context and output directory.
+     * Repeated calls replace the collector while preserving the existing timeout, run context and output directory.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
      */
     withTesting(options?: WithTestingOptions): ContainerResourcePromise;
+    /**
+     * Configures the runtime result collector deadline for an existing test resource.
+     *
+     * Call after `WithTesting``1` or a framework helper that marks the resource for testing.
+     * The existing collector and output context are preserved. The default is no collector deadline.
+     * A finite deadline starts when the collector is scheduled, including any wait for resource completion
+     * inside it. It does not limit resource startup or execution, and overall run cancellation still applies.
+     * @param timeout The collector timeout in milliseconds; -1 disables the collector deadline.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withTestingTimeout(timeout: number): ContainerResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -17389,12 +17454,24 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      * The callback runs at runtime alongside the resource, not during model definition or ordinary runs.
      * The context supplies a private resource output destination. Configure runner report paths independently
      * and stage collected artifacts into this destination at runtime.
-     * Repeated calls replace the collector while preserving the existing run context and output directory.
+     * Repeated calls replace the collector while preserving the existing timeout, run context and output directory.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
      */
     withTesting(options?: WithTestingOptions): ContainerResourcePromise;
+    /**
+     * Configures the runtime result collector deadline for an existing test resource.
+     *
+     * Call after `WithTesting``1` or a framework helper that marks the resource for testing.
+     * The existing collector and output context are preserved. The default is no collector deadline.
+     * A finite deadline starts when the collector is scheduled, including any wait for resource completion
+     * inside it. It does not limit resource startup or execution, and overall run cancellation still applies.
+     * @param timeout The collector timeout in milliseconds; -1 disables the collector deadline.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withTestingTimeout(timeout: number): ContainerResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -19791,7 +19868,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
      * The callback runs at runtime alongside the resource, not during model definition or ordinary runs.
      * The context supplies a private resource output destination. Configure runner report paths independently
      * and stage collected artifacts into this destination at runtime.
-     * Repeated calls replace the collector while preserving the existing run context and output directory.
+     * Repeated calls replace the collector while preserving the existing timeout, run context and output directory.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -19799,6 +19876,31 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     withTesting(options?: WithTestingOptions): ContainerResourcePromise {
         const callback = options?.callback;
         return new ContainerResourcePromiseImpl(this._withTestingInternal(callback), this._client);
+    }
+
+    /** @internal */
+    private async _withTestingTimeoutInternal(timeout: number): Promise<ContainerResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, timeout };
+        const result = await this._client.invokeCapability<ContainerResourceHandle>(
+            'Aspire.Hosting/withTestingTimeout',
+            rpcArgs
+        );
+        return new ContainerResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the runtime result collector deadline for an existing test resource.
+     *
+     * Call after `WithTesting``1` or a framework helper that marks the resource for testing.
+     * The existing collector and output context are preserved. The default is no collector deadline.
+     * A finite deadline starts when the collector is scheduled, including any wait for resource completion
+     * inside it. It does not limit resource startup or execution, and overall run cancellation still applies.
+     * @param timeout The collector timeout in milliseconds; -1 disables the collector deadline.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withTestingTimeout(timeout: number): ContainerResourcePromise {
+        return new ContainerResourcePromiseImpl(this._withTestingTimeoutInternal(timeout), this._client);
     }
 
     /** @internal */
@@ -20569,6 +20671,7 @@ const ContainerResourcePromiseImpl = $aspireCreateFluentPromiseClass<ContainerRe
     ["withDisplayOrder"]: () => ContainerResourcePromiseImpl,
     ["withTerminal"]: () => ContainerResourcePromiseImpl,
     ["withTesting"]: () => ContainerResourcePromiseImpl,
+    ["withTestingTimeout"]: () => ContainerResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => ContainerResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => ContainerResourcePromiseImpl,
     ["withVolume"]: () => ContainerResourcePromiseImpl,
@@ -21187,12 +21290,24 @@ export interface CSharpAppResource {
      * The callback runs at runtime alongside the resource, not during model definition or ordinary runs.
      * The context supplies a private resource output destination. Configure runner report paths independently
      * and stage collected artifacts into this destination at runtime.
-     * Repeated calls replace the collector while preserving the existing run context and output directory.
+     * Repeated calls replace the collector while preserving the existing timeout, run context and output directory.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
      */
     withTesting(options?: WithTestingOptions): CSharpAppResourcePromise;
+    /**
+     * Configures the runtime result collector deadline for an existing test resource.
+     *
+     * Call after `WithTesting``1` or a framework helper that marks the resource for testing.
+     * The existing collector and output context are preserved. The default is no collector deadline.
+     * A finite deadline starts when the collector is scheduled, including any wait for resource completion
+     * inside it. It does not limit resource startup or execution, and overall run cancellation still applies.
+     * @param timeout The collector timeout in milliseconds; -1 disables the collector deadline.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withTestingTimeout(timeout: number): CSharpAppResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -21911,12 +22026,24 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      * The callback runs at runtime alongside the resource, not during model definition or ordinary runs.
      * The context supplies a private resource output destination. Configure runner report paths independently
      * and stage collected artifacts into this destination at runtime.
-     * Repeated calls replace the collector while preserving the existing run context and output directory.
+     * Repeated calls replace the collector while preserving the existing timeout, run context and output directory.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
      */
     withTesting(options?: WithTestingOptions): CSharpAppResourcePromise;
+    /**
+     * Configures the runtime result collector deadline for an existing test resource.
+     *
+     * Call after `WithTesting``1` or a framework helper that marks the resource for testing.
+     * The existing collector and output context are preserved. The default is no collector deadline.
+     * A finite deadline starts when the collector is scheduled, including any wait for resource completion
+     * inside it. It does not limit resource startup or execution, and overall run cancellation still applies.
+     * @param timeout The collector timeout in milliseconds; -1 disables the collector deadline.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withTestingTimeout(timeout: number): CSharpAppResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -23901,7 +24028,7 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
      * The callback runs at runtime alongside the resource, not during model definition or ordinary runs.
      * The context supplies a private resource output destination. Configure runner report paths independently
      * and stage collected artifacts into this destination at runtime.
-     * Repeated calls replace the collector while preserving the existing run context and output directory.
+     * Repeated calls replace the collector while preserving the existing timeout, run context and output directory.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -23909,6 +24036,31 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     withTesting(options?: WithTestingOptions): CSharpAppResourcePromise {
         const callback = options?.callback;
         return new CSharpAppResourcePromiseImpl(this._withTestingInternal(callback), this._client);
+    }
+
+    /** @internal */
+    private async _withTestingTimeoutInternal(timeout: number): Promise<CSharpAppResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, timeout };
+        const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
+            'Aspire.Hosting/withTestingTimeout',
+            rpcArgs
+        );
+        return new CSharpAppResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the runtime result collector deadline for an existing test resource.
+     *
+     * Call after `WithTesting``1` or a framework helper that marks the resource for testing.
+     * The existing collector and output context are preserved. The default is no collector deadline.
+     * A finite deadline starts when the collector is scheduled, including any wait for resource completion
+     * inside it. It does not limit resource startup or execution, and overall run cancellation still applies.
+     * @param timeout The collector timeout in milliseconds; -1 disables the collector deadline.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withTestingTimeout(timeout: number): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromiseImpl(this._withTestingTimeoutInternal(timeout), this._client);
     }
 
     /** @internal */
@@ -24674,6 +24826,7 @@ const CSharpAppResourcePromiseImpl = $aspireCreateFluentPromiseClass<CSharpAppRe
     ["withDisplayOrder"]: () => CSharpAppResourcePromiseImpl,
     ["withTerminal"]: () => CSharpAppResourcePromiseImpl,
     ["withTesting"]: () => CSharpAppResourcePromiseImpl,
+    ["withTestingTimeout"]: () => CSharpAppResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => CSharpAppResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => CSharpAppResourcePromiseImpl,
     ["withVolume"]: () => CSharpAppResourcePromiseImpl,
@@ -25335,12 +25488,24 @@ export interface DotnetToolResource {
      * The callback runs at runtime alongside the resource, not during model definition or ordinary runs.
      * The context supplies a private resource output destination. Configure runner report paths independently
      * and stage collected artifacts into this destination at runtime.
-     * Repeated calls replace the collector while preserving the existing run context and output directory.
+     * Repeated calls replace the collector while preserving the existing timeout, run context and output directory.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
      */
     withTesting(options?: WithTestingOptions): DotnetToolResourcePromise;
+    /**
+     * Configures the runtime result collector deadline for an existing test resource.
+     *
+     * Call after `WithTesting``1` or a framework helper that marks the resource for testing.
+     * The existing collector and output context are preserved. The default is no collector deadline.
+     * A finite deadline starts when the collector is scheduled, including any wait for resource completion
+     * inside it. It does not limit resource startup or execution, and overall run cancellation still applies.
+     * @param timeout The collector timeout in milliseconds; -1 disables the collector deadline.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withTestingTimeout(timeout: number): DotnetToolResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -26095,12 +26260,24 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      * The callback runs at runtime alongside the resource, not during model definition or ordinary runs.
      * The context supplies a private resource output destination. Configure runner report paths independently
      * and stage collected artifacts into this destination at runtime.
-     * Repeated calls replace the collector while preserving the existing run context and output directory.
+     * Repeated calls replace the collector while preserving the existing timeout, run context and output directory.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
      */
     withTesting(options?: WithTestingOptions): DotnetToolResourcePromise;
+    /**
+     * Configures the runtime result collector deadline for an existing test resource.
+     *
+     * Call after `WithTesting``1` or a framework helper that marks the resource for testing.
+     * The existing collector and output context are preserved. The default is no collector deadline.
+     * A finite deadline starts when the collector is scheduled, including any wait for resource completion
+     * inside it. It does not limit resource startup or execution, and overall run cancellation still applies.
+     * @param timeout The collector timeout in milliseconds; -1 disables the collector deadline.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withTestingTimeout(timeout: number): DotnetToolResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -28200,7 +28377,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
      * The callback runs at runtime alongside the resource, not during model definition or ordinary runs.
      * The context supplies a private resource output destination. Configure runner report paths independently
      * and stage collected artifacts into this destination at runtime.
-     * Repeated calls replace the collector while preserving the existing run context and output directory.
+     * Repeated calls replace the collector while preserving the existing timeout, run context and output directory.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -28208,6 +28385,31 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     withTesting(options?: WithTestingOptions): DotnetToolResourcePromise {
         const callback = options?.callback;
         return new DotnetToolResourcePromiseImpl(this._withTestingInternal(callback), this._client);
+    }
+
+    /** @internal */
+    private async _withTestingTimeoutInternal(timeout: number): Promise<DotnetToolResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, timeout };
+        const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
+            'Aspire.Hosting/withTestingTimeout',
+            rpcArgs
+        );
+        return new DotnetToolResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the runtime result collector deadline for an existing test resource.
+     *
+     * Call after `WithTesting``1` or a framework helper that marks the resource for testing.
+     * The existing collector and output context are preserved. The default is no collector deadline.
+     * A finite deadline starts when the collector is scheduled, including any wait for resource completion
+     * inside it. It does not limit resource startup or execution, and overall run cancellation still applies.
+     * @param timeout The collector timeout in milliseconds; -1 disables the collector deadline.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withTestingTimeout(timeout: number): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromiseImpl(this._withTestingTimeoutInternal(timeout), this._client);
     }
 
     /** @internal */
@@ -28960,6 +29162,7 @@ const DotnetToolResourcePromiseImpl = $aspireCreateFluentPromiseClass<DotnetTool
     ["withDisplayOrder"]: () => DotnetToolResourcePromiseImpl,
     ["withTerminal"]: () => DotnetToolResourcePromiseImpl,
     ["withTesting"]: () => DotnetToolResourcePromiseImpl,
+    ["withTestingTimeout"]: () => DotnetToolResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => DotnetToolResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => DotnetToolResourcePromiseImpl,
     ["withVolume"]: () => DotnetToolResourcePromiseImpl,
@@ -29588,12 +29791,24 @@ export interface ExecutableResource {
      * The callback runs at runtime alongside the resource, not during model definition or ordinary runs.
      * The context supplies a private resource output destination. Configure runner report paths independently
      * and stage collected artifacts into this destination at runtime.
-     * Repeated calls replace the collector while preserving the existing run context and output directory.
+     * Repeated calls replace the collector while preserving the existing timeout, run context and output directory.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
      */
     withTesting(options?: WithTestingOptions): ExecutableResourcePromise;
+    /**
+     * Configures the runtime result collector deadline for an existing test resource.
+     *
+     * Call after `WithTesting``1` or a framework helper that marks the resource for testing.
+     * The existing collector and output context are preserved. The default is no collector deadline.
+     * A finite deadline starts when the collector is scheduled, including any wait for resource completion
+     * inside it. It does not limit resource startup or execution, and overall run cancellation still applies.
+     * @param timeout The collector timeout in milliseconds; -1 disables the collector deadline.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withTestingTimeout(timeout: number): ExecutableResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -30309,12 +30524,24 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      * The callback runs at runtime alongside the resource, not during model definition or ordinary runs.
      * The context supplies a private resource output destination. Configure runner report paths independently
      * and stage collected artifacts into this destination at runtime.
-     * Repeated calls replace the collector while preserving the existing run context and output directory.
+     * Repeated calls replace the collector while preserving the existing timeout, run context and output directory.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
      */
     withTesting(options?: WithTestingOptions): ExecutableResourcePromise;
+    /**
+     * Configures the runtime result collector deadline for an existing test resource.
+     *
+     * Call after `WithTesting``1` or a framework helper that marks the resource for testing.
+     * The existing collector and output context are preserved. The default is no collector deadline.
+     * A finite deadline starts when the collector is scheduled, including any wait for resource completion
+     * inside it. It does not limit resource startup or execution, and overall run cancellation still applies.
+     * @param timeout The collector timeout in milliseconds; -1 disables the collector deadline.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withTestingTimeout(timeout: number): ExecutableResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -32304,7 +32531,7 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
      * The callback runs at runtime alongside the resource, not during model definition or ordinary runs.
      * The context supplies a private resource output destination. Configure runner report paths independently
      * and stage collected artifacts into this destination at runtime.
-     * Repeated calls replace the collector while preserving the existing run context and output directory.
+     * Repeated calls replace the collector while preserving the existing timeout, run context and output directory.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -32312,6 +32539,31 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     withTesting(options?: WithTestingOptions): ExecutableResourcePromise {
         const callback = options?.callback;
         return new ExecutableResourcePromiseImpl(this._withTestingInternal(callback), this._client);
+    }
+
+    /** @internal */
+    private async _withTestingTimeoutInternal(timeout: number): Promise<ExecutableResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, timeout };
+        const result = await this._client.invokeCapability<ExecutableResourceHandle>(
+            'Aspire.Hosting/withTestingTimeout',
+            rpcArgs
+        );
+        return new ExecutableResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the runtime result collector deadline for an existing test resource.
+     *
+     * Call after `WithTesting``1` or a framework helper that marks the resource for testing.
+     * The existing collector and output context are preserved. The default is no collector deadline.
+     * A finite deadline starts when the collector is scheduled, including any wait for resource completion
+     * inside it. It does not limit resource startup or execution, and overall run cancellation still applies.
+     * @param timeout The collector timeout in milliseconds; -1 disables the collector deadline.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withTestingTimeout(timeout: number): ExecutableResourcePromise {
+        return new ExecutableResourcePromiseImpl(this._withTestingTimeoutInternal(timeout), this._client);
     }
 
     /** @internal */
@@ -33058,6 +33310,7 @@ const ExecutableResourcePromiseImpl = $aspireCreateFluentPromiseClass<Executable
     ["withDisplayOrder"]: () => ExecutableResourcePromiseImpl,
     ["withTerminal"]: () => ExecutableResourcePromiseImpl,
     ["withTesting"]: () => ExecutableResourcePromiseImpl,
+    ["withTestingTimeout"]: () => ExecutableResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => ExecutableResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => ExecutableResourcePromiseImpl,
     ["withVolume"]: () => ExecutableResourcePromiseImpl,
@@ -33370,12 +33623,24 @@ export interface ExternalServiceResource {
      * The callback runs at runtime alongside the resource, not during model definition or ordinary runs.
      * The context supplies a private resource output destination. Configure runner report paths independently
      * and stage collected artifacts into this destination at runtime.
-     * Repeated calls replace the collector while preserving the existing run context and output directory.
+     * Repeated calls replace the collector while preserving the existing timeout, run context and output directory.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
      */
     withTesting(options?: WithTestingOptions): ExternalServiceResourcePromise;
+    /**
+     * Configures the runtime result collector deadline for an existing test resource.
+     *
+     * Call after `WithTesting``1` or a framework helper that marks the resource for testing.
+     * The existing collector and output context are preserved. The default is no collector deadline.
+     * A finite deadline starts when the collector is scheduled, including any wait for resource completion
+     * inside it. It does not limit resource startup or execution, and overall run cancellation still applies.
+     * @param timeout The collector timeout in milliseconds; -1 disables the collector deadline.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withTestingTimeout(timeout: number): ExternalServiceResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -33763,12 +34028,24 @@ export interface ExternalServiceResourcePromise extends PromiseLike<ExternalServ
      * The callback runs at runtime alongside the resource, not during model definition or ordinary runs.
      * The context supplies a private resource output destination. Configure runner report paths independently
      * and stage collected artifacts into this destination at runtime.
-     * Repeated calls replace the collector while preserving the existing run context and output directory.
+     * Repeated calls replace the collector while preserving the existing timeout, run context and output directory.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
      */
     withTesting(options?: WithTestingOptions): ExternalServiceResourcePromise;
+    /**
+     * Configures the runtime result collector deadline for an existing test resource.
+     *
+     * Call after `WithTesting``1` or a framework helper that marks the resource for testing.
+     * The existing collector and output context are preserved. The default is no collector deadline.
+     * A finite deadline starts when the collector is scheduled, including any wait for resource completion
+     * inside it. It does not limit resource startup or execution, and overall run cancellation still applies.
+     * @param timeout The collector timeout in milliseconds; -1 disables the collector deadline.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withTestingTimeout(timeout: number): ExternalServiceResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -34760,7 +35037,7 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
      * The callback runs at runtime alongside the resource, not during model definition or ordinary runs.
      * The context supplies a private resource output destination. Configure runner report paths independently
      * and stage collected artifacts into this destination at runtime.
-     * Repeated calls replace the collector while preserving the existing run context and output directory.
+     * Repeated calls replace the collector while preserving the existing timeout, run context and output directory.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -34768,6 +35045,31 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
     withTesting(options?: WithTestingOptions): ExternalServiceResourcePromise {
         const callback = options?.callback;
         return new ExternalServiceResourcePromiseImpl(this._withTestingInternal(callback), this._client);
+    }
+
+    /** @internal */
+    private async _withTestingTimeoutInternal(timeout: number): Promise<ExternalServiceResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, timeout };
+        const result = await this._client.invokeCapability<ExternalServiceResourceHandle>(
+            'Aspire.Hosting/withTestingTimeout',
+            rpcArgs
+        );
+        return new ExternalServiceResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the runtime result collector deadline for an existing test resource.
+     *
+     * Call after `WithTesting``1` or a framework helper that marks the resource for testing.
+     * The existing collector and output context are preserved. The default is no collector deadline.
+     * A finite deadline starts when the collector is scheduled, including any wait for resource completion
+     * inside it. It does not limit resource startup or execution, and overall run cancellation still applies.
+     * @param timeout The collector timeout in milliseconds; -1 disables the collector deadline.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withTestingTimeout(timeout: number): ExternalServiceResourcePromise {
+        return new ExternalServiceResourcePromiseImpl(this._withTestingTimeoutInternal(timeout), this._client);
     }
 
     /** @internal */
@@ -35393,6 +35695,7 @@ const ExternalServiceResourcePromiseImpl = $aspireCreateFluentPromiseClass<Exter
     ["withDisplayOrder"]: () => ExternalServiceResourcePromiseImpl,
     ["withTerminal"]: () => ExternalServiceResourcePromiseImpl,
     ["withTesting"]: () => ExternalServiceResourcePromiseImpl,
+    ["withTestingTimeout"]: () => ExternalServiceResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => ExternalServiceResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => ExternalServiceResourcePromiseImpl,
     ["getResourceName"]: null,
@@ -35725,12 +36028,24 @@ export interface ParameterResource {
      * The callback runs at runtime alongside the resource, not during model definition or ordinary runs.
      * The context supplies a private resource output destination. Configure runner report paths independently
      * and stage collected artifacts into this destination at runtime.
-     * Repeated calls replace the collector while preserving the existing run context and output directory.
+     * Repeated calls replace the collector while preserving the existing timeout, run context and output directory.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
      */
     withTesting(options?: WithTestingOptions): ParameterResourcePromise;
+    /**
+     * Configures the runtime result collector deadline for an existing test resource.
+     *
+     * Call after `WithTesting``1` or a framework helper that marks the resource for testing.
+     * The existing collector and output context are preserved. The default is no collector deadline.
+     * A finite deadline starts when the collector is scheduled, including any wait for resource completion
+     * inside it. It does not limit resource startup or execution, and overall run cancellation still applies.
+     * @param timeout The collector timeout in milliseconds; -1 disables the collector deadline.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withTestingTimeout(timeout: number): ParameterResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -36160,12 +36475,24 @@ export interface ParameterResourcePromise extends PromiseLike<ParameterResource>
      * The callback runs at runtime alongside the resource, not during model definition or ordinary runs.
      * The context supplies a private resource output destination. Configure runner report paths independently
      * and stage collected artifacts into this destination at runtime.
-     * Repeated calls replace the collector while preserving the existing run context and output directory.
+     * Repeated calls replace the collector while preserving the existing timeout, run context and output directory.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
      */
     withTesting(options?: WithTestingOptions): ParameterResourcePromise;
+    /**
+     * Configures the runtime result collector deadline for an existing test resource.
+     *
+     * Call after `WithTesting``1` or a framework helper that marks the resource for testing.
+     * The existing collector and output context are preserved. The default is no collector deadline.
+     * A finite deadline starts when the collector is scheduled, including any wait for resource completion
+     * inside it. It does not limit resource startup or execution, and overall run cancellation still applies.
+     * @param timeout The collector timeout in milliseconds; -1 disables the collector deadline.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withTestingTimeout(timeout: number): ParameterResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -37237,7 +37564,7 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
      * The callback runs at runtime alongside the resource, not during model definition or ordinary runs.
      * The context supplies a private resource output destination. Configure runner report paths independently
      * and stage collected artifacts into this destination at runtime.
-     * Repeated calls replace the collector while preserving the existing run context and output directory.
+     * Repeated calls replace the collector while preserving the existing timeout, run context and output directory.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -37245,6 +37572,31 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
     withTesting(options?: WithTestingOptions): ParameterResourcePromise {
         const callback = options?.callback;
         return new ParameterResourcePromiseImpl(this._withTestingInternal(callback), this._client);
+    }
+
+    /** @internal */
+    private async _withTestingTimeoutInternal(timeout: number): Promise<ParameterResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, timeout };
+        const result = await this._client.invokeCapability<ParameterResourceHandle>(
+            'Aspire.Hosting/withTestingTimeout',
+            rpcArgs
+        );
+        return new ParameterResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the runtime result collector deadline for an existing test resource.
+     *
+     * Call after `WithTesting``1` or a framework helper that marks the resource for testing.
+     * The existing collector and output context are preserved. The default is no collector deadline.
+     * A finite deadline starts when the collector is scheduled, including any wait for resource completion
+     * inside it. It does not limit resource startup or execution, and overall run cancellation still applies.
+     * @param timeout The collector timeout in milliseconds; -1 disables the collector deadline.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withTestingTimeout(timeout: number): ParameterResourcePromise {
+        return new ParameterResourcePromiseImpl(this._withTestingTimeoutInternal(timeout), this._client);
     }
 
     /** @internal */
@@ -37910,6 +38262,7 @@ const ParameterResourcePromiseImpl = $aspireCreateFluentPromiseClass<ParameterRe
     ["withDisplayOrder"]: () => ParameterResourcePromiseImpl,
     ["withTerminal"]: () => ParameterResourcePromiseImpl,
     ["withTesting"]: () => ParameterResourcePromiseImpl,
+    ["withTestingTimeout"]: () => ParameterResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => ParameterResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => ParameterResourcePromiseImpl,
     ["getResourceName"]: null,
@@ -38527,12 +38880,24 @@ export interface ProjectResource {
      * The callback runs at runtime alongside the resource, not during model definition or ordinary runs.
      * The context supplies a private resource output destination. Configure runner report paths independently
      * and stage collected artifacts into this destination at runtime.
-     * Repeated calls replace the collector while preserving the existing run context and output directory.
+     * Repeated calls replace the collector while preserving the existing timeout, run context and output directory.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
      */
     withTesting(options?: WithTestingOptions): ProjectResourcePromise;
+    /**
+     * Configures the runtime result collector deadline for an existing test resource.
+     *
+     * Call after `WithTesting``1` or a framework helper that marks the resource for testing.
+     * The existing collector and output context are preserved. The default is no collector deadline.
+     * A finite deadline starts when the collector is scheduled, including any wait for resource completion
+     * inside it. It does not limit resource startup or execution, and overall run cancellation still applies.
+     * @param timeout The collector timeout in milliseconds; -1 disables the collector deadline.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withTestingTimeout(timeout: number): ProjectResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -39251,12 +39616,24 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      * The callback runs at runtime alongside the resource, not during model definition or ordinary runs.
      * The context supplies a private resource output destination. Configure runner report paths independently
      * and stage collected artifacts into this destination at runtime.
-     * Repeated calls replace the collector while preserving the existing run context and output directory.
+     * Repeated calls replace the collector while preserving the existing timeout, run context and output directory.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
      */
     withTesting(options?: WithTestingOptions): ProjectResourcePromise;
+    /**
+     * Configures the runtime result collector deadline for an existing test resource.
+     *
+     * Call after `WithTesting``1` or a framework helper that marks the resource for testing.
+     * The existing collector and output context are preserved. The default is no collector deadline.
+     * A finite deadline starts when the collector is scheduled, including any wait for resource completion
+     * inside it. It does not limit resource startup or execution, and overall run cancellation still applies.
+     * @param timeout The collector timeout in milliseconds; -1 disables the collector deadline.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withTestingTimeout(timeout: number): ProjectResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -41242,7 +41619,7 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
      * The callback runs at runtime alongside the resource, not during model definition or ordinary runs.
      * The context supplies a private resource output destination. Configure runner report paths independently
      * and stage collected artifacts into this destination at runtime.
-     * Repeated calls replace the collector while preserving the existing run context and output directory.
+     * Repeated calls replace the collector while preserving the existing timeout, run context and output directory.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -41250,6 +41627,31 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     withTesting(options?: WithTestingOptions): ProjectResourcePromise {
         const callback = options?.callback;
         return new ProjectResourcePromiseImpl(this._withTestingInternal(callback), this._client);
+    }
+
+    /** @internal */
+    private async _withTestingTimeoutInternal(timeout: number): Promise<ProjectResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, timeout };
+        const result = await this._client.invokeCapability<ProjectResourceHandle>(
+            'Aspire.Hosting/withTestingTimeout',
+            rpcArgs
+        );
+        return new ProjectResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the runtime result collector deadline for an existing test resource.
+     *
+     * Call after `WithTesting``1` or a framework helper that marks the resource for testing.
+     * The existing collector and output context are preserved. The default is no collector deadline.
+     * A finite deadline starts when the collector is scheduled, including any wait for resource completion
+     * inside it. It does not limit resource startup or execution, and overall run cancellation still applies.
+     * @param timeout The collector timeout in milliseconds; -1 disables the collector deadline.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withTestingTimeout(timeout: number): ProjectResourcePromise {
+        return new ProjectResourcePromiseImpl(this._withTestingTimeoutInternal(timeout), this._client);
     }
 
     /** @internal */
@@ -42015,6 +42417,7 @@ const ProjectResourcePromiseImpl = $aspireCreateFluentPromiseClass<ProjectResour
     ["withDisplayOrder"]: () => ProjectResourcePromiseImpl,
     ["withTerminal"]: () => ProjectResourcePromiseImpl,
     ["withTesting"]: () => ProjectResourcePromiseImpl,
+    ["withTestingTimeout"]: () => ProjectResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => ProjectResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => ProjectResourcePromiseImpl,
     ["withVolume"]: () => ProjectResourcePromiseImpl,
@@ -42795,12 +43198,24 @@ export interface TestDatabaseResource {
      * The callback runs at runtime alongside the resource, not during model definition or ordinary runs.
      * The context supplies a private resource output destination. Configure runner report paths independently
      * and stage collected artifacts into this destination at runtime.
-     * Repeated calls replace the collector while preserving the existing run context and output directory.
+     * Repeated calls replace the collector while preserving the existing timeout, run context and output directory.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
      */
     withTesting(options?: WithTestingOptions): TestDatabaseResourcePromise;
+    /**
+     * Configures the runtime result collector deadline for an existing test resource.
+     *
+     * Call after `WithTesting``1` or a framework helper that marks the resource for testing.
+     * The existing collector and output context are preserved. The default is no collector deadline.
+     * A finite deadline starts when the collector is scheduled, including any wait for resource completion
+     * inside it. It does not limit resource startup or execution, and overall run cancellation still applies.
+     * @param timeout The collector timeout in milliseconds; -1 disables the collector deadline.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withTestingTimeout(timeout: number): TestDatabaseResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -43679,12 +44094,24 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      * The callback runs at runtime alongside the resource, not during model definition or ordinary runs.
      * The context supplies a private resource output destination. Configure runner report paths independently
      * and stage collected artifacts into this destination at runtime.
-     * Repeated calls replace the collector while preserving the existing run context and output directory.
+     * Repeated calls replace the collector while preserving the existing timeout, run context and output directory.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
      */
     withTesting(options?: WithTestingOptions): TestDatabaseResourcePromise;
+    /**
+     * Configures the runtime result collector deadline for an existing test resource.
+     *
+     * Call after `WithTesting``1` or a framework helper that marks the resource for testing.
+     * The existing collector and output context are preserved. The default is no collector deadline.
+     * A finite deadline starts when the collector is scheduled, including any wait for resource completion
+     * inside it. It does not limit resource startup or execution, and overall run cancellation still applies.
+     * @param timeout The collector timeout in milliseconds; -1 disables the collector deadline.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withTestingTimeout(timeout: number): TestDatabaseResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -46080,7 +46507,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
      * The callback runs at runtime alongside the resource, not during model definition or ordinary runs.
      * The context supplies a private resource output destination. Configure runner report paths independently
      * and stage collected artifacts into this destination at runtime.
-     * Repeated calls replace the collector while preserving the existing run context and output directory.
+     * Repeated calls replace the collector while preserving the existing timeout, run context and output directory.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -46088,6 +46515,31 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     withTesting(options?: WithTestingOptions): TestDatabaseResourcePromise {
         const callback = options?.callback;
         return new TestDatabaseResourcePromiseImpl(this._withTestingInternal(callback), this._client);
+    }
+
+    /** @internal */
+    private async _withTestingTimeoutInternal(timeout: number): Promise<TestDatabaseResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, timeout };
+        const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
+            'Aspire.Hosting/withTestingTimeout',
+            rpcArgs
+        );
+        return new TestDatabaseResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the runtime result collector deadline for an existing test resource.
+     *
+     * Call after `WithTesting``1` or a framework helper that marks the resource for testing.
+     * The existing collector and output context are preserved. The default is no collector deadline.
+     * A finite deadline starts when the collector is scheduled, including any wait for resource completion
+     * inside it. It does not limit resource startup or execution, and overall run cancellation still applies.
+     * @param timeout The collector timeout in milliseconds; -1 disables the collector deadline.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withTestingTimeout(timeout: number): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromiseImpl(this._withTestingTimeoutInternal(timeout), this._client);
     }
 
     /** @internal */
@@ -46858,6 +47310,7 @@ const TestDatabaseResourcePromiseImpl = $aspireCreateFluentPromiseClass<TestData
     ["withDisplayOrder"]: () => TestDatabaseResourcePromiseImpl,
     ["withTerminal"]: () => TestDatabaseResourcePromiseImpl,
     ["withTesting"]: () => TestDatabaseResourcePromiseImpl,
+    ["withTestingTimeout"]: () => TestDatabaseResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => TestDatabaseResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => TestDatabaseResourcePromiseImpl,
     ["withVolume"]: () => TestDatabaseResourcePromiseImpl,
@@ -47653,12 +48106,24 @@ export interface TestRedisResource {
      * The callback runs at runtime alongside the resource, not during model definition or ordinary runs.
      * The context supplies a private resource output destination. Configure runner report paths independently
      * and stage collected artifacts into this destination at runtime.
-     * Repeated calls replace the collector while preserving the existing run context and output directory.
+     * Repeated calls replace the collector while preserving the existing timeout, run context and output directory.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
      */
     withTesting(options?: WithTestingOptions): TestRedisResourcePromise;
+    /**
+     * Configures the runtime result collector deadline for an existing test resource.
+     *
+     * Call after `WithTesting``1` or a framework helper that marks the resource for testing.
+     * The existing collector and output context are preserved. The default is no collector deadline.
+     * A finite deadline starts when the collector is scheduled, including any wait for resource completion
+     * inside it. It does not limit resource startup or execution, and overall run cancellation still applies.
+     * @param timeout The collector timeout in milliseconds; -1 disables the collector deadline.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withTestingTimeout(timeout: number): TestRedisResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -48621,12 +49086,24 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      * The callback runs at runtime alongside the resource, not during model definition or ordinary runs.
      * The context supplies a private resource output destination. Configure runner report paths independently
      * and stage collected artifacts into this destination at runtime.
-     * Repeated calls replace the collector while preserving the existing run context and output directory.
+     * Repeated calls replace the collector while preserving the existing timeout, run context and output directory.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
      */
     withTesting(options?: WithTestingOptions): TestRedisResourcePromise;
+    /**
+     * Configures the runtime result collector deadline for an existing test resource.
+     *
+     * Call after `WithTesting``1` or a framework helper that marks the resource for testing.
+     * The existing collector and output context are preserved. The default is no collector deadline.
+     * A finite deadline starts when the collector is scheduled, including any wait for resource completion
+     * inside it. It does not limit resource startup or execution, and overall run cancellation still applies.
+     * @param timeout The collector timeout in milliseconds; -1 disables the collector deadline.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withTestingTimeout(timeout: number): TestRedisResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -51126,7 +51603,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
      * The callback runs at runtime alongside the resource, not during model definition or ordinary runs.
      * The context supplies a private resource output destination. Configure runner report paths independently
      * and stage collected artifacts into this destination at runtime.
-     * Repeated calls replace the collector while preserving the existing run context and output directory.
+     * Repeated calls replace the collector while preserving the existing timeout, run context and output directory.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -51134,6 +51611,31 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     withTesting(options?: WithTestingOptions): TestRedisResourcePromise {
         const callback = options?.callback;
         return new TestRedisResourcePromiseImpl(this._withTestingInternal(callback), this._client);
+    }
+
+    /** @internal */
+    private async _withTestingTimeoutInternal(timeout: number): Promise<TestRedisResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, timeout };
+        const result = await this._client.invokeCapability<TestRedisResourceHandle>(
+            'Aspire.Hosting/withTestingTimeout',
+            rpcArgs
+        );
+        return new TestRedisResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the runtime result collector deadline for an existing test resource.
+     *
+     * Call after `WithTesting``1` or a framework helper that marks the resource for testing.
+     * The existing collector and output context are preserved. The default is no collector deadline.
+     * A finite deadline starts when the collector is scheduled, including any wait for resource completion
+     * inside it. It does not limit resource startup or execution, and overall run cancellation still applies.
+     * @param timeout The collector timeout in milliseconds; -1 disables the collector deadline.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withTestingTimeout(timeout: number): TestRedisResourcePromise {
+        return new TestRedisResourcePromiseImpl(this._withTestingTimeoutInternal(timeout), this._client);
     }
 
     /** @internal */
@@ -52181,6 +52683,7 @@ const TestRedisResourcePromiseImpl = $aspireCreateFluentPromiseClass<TestRedisRe
     ["withDisplayOrder"]: () => TestRedisResourcePromiseImpl,
     ["withTerminal"]: () => TestRedisResourcePromiseImpl,
     ["withTesting"]: () => TestRedisResourcePromiseImpl,
+    ["withTestingTimeout"]: () => TestRedisResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => TestRedisResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => TestRedisResourcePromiseImpl,
     ["withVolume"]: () => TestRedisResourcePromiseImpl,
@@ -52976,12 +53479,24 @@ export interface TestVaultResource {
      * The callback runs at runtime alongside the resource, not during model definition or ordinary runs.
      * The context supplies a private resource output destination. Configure runner report paths independently
      * and stage collected artifacts into this destination at runtime.
-     * Repeated calls replace the collector while preserving the existing run context and output directory.
+     * Repeated calls replace the collector while preserving the existing timeout, run context and output directory.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
      */
     withTesting(options?: WithTestingOptions): TestVaultResourcePromise;
+    /**
+     * Configures the runtime result collector deadline for an existing test resource.
+     *
+     * Call after `WithTesting``1` or a framework helper that marks the resource for testing.
+     * The existing collector and output context are preserved. The default is no collector deadline.
+     * A finite deadline starts when the collector is scheduled, including any wait for resource completion
+     * inside it. It does not limit resource startup or execution, and overall run cancellation still applies.
+     * @param timeout The collector timeout in milliseconds; -1 disables the collector deadline.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withTestingTimeout(timeout: number): TestVaultResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -53862,12 +54377,24 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      * The callback runs at runtime alongside the resource, not during model definition or ordinary runs.
      * The context supplies a private resource output destination. Configure runner report paths independently
      * and stage collected artifacts into this destination at runtime.
-     * Repeated calls replace the collector while preserving the existing run context and output directory.
+     * Repeated calls replace the collector while preserving the existing timeout, run context and output directory.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
      */
     withTesting(options?: WithTestingOptions): TestVaultResourcePromise;
+    /**
+     * Configures the runtime result collector deadline for an existing test resource.
+     *
+     * Call after `WithTesting``1` or a framework helper that marks the resource for testing.
+     * The existing collector and output context are preserved. The default is no collector deadline.
+     * A finite deadline starts when the collector is scheduled, including any wait for resource completion
+     * inside it. It does not limit resource startup or execution, and overall run cancellation still applies.
+     * @param timeout The collector timeout in milliseconds; -1 disables the collector deadline.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withTestingTimeout(timeout: number): TestVaultResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -56265,7 +56792,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
      * The callback runs at runtime alongside the resource, not during model definition or ordinary runs.
      * The context supplies a private resource output destination. Configure runner report paths independently
      * and stage collected artifacts into this destination at runtime.
-     * Repeated calls replace the collector while preserving the existing run context and output directory.
+     * Repeated calls replace the collector while preserving the existing timeout, run context and output directory.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -56273,6 +56800,31 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     withTesting(options?: WithTestingOptions): TestVaultResourcePromise {
         const callback = options?.callback;
         return new TestVaultResourcePromiseImpl(this._withTestingInternal(callback), this._client);
+    }
+
+    /** @internal */
+    private async _withTestingTimeoutInternal(timeout: number): Promise<TestVaultResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, timeout };
+        const result = await this._client.invokeCapability<TestVaultResourceHandle>(
+            'Aspire.Hosting/withTestingTimeout',
+            rpcArgs
+        );
+        return new TestVaultResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the runtime result collector deadline for an existing test resource.
+     *
+     * Call after `WithTesting``1` or a framework helper that marks the resource for testing.
+     * The existing collector and output context are preserved. The default is no collector deadline.
+     * A finite deadline starts when the collector is scheduled, including any wait for resource completion
+     * inside it. It does not limit resource startup or execution, and overall run cancellation still applies.
+     * @param timeout The collector timeout in milliseconds; -1 disables the collector deadline.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withTestingTimeout(timeout: number): TestVaultResourcePromise {
+        return new TestVaultResourcePromiseImpl(this._withTestingTimeoutInternal(timeout), this._client);
     }
 
     /** @internal */
@@ -57058,6 +57610,7 @@ const TestVaultResourcePromiseImpl = $aspireCreateFluentPromiseClass<TestVaultRe
     ["withDisplayOrder"]: () => TestVaultResourcePromiseImpl,
     ["withTerminal"]: () => TestVaultResourcePromiseImpl,
     ["withTesting"]: () => TestVaultResourcePromiseImpl,
+    ["withTestingTimeout"]: () => TestVaultResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => TestVaultResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => TestVaultResourcePromiseImpl,
     ["withVolume"]: () => TestVaultResourcePromiseImpl,
@@ -57650,12 +58203,24 @@ export interface Resource {
      * The callback runs at runtime alongside the resource, not during model definition or ordinary runs.
      * The context supplies a private resource output destination. Configure runner report paths independently
      * and stage collected artifacts into this destination at runtime.
-     * Repeated calls replace the collector while preserving the existing run context and output directory.
+     * Repeated calls replace the collector while preserving the existing timeout, run context and output directory.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
      */
     withTesting(options?: WithTestingOptions): ResourcePromise;
+    /**
+     * Configures the runtime result collector deadline for an existing test resource.
+     *
+     * Call after `WithTesting``1` or a framework helper that marks the resource for testing.
+     * The existing collector and output context are preserved. The default is no collector deadline.
+     * A finite deadline starts when the collector is scheduled, including any wait for resource completion
+     * inside it. It does not limit resource startup or execution, and overall run cancellation still applies.
+     * @param timeout The collector timeout in milliseconds; -1 disables the collector deadline.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withTestingTimeout(timeout: number): ResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -58038,12 +58603,24 @@ export interface ResourcePromise extends PromiseLike<Resource> {
      * The callback runs at runtime alongside the resource, not during model definition or ordinary runs.
      * The context supplies a private resource output destination. Configure runner report paths independently
      * and stage collected artifacts into this destination at runtime.
-     * Repeated calls replace the collector while preserving the existing run context and output directory.
+     * Repeated calls replace the collector while preserving the existing timeout, run context and output directory.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
      */
     withTesting(options?: WithTestingOptions): ResourcePromise;
+    /**
+     * Configures the runtime result collector deadline for an existing test resource.
+     *
+     * Call after `WithTesting``1` or a framework helper that marks the resource for testing.
+     * The existing collector and output context are preserved. The default is no collector deadline.
+     * A finite deadline starts when the collector is scheduled, including any wait for resource completion
+     * inside it. It does not limit resource startup or execution, and overall run cancellation still applies.
+     * @param timeout The collector timeout in milliseconds; -1 disables the collector deadline.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withTestingTimeout(timeout: number): ResourcePromise;
     /**
      * Adds a pipeline step to the resource that will be executed during deployment.
      * @param stepName The unique name of the pipeline step.
@@ -59012,7 +59589,7 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
      * The callback runs at runtime alongside the resource, not during model definition or ordinary runs.
      * The context supplies a private resource output destination. Configure runner report paths independently
      * and stage collected artifacts into this destination at runtime.
-     * Repeated calls replace the collector while preserving the existing run context and output directory.
+     * Repeated calls replace the collector while preserving the existing timeout, run context and output directory.
      * @param options Additional options.
      * @returns The resource builder.
      * @experimental
@@ -59020,6 +59597,31 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
     withTesting(options?: WithTestingOptions): ResourcePromise {
         const callback = options?.callback;
         return new ResourcePromiseImpl(this._withTestingInternal(callback), this._client);
+    }
+
+    /** @internal */
+    private async _withTestingTimeoutInternal(timeout: number): Promise<Resource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, timeout };
+        const result = await this._client.invokeCapability<IResourceHandle>(
+            'Aspire.Hosting/withTestingTimeout',
+            rpcArgs
+        );
+        return new ResourceImpl(result, this._client);
+    }
+
+    /**
+     * Configures the runtime result collector deadline for an existing test resource.
+     *
+     * Call after `WithTesting``1` or a framework helper that marks the resource for testing.
+     * The existing collector and output context are preserved. The default is no collector deadline.
+     * A finite deadline starts when the collector is scheduled, including any wait for resource completion
+     * inside it. It does not limit resource startup or execution, and overall run cancellation still applies.
+     * @param timeout The collector timeout in milliseconds; -1 disables the collector deadline.
+     * @returns The resource builder.
+     * @experimental
+     */
+    withTestingTimeout(timeout: number): ResourcePromise {
+        return new ResourcePromiseImpl(this._withTestingTimeoutInternal(timeout), this._client);
     }
 
     /** @internal */
@@ -59644,6 +60246,7 @@ const ResourcePromiseImpl = $aspireCreateFluentPromiseClass<Resource, ResourcePr
     ["withDisplayOrder"]: () => ResourcePromiseImpl,
     ["withTerminal"]: () => ResourcePromiseImpl,
     ["withTesting"]: () => ResourcePromiseImpl,
+    ["withTestingTimeout"]: () => ResourcePromiseImpl,
     ["withPipelineStepFactory"]: () => ResourcePromiseImpl,
     ["withPipelineConfiguration"]: () => ResourcePromiseImpl,
     ["getResourceName"]: null,

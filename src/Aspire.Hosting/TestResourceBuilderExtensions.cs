@@ -27,6 +27,7 @@ public static class TestResourceBuilderExtensions
     /// The callback does not run during model definition. It starts alongside resource execution and may
     /// use <see cref="ResourceTestingContext.WaitForCompletionAsync"/> before harvesting final artifacts.
     /// Remote collectors use test-run cancellation rather than the ordinary remote callback timeout.
+    /// <see cref="TestingAnnotation.Timeout"/> can additionally bound collection.
     /// The command waits for all marked resources, including their replicas, and all collectors.
     /// It then shuts down the application unless <c>--keep-alive</c> was requested.
     /// A terminal state with exit code zero passes; startup failure, a nonzero exit code, or an unknown
@@ -39,7 +40,7 @@ public static class TestResourceBuilderExtensions
     /// </para>
     /// <para>
     /// Calling this method again replaces the collector, including removing it for a marker-only call,
-    /// while preserving the resource's existing run context and output directory.
+    /// while preserving the resource's existing timeout, run context and output directory.
     /// Each logical resource uses a directory named after the resource directly beneath the run directory.
     /// Replicas share that directory; this API does not allocate separate per-replica output paths.
     /// </para>
@@ -61,7 +62,7 @@ public static class TestResourceBuilderExtensions
     /// The callback runs at runtime alongside the resource, not during model definition or ordinary runs.
     /// The context supplies a private resource output destination. Configure runner report paths independently
     /// and stage collected artifacts into this destination at runtime.
-    /// Repeated calls replace the collector while preserving the existing run context and output directory.
+    /// Repeated calls replace the collector while preserving the existing timeout, run context and output directory.
     /// </ats-remarks>
     /// <ats-returns>The resource builder.</ats-returns>
     /// <exception cref="ArgumentNullException">The builder is null.</exception>
@@ -90,10 +91,52 @@ public static class TestResourceBuilderExtensions
         }
         return builder.WithAnnotation(new TestingAnnotation
         {
+            Timeout = annotation?.Timeout ?? Timeout.InfiniteTimeSpan,
             Collector = callback,
             TestingContext = testingContext,
             OutputPath = resourceOutputPath
         }, ResourceAnnotationMutationBehavior.Replace);
+    }
+
+    /// <summary>
+    /// Configures the runtime result collector deadline for an existing test resource.
+    /// </summary>
+    /// <ats-summary>Configures the runtime result collector deadline for an existing test resource.</ats-summary>
+    /// <typeparam name="T">The resource type.</typeparam>
+    /// <param name="builder">The resource builder, already marked for testing.</param>
+    /// <param name="timeout">A positive duration, or <see cref="Timeout.InfiniteTimeSpan"/> to remove the collector deadline.</param>
+    /// <ats-param name="timeout">The collector timeout in milliseconds; -1 disables the collector deadline.</ats-param>
+    /// <returns>The resource builder.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
+    /// <remarks>
+    /// Call after <see cref="WithTesting{T}"/> or a framework helper that marks the resource for testing.
+    /// The existing collector and output context are preserved. The default is no collector deadline.
+    /// A finite deadline starts when the collector is scheduled, including any wait for resource completion
+    /// inside it. It does not limit resource startup or execution, and overall run cancellation still applies.
+    /// </remarks>
+    /// <example>
+    /// <code lang="C#">
+    /// tests.WithTesting(async context =>
+    /// {
+    ///     await context.WaitForCompletionAsync();
+    /// }).WithTestingTimeout(TimeSpan.FromMinutes(2));
+    /// </code>
+    /// </example>
+    /// <exception cref="ArgumentNullException">The builder is null.</exception>
+    /// <exception cref="InvalidOperationException">The resource has not been marked for testing.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">The timeout is not infinite or a supported positive duration.</exception>
+    [AspireExport]
+    [Experimental(TestingDiagnostics.DiagnosticId, UrlFormat = TestingDiagnostics.UrlFormat)]
+    public static IResourceBuilder<T> WithTestingTimeout<T>(this IResourceBuilder<T> builder, TimeSpan timeout) where T : IResource
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        if (!builder.Resource.TryGetLastAnnotation<TestingAnnotation>(out var annotation))
+        {
+            throw new InvalidOperationException($"Resource '{builder.Resource.Name}' must be marked for testing before configuring its collector timeout.");
+        }
+        annotation.Timeout = timeout;
+
+        return builder;
     }
 
     private static string CreateResourceOutputDirectory(string runOutputPath, string resourceName)

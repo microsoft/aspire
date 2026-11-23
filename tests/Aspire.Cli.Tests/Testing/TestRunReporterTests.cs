@@ -34,10 +34,10 @@ public class TestRunReporterTests(ITestOutputHelper outputHelper)
         AssertPrivateDirectory(reporter.OutputPath);
         AssertPrivateFile(reporter.SummaryPath);
         var summary = JsonNode.Parse(File.ReadAllText(reporter.SummaryPath))!;
-        Assert.Equal("running", summary["status"]!.GetValue<string>());
+        Assert.Equal("running", summary["testSummary"]!["outcome"]!.GetValue<string>());
         Assert.Null(summary["completedAt"]);
         Assert.Null(summary["cliExitCode"]);
-        Assert.Empty(summary["resources"]!.AsArray());
+        Assert.Empty(summary["testResults"]!.AsObject());
         Assert.Equal(["summary.json"], Directory.GetFiles(reporter.OutputPath).Select(Path.GetFileName));
     }
 
@@ -63,12 +63,12 @@ public class TestRunReporterTests(ITestOutputHelper outputHelper)
             AssertPrivateDirectory(Path.GetDirectoryName(reporter.OutputPath)!);
             AssertPrivateDirectory(reporter.OutputPath);
             AssertPrivateFile(reporter.SummaryPath);
-            Assert.Equal("running", JsonNode.Parse(File.ReadAllText(reporter.SummaryPath))!["status"]!.GetValue<string>());
+            Assert.Equal("running", JsonNode.Parse(File.ReadAllText(reporter.SummaryPath))!["testSummary"]!["outcome"]!.GetValue<string>());
 
             reporter.Complete(CommandResult.Success());
 
             AssertPrivateFile(reporter.SummaryPath);
-            Assert.Equal("passed", JsonNode.Parse(File.ReadAllText(reporter.SummaryPath))!["status"]!.GetValue<string>());
+            Assert.Equal("passed", JsonNode.Parse(File.ReadAllText(reporter.SummaryPath))!["testSummary"]!["outcome"]!.GetValue<string>());
         }, workspace.Path, new RemoteInvokeOptions { Start = false });
         var startInfo = invocation.Process.StartInfo;
         startInfo.Environment["ASPIRE_TEST_CHILD_EXECUTABLE"] = startInfo.FileName;
@@ -92,7 +92,7 @@ public class TestRunReporterTests(ITestOutputHelper outputHelper)
         Assert.Throws<IOException>(() => reporter.Complete(CommandResult.Success()));
 
         Assert.Equal(mode, File.GetUnixFileMode(reporter.OutputPath));
-        Assert.Equal("running", JsonNode.Parse(File.ReadAllText(reporter.SummaryPath))!["status"]!.GetValue<string>());
+        Assert.Equal("running", JsonNode.Parse(File.ReadAllText(reporter.SummaryPath))!["testSummary"]!["outcome"]!.GetValue<string>());
     }
 
     [Fact]
@@ -194,8 +194,8 @@ public class TestRunReporterTests(ITestOutputHelper outputHelper)
 
         Assert.False(await reporter.WaitForCompletionAsync(backchannel, TestContext.Current.CancellationToken));
         var beforeStop = JsonNode.Parse(File.ReadAllText(reporter.SummaryPath))!;
-        Assert.Equal(2, beforeStop["resources"]!.AsArray().Count);
-        Assert.Equal("passed", beforeStop["resources"]![1]!["outcome"]!.GetValue<string>());
+        Assert.Equal(2, beforeStop["testResults"]!["tests"]!["replicas"]!.AsObject().Count);
+        Assert.Equal("passed", beforeStop["testResults"]!["tests"]!["replicas"]!["tests-2"]!["outcome"]!.GetValue<string>());
         reporter.Complete(CommandResult.Failure(CliExitCodes.TestRunFailed));
         AssertPrivateFile(reporter.SummaryPath);
         Assert.Contains(interaction.DisplayedMessages, message => message.Message == TestCommandStrings.RunningHeader);
@@ -224,10 +224,10 @@ public class TestRunReporterTests(ITestOutputHelper outputHelper)
             reporter.WaitForCompletionAsync(backchannel, TestContext.Current.CancellationToken));
         reporter.Complete(CommandResult.Cancelled());
         var summary = JsonNode.Parse(File.ReadAllText(reporter.SummaryPath))!;
-        Assert.Equal("cancelled", summary["status"]!.GetValue<string>());
+        Assert.Equal("cancelled", summary["testSummary"]!["outcome"]!.GetValue<string>());
         Assert.Equal(130, summary["cliExitCode"]!.GetValue<int>());
-        Assert.Equal("incomplete", summary["resources"]![0]!["outcome"]!.GetValue<string>());
-        Assert.Null(summary["resources"]![0]!["exitCode"]);
+        Assert.Equal("incomplete", summary["testResults"]!["tests"]!["outcome"]!.GetValue<string>());
+        Assert.Null(summary["testResults"]!["tests"]!["exitCode"]);
     }
 
     [Fact]
@@ -306,10 +306,10 @@ public class TestRunReporterTests(ITestOutputHelper outputHelper)
         Assert.Equal($"Test [teal]tests[/] / [blue]fixture[/]: [{color}]{displayOutcome}[/]",
             Assert.Single(interaction.DisplayedMessages, m => m.Message.StartsWith("Test [", StringComparison.Ordinal)).Message);
         var summary = JsonNode.Parse(File.ReadAllText(reporter.SummaryPath))!;
-        Assert.Equal(outcome, Assert.Single(summary["testResults"]!.AsArray())!["outcome"]!.GetValue<string>());
-        Assert.Equal(passed ? "passed" : "failed", summary["status"]!.GetValue<string>());
+        Assert.Equal(outcome, Assert.Single(summary["testResults"]!["tests"]!["testCases"]!.AsArray())!["outcome"]!.GetValue<string>());
+        Assert.Equal(passed ? "passed" : "failed", summary["testSummary"]!["outcome"]!.GetValue<string>());
         Assert.Equal(passed ? 0 : CliExitCodes.TestRunFailed, summary["cliExitCode"]!.GetValue<int>());
-        var counts = summary["publishedResults"]!;
+        var counts = summary["testSummary"]!;
         var expected = (Passed: outcome == "passed" ? 1 : 0, Failed: passed ? 0 : 1, Other: outcome == "skipped" ? 1 : 0);
         Assert.Equal(expected, (counts["passed"]!.GetValue<int>(), counts["failed"]!.GetValue<int>(), counts["skipped"]!.GetValue<int>()));
         Assert.Equal($"Resource [teal]tests[/]: [{(passed ? "green" : "red")}]{(passed ? "passed" : "failed")}[/]; " +
@@ -393,6 +393,43 @@ public class TestRunReporterTests(ITestOutputHelper outputHelper)
         {
             await Verify(output.ToString()).UseDirectory("Snapshots");
         }
+    }
+
+    [Fact]
+    public async Task ResourceKeyedReportPreservesReplicasPartialCasesAndResourceOnlyFailures()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var interaction = new TestInteractionService();
+        var reporter = TestRunReporter.Create(CreateContext(workspace), interaction, interactive: false,
+            OutputFormat.Json, new FakeTimeProvider(), NullLogger.Instance);
+        var backchannel = new TestAppHostBackchannel
+        {
+            WatchTestRunAsyncCallback = _ => Events(
+                new TestRunEvent { Resource = Resource("shared-id", "Finished", 0, "passed") with { ResourceName = "go-tests" } },
+                new TestRunEvent { Resource = Resource("go-2", "Exited", 1, "failed") with { ResourceName = "go-tests" } },
+                new TestRunEvent { Resource = Resource("shared-id", "Finished", 0, "passed") with { ResourceName = "python-tests", ExpectedReplicas = 1 } },
+                new TestRunEvent { Resource = Resource("script-1", "Exited", 5, "failed") with { ResourceName = "script", ExpectedReplicas = 1 } },
+                new TestRunEvent { Resource = Resource("unknown-1", "Finished", 0, "passed") with { ResourceName = "unavailable-collector", ExpectedReplicas = 1 } },
+                new TestRunEvent { Result = new PublishedTestResult { ResourceName = "go-tests", Name = "TestHealth", Outcome = "passed", DurationMilliseconds = 12 } },
+                new TestRunEvent { Result = new PublishedTestResult { ResourceName = "go-tests", Name = "TestHealth", Outcome = "failed", Message = "second replica failed" } },
+                new TestRunEvent { Result = new PublishedTestResult { ResourceName = "python-tests", Name = "test_checkout", Outcome = "skipped", Message = "optional fixture" } },
+                new TestRunEvent { Collection = new TestCollectionState { ResourceName = "go-tests", CollectorCount = 1, Status = "completed" } },
+                new TestRunEvent { Collection = new TestCollectionState { ResourceName = "python-tests", CollectorCount = 1, Status = "failed", Error = "report was truncated" } },
+                new TestRunEvent { Collection = new TestCollectionState { ResourceName = "script", Status = "notConfigured" } },
+                new TestRunEvent { Passed = false })
+        };
+
+        Assert.False(await reporter.WaitForCompletionAsync(backchannel, TestContext.Current.CancellationToken));
+        reporter.Complete(CommandResult.Failure(CliExitCodes.TestRunFailed));
+        var stdout = Assert.Single(interaction.DisplayedRawText);
+        Assert.Equal(File.ReadAllText(reporter.SummaryPath), stdout.Text);
+        var summary = JsonNode.Parse(stdout.Text)!;
+        summary["runId"] = "run-id";
+        summary["outputPath"] = "output-directory";
+        summary["summaryPath"] = "summary-file";
+
+        await Verify(summary.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }), "json")
+            .UseDirectory("Snapshots");
     }
 
     [Theory]
@@ -613,7 +650,7 @@ public class TestRunReporterTests(ITestOutputHelper outputHelper)
             reporter.WaitForCompletionAsync(backchannel, TestContext.Current.CancellationToken));
         reporter.Complete(CommandResult.Failure(CliExitCodes.TestRunFailed));
         var summary = JsonNode.Parse(File.ReadAllText(reporter.SummaryPath))!;
-        Assert.Equal("failed", summary["resources"]![0]!["outcome"]!.GetValue<string>());
+        Assert.Equal("failed", summary["testResults"]!["tests"]!["outcome"]!.GetValue<string>());
     }
 
     [Fact]
@@ -633,9 +670,9 @@ public class TestRunReporterTests(ITestOutputHelper outputHelper)
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => waiting);
 
         var summary = JsonNode.Parse(File.ReadAllText(reporter.SummaryPath))!;
-        Assert.Equal("cancelled", summary["status"]!.GetValue<string>());
-        Assert.Equal("incomplete", summary["resources"]![0]!["outcome"]!.GetValue<string>());
-        Assert.Equal("Running", summary["resources"]![0]!["state"]!.GetValue<string>());
+        Assert.Equal("cancelled", summary["testSummary"]!["outcome"]!.GetValue<string>());
+        Assert.Equal("incomplete", summary["testResults"]!["tests"]!["outcome"]!.GetValue<string>());
+        Assert.Equal("Running", summary["testResults"]!["tests"]!["state"]!.GetValue<string>());
 
         async IAsyncEnumerable<TestRunEvent> DelayedEvents()
         {

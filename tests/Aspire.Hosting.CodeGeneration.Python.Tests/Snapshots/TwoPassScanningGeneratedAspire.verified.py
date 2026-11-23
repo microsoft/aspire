@@ -7833,6 +7833,10 @@ class AbstractResource(abc.ABC):
         """Marks a resource for testing with an optional runtime result collector."""
 
     @abc.abstractmethod
+    def with_testing_timeout(self, timeout: float) -> typing.Self:
+        """Configures the runtime result collector deadline for an existing test resource."""
+
+    @abc.abstractmethod
     def with_pipeline_step_factory(self, step_name: str, callback: typing.Callable[[PipelineStepContext], None], *, depends_on: typing.Iterable[str] | None = None, required_by: typing.Iterable[str] | None = None, tags: typing.Iterable[str] | None = None, description: str | None = None) -> typing.Self:
         """Adds a pipeline step to the resource that will be executed during deployment."""
 
@@ -8243,6 +8247,7 @@ class _BaseResourceKwargs(typing.TypedDict, total=False):
     display_order: int
     terminal: typing.Callable[[TerminalOptions], None] | typing.Literal[True]
     testing: typing.Callable[[ResourceTestingContext], None] | typing.Literal[True]
+    testing_timeout: float
     pipeline_step_factory: tuple[str, typing.Callable[[PipelineStepContext], None]] | PipelineStepFactoryParameters
     pipeline_config: typing.Callable[[PipelineConfigurationContext], None]
     on_before_resource_started: typing.Callable[[BeforeResourceStartedEvent], None]
@@ -8673,6 +8678,17 @@ class _BaseResource(AbstractResource):
             rpc_args['callback'] = self._client.register_callback(callback, ("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceTestingContext",))
         result = self._client.invoke_capability(
             'Aspire.Hosting/withTesting',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
+    def with_testing_timeout(self, timeout: float) -> typing.Self:
+        """Configures the runtime result collector deadline for an existing test resource."""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['timeout'] = timeout
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withTestingTimeout',
             rpc_args,
         )
         self._handle = self._wrap_builder(result)
@@ -9275,6 +9291,13 @@ class _BaseResource(AbstractResource):
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withTesting', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'testing'. Expected: Callable[[ResourceTestingContext], None] or Literal[True]")
+        if (_testing_timeout := kwargs.pop("testing_timeout", None)) is not None:
+            if _validate_type(_testing_timeout, float):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["timeout"] = typing.cast(float, _testing_timeout)
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withTestingTimeout', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'testing_timeout'. Expected: float")
         if (_pipeline_step_factory := kwargs.pop("pipeline_step_factory", None)) is not None:
             if _validate_tuple_types(_pipeline_step_factory, (str, typing.Callable[[PipelineStepContext], None])):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}

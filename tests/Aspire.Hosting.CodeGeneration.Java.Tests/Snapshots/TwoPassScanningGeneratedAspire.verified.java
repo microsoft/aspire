@@ -3577,6 +3577,15 @@ public class CSharpAppResource extends ProjectResource {
         return this;
     }
 
+    /** Configures the runtime result collector deadline for an existing test resource. */
+    public CSharpAppResource withTestingTimeout(double timeout) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("timeout", AspireClient.serializeValue(timeout));
+        getClient().invokeCapability("Aspire.Hosting/withTestingTimeout", reqArgs);
+        return this;
+    }
+
     /** Adds a pipeline step to the resource that will be executed during deployment. */
     public CSharpAppResource withPipelineStepFactory(String stepName, AspireAction1<PipelineStepContext> callback, WithPipelineStepFactoryOptions optionsBag) {
         var dependsOn = optionsBag == null ? null : optionsBag.getDependsOn();
@@ -6045,6 +6054,15 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures the runtime result collector deadline for an existing test resource. */
+    public ContainerRegistryResource withTestingTimeout(double timeout) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("timeout", AspireClient.serializeValue(timeout));
+        getClient().invokeCapability("Aspire.Hosting/withTestingTimeout", reqArgs);
+        return this;
+    }
+
     /** Adds a pipeline step to the resource that will be executed during deployment. */
     public ContainerRegistryResource withPipelineStepFactory(String stepName, AspireAction1<PipelineStepContext> callback, WithPipelineStepFactoryOptions optionsBag) {
         var dependsOn = optionsBag == null ? null : optionsBag.getDependsOn();
@@ -8075,6 +8093,15 @@ public class ContainerResource extends ResourceBuilderBase {
             reqArgs.put("callback", callbackId);
         }
         getClient().invokeCapability("Aspire.Hosting/withTesting", reqArgs);
+        return this;
+    }
+
+    /** Configures the runtime result collector deadline for an existing test resource. */
+    public ContainerResource withTestingTimeout(double timeout) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("timeout", AspireClient.serializeValue(timeout));
+        getClient().invokeCapability("Aspire.Hosting/withTestingTimeout", reqArgs);
         return this;
     }
 
@@ -10940,6 +10967,15 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    /** Configures the runtime result collector deadline for an existing test resource. */
+    public DotnetToolResource withTestingTimeout(double timeout) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("timeout", AspireClient.serializeValue(timeout));
+        getClient().invokeCapability("Aspire.Hosting/withTestingTimeout", reqArgs);
+        return this;
+    }
+
     /** Adds a pipeline step to the resource that will be executed during deployment. */
     public DotnetToolResource withPipelineStepFactory(String stepName, AspireAction1<PipelineStepContext> callback, WithPipelineStepFactoryOptions optionsBag) {
         var dependsOn = optionsBag == null ? null : optionsBag.getDependsOn();
@@ -13503,6 +13539,15 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures the runtime result collector deadline for an existing test resource. */
+    public ExecutableResource withTestingTimeout(double timeout) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("timeout", AspireClient.serializeValue(timeout));
+        getClient().invokeCapability("Aspire.Hosting/withTestingTimeout", reqArgs);
+        return this;
+    }
+
     /** Adds a pipeline step to the resource that will be executed during deployment. */
     public ExecutableResource withPipelineStepFactory(String stepName, AspireAction1<PipelineStepContext> callback, WithPipelineStepFactoryOptions optionsBag) {
         var dependsOn = optionsBag == null ? null : optionsBag.getDependsOn();
@@ -14708,6 +14753,15 @@ public class ExternalServiceResource extends ResourceBuilderBase {
             reqArgs.put("callback", callbackId);
         }
         getClient().invokeCapability("Aspire.Hosting/withTesting", reqArgs);
+        return this;
+    }
+
+    /** Configures the runtime result collector deadline for an existing test resource. */
+    public ExternalServiceResource withTestingTimeout(double timeout) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("timeout", AspireClient.serializeValue(timeout));
+        getClient().invokeCapability("Aspire.Hosting/withTestingTimeout", reqArgs);
         return this;
     }
 
@@ -19672,6 +19726,15 @@ public class ParameterResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures the runtime result collector deadline for an existing test resource. */
+    public ParameterResource withTestingTimeout(double timeout) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("timeout", AspireClient.serializeValue(timeout));
+        getClient().invokeCapability("Aspire.Hosting/withTestingTimeout", reqArgs);
+        return this;
+    }
+
     /** Adds a pipeline step to the resource that will be executed during deployment. */
     public ParameterResource withPipelineStepFactory(String stepName, AspireAction1<PipelineStepContext> callback, WithPipelineStepFactoryOptions optionsBag) {
         var dependsOn = optionsBag == null ? null : optionsBag.getDependsOn();
@@ -22137,6 +22200,15 @@ public class ProjectResource extends ResourceBuilderBase {
             reqArgs.put("callback", callbackId);
         }
         getClient().invokeCapability("Aspire.Hosting/withTesting", reqArgs);
+        return this;
+    }
+
+    /** Configures the runtime result collector deadline for an existing test resource. */
+    public ProjectResource withTestingTimeout(double timeout) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("timeout", AspireClient.serializeValue(timeout));
+        getClient().invokeCapability("Aspire.Hosting/withTestingTimeout", reqArgs);
         return this;
     }
 
@@ -25849,6 +25921,15 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Configures the runtime result collector deadline for an existing test resource. */
+    public TestDatabaseResource withTestingTimeout(double timeout) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("timeout", AspireClient.serializeValue(timeout));
+        getClient().invokeCapability("Aspire.Hosting/withTestingTimeout", reqArgs);
+        return this;
+    }
+
     /** Adds a pipeline step to the resource that will be executed during deployment. */
     public TestDatabaseResource withPipelineStepFactory(String stepName, AspireAction1<PipelineStepContext> callback, WithPipelineStepFactoryOptions optionsBag) {
         var dependsOn = optionsBag == null ? null : optionsBag.getDependsOn();
@@ -28246,6 +28327,15 @@ public class TestRedisResource extends ContainerResource {
             reqArgs.put("callback", callbackId);
         }
         getClient().invokeCapability("Aspire.Hosting/withTesting", reqArgs);
+        return this;
+    }
+
+    /** Configures the runtime result collector deadline for an existing test resource. */
+    public TestRedisResource withTestingTimeout(double timeout) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("timeout", AspireClient.serializeValue(timeout));
+        getClient().invokeCapability("Aspire.Hosting/withTestingTimeout", reqArgs);
         return this;
     }
 
@@ -30847,6 +30937,15 @@ public class TestVaultResource extends ContainerResource {
             reqArgs.put("callback", callbackId);
         }
         getClient().invokeCapability("Aspire.Hosting/withTesting", reqArgs);
+        return this;
+    }
+
+    /** Configures the runtime result collector deadline for an existing test resource. */
+    public TestVaultResource withTestingTimeout(double timeout) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("timeout", AspireClient.serializeValue(timeout));
+        getClient().invokeCapability("Aspire.Hosting/withTestingTimeout", reqArgs);
         return this;
     }
 

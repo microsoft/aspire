@@ -167,6 +167,9 @@ public class TestingCollectorTests(ITestOutputHelper outputHelper)
         Assert.Equal("ASPIRETESTING001",
             typeof(TestResourceBuilderExtensions).GetMethod(nameof(TestResourceBuilderExtensions.WithTesting))!
                 .GetCustomAttribute<ExperimentalAttribute>()!.DiagnosticId);
+        Assert.Equal("ASPIRETESTING001",
+            typeof(TestResourceBuilderExtensions).GetMethod(nameof(TestResourceBuilderExtensions.WithTestingTimeout))!
+                .GetCustomAttribute<ExperimentalAttribute>()!.DiagnosticId);
     }
 
     [Fact]
@@ -299,6 +302,7 @@ public class TestingCollectorTests(ITestOutputHelper outputHelper)
             return Task.CompletedTask;
         });
         var first = Assert.Single(resource.Resource.Annotations.OfType<TestingAnnotation>());
+        resource.WithTestingTimeout(TimeSpan.FromMinutes(2));
         await File.WriteAllTextAsync(Path.Combine(first.OutputPath!, "result.txt"), "artifact");
         resource.WithTesting(async context =>
         {
@@ -311,6 +315,7 @@ public class TestingCollectorTests(ITestOutputHelper outputHelper)
         });
         var replacement = Assert.Single(resource.Resource.Annotations.OfType<TestingAnnotation>());
         Assert.NotSame(first, replacement);
+        Assert.Equal(first.Timeout, replacement.Timeout);
         Assert.Same(first.TestingContext, replacement.TestingContext);
         Assert.Equal(first.OutputPath, replacement.OutputPath);
         Assert.Equal(first.OutputPath, Assert.Single(Directory.GetDirectories(
@@ -344,9 +349,11 @@ public class TestingCollectorTests(ITestOutputHelper outputHelper)
             }
             : null);
         var first = Assert.Single(resource.Resource.Annotations.OfType<TestingAnnotation>());
+        first.Timeout = TimeSpan.FromMinutes(2);
         resource.WithTesting();
         var replacement = Assert.Single(resource.Resource.Annotations.OfType<TestingAnnotation>());
         Assert.NotSame(first, replacement);
+        Assert.Equal(first.Timeout, replacement.Timeout);
         Assert.Same(first.TestingContext, replacement.TestingContext);
         Assert.Equal(first.OutputPath, replacement.OutputPath);
         Assert.Null(replacement.Collector);
@@ -551,8 +558,167 @@ public class TestingCollectorTests(ITestOutputHelper outputHelper)
         Assert.Contains("fixture collector failure", failure.Error);
     }
 
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(1000)]
+    public async Task CollectorCompletesWithInfiniteOrUnexpiredTimeout(int timeoutMilliseconds)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = CreateBuilder(workspace);
+        var started = new TaskCompletionSource<ResourceTestingContext>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var resource = builder.AddResource(new ContainerResource("tests")).WithTesting(async context =>
+        {
+            started.TrySetResult(context);
+            await release.Task.WaitAsync(context.CancellationToken);
+            context.PublishResult(new TestResult { Name = "fixture", Outcome = TestOutcome.Passed });
+        });
+        if (timeoutMilliseconds >= 0)
+        {
+            resource.WithTestingTimeout(TimeSpan.FromMilliseconds(timeoutMilliseconds));
+        }
+        var timeProvider = new FakeTimeProvider();
+        using var notifications = ResourceNotificationServiceTestHelpers.Create();
+        using var coordinator = new TestRunCoordinator(new DistributedApplicationModel(builder.Resources), notifications,
+            timeProvider, NullLogger<TestRunCoordinator>.Instance);
+        var events = new ConcurrentQueue<TestRunEvent>();
+        var collected = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var stream = ReadAsync(coordinator, events, item =>
+        {
+            if (item.Collection is { Status: "completed" })
+            {
+                collected.TrySetResult();
+            }
+        });
+        var context = await started.Task.DefaultTimeout();
+        timeProvider.Advance(timeoutMilliseconds < 0 ? TimeSpan.FromDays(365) : TimeSpan.FromMilliseconds(999));
+        Assert.False(context.CancellationToken.IsCancellationRequested);
+        Assert.False(stream.IsCompleted);
+        release.TrySetResult();
+        await collected.Task.DefaultTimeout();
+        timeProvider.Advance(TimeSpan.FromDays(1));
+        Assert.False(context.CancellationToken.IsCancellationRequested);
+        await notifications.PublishUpdateAsync(resource.Resource, s => s with { State = KnownResourceStates.Finished, ExitCode = 0 });
+        await stream.DefaultTimeout();
+
+        Assert.True(events.Last().Passed);
+        Assert.Equal("fixture", Assert.Single(events, item => item.Result is not null).Result!.Name);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task CollectorTimeoutFailsCollectionWithoutStoppingResourcesOrOtherCollectors(bool cooperative)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = CreateBuilder(workspace);
+        var started = new TaskCompletionSource<ResourceTestingContext>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var exited = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var first = builder.AddResource(new ContainerResource("first")).WithTesting(async context =>
+        {
+            context.PublishResult(new TestResult { Name = "before timeout", Outcome = TestOutcome.Passed });
+            started.TrySetResult(context);
+            try
+            {
+                await (cooperative ? release.Task.WaitAsync(context.CancellationToken) : release.Task);
+                throw new IOException("late collector failure");
+            }
+            finally
+            {
+                exited.TrySetResult();
+            }
+        });
+        first.WithTestingTimeout(TimeSpan.FromSeconds(1));
+        var second = builder.AddResource(new ContainerResource("second")).WithTesting(async context =>
+        {
+            await context.WaitForCompletionAsync();
+            context.PublishResult(new TestResult { Name = "other collector", Outcome = TestOutcome.Passed });
+        });
+        var timeProvider = new FakeTimeProvider();
+        using var notifications = ResourceNotificationServiceTestHelpers.Create();
+        using var coordinator = new TestRunCoordinator(new DistributedApplicationModel(builder.Resources), notifications,
+            timeProvider, NullLogger<TestRunCoordinator>.Instance);
+        var events = new ConcurrentQueue<TestRunEvent>();
+        var failed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var stream = ReadAsync(coordinator, events, item =>
+        {
+            if (item.Collection is { Status: "failed" })
+            {
+                failed.TrySetResult();
+            }
+        });
+        var context = await started.Task.DefaultTimeout();
+        timeProvider.Advance(TimeSpan.FromSeconds(1));
+        await failed.Task.DefaultTimeout();
+        Assert.False(stream.IsCompleted);
+        Assert.True(context.CancellationToken.IsCancellationRequested);
+        await notifications.PublishUpdateAsync(first.Resource, s => s with { State = KnownResourceStates.Finished, ExitCode = 0 });
+        Assert.False(stream.IsCompleted);
+        await notifications.PublishUpdateAsync(second.Resource, s => s with { State = KnownResourceStates.Finished, ExitCode = 0 });
+        await stream.DefaultTimeout();
+        Assert.ThrowsAny<OperationCanceledException>(() =>
+            context.PublishResult(new TestResult { Name = "late fixture", Outcome = TestOutcome.Passed }));
+        release.TrySetResult();
+        await exited.Task.DefaultTimeout();
+
+        Assert.False(events.Last().Passed);
+        Assert.Equal("Test result collection timed out for resource 'first' after 00:00:01.",
+            Assert.Single(events, item => item.Collection is { Status: "failed" }).Collection!.Error);
+        Assert.Equal(["before timeout", "other collector"], events.Where(item => item.Result is not null).Select(item => item.Result!.Name));
+        Assert.Equal(2, events.Count(item => item.Resource is { Outcome: "passed" }));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-2)]
+    [InlineData(4294967295)]
+    public void InvalidCollectorTimeoutIsRejected(long timeoutMilliseconds)
+    {
+        var annotation = new TestingAnnotation();
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => annotation.Timeout = TimeSpan.FromMilliseconds(timeoutMilliseconds));
+    }
+
     [Fact]
-    public async Task CancelledNonCooperativeCollectorCannotPublishAfterFinalization()
+    public void TestingTimeoutRequiresExistingTestingAnnotation()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+        var resource = builder.AddResource(new ContainerResource("service"));
+
+        var exception = Assert.Throws<InvalidOperationException>(() => resource.WithTestingTimeout(TimeSpan.FromSeconds(1)));
+
+        Assert.Equal("Resource 'service' must be marked for testing before configuring its collector timeout.", exception.Message);
+        Assert.Empty(resource.Resource.Annotations.OfType<TestingAnnotation>());
+    }
+
+    [Fact]
+    public void TestingTimeoutPreservesCollectorAndOutputContextAndCanBeRemoved()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = CreateBuilder(workspace);
+        var resource = builder.AddResource(new ContainerResource("tests")).WithTesting(_ => Task.CompletedTask);
+        var annotation = Assert.Single(resource.Resource.Annotations.OfType<TestingAnnotation>());
+        var collector = annotation.Collector;
+        var outputPath = annotation.OutputPath;
+        var testingContext = annotation.TestingContext;
+
+        Assert.Same(resource, resource.WithTestingTimeout(TimeSpan.FromSeconds(1)));
+        Assert.Same(annotation, Assert.Single(resource.Resource.Annotations.OfType<TestingAnnotation>()));
+        Assert.Same(collector, annotation.Collector);
+        Assert.Equal(outputPath, annotation.OutputPath);
+        Assert.Same(testingContext, annotation.TestingContext);
+        Assert.Equal(TimeSpan.FromSeconds(1), annotation.Timeout);
+        resource.WithTestingTimeout(Timeout.InfiniteTimeSpan);
+        Assert.Equal(Timeout.InfiniteTimeSpan, annotation.Timeout);
+        Assert.Throws<ArgumentOutOfRangeException>(() => resource.WithTestingTimeout(TimeSpan.Zero));
+        Assert.Equal(Timeout.InfiniteTimeSpan, annotation.Timeout);
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(1000)]
+    public async Task CancelledNonCooperativeCollectorCannotPublishAfterFinalization(int timeoutMilliseconds)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var builder = CreateBuilder(workspace);
@@ -560,7 +726,7 @@ public class TestingCollectorTests(ITestOutputHelper outputHelper)
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var rejected = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        builder.AddResource(new ContainerResource("tests")).WithTesting(async context =>
+        var resource = builder.AddResource(new ContainerResource("tests")).WithTesting(async context =>
         {
             started.TrySetResult();
             await release.Task;
@@ -568,6 +734,10 @@ public class TestingCollectorTests(ITestOutputHelper outputHelper)
                 context.PublishResult(new TestResult { Name = "late fixture", Outcome = TestOutcome.Passed }));
             rejected.TrySetResult();
         });
+        if (timeoutMilliseconds >= 0)
+        {
+            Assert.Single(resource.Resource.Annotations.OfType<TestingAnnotation>()).Timeout = TimeSpan.FromMilliseconds(timeoutMilliseconds);
+        }
         using var notifications = ResourceNotificationServiceTestHelpers.Create();
         using var coordinator = CreateCoordinator(builder, notifications);
         var completion = coordinator.WaitForCompletionAsync(cancellation.Token);

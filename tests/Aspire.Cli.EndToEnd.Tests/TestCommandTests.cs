@@ -146,10 +146,9 @@ public sealed class TestCommandTests(ITestOutputHelper output)
                         raise TimeoutError("The keep-alive CLI did not finalize its results")
                     time.sleep(0.05)
 
-            assert summary["status"] == "passed", summary
+            assert summary["testSummary"]["outcome"] == "passed", summary
             assert summary["cliExitCode"] is None, summary
-            collections = {c["resourceName"]: c for c in summary["collections"]}
-            assert collections["primary"]["status"] == "completed", collections
+            assert summary["testResults"]["primary"]["collectorStatus"] == "completed", summary
             for name in ["apphost", "service"]:
                 pid = pathlib.Path(name + ".pid").read_text()
                 assert pathlib.Path("/proc", pid).exists(), (name, pid)
@@ -173,36 +172,36 @@ public sealed class TestCommandTests(ITestOutputHelper output)
             if keep_alive:
                 # Inspection emits completed results once; cancellation updates only
                 # the persisted command status, not those results or stdout.
-                assert summary["status"] == "passed", summary
+                assert summary["testSummary"]["outcome"] == "passed", summary
                 assert summary["cliExitCode"] is None, summary
-                assert persisted["status"] == "cancelled", persisted
+                assert persisted["testSummary"]["outcome"] == "cancelled", persisted
                 assert persisted["cliExitCode"] == 130, persisted
-                for key in ["resources", "collections", "testResults", "publishedResults"]:
-                    assert persisted[key] == summary[key], (key, summary, persisted)
+                assert persisted["testResults"] == summary["testResults"], (summary, persisted)
+                for key in ["passed", "failed", "skipped"]:
+                    assert persisted["testSummary"][key] == summary["testSummary"][key], (key, summary, persisted)
             else:
                 assert summary == persisted, (summary, persisted)
                 assert summary["cliExitCode"] == expected
-                assert summary["status"] == ("passed" if expected == 0 else "failed")
-            assert summary["schemaVersion"] == 1
+                assert summary["testSummary"]["outcome"] == ("passed" if expected == 0 else "failed")
+            assert summary["schemaVersion"] == 2
             assert summary["error"] is None, summary
             results = summary["testResults"]
             outcome = "failed" if scenario == "result-failed" else "passed"
-            assert [(r["resourceName"], r["name"], r["outcome"]) for r in results] == [
-                ("primary", "runtime service probe", outcome)
+            assert [(r["name"], r["outcome"]) for r in results["primary"]["testCases"]] == [
+                ("runtime service probe", outcome)
             ], results
-            assert summary["publishedResults"] == {
+            assert summary["testSummary"] == {
+                "outcome": "passed" if expected == 0 or keep_alive else "failed",
                 "passed": int(outcome == "passed"), "failed": int(outcome == "failed"), "skipped": 0
             }
-            resources = summary["resources"]
-            assert sorted(r["resourceName"] for r in resources) == ["primary", "remaining"], resources
-            assert all(r["state"] == "Finished" for r in resources), resources
-            assert {r["resourceName"]: r["exitCode"] for r in resources} == {
+            assert sorted(results) == ["primary", "remaining"], results
+            assert all(r["state"] == "Finished" for r in results.values()), results
+            assert {name: r["exitCode"] for name, r in results.items()} == {
                 "primary": 7 if scenario == "process-failed" else 0, "remaining": 0
-            }, resources
-            collections = {c["resourceName"]: c for c in summary["collections"]}
-            assert collections["primary"]["status"] == "completed", collections
-            assert collections["primary"]["collectorCount"] == 1
-            assert collections["remaining"]["collectorCount"] == 0
+            }, results
+            assert results["primary"]["collectorStatus"] == "completed", results
+            assert results["remaining"]["collectorStatus"] == "notConfigured", results
+            assert results["remaining"]["testCases"] == [], results
             artifact = pathlib.Path(summary["outputPath"]) / "primary" / "probe.txt"
             assert artifact.read_text() == "dependency alive"
             assert pathlib.Path("remaining.txt").read_text() == "dependency alive"

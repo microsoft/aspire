@@ -115,8 +115,8 @@ public class TestCommandTests(ITestOutputHelper outputHelper)
         Assert.False(stopRequested);
         Assert.Equal("", stdout.ToString());
         var live = JsonNode.Parse(File.ReadAllText(summaryPath!))!;
-        Assert.Equal("running", live["status"]!.GetValue<string>());
-        Assert.Equal(outcome, live["testResults"]![0]!["outcome"]!.GetValue<string>());
+        Assert.Equal("running", live["testSummary"]!["outcome"]!.GetValue<string>());
+        Assert.Equal(outcome, live["testResults"]!["tests"]!["testCases"]![0]!["outcome"]!.GetValue<string>());
         if (cancelDuringCollection)
         {
             cancellation.Cancel();
@@ -131,7 +131,7 @@ public class TestCommandTests(ITestOutputHelper outputHelper)
                 Assert.False(execution.IsCompleted);
                 Assert.False(stopRequested);
                 var completed = JsonNode.Parse(stdout.ToString())!;
-                Assert.Equal("failed", completed["status"]!.GetValue<string>());
+                Assert.Equal("failed", completed["testSummary"]!["outcome"]!.GetValue<string>());
                 Assert.Null(completed["cliExitCode"]);
                 cancellation.Cancel();
                 Assert.Equal(CliExitCodes.Cancelled, await execution.DefaultTimeout());
@@ -142,13 +142,13 @@ public class TestCommandTests(ITestOutputHelper outputHelper)
             }
         }
         var output = JsonNode.Parse(stdout.ToString())!;
-        Assert.Equal("passed", output["resources"]![0]!["outcome"]!.GetValue<string>());
-        Assert.Equal((1, 0, 0), (output["publishedResults"]!["failed"]!.GetValue<int>(),
-            output["publishedResults"]!["passed"]!.GetValue<int>(), output["publishedResults"]!["skipped"]!.GetValue<int>()));
-        Assert.Equal("failed fixture", output["testResults"]![0]!["name"]!.GetValue<string>());
-        Assert.Equal(outcome, output["testResults"]![0]!["outcome"]!.GetValue<string>());
-        Assert.Equal(25, output["testResults"]![0]!["durationMilliseconds"]!.GetValue<int>());
-        Assert.Equal(cancelDuringCollection ? "incomplete" : "completed", output["collections"]![0]!["status"]!.GetValue<string>());
+        Assert.Equal("passed", output["testResults"]!["tests"]!["outcome"]!.GetValue<string>());
+        Assert.Equal((1, 0, 0), (output["testSummary"]!["failed"]!.GetValue<int>(),
+            output["testSummary"]!["passed"]!.GetValue<int>(), output["testSummary"]!["skipped"]!.GetValue<int>()));
+        Assert.Equal("failed fixture", output["testResults"]!["tests"]!["testCases"]![0]!["name"]!.GetValue<string>());
+        Assert.Equal(outcome, output["testResults"]!["tests"]!["testCases"]![0]!["outcome"]!.GetValue<string>());
+        Assert.Equal(25, output["testResults"]!["tests"]!["testCases"]![0]!["durationMilliseconds"]!.GetValue<int>());
+        Assert.Equal(cancelDuringCollection ? "incomplete" : "completed", output["testResults"]!["tests"]!["collectorStatus"]!.GetValue<string>());
         if (!keepAlive)
         {
             Assert.Equal(File.ReadAllText(summaryPath!), stdout.ToString().TrimEnd());
@@ -202,7 +202,7 @@ public class TestCommandTests(ITestOutputHelper outputHelper)
                 summaryPath = Path.Combine(outputPath, "summary.json");
                 Assert.True(Directory.Exists(outputPath));
                 var summary = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(Path.Combine(outputPath, "summary.json")))!;
-                Assert.Equal("running", summary["status"]!.GetValue<string>());
+                Assert.Equal("running", summary["testSummary"]!["outcome"]!.GetValue<string>());
                 context.BuildCompletionSource!.TrySetResult(true);
                 context.BackchannelCompletionSource!.TrySetResult(backchannel);
                 return await stopped.Task.WaitAsync(ct);
@@ -232,7 +232,7 @@ public class TestCommandTests(ITestOutputHelper outputHelper)
         {
             var completedSummary = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(summaryPath!))!;
             Assert.Equal(expectedExitCode, completedSummary["cliExitCode"]!.GetValue<int>());
-            Assert.Equal(expectedExitCode == 0 ? "passed" : "failed", completedSummary["status"]!.GetValue<string>());
+            Assert.Equal(expectedExitCode == 0 ? "passed" : "failed", completedSummary["testSummary"]!["outcome"]!.GetValue<string>());
         }
     }
 
@@ -286,7 +286,7 @@ public class TestCommandTests(ITestOutputHelper outputHelper)
         var summaryPath = Assert.Single(Directory.GetFiles(workspace.CreateExecutionContext().AspireHomeDirectory.FullName,
             "summary.json", SearchOption.AllDirectories));
         var summary = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(summaryPath))!;
-        Assert.Equal("failed", summary["status"]!.GetValue<string>());
+        Assert.Equal("failed", summary["testSummary"]!["outcome"]!.GetValue<string>());
         Assert.Equal(expectedExitCode, summary["cliExitCode"]!.GetValue<int>());
         if (json)
         {
@@ -363,7 +363,7 @@ public class TestCommandTests(ITestOutputHelper outputHelper)
         if (json)
         {
             var output = JsonNode.Parse(Assert.Single(interaction.DisplayedRawText).Text)!;
-            Assert.Equal("cancelled", output["status"]!.GetValue<string>());
+            Assert.Equal("cancelled", output["testSummary"]!["outcome"]!.GetValue<string>());
             Assert.Equal(expectedExitCode, output["cliExitCode"]!.GetValue<int>());
         }
         if (commandName == "test" && !artifactFailure)
@@ -371,7 +371,7 @@ public class TestCommandTests(ITestOutputHelper outputHelper)
             var summaryPath = Assert.Single(Directory.GetFiles(workspace.CreateExecutionContext().AspireHomeDirectory.FullName,
                 "summary.json", SearchOption.AllDirectories));
             var summary = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(summaryPath))!;
-            Assert.Equal("cancelled", summary["status"]!.GetValue<string>());
+            Assert.Equal("cancelled", summary["testSummary"]!["outcome"]!.GetValue<string>());
             Assert.Equal(130, summary["cliExitCode"]!.GetValue<int>());
         }
     }
@@ -469,12 +469,13 @@ public class TestCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(expectedExitCode, exitCode);
         var json = JsonNode.Parse(stdout.ToString())!;
-        Assert.Equal(passed ? "passed" : "failed", json["status"]!.GetValue<string>());
+        Assert.Equal(passed ? "passed" : "failed", json["testSummary"]!["outcome"]!.GetValue<string>());
         Assert.Equal(expectedExitCode, json["cliExitCode"]!.GetValue<int>());
         var summaryPath = json["summaryPath"]!.GetValue<string>();
         Assert.Equal(Path.Combine(json["outputPath"]!.GetValue<string>(), "summary.json"), summaryPath);
         Assert.Equal(File.ReadAllText(summaryPath), stdout.ToString().TrimEnd());
-        var resource = Assert.Single(json["resources"]!.AsArray())!;
+        Assert.Equal(["tests"], json["testResults"]!.AsObject().Select(entry => entry.Key));
+        var resource = json["testResults"]!["tests"]!;
         Assert.Equal(passed ? 0 : 1, resource["exitCode"]!.GetValue<int>());
         Assert.Equal(passed ? "passed" : "failed", resource["outcome"]!.GetValue<string>());
     }
@@ -571,13 +572,13 @@ public class TestCommandTests(ITestOutputHelper outputHelper)
         Assert.False(stopRequested);
         Assert.Equal(1, completionQueries);
         var beforeStop = JsonNode.Parse(File.ReadAllText(summaryPath!))!;
-        Assert.Equal(passed ? "passed" : "failed", beforeStop["status"]!.GetValue<string>());
+        Assert.Equal(passed ? "passed" : "failed", beforeStop["testSummary"]!["outcome"]!.GetValue<string>());
         Assert.NotNull(beforeStop["completedAt"]);
         Assert.Null(beforeStop["cliExitCode"]);
         if (json)
         {
             Assert.Equal(File.ReadAllText(summaryPath!), stdout.ToString().TrimEnd());
-            Assert.Equal(passed ? "passed" : "failed", JsonNode.Parse(stdout.ToString())!["status"]!.GetValue<string>());
+            Assert.Equal(passed ? "passed" : "failed", JsonNode.Parse(stdout.ToString())!["testSummary"]!["outcome"]!.GetValue<string>());
         }
         else
         {
@@ -597,10 +598,10 @@ public class TestCommandTests(ITestOutputHelper outputHelper)
         }
         Assert.Equal(1, completionQueries);
         var afterStop = JsonNode.Parse(File.ReadAllText(summaryPath!))!;
-        Assert.Equal("cancelled", afterStop["status"]!.GetValue<string>());
+        Assert.Equal("cancelled", afterStop["testSummary"]!["outcome"]!.GetValue<string>());
         Assert.Equal(130, afterStop["cliExitCode"]!.GetValue<int>());
         Assert.Equal(beforeStop["completedAt"]!.GetValue<string>(), afterStop["completedAt"]!.GetValue<string>());
-        Assert.Equal(passed ? "passed" : "failed", afterStop["resources"]![0]!["outcome"]!.GetValue<string>());
+        Assert.Equal(passed ? "passed" : "failed", afterStop["testResults"]!["tests"]!["outcome"]!.GetValue<string>());
     }
 
     [Theory]
@@ -649,7 +650,7 @@ public class TestCommandTests(ITestOutputHelper outputHelper)
         Assert.NotEqual(CliExitCodes.Success, exitCode);
         await tornDown.Task.DefaultTimeout();
         var json = JsonNode.Parse(Assert.Single(interaction.DisplayedRawText).Text)!;
-        Assert.Equal("failed", json["status"]!.GetValue<string>());
+        Assert.Equal("failed", json["testSummary"]!["outcome"]!.GetValue<string>());
         Assert.Equal(exitCode, json["cliExitCode"]!.GetValue<int>());
         Assert.NotNull(json["error"]);
     }
@@ -717,7 +718,7 @@ public class TestCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(expectedExitCode, await execution.DefaultTimeout());
         var final = JsonNode.Parse(File.ReadAllText(summaryPath!))!;
         Assert.Equal(expectedExitCode, final["cliExitCode"]!.GetValue<int>());
-        Assert.Equal(passed ? "passed" : "failed", final["resources"]![0]!["outcome"]!.GetValue<string>());
+        Assert.Equal(passed ? "passed" : "failed", final["testResults"]!["tests"]!["outcome"]!.GetValue<string>());
         Assert.Single(interaction.DisplayedRawText);
     }
 
@@ -769,7 +770,7 @@ public class TestCommandTests(ITestOutputHelper outputHelper)
         Assert.NotEqual(CliExitCodes.Success, await execution.DefaultTimeout());
         await tornDown.Task.DefaultTimeout();
         var final = JsonNode.Parse(File.ReadAllText(summaryPath!))!;
-        Assert.Equal("failed", final["status"]!.GetValue<string>());
+        Assert.Equal("failed", final["testSummary"]!["outcome"]!.GetValue<string>());
         Assert.Contains(TestCommandStrings.KeepAliveDisconnected, final["error"]!.GetValue<string>());
         Assert.Single(interaction.DisplayedRawText);
     }
@@ -849,7 +850,7 @@ public class TestCommandTests(ITestOutputHelper outputHelper)
         if (json)
         {
             var output = JsonNode.Parse(stdout.ToString())!;
-            Assert.Equal("failed", output["status"]!.GetValue<string>());
+            Assert.Equal("failed", output["testSummary"]!["outcome"]!.GetValue<string>());
             Assert.Equal(result, output["cliExitCode"]!.GetValue<int>());
         }
     }
@@ -955,7 +956,7 @@ public class TestCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(CliExitCodes.Cancelled, await execution.DefaultTimeout());
         var summary = JsonNode.Parse(Assert.Single(interaction.DisplayedRawText).Text)!;
-        Assert.Equal("cancelled", summary["status"]!.GetValue<string>());
+        Assert.Equal("cancelled", summary["testSummary"]!["outcome"]!.GetValue<string>());
         Assert.Equal(CliExitCodes.Cancelled, summary["cliExitCode"]!.GetValue<int>());
     }
 
@@ -1001,9 +1002,9 @@ public class TestCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Cancelled, await execution.DefaultTimeout());
         await tornDown.Task.DefaultTimeout();
         var summary = JsonNode.Parse(Assert.Single(interaction.DisplayedRawText).Text)!;
-        Assert.Equal("cancelled", summary["status"]!.GetValue<string>());
+        Assert.Equal("cancelled", summary["testSummary"]!["outcome"]!.GetValue<string>());
         Assert.Equal(CliExitCodes.Cancelled, summary["cliExitCode"]!.GetValue<int>());
-        Assert.Empty(summary["resources"]!.AsArray());
+        Assert.Empty(summary["testResults"]!.AsObject());
     }
 
     [Theory]
@@ -1057,7 +1058,7 @@ public class TestCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, await execution.DefaultTimeout());
         await tornDown.Task.DefaultTimeout();
         var summary = JsonNode.Parse(Assert.Single(interaction.DisplayedRawText).Text)!;
-        Assert.Equal("failed", summary["status"]!.GetValue<string>());
+        Assert.Equal("failed", summary["testSummary"]!["outcome"]!.GetValue<string>());
         Assert.Contains(CliConfigNames.AppHostStartupTimeout, summary["error"]!.GetValue<string>());
     }
 
@@ -1272,19 +1273,19 @@ public class TestCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.WaitTimeout, await execution.DefaultTimeout());
         await tornDown.Task.DefaultTimeout();
         var persisted = JsonNode.Parse(File.ReadAllText(summaryPath!))!;
-        Assert.Equal(keepAlive ? resourcePassed ? "passed" : "failed" : "timedOut", persisted["status"]!.GetValue<string>());
+        Assert.Equal(keepAlive ? resourcePassed ? "passed" : "failed" : "timedOut", persisted["testSummary"]!["outcome"]!.GetValue<string>());
         Assert.Equal(CliExitCodes.WaitTimeout, persisted["cliExitCode"]!.GetValue<int>());
         Assert.Equal(string.Format(TestCommandStrings.CommandTimedOut, 10), persisted["error"]!.GetValue<string>());
         if (phase is "build" or "startup")
         {
-            Assert.Empty(persisted["resources"]!.AsArray());
+            Assert.Empty(persisted["testResults"]!.AsObject());
         }
         else
         {
-            Assert.Equal("earlier-result", persisted["testResults"]![0]!["name"]!.GetValue<string>());
+            Assert.Equal("earlier-result", persisted["testResults"]!["tests"]!["testCases"]![0]!["name"]!.GetValue<string>());
             Assert.Equal(phase == "resources" ? "incomplete" : resourcePassed ? "passed" : "failed",
-                persisted["resources"]![0]!["outcome"]!.GetValue<string>());
-            Assert.Equal(keepAlive ? "completed" : "incomplete", persisted["collections"]![0]!["status"]!.GetValue<string>());
+                persisted["testResults"]!["tests"]!["outcome"]!.GetValue<string>());
+            Assert.Equal(keepAlive ? "completed" : "incomplete", persisted["testResults"]!["tests"]!["collectorStatus"]!.GetValue<string>());
         }
         if (keepAlive)
         {
@@ -1398,7 +1399,7 @@ public class TestCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(CliExitCodes.Cancelled, await execution.DefaultTimeout());
         var summary = JsonNode.Parse(Assert.Single(interaction.DisplayedRawText).Text)!;
-        Assert.Equal("cancelled", summary["status"]!.GetValue<string>());
+        Assert.Equal("cancelled", summary["testSummary"]!["outcome"]!.GetValue<string>());
         Assert.Equal(CliExitCodes.Cancelled, summary["cliExitCode"]!.GetValue<int>());
     }
 

@@ -24,6 +24,34 @@ public sealed class TestingAnnotation : IResourceAnnotation
     {
     }
 
+    /// <summary>
+    /// Gets or sets the time allowed for the runtime result collector to complete.
+    /// </summary>
+    /// <value>
+    /// A positive duration no greater than <c>4,294,967,294</c> milliseconds, or
+    /// <see cref="System.Threading.Timeout.InfiniteTimeSpan"/> (the default) for no collector deadline.
+    /// </value>
+    /// <remarks>
+    /// The deadline begins when collection is scheduled, including time spent waiting for resource
+    /// completion inside the callback. It does not bound resource startup or execution.
+    /// Expiry cancels the collector context and fails collection without stopping other participants.
+    /// Test-run cancellation, including the overall CLI deadline, always applies.
+    /// </remarks>
+    /// <exception cref="ArgumentOutOfRangeException">The value is not infinite or a supported positive duration.</exception>
+    public TimeSpan Timeout
+    {
+        get;
+        set
+        {
+            if (value != System.Threading.Timeout.InfiniteTimeSpan &&
+                (value <= TimeSpan.Zero || value > TimeSpan.FromMilliseconds(uint.MaxValue - 1)))
+            {
+                throw new ArgumentOutOfRangeException(nameof(value), value, "The collector timeout must be infinite or a positive duration no greater than 4,294,967,294 milliseconds.");
+            }
+            field = value;
+        }
+    } = System.Threading.Timeout.InfiniteTimeSpan;
+
     internal Func<ResourceTestingContext, Task>? Collector { get; init; }
     internal TestingContext? TestingContext { get; init; }
     internal string? OutputPath { get; init; }
