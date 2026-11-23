@@ -28,8 +28,9 @@ internal sealed class FileSystemService : IFileSystemService, IDisposable
 
         _temporaryStorage = temporaryStorage;
 
-        // Check configuration to preserve temp files for debugging
-        _preserveTempFiles = configuration["ASPIRE_PRESERVE_TEMP_FILES"] is not null;
+        // Preserve temp files for debugging only when the setting is truthy ("true" or a non-zero integer),
+        // so values such as "false" or "0" leave cleanup enabled.
+        _preserveTempFiles = configuration.GetBool("ASPIRE_PRESERVE_TEMP_FILES", defaultValue: false);
 
         _tempDirectory = new TempFileSystemService(this);
     }

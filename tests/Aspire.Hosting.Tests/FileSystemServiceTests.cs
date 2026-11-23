@@ -438,4 +438,24 @@ public class FileSystemServiceTests
         using var tempDir = service.TempDirectory.CreateTempSubdirectory();
         Assert.True(Directory.Exists(tempDir.Path));
     }
+
+    [Theory]
+    [InlineData(null, false)]
+    [InlineData("", false)]
+    [InlineData("false", false)]
+    [InlineData("0", false)]
+    [InlineData("no", false)]
+    [InlineData("true", true)]
+    [InlineData("TRUE", true)]
+    [InlineData("1", true)]
+    public void PreserveTempFiles_RequiresTruthyValue(string? value, bool expected)
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?> { ["ASPIRE_PRESERVE_TEMP_FILES"] = value })
+            .Build();
+
+        var service = new FileSystemService(configuration, new Aspire.Shared.TemporaryStorage());
+
+        Assert.Equal(expected, service.ShouldPreserveTempFiles);
+    }
 }
