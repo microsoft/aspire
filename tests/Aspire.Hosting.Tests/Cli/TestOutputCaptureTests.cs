@@ -3,8 +3,12 @@
 
 using System.Text;
 using System.IO.Pipelines;
+using Aspire.Hosting.Backchannel;
 using Aspire.Hosting.Cli;
 using Aspire.Hosting.Tests.Utils;
+using Aspire.Hosting.Utils;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Time.Testing;
 
 #pragma warning disable ASPIRETESTING001
 
@@ -58,6 +62,64 @@ public class TestOutputCaptureTests(ITestOutputHelper outputHelper)
         }
         context.Close();
         await Assert.ThrowsAsync<InvalidOperationException>(context.CaptureOutputAsync);
+    }
+
+    [Fact]
+    public async Task CollectorDeadlineCancelsRawCaptureAndDoesNotMarkItComplete()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+        builder.Configuration["ASPIRE_TEST_OUTPUT_PATH"] = Path.Combine(workspace.Path, "results");
+        using var logs = new ResourceLoggerService();
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var exited = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var calls = 0;
+        logs.SetConsoleLogsService(new TestConsoleLogsService
+        {
+            RawOutput = async (_, _, token) =>
+            {
+                if (Interlocked.Increment(ref calls) == 2)
+                {
+                    started.TrySetResult();
+                }
+                await Task.Delay(Timeout.InfiniteTimeSpan, token);
+                throw new InvalidOperationException("Cancellation was expected.");
+            }
+        });
+        var resource = builder.AddExecutable("tests", "go", workspace.Path).WithTesting(async context =>
+        {
+            try
+            {
+                await context.CaptureOutputAsync();
+            }
+            finally
+            {
+                exited.TrySetResult();
+            }
+        }).WithTestingTimeout(TimeSpan.FromSeconds(1));
+        var timeProvider = new FakeTimeProvider();
+        using var notifications = ResourceNotificationServiceTestHelpers.Create();
+        await notifications.PublishUpdateAsync(resource.Resource, s => s with { State = KnownResourceStates.Finished, ExitCode = 0 });
+        using var coordinator = new TestRunCoordinator(new DistributedApplicationModel(builder.Resources),
+            notifications, timeProvider, NullLogger<TestRunCoordinator>.Instance, logs);
+        var events = new List<TestRunEvent>();
+        var stream = ReadEventsAsync();
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+        timeProvider.Advance(TimeSpan.FromSeconds(1));
+        await Task.WhenAll(stream, exited.Task).WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+        Assert.False(events.Last().Passed);
+        Assert.Equal("Test result collection timed out for resource 'tests' after 00:00:01.",
+            Assert.Single(events, item => item.Collection is { Status: "failed" }).Collection!.Error);
+        var path = Assert.Single(resource.Resource.Annotations.OfType<TestingAnnotation>()).OutputPath!;
+        Assert.False(File.Exists(Path.Combine(path, "output.complete")));
+
+        async Task ReadEventsAsync()
+        {
+            await foreach (var item in coordinator.WatchAsync(TestContext.Current.CancellationToken))
+            {
+                events.Add(item);
+            }
+        }
     }
 
     [Fact]
