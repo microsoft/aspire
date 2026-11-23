@@ -349,7 +349,7 @@ extends:
                   SYSTEM_ACCESSTOKEN: $(System.AccessToken)
 
               # Download artifacts from the source build pipeline
-              - ${{ if not(and(eq(parameters.SkipNuGetPublish, true), eq(parameters.SkipChannelPromotion, true))) }}:
+              - ${{ if eq(parameters.SkipNuGetPublish, false) }}:
                 - download: aspire-build
                   displayName: 'Download PackageArtifacts from Source Build'
                   artifact: PackageArtifacts
@@ -417,7 +417,7 @@ extends:
                   artifact: aspire-vscode-extension
 
               # Move artifacts to expected location for output
-              - ${{ if not(and(eq(parameters.SkipNuGetPublish, true), eq(parameters.SkipChannelPromotion, true))) }}:
+              - ${{ if eq(parameters.SkipNuGetPublish, false) }}:
                 - powershell: |
                     $sourcePath = "$(Pipeline.Workspace)/aspire-build/PackageArtifacts"
                     $targetPath = "$(Pipeline.Workspace)/packages/PackageArtifacts"
@@ -440,7 +440,7 @@ extends:
                     Write-Host "✓ Artifacts prepared for SBOM generation"
                   displayName: 'Prepare Artifacts for Publishing'
 
-              - ${{ if and(eq(parameters.SkipNuGetPublish, true), eq(parameters.SkipChannelPromotion, true)) }}:
+              - ${{ if eq(parameters.SkipNuGetPublish, true) }}:
                 - powershell: |
                     $targetPath = "$(Pipeline.Workspace)/packages/PackageArtifacts"
 
@@ -448,7 +448,7 @@ extends:
                       New-Item -ItemType Directory -Path $targetPath -Force | Out-Null
                     }
 
-                    Write-Host "Installer-only run detected; created empty PackageArtifacts placeholder."
+                    Write-Host "NuGet publishing skipped; created empty PackageArtifacts placeholder."
                   displayName: 'Prepare Empty PackageArtifacts Placeholder'
 
               - ${{ if or(eq(parameters.SkipNpmRidPublish, false), eq(parameters.SkipNpmPointerPublish, false)) }}:
@@ -734,8 +734,8 @@ extends:
         dependsOn: PrepareArtifacts
         jobs:
           - job: ReleaseJob
-            displayName: 'Validate Release Parameters'
-            timeoutInMinutes: 15
+            displayName: 'Validate Release Parameters and Payloads'
+            timeoutInMinutes: 90
             pool:
               name: NetCore1ESPool-Internal
               image: windows.vs2026preview.scout.amd64
@@ -749,6 +749,24 @@ extends:
               mb:
                 publish:
                   enabled: false
+              inputs:
+                - ${{ if eq(parameters.SkipNuGetPublish, false) }}:
+                  - input: pipelineArtifact
+                    artifactName: PackageArtifacts
+                    targetPath: '$(Pipeline.Workspace)/packages/PackageArtifacts'
+                - ${{ if or(eq(parameters.SkipNpmRidPublish, false), eq(parameters.SkipNpmPointerPublish, false)) }}:
+                  - input: pipelineArtifact
+                    artifactName: NpmRidPackageArtifacts
+                    targetPath: '$(Pipeline.Workspace)/npm/rid-packages'
+                  - input: pipelineArtifact
+                    artifactName: NpmPointerPackageArtifacts
+                    targetPath: '$(Pipeline.Workspace)/npm/pointer-package'
+                  - input: pipelineArtifact
+                    artifactName: NpmValidationSummary
+                    targetPath: '$(Pipeline.Workspace)/npm/validation-summary'
+                  - input: pipelineArtifact
+                    artifactName: NpmSignatureArtifacts
+                    targetPath: '$(Pipeline.Workspace)/npm/signatures'
             steps:
               # ===== VALIDATION =====
               # Note: No checkout - releaseJob doesn't allow it. All scripts are inlined.
@@ -961,266 +979,79 @@ extends:
                   env:
                     SYSTEM_ACCESSTOKEN: $(System.AccessToken)
 
-              # ===== SUMMARY =====
-              - powershell: |
-                  Write-Host ""
-                  Write-Host "╔═══════════════════════════════════════════════════════════════╗"
-                  Write-Host "║                    RELEASE SUMMARY                            ║"
-                  Write-Host "╠═══════════════════════════════════════════════════════════════╣"
-                  Write-Host "║ Source Build:   $(resources.pipeline.aspire-build.runName)"
-                  Write-Host "║ Source Build ID: $(resources.pipeline.aspire-build.runID)"
-                  if ("${{ parameters.SkipChannelPromotion }}" -eq "true") {
-                    Write-Host "║ BAR Build ID:   (SKIPPED)"
-                  } else {
-                    Write-Host "║ BAR Build ID:   $(BarBuildId)"
-                  }
-                  Write-Host "║ GA Channel:     ${{ parameters.GaChannelName }}"
-                  Write-Host "║ Prerelease:     ${{ parameters.IsPrerelease }}"
-                  Write-Host "║ Dry Run:        ${{ parameters.DryRun }}"
-                  Write-Host "╠═══════════════════════════════════════════════════════════════╣"
-                  Write-Host "║ NuGet Publish:  ${{ parameters.SkipNuGetPublish }}" -NoNewline
-                  if ("${{ parameters.SkipNuGetPublish }}" -eq "true") {
-                    Write-Host " (SKIPPED)"
-                  } elseif ("${{ parameters.DryRun }}" -eq "true") {
-                    Write-Host " (DRY RUN)"
-                  } else {
-                    Write-Host " (runs in parallel after validation)"
-                  }
-                  Write-Host "║ npm Publish:    RID skip=${{ parameters.SkipNpmRidPublish }}, pointer skip=${{ parameters.SkipNpmPointerPublish }}" -NoNewline
-                  if ("${{ parameters.SkipNpmRidPublish }}" -eq "true" -and "${{ parameters.SkipNpmPointerPublish }}" -eq "true") {
-                    Write-Host " (SKIPPED)"
-                  } elseif ("${{ parameters.DryRun }}" -eq "true") {
-                    Write-Host " (DRY RUN)"
-                  } elseif ("${{ parameters.IsPrerelease }}" -eq "true") {
-                    Write-Host " (BLOCKED - prerelease requires non-latest npm dist-tag support)"
-                  } elseif ("${{ parameters.SkipNpmPointerPublish }}" -eq "true") {
-                    Write-Host " (runs in parallel after validation; pointer publish skipped)"
-                  } elseif ("${{ parameters.SkipNpmRidPublish }}" -eq "true") {
-                    Write-Host " (runs in parallel after validation; RID publish skipped)"
-                  } else {
-                    Write-Host " (runs in parallel after validation)"
-                  }
-                  Write-Host "║ npm RID Skip:   ${{ parameters.SkipNpmRidPublish }}"
-                  Write-Host "║ npm Ptr Skip:   ${{ parameters.SkipNpmPointerPublish }}"
-                  Write-Host "║ Channel Promo:  ${{ parameters.SkipChannelPromotion }}" -NoNewline
-                  if ("${{ parameters.SkipChannelPromotion }}" -eq "true") {
-                    Write-Host " (SKIPPED)"
-                  } else {
-                    Write-Host " (runs in parallel after validation)"
-                  }
-                  Write-Host "║ WinGet:         ${{ parameters.SkipWinGetPublish }}" -NoNewline
-                  if ("${{ parameters.SkipWinGetPublish }}" -eq "true") {
-                    Write-Host " (SKIPPED)"
-                  } elseif ("${{ parameters.IsPrerelease }}" -eq "true") {
-                    Write-Host " (SKIPPED - prerelease)"
-                  } else {
-                    Write-Host " (runs after channel promotion)"
-                  }
-                  Write-Host "║ GitHub Tasks:   ${{ parameters.SkipGitHubTasks }}" -NoNewline
-                  if ("${{ parameters.SkipGitHubTasks }}" -eq "true") {
-                    Write-Host " (SKIPPED)"
-                  } elseif ("${{ parameters.DryRun }}" -eq "true") {
-                    Write-Host " (runs in parallel after validation; dry_run=true forwarded)"
-                  } else {
-                    Write-Host " (runs in parallel after validation)"
-                  }
-                  Write-Host "║ Release Assets: ${{ parameters.SkipReleaseAssets }}" -NoNewline
-                  if ("${{ parameters.SkipReleaseAssets }}" -eq "true") {
-                    Write-Host " (SKIPPED)"
-                  } elseif ("${{ parameters.DryRun }}" -eq "true") {
-                    Write-Host " (verify only; no upload in dry-run)"
-                  } else {
-                    Write-Host " (uploaded to draft release after GitHub Tasks job)"
-                  }
-                  Write-Host "║ Nix Flake:      ${{ parameters.SkipNixPackageUpdate }}" -NoNewline
-                  if ("${{ parameters.SkipNixPackageUpdate }}" -eq "true") {
-                    Write-Host " (SKIPPED)"
-                  } elseif ("${{ parameters.IsPrerelease }}" -eq "true") {
-                    Write-Host " (SKIPPED - prerelease)"
-                  } elseif ("${{ parameters.DryRun }}" -eq "true") {
-                    Write-Host " (dry-run dispatch after baseline branch creation)"
-                  } else {
-                    Write-Host " (runs after baseline branch creation; independent of asset upload)"
-                  }
-                  Write-Host "║ VS Code Ext:    ${{ parameters.SkipVSCodeExtensionPublish }}" -NoNewline
-                  if ("${{ parameters.SkipVSCodeExtensionPublish }}" -eq "true") {
-                    Write-Host " (SKIPPED)"
-                  } else {
-                    if ("${{ parameters.DryRun }}" -eq "true") {
-                      Write-Host " (validated in dry-run)"
-                    } else {
-                      Write-Host " (runs in parallel after validation)"
-                    }
-                  }
-                  Write-Host "╚═══════════════════════════════════════════════════════════════╝"
-                  Write-Host ""
-                displayName: 'Print Summary'
-                condition: always()
+              # Validate every selected payload before any publisher can start.
+              - ${{ if eq(parameters.SkipNuGetPublish, false) }}:
+                - task: UseDotNet@2
+                  displayName: 'Install .NET 10 SDK'
+                  inputs:
+                    packageType: 'sdk'
+                    version: '10.0.x'
 
-          # ===== NUGET PUBLISHING =====
-          # Publishing legs share only the parameter-validation barrier. Each release job
-          # downloads its own SBOM-backed inputs and reports failures independently.
-          - job: NuGetPublishJob
-            displayName: 'Publish NuGet Packages'
-            dependsOn: ReleaseJob
-            condition: |
-              and(
-                in(dependencies.ReleaseJob.result, 'Succeeded', 'SucceededWithIssues'),
-                eq('${{ parameters.SkipNuGetPublish }}', 'false')
-              )
-            timeoutInMinutes: 90
-            pool:
-              name: NetCore1ESPool-Internal
-              image: windows.vs2026preview.scout.amd64
-              os: windows
-            templateContext:
-              type: releaseJob
-              isProduction: true
-              # The auto-injected publish auth plugin must use the accessible dnceng mirror.
-              mb:
-                publish:
-                  feedSource: 'https://pkgs.dev.azure.com/dnceng/_packaging/MicroBuildToolset/nuget/v3/index.json'
-              inputs:
-                - input: pipelineArtifact
-                  artifactName: PackageArtifacts
-                  targetPath: '$(Pipeline.Workspace)/packages/PackageArtifacts'
-            steps:
-              - task: UseDotNet@2
-                displayName: 'Install .NET 10 SDK'
-                inputs:
-                  packageType: 'sdk'
-                  version: '10.0.x'
-
-              - powershell: |
-                  $packagesPath = "$(Pipeline.Workspace)/packages/PackageArtifacts"
-                  Write-Host "=== Package Inventory ==="
-
-                  $packages = Get-ChildItem -Path $packagesPath -Filter "*.nupkg" -Recurse
-                  Write-Host "Found $($packages.Count) packages:"
-
-                  foreach ($pkg in $packages) {
-                    $sizeMB = [math]::Round($pkg.Length / 1MB, 2)
-                    Write-Host "  - $($pkg.Name) ($sizeMB MB)"
-                  }
-
-                  if ($packages.Count -eq 0) {
-                    Write-Error "No packages found in artifacts!"
-                    exit 1
-                  }
-
-                  Write-Host "==========================="
-                displayName: 'List Packages'
-
-              # Throttle parallel signature verification to avoid saturating certificate
-              # revocation checks. The PowerShell 7 runner supports ForEach-Object -Parallel.
-              - pwsh: |
-                  $packagesPath = "$(Pipeline.Workspace)/packages/PackageArtifacts"
-                  Write-Host "=== Verifying Package Signatures (parallel) ==="
-
-                  $packages = Get-ChildItem -Path $packagesPath -Filter "*.nupkg" -Recurse
-                  Write-Host "Found $($packages.Count) packages to verify"
-
-                  $failedVerification = [System.Collections.Concurrent.ConcurrentBag[string]]::new()
-
-                  $packages | ForEach-Object -ThrottleLimit 8 -Parallel {
-                    $package = $_
-                    $bag = $using:failedVerification
-
-                    # Capture native stderr without terminating the parallel runspace.
-                    $ErrorActionPreference = 'Continue'
-                    $result = dotnet nuget verify $package.FullName 2>&1
-                    $verifyExitCode = $LASTEXITCODE
-
-                    if ($verifyExitCode -ne 0) {
-                      Write-Host "  ❌ $($package.Name): signature verification FAILED"
-                      Write-Host $result
-                      $bag.Add($package.Name)
-                    } else {
-                      Write-Host "  ✓ $($package.Name)"
-                    }
-                  }
-
-                  if ($failedVerification.Count -gt 0) {
-                    Write-Host ""
-                    Write-Host "=== SIGNATURE VERIFICATION FAILED ==="
-                    Write-Host "The following packages failed signature verification:"
-                    foreach ($pkg in $failedVerification) {
-                      Write-Host "  - $pkg"
-                    }
-                    Write-Error "Package signature verification failed. Aborting release."
-                    exit 1
-                  }
-
-                  Write-Host ""
-                  Write-Host "✓ All $($packages.Count) packages passed signature verification"
-                  Write-Host "==========================="
-                displayName: 'Verify Package Signatures'
-
-              - ${{ if eq(parameters.DryRun, true) }}:
                 - powershell: |
                     $packagesPath = "$(Pipeline.Workspace)/packages/PackageArtifacts"
-                    Write-Host "=== DRY RUN MODE ==="
-                    Write-Host "⚠️ The following packages would be published to NuGet.org:"
-                    Write-Host ""
+                    Write-Host "=== Package Inventory ==="
+
                     $packages = Get-ChildItem -Path $packagesPath -Filter "*.nupkg" -Recurse
+                    Write-Host "Found $($packages.Count) packages:"
+
                     foreach ($pkg in $packages) {
                       $sizeMB = [math]::Round($pkg.Length / 1MB, 2)
                       Write-Host "  - $($pkg.Name) ($sizeMB MB)"
                     }
+
+                    if ($packages.Count -eq 0) {
+                      Write-Error "No packages found in artifacts!"
+                      exit 1
+                    }
+
+                    Write-Host "==========================="
+                  displayName: 'List Packages'
+
+                # Throttle parallel signature verification to avoid saturating certificate
+                # revocation checks. The PowerShell 7 runner supports ForEach-Object -Parallel.
+                - pwsh: |
+                    $packagesPath = "$(Pipeline.Workspace)/packages/PackageArtifacts"
+                    Write-Host "=== Verifying Package Signatures (parallel) ==="
+
+                    $packages = Get-ChildItem -Path $packagesPath -Filter "*.nupkg" -Recurse
+                    Write-Host "Found $($packages.Count) packages to verify"
+
+                    $failedVerification = [System.Collections.Concurrent.ConcurrentBag[string]]::new()
+
+                    $packages | ForEach-Object -ThrottleLimit 8 -Parallel {
+                      $package = $_
+                      $bag = $using:failedVerification
+
+                      # Capture native stderr without terminating the parallel runspace.
+                      $ErrorActionPreference = 'Continue'
+                      $result = dotnet nuget verify $package.FullName 2>&1
+                      $verifyExitCode = $LASTEXITCODE
+
+                      if ($verifyExitCode -ne 0) {
+                        Write-Host "  ❌ $($package.Name): signature verification FAILED"
+                        Write-Host $result
+                        $bag.Add($package.Name)
+                      } else {
+                        Write-Host "  ✓ $($package.Name)"
+                      }
+                    }
+
+                    if ($failedVerification.Count -gt 0) {
+                      Write-Host ""
+                      Write-Host "=== SIGNATURE VERIFICATION FAILED ==="
+                      Write-Host "The following packages failed signature verification:"
+                      foreach ($pkg in $failedVerification) {
+                        Write-Host "  - $pkg"
+                      }
+                      Write-Error "Package signature verification failed. Aborting release."
+                      exit 1
+                    }
+
                     Write-Host ""
-                    Write-Host "Total: $($packages.Count) packages"
-                    Write-Host "=== DRY RUN - No packages were actually published ==="
-                  displayName: 'Dry Run - List Packages (No Publish)'
+                    Write-Host "✓ All $($packages.Count) packages passed signature verification"
+                    Write-Host "==========================="
+                  displayName: 'Verify Package Signatures'
 
-              # useDotNetTask: false is required for encrypted API keys.
-              # Omit the service-connection reference entirely on skipped reruns.
-              - ${{ if and(eq(parameters.DryRun, false), eq(parameters.SkipNuGetPublish, false)) }}:
-                - task: 1ES.PublishNuget@1
-                  displayName: 'Push Packages to NuGet.org'
-                  inputs:
-                    useDotNetTask: false
-                    packagesToPush: '$(Pipeline.Workspace)/packages/PackageArtifacts/*.nupkg'
-                    packageParentPath: '$(Pipeline.Workspace)/packages/PackageArtifacts'
-                    nuGetFeedType: external
-                    publishFeedCredentials: 'NuGet.org - dotnet/aspire'
-
-          # ===== npm PUBLISHING =====
-          - job: NpmPublishJob
-            displayName: 'Publish npm Packages'
-            dependsOn: ReleaseJob
-            condition: |
-              and(
-                in(dependencies.ReleaseJob.result, 'Succeeded', 'SucceededWithIssues'),
-                or(eq('${{ parameters.SkipNpmRidPublish }}', 'false'), eq('${{ parameters.SkipNpmPointerPublish }}', 'false'))
-              )
-            timeoutInMinutes: 120
-            pool:
-              name: NetCore1ESPool-Internal
-              image: windows.vs2026preview.scout.amd64
-              os: windows
-            variables:
-              NpmPublishOwnersEffective: $[ dependencies.ReleaseJob.outputs['validateParameters.NpmPublishOwnersEffective'] ]
-              NpmPublishApproversEffective: $[ dependencies.ReleaseJob.outputs['validateParameters.NpmPublishApproversEffective'] ]
-            templateContext:
-              type: releaseJob
-              isProduction: true
-              mb:
-                publish:
-                  feedSource: 'https://pkgs.dev.azure.com/dnceng/_packaging/MicroBuildToolset/nuget/v3/index.json'
-              inputs:
-                - input: pipelineArtifact
-                  artifactName: NpmRidPackageArtifacts
-                  targetPath: '$(Pipeline.Workspace)/npm/rid-packages'
-                - input: pipelineArtifact
-                  artifactName: NpmPointerPackageArtifacts
-                  targetPath: '$(Pipeline.Workspace)/npm/pointer-package'
-                - input: pipelineArtifact
-                  artifactName: NpmValidationSummary
-                  targetPath: '$(Pipeline.Workspace)/npm/validation-summary'
-                - input: pipelineArtifact
-                  artifactName: NpmSignatureArtifacts
-                  targetPath: '$(Pipeline.Workspace)/npm/signatures'
-            steps:
               - ${{ if or(eq(parameters.SkipNpmRidPublish, false), eq(parameters.SkipNpmPointerPublish, false)) }}:
                 - powershell: |
                     $ErrorActionPreference = 'Stop'
@@ -1470,6 +1301,194 @@ extends:
                     Write-Host "All staged npm tarballs match validated version '$validatedVersion'."
                   displayName: 'Verify Staged npm Package Versions'
 
+              # ===== SUMMARY =====
+              - powershell: |
+                  Write-Host ""
+                  Write-Host "╔═══════════════════════════════════════════════════════════════╗"
+                  Write-Host "║                    RELEASE SUMMARY                            ║"
+                  Write-Host "╠═══════════════════════════════════════════════════════════════╣"
+                  Write-Host "║ Source Build:   $(resources.pipeline.aspire-build.runName)"
+                  Write-Host "║ Source Build ID: $(resources.pipeline.aspire-build.runID)"
+                  if ("${{ parameters.SkipChannelPromotion }}" -eq "true") {
+                    Write-Host "║ BAR Build ID:   (SKIPPED)"
+                  } else {
+                    Write-Host "║ BAR Build ID:   $(BarBuildId)"
+                  }
+                  Write-Host "║ GA Channel:     ${{ parameters.GaChannelName }}"
+                  Write-Host "║ Prerelease:     ${{ parameters.IsPrerelease }}"
+                  Write-Host "║ Dry Run:        ${{ parameters.DryRun }}"
+                  Write-Host "╠═══════════════════════════════════════════════════════════════╣"
+                  Write-Host "║ NuGet Publish:  ${{ parameters.SkipNuGetPublish }}" -NoNewline
+                  if ("${{ parameters.SkipNuGetPublish }}" -eq "true") {
+                    Write-Host " (SKIPPED)"
+                  } elseif ("${{ parameters.DryRun }}" -eq "true") {
+                    Write-Host " (DRY RUN)"
+                  } else {
+                    Write-Host " (runs in parallel after validation)"
+                  }
+                  Write-Host "║ npm Publish:    RID skip=${{ parameters.SkipNpmRidPublish }}, pointer skip=${{ parameters.SkipNpmPointerPublish }}" -NoNewline
+                  if ("${{ parameters.SkipNpmRidPublish }}" -eq "true" -and "${{ parameters.SkipNpmPointerPublish }}" -eq "true") {
+                    Write-Host " (SKIPPED)"
+                  } elseif ("${{ parameters.DryRun }}" -eq "true") {
+                    Write-Host " (DRY RUN)"
+                  } elseif ("${{ parameters.IsPrerelease }}" -eq "true") {
+                    Write-Host " (BLOCKED - prerelease requires non-latest npm dist-tag support)"
+                  } elseif ("${{ parameters.SkipNpmPointerPublish }}" -eq "true") {
+                    Write-Host " (runs in parallel after validation; pointer publish skipped)"
+                  } elseif ("${{ parameters.SkipNpmRidPublish }}" -eq "true") {
+                    Write-Host " (runs in parallel after validation; RID publish skipped)"
+                  } else {
+                    Write-Host " (runs in parallel after validation)"
+                  }
+                  Write-Host "║ npm RID Skip:   ${{ parameters.SkipNpmRidPublish }}"
+                  Write-Host "║ npm Ptr Skip:   ${{ parameters.SkipNpmPointerPublish }}"
+                  Write-Host "║ Channel Promo:  ${{ parameters.SkipChannelPromotion }}" -NoNewline
+                  if ("${{ parameters.SkipChannelPromotion }}" -eq "true") {
+                    Write-Host " (SKIPPED)"
+                  } else {
+                    Write-Host " (runs in parallel after validation)"
+                  }
+                  Write-Host "║ WinGet:         ${{ parameters.SkipWinGetPublish }}" -NoNewline
+                  if ("${{ parameters.SkipWinGetPublish }}" -eq "true") {
+                    Write-Host " (SKIPPED)"
+                  } elseif ("${{ parameters.IsPrerelease }}" -eq "true") {
+                    Write-Host " (SKIPPED - prerelease)"
+                  } else {
+                    Write-Host " (runs after channel promotion)"
+                  }
+                  Write-Host "║ GitHub Tasks:   ${{ parameters.SkipGitHubTasks }}" -NoNewline
+                  if ("${{ parameters.SkipGitHubTasks }}" -eq "true") {
+                    Write-Host " (SKIPPED)"
+                  } elseif ("${{ parameters.DryRun }}" -eq "true") {
+                    Write-Host " (runs in parallel after validation; dry_run=true forwarded)"
+                  } else {
+                    Write-Host " (runs in parallel after validation)"
+                  }
+                  Write-Host "║ Release Assets: ${{ parameters.SkipReleaseAssets }}" -NoNewline
+                  if ("${{ parameters.SkipReleaseAssets }}" -eq "true") {
+                    Write-Host " (SKIPPED)"
+                  } elseif ("${{ parameters.DryRun }}" -eq "true") {
+                    Write-Host " (verify only; no upload in dry-run)"
+                  } else {
+                    Write-Host " (uploaded to draft release after GitHub Tasks job)"
+                  }
+                  Write-Host "║ Nix Flake:      ${{ parameters.SkipNixPackageUpdate }}" -NoNewline
+                  if ("${{ parameters.SkipNixPackageUpdate }}" -eq "true") {
+                    Write-Host " (SKIPPED)"
+                  } elseif ("${{ parameters.IsPrerelease }}" -eq "true") {
+                    Write-Host " (SKIPPED - prerelease)"
+                  } elseif ("${{ parameters.DryRun }}" -eq "true") {
+                    Write-Host " (dry-run dispatch after baseline branch creation)"
+                  } else {
+                    Write-Host " (runs after baseline branch creation; independent of asset upload)"
+                  }
+                  Write-Host "║ VS Code Ext:    ${{ parameters.SkipVSCodeExtensionPublish }}" -NoNewline
+                  if ("${{ parameters.SkipVSCodeExtensionPublish }}" -eq "true") {
+                    Write-Host " (SKIPPED)"
+                  } else {
+                    if ("${{ parameters.DryRun }}" -eq "true") {
+                      Write-Host " (validated in dry-run)"
+                    } else {
+                      Write-Host " (runs in parallel after validation)"
+                    }
+                  }
+                  Write-Host "╚═══════════════════════════════════════════════════════════════╝"
+                  Write-Host ""
+                displayName: 'Print Summary'
+                condition: always()
+
+          # ===== NUGET PUBLISHING =====
+          # All publishers wait for selected-payload integrity checks in ReleaseJob.
+          # Publication failures remain independent after that shared preflight.
+          - job: NuGetPublishJob
+            displayName: 'Publish NuGet Packages'
+            dependsOn: ReleaseJob
+            condition: |
+              and(
+                in(dependencies.ReleaseJob.result, 'Succeeded', 'SucceededWithIssues'),
+                eq('${{ parameters.SkipNuGetPublish }}', 'false')
+              )
+            timeoutInMinutes: 90
+            pool:
+              name: NetCore1ESPool-Internal
+              image: windows.vs2026preview.scout.amd64
+              os: windows
+            templateContext:
+              type: releaseJob
+              isProduction: true
+              # The auto-injected publish auth plugin must use the accessible dnceng mirror.
+              mb:
+                publish:
+                  feedSource: 'https://pkgs.dev.azure.com/dnceng/_packaging/MicroBuildToolset/nuget/v3/index.json'
+              inputs:
+                - input: pipelineArtifact
+                  artifactName: PackageArtifacts
+                  targetPath: '$(Pipeline.Workspace)/packages/PackageArtifacts'
+            steps:
+              - ${{ if eq(parameters.DryRun, true) }}:
+                - powershell: |
+                    $packagesPath = "$(Pipeline.Workspace)/packages/PackageArtifacts"
+                    Write-Host "=== DRY RUN MODE ==="
+                    Write-Host "⚠️ The following packages would be published to NuGet.org:"
+                    Write-Host ""
+                    $packages = Get-ChildItem -Path $packagesPath -Filter "*.nupkg" -Recurse
+                    foreach ($pkg in $packages) {
+                      $sizeMB = [math]::Round($pkg.Length / 1MB, 2)
+                      Write-Host "  - $($pkg.Name) ($sizeMB MB)"
+                    }
+                    Write-Host ""
+                    Write-Host "Total: $($packages.Count) packages"
+                    Write-Host "=== DRY RUN - No packages were actually published ==="
+                  displayName: 'Dry Run - List Packages (No Publish)'
+
+              # useDotNetTask: false is required for encrypted API keys.
+              # Omit the service-connection reference entirely on skipped reruns.
+              - ${{ if and(eq(parameters.DryRun, false), eq(parameters.SkipNuGetPublish, false)) }}:
+                - task: 1ES.PublishNuget@1
+                  displayName: 'Push Packages to NuGet.org'
+                  inputs:
+                    useDotNetTask: false
+                    packagesToPush: '$(Pipeline.Workspace)/packages/PackageArtifacts/*.nupkg'
+                    packageParentPath: '$(Pipeline.Workspace)/packages/PackageArtifacts'
+                    nuGetFeedType: external
+                    publishFeedCredentials: 'NuGet.org - dotnet/aspire'
+
+              - ${{ if eq(parameters.SkipNuGetPublish, true) }}:
+                - powershell: |
+                    Write-Host "=== Skipping NuGet Publishing (SkipNuGetPublish=true) ==="
+                  displayName: 'Skip NuGet Packages (flagged)'
+
+          # ===== npm PUBLISHING =====
+          - job: NpmPublishJob
+            displayName: 'Publish npm Packages'
+            dependsOn: ReleaseJob
+            condition: |
+              and(
+                in(dependencies.ReleaseJob.result, 'Succeeded', 'SucceededWithIssues'),
+                or(eq('${{ parameters.SkipNpmRidPublish }}', 'false'), eq('${{ parameters.SkipNpmPointerPublish }}', 'false'))
+              )
+            timeoutInMinutes: 120
+            pool:
+              name: NetCore1ESPool-Internal
+              image: windows.vs2026preview.scout.amd64
+              os: windows
+            variables:
+              NpmPublishOwnersEffective: $[ dependencies.ReleaseJob.outputs['validateParameters.NpmPublishOwnersEffective'] ]
+              NpmPublishApproversEffective: $[ dependencies.ReleaseJob.outputs['validateParameters.NpmPublishApproversEffective'] ]
+            templateContext:
+              type: releaseJob
+              isProduction: true
+              mb:
+                publish:
+                  feedSource: 'https://pkgs.dev.azure.com/dnceng/_packaging/MicroBuildToolset/nuget/v3/index.json'
+              inputs:
+                - input: pipelineArtifact
+                  artifactName: NpmRidPackageArtifacts
+                  targetPath: '$(Pipeline.Workspace)/npm/rid-packages'
+                - input: pipelineArtifact
+                  artifactName: NpmPointerPackageArtifacts
+                  targetPath: '$(Pipeline.Workspace)/npm/pointer-package'
+            steps:
               - ${{ if and(eq(parameters.DryRun, true), or(eq(parameters.SkipNpmRidPublish, false), eq(parameters.SkipNpmPointerPublish, false))) }}:
                 - powershell: |
                     Write-Host "=== DRY RUN MODE ==="
@@ -1538,7 +1557,7 @@ extends:
                   displayName: 'Skip npm Packages (flagged)'
 
           # ===== CHANNEL PROMOTION =====
-          # Promotion runs alongside the publishing jobs after parameter validation.
+          # Promotion runs alongside the publishing jobs after the shared preflight.
           - job: ChannelPromotionJob
             displayName: 'Promote Build to Channel'
             dependsOn: ReleaseJob
@@ -1562,25 +1581,37 @@ extends:
                   enabled: false
             steps:
               - ${{ if eq(parameters.SkipChannelPromotion, false) }}:
+                # The SDK is required for tool installation and supplies .NET 10.
+                # darc's net8.0 runtimeconfig permits major roll-forward.
+                - task: UseDotNet@2
+                  displayName: 'Install .NET 10 SDK for darc'
+                  inputs:
+                    packageType: 'sdk'
+                    version: '10.0.x'
+
                 - powershell: |
+                    $ErrorActionPreference = 'Stop'
                     Write-Host "Installing darc CLI..."
                     
                     # Query Maestro API for the correct darc version
                     $versionEndpoint = 'https://maestro.dot.net/api/assets/darc-version?api-version=2020-02-20'
-                    $darcVersion = (Invoke-WebRequest -Uri $versionEndpoint -UseBasicParsing).Content
+                    $darcVersion = (Invoke-WebRequest -Uri $versionEndpoint -UseBasicParsing).Content.Trim()
                     Write-Host "Darc version: $darcVersion"
                     
-                    # Install darc as a .NET global tool
+                    # Match eng/common's isolated darc install; release jobs cannot check out
+                    # that helper. Do not rely on the image's global-tools PATH.
+                    $darcToolPath = "$(Agent.TempDirectory)\darc"
                     $arcadeServicesSource = 'https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-eng/nuget/v3/index.json'
                     Write-Host "Installing darc from $arcadeServicesSource..."
                     
-                    dotnet tool install microsoft.dotnet.darc --version $darcVersion --add-source "$arcadeServicesSource" -g
+                    dotnet tool install microsoft.dotnet.darc --version $darcVersion --source "$arcadeServicesSource" --tool-path "$darcToolPath"
                     
                     if ($LASTEXITCODE -ne 0) {
                       Write-Error "Failed to install darc CLI"
                       exit 1
                     }
                     
+                    Write-Host "##vso[task.setvariable variable=DarcExecutable]$darcToolPath\darc.exe"
                     Write-Host "✓ Darc CLI installed successfully"
                   displayName: 'Install darc'
 
@@ -1591,6 +1622,8 @@ extends:
                     scriptType: 'pscore'
                     scriptLocation: 'inlineScript'
                     inlineScript: |
+                      $ErrorActionPreference = 'Stop'
+                      $darc = "$(DarcExecutable)"
                       $barBuildId = "$(BarBuildId)"
                       $channelName = "${{ parameters.GaChannelName }}"
                       $dryRun = [System.Convert]::ToBoolean("${{ parameters.DryRun }}")
@@ -1600,6 +1633,14 @@ extends:
                       Write-Host "BAR Build ID: $barBuildId"
                       Write-Host "Target Channel: $channelName"
 
+                      # Probe the same executable in dry runs so a missing shim or
+                      # incompatible runtime fails before skipping the mutation.
+                      & $darc --version
+                      if ($LASTEXITCODE -ne 0) {
+                        Write-Error "darc startup failed with exit code $LASTEXITCODE"
+                        exit $LASTEXITCODE
+                      }
+
                       if ($dryRun) {
                         Write-Host "⚠️ DRY RUN MODE - Build will not actually be promoted"
                         Write-Host "[DRY RUN] Would run: darc add-build-to-channel --id $barBuildId --channel '$channelName' --azdev-pat <token> --ci"
@@ -1608,9 +1649,8 @@ extends:
 
                       Write-Host "Promoting build $barBuildId to channel '$channelName'..."
 
-                      # darc is installed as a global tool, so it's available in PATH
                       # --azdev-pat is required for darc to access Azure DevOps build artifacts
-                      darc add-build-to-channel `
+                      & $darc add-build-to-channel `
                         --id $barBuildId `
                         --channel "$channelName" `
                         --azdev-pat "$azdoToken" `

@@ -139,7 +139,7 @@ Before starting a release:
 4. Select the **Resources** button in the bottom right, then select the source build from the `aspire-build` dropdown.
    - The picker shows all recent builds from the `microsoft-aspire` pipeline regardless of branch. Pick the build that corresponds to the release branch and version you intend to ship.
    - Each build's tags are shown alongside its number. Verify the `release-version - X.Y.Z` tag matches the version you intend to ship before clicking **Run**. If the tag is missing, either re-run the source build after the tag-emitting change in `azure-pipelines.yml` is on that release branch or pass an explicit `ReleaseVersion` override.
-5. Click **Run** and monitor the pipeline. After artifact preparation and parameter validation succeed, the selected NuGet publish, npm publish, darc promotion, VS Code publishing, and GitHub release tasks run in parallel. WinGet waits for channel promotion (or an explicitly skipped promotion on a rerun). The GitHub jobs dispatch `release-github-tasks.yml`, wait for it to create the tag, draft release, merge-back PR, and baseline branch, then upload the `aspire-cli-*` archives to the draft release while the stable-release Nix updater independently uses the source build's `.sha512` checksums to update `eng/nix/versions.json` on the `update-baseline-<version>` branch. The AzDO pipeline only succeeds if every selected publish, promotion, GitHub task, asset upload, and Nix update succeeds; a failed parallel job does not roll back other completed publishes.
+5. Click **Run** and monitor the pipeline. After artifact preparation, parameter validation, and the shared payload integrity preflight succeed, the selected NuGet publish, npm publish, darc promotion, VS Code publishing, and GitHub release tasks run in parallel. The preflight checks NuGet signatures only when NuGet publishing is selected, and validates npm install summaries, inventory, signature-sidecar inputs, and tarball versions when either npm publish is selected. Any failed preflight prevents all publishers from starting, including in dry runs; skipped NuGet publishing does not require NuGet inputs. WinGet waits for channel promotion (or an explicitly skipped promotion on a rerun). The GitHub jobs dispatch `release-github-tasks.yml`, wait for it to create the tag, draft release, merge-back PR, and baseline branch, then upload the `aspire-cli-*` archives to the draft release while the stable-release Nix updater independently uses the source build's `.sha512` checksums to update `eng/nix/versions.json` on the `update-baseline-<version>` branch. The AzDO pipeline only succeeds if every selected publish, promotion, GitHub task, asset upload, and Nix update succeeds; a failed parallel publication does not roll back other completed publishes.
 6. Verify packages appear on NuGet.org and npm, verify that the `aspire-cli-*` archives are attached to the draft GitHub release, and review the generated baseline version PR including the Nix flake manifest update. Then proceed to [Step 5: Publish the draft release](#step-5-publish-the-draft-release).
 
 To publish only the VS Code extension after merging an extension release PR, run the same `release-publish-nuget` pipeline, select the signed source build from that merge, and set:
@@ -168,6 +168,8 @@ The npm release path validates Windows, Linux, and macOS install summaries and s
 `commit_sha` and `release_branch` for the GitHub workflow are derived automatically from the source build resource, so there is no need to copy them by hand.
 
 > **Tip**: Use `DryRun: true` to test end-to-end without publishing, promoting, tagging, creating PRs, or uploading release assets. The dry-run state is propagated to the GitHub workflow as `dry_run: true`.
+
+Channel promotion provisions the .NET SDK and installs darc into an isolated tool directory, then invokes its absolute executable path. The promotion step probes `darc --version` before the dry-run exit so dry runs also detect missing executables or incompatible runtimes.
 
 ### Step 2: Prepare a VS Code extension release PR
 
@@ -405,9 +407,10 @@ Azure DevOps release-publish-nuget.yml
      -> republish WinGet artifacts with SBOM when selected
   -> ReleaseJob
      -> validate parameters and export release metadata
-     -> fan out selected release work
+     -> verify NuGet inventory and signatures when NuGet publishing is selected
+     -> validate npm summaries, inventory, signature-sidecar inputs, and tarball versions when npm is selected
+     -> fan out selected release work only after all selected payload checks pass
   -> NuGetPublishJob (parallel with npm, promotion, extension, and GitHub jobs)
-     -> verify NuGet signatures
      -> publish NuGet through 1ES.PublishNuget@1
   -> NpmPublishJob
      -> publish npm RID packages through MicroBuild.Publish
@@ -415,6 +418,7 @@ Azure DevOps release-publish-nuget.yml
      -> publish npm pointer package through MicroBuild.Publish
      -> wait for ESRP completion (no direct npm registry access)
   -> ChannelPromotionJob
+     -> install darc with an isolated tool path and probe startup even in dry runs
      -> promote BAR build to GA channel
   -> WinGetJob
      -> waits for ChannelPromotionJob, or a skipped promotion rerun
