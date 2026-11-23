@@ -2,13 +2,49 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
+using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.OpenAI.Tests;
 
 public class OpenAIExtensionTests
 {
+    [Fact]
+    public async Task InitializationReportsMissingApiKeyOnParentAndModel()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var apiKey = builder.AddPendingSecretParameter("api-key");
+        var openAI = builder.AddOpenAI("openai").WithApiKey(apiKey);
+        IResource[] resources = [openAI.Resource, openAI.AddModel("model", "gpt-4o-mini").Resource];
+        using var app = builder.Build();
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
+        var notifications = app.ResourceNotifications;
+        var loggerService = app.Services.GetRequiredService<ResourceLoggerService>();
+        var initialization = resources.Select(resource => builder.Eventing.PublishAsync(
+            new InitializeResourceEvent(resource, builder.Eventing, loggerService, notifications, app.Services), cts.Token)).ToArray();
+
+        try
+        {
+            foreach (var resource in resources)
+            {
+                await notifications.AssertWaitingForParameterAsync(resource, apiKey.Resource, cts.Token);
+            }
+            Assert.All(initialization, task => Assert.False(task.IsCompleted));
+        }
+        finally
+        {
+            await apiKey.Resource.SetValueAsync("test-value").DefaultTimeout();
+            await Task.WhenAll(initialization).DefaultTimeout();
+        }
+
+        foreach (var resource in resources)
+        {
+            Assert.Equal(KnownResourceStates.Running, notifications.AssertParameterWaitCleared(resource)?.Text);
+        }
+    }
+
     [Fact]
     public async Task DefaultEndpointIsUsedInConnectionString()
     {

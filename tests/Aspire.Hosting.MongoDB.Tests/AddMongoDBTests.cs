@@ -7,6 +7,7 @@ using System.Security.Cryptography.X509Certificates;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
+using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using MongoDB.Driver;
 
@@ -436,6 +437,35 @@ public class AddMongoDBTests(ITestOutputHelper testOutputHelper)
         Assert.Contains("--replSet", args);
         Assert.Contains("test", args);
         Assert.Contains("--bind_ip_all", args);
+    }
+
+    [Fact]
+    public async Task WithKeyFileReportsParameterWaitWhileGeneratingFile()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var key = builder.AddPendingSecretParameter("mongo-key").Resource;
+        var mongo = builder.AddMongoDB("mongo").WithKeyFile(key).Resource;
+        using var app = builder.Build();
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
+        var notifications = app.ResourceNotifications;
+        await notifications.PublishUpdateAsync(mongo, s => s with { State = KnownResourceStates.Starting });
+        var callback = Assert.Single(mongo.Annotations.OfType<ContainerFileSystemCallbackAnnotation>());
+
+        var files = callback.Callback(new() { Model = mongo, Services = app.Services }, cts.Token);
+        try
+        {
+            await notifications.AssertWaitingForParameterAsync(mongo, key, cts.Token);
+            Assert.False(files.IsCompleted);
+        }
+        finally
+        {
+            await key.SetValueAsync("test-value").DefaultTimeout();
+            await files.DefaultTimeout();
+        }
+
+        var file = Assert.IsType<ContainerFile>(Assert.Single(await files));
+        Assert.Equal("test-value", file.Contents);
+        Assert.Equal(KnownResourceStates.Starting, notifications.AssertParameterWaitCleared(mongo)?.Text);
     }
 
     [Fact]
