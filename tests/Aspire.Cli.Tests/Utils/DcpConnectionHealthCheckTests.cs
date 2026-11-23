@@ -252,7 +252,7 @@ public class DcpConnectionHealthCheckTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task TestConnectionAsync_WhenCanceledAfterStart_StopsDcpAndPropagatesCancellation()
+    public async Task TestConnectionAsync_WhenCanceledAfterStart_LeavesDcpToMonitorAndPropagatesCancellation()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var factory = new TestProcessExecutionFactory();
@@ -266,10 +266,7 @@ public class DcpConnectionHealthCheckTests(ITestOutputHelper outputHelper)
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => connection);
 
-        Assert.Equal(1, execution.KillCount);
-        Assert.True(execution.KilledEntireProcessTree);
-        Assert.Equal(1, execution.DisposeCount);
-        Assert.False(Directory.Exists(execution.EnvironmentVariables["DCP_SESSION_FOLDER"]));
+        AssertLeftToMonitor(execution);
     }
 
     [Theory]
@@ -305,7 +302,7 @@ public class DcpConnectionHealthCheckTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task TestConnectionAsync_WhenKubeconfigIsInvalid_StopsDcpAndReturnsFailure()
+    public async Task TestConnectionAsync_WhenKubeconfigIsInvalid_LeavesDcpToMonitorAndReturnsFailure()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var factory = new TestProcessExecutionFactory
@@ -324,10 +321,25 @@ public class DcpConnectionHealthCheckTests(ITestOutputHelper outputHelper)
         Assert.Equal(EnvironmentCheckStatus.Fail, result.Status);
         Assert.Equal(DoctorCommandStrings.DcpKubeconfigMissingServerDetails, result.Details);
         Assert.True(execution.Started);
-        Assert.Equal(1, execution.KillCount);
-        Assert.True(execution.KilledEntireProcessTree);
-        Assert.Equal(1, execution.DisposeCount);
-        Assert.False(Directory.Exists(execution.EnvironmentVariables["DCP_SESSION_FOLDER"]));
+        AssertLeftToMonitor(execution);
+    }
+
+    // When no stop request can be delivered, the running execution is neither killed nor disposed
+    // (disposing a running ChildProcess kills its tree); DCP exits through --monitor instead and
+    // owns its session folder until then.
+    private static void AssertLeftToMonitor(TestProcessExecution execution)
+    {
+        var sessionDirectory = Assert.IsType<string>(execution.EnvironmentVariables["DCP_SESSION_FOLDER"]);
+        try
+        {
+            Assert.Equal(0, execution.KillCount);
+            Assert.Equal(0, execution.DisposeCount);
+            Assert.True(Directory.Exists(sessionDirectory));
+        }
+        finally
+        {
+            Directory.Delete(sessionDirectory, recursive: true);
+        }
     }
 
     [Fact]
