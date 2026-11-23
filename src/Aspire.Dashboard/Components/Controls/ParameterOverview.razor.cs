@@ -203,6 +203,15 @@ public partial class ParameterOverview : ComponentBase
         UpdateChoiceValueState();
     }
 
+    private void OnChoiceSelectionChanged(IEnumerable<SelectViewModel<string>> options)
+    {
+        if (ValueInputViewModel is { } input)
+        {
+            input.SelectedOption = options.FirstOrDefault();
+            UpdateChoiceValueState();
+        }
+    }
+
     private void UpdateChoiceValueState()
     {
         if (ValueInputViewModel is not { } input)

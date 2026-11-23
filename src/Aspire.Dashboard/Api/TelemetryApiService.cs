@@ -36,39 +36,34 @@ internal sealed class TelemetryApiService(ITelemetryRepository telemetryReposito
         }
 
         var effectiveLimit = limit ?? DefaultLimit;
+        // A zero or negative limit returns no items, which matches taking a tail of that size.
+        var latestCount = Math.Max(effectiveLimit, 0);
 
         // Convert structured search qualifiers into TelemetryFilter objects for repository-level filtering
         var spanFilters = new List<TelemetryFilter>();
         var searchTextFragments = ParseAndApplySearchFilters(search, spanFilters, AddSpanFiltersFromQualifiers, key => ResolveSpanFieldKey(key) is not null);
 
-        // Get spans for all resource keys (empty list means no filter / all resources)
+        // Get the most recent spans for all resource keys (empty list means no filter / all resources).
+        // The repository selects the tail so only the returned spans and their traces are materialized.
         var result = await telemetryRepository.GetSpansAsync(new GetSpansRequest
         {
             ResourceKeys = resourceKeys,
             StartIndex = 0,
-            Count = int.MaxValue,
+            Count = latestCount,
+            LatestItemCount = latestCount,
             Filters = spanFilters,
             TraceId = traceId,
             HasError = hasError,
             TextFragments = searchTextFragments
         }, cancellationToken).ConfigureAwait(false);
-        var allSpans = result.PagedResult.Items;
-
-        var totalCount = allSpans.Count;
-
-        // Apply limit (take from end for most recent)
-        var spans = allSpans;
-        if (spans.Count > effectiveLimit)
-        {
-            spans = spans.Skip(spans.Count - effectiveLimit).ToList();
-        }
+        var spans = result.PagedResult.Items;
 
         var otlpData = TelemetryExportService.ConvertSpansToOtlpJson(spans);
 
         return new TelemetryApiResponse
         {
             Data = otlpData,
-            TotalCount = totalCount,
+            TotalCount = result.PagedResult.TotalItemCount,
             ReturnedCount = spans.Count
         };
     }
@@ -89,6 +84,7 @@ internal sealed class TelemetryApiService(ITelemetryRepository telemetryReposito
         }
 
         var effectiveLimit = limit ?? DefaultTraceLimit;
+        var latestCount = Math.Max(effectiveLimit, 0);
 
         // Convert structured search qualifiers into TelemetryFilter objects for repository-level filtering
         var traceFilters = new List<TelemetryFilter>();
@@ -103,23 +99,19 @@ internal sealed class TelemetryApiService(ITelemetryRepository telemetryReposito
         }
         var searchTextFragments = ParseAndApplySearchFilters(search, traceFilters, AddSpanFiltersFromQualifiers, key => ResolveSpanFieldKey(key) is not null);
 
-        // Get traces for all resource keys (empty list means no filter / all resources)
+        // Get the most recent traces for all resource keys (empty list means no filter / all resources).
+        // The repository selects the tail so only the returned traces are materialized.
         var result = await telemetryRepository.GetTracesAsync(new GetTracesRequest
         {
             ResourceKeys = resourceKeys,
             StartIndex = 0,
-            Count = int.MaxValue,
+            Count = latestCount,
+            LatestItemCount = latestCount,
             Filters = traceFilters,
             TextFragments = searchTextFragments
         }, cancellationToken).ConfigureAwait(false);
         var traces = result.PagedResult.Items;
         var totalCount = result.PagedResult.TotalItemCount;
-
-        // Apply limit (take from end for most recent)
-        if (traces.Count > effectiveLimit)
-        {
-            traces = traces.Skip(traces.Count - effectiveLimit).ToList();
-        }
 
         var spans = traces.SelectMany(t => t.Spans).ToList();
         var returnedCount = traces.Count;
@@ -174,6 +166,7 @@ internal sealed class TelemetryApiService(ITelemetryRepository telemetryReposito
         }
 
         var effectiveLimit = limit ?? DefaultLimit;
+        var latestCount = Math.Max(effectiveLimit, 0);
 
         var filters = new List<TelemetryFilter>();
 
@@ -204,32 +197,26 @@ internal sealed class TelemetryApiService(ITelemetryRepository telemetryReposito
 
         var searchTextFragments = ParseAndApplySearchFilters(search, filters, AddLogFiltersFromQualifiers, key => ResolveLogFieldKey(key) is not null);
 
-        // Get logs for all resource keys (empty list means no filter / all resources)
+        // Get the most recent logs for all resource keys (empty list means no filter / all resources).
+        // The repository selects the tail so only the returned logs are materialized.
         var result = await telemetryRepository.GetLogsAsync(new GetLogsContext
         {
             ResourceKeys = resourceKeys,
             StartIndex = 0,
-            Count = int.MaxValue,
+            Count = latestCount,
+            LatestItemCount = latestCount,
             Filters = filters,
             TextFragments = searchTextFragments
         }, cancellationToken).ConfigureAwait(false);
 
         var logs = result.Items;
 
-        var totalCount = logs.Count;
-
-        // Apply limit (take from end for most recent)
-        if (logs.Count > effectiveLimit)
-        {
-            logs = logs.Skip(logs.Count - effectiveLimit).ToList();
-        }
-
         var otlpData = TelemetryExportService.ConvertLogsToOtlpJson(logs);
 
         return new TelemetryApiResponse
         {
             Data = otlpData,
-            TotalCount = totalCount,
+            TotalCount = result.TotalItemCount,
             ReturnedCount = logs.Count
         };
     }

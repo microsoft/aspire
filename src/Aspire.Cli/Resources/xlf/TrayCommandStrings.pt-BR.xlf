@@ -3,13 +3,13 @@
   <file datatype="xml" source-language="en" target-language="pt-BR" original="../TrayCommandStrings.resx">
     <body>
       <trans-unit id="BundleRequired">
-        <source>The Aspire tray requires a CLI bundle. No usable bundle was found. Install an Aspire bundle that includes the tray companion for your desktop.</source>
-        <target state="needs-review-translation">A bandeja experimental do Aspire requer um pacote CLI licenciado e com versão. Nenhum pacote utilizável foi encontrado. Instale um pacote Aspire para Windows ou macOS que inclua o complemento na bandeja do sistema.</target>
+        <source>The Aspire tray requires a leased, versioned CLI bundle. No usable bundle was found. Install an Aspire bundle that includes the tray companion for your desktop.</source>
+        <target state="translated">A bandeja do Aspire requer um pacote da CLI sob concessão e com controle de versão. Nenhum pacote utilizável foi encontrado. Instale um pacote do Aspire que inclua o aplicativo complementar de bandeja para seu ambiente de área de trabalho.</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
         <source>Manage the desktop tray companion (Preview)</source>
-        <target state="needs-review-translation">Gerenciar o complemento da bandeja do Windows ou macOS (Experimental)</target>
+        <target state="translated">Gerenciar o complemento da bandeja da área de trabalho (Visualização)</target>
         <note />
       </trans-unit>
       <trans-unit id="HelperFailed">
@@ -24,12 +24,12 @@
       </trans-unit>
       <trans-unit id="NativeCliRequired">
         <source>Starting the tray requires an installed native Aspire CLI executable. Managed development builds and 'dotnet aspire.dll' are not supported.</source>
-        <target state="needs-review-translation">Para iniciar a bandeja experimental, é necessário ter um executável nativo da CLI do Aspire instalado. Não há suporte para compilações de desenvolvimento gerenciadas nem para 'dotnet aspire.dll'.</target>
+        <target state="translated">Para iniciar a bandeja, é necessário ter um executável nativo da CLI do Aspire instalado. Não há suporte para compilações de desenvolvimento gerenciadas e 'dotnet aspire.dll'.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoTrayHost">
         <source>The desktop has no tray host, so the tray icon won't appear yet. Enable an AppIndicator extension on GNOME or your desktop's tray module. The icon appears as soon as tray support is available.</source>
-        <target state="new">The desktop has no tray host, so the tray icon won't appear yet. Enable an AppIndicator extension on GNOME or your desktop's tray module. The icon appears as soon as tray support is available.</target>
+        <target state="translated">O ambiente de área de trabalho não tem um host de bandeja, por isso o ícone da bandeja ainda não aparecerá. Habilite uma extensão AppIndicator no GNOME ou o módulo de bandeja do seu ambiente de área de trabalho. O ícone aparece assim que o suporte à bandeja fica disponível.</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationFailed">
@@ -39,12 +39,12 @@
       </trans-unit>
       <trans-unit id="PayloadMissing">
         <source>The CLI bundle does not contain the tray companion for this platform (Windows: tray/aspire-tray.exe and tray/Aspire.ico; macOS: tray/Aspire Tray.app; Linux: tray/aspire-tray and tray/Aspire.png). Install a matching native Aspire bundle, or run 'aspire setup --force' to repair an incomplete extraction.</source>
-        <target state="needs-review-translation">O pacote da CLI não contém o complemento de bandeja para esta plataforma (Windows: bandeja/aspire-tray.exe e bandeja/Aspire.ico; macOS: bandeja/Tray.app). Instale um pacote nativo do Aspire compatível ou execute 'aspire setup --force' para corrigir uma extração incompleta.</target>
+        <target state="translated">O pacote CLI não contém o complemento de bandeja para esta plataforma (Windows: bandeja/aspire-tray.exe e bandeja/Aspire.ico; macOS: bandeja/Aspire Tray.app; Linux: bandeja/aspire-bandeja e bandeja/Aspire.png). Instale um pacote nativo do Aspire correspondente ou execute 'aspire setup --force' para reparar uma extração incompleta.</target>
         <note />
       </trans-unit>
       <trans-unit id="StartDescription">
         <source>Start or restore the tray icon (Preview)</source>
-        <target state="needs-review-translation">Iniciar ou restaurar o ícone na bandeja (Experimental)</target>
+        <target state="translated">Iniciar ou restaurar o ícone na bandeja (Visualização)</target>
         <note />
       </trans-unit>
       <trans-unit id="Started">
@@ -54,7 +54,7 @@
       </trans-unit>
       <trans-unit id="StopDescription">
         <source>Stop the tray without stopping AppHosts (Preview)</source>
-        <target state="needs-review-translation">Parar a bandeja sem parar os AppHosts (Experimental)</target>
+        <target state="translated">Parar a bandeja sem parar os AppHosts (Visualização)</target>
         <note />
       </trans-unit>
       <trans-unit id="Stopped">
@@ -64,7 +64,7 @@
       </trans-unit>
       <trans-unit id="UnsupportedPlatform">
         <source>The Aspire tray supports Windows, macOS, and glibc Linux x64/ARM64 installations. Linux requires a graphical desktop with StatusNotifierItem support, GTK 3, and an AppIndicator library.</source>
-        <target state="needs-review-translation">A bandeja experimental do Aspire oferece suporte a instalações do Windows e macOS x64/ARM64. Não há suporte para Linux.</target>
+        <target state="translated">A bandeja do Aspire é compatível com instalações do Windows, macOS e Linux com glibc em x64/ARM64. O Linux requer um ambiente gráfico de área de trabalho com suporte a StatusNotifierItem, GTK 3 e uma biblioteca AppIndicator.</target>
         <note />
       </trans-unit>
     </body>

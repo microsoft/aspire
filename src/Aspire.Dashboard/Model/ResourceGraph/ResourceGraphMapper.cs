@@ -12,6 +12,16 @@ namespace Aspire.Dashboard.Model.ResourceGraph;
 
 public static class ResourceGraphMapper
 {
+    internal static List<ResourceViewModel> OrderResources(IEnumerable<ResourceViewModel> resources) =>
+        resources.OrderBy(resource => resource.ResourceType).ThenBy(resource => resource.Name).ToList();
+
+    internal static IReadOnlyList<ResourceViewModel> GetTagMembers(IEnumerable<ResourceViewModel> graphResources, string tagName, ResourceTagStore? tagStore)
+    {
+        var resources = graphResources.ToList();
+        var tagsByResource = tagStore?.GetTagsByResource(resources);
+        return resources.Where(resource => ResourceTagStore.HasTag(resource, tagName, tagsByResource)).ToList();
+    }
+
     // The text of the game's DOM controls. What the game draws on its canvas stays in English: its bitmap font only has ASCII.
     internal static GraphGameStringsDto GetGameStrings(IStringLocalizer<Aspire.Dashboard.Resources.Resources> loc) => new(
         Instructions: loc[nameof(Aspire.Dashboard.Resources.Resources.ResourceGraphGameInstructions)].Value,
@@ -24,7 +34,7 @@ public static class ResourceGraphMapper
         HardCoreWarning: loc[nameof(Aspire.Dashboard.Resources.Resources.ResourceGraphGameHardCoreWarning)].Value,
         HardCoreStopped: loc[nameof(Aspire.Dashboard.Resources.Resources.ResourceGraphGameHardCoreStopped)].Value);
 
-    public static ResourceDto MapResource(ResourceViewModel r, IEnumerable<ResourceViewModel> graphResources, IDictionary<string, ResourceViewModel> resourcesByName, IStringLocalizer<Columns> columnsLoc, bool showHiddenResources, IconResolver iconResolver)
+    public static ResourceDto MapResource(ResourceViewModel r, IEnumerable<ResourceViewModel> graphResources, IDictionary<string, ResourceViewModel> resourcesByName, IStringLocalizer<Columns> columnsLoc, bool showHiddenResources, IconResolver iconResolver, IReadOnlyList<string> tags)
     {
         var resolvedNames = new List<string>();
 
@@ -73,6 +83,7 @@ public static class ResourceGraphMapper
                 Tooltip = stateIcon.Text ?? r.State
             },
             ReferencedNames = resolvedNames.Distinct().OrderBy(n => n).ToImmutableArray(),
+            Tags = [.. tags.Select(tag => new ResourceTagDto(tag, ColorGenerator.TagInstance.GetColorVariableByKey(tag)))],
             EndpointUrl = r.IsParameter ? null : endpoint?.Url,
             EndpointText = resolvedEndpointText,
             // Resources marked hidden are included only while "Show hidden resources" is enabled.

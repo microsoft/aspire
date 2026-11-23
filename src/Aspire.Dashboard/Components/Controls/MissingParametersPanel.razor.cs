@@ -319,6 +319,12 @@ public partial class MissingParametersPanel : IAsyncDisposable
         return UpdateChoiceValueStateAsync(input);
     }
 
+    private Task OnChoiceSelectionChangedAsync(InputViewModel input, IEnumerable<SelectViewModel<string>> options)
+    {
+        input.SelectedOption = options.FirstOrDefault();
+        return UpdateChoiceValueStateAsync(input);
+    }
+
     private async Task UpdateChoiceValueStateAsync(InputViewModel input)
     {
         input.SelectedOption ??= input.SelectOptions.FirstOrDefault(option => option.Id == input.Value)

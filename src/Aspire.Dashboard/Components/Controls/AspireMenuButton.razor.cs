@@ -92,6 +92,10 @@ public partial class AspireMenuButton : FluentComponentBase
     [Parameter]
     public bool RestoreFocusOnItemClick { get; set; } = true;
 
+    // Keep the original action callbacks when they capture the scope shown when the menu opened.
+    [Parameter]
+    public bool RefreshItemsWhileOpen { get; set; } = true;
+
     protected override void OnParametersSet()
     {
         if (!ReferenceEquals(_renderedItemsProvider, ItemsProvider))
@@ -103,7 +107,7 @@ public partial class AspireMenuButton : FluentComponentBase
             _hasActionableItems = true;
         }
 
-        if (_visible)
+        if (_visible && RefreshItemsWhileOpen)
         {
             RefreshItems();
 

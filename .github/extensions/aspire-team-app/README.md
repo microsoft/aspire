@@ -87,7 +87,10 @@ card shows are driven by its lane and its signal pills:
 
 ## Needs attention order
 
-Needs attention is numbered, left-to-right across each row, in ascending order of
+Needs attention is numbered, left-to-right across each row, with eligible PRs
+labeled **fixes-ci** or **urgent-review** first. Label names match exactly,
+case-insensitively; either label or both gives the same priority. Within the
+priority group and the remaining group, PRs are in ascending order of
 **first-ever non-draft readiness**. A PR opened ready uses its creation time; a PR
 opened as a draft uses its earliest ready-for-review event. Complete, paginated
 draft/ready transition history distinguishes these cases, including PRs opened
@@ -95,10 +98,13 @@ ready that later returned to draft. Equal timestamps use ordinal host/repository
 order, then PR number, independent of fetch completion and user locale.
 
 Later draft cycles, comments, label changes, commits, and human or Copilot reviews
-do not reset this priority. Existing eligibility rules still hide blocked PRs;
-when eligible again, they return at their original first-readiness priority.
-This is an approximation of reviewability: a PR marked ready on Monday but
-conflicted until Thursday still precedes one first marked ready on Tuesday.
+do not reset the readiness timestamp. Adding or removing a priority label reorders
+the queue on refresh. Existing eligibility rules still hide blocked PRs, even
+with priority labels; when eligible again, they return at their original
+first-readiness position within their current label-priority group.
+This is an approximation of reviewability: within the same label-priority group,
+a PR marked ready on Monday but conflicted until Thursday still precedes one
+first marked ready on Tuesday.
 The canvas only reads GitHub; it does not persist queue state or write metadata.
 If transition history is missing, inconsistent, or exceeds the pagination safety
 limit, the PR is omitted from Needs attention with a visible error, not assigned
@@ -106,7 +112,8 @@ a guessed timestamp. A later refresh retries.
 
 The main queue shows the first **10** eligible PRs (or all of them when fewer than
 10 qualify), with no review-debt spillover or per-user limit override.
-**Later in queue** shows the remaining count and starts collapsed. Expand it to
+**Later in queue** continues the same label-priority and readiness order, shows
+the remaining count, and starts collapsed. Expand it to
 look up a PR's position, not to pick an alternative review pool: prioritize the
 first 10 in Needs attention. This compact reference list has PR links but no
 review-action buttons. Positions continue at 11 without gaps or duplicates and

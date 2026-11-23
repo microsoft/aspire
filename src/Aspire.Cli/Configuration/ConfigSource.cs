@@ -48,6 +48,8 @@ internal sealed class ConfigSource
 
     public void Validate()
     {
+        // Report malformed bindings before acquisition. These are correctness checks,
+        // not a security boundary against trusted local inputs or an accepted publisher.
         if (string.IsNullOrWhiteSpace(Repository) || string.IsNullOrWhiteSpace(Path))
         {
             throw new ConfigSourceException(ConfigSourceStrings.InvalidBinding);

@@ -24,12 +24,12 @@
       </trans-unit>
       <trans-unit id="FetchingSource">
         <source>Fetching {0} from {1} using Git...</source>
-        <target state="new">Fetching {0} from {1} using Git...</target>
+        <target state="translated">正在使用 Git 擷取 {0}，來源為 {1}...</target>
         <note>{0} is the localized content being fetched, such as "configuration source" or "templates". {1} is the Git repository, optionally followed by its path and ref.</note>
       </trans-unit>
       <trans-unit id="FetchingSourceWithAuthentication">
         <source>Fetching {0} from {1} using Git. Git may prompt you to authenticate.</source>
-        <target state="new">Fetching {0} from {1} using Git. Git may prompt you to authenticate.</target>
+        <target state="translated">正在使用 Git 擷取 {0}，來源為 {1}。Git 可能會提示您進行驗證。</target>
         <note>{0} is the localized content being fetched, such as "configuration source" or "templates". {1} is the Git repository, optionally followed by its path and ref.</note>
       </trans-unit>
       <trans-unit id="FormatOptionDescription">
@@ -39,12 +39,12 @@
       </trans-unit>
       <trans-unit id="GitFetchConfigurationSource">
         <source>configuration source</source>
-        <target state="new">configuration source</target>
+        <target state="translated">設定來源</target>
         <note>The content inserted into the Git-fetch notice.</note>
       </trans-unit>
       <trans-unit id="GitFetchTemplates">
         <source>templates</source>
-        <target state="new">templates</target>
+        <target state="translated">範本</target>
         <note>The content inserted into the Git-fetch notice.</note>
       </trans-unit>
       <trans-unit id="HeaderLanguage">
@@ -144,12 +144,12 @@
       </trans-unit>
       <trans-unit id="NuGetSearchLimitWarning">
         <source>NuGet search results may be incomplete because the limit of {0} packages per feed was reached. Use narrower integration source patterns.</source>
-        <target state="new">NuGet search results may be incomplete because the limit of {0} packages per feed was reached. Use narrower integration source patterns.</target>
+        <target state="translated">NuGet 搜尋結果可能不完整，因為已達每個摘要 {0} 個套件的上限。請使用更精確的整合來源模式。</target>
         <note>{0} is the maximum number of packages searched per feed.</note>
       </trans-unit>
       <trans-unit id="NuGetSearchSourceFailedWarning">
         <source>Failed to search NuGet source '{0}'. Some integrations may be missing. Check the source configuration and authentication. See the CLI logs for details.</source>
-        <target state="new">Failed to search NuGet source '{0}'. Some integrations may be missing. Check the source configuration and authentication. See the CLI logs for details.</target>
+        <target state="translated">無法搜尋 NuGet 來源 '{0}'。可能缺少某些整合。檢查來源設定和驗證。如需詳細資料，請參閱 CLI 記錄。</target>
         <note>{0} is the redacted NuGet source name or URL.</note>
       </trans-unit>
       <trans-unit id="PipelineEnvironmentOptionDescription">
@@ -204,62 +204,62 @@
       </trans-unit>
       <trans-unit id="SourceFeed">
         <source>Package feed</source>
-        <target state="new">Package feed</target>
+        <target state="translated">套件摘要</target>
         <note />
       </trans-unit>
       <trans-unit id="SourceGitPath">
         <source>Git path</source>
-        <target state="new">Git path</target>
+        <target state="translated">Git 路徑</target>
         <note />
       </trans-unit>
       <trans-unit id="SourceGitRepository">
         <source>Git source</source>
-        <target state="new">Git source</target>
+        <target state="translated">Git 來源</target>
         <note />
       </trans-unit>
       <trans-unit id="SourceMarketplace">
         <source>Marketplace</source>
-        <target state="new">Marketplace</target>
+        <target state="translated">Marketplace</target>
         <note />
       </trans-unit>
       <trans-unit id="SourceName">
         <source>Name</source>
-        <target state="new">Name</target>
+        <target state="translated">名稱</target>
         <note />
       </trans-unit>
       <trans-unit id="SourceOpenCodeV1Catalog">
         <source>OpenCode V1 catalog</source>
-        <target state="new">OpenCode V1 catalog</target>
+        <target state="translated">OpenCode V1 目錄</target>
         <note />
       </trans-unit>
       <trans-unit id="SourceOpenCodeV2Catalog">
         <source>OpenCode V2 catalog</source>
-        <target state="new">OpenCode V2 catalog</target>
+        <target state="translated">OpenCode V2 目錄</target>
         <note />
       </trans-unit>
       <trans-unit id="SourcePath">
         <source>Path</source>
-        <target state="new">Path</target>
+        <target state="translated">路徑</target>
         <note />
       </trans-unit>
       <trans-unit id="SourcePatterns">
         <source>Package patterns</source>
-        <target state="new">Package patterns</target>
+        <target state="translated">套件模式</target>
         <note />
       </trans-unit>
       <trans-unit id="SourcePlugins">
         <source>Plugins</source>
-        <target state="new">Plugins</target>
+        <target state="translated">外掛程式</target>
         <note />
       </trans-unit>
       <trans-unit id="SourceRef">
         <source>Git ref</source>
-        <target state="new">Git ref</target>
+        <target state="translated">Git 參考</target>
         <note />
       </trans-unit>
       <trans-unit id="SourceTrustWarning">
         <source>Only use sources you trust. Content from these sources can run code on your machine.</source>
-        <target state="new">Only use sources you trust. Content from these sources can run code on your machine.</target>
+        <target state="translated">只使用您信任的來源。來自這些來源的內容可以在您的電腦上執行程式碼。</target>
         <note />
       </trans-unit>
       <trans-unit id="UnrecognizedOptionDidYouMeanFormat">

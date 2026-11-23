@@ -405,7 +405,10 @@ public sealed partial class SqliteTelemetryRepository
         using var transaction = connection.BeginTransaction(deferred: true);
         var query = BuildSpanQuery(context);
         var totalCount = connection.QuerySingle<int>($"SELECT COUNT(*) {query.FromAndWhere};", query.Parameters, transaction);
-        query.Parameters.Add("StartIndex", Math.Max(context.StartIndex, 0));
+        var hiddenItemCount = context.LatestItemCount is { } latestItemCount
+            ? Math.Max(totalCount - Math.Max(latestItemCount, 0), 0)
+            : 0;
+        query.Parameters.Add("StartIndex", (long)Math.Max(context.StartIndex, 0) + hiddenItemCount);
         query.Parameters.Add("Count", Math.Max(context.Count, 0));
         var identities = connection.Query<SpanIdentityRecord>($"""
             SELECT s.trace_id AS TraceId, s.span_id AS SpanId

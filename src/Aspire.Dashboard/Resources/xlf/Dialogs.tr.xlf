@@ -95,217 +95,217 @@ Yeteneklerin kurulumu da dahil olmak üzere, kontrol paneli ile yapay zeka arac�
       </trans-unit>
       <trans-unit id="DashboardFeedbackBack">
         <source>Back</source>
-        <target state="new">Back</target>
+        <target state="translated">Geri</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackContinue">
         <source>Continue</source>
-        <target state="new">Continue</target>
+        <target state="translated">Devam</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackCopied">
         <source>Feedback copied to the clipboard.</source>
-        <target state="new">Feedback copied to the clipboard.</target>
+        <target state="translated">Geri bildirim panoya kopyalandı.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackCopiedAndOpened">
         <source>Feedback copied. Paste it into the GitHub discussion to share it.</source>
-        <target state="new">Feedback copied. Paste it into the GitHub discussion to share it.</target>
+        <target state="translated">Geri bildirim kopyalandı. Paylaşmak için GitHub tartışmasına yapıştırın.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackCopy">
         <source>Copy feedback</source>
-        <target state="new">Copy feedback</target>
+        <target state="translated">Geri bildirimi kopyala</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackCopyAndOpen">
         <source>Copy and open discussion</source>
-        <target state="new">Copy and open discussion</target>
+        <target state="translated">Kopyala ve tartışmayı aç</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackCopyFailed">
         <source>The clipboard could not be accessed. Copy the preview manually.</source>
-        <target state="new">The clipboard could not be accessed. Copy the preview manually.</target>
+        <target state="translated">Panoya erişilemedi. Önizlemeyi el ile kopyalayın.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackCopyOpenAndSwitch">
         <source>Open new discussion and switch</source>
-        <target state="new">Open new discussion and switch</target>
+        <target state="translated">Yeni tartışma aç ve geçiş yap</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackDescription">
         <source>Your answers stay in this browser until you copy them. GitHub opens in a new tab so you can review and submit the feedback yourself.</source>
-        <target state="new">Your answers stay in this browser until you copy them. GitHub opens in a new tab so you can review and submit the feedback yourself.</target>
+        <target state="translated">Siz kopyalayana kadar yanıtlarınız bu tarayıcıda kalır. GitHub yeni bir sekmede açılır; böylece geri bildirimi kendiniz inceleyip gönderebilirsiniz.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackDialogTitle">
         <source>Share dashboard feedback</source>
-        <target state="new">Share dashboard feedback</target>
+        <target state="translated">Pano geri bildirimini paylaş</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackDifficultiesLabel">
         <source>What was harder or less clear than in the previous dashboard?</source>
-        <target state="new">What was harder or less clear than in the previous dashboard?</target>
+        <target state="translated">Önceki gösterge tablosuna kıyasla ne daha zordu veya daha az anlaşılırdı?</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackDurationLabel">
         <source>How long have you used the new dashboard?</source>
-        <target state="new">How long have you used the new dashboard?</target>
+        <target state="translated">Yeni panoyu ne kadar süredir kullanıyorsunuz?</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackDurationLessThanOneHour">
         <source>Less than an hour</source>
-        <target state="new">Less than an hour</target>
+        <target state="translated">Bir saatten kısa bir süre önce</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackDurationMoreThanOneWeek">
         <source>More than a week</source>
-        <target state="new">More than a week</target>
+        <target state="translated">Bir haftadan fazla</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackDurationNotSpecified">
         <source>I'd rather not say</source>
-        <target state="new">I'd rather not say</target>
+        <target state="translated">Söylememeyi tercih ederim</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackDurationOneDay">
         <source>About a day</source>
-        <target state="new">About a day</target>
+        <target state="translated">Yaklaşık bir gün</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackDurationTwoToSevenDays">
         <source>2 to 7 days</source>
-        <target state="new">2 to 7 days</target>
+        <target state="translated">2 ila 7 gün arası</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackMarkdownTitle">
         <source>Dashboard experience feedback</source>
-        <target state="new">Dashboard experience feedback</target>
+        <target state="translated">Pano deneyimi geri bildirimi</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackMissingLabel">
         <source>What is missing from the new dashboard?</source>
-        <target state="new">What is missing from the new dashboard?</target>
+        <target state="translated">Yeni panoda ne eksik?</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackModeAppHost">
         <source>With an AppHost</source>
-        <target state="new">With an AppHost</target>
+        <target state="translated">AppHost ile</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackModeLabel">
         <source>How do you run the dashboard?</source>
-        <target state="new">How do you run the dashboard?</target>
+        <target state="translated">Panoyu nasıl çalıştırıyorsunuz?</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackModeStandalone">
         <source>Standalone, for telemetry only</source>
-        <target state="new">Standalone, for telemetry only</target>
+        <target state="translated">Tek başına, yalnızca telemetri için</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackOtherPlaceholder">
         <source>Tell us what happened</source>
-        <target state="new">Tell us what happened</target>
+        <target state="translated">Neler olduğunu bize anlatın</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackPreviewDisclosure">
         <source>Preview copied feedback</source>
-        <target state="new">Preview copied feedback</target>
+        <target state="translated">Kopyalanan geri bildirimi önizle</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackPreviewLabel">
         <source>Your feedback</source>
-        <target state="new">Your feedback</target>
+        <target state="translated">Geri bildiriminiz</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackPromptIgnore">
         <source>Don't ask again</source>
-        <target state="new">Don't ask again</target>
+        <target state="translated">Bir daha sorma</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackPromptMessage">
         <source>We'd love your feedback on the new experience.</source>
-        <target state="new">We'd love your feedback on the new experience.</target>
+        <target state="translated">Yeni deneyim hakkındaki görüşlerinizi öğrenmek isteriz.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackPromptShare">
         <source>Share feedback</source>
-        <target state="new">Share feedback</target>
+        <target state="translated">Geri bildirimi paylaşın</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackPromptTitle">
         <source>Welcome to the new Aspire dashboard!</source>
-        <target state="new">Welcome to the new Aspire dashboard!</target>
+        <target state="translated">Yeni Aspire panosuna hoş geldiniz!</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackReasonFindingApplicationUrls">
         <source>I couldn't find my application URLs</source>
-        <target state="new">I couldn't find my application URLs</target>
+        <target state="translated">Uygulama URL'lerimi bulamadım</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackReasonMissingFeature">
         <source>A feature I need is missing</source>
-        <target state="new">A feature I need is missing</target>
+        <target state="translated">İhtiyacım olan bir özellik eksik</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackReasonNavigation">
         <source>It was hard to find my way around</source>
-        <target state="new">It was hard to find my way around</target>
+        <target state="translated">Kullanım şeklini anlamak zordu</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackReasonOther">
         <source>Another reason</source>
-        <target state="new">Another reason</target>
+        <target state="translated">Diğer neden</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackReasonPerformanceOrAccessibility">
         <source>It was slow or hard to use with assistive technology</source>
-        <target state="new">It was slow or hard to use with assistive technology</target>
+        <target state="translated">Yardımcı teknolojiyle kullanmak yavaştı veya zordu</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackReasonTelemetryWorkflow">
         <source>The telemetry workflow didn't work for me</source>
-        <target state="new">The telemetry workflow didn't work for me</target>
+        <target state="translated">Telemetri iş akışı benim için işe yaramadı</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackReasonTerminals">
         <source>The terminals didn't work for me</source>
-        <target state="new">The terminals didn't work for me</target>
+        <target state="translated">Terminaller benim için işe yaramadı</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackReasonsLabel">
         <source>What made you go back? Select all that apply.</source>
-        <target state="new">What made you go back? Select all that apply.</target>
+        <target state="translated">Geri dönmenize ne sebep oldu? Uygun olanların tümünü seçin.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackSkipAndSwitch">
         <source>Skip and switch</source>
-        <target state="new">Skip and switch</target>
+        <target state="translated">Atla ve değiştir</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackStepOneTitle">
         <source>Why are you going back to the previous dashboard?</source>
-        <target state="new">Why are you going back to the previous dashboard?</target>
+        <target state="translated">Neden önceki panoya geri dönüyorsunuz?</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackStepProgress">
         <source>Step {0} of 2</source>
-        <target state="new">Step {0} of 2</target>
+        <target state="translated">Adım {0} / 2</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackStepTwoDescription">
         <source>Both questions are optional, but your answers help us decide what to improve.</source>
-        <target state="new">Both questions are optional, but your answers help us decide what to improve.</target>
+        <target state="translated">Her iki soru da isteğe bağlıdır ancak yanıtlarınız neyi geliştireceğimize karar vermemize yardımcı olur.</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackStepTwoTitle">
         <source>Is there anything else you want to tell us?</source>
-        <target state="new">Is there anything else you want to tell us?</target>
+        <target state="translated">Bize söylemek istediğiniz başka bir şey var mı?</target>
         <note />
       </trans-unit>
       <trans-unit id="DashboardFeedbackSwitchToLegacy">
         <source>Switch to previous dashboard</source>
-        <target state="new">Switch to previous dashboard</target>
+        <target state="translated">Önceki panoya geç</target>
         <note />
       </trans-unit>
       <trans-unit id="DialogCloseButtonText">
@@ -630,22 +630,22 @@ Yeteneklerin kurulumu da dahil olmak üzere, kontrol paneli ile yapay zeka arac�
       </trans-unit>
       <trans-unit id="HelpDialogAspireDocumentationDescription">
         <source>Get started with Aspire, its integrations and deployment.</source>
-        <target state="new">Get started with Aspire, its integrations and deployment.</target>
+        <target state="translated">Aspire'ı, tümleştirmelerini ve dağıtımını kullanmaya başlayın.</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogAspireDocumentationTitle">
         <source>Aspire documentation</source>
-        <target state="new">Aspire documentation</target>
+        <target state="translated">Aspire belgeleri</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogCategoryNavigation">
         <source>General</source>
-        <target state="needs-review-translation">Site genelinde gezinti</target>
+        <target state="translated">Genel</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogCategoryPageNavigation">
         <source>Dashboard navigation</source>
-        <target state="needs-review-translation">Sayfa gezintisi</target>
+        <target state="translated">Pano gezintisi</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogCategoryPanels">
@@ -655,37 +655,37 @@ Yeteneklerin kurulumu da dahil olmak üzere, kontrol paneli ile yapay zeka arac�
       </trans-unit>
       <trans-unit id="HelpDialogCategoryResourceGraph">
         <source>Resource graph</source>
-        <target state="new">Resource graph</target>
+        <target state="translated">Kaynak grafı</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogCategoryTelemetry">
         <source>Logs &amp; telemetry</source>
-        <target state="new">Logs &amp; telemetry</target>
+        <target state="translated">Günlükler ve telemetri</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogCommunityHeading">
         <source>Community and support</source>
-        <target state="new">Community and support</target>
+        <target state="translated">Topluluk ve destek</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogDashboardDocumentationDescription">
         <source>Guides and reference for using the Aspire dashboard.</source>
-        <target state="new">Guides and reference for using the Aspire dashboard.</target>
+        <target state="translated">Aspire gösterge tablosunu kullanma kılavuzları ve başvuru bilgileri.</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogDashboardFeedbackDescription">
         <source>Share feedback about the evolving dashboard experience.</source>
-        <target state="new">Share feedback about the evolving dashboard experience.</target>
+        <target state="translated">Gelişmeye devam eden gösterge tablosu deneyimi hakkında geri bildirim paylaşın.</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogDashboardFeedbackTitle">
         <source>Dashboard feedback</source>
-        <target state="new">Dashboard feedback</target>
+        <target state="translated">Pano geri bildirimi</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogDashboardVersion">
         <source>Aspire dashboard version {0}</source>
-        <target state="new">Aspire dashboard version {0}</target>
+        <target state="translated">Aspire pano sürümü {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogDecreasePanelSize">
@@ -695,27 +695,27 @@ Yeteneklerin kurulumu da dahil olmak üzere, kontrol paneli ile yapay zeka arac�
       </trans-unit>
       <trans-unit id="HelpDialogDiscordDescription">
         <source>Chat with the Aspire team and community.</source>
-        <target state="new">Chat with the Aspire team and community.</target>
+        <target state="translated">Aspire ekibi ve topluluğuyla sohbet edin.</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogDiscordTitle">
         <source>Discord</source>
-        <target state="new">Discord</target>
+        <target state="translated">Discord</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogDocumentationTab">
         <source>Documentation</source>
-        <target state="new">Documentation</target>
+        <target state="translated">Belgeler</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogGameDescription">
         <source>In the resource graph, select Play Aspire Outage, or focus the graph and press O, to play a game starring your resources. Press Esc to return to the graph.</source>
-        <target state="new">In the resource graph, select Play Aspire Outage, or focus the graph and press O, to play a game starring your resources. Press Esc to return to the graph.</target>
+        <target state="translated">Kaynak grafında, kaynaklarınızı konu alan bir oyun oynamak için Play Aspire Outage seçeneğini belirtin veya grafa odaklanıp O tuşuna basın. Grafiğe dönmek için Esc tuşuna basın.</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogGameTitle">
         <source>Aspire Outage</source>
-        <target state="new">Aspire Outage</target>
+        <target state="translated">Aspire Outage</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogGetHelpLinkText">
@@ -725,62 +725,62 @@ Yeteneklerin kurulumu da dahil olmak üzere, kontrol paneli ile yapay zeka arac�
       </trans-unit>
       <trans-unit id="HelpDialogGoToConsoleLogs">
         <source>Console logs (all resources)</source>
-        <target state="needs-review-translation">Konsol Günlükleri'ne Git</target>
+        <target state="translated">Konsol günlükleri (tüm kaynaklar)</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogGoToExtensions">
         <source>Extensions</source>
-        <target state="new">Extensions</target>
+        <target state="translated">Uzantılar</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogGoToGraph">
         <source>Resource graph</source>
-        <target state="new">Resource graph</target>
+        <target state="translated">Kaynak grafı</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogGoToHelp">
         <source>Keyboard shortcuts</source>
-        <target state="needs-review-translation">Yardım'a git</target>
+        <target state="translated">Klavye kısayolları</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogGoToMetrics">
         <source>Metrics</source>
-        <target state="needs-review-translation">Ölçümlere Git</target>
+        <target state="translated">Ölçümler</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogGoToParameters">
         <source>Parameters</source>
-        <target state="new">Parameters</target>
+        <target state="translated">Parametreler</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogGoToResources">
         <source>Resources</source>
-        <target state="needs-review-translation">Kaynaklar'a git</target>
+        <target state="translated">Kaynaklar</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogGoToSettings">
         <source>Settings</source>
-        <target state="needs-review-translation">Ayarlar'a git</target>
+        <target state="translated">Ayarlar</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogGoToStructuredLogs">
         <source>Structured logs</source>
-        <target state="needs-review-translation">Yapılandırılmış Günlükler'e git</target>
+        <target state="translated">Yapılandırılmış günlükler</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogGoToTelemetrySources">
         <source>Telemetry sources</source>
-        <target state="new">Telemetry sources</target>
+        <target state="translated">Telemetri kaynakları</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogGoToTerminals">
         <source>Terminals</source>
-        <target state="needs-review-translation">Terminallere git</target>
+        <target state="translated">Terminaller</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogGoToTraces">
         <source>Traces</source>
-        <target state="needs-review-translation">İzlemelere Git</target>
+        <target state="translated">İzlemeler</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogIncreasePanelSize">
@@ -795,32 +795,32 @@ Yeteneklerin kurulumu da dahil olmak üzere, kontrol paneli ile yapay zeka arac�
       </trans-unit>
       <trans-unit id="HelpDialogLearnHeading">
         <source>Learn</source>
-        <target state="new">Learn</target>
+        <target state="translated">Öğrenme</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogOpensInNewTab">
         <source>Opens in a new tab</source>
-        <target state="new">Opens in a new tab</target>
+        <target state="translated">Yeni bir sekmede açılır</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogPlayGame">
         <source>Play Aspire Outage, when the graph has focus</source>
-        <target state="new">Play Aspire Outage, when the graph has focus</target>
+        <target state="translated">Graf odaktayken Aspire Outage'ı oynat</target>
         <note>Aspire Outage is the name of a game.</note>
       </trans-unit>
       <trans-unit id="HelpDialogRepoDescription">
         <source>Source code, releases and issues on GitHub.</source>
-        <target state="new">Source code, releases and issues on GitHub.</target>
+        <target state="translated">GitHub'da kaynak kodu, sürümler ve sorunlar.</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogReportIssueDescription">
         <source>Found a bug or have an idea? Open an issue on GitHub.</source>
-        <target state="new">Found a bug or have an idea? Open an issue on GitHub.</target>
+        <target state="translated">Bir hata mı buldunuz veya bir fikriniz mi var? GitHub’da bir sorun oluşturun.</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogReportIssueTitle">
         <source>Report an issue</source>
-        <target state="new">Report an issue</target>
+        <target state="translated">Sorun bildir</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogResetPanelSize">
@@ -830,7 +830,7 @@ Yeteneklerin kurulumu da dahil olmak üzere, kontrol paneli ile yapay zeka arac�
       </trans-unit>
       <trans-unit id="HelpDialogShortcutsHint">
         <source>Use shortcuts outside text fields and terminal input. Panel shortcuts apply to an open details panel. Press {0} in a terminal to focus its controls before using dashboard shortcuts.</source>
-        <target state="new">Use shortcuts outside text fields and terminal input. Panel shortcuts apply to an open details panel. Press {0} in a terminal to focus its controls before using dashboard shortcuts.</target>
+        <target state="translated">Kısayolları metin alanlarının ve terminal girdilerinin dışında kullanın. Panel kısayolları açık olan ayrıntılar paneline uygulanır. Gösterge tablosu kısayollarını kullanmadan önce terminaldeki denetimlere odaklanmak için {0} tuşuna basın.</target>
         <note>{0} is the F6 key, rendered as a keyboard key.</note>
       </trans-unit>
       <trans-unit id="HelpDialogTogglePanelOpen">
@@ -845,7 +845,7 @@ Yeteneklerin kurulumu da dahil olmak üzere, kontrol paneli ile yapay zeka arac�
       </trans-unit>
       <trans-unit id="HelpDialogToggleTerminalDock">
         <source>Toggle terminal dock</source>
-        <target state="needs-review-translation">Terminali aç-kapat</target>
+        <target state="translated">Terminal yuvasını aç/kapat</target>
         <note />
       </trans-unit>
       <trans-unit id="InteractionButtonCancel">
@@ -985,7 +985,7 @@ Yeteneklerin kurulumu da dahil olmak üzere, kontrol paneli ile yapay zeka arac�
       </trans-unit>
       <trans-unit id="SettingsDialogAppearanceGroup">
         <source>Appearance</source>
-        <target state="new">Appearance</target>
+        <target state="translated">Görünüm</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogDarkTheme">
@@ -995,27 +995,27 @@ Yeteneklerin kurulumu da dahil olmak üzere, kontrol paneli ile yapay zeka arac�
       </trans-unit>
       <trans-unit id="SettingsDialogDashboardExperience">
         <source>Dashboard experience</source>
-        <target state="new">Dashboard experience</target>
+        <target state="translated">Pano deneyimini</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogDashboardExperienceDescription">
         <source>Choose which dashboard experience to use.</source>
-        <target state="new">Choose which dashboard experience to use.</target>
+        <target state="translated">Kullanılacak pano deneyimini seçin.</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogDashboardExperienceNew">
         <source>New dashboard</source>
-        <target state="new">New dashboard</target>
+        <target state="translated">Yeni pano</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogDashboardExperiencePrevious">
         <source>Previous dashboard</source>
-        <target state="new">Previous dashboard</target>
+        <target state="translated">Önceki pano</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogDashboardExperienceSelectorLabel">
         <source>Experience</source>
-        <target state="new">Experience</target>
+        <target state="translated">Deneyim</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogDashboardLogsAndTelemetry">
@@ -1025,7 +1025,7 @@ Yeteneklerin kurulumu da dahil olmak üzere, kontrol paneli ile yapay zeka arac�
       </trans-unit>
       <trans-unit id="SettingsDialogDataAndTelemetryGroup">
         <source>Data and telemetry</source>
-        <target state="new">Data and telemetry</target>
+        <target state="translated">Veriler ve telemetri</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogDotNetRuntimeVersion">
@@ -1035,17 +1035,17 @@ Yeteneklerin kurulumu da dahil olmak üzere, kontrol paneli ile yapay zeka arac�
       </trans-unit>
       <trans-unit id="SettingsDialogExperienceGroup">
         <source>Dashboard experience</source>
-        <target state="new">Dashboard experience</target>
+        <target state="translated">Pano deneyimini</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogGroupOverview">
         <source>Overview layout</source>
-        <target state="new">Overview layout</target>
+        <target state="translated">Genel bakış düzeni</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogGroupOverviewSummary">
         <source>Summary</source>
-        <target state="new">Summary</target>
+        <target state="translated">Özet</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogLanguage">
@@ -1055,7 +1055,7 @@ Yeteneklerin kurulumu da dahil olmak üzere, kontrol paneli ile yapay zeka arac�
       </trans-unit>
       <trans-unit id="SettingsDialogLanguageAndTimeGroup">
         <source>Language and time</source>
-        <target state="new">Language and time</target>
+        <target state="translated">Dil ve saat</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogLanguagePageReloads">
@@ -1070,17 +1070,17 @@ Yeteneklerin kurulumu da dahil olmak üzere, kontrol paneli ile yapay zeka arac�
       </trans-unit>
       <trans-unit id="SettingsDialogResourceListDensity">
         <source>Resource list density</source>
-        <target state="new">Resource list density</target>
+        <target state="translated">Kaynak listesi yoğunluğu</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogResourceListDensityComfortable">
         <source>Comfortable</source>
-        <target state="new">Comfortable</target>
+        <target state="translated">Rahat</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogResourceListDensityCompact">
         <source>Compact</source>
-        <target state="new">Compact</target>
+        <target state="translated">Sıkıştırılmış</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogSystemTheme">
@@ -1287,7 +1287,7 @@ Uygulamanızı günlükleri, izlemeleri ve ölçümleri dışarı aktarma işlem
       </trans-unit>
       <trans-unit id="TextVisualizerWordWrap">
         <source>Word wrap</source>
-        <target state="new">Word wrap</target>
+        <target state="translated">Sözcük kaydırma</target>
         <note />
       </trans-unit>
     </body>

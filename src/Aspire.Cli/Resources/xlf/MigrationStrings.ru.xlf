@@ -29,7 +29,7 @@
       </trans-unit>
       <trans-unit id="NoAutomaticMigrationsAppHostSdkObsolete">
         <source>No automatic migrations apply. This AppHost still uses Aspire.AppHost.Sdk (ASPIRE012), which is obsolete. See https://aka.ms/aspire/diagnostics/aspire012 for how to migrate.</source>
-        <target state="new">No automatic migrations apply. This AppHost still uses Aspire.AppHost.Sdk (ASPIRE012), which is obsolete. See https://aka.ms/aspire/diagnostics/aspire012 for how to migrate.</target>
+        <target state="translated">Автоматические миграции не применяются. Этот AppHost по-прежнему использует Aspire.AppHost.Sdk (ASPIRE012), который устарел. См. https://aka.ms/aspire/diagnostics/aspire012 о том, как выполнить миграцию.</target>
         <note />
       </trans-unit>
       <trans-unit id="NothingToMigrate">

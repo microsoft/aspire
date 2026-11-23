@@ -15,7 +15,7 @@ import {
 } from './helpers/fixtures';
 import { getWorkspaceRoot } from './helpers/paths';
 import { VSBrowser } from './helpers/extester';
-import { openAspireView, waitForNotificationMessage, waitForWorkbenchText } from './helpers/vscode';
+import { openAspireView, takeNotificationAction, waitForNotificationMessage, waitForWorkbenchText } from './helpers/vscode';
 
 // Mirrors configuredCliPathRejected in src/loc/strings.ts.
 const rejectionNotificationText = 'The configured Aspire CLI path could not be used';
@@ -84,7 +84,8 @@ suite('Configured CLI path rejection E2E', function () {
             message.includes(invalidCliPath),
             `The rejection notification did not name the configured path. Message: ${message}`);
 
-        await notification.takeAction(openSettingActionText);
+        // Reacquire the matching notification after capturing the screenshot rather than clicking a cached element.
+        await takeNotificationAction(message, openSettingActionText);
         // The Settings editor renders as a webview-backed tab; assert on the visible workbench text
         // so the check does not depend on how the tab title is localized.
         const settingsText = await waitForWorkbenchText('aspireCliExecutablePath', 60_000);

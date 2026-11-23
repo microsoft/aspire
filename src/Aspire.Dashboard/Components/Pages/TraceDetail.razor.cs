@@ -199,12 +199,7 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
 
     private string TracesListUrl => ResourcesLayout?.DetailParentUrl ?? DashboardUrls.TracesUrl();
 
-    private string? PauseText => PauseManager.AreTracesPaused(out var startTime)
-        ? string.Format(
-            CultureInfo.CurrentCulture,
-            TracesLoc[nameof(Dashboard.Resources.Traces.PauseInProgressText)],
-            FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, startTime.Value))
-        : null;
+    private DateTime? PausedAt => PauseManager.AreTracesPaused(out var startTime) ? startTime : null;
 
     internal string? GetPageTitle()
     {

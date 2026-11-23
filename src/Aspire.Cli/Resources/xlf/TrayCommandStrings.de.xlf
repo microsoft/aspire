@@ -3,13 +3,13 @@
   <file datatype="xml" source-language="en" target-language="de" original="../TrayCommandStrings.resx">
     <body>
       <trans-unit id="BundleRequired">
-        <source>The Aspire tray requires a CLI bundle. No usable bundle was found. Install an Aspire bundle that includes the tray companion for your desktop.</source>
-        <target state="needs-review-translation">Das experimentelle Aspire-Infobereichssymbol erfordert ein geleastes, versioniertes CLI-Bundle. Es wurde kein verwendbares Bundle gefunden. Installieren Sie ein Windows- oder macOS-Aspire-Bundle, das den Infobereichsbegleiter enthält.</target>
+        <source>The Aspire tray requires a leased, versioned CLI bundle. No usable bundle was found. Install an Aspire bundle that includes the tray companion for your desktop.</source>
+        <target state="translated">Der Aspire-Infobereich erfordert ein geleastes, versioniertes CLI-Bundle. Es wurde kein verwendbares Bundle gefunden. Installieren Sie ein Aspire-Bundle, das den Infobereichsbegleiter für Ihren Desktop enthält.</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
         <source>Manage the desktop tray companion (Preview)</source>
-        <target state="needs-review-translation">Windows- oder macOS-Infobereichsbegleiter verwalten (experimentell)</target>
+        <target state="translated">Infobereich für den Desktop verwalten (Vorschau)</target>
         <note />
       </trans-unit>
       <trans-unit id="HelperFailed">
@@ -24,12 +24,12 @@
       </trans-unit>
       <trans-unit id="NativeCliRequired">
         <source>Starting the tray requires an installed native Aspire CLI executable. Managed development builds and 'dotnet aspire.dll' are not supported.</source>
-        <target state="needs-review-translation">Zum Starten des experimentellen Infobereichssymbols muss eine native ausführbare Aspire-CLI-Datei installiert sein. Verwaltete Entwicklungsbuilds und „dotnet aspire.dll“ werden nicht unterstützt.</target>
+        <target state="translated">Zum Starten des Infobereichs muss eine native ausführbare Aspire-CLI-Datei installiert sein. Verwaltete Entwicklungsbuilds und „dotnet aspire.dll“ werden nicht unterstützt.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoTrayHost">
         <source>The desktop has no tray host, so the tray icon won't appear yet. Enable an AppIndicator extension on GNOME or your desktop's tray module. The icon appears as soon as tray support is available.</source>
-        <target state="new">The desktop has no tray host, so the tray icon won't appear yet. Enable an AppIndicator extension on GNOME or your desktop's tray module. The icon appears as soon as tray support is available.</target>
+        <target state="translated">Auf dem Desktop ist derzeit kein Host für den Infobereich vorhanden, daher wird das Symbol dort noch nicht angezeigt. Aktivieren Sie unter GNOME eine AppIndicator-Erweiterung oder das Infobereichsmodul Ihres Desktops. Das Symbol wird angezeigt, sobald die Unterstützung für den Infobereich verfügbar ist.</target>
         <note />
       </trans-unit>
       <trans-unit id="OperationFailed">
@@ -39,12 +39,12 @@
       </trans-unit>
       <trans-unit id="PayloadMissing">
         <source>The CLI bundle does not contain the tray companion for this platform (Windows: tray/aspire-tray.exe and tray/Aspire.ico; macOS: tray/Aspire Tray.app; Linux: tray/aspire-tray and tray/Aspire.png). Install a matching native Aspire bundle, or run 'aspire setup --force' to repair an incomplete extraction.</source>
-        <target state="needs-review-translation">Das CLI-Bundle enthält für diese Plattform keine Tray-Komponente (Windows: tray/aspire-tray.exe und tray/Aspire.ico; macOS: tray/Aspire Tray.app). Installieren Sie ein passendes natives Aspire-Bundle oder führen Sie „aspire setup --force“ aus, um eine unvollständige Entpackung zu reparieren.</target>
+        <target state="translated">Das CLI-Bundle enthält für diese Plattform keine Tray-Komponente (Windows: tray/aspire-tray.exe und tray/Aspire.ico; macOS: tray/Aspire Tray.app; Linux: tray/aspire-tray and tray/Aspire.png). Installieren Sie ein passendes natives Aspire-Bundle oder führen Sie „aspire setup --force“ aus, um eine unvollständige Entpackung zu reparieren.</target>
         <note />
       </trans-unit>
       <trans-unit id="StartDescription">
         <source>Start or restore the tray icon (Preview)</source>
-        <target state="needs-review-translation">Symbol im Infobereich starten oder wiederherstellen (experimentell)</target>
+        <target state="translated">Infobereichssymbol starten oder wiederherstellen (Vorschau)</target>
         <note />
       </trans-unit>
       <trans-unit id="Started">
@@ -54,7 +54,7 @@
       </trans-unit>
       <trans-unit id="StopDescription">
         <source>Stop the tray without stopping AppHosts (Preview)</source>
-        <target state="needs-review-translation">Infobereich beenden, ohne AppHosts zu beenden (experimentell)</target>
+        <target state="translated">Infobereich beenden, ohne AppHosts zu beenden (Vorschau)</target>
         <note />
       </trans-unit>
       <trans-unit id="Stopped">
@@ -64,7 +64,7 @@
       </trans-unit>
       <trans-unit id="UnsupportedPlatform">
         <source>The Aspire tray supports Windows, macOS, and glibc Linux x64/ARM64 installations. Linux requires a graphical desktop with StatusNotifierItem support, GTK 3, and an AppIndicator library.</source>
-        <target state="needs-review-translation">Das experimentelle Aspire-Infobereichssymbol unterstützt Installationen unter Windows und macOS für x64/ARM64. Linux wird nicht unterstützt.</target>
+        <target state="translated">Der Aspire-Infobereich unterstützt Installationen unter Windows, macOS und glibc Linux für x64/ARM64. Unter Linux ist ein grafischer Desktop mit Unterstützung für StatusNotifierItem und GTK 3 sowie eine Bibliothek für AppIndicator erforderlich.</target>
         <note />
       </trans-unit>
     </body>
