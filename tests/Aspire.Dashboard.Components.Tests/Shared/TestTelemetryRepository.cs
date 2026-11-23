@@ -11,6 +11,7 @@ internal sealed class TestTelemetryRepository(ITelemetryRepository inner) : ITel
 {
     public Func<GetLogsContext, CancellationToken, Task<PagedResult<LogSummary>>>? GetLogSummariesAsyncHandler { get; init; }
     public Func<List<ResourceKey>, int, bool, CancellationToken, Task<OverviewLogs>>? GetOverviewLogsAsyncHandler { get; init; }
+    public Func<GetTracesRequest, CancellationToken, Task<GetTraceSummariesResponse>>? GetTraceSummariesAsyncHandler { get; init; }
     public Func<GetInstrumentRequest, CancellationToken, Task<OtlpInstrumentData?>>? GetInstrumentAsyncHandler { get; init; }
     public Func<GetRequestSpansRequest, CancellationToken, Task<GetRequestSpansResponse>>? GetRequestSpansAsyncHandler { get; init; }
     public Action<Func<Task>>? OnNewLogsRegistered { get; init; }
@@ -62,7 +63,8 @@ internal sealed class TestTelemetryRepository(ITelemetryRepository inner) : ITel
     public Task<List<string>> GetLogPropertyKeysAsync(ResourceKey? resourceKey, CancellationToken cancellationToken) => inner.GetLogPropertyKeysAsync(resourceKey, cancellationToken);
     public Task<List<string>> GetTracePropertyKeysAsync(ResourceKey? resourceKey, CancellationToken cancellationToken) => inner.GetTracePropertyKeysAsync(resourceKey, cancellationToken);
     public Task<GetTracesResponse> GetTracesAsync(GetTracesRequest context, CancellationToken cancellationToken) => inner.GetTracesAsync(context, cancellationToken);
-    public Task<GetTraceSummariesResponse> GetTraceSummariesAsync(GetTracesRequest context, CancellationToken cancellationToken) => inner.GetTraceSummariesAsync(context, cancellationToken);
+    public Task<GetTraceSummariesResponse> GetTraceSummariesAsync(GetTracesRequest context, CancellationToken cancellationToken) =>
+        GetTraceSummariesAsyncHandler?.Invoke(context, cancellationToken) ?? inner.GetTraceSummariesAsync(context, cancellationToken);
     public Task<GetSpansResponse> GetSpansAsync(GetSpansRequest context, CancellationToken cancellationToken) => inner.GetSpansAsync(context, cancellationToken);
     public Task<GetRequestSpansResponse> GetRequestSpansAsync(GetRequestSpansRequest request, CancellationToken cancellationToken) =>
         GetRequestSpansAsyncHandler?.Invoke(request, cancellationToken) ?? inner.GetRequestSpansAsync(request, cancellationToken);

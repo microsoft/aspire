@@ -51,6 +51,7 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
     // Tests replace this to hold a refresh at the point where it can be canceled, because how soon a real delay handles
     // its cancellation depends on thread pool timing.
     internal Func<TimeSpan, CancellationToken, Task> TelemetryRefreshDelayAsync { get; set; } = Task.Delay;
+    internal Task TelemetryRefreshTask { get; private set; } = Task.CompletedTask;
     private int _consoleRenderPending;
     private bool _hasConsoleLogs;
     private bool _consoleLogsLoaded;
@@ -287,7 +288,7 @@ public sealed partial class ResourceOverview : ComponentBase, IAsyncDisposable
         }
 
         refresh.IsRunning = true;
-        _ = RefreshTelemetryAsync(refresh, key, immediate, _resourceCts?.Token ?? CancellationToken.None);
+        TelemetryRefreshTask = RefreshTelemetryAsync(refresh, key, immediate, _resourceCts?.Token ?? CancellationToken.None);
     }
 
     private async Task RefreshTelemetryAsync(TelemetryRefreshGeneration refresh, ResourceKey key, bool immediate, CancellationToken cancellationToken)
