@@ -201,7 +201,7 @@ internal sealed class DcpConnectionChecker(
             : DcpConnectionHealthCheck.EphemeralCertificateCheckName;
     }
 
-    private sealed class DcpConnectionTestSession : IAsyncDisposable
+    internal sealed class DcpConnectionTestSession : IAsyncDisposable
     {
         private readonly IProcessExecution _process;
         private readonly string _sessionDirectory;

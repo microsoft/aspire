@@ -4,45 +4,126 @@
 using System.Diagnostics;
 using System.IO.Pipes;
 using System.Reflection;
+using Aspire.Cli.DotNet;
 using Aspire.Cli.Tests.TestServices;
+using Aspire.Cli.Utils.EnvironmentChecker;
 using Aspire.Hosting;
 using Aspire.Shared;
 using Aspire.Shared.Tests;
 using Aspire.TestUtilities;
+using Microsoft.AspNetCore.Certificates.Generation;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.DotNet.RemoteExecutor;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.Utils;
 
 [RequiresTools(["dotnet"])]
 public class DcpConnectionLifetimeTests(ITestOutputHelper outputHelper)
 {
-    [Fact]
-    public async Task TestConnectionAsync_WhenParentExits_StopsApiServerAndControllers()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Session_WhenParentExits_StopsApiServerAndControllers(bool delayHandoff)
     {
-        await TestLifetimeAsync(abruptParentExit: true);
+        await TestLifetimeAsync(abruptParentExit: true, delayHandoff, useSymlink: false);
     }
 
     [Fact]
-    public async Task TestConnectionAsync_WhenProbeCompletes_StopsDcpBeforeParentExits()
+    public async Task Session_WhenDisposed_StopsDcpBeforeParentExits()
     {
-        await TestLifetimeAsync(abruptParentExit: false);
+        await TestLifetimeAsync(abruptParentExit: false, delayHandoff: false, useSymlink: false);
     }
 
-    private async Task TestLifetimeAsync(bool abruptParentExit)
+    [Fact]
+    public async Task Session_WhenBundleDirectoryIsSymlinked_RecognizesControllers()
+    {
+        await TestLifetimeAsync(abruptParentExit: false, delayHandoff: false, useSymlink: true);
+    }
+
+    [Fact]
+    public async Task TestConnectionAsync_WhenProbeCompletes_StopsDcpBeforeCallerExits()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var factory = new ProcessExecutionFactory(new HostEnvironment(), NullLogger<ProcessExecutionFactory>.Instance);
+        ProcessTestIdentity? identity = null;
+        string? sessionDirectory = null;
+        var recordingFactory = new TestProcessExecutionFactory
+        {
+            CreateExecutionWithFileNameCallback = (fileName, arguments, environment, directory, options) =>
+            {
+                var containerRuntime = Environment.GetEnvironmentVariable(KnownConfigNames.ContainerRuntime);
+                string[] testArguments = string.IsNullOrEmpty(containerRuntime)
+                    ? arguments
+                    : [.. arguments, "--container-runtime", containerRuntime];
+                var execution = factory.CreateExecution(fileName, testArguments, environment, directory, options);
+                return new DcpConnectionTestProcess(execution, (process, _) =>
+                {
+                    identity = ProcessTestIdentity.Capture(process.ProcessId);
+                    sessionDirectory = Assert.IsType<string>(process.EnvironmentVariables["DCP_SESSION_FOLDER"]);
+                    return Task.CompletedTask;
+                });
+            }
+        };
+        var checker = new DcpConnectionChecker(
+            CertificateManager.Create(NullLogger.Instance, new HostEnvironment(), nssDbOverride: null),
+            recordingFactory,
+            DcpConnectionTestProcess.CreateExecutionContext(workspace.Path),
+            new HostEnvironment(),
+            NullLogger<DcpConnectionChecker>.Instance);
+
+        try
+        {
+            var result = await checker.TestConnectionAsync(
+                GetDcpDirectory(), useDeveloperCertificate: false, TestContext.Current.CancellationToken);
+
+            Assert.True(result.Status == EnvironmentCheckStatus.Pass, $"{result.Message}: {result.Details}");
+            Assert.NotNull(identity);
+            Assert.False(ProcessStartTimeHelper.IsProcessRunning(identity.Value.ProcessId, identity.Value.StartTime));
+            Assert.NotNull(sessionDirectory);
+            Assert.False(Directory.Exists(sessionDirectory));
+        }
+        finally
+        {
+            if (identity is { } processIdentity)
+            {
+                ProcessTestFixture.KillIfRunning(processIdentity);
+            }
+            if (sessionDirectory is not null && Directory.Exists(sessionDirectory))
+            {
+                Assert.StartsWith("aspire-dcp-doctor-", new DirectoryInfo(sessionDirectory).Name, StringComparison.Ordinal);
+                Directory.Delete(sessionDirectory, recursive: true);
+            }
+        }
+    }
+
+    private static string GetDcpDirectory()
+    {
+        var directory = typeof(DcpConnectionLifetimeTests).Assembly
+            .GetCustomAttributes<AssemblyMetadataAttribute>()
+            .Single(attribute => attribute.Key == "DcpTestDirectory").Value;
+        Assert.NotNull(directory);
+        Assert.True(File.Exists(BundleDiscovery.GetDcpExecutablePath(directory)), $"DCP test package not found at {directory}.");
+
+        return directory;
+    }
+
+    private async Task TestLifetimeAsync(bool abruptParentExit, bool delayHandoff, bool useSymlink)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         using var readiness = new ProcessTestReadiness();
-        var dcpDirectory = typeof(DcpConnectionLifetimeTests).Assembly
-            .GetCustomAttributes<AssemblyMetadataAttribute>()
-            .Single(attribute => attribute.Key == "DcpTestDirectory").Value;
-        Assert.NotNull(dcpDirectory);
-        Assert.True(File.Exists(BundleDiscovery.GetDcpExecutablePath(dcpDirectory)), $"DCP test package not found at {dcpDirectory}.");
+        var dcpDirectory = GetDcpDirectory();
+        if (useSymlink)
+        {
+            var linkedDirectory = Path.Combine(workspace.Path, "linked-dcp");
+            TestSymlinkHelper.TryCreateSymlink(linkedDirectory, dcpDirectory);
+            dcpDirectory = linkedDirectory;
+        }
 
         var options = new RemoteInvokeOptions
         {
             CheckExitCode = false,
-            TimeOut = 90_000
+            TimeOut = 180_000
         };
         options.StartInfo.RedirectStandardOutput = true;
         options.StartInfo.RedirectStandardError = true;
@@ -57,6 +138,8 @@ public class DcpConnectionLifetimeTests(ITestOutputHelper outputHelper)
         var error = helper.Process.StandardError.ReadToEndAsync();
         var identities = new List<ProcessTestIdentity>();
         var processes = new List<Process>();
+        var sessionDirectoryFile = Path.Combine(workspace.Path, DcpConnectionTestProcess.SessionDirectoryFileName);
+        string? sessionDirectory = null;
 
         try
         {
@@ -69,6 +152,16 @@ public class DcpConnectionLifetimeTests(ITestOutputHelper outputHelper)
             Assert.Equal(apiServer, tree[0]);
             identities.Add(tree[1]);
             processes.Add(Process.GetProcessById(tree[1].ProcessId));
+            sessionDirectory = await File.ReadAllTextAsync(sessionDirectoryFile, TestContext.Current.CancellationToken);
+            Assert.StartsWith("aspire-dcp-doctor-", new DirectoryInfo(sessionDirectory).Name, StringComparison.Ordinal);
+            if (delayHandoff)
+            {
+                // Exceed the checker's 20-second probe deadline without advancing the lifetime test
+                // to its kill/dispose action. Managed timeout cleanup must not satisfy these assertions.
+                await Task.Delay(TimeSpan.FromSeconds(21), TestContext.Current.CancellationToken);
+            }
+
+            Assert.False(helper.Process.HasExited);
             foreach (var identity in identities)
             {
                 Assert.True(ProcessStartTimeHelper.IsProcessRunning(identity.ProcessId, identity.StartTime));
@@ -82,6 +175,7 @@ public class DcpConnectionLifetimeTests(ITestOutputHelper outputHelper)
                 await helper.Process.WaitForExitAsync(TestContext.Current.CancellationToken).DefaultTimeout();
                 await Task.WhenAll(processes.Select(process => process.WaitForExitAsync(TestContext.Current.CancellationToken))).WaitAsync(
                     TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+                Assert.False(Directory.Exists(sessionDirectory));
             }
             else
             {
@@ -94,6 +188,7 @@ public class DcpConnectionLifetimeTests(ITestOutputHelper outputHelper)
                 Assert.False(helper.Process.HasExited);
                 await Task.WhenAll(processes.Select(process => process.WaitForExitAsync(TestContext.Current.CancellationToken))).WaitAsync(
                     TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+                Assert.False(Directory.Exists(sessionDirectory));
                 await writer.WriteLineAsync("exit");
                 await helper.Process.WaitForExitAsync(TestContext.Current.CancellationToken).DefaultTimeout();
                 Assert.Equal(RemoteExecutor.SuccessExitCode, helper.Process.ExitCode);
@@ -123,8 +218,7 @@ public class DcpConnectionLifetimeTests(ITestOutputHelper outputHelper)
                 }
             }
 
-            var sessionDirectoryFile = Path.Combine(workspace.Path, DcpConnectionTestProcess.SessionDirectoryFileName);
-            var sessionDirectory = File.Exists(sessionDirectoryFile) ? await File.ReadAllTextAsync(sessionDirectoryFile) : null;
+            sessionDirectory ??= File.Exists(sessionDirectoryFile) ? await File.ReadAllTextAsync(sessionDirectoryFile) : null;
             outputHelper.WriteLine($"DCP session directory: {sessionDirectory}");
             await Task.WhenAll(processes.Select(process => process.WaitForExitAsync()))
                 .WaitAsync(TimeSpan.FromSeconds(10));

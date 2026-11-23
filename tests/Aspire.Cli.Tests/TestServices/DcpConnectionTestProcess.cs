@@ -7,6 +7,7 @@ using System.Security.Cryptography.X509Certificates;
 using System.Text.Json;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Utils.EnvironmentChecker;
+using Aspire.Hosting.Utils;
 using Aspire.Shared.Tests;
 using Microsoft.AspNetCore.Certificates.Generation;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -36,8 +37,6 @@ internal sealed class DcpConnectionTestProcess(
             return false;
         }
 
-        // Hold the real probe before it can finish and dispose DCP. The outer test must be able
-        // to kill only this parent, bypassing managed cleanup without replacing the launch path.
         await afterStart(inner, cancellationToken);
 
         return true;
@@ -50,7 +49,6 @@ internal sealed class DcpConnectionTestProcess(
 
     internal static async Task RunAsync(string dcpDirectory, string workingDirectory, string readinessName, string containerRuntime)
     {
-        using var lifetime = new CancellationTokenSource(TimeSpan.FromSeconds(90));
         using var control = new NamedPipeServerStream(
             $"{readinessName}-control", PipeDirection.InOut, 1, PipeTransmissionMode.Byte,
             PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
@@ -67,8 +65,6 @@ internal sealed class DcpConnectionTestProcess(
                 Assert.NotNull(environment);
                 var sessionDirectory = environment["DCP_SESSION_FOLDER"];
                 File.WriteAllText(Path.Combine(workingDirectory, SessionDirectoryFileName), sessionDirectory);
-                var kubeconfigPath = Path.Combine(sessionDirectory, "kubeconfig");
-
                 // Verbose startup metadata supplies the controller PID, not our readiness condition.
                 string[] testArguments = [.. arguments, "-v=debug"];
                 if (!string.IsNullOrEmpty(containerRuntime))
@@ -84,7 +80,7 @@ internal sealed class DcpConnectionTestProcess(
 
                 // Regular files keep stdio usable after the helper dies. A broken stdout/stderr
                 // pipe can itself terminate a Go process and falsely pass the monitor regression:
-                // https://pkg.go.dev/os/signal#hdr-SIGPIPE.
+                // https://github.com/microsoft/dcp/issues/378.
                 // The normal factory redirects to helper-owned pipes, so retain its launch policy
                 // and execution primitive but replace only the test's standard handles.
                 startInfo.RedirectStandardOutput = false;
@@ -94,23 +90,59 @@ internal sealed class DcpConnectionTestProcess(
                 startInfo.StandardOutputHandle = standardOutput;
                 startInfo.StandardErrorHandle = standardError;
                 var execution = new ProcessExecution(startInfo, NullLogger.Instance, options, new HostEnvironment());
-                return new DcpConnectionTestProcess(execution, async (process, cancellationToken) =>
-                {
-                    var apiServer = ProcessTestIdentity.Capture(process.ProcessId);
-                    await NotifyAsync(readinessName, "guardian", apiServer, cancellationToken);
-                    var controllerIdentity = await ReadControllerAsync(standardOutputPath, standardErrorPath, fileName, cancellationToken);
-                    await WaitForApiAsync(kubeconfigPath, cancellationToken);
-                    Assert.True(ProcessStartTimeHelper.IsProcessRunning(controllerIdentity.ProcessId, controllerIdentity.StartTime));
-                    await Task.WhenAll(
-                        NotifyAsync(readinessName, "runtime", apiServer, cancellationToken),
-                        NotifyAsync(readinessName, "worker", controllerIdentity, cancellationToken));
-                    await control.WaitForConnectionAsync(cancellationToken);
-                    Assert.Equal("continue", await reader.ReadLineAsync(cancellationToken));
-                });
+                return new DcpConnectionTestProcess(execution, (process, cancellationToken) =>
+                    NotifyAsync(readinessName, "guardian", ProcessTestIdentity.Capture(process.ProcessId), cancellationToken));
             }
         };
+        DcpConnectionChecker.DcpConnectionTestSession session;
+        using (var startup = new CancellationTokenSource(TimeSpan.FromSeconds(30)))
+        {
+            session = await DcpConnectionChecker.DcpConnectionTestSession.StartAsync(
+                dcpDirectory,
+                useDeveloperCertificate: false,
+                CertificateManager.Create(NullLogger.Instance, new HostEnvironment(), nssDbOverride: null),
+                recordingFactory,
+                CreateExecutionContext(workingDirectory),
+                new HostEnvironment(),
+                NullLogger<DcpConnectionChecker>.Instance,
+                startup.Token);
+        }
+
+        // Exercise the production session lifetime without letting the checker's probe deadline
+        // expire while the outer test pauses this parent before its abrupt exit.
+        await using (session)
+        {
+            var process = Assert.Single(recordingFactory.CreatedExecutions);
+            var sessionDirectory = Assert.IsType<string>(process.EnvironmentVariables["DCP_SESSION_FOLDER"]);
+            using (var readiness = new CancellationTokenSource(TimeSpan.FromSeconds(30)))
+            {
+                var controllerIdentity = await ReadControllerAsync(
+                    standardOutputPath, standardErrorPath, process.FileName, readiness.Token);
+                await WaitForApiAsync(Path.Combine(sessionDirectory, "kubeconfig"), readiness.Token);
+                Assert.True(ProcessStartTimeHelper.IsProcessRunning(controllerIdentity.ProcessId, controllerIdentity.StartTime));
+                await Task.WhenAll(
+                    NotifyAsync(readinessName, "runtime", ProcessTestIdentity.Capture(process.ProcessId), readiness.Token),
+                    NotifyAsync(readinessName, "worker", controllerIdentity, readiness.Token));
+            }
+
+            using var handoff = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+            await control.WaitForConnectionAsync(handoff.Token);
+            Assert.Equal("continue", await reader.ReadLineAsync(handoff.Token));
+        }
+
+        using var completion = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        using var writer = new StreamWriter(control, leaveOpen: true) { AutoFlush = true };
+        await writer.WriteLineAsync("completed");
+
+        // Keep the parent alive so session disposal cannot be mistaken for parent-exit monitoring.
+        Assert.Equal("exit", await reader.ReadLineAsync(completion.Token));
+    }
+
+    internal static CliExecutionContext CreateExecutionContext(string workingDirectory)
+    {
         var root = new DirectoryInfo(workingDirectory);
-        var context = new CliExecutionContext(
+
+        return new CliExecutionContext(
             workingDirectory: root,
             hivesDirectory: root.CreateSubdirectory(".aspire-hives"),
             cacheDirectory: root.CreateSubdirectory(".aspire-cache"),
@@ -118,21 +150,6 @@ internal sealed class DcpConnectionTestProcess(
             logsDirectory: root.CreateSubdirectory(".aspire-logs"),
             logFilePath: "test.log",
             identityChannel: "local");
-        var checker = new DcpConnectionChecker(
-            CertificateManager.Create(NullLogger.Instance, new HostEnvironment(), nssDbOverride: null),
-            recordingFactory,
-            context,
-            new HostEnvironment(),
-            NullLogger<DcpConnectionChecker>.Instance);
-
-        var result = await checker.TestConnectionAsync(dcpDirectory, useDeveloperCertificate: false, lifetime.Token);
-        Assert.True(result.Status == EnvironmentCheckStatus.Pass, $"{result.Message}: {result.Details}");
-        using var writer = new StreamWriter(control, leaveOpen: true) { AutoFlush = true };
-        await writer.WriteLineAsync("completed");
-
-        // Keep the parent alive after a successful probe so the test cannot mistake the
-        // parent-exit monitor for the probe's normal session disposal.
-        Assert.Equal("exit", await reader.ReadLineAsync(lifetime.Token));
     }
 
     internal static async Task<string> ReadLogAsync(string path, CancellationToken cancellationToken)
@@ -182,10 +199,13 @@ internal sealed class DcpConnectionTestProcess(
         var root = metadata.RootElement;
         var command = root.GetProperty("Command").GetString();
         var arguments = root.GetProperty("Args");
-        // On Windows, the test DCP directory comes from $(DcpDir), which mixes '\' and '/' separators,
-        // while DCP logs the controller path with '\' only. GetFullPath normalizes both to '\'.
+        // DCP resolves executable symlinks before launching its controllers. Canonicalize both paths,
+        // including the mixed Windows separators in $(DcpDir), to identify the same executable.
         if (command is not null &&
-            string.Equals(Path.GetFullPath(command), Path.GetFullPath(executable), OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal) &&
+            string.Equals(
+                PathNormalizer.ResolveSymlinks(command),
+                PathNormalizer.ResolveSymlinks(executable),
+                OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal) &&
             arguments.GetArrayLength() > 0 &&
             arguments[0].GetString() == "run-controllers")
         {
