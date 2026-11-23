@@ -119,7 +119,7 @@
       </trans-unit>
       <trans-unit id="DryRunBackupsNotReplaced">
         <source>Dry run cancelled without replacing existing backups. Recover the originals from the listed backup files or move them aside before retrying.</source>
-        <target state="new">Dry run cancelled without replacing existing backups. Recover the originals from the listed backup files or move them aside before retrying.</target>
+        <target state="translated">La simulación se canceló sin reemplazar las copias de seguridad existentes. Recupere los archivos originales de los archivos de copia de seguridad indicados o muévalos a un lado antes de volver a intentarlo.</target>
         <note />
       </trans-unit>
       <trans-unit id="DryRunExistingBackupsFormat">
@@ -131,7 +131,7 @@
       </trans-unit>
       <trans-unit id="DryRunOptionDescription">
         <source>Validate an explicit .NET AppHost channel update using temporary NuGet caches, without proposing or applying changes.</source>
-        <target state="new">Validate an explicit .NET AppHost channel update using temporary NuGet caches, without proposing or applying changes.</target>
+        <target state="translated">Valide una actualización explícita del canal de AppHost de .NET mediante cachés temporales de NuGet, sin proponer ni aplicar cambios.</target>
         <note />
       </trans-unit>
       <trans-unit id="DryRunReplaceBackupsPrompt">
@@ -141,22 +141,22 @@
       </trans-unit>
       <trans-unit id="DryRunRequiresChannel">
         <source>--dry-run requires an explicit --channel or --quality other than default, and cannot be combined with --self or --migrate.</source>
-        <target state="new">--dry-run requires an explicit --channel or --quality other than default, and cannot be combined with --self or --migrate.</target>
+        <target state="translated">--dry-run requiere un valor explícito para --channel o un valor de --quality distinto del predeterminado. Además, no se puede combinar con --self ni con --migrate.</target>
         <note />
       </trans-unit>
       <trans-unit id="DryRunRequiresDotNet">
         <source>--dry-run is supported only for .NET AppHosts.</source>
-        <target state="new">--dry-run is supported only for .NET AppHosts.</target>
+        <target state="translated">--dry-run solo se admite para AppHosts de .NET.</target>
         <note />
       </trans-unit>
       <trans-unit id="DryRunSuccessful">
         <source>Channel update validation succeeded. Original files have been restored; no update was applied.</source>
-        <target state="new">Channel update validation succeeded. Original files have been restored; no update was applied.</target>
+        <target state="translated">La validación de la actualización del canal se realizó correctamente. Se restauraron los archivos originales y no se aplicó ninguna actualización.</target>
         <note />
       </trans-unit>
       <trans-unit id="DryRunValidating">
         <source>Validating the channel update...</source>
-        <target state="new">Validating the channel update...</target>
+        <target state="translated">Validando la actualización del canal...</target>
         <note />
       </trans-unit>
       <trans-unit id="ExecutingUpdateStepFormat">
@@ -201,7 +201,7 @@
       </trans-unit>
       <trans-unit id="FailedToRestoreAfterUpdateFormat">
         <source>Validation restore for {0} channel update failed for project {1}. The update was not applied. Review the restore output for details.</source>
-        <target state="new">Validation restore for {0} channel update failed for project {1}. The update was not applied. Review the restore output for details.</target>
+        <target state="translated">Error en la restauración de validación de la actualización del canal de {0} para el proyecto {1}. No se aplicó la actualización. Revise la salida de la restauración para obtener más detalles.</target>
         <note>{0} = Channel name. {1} = AppHost file path.</note>
       </trans-unit>
       <trans-unit id="FailedUpdatePackageReferenceFormat">

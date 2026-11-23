@@ -644,7 +644,7 @@
       </trans-unit>
       <trans-unit id="ResourceTabHome">
         <source>Home</source>
-        <target state="new">Home</target>
+        <target state="translated">主页</target>
         <note />
       </trans-unit>
       <trans-unit id="ResourceTabOverview">
