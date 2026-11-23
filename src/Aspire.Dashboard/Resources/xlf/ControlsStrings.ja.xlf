@@ -179,7 +179,7 @@
       </trans-unit>
       <trans-unit id="PauseWarningText">
         <source>{0} capture paused</source>
-        <target state="new">{0} capture paused</target>
+        <target state="translated">{0} キャプチャが一時停止しました</target>
         <note>{0} is the type of captured data.</note>
       </trans-unit>
       <trans-unit id="ResourcesContainerGraphAccessibleLabel">
