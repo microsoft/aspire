@@ -136,7 +136,7 @@ public class AddRedisTests(ITestOutputHelper testOutputHelper)
         var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
 
         var connectionStringResource = Assert.Single(appModel.Resources.OfType<RedisResource>());
-        var connectionString = await connectionStringResource.GetConnectionStringAsync(new ValueProviderContext());
+        var connectionString = await connectionStringResource.GetConnectionStringAsync(new ValueProviderContext(), TestContext.Current.CancellationToken);
         var valueExpression = connectionStringResource.ConnectionStringExpression.ValueExpression;
         Assert.StartsWith("{myRedis.bindings.tcp.host}:{myRedis.bindings.tcp.port},password={myRedis-password.value}", valueExpression);
         AssertContainsConditionalReference(valueExpression);

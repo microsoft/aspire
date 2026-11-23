@@ -177,7 +177,7 @@ public class AddPostgresTests(ITestOutputHelper outputHelper)
         var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
 
         var postgresResource = Assert.Single(appModel.Resources.OfType<PostgresServerResource>());
-        var postgresConnectionString = await postgresResource.GetConnectionStringAsync(new ValueProviderContext());
+        var postgresConnectionString = await postgresResource.GetConnectionStringAsync(new ValueProviderContext(), TestContext.Current.CancellationToken);
         var postgresDatabaseResource = Assert.Single(appModel.Resources.OfType<PostgresDatabaseResource>());
         var postgresDatabaseConnectionStringResource = (IResourceWithConnectionString)postgresDatabaseResource;
         var dbConnectionString = await postgresDatabaseConnectionStringResource.GetConnectionStringAsync();

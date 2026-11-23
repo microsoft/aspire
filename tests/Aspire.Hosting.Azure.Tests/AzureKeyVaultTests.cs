@@ -463,7 +463,7 @@ public class AzureKeyVaultTests(ITestOutputHelper testOutputHelper)
         keyVault.Resource.Annotations.Add(new ConnectionStringRedirectAnnotation(redirectTarget));
 
         var connectionString = keyVault.Resource.ConnectionStringExpression;
-        var connectionStringValue = await keyVault.Resource.GetConnectionStringAsync(new ValueProviderContext());
+        var connectionStringValue = await keyVault.Resource.GetConnectionStringAsync(new ValueProviderContext(), TestContext.Current.CancellationToken);
 
         Assert.Equal(redirectTarget.ConnectionStringExpression.ValueExpression, connectionString.ValueExpression);
         Assert.Equal("https://redirected-vault.vault.azure.net", connectionStringValue);

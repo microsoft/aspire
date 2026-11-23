@@ -116,7 +116,7 @@ public class AddConnectionStringTests
         };
         IValueProvider provider = source == "reference" ? new ConnectionStringReference(resource, optional: false) : resource;
         var value = source == "connection-string"
-            ? await resource.GetConnectionStringAsync(context)
+            ? await resource.GetConnectionStringAsync(context, cts.Token)
             : await provider.GetValueAsync(context, cts.Token);
 
         Assert.Equal("Endpoint=http://server:8080", value);
@@ -160,6 +160,7 @@ public class AddConnectionStringTests
         };
         var context = new ValueProviderContext { Caller = new ContainerResource("caller") };
 
+        Assert.Equal("legacy", await resource.GetConnectionStringAsync(default));
         Assert.Equal("legacy", await resource.GetConnectionStringAsync(context, TestContext.Current.CancellationToken));
         Assert.Equal("ResourceWithoutLifetime", await resource.GetValueAsync(context, TestContext.Current.CancellationToken));
     }

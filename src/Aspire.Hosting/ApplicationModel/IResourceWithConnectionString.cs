@@ -27,11 +27,12 @@ public interface IResourceWithConnectionString : IResource, IExpressionValue, IV
     public ValueTask<string?> GetConnectionStringAsync(CancellationToken cancellationToken = default) =>
         ConnectionStringExpression.GetValueAsync(cancellationToken);
 
+    // Keep cancellationToken required so GetConnectionStringAsync(default) binds to the context-free overload.
     /// <summary>
     /// Gets the connection string associated with the resource in the specified context.
     /// </summary>
     /// <param name="context">The context identifying the requesting resource, execution mode, and network.</param>
-    /// <param name="cancellationToken">A cancellation token to observe while resolving the connection string. Defaults to <see cref="CancellationToken.None"/>.</param>
+    /// <param name="cancellationToken">A cancellation token to observe while resolving the connection string.</param>
     /// <returns>The connection string associated with the resource, when one is available.</returns>
     /// <remarks>
     /// The default implementation evaluates <see cref="ConnectionStringExpression"/> in the specified context,
@@ -43,7 +44,7 @@ public interface IResourceWithConnectionString : IResource, IExpressionValue, IV
     /// a contextual implementation, contextual calls use that inherited implementation, bypassing the custom resolver.
     /// </para>
     /// </remarks>
-    public ValueTask<string?> GetConnectionStringAsync(ValueProviderContext context, CancellationToken cancellationToken = default) =>
+    public ValueTask<string?> GetConnectionStringAsync(ValueProviderContext context, CancellationToken cancellationToken) =>
         GetConnectionStringImplementations(this.GetType()).Legacy
             ? GetConnectionStringAsync(cancellationToken)
             : ConnectionStringExpression.GetValueAsync(context, cancellationToken);
