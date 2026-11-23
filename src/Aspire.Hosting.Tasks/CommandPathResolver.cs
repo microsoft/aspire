@@ -76,7 +76,7 @@ internal static class CommandPathResolver
                 if (TryCombine(directory, command + extension, out var candidateWithExtension) &&
                     FileExistsSafe(fileExists, candidateWithExtension))
                 {
-                    return candidateWithExtension;
+                    return GetOnDiskPath(candidateWithExtension);
                 }
             }
         }
@@ -84,6 +84,42 @@ internal static class CommandPathResolver
         return TryCombine(directory, command, out var candidate) && FileExistsSafe(fileExists, candidate)
             ? candidate
             : null;
+    }
+
+    // PATHEXT entries are conventionally upper case (".CMD"), but Windows file names are case-insensitive, so
+    // "aspire" + ".CMD" matches "aspire.cmd". Report the file name as it exists on disk so resolved paths read the
+    // way the file was named. Falls back to the constructed path when the directory cannot be enumerated, for
+    // example when a test supplies its own existence probe.
+    private static string GetOnDiskPath(string path)
+    {
+        try
+        {
+            var directory = Path.GetDirectoryName(path);
+            var fileName = Path.GetFileName(path);
+            if (string.IsNullOrEmpty(directory) || string.IsNullOrEmpty(fileName))
+            {
+                return path;
+            }
+
+#if NET
+            var matches = Directory.EnumerateFiles(directory, fileName, new EnumerationOptions { MatchCasing = MatchCasing.CaseInsensitive, MatchType = MatchType.Simple });
+#else
+            // .NET Framework only runs on Windows, where file name patterns already match case-insensitively.
+            var matches = Directory.EnumerateFiles(directory, fileName);
+#endif
+            foreach (var match in matches)
+            {
+                if (string.Equals(Path.GetFileName(match), fileName, StringComparison.OrdinalIgnoreCase))
+                {
+                    return Path.Combine(directory, Path.GetFileName(match));
+                }
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or System.Security.SecurityException)
+        {
+        }
+
+        return path;
     }
 
     private static string? TryGetFullPath(string path)

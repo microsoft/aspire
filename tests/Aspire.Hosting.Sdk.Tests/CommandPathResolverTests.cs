@@ -121,6 +121,29 @@ public class CommandPathResolverTests
         Assert.Equal(sharedCandidates, taskCandidates);
     }
 
+    [Fact]
+    public void ExtensionMatchesReportTheOnDiskFileNameConsistentlyWithPathLookupHelper()
+    {
+        var directory = Directory.CreateTempSubdirectory("aspire-command-path-resolver-");
+        try
+        {
+            var onDiskPath = Path.Combine(directory.FullName, "aspire.cmd");
+            File.WriteAllText(onDiskPath, string.Empty);
+            // Simulate Windows' case-insensitive file system on every platform.
+            bool FileExists(string path) => string.Equals(path, onDiskPath, StringComparison.OrdinalIgnoreCase);
+
+            var taskCandidates = CommandPathResolver.EnumerateFromPath("aspire", directory.FullName, [".EXE", ".CMD"], FileExists).ToArray();
+            var sharedCandidates = PathLookupHelper.FindAllFullPathsFromPath("aspire", directory.FullName, Path.PathSeparator, FileExists, [".EXE", ".CMD"]).ToArray();
+
+            Assert.Equal([onDiskPath], taskCandidates);
+            Assert.Equal(sharedCandidates, taskCandidates);
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
     [Theory]
     [InlineData(null)]
     [InlineData("")]

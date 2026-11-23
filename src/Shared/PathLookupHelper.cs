@@ -201,7 +201,7 @@ internal static class PathLookupHelper
                     if (TryCombine(directory, command + extension, out var fullPathWithExt) &&
                         FileExistsSafe(fileExists, fullPathWithExt))
                     {
-                        yield return fullPathWithExt;
+                        yield return GetOnDiskPath(fullPathWithExt);
                         foundExtensionMatch = true;
                         break;
                     }
@@ -220,6 +220,37 @@ internal static class PathLookupHelper
                 yield return fullPath;
             }
         }
+    }
+
+    // PATHEXT entries are conventionally upper case (".CMD"), but Windows file names are case-insensitive, so
+    // "aspire" + ".CMD" matches "aspire.cmd". Report the file name as it exists on disk so resolved paths read the
+    // way the file was named. Falls back to the constructed path when the directory cannot be enumerated, for
+    // example when a test supplies its own existence probe.
+    private static string GetOnDiskPath(string path)
+    {
+        try
+        {
+            var directory = Path.GetDirectoryName(path);
+            var fileName = Path.GetFileName(path);
+            if (string.IsNullOrEmpty(directory) || string.IsNullOrEmpty(fileName))
+            {
+                return path;
+            }
+
+            var options = new EnumerationOptions { MatchCasing = MatchCasing.CaseInsensitive, MatchType = MatchType.Simple };
+            foreach (var match in Directory.EnumerateFiles(directory, fileName, options))
+            {
+                if (string.Equals(Path.GetFileName(match), fileName, StringComparison.OrdinalIgnoreCase))
+                {
+                    return Path.Combine(directory, Path.GetFileName(match));
+                }
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or System.Security.SecurityException)
+        {
+        }
+
+        return path;
     }
 
     private static bool TryCombine(string directory, string fileName, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out string? path)
