@@ -2642,13 +2642,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             _selectionAnchor = resourceName;
         }
 
-        if (selection.Count == 0)
-        {
-            // Remember the cleared selection so the overview doesn't select a resource again.
-            await SetStoredSelectionAsync(selection);
-        }
-
-        NavigateToSelection(selection);
+        await NavigateToSelectionAsync(selection);
     }
 
     // A single selected resource is shown by its row alone, so a one-resource group doesn't duplicate the highlight.
@@ -2709,7 +2703,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         }
 
         _selectionAnchor = selection is [.., var last] ? last : null;
-        NavigateToSelection(selection);
+        await NavigateToSelectionAsync(selection);
     }
 
     private async Task OnAllResourcesClickAsync()
@@ -2763,8 +2757,14 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         return names;
     }
 
-    private void NavigateToSelection(IReadOnlyList<string> resourceNames)
+    private async Task NavigateToSelectionAsync(IReadOnlyList<string> resourceNames)
     {
+        if (resourceNames.Count == 0)
+        {
+            // Clear the remembered selection before Overview can restore it during navigation.
+            await SetStoredSelectionAsync(resourceNames);
+        }
+
         var url = GetSelectionUrl(resourceNames);
         _animatedPaneNavigation = _isPaneFullCanvas && resourceNames.Count == 1
             ? NavigationManager.ToAbsoluteUri(url).AbsoluteUri

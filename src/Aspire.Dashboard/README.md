@@ -19,8 +19,10 @@ The popup includes search; filter and grouping buttons are available only in the
 Use **Group resources**, beside **Filters** in the resources pane, to group
 the list by **Tags**, **Resource type**, or **State**. **None** restores the default nested resource list.
 Click a group name to select its items together, or click its chevron to expand or collapse it.
-This also works for sections like **Parameters** when grouping is set to **None**. Grouping adds no extra
-indentation; nested resources still indent under their parent in **None**. Search matches group names as
+This also works for sections like **Parameters** when grouping is set to **None**.
+Ctrl-click (Cmd-click on macOS) a selected group to remove its items from the selection. Removing the last
+selected items returns to **All resources** in Overview without restoring the previous selection.
+Grouping adds no extra indentation; nested resources still indent under their parent in **None**. Search matches group names as
 well as resources, and the grouping preference is remembered across navigation and reloads.
 Tag grouping replaces the separate Tags navigation entry; resources with multiple tags appear under each tag,
 with untagged resources initially listed last. Telemetry sources keep their ungrouped list.

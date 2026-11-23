@@ -1022,6 +1022,51 @@ public class ResourcesLayoutTests : DashboardTestContext
     }
 
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ParametersSection_ModifierClickClearsRememberedSelection(bool useCommand)
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var stored = new ConcurrentDictionary<string, object?>();
+        var sessionStorage = new TestSessionStorage
+        {
+            OnGetAsync = key => (stored.TryGetValue(key, out var value), value),
+            OnSetAsync = (key, value) => stored[key] = value
+        };
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources:
+            [
+                ModelTestHelpers.CreateResource("api", resourceType: KnownResourceTypes.Project),
+                ModelTestHelpers.CreateResource("api-key", resourceType: KnownResourceTypes.Parameter),
+                ModelTestHelpers.CreateResource("theme", resourceType: KnownResourceTypes.Parameter)
+            ], resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>),
+            configureServices: services => services.AddSingleton<ISessionStorage>(sessionStorage));
+        var storage = Assert.IsType<TestLocalStorage>(Services.GetRequiredService<ILocalStorage>());
+        storage.OnGetUnprotectedAsync = key => key == BrowserStorageKeys.ResourcePaneGrouping
+            ? (true, nameof(ResourcePaneGrouping.None))
+            : (false, null);
+        var navigation = Services.GetRequiredService<NavigationManager>();
+        navigation.NavigateTo(DashboardUrls.ResourceOverviewUrl("api"));
+        var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
+        const string link = ".resource-pane-section-header a[aria-label='Parameters, 2 parameters']";
+        cut.WaitForAssertion(() => Assert.Equal(["api"], cut.Instance.SelectedResourceNames));
+
+        await cut.Find(link).ClickAsync(new MouseEventArgs());
+        cut.Render();
+        cut.WaitForAssertion(() =>
+            Assert.Equal(["api-key", "theme"], Assert.IsType<List<string>>(stored[BrowserStorageKeys.LastSelectedResources])));
+
+        await cut.Find(link).ClickAsync(new MouseEventArgs { CtrlKey = !useCommand, MetaKey = useCommand });
+        cut.Render();
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Empty(Assert.IsType<List<string>>(stored[BrowserStorageKeys.LastSelectedResources]));
+            Assert.Equal(DashboardUrls.ResourceOverviewUrl(), new Uri(navigation.Uri).PathAndQuery);
+            Assert.Empty(cut.Instance.SelectedResourceNames);
+        });
+    }
+
+    [Theory]
     [InlineData("Tags", "Tags:A new group")]
     [InlineData("ResourceType", "ResourceType:AAA")]
     [InlineData("State", "State:Building")]
