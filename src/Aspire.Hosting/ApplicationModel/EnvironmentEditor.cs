@@ -31,6 +31,9 @@ internal sealed class EnvironmentEditor(Dictionary<string, object> environmentVa
         ArgumentNullException.ThrowIfNull(name);
         ArgumentNullException.ThrowIfNull(value);
 
-        _environmentVariables[name] = value;
+        // Polyglot AppHosts can only pass a resource builder handle. Store the resource itself, as a
+        // C# AppHost does with parameter.Resource, so every consumer of the environment (publishers
+        // included) sees a value it knows how to resolve.
+        _environmentVariables[name] = value is IResourceBuilder<IResource> resourceBuilder ? resourceBuilder.Resource : value;
     }
 }
