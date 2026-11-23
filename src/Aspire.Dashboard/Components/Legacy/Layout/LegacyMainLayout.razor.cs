@@ -112,6 +112,29 @@ public partial class LegacyMainLayout : IGlobalKeydownListener, IAsyncDisposable
 
     protected override async Task OnInitializedAsync()
     {
+        if (RunStore.SupportsRunSelection)
+        {
+            var selectedRunResult = await SessionStorage.GetAsync<string>(BrowserStorageKeys.SelectedDashboardRunId);
+            var selectedRunId = selectedRunResult is { Success: true } ? selectedRunResult.Value : null;
+            if (!_runSelectionChanged && !string.IsNullOrEmpty(selectedRunId))
+            {
+                try
+                {
+                    RunSelection.SelectRun(selectedRunId);
+                }
+                catch (Exception exception)
+                {
+                    Logger.LogError(exception, "Failed to restore dashboard run '{RunId}'. Falling back to the current run.", selectedRunId);
+                    RunSelection.SelectRun(runId: null);
+                }
+
+                if (RunSelection.SelectedRun.IsCurrent)
+                {
+                    await SessionStorage.SetAsync(BrowserStorageKeys.SelectedDashboardRunId, string.Empty);
+                }
+            }
+        }
+
         NotificationService.OnChange += HandleNotificationsChanged;
 
         // Theme change can be triggered from the settings dialog. This logic applies the new theme to the browser window.
@@ -146,93 +169,25 @@ public partial class LegacyMainLayout : IGlobalKeydownListener, IAsyncDisposable
 
         try
         {
-            // Start independent browser storage and JS interop reads concurrently so Blazor Server
-            // pipelines them in a single round-trip wave instead of awaiting each sequentially.
-            var selectedRunTask = RunStore.SupportsRunSelection
-                ? SessionStorage.GetAsync<string>(BrowserStorageKeys.SelectedDashboardRunId)
-                : null;
-            var browserInfoTask = JS.InvokeAsync<BrowserInfo>("window.getBrowserInfo").AsTask();
-            var timeFormatTask = LocalStorage.GetAsync<TimeFormat>(BrowserStorageKeys.TimeFormat);
-            // Restore the persisted desktop nav rail layout (collapsed to icons vs. expanded with labels).
-            var navExpandedTask = LocalStorage.GetUnprotectedAsync<bool>(BrowserStorageKeys.NavMenuExpanded);
-
-            var unsecuredEndpointsMessage = GetUnsecuredEndpointsMessage();
-            // Check UnsecuredTelemetryMessageDismissedKey for backwards compatibility.
-            var unsecuredEndpointDismissedTask = unsecuredEndpointsMessage is not null
-                ? LocalStorage.GetUnprotectedAsync<bool>(BrowserStorageKeys.UnsecuredEndpointMessageDismissedKey)
-                : null;
-            var unsecuredTelemetryDismissedTask = unsecuredEndpointsMessage is not null
-                ? LocalStorage.GetUnprotectedAsync<bool>(BrowserStorageKeys.UnsecuredTelemetryMessageDismissedKey)
-                : null;
-
-            var startupTasks = new List<Task>(6)
-            {
-                browserInfoTask,
-                timeFormatTask,
-                navExpandedTask
-            };
-            if (selectedRunTask is not null)
-            {
-                startupTasks.Add(selectedRunTask);
-            }
-            if (unsecuredEndpointDismissedTask is not null)
-            {
-                startupTasks.Add(unsecuredEndpointDismissedTask);
-                startupTasks.Add(unsecuredTelemetryDismissedTask!);
-            }
-
-            await Task.WhenAll(startupTasks);
-
-            if (selectedRunTask is not null)
-            {
-                var selectedRunResult = await selectedRunTask;
-                var selectedRunId = selectedRunResult is { Success: true } ? selectedRunResult.Value : null;
-                if (!_runSelectionChanged && !string.IsNullOrEmpty(selectedRunId))
-                {
-                    try
-                    {
-                        RunSelection.SelectRun(selectedRunId);
-                    }
-                    catch (Exception exception)
-                    {
-                        Logger.LogError(exception, "Failed to restore dashboard run '{RunId}'. Falling back to the current run.", selectedRunId);
-                        RunSelection.SelectRun(runId: null);
-                    }
-
-                    if (RunSelection.SelectedRun.IsCurrent)
-                    {
-                        await SessionStorage.SetAsync(BrowserStorageKeys.SelectedDashboardRunId, string.Empty);
-                    }
-                }
-            }
-
-            var result = await browserInfoTask;
+            var result = await JS.InvokeAsync<BrowserInfo>("window.getBrowserInfo");
             TimeProvider.SetBrowserTimeZone(result.TimeZone);
             TimeProvider.SetBrowserTimeFormat(result.Is24HourTime ? TimeFormat.TwentyFourHour : TimeFormat.TwelveHour);
             TelemetryContextProvider.SetBrowserUserAgent(result.UserAgent);
 
-            var timeFormatResult = await timeFormatTask;
+            var timeFormatResult = await LocalStorage.GetAsync<TimeFormat>(BrowserStorageKeys.TimeFormat);
             if (timeFormatResult.Success)
             {
                 TimeProvider.SetConfiguredTimeFormat(timeFormatResult.Value);
             }
 
-            var navExpandedResult = await navExpandedTask;
+            // Restore the persisted desktop nav rail layout (collapsed to icons vs. expanded with labels).
+            var navExpandedResult = await LocalStorage.GetUnprotectedAsync<bool>(BrowserStorageKeys.NavMenuExpanded);
             if (navExpandedResult.Success)
             {
                 _isNavMenuExpanded = navExpandedResult.Value;
             }
 
-            if (unsecuredEndpointsMessage is not null)
-            {
-                var endpointDismissed = await unsecuredEndpointDismissedTask!;
-                var telemetryDismissed = await unsecuredTelemetryDismissedTask!;
-                if (!(endpointDismissed.Success && endpointDismissed.Value) &&
-                    !(telemetryDismissed.Success && telemetryDismissed.Value))
-                {
-                    await DisplayUnsecuredEndpointsMessageAsync(unsecuredEndpointsMessage);
-                }
-            }
+            await DisplayUnsecuredEndpointsMessageAsync();
         }
         catch (JSDisconnectedException ex)
         {
@@ -244,7 +199,7 @@ public partial class LegacyMainLayout : IGlobalKeydownListener, IAsyncDisposable
         }
     }
 
-    private string? GetUnsecuredEndpointsMessage()
+    private async Task DisplayUnsecuredEndpointsMessageAsync()
     {
         var unsecuredEndpointsMessage = new StringBuilder();
         if (ShouldShowUnsecuredTelemetryMessage())
@@ -256,22 +211,33 @@ public partial class LegacyMainLayout : IGlobalKeydownListener, IAsyncDisposable
             unsecuredEndpointsMessage.AppendLine(Loc[nameof(Resources.Layout.MessageUnsecuredEndpointApiBody)]);
         }
 
-        return unsecuredEndpointsMessage.Length > 0 ? unsecuredEndpointsMessage.ToString() : null;
-    }
+        if (unsecuredEndpointsMessage.Length > 0)
+        {
+            // Check UnsecuredTelemetryMessageDismissedKey for backwards compatibility.
+            var skipMessage = (await ShouldSkipMessageAsync(LocalStorage, BrowserStorageKeys.UnsecuredEndpointMessageDismissedKey) ||
+                await ShouldSkipMessageAsync(LocalStorage, BrowserStorageKeys.UnsecuredTelemetryMessageDismissedKey));
 
-    private Task DisplayUnsecuredEndpointsMessageAsync(string unsecuredEndpointsMessage)
-    {
-        return MessageService.ShowAsync(
-            new DashboardMessageBarContent
+            if (!skipMessage)
             {
-                Title = Loc[nameof(Resources.Layout.MessageUnsecuredEndpointTitle)],
-                Message = unsecuredEndpointsMessage,
-                LinkText = Loc[nameof(Resources.Layout.MessageUnsecuredEndpointLink)],
-                LinkUrl = "https://aka.ms/aspire/api-endpoint-unsecured"
-            },
-            MessageBarIntent.Warning,
-            DashboardUIHelpers.MessageBarSection,
-            _ => LocalStorage.SetUnprotectedAsync(BrowserStorageKeys.UnsecuredEndpointMessageDismissedKey, true));
+                await MessageService.ShowAsync(
+                    new DashboardMessageBarContent
+                    {
+                        Title = Loc[nameof(Resources.Layout.MessageUnsecuredEndpointTitle)],
+                        Message = unsecuredEndpointsMessage.ToString(),
+                        LinkText = Loc[nameof(Resources.Layout.MessageUnsecuredEndpointLink)],
+                        LinkUrl = "https://aka.ms/aspire/api-endpoint-unsecured"
+                    },
+                    MessageBarIntent.Warning,
+                    DashboardUIHelpers.MessageBarSection,
+                    _ => LocalStorage.SetUnprotectedAsync(BrowserStorageKeys.UnsecuredEndpointMessageDismissedKey, true));
+            }
+        }
+
+        static async Task<bool> ShouldSkipMessageAsync(ILocalStorage localStorage, string storageKey)
+        {
+            var dismissedResult = await localStorage.GetUnprotectedAsync<bool>(storageKey);
+            return dismissedResult.Success && dismissedResult.Value;
+        }
     }
 
     private bool ShouldShowUnsecuredTelemetryMessage()

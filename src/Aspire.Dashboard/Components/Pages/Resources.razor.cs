@@ -235,14 +235,11 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
             collapsedResultTask = LocalStorage.GetAsync<List<string>>(_collapsedResourceNamesKey);
         }
 
-        if (collapsedResultTask is not null)
-        {
-            await Task.WhenAll(tagStoreTask, showResourceTypeColumnTask, showHiddenResourcesTask, collapsedResultTask);
-        }
-        else
-        {
-            await Task.WhenAll(tagStoreTask, showResourceTypeColumnTask, showHiddenResourcesTask);
-        }
+        await Task.WhenAll(
+            tagStoreTask,
+            showResourceTypeColumnTask,
+            showHiddenResourcesTask,
+            collapsedResultTask ?? Task.CompletedTask);
 
         var showResourceTypeColumn = await showResourceTypeColumnTask;
         if (showResourceTypeColumn.Success)

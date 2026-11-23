@@ -157,85 +157,22 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
 
         try
         {
-            // Start independent browser storage and JS interop reads concurrently so Blazor Server
+            // Run independent browser storage and JS interop reads concurrently so Blazor Server
             // pipelines them in a single round-trip wave instead of awaiting each sequentially.
             var viewPreferencesTask = ViewPreferences.EnsureLoadedAsync();
-            var selectedRunTask = RunStore.SupportsRunSelection
-                ? SessionStorage.GetAsync<string>(BrowserStorageKeys.SelectedDashboardRunId)
-                : null;
-            var browserInfoTask = JS.InvokeAsync<BrowserInfo>("window.getBrowserInfo").AsTask();
-            var timeFormatTask = LocalStorage.GetAsync<TimeFormat>(BrowserStorageKeys.TimeFormat);
+            var selectedRunTask = RestoreSelectedRunAsync();
+            var browserInfoTask = InitializeBrowserInfoAsync();
+            var unsecuredEndpointsMessageTask = GetUnsecuredEndpointsMessageToShowAsync();
 
-            var unsecuredEndpointsMessage = GetUnsecuredEndpointsMessage();
-            // Check UnsecuredTelemetryMessageDismissedKey for backwards compatibility.
-            var unsecuredEndpointDismissedTask = unsecuredEndpointsMessage is not null
-                ? LocalStorage.GetUnprotectedAsync<bool>(BrowserStorageKeys.UnsecuredEndpointMessageDismissedKey)
-                : null;
-            var unsecuredTelemetryDismissedTask = unsecuredEndpointsMessage is not null
-                ? LocalStorage.GetUnprotectedAsync<bool>(BrowserStorageKeys.UnsecuredTelemetryMessageDismissedKey)
-                : null;
-
-            var startupTasks = new List<Task>(6)
-            {
+            await Task.WhenAll(
                 viewPreferencesTask,
+                selectedRunTask,
                 browserInfoTask,
-                timeFormatTask
-            };
-            if (selectedRunTask is not null)
+                unsecuredEndpointsMessageTask);
+
+            if (await unsecuredEndpointsMessageTask is { } unsecuredEndpointsMessage)
             {
-                startupTasks.Add(selectedRunTask);
-            }
-            if (unsecuredEndpointDismissedTask is not null)
-            {
-                startupTasks.Add(unsecuredEndpointDismissedTask);
-                startupTasks.Add(unsecuredTelemetryDismissedTask!);
-            }
-
-            await Task.WhenAll(startupTasks);
-
-            if (selectedRunTask is not null)
-            {
-                var selectedRunResult = await selectedRunTask;
-                var selectedRunId = selectedRunResult is { Success: true } ? selectedRunResult.Value : null;
-                if (!_runSelectionChanged && !string.IsNullOrEmpty(selectedRunId))
-                {
-                    try
-                    {
-                        RunSelection.SelectRun(selectedRunId);
-                    }
-                    catch (Exception exception)
-                    {
-                        Logger.LogError(exception, "Failed to restore dashboard run '{RunId}'. Falling back to the current run.", selectedRunId);
-                        RunSelection.SelectRun(runId: null);
-                    }
-
-                    if (RunSelection.SelectedRun.IsCurrent)
-                    {
-                        await SessionStorage.SetAsync(BrowserStorageKeys.SelectedDashboardRunId, string.Empty);
-                    }
-                }
-            }
-
-            var result = await browserInfoTask;
-            TimeProvider.SetBrowserTimeZone(result.TimeZone);
-            TimeProvider.SetBrowserTimeFormat(result.Is24HourTime ? TimeFormat.TwentyFourHour : TimeFormat.TwelveHour);
-            TelemetryContextProvider.SetBrowserUserAgent(result.UserAgent);
-
-            var timeFormatResult = await timeFormatTask;
-            if (timeFormatResult.Success)
-            {
-                TimeProvider.SetConfiguredTimeFormat(timeFormatResult.Value);
-            }
-
-            if (unsecuredEndpointsMessage is not null)
-            {
-                var endpointDismissed = await unsecuredEndpointDismissedTask!;
-                var telemetryDismissed = await unsecuredTelemetryDismissedTask!;
-                if (!(endpointDismissed.Success && endpointDismissed.Value) &&
-                    !(telemetryDismissed.Success && telemetryDismissed.Value))
-                {
-                    await DisplayUnsecuredEndpointsMessageAsync(unsecuredEndpointsMessage);
-                }
+                await ShowUnsecuredEndpointsMessageAsync(unsecuredEndpointsMessage);
             }
         }
         catch (JSDisconnectedException ex)
@@ -248,7 +185,54 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
         }
     }
 
-    private string? GetUnsecuredEndpointsMessage()
+    private async Task RestoreSelectedRunAsync()
+    {
+        if (!RunStore.SupportsRunSelection)
+        {
+            return;
+        }
+
+        var selectedRunResult = await SessionStorage.GetAsync<string>(BrowserStorageKeys.SelectedDashboardRunId);
+        var selectedRunId = selectedRunResult is { Success: true } ? selectedRunResult.Value : null;
+        if (!_runSelectionChanged && !string.IsNullOrEmpty(selectedRunId))
+        {
+            try
+            {
+                RunSelection.SelectRun(selectedRunId);
+            }
+            catch (Exception exception)
+            {
+                Logger.LogError(exception, "Failed to restore dashboard run '{RunId}'. Falling back to the current run.", selectedRunId);
+                RunSelection.SelectRun(runId: null);
+            }
+
+            if (RunSelection.SelectedRun.IsCurrent)
+            {
+                await SessionStorage.SetAsync(BrowserStorageKeys.SelectedDashboardRunId, string.Empty);
+            }
+        }
+    }
+
+    private async Task InitializeBrowserInfoAsync()
+    {
+        var browserInfoTask = JS.InvokeAsync<BrowserInfo>("window.getBrowserInfo").AsTask();
+        var timeFormatTask = LocalStorage.GetAsync<TimeFormat>(BrowserStorageKeys.TimeFormat);
+
+        await Task.WhenAll(browserInfoTask, timeFormatTask);
+
+        var result = await browserInfoTask;
+        TimeProvider.SetBrowserTimeZone(result.TimeZone);
+        TimeProvider.SetBrowserTimeFormat(result.Is24HourTime ? TimeFormat.TwentyFourHour : TimeFormat.TwelveHour);
+        TelemetryContextProvider.SetBrowserUserAgent(result.UserAgent);
+
+        var timeFormatResult = await timeFormatTask;
+        if (timeFormatResult.Success)
+        {
+            TimeProvider.SetConfiguredTimeFormat(timeFormatResult.Value);
+        }
+    }
+
+    private async Task<string?> GetUnsecuredEndpointsMessageToShowAsync()
     {
         var unsecuredEndpointsMessage = new StringBuilder();
         if (ShouldShowUnsecuredTelemetryMessage())
@@ -260,10 +244,28 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
             unsecuredEndpointsMessage.AppendLine(Loc[nameof(Resources.Layout.MessageUnsecuredEndpointApiBody)]);
         }
 
-        return unsecuredEndpointsMessage.Length > 0 ? unsecuredEndpointsMessage.ToString() : null;
+        if (unsecuredEndpointsMessage.Length == 0)
+        {
+            return null;
+        }
+
+        // Check UnsecuredTelemetryMessageDismissedKey for backwards compatibility.
+        var endpointDismissedTask = LocalStorage.GetUnprotectedAsync<bool>(BrowserStorageKeys.UnsecuredEndpointMessageDismissedKey);
+        var telemetryDismissedTask = LocalStorage.GetUnprotectedAsync<bool>(BrowserStorageKeys.UnsecuredTelemetryMessageDismissedKey);
+        await Task.WhenAll(endpointDismissedTask, telemetryDismissedTask);
+
+        var endpointDismissed = await endpointDismissedTask;
+        var telemetryDismissed = await telemetryDismissedTask;
+        if ((endpointDismissed.Success && endpointDismissed.Value) ||
+            (telemetryDismissed.Success && telemetryDismissed.Value))
+        {
+            return null;
+        }
+
+        return unsecuredEndpointsMessage.ToString();
     }
 
-    private Task DisplayUnsecuredEndpointsMessageAsync(string unsecuredEndpointsMessage)
+    private Task ShowUnsecuredEndpointsMessageAsync(string unsecuredEndpointsMessage)
     {
         return MessageService.ShowAsync(
             new DashboardMessageBarContent
