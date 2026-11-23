@@ -1925,9 +1925,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         .Take(DashboardUIHelpers.MaxHighlightedCommands);
 
     private IEnumerable<CommandViewModel> GetInlineRowCommands(ResourceViewModel resource) =>
-        resource.IsParameter
-            ? GetHighlightedCommands(resource).Take(1)
-            : _isPaneFullCanvas ? GetHighlightedCommands(resource) : GetSidebarCommands(resource);
+        _isPaneFullCanvas ? GetHighlightedCommands(resource) : GetSidebarCommands(resource);
 
     private static IEnumerable<CommandViewModel> GetResourceRowCommands(ResourceViewModel resource)
     {

@@ -2046,14 +2046,15 @@ public class ResourcesLayoutTests : DashboardTestContext
     }
 
     [Theory]
-    [InlineData(CommandViewModelState.Enabled, true, true, false, ResourceListDensity.Compact, "Set parameter")]
-    [InlineData(CommandViewModelState.Disabled, true, true, false, ResourceListDensity.Comfortable, "Set parameter")]
-    [InlineData(CommandViewModelState.Enabled, true, true, true, ResourceListDensity.Compact, "Set parameter")]
-    [InlineData(CommandViewModelState.Enabled, false, true, false, ResourceListDensity.Comfortable, "Delete parameter")]
-    [InlineData(CommandViewModelState.Hidden, true, true, false, ResourceListDensity.Compact, "Delete parameter")]
-    [InlineData(CommandViewModelState.Enabled, false, false, false, ResourceListDensity.Compact, null)]
-    public async Task ParameterRowActions_ShowFirstVisibleHighlightedCommandInBothViews(
-        CommandViewModelState setState, bool setHighlighted, bool hasValue, bool readOnly, ResourceListDensity density, string? expectedCommand)
+    [InlineData(CommandViewModelState.Enabled, true, true, false, ResourceListDensity.Compact, true)]
+    [InlineData(CommandViewModelState.Disabled, true, true, false, ResourceListDensity.Comfortable, true)]
+    [InlineData(CommandViewModelState.Enabled, true, true, true, ResourceListDensity.Compact, true)]
+    [InlineData(CommandViewModelState.Enabled, false, true, false, ResourceListDensity.Comfortable, false)]
+    [InlineData(CommandViewModelState.Hidden, true, true, false, ResourceListDensity.Compact, false)]
+    [InlineData(CommandViewModelState.Enabled, true, false, false, ResourceListDensity.Comfortable, true)]
+    [InlineData(CommandViewModelState.Enabled, false, false, false, ResourceListDensity.Compact, false)]
+    public async Task ParameterRowActions_ShowVisibleHighlightedCommandsInBothViews(
+        CommandViewModelState setState, bool setHighlighted, bool hasValue, bool readOnly, ResourceListDensity density, bool showSetInline)
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         static CommandViewModel Command(string name, string displayName, CommandViewModelState state, bool highlighted) =>
@@ -2080,7 +2081,7 @@ public class ResourcesLayoutTests : DashboardTestContext
         cut.WaitForAssertion(() => Assert.Single(cut.FindAll(".pane-full-canvas")));
         AssertRowActions();
 
-        if (expectedCommand == "Set parameter" && !readOnly && setState == CommandViewModelState.Enabled)
+        if (showSetInline && !readOnly && setState == CommandViewModelState.Enabled)
         {
             await cut.InvokeAsync(() => cut.Find("[data-resource-name='setting-id'] fluent-button[aria-label='Set parameter setting']").Click());
             var navigation = Services.GetRequiredService<NavigationManager>();
@@ -2090,17 +2091,24 @@ public class ResourcesLayoutTests : DashboardTestContext
         void AssertRowActions()
         {
             var actions = cut.FindAll("[data-resource-name='setting-id'] .resource-row-actions fluent-button");
-            string[] expectedActions = expectedCommand is null
-                ? ["Actions for setting"]
-                : [$"{expectedCommand} setting", "Actions for setting"];
-            Assert.Equal(expectedActions, actions.Select(button => button.GetAttribute("aria-label")));
-            if (expectedCommand is not null)
+            var expectedActions = new List<(string? Label, bool Disabled)>();
+            if (showSetInline)
             {
-                Assert.Equal(readOnly || (expectedCommand == "Set parameter" && setState == CommandViewModelState.Disabled), actions[0].HasAttribute("disabled"));
+                expectedActions.Add(("Set parameter setting", readOnly || setState == CommandViewModelState.Disabled));
             }
 
+            if (hasValue)
+            {
+                expectedActions.Add(("Delete parameter setting", readOnly));
+            }
+
+            expectedActions.Add(("Actions for setting", false));
+            Assert.Equal(expectedActions, actions.Select(button => (button.GetAttribute("aria-label"), button.HasAttribute("disabled"))));
+
             var menu = cut.FindComponents<AspireMenuButton>().Single(button => button.Instance.Title == "Actions for setting");
-            Assert.Equal(hasValue, menu.Instance.ItemsProvider().Any(item => item.Text == "Delete parameter"));
+            var menuItems = menu.Instance.ItemsProvider();
+            Assert.Contains(menuItems, item => item.Text == "Custom");
+            Assert.Equal(hasValue, menuItems.Any(item => item.Text == "Delete parameter"));
         }
     }
 
@@ -2254,15 +2262,10 @@ public class ResourcesLayoutTests : DashboardTestContext
         cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
         await cut.InvokeAsync(() => Services.GetRequiredService<DashboardViewPreferences>().SetDensityAsync(density));
 
-        // The rail has the endpoint, the command and the menu, which has the terminal. A compact sidebar row puts the
-        // toggle, here its spacer, after the actions, so the tab order matches the screen. The other densities keep it
-        // first.
-        var rail = cut.Find("a.resource-row-primary-endpoint").ParentElement!.Children.ToList();
-        var spacer = density == ResourceListDensity.Compact ? rail[^1] : rail[0];
-        Assert.True(spacer.ClassList.Contains("resource-row-toggle-spacer"));
-        Assert.Collection(rail.Where(child => child != spacer),
-            endpoint => Assert.True(endpoint.ClassList.Contains("resource-row-action-priority-0")),
-            command => Assert.True(command.ClassList.Contains("resource-row-action-priority-1")),
+        var rail = cut.Find("a.resource-row-primary-endpoint").ParentElement!;
+        Assert.Collection(rail.Children,
+            endpoint => Assert.True(endpoint.ClassList.Contains("resource-row-primary-endpoint")),
+            command => Assert.True(command.ClassList.Contains("resource-row-highlighted")),
             menu => Assert.True(menu.ClassList.Contains("aspire-menu-button")));
 
         if (!desktop)
