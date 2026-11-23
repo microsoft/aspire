@@ -210,6 +210,9 @@ public sealed partial class SqliteTelemetryRepository
         }
 
         var positivePredicates = new List<string>();
+        var timestampBoundCount = 0;
+        var hasTimestampLowerBound = false;
+        var hasTimestampUpperBound = false;
         var filterIndex = 0;
         foreach (var filter in context.Filters.Where(filter => filter.Enabled))
         {
@@ -239,9 +242,34 @@ public sealed partial class SqliteTelemetryRepository
             else
             {
                 positivePredicates.Add(BuildSpanFieldPredicate(fieldFilter, parameters, filterIndex++, invertNegative: false));
+                if (fieldFilter.Field == KnownTraceFields.TimestampField)
+                {
+                    switch (fieldFilter.Condition)
+                    {
+                        case FilterCondition.GreaterThan:
+                        case FilterCondition.GreaterThanOrEqual:
+                            hasTimestampLowerBound = true;
+                            timestampBoundCount++;
+                            break;
+                        case FilterCondition.LessThan:
+                        case FilterCondition.LessThanOrEqual:
+                            hasTimestampUpperBound = true;
+                            timestampBoundCount++;
+                            break;
+                    }
+                }
             }
         }
-        if (positivePredicates.Count > 0)
+        if (hasTimestampLowerBound && hasTimestampUpperBound && timestampBoundCount == positivePredicates.Count)
+        {
+            // For a bounded time-only span query (such as an Overview activity bucket), find the matching
+            // spans first. Iterating resource IDs lets SQLite seek the existing (resource_id, start_time_ticks)
+            // index instead of probing the span index once per retained trace.
+            sql.Append(" AND t.trace_id IN (SELECT s.trace_id FROM telemetry_spans s WHERE s.resource_id IN (SELECT resource_id FROM telemetry_resources) AND ");
+            sql.AppendJoin(" AND ", positivePredicates);
+            sql.Append(')');
+        }
+        else if (positivePredicates.Count > 0)
         {
             sql.Append(" AND EXISTS (SELECT 1 FROM telemetry_spans s JOIN telemetry_resources r ON r.resource_id = s.resource_id JOIN telemetry_scopes sc ON sc.scope_id = s.scope_id JOIN telemetry_span_kinds sk ON sk.kind = s.kind JOIN telemetry_span_statuses ss ON ss.status = s.status LEFT JOIN telemetry_resources pr ON pr.resource_id = s.uninstrumented_peer_resource_id WHERE s.trace_id = t.trace_id AND ");
             sql.AppendJoin(" AND ", positivePredicates);
@@ -343,6 +371,11 @@ public sealed partial class SqliteTelemetryRepository
                 _ => filter.Condition
             }
             : filter.Condition;
+        if (filter.Field == KnownTraceFields.TimestampField)
+        {
+            return BuildTimestampFilterPredicate("s.start_time_ticks", condition, filter.Value, parameters, parameterName);
+        }
+
         parameters.Add(
             parameterName,
             condition is FilterCondition.Contains or FilterCondition.NotContains
@@ -358,18 +391,8 @@ public sealed partial class SqliteTelemetryRepository
             KnownTraceFields.KindField => "sk.kind_name",
             KnownTraceFields.StatusField => "ss.status_name",
             KnownSourceFields.NameField => "sc.scope_name",
-            KnownTraceFields.TimestampField => "s.start_time_ticks / 10000",
             _ => null
         };
-        if (filter.Field == KnownTraceFields.TimestampField)
-        {
-            if (!DateTime.TryParse(filter.Value, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeLocal, out var date))
-            {
-                return "0 = 1";
-            }
-            parameters.Add(parameterName, date.ToUniversalTime().Ticks / TimeSpan.TicksPerMillisecond);
-            return BuildNumericPredicate(expression!, condition, parameterName);
-        }
         if (expression is not null)
         {
             return BuildStringPredicate(expression, condition, parameterName);
