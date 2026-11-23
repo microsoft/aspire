@@ -42,15 +42,7 @@ internal sealed class ResourceTelemetryStatus
         }
     }
 
-    /// <summary>
-    /// Creates a status from the resources reported by the dashboard telemetry API.
-    /// </summary>
-    internal static ResourceTelemetryStatus Create(IEnumerable<ResourceInfoJson> telemetryResources) => new(telemetryResources);
-
-    /// <summary>
-    /// Gets whether the AppHost configured an OTLP exporter endpoint for the resource.
-    /// </summary>
-    internal static bool IsOtlpExporterConfigured(ResourceSnapshot snapshot) =>
+    private static bool IsOtlpExporterConfigured(ResourceSnapshot snapshot) =>
         // An explicitly empty endpoint disables export; a null value means the value wasn't captured.
         snapshot.EnvironmentVariables.Any(e =>
             string.Equals(e.Name, KnownOtelConfigNames.ExporterOtlpEndpoint, StringComparison.Ordinal) &&
@@ -119,7 +111,7 @@ internal sealed class ResourceTelemetryStatus
             }
 
             using var client = TelemetryCommandHelpers.CreateApiClient(httpClientFactory, apiToken);
-            return Create(await TelemetryCommandHelpers.GetAllResourcesAsync(client, apiBaseUrl, timeoutCts.Token).ConfigureAwait(false));
+            return new ResourceTelemetryStatus(await TelemetryCommandHelpers.GetAllResourcesAsync(client, apiBaseUrl, timeoutCts.Token).ConfigureAwait(false));
         }
         catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
         {

@@ -3,6 +3,7 @@
 
 using Aspire.Cli.EndToEnd.Tests.Helpers;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Aspire.Cli.Resources;
 using Hex1b.Automation;
 using Xunit;
@@ -109,6 +110,88 @@ public sealed class DescribeCommandTests(ITestOutputHelper output)
         await auto.EnterAsync();
         await auto.WaitUntilAppHostStoppedSuccessfullyAsync(timeout: TimeSpan.FromMinutes(1));
         await auto.WaitForSuccessPromptAsync(counter);
+    }
+
+    [Fact]
+    [CaptureWorkspaceOnFailure]
+    public async Task DescribeCommandReportsOtlpConfiguredResourcesThatSentNoTelemetry()
+    {
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
+
+        using var workspace = TemporaryWorkspace.Create(output);
+
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: true, workspace: workspace);
+
+        var counter = new SequenceCounter();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
+
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.InstallAspireCliAsync(strategy, counter);
+
+        // The starter's apiservice and webfrontend export telemetry through their ServiceDefaults.
+        await auto.AspireNewAsync("AspireOtlpStatusApp", counter, useRedisCache: false);
+
+        await auto.TypeAsync("cd AspireOtlpStatusApp/AspireOtlpStatusApp.AppHost");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
+
+        await auto.TypeAsync("aspire add Aspire.Hosting.JavaScript --non-interactive");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
+
+        // A Node app without an OpenTelemetry SDK receives the OTEL_* variables from AddNodeApp but exports nothing.
+        var projectDir = Path.Combine(workspace.WorkspaceRoot.FullName, "AspireOtlpStatusApp");
+        var appHostDir = Path.Combine(projectDir, "AspireOtlpStatusApp.AppHost");
+        Directory.CreateDirectory(Path.Combine(projectDir, "silent"));
+        File.WriteAllText(Path.Combine(projectDir, "silent", "server.js"), "setInterval(() => {}, 60_000);\n");
+
+        var appHostFilePath = Path.Combine(appHostDir, "AppHost.cs");
+        var content = File.ReadAllText(appHostFilePath);
+        const string runCall = "builder.Build().Run();";
+        Assert.Contains(runCall, content);
+        File.WriteAllText(appHostFilePath, content.Replace(runCall, $"""
+            builder.AddNodeApp("silent", "../silent", "server.js");
+
+            {runCall}
+            """, StringComparison.Ordinal));
+
+        await auto.AspireStartAsync(counter);
+
+        await auto.TypeAsync("aspire wait apiservice --status up --timeout 300 && aspire wait silent --status up --timeout 300");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter, timeout: TimeSpan.FromMinutes(11));
+
+        // The instrumented apps export their first logs shortly after start; poll until the dashboard has them.
+        await auto.TypeAsync(
+            "for i in $(seq 1 60); do aspire describe --format json > resources.json && " +
+            "jq -e '[.resources[] | select(.displayName == \"apiservice\" or .displayName == \"webfrontend\") | .telemetryReceived == true] | length == 2 and all' resources.json > /dev/null && break; " +
+            "sleep 2; done");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter, timeout: TimeSpan.FromMinutes(5));
+
+        await auto.TypeAsync("aspire describe > describe-table.txt 2>&1");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
+
+        // The workspace is a bind mount, so files written inside the container are readable from here.
+        using var resourcesJson = JsonDocument.Parse(File.ReadAllText(Path.Combine(appHostDir, "resources.json")));
+        var telemetryReceived = resourcesJson.RootElement.GetProperty("resources").EnumerateArray()
+            .Where(r => r.GetProperty("displayName").GetString() is "apiservice" or "webfrontend" or "silent")
+            .Select(r => (r.GetProperty("displayName").GetString(), r.GetProperty("telemetryReceived").GetBoolean()))
+            .OrderBy(r => r.Item1, StringComparer.Ordinal);
+        Assert.Equal(new (string?, bool)[] { ("apiservice", true), ("silent", false), ("webfrontend", true) }, telemetryReceived);
+
+        // The note can wrap at the redirected console width, so compare it with whitespace collapsed:
+        //   ℹ️  OpenTelemetry export is configured, but no telemetry has been received from: silent
+        //   The OTEL_* settings only take effect when the app registers an OpenTelemetry SDK. ...
+        var table = Regex.Replace(File.ReadAllText(Path.Combine(appHostDir, "describe-table.txt")), @"\s+", " ");
+        var note = Regex.Match(table, "no telemetry has been received from: (?<names>.*?) The OTEL_\\* settings");
+        Assert.True(note.Success, $"Expected the no-telemetry note in the describe table output:{Environment.NewLine}{table}");
+        Assert.Equal("silent", note.Groups["names"].Value);
+
+        await auto.AspireStopAsync(counter);
     }
 
     private static void AssertResourceTypes(List<JsonElement> resources, string displayName, string expectedResourceType, string expectedTypeDisplayName)
