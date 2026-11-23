@@ -56,7 +56,7 @@ public sealed class ProcessTestFixture : IAsyncLifetime
         [
             "IChildProcess.cs", "ChildProcess.cs", "ChildProcessOptions.cs", "ProcessScope.cs",
             "ProcessSupervisor.cs", "ProcessSupervisorLogger.cs", "ProcessSupervisor.Windows.cs", "ParentProcessLivenessMonitor.cs",
-            "ProcessStartTimeHelper.cs", "ProcessSignaler.cs", "KnownConfigNames.cs"
+            "ProcessStartTimeHelper.cs", "ProcessSignaler.cs", "KnownConfigNames.cs", "TemporaryStorage.cs"
         ];
         var sourcePaths = sources.Select(source => Path.Combine(repository.FullName, "src", "Shared", source)).Concat(
         [
