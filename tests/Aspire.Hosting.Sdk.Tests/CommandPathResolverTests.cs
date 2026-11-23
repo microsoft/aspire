@@ -43,14 +43,25 @@ public class CommandPathResolverTests
     }
 
     [Fact]
-    public void QuotedAndDuplicatePathEntriesAreSearchedOnce()
+    public void DuplicatePathEntriesAreSearchedOnce()
     {
         var existingFiles = CreateFileSet(Path.Combine(s_firstDirectory, "aspire"));
-        var path = string.Join(Path.PathSeparator.ToString(), $" \"{s_firstDirectory}\" ", s_firstDirectory, string.Empty);
+        var path = string.Join(Path.PathSeparator.ToString(), s_firstDirectory, s_firstDirectory, string.Empty);
 
         var candidates = CommandPathResolver.EnumerateFromPath("aspire", path, pathExtensions: null, existingFiles.Contains);
 
         Assert.Equal([Path.Combine(s_firstDirectory, "aspire")], candidates);
+    }
+
+    [Fact]
+    public void QuotedPathEntriesAreUnquotedOnlyOnWindows()
+    {
+        var existingFiles = CreateFileSet(Path.Combine(s_firstDirectory, "aspire"));
+
+        var candidates = CommandPathResolver.EnumerateFromPath("aspire", $" \"{s_firstDirectory}\" ", pathExtensions: null, existingFiles.Contains);
+
+        // Unix PATH has no quoting, so the quotes and spaces are part of a directory name that doesn't exist.
+        Assert.Equal(OperatingSystem.IsWindows() ? [Path.Combine(s_firstDirectory, "aspire")] : [], candidates);
     }
 
     [Fact]
@@ -87,13 +98,26 @@ public class CommandPathResolverTests
     public void ResolvesConsistentlyWithPathLookupHelper(string command, string[] files, string[]? pathExtensions, string[] expected)
     {
         var existingFiles = CreateFileSet(files.Select(ToFullPath).ToArray());
-        // Includes an empty entry and a quoted, padded entry, which both helpers skip and unquote respectively.
-        var path = string.Join(Path.PathSeparator.ToString(), s_firstDirectory, string.Empty, $" \"{s_secondDirectory}\" ");
+        // Includes an empty entry, which both helpers skip.
+        var path = string.Join(Path.PathSeparator.ToString(), s_firstDirectory, string.Empty, s_secondDirectory);
 
         var taskCandidates = CommandPathResolver.EnumerateFromPath(command, path, pathExtensions, existingFiles.Contains).ToArray();
         var sharedCandidates = PathLookupHelper.FindAllFullPathsFromPath(command, path, Path.PathSeparator, existingFiles.Contains, pathExtensions).ToArray();
 
         Assert.Equal(expected.Select(ToFullPath), taskCandidates);
+        Assert.Equal(sharedCandidates, taskCandidates);
+    }
+
+    [Fact]
+    public void QuotedPathEntriesResolveConsistentlyWithPathLookupHelper()
+    {
+        var existingFiles = CreateFileSet(Path.Combine(s_secondDirectory, "aspire"));
+        var path = string.Join(Path.PathSeparator.ToString(), s_firstDirectory, $" \"{s_secondDirectory}\" ");
+
+        var taskCandidates = CommandPathResolver.EnumerateFromPath("aspire", path, pathExtensions: null, existingFiles.Contains).ToArray();
+        var sharedCandidates = PathLookupHelper.FindAllFullPathsFromPath("aspire", path, Path.PathSeparator, existingFiles.Contains, pathExtensions: null).ToArray();
+
+        Assert.Equal(OperatingSystem.IsWindows() ? [Path.Combine(s_secondDirectory, "aspire")] : [], taskCandidates);
         Assert.Equal(sharedCandidates, taskCandidates);
     }
 

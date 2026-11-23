@@ -184,7 +184,8 @@ internal static class PathLookupHelper
         {
             // Windows PATH entries can be quoted, and Path.Combine keeps the quotes as part of the directory name:
             //   C:\Tools;"C:\Program Files\Aspire";C:\Users\user\.dotnet\tools
-            var directory = pathEntry.Trim().Trim('"');
+            // Unix PATH has no quoting, so ':'-separated entries are literal and a quote or space is part of the name.
+            var directory = pathSeparator == ';' ? pathEntry.Trim().Trim('"') : pathEntry;
             if (directory.Length == 0)
             {
                 continue;

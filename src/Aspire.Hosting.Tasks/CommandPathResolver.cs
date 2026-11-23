@@ -41,11 +41,12 @@ internal static class CommandPathResolver
 
         var seenPaths = new HashSet<string>(IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
 
-        // PATH entries can be quoted, for example:
-        //   C:\Tools;"C:\Program Files\dotnet";C:\Users\user\.dotnet\tools
         foreach (var pathEntry in path!.Split(Path.PathSeparator))
         {
-            var directory = TryGetFullPath(pathEntry.Trim().Trim('"'));
+            // Windows PATH entries can be quoted, for example:
+            //   C:\Tools;"C:\Program Files\dotnet";C:\Users\user\.dotnet\tools
+            // Unix PATH has no quoting, so entries are literal and a quote or space is part of the name.
+            var directory = TryGetFullPath(IsWindows() ? pathEntry.Trim().Trim('"') : pathEntry);
             if (directory is null)
             {
                 continue;
