@@ -1333,6 +1333,65 @@ public class ResourcesLayoutTests : DashboardTestContext
         Assert.Equal(initiallyListed ? string.Empty : "TelemetrySources", stored[BrowserStorageKeys.ResourcePaneKinds]);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AppHost_TelemetrySourcesChoiceDuringStartupOverridesSavedSnapshot(bool resetFilter)
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources: [ModelTestHelpers.CreateResource("cache")],
+            resourceChannelProvider: () => channel));
+        await AddTelemetryAsync("cache");
+        await AddTelemetryAsync("browser");
+        var storage = Assert.IsType<TestLocalStorage>(Services.GetRequiredService<ILocalStorage>());
+        await storage.SetUnprotectedAsync(BrowserStorageKeys.ResourcePaneKinds, resetFilter ? string.Empty : "TelemetrySources");
+        var viewPreferenceRead = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseViewPreference = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        storage.OnBeforeGetUnprotectedAsync = key =>
+        {
+            if (key == BrowserStorageKeys.GroupOverview)
+            {
+                viewPreferenceRead.TrySetResult();
+                return releaseViewPreference.Task;
+            }
+
+            return Task.CompletedTask;
+        };
+
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.ResourceListUrl());
+        var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
+        IRenderedComponent<ResourcePaneFilter> filter;
+        try
+        {
+            await viewPreferenceRead.Task.WaitAsync(DefaultWaitTimeout);
+            Assert.False(cut.Instance.IsLoaded);
+            filter = OpenFilter(cut);
+            var option = GetFilterCheckboxes(filter, "types").Single(box => box.Instance.Label == "Telemetry sources");
+            Assert.True(option.Instance.Value);
+            await cut.InvokeAsync(() => option.Instance.ValueChanged.InvokeAsync(false));
+            if (resetFilter)
+            {
+                await cut.Find(".resource-filter-reset").ClickAsync(new MouseEventArgs());
+            }
+        }
+        finally
+        {
+            releaseViewPreference.TrySetResult();
+        }
+
+        cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
+        var currentOption = GetFilterCheckboxes(filter, "types").Single(box => box.Instance.Label == "Telemetry sources");
+        Assert.Equal(resetFilter, currentOption.Instance.Value);
+        string[] expected = resetFilter ? ["cache", "browser"] : ["cache"];
+        Assert.Equal(expected, cut.FindAll(".resource-row:not(.resource-row-all) .resource-row-link").Select(link => link.GetAttribute("aria-label")));
+        Assert.Equal(expected.Order(StringComparer.Ordinal), cut.Instance.GetPaneTelemetryKeys().Select(key => key.Name).Order(StringComparer.Ordinal));
+        var saved = await storage.GetUnprotectedAsync<string>(BrowserStorageKeys.ResourcePaneKinds);
+        Assert.True(saved.Success);
+        Assert.Equal(resetFilter ? "TelemetrySources" : string.Empty, saved.Value);
+    }
+
     [Fact]
     public async Task AppHost_CountsResourcesAndParametersSeparately()
     {
