@@ -1067,6 +1067,43 @@ public class ResourcesLayoutTests : DashboardTestContext
     }
 
     [Theory]
+    [InlineData(nameof(ResourcePaneGrouping.ResourceType), false)]
+    [InlineData(nameof(ResourcePaneGrouping.ResourceType), true)]
+    [InlineData(nameof(ResourcePaneGrouping.State), false)]
+    [InlineData(nameof(ResourcePaneGrouping.State), true)]
+    public async Task ParametersSection_ShiftClickSelectsOnlyVisibleRange(string grouping, bool collapseParameters)
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
+            initialResources:
+            [
+                ModelTestHelpers.CreateResource("api", state: KnownResourceState.Running, resourceType: KnownResourceTypes.Project),
+                ModelTestHelpers.CreateResource("worker", state: KnownResourceState.Running, resourceType: KnownResourceTypes.Project),
+                ModelTestHelpers.CreateResource("api-key", resourceType: KnownResourceTypes.Parameter),
+                ModelTestHelpers.CreateResource("theme", resourceType: KnownResourceTypes.Parameter)
+            ], resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
+        var storage = Assert.IsType<TestLocalStorage>(Services.GetRequiredService<ILocalStorage>());
+        storage.OnGetUnprotectedAsync = key => key == BrowserStorageKeys.ResourcePaneGrouping ? (true, grouping) : (false, null);
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.ResourceOverviewUrl("api"));
+        var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
+        cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
+
+        await cut.Find(".resource-pane-section-header a[aria-label='Parameters, 2 parameters']").ClickAsync(new MouseEventArgs());
+        cut.Render();
+        Assert.Equal(["api-key", "theme"], cut.Instance.SelectedResourceNames);
+
+        if (collapseParameters)
+        {
+            await cut.Find(".resource-pane-section-header button[aria-label='Expand or collapse Parameters']").ClickAsync(new MouseEventArgs());
+            Assert.Empty(cut.FindAll(".resource-row-kind-parameter"));
+        }
+
+        await cut.Find(".resource-row-link[aria-label='api']").ClickAsync(new MouseEventArgs { ShiftKey = true });
+        cut.Render();
+        Assert.Equal(collapseParameters ? ["api"] : ["api", "worker", "api-key", "theme"], cut.Instance.SelectedResourceNames);
+    }
+
+    [Theory]
     [InlineData("Tags", "Tags:A new group")]
     [InlineData("ResourceType", "ResourceType:AAA")]
     [InlineData("State", "State:Building")]

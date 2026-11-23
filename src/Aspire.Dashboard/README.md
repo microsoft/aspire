@@ -22,8 +22,9 @@ Click a group name to select its items together, or click its chevron to expand 
 This also works for sections like **Parameters** when grouping is set to **None**.
 Ctrl-click (Cmd-click on macOS) a selected group to remove its items from the selection. Removing the last
 selected items returns to **All resources** in Overview without restoring the previous selection.
-Grouping adds no extra indentation; nested resources still indent under their parent in **None**. Search matches group names as
-well as resources, and the grouping preference is remembered across navigation and reloads.
+Shift-click a row to select the visible range from the last selected item, including expanded **Parameters** rows.
+Grouping adds no extra indentation; nested resources still indent under their parent in **None**.
+Search matches group names as well as resources, and the grouping preference is remembered across navigation and reloads.
 Tag grouping replaces the separate Tags navigation entry; resources with multiple tags appear under each tag,
 with untagged resources initially listed last. Telemetry sources keep their ungrouped list.
 The **...** menu on each group header lists commands for that group's resources. Parameter commands are

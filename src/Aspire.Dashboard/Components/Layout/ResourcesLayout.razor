@@ -9,19 +9,14 @@
 @using Microsoft.AspNetCore.Components.Sections
 
 @{
-    var isGrouped = DashboardClient.IsEnabled && _grouping != ResourcePaneGrouping.None;
-    var paneRows = isGrouped ? new List<ResourceGridViewModel>() : GetPaneRows().ToList();
-    var treeGuides = GetTreeGuides(paneRows);
-    var parameterRows = GetParameterPaneRows();
-    var groups = isGrouped ? GetResourceGroups() : new List<ResourceGroup>();
-    var telemetryRows = GetVisibleTelemetryResources().ToList();
-    // Grouping by tags puts parameters in the groups (see GetTagGroups). Other groupings list them in their own section.
-    var parametersInGroups = isGrouped && _grouping == ResourcePaneGrouping.Tags;
-    var groupedItems = groups.SelectMany(g => g.Resources).DistinctBy(r => r.Name).ToList();
-    var paneResourceCount = isGrouped ? groupedItems.Count(r => !r.IsParameter) : paneRows.Count;
-    var paneParameterCount = parametersInGroups ? groupedItems.Count(r => r.IsParameter) : parameterRows.Count;
-    var paneTelemetrySourceCount = telemetryRows.Count;
+    var paneSections = GetPaneSections().ToList();
+    var paneItems = paneSections.SelectMany(section => section.Resources).DistinctBy(r => r.Name).ToList();
+    var paneParameterCount = paneItems.Count(r => r.IsParameter);
+    var paneResourceCount = paneItems.Count - paneParameterCount;
+    var paneTelemetrySourceCount = paneSections.OfType<TelemetryPaneSection>().Sum(section => section.Rows.Count);
     var paneItemCount = paneResourceCount + paneParameterCount + paneTelemetrySourceCount;
+    var showNoTags = _isLoaded && IsResourcePaneGrouped && _grouping == ResourcePaneGrouping.Tags &&
+        TagStore.GetAllTags(_resourceByName.Values).Count == 0;
     var isDesktop = ViewportInformation.IsDesktop;
     var showCollapsedPane = isDesktop && _isPaneCollapsed && !_isPaneFullCanvas;
 
@@ -122,7 +117,7 @@
                     </div>
                 }
 
-                @if (_isLoaded && paneItemCount == 0 && !(isGrouped && _grouping == ResourcePaneGrouping.Tags && TagStore.GetAllTags(_resourceByName.Values).Count == 0))
+                @if (_isLoaded && paneItemCount == 0 && !showNoTags)
                 {
                     <div class="resource-pane-message">
                         @(DashboardClient.IsEnabled
@@ -131,45 +126,18 @@
                     </div>
                 }
 
-                @if (isGrouped)
+                @if (showNoTags)
                 {
-                    @if (_isLoaded && _grouping == ResourcePaneGrouping.Tags && TagStore.GetAllTags(_resourceByName.Values).Count == 0)
-                    {
-                        <div class="resource-tags-empty">
-                            <FluentIcon Value="@(new Icons.Regular.Size24.TagMultiple())" Width="24px" Color="Color.Custom" CustomColor="var(--colorNeutralForeground3)" />
-                            <span class="resource-tags-empty-title">@Loc[nameof(Dashboard.Resources.Layout.ResourcePaneNoTagsTitle)]</span>
-                            <span class="resource-tags-empty-description">@Loc[nameof(Dashboard.Resources.Layout.ResourcePaneNoTagsDescription)]</span>
-                        </div>
-                    }
-
-                    @foreach (var group in groups)
-                    {
-                        RenderPaneGroup(__builder, GetGroupKey(group), GetGroupName(group.Value), group.Resources.Select(GetResourceName).ToList(),
-                            GetPaneCountText(group.Resources.Count, 0, 0), RenderGroupIcon(group), RenderFlatResourceRows(group.Resources),
-                            isSection: false, actionTag: _grouping == ResourcePaneGrouping.Tags ? group.Value : null);
-                    }
-                }
-                else if (DashboardClient.IsEnabled && paneRows.Count > 0)
-                {
-                    RenderPaneGroup(__builder, ResourcesSectionKey, ResourcesLoc[nameof(Dashboard.Resources.Resources.ResourcesHeader)],
-                        paneRows.Select(row => GetResourceName(row.Resource)).ToList(), GetPaneCountText(paneRows.Count, 0, 0),
-                        icon: null, RenderTreeResourceRows(paneRows, treeGuides), isSection: true, actionTag: null);
+                    <div class="resource-tags-empty">
+                        <FluentIcon Value="@(new Icons.Regular.Size24.TagMultiple())" Width="24px" Color="Color.Custom" CustomColor="var(--colorNeutralForeground3)" />
+                        <span class="resource-tags-empty-title">@Loc[nameof(Dashboard.Resources.Layout.ResourcePaneNoTagsTitle)]</span>
+                        <span class="resource-tags-empty-description">@Loc[nameof(Dashboard.Resources.Layout.ResourcePaneNoTagsDescription)]</span>
+                    </div>
                 }
 
-                @if (DashboardClient.IsEnabled && !parametersInGroups && parameterRows.Count > 0)
+                @foreach (var section in paneSections)
                 {
-                    RenderPaneGroup(__builder, ParametersSectionKey, Loc[nameof(Dashboard.Resources.Layout.NavMenuParametersTab)],
-                        parameterRows.Select(GetResourceName).ToList(), GetPaneCountText(0, parameterRows.Count, 0),
-                        isGrouped ? RenderSectionIcon(new Icons.Regular.Size16.Key(), "var(--colorPaletteDarkOrangeForeground2)") : null,
-                        RenderFlatResourceRows(parameterRows), isSection: true, actionTag: null);
-                }
-
-                @if (telemetryRows.Count > 0)
-                {
-                    RenderPaneGroup(__builder, TelemetrySectionKey, Loc[nameof(Dashboard.Resources.Layout.NavMenuTelemetrySourcesTab)],
-                        telemetryRows.Select(row => row.Name).ToList(), GetPaneCountText(0, 0, telemetryRows.Count),
-                        isGrouped ? RenderSectionIcon(new Icons.Regular.Size16.DataUsage(), "var(--colorPaletteBlueForeground2)") : null,
-                        RenderTelemetryRows(telemetryRows), isSection: true, actionTag: null);
+                    RenderPaneSection(__builder, section);
                 }
             </nav>
 
