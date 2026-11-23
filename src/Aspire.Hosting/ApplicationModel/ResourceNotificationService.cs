@@ -1028,6 +1028,34 @@ public class ResourceNotificationService : IDisposable
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    /// Exposes pending initialization parameter reads on the instance selected for manual start.
+    /// </summary>
+    internal async Task WaitForInitializationOnManualStartAsync(IResource resource, string resourceId, Task initialization, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var state = GetResourceNotificationState(resourceId, resource);
+        lock (state)
+        {
+            state.ManualStartsWaitingForInitialization++;
+        }
+
+        try
+        {
+            await PublishUpdateAsync(resource, resourceId, static snapshot => snapshot).ConfigureAwait(false);
+            await initialization.WaitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            lock (state)
+            {
+                state.ManualStartsWaitingForInitialization--;
+            }
+
+            await PublishUpdateAsync(resource, resourceId, static snapshot => snapshot).ConfigureAwait(false);
+        }
+    }
+
     internal async ValueTask<string?> WaitForParameterAsync(IResource resource, ParameterResource parameter, ValueTask<string?> valueTask)
     {
         // Known limitation: the caller identifies a model resource, not a specific replica,
@@ -1105,11 +1133,21 @@ public class ResourceNotificationService : IDisposable
             return (snapshot, stateBeforeParameterWait, isParameterWaitStateActive);
         }
 
+        // If the last Start request left initialization, the initialization read may still be
+        // pending (for example, if the request was canceled). Don't keep displaying that wait.
+        var manualStartPending = notificationState.ManualStartsWaitingForInitialization > 0;
+        if (!manualStartPending && stateBeforeParameterWait?.Text == KnownResourceStates.NotStarted &&
+            snapshot.State?.Text == KnownResourceStates.UnresolvedParameters)
+        {
+            snapshot = snapshot with { State = stateBeforeParameterWait };
+        }
+
         // Custom resources also use Waiting during initialization. Dependency annotations remain after
         // dependencies are ready, so use the pending list to identify active dependency waits.
         // Leaving Waiting during an active dependency wait would release WaitFor prematurely.
         // URL callbacks can resolve parameters before a resource has a state.
         if (snapshot.State is null || snapshot.State.Text == KnownResourceStates.Starting ||
+            (manualStartPending && snapshot.State.Text == KnownResourceStates.NotStarted) ||
             (snapshot.State?.Text == KnownResourceStates.Waiting && !TryGetWaitingForDependencies(snapshot.Properties, out _)))
         {
             stateBeforeParameterWait = snapshot.State;
@@ -1590,6 +1628,7 @@ public class ResourceNotificationService : IDisposable
         public CustomResourceSnapshot? LastSnapshot { get; set; }
         public IResource Resource { get; } = resource;
         public Dictionary<string, int>? ParameterWaits { get; set; }
+        public int ManualStartsWaitingForInitialization { get; set; }
         public ResourceStateSnapshot? StateBeforeParameterWait { get; set; }
         // Null is a valid pre-start state, not an indication that no state was captured.
         public bool IsParameterWaitStateActive { get; set; }

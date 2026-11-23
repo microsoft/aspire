@@ -17,6 +17,7 @@ using k8s;
 using k8s.Autorest;
 using k8s.Models;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Polly;
@@ -1014,17 +1015,10 @@ internal sealed class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAsyncDispo
                 await _executorEvents.PublishAsync(new OnResourceFailedToStartContext(cancellationToken, resourceType, er.ModelResource, er.DcpResource.Metadata.Name)).ConfigureAwait(false);
             }
         }
-
-        static bool IsDelayedStart(CustomResource resource)
-        {
-            return resource switch
-            {
-                Container { Spec.Start: false } => true,
-                Executable { Spec.Start: false } => true,
-                _ => false
-            };
-        }
     }
+
+    private static bool IsDelayedStart(CustomResource resource) =>
+        resource is Container { Spec.Start: false } or Executable { Spec.Start: false };
 
     /// <summary>
     /// Gets information about the resource's DCP instance. ReplicaInstancesAnnotation is added in BeforeStartEvent.
@@ -1164,7 +1158,20 @@ internal sealed class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAsyncDispo
             _logger.LogDebug("Starting {ResourceType} '{ResourceName}'.", appResource.DcpResourceKind, resourceReference.DcpResourceName);
 
             // No concurrent start/stop operations on the same resource. Must wait for initialization to complete.
-            await appResource.Initialized.WaitAsync(cancellationToken).ConfigureAwait(false);
+            if (!appResource.Initialized.IsCompleted &&
+                IsDelayedStart(appResource.DcpResource) &&
+                resourceReference.ModelResource.GetLifetimeType() == Lifetime.Persistent)
+            {
+                // Persistent resources can be waiting for parameters while DCP registers them without starting them.
+                var notifications = _executionContext.Services.GetRequiredService<ResourceNotificationService>();
+                await notifications.WaitForInitializationOnManualStartAsync(
+                    resourceReference.ModelResource, resourceReference.DcpResourceName, appResource.Initialized, cancellationToken).ConfigureAwait(false);
+            }
+            else
+            {
+                await appResource.Initialized.WaitAsync(cancellationToken).ConfigureAwait(false);
+            }
+
             using var _ = await ConcurrencyUtils.AcquireAllAsync([appResource.SerializedOpSemaphore], cancellationToken).ConfigureAwait(false);
 
             // For resources that need delete/recreate startup, raise the starting event after deletion. This is required because
