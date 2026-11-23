@@ -183,10 +183,13 @@ public sealed class DescribeCommandTests(ITestOutputHelper output)
             .OrderBy(r => r.Item1, StringComparer.Ordinal);
         Assert.Equal(new (string?, bool)[] { ("apiservice", true), ("silent", false), ("webfrontend", true) }, telemetryReceived);
 
-        // The note can wrap at the redirected console width, so compare it with whitespace collapsed:
-        //   ℹ️  OpenTelemetry export is configured, but no telemetry has been received from: silent
-        //   The OTEL_* settings only take effect when the app registers an OpenTelemetry SDK. ...
-        var table = Regex.Replace(File.ReadAllText(Path.Combine(appHostDir, "describe-table.txt")), @"\s+", " ");
+        // The redirected output keeps ANSI styling and OSC 8 hyperlinks, and the note can wrap at the console
+        // width, so strip escape sequences and collapse whitespace before matching:
+        //   \e[38;5;12mℹ️\e[0m  OpenTelemetry export is configured, but no telemetry has been received from: silent
+        //   \e[2mThe OTEL_* settings only take effect when the app registers an OpenTelemetry SDK. ...\e[0m
+        var table = File.ReadAllText(Path.Combine(appHostDir, "describe-table.txt"));
+        table = Regex.Replace(table, @"\x1B(\[[0-9;]*[A-Za-z]|\][^\x1B\x07]*(\x1B\\|\x07))", string.Empty);
+        table = Regex.Replace(table, @"\s+", " ");
         var note = Regex.Match(table, "no telemetry has been received from: (?<names>.*?) The OTEL_\\* settings");
         Assert.True(note.Success, $"Expected the no-telemetry note in the describe table output:{Environment.NewLine}{table}");
         Assert.Equal("silent", note.Groups["names"].Value);
