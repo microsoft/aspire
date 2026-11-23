@@ -338,7 +338,7 @@
         align-self: stretch;
         align-items: center;
         min-height: 50px;
-        gap: var(--aspire-space-1);
+        gap: 0;
         padding: 0;
         border: 0;
         border-radius: 0;
@@ -348,7 +348,7 @@
     ::deep.layout > header .resources-tab-header a.resource-tab {
         position: relative;
         height: 32px;
-        padding: 0 10px;
+        padding: 0 12px;
         border: 0;
         border-radius: var(--aspire-radius-medium);
         background: transparent;
@@ -365,6 +365,8 @@
         position: absolute;
         inset-inline: 8px;
         bottom: -9px;
+        /* Paint over the header's bottom separator (header::after), which is positioned later in the header. */
+        z-index: 1;
         display: block;
         height: 3px;
         border-radius: var(--aspire-radius-small) var(--aspire-radius-small) 0 0;

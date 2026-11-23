@@ -809,7 +809,7 @@
                    aria-current="@(isActive ? "page" : null)"
                    data-tooltip="@(tab.IsAvailable ? null : Loc[nameof(Dashboard.Resources.Layout.ResourceTabUnavailable)].Value)"
                    @onclick="@(e => OnTabClickAsync(e, tab.Tab))">
-                    <FluentIcon Value="@tab.Icon" Color="Color.Custom" CustomColor="currentColor" />
+                    <FluentIcon Value="@tab.Icon" Width="18px" Color="Color.Custom" CustomColor="currentColor" />
                     <span>@tab.Text</span>
                     @if (tab.ErrorCount > 0)
                     {
