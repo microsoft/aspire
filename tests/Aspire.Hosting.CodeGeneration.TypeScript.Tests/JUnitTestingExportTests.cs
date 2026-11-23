@@ -21,6 +21,8 @@ public class JUnitTestingExportTests
         Assert.NotEmpty(java);
         var method = Regex.Match(java, @"(?m)^    withJUnitTesting\([^\r\n]*;").Value;
         Assert.NotEmpty(method);
-        await Verify(method);
+        var timeout = Regex.Match(java, @"(?m)^    withTestingTimeout\([^\r\n]*;").Value;
+        Assert.NotEmpty(timeout);
+        await Verify(method + Environment.NewLine + timeout);
     }
 }

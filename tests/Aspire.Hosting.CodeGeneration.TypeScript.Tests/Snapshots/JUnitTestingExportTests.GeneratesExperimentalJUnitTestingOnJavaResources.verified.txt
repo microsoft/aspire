@@ -1,1 +1,2 @@
 ﻿    withJUnitTesting(): JavaAppResourcePromise;
+    withTestingTimeout(timeout: number): JavaAppResourcePromise;
