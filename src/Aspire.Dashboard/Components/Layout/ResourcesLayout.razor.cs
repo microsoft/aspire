@@ -98,10 +98,9 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
     private bool _wasResourcePickerOpen;
     private bool _focusResourcePicker;
     private FluentTextInput? _resourcePaneSearch;
-    // Whether the pane lists the resources that only send telemetry, and so whether "all resources" covers them. It's
-    // the "Telemetry sources" option at the end of the filter's resource types. Like the filter's other options, it
-    // starts on, so an unfiltered list shows everything.
-    private bool _showTelemetryOnlyResources = true;
+    // Null until the saved filter loads or the user makes a choice. The pane shows all sources by default.
+    private bool? _showTelemetryOnlyResources;
+    private bool ShowTelemetryOnlyResources => _showTelemetryOnlyResources ?? true;
     // The name telemetry sources are stored under in BrowserStorageKeys.ResourcePaneKinds.
     private const string TelemetrySourcesKind = "TelemetrySources";
     private bool _pendingLandingRedirect;
@@ -342,11 +341,12 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         // A comma-separated list of the kinds of items the pane lists, such as "Resources,Parameters,TelemetrySources".
         // The pane used to have a toggle for each kind. Resources and parameters are now always listed (the filter's
         // types narrow them down), so only the telemetry sources entry still counts.
-        var kindsResult = panePreferences.Get<string>(BrowserStorageKeys.ResourcePaneKinds);
-        if (kindsResult.Success && kindsResult.Value is { } storedKinds)
+        if (_showTelemetryOnlyResources is null)
         {
-            var kinds = storedKinds.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            _showTelemetryOnlyResources = kinds.Contains(TelemetrySourcesKind, StringComparer.Ordinal);
+            var kindsResult = panePreferences.Get<string>(BrowserStorageKeys.ResourcePaneKinds);
+            _showTelemetryOnlyResources = !kindsResult.Success || kindsResult.Value is not { } storedKinds ||
+                storedKinds.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                    .Contains(TelemetrySourcesKind, StringComparer.Ordinal);
         }
         await ApplyPaneModeFromLocationAsync(_lastLocation);
         if (cancellationToken.IsCancellationRequested)
@@ -1355,7 +1355,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
 
     private IEnumerable<TelemetryOnlyResource> GetVisibleTelemetryResources() =>
         _telemetryOnlyResources.Where(r =>
-            (!DashboardClient.IsEnabled || _showTelemetryOnlyResources || IsSelected(r.Name)) &&
+            (!DashboardClient.IsEnabled || ShowTelemetryOnlyResources || IsSelected(r.Name)) &&
             r.Name.Contains(_filter.TextFilter, StringComparisons.UserTextSearch));
 
     internal IEnumerable<ResourceGridViewModel> GetPaneRows()
@@ -1577,7 +1577,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
                     "telemetry-sources",
                     Loc[nameof(Resources.Layout.NavMenuTelemetrySourcesTab)],
                     () => _telemetryOnlyResources.Count,
-                    () => _showTelemetryOnlyResources,
+                    () => ShowTelemetryOnlyResources,
                     SetTelemetrySourcesShownAsync)
             ]),
         new("states", ResourcesLoc[nameof(Dashboard.Resources.Resources.ResourcesResourceStatesHeader)], _filter.ResourceStatesToVisibility, r => [r.State ?? string.Empty]),
@@ -2355,7 +2355,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
             // All resources: the app's resources, and the telemetry sources while the pane lists them. Parameters don't
             // send telemetry.
             names = _resourceByName.Values.Where(r => !r.IsParameter).Select(GetPinResourceName);
-            if (_showTelemetryOnlyResources)
+            if (ShowTelemetryOnlyResources)
             {
                 names = names.Concat(_telemetryOnlyResources.Select(r => r.Resource.ResourceKey.Name));
             }
@@ -2377,7 +2377,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         // "All resources" covers the app's resources, and the telemetry sources while the pane lists them. Parameters
         // don't send telemetry.
         var keys = _resourceByName.Values.Where(r => !r.IsParameter).Select(GetTelemetryResource).OfType<OtlpResource>().Select(r => r.ResourceKey);
-        if (_showTelemetryOnlyResources)
+        if (ShowTelemetryOnlyResources)
         {
             keys = keys.Concat(_telemetryOnlyResources.Select(r => r.Resource.ResourceKey));
         }
@@ -2764,7 +2764,7 @@ public sealed partial class ResourcesLayout : LayoutComponentBase, IAsyncDisposa
         // "Select all" covers telemetry sources only while the pane lists them, as its telemetry scope does (see
         // GetPaneTelemetryKeys). Deselecting one resource must not add sources the filter hides.
         var names = GetAllResourceNames();
-        if (DashboardClient.IsEnabled && _showTelemetryOnlyResources)
+        if (DashboardClient.IsEnabled && ShowTelemetryOnlyResources)
         {
             names.AddRange(_telemetryOnlyResources.Select(r => r.Name).Where(n => !names.Contains(n, StringComparers.ResourceName)));
         }
