@@ -25,6 +25,18 @@ public partial class FoundryModel
         public static readonly FoundryModel ClaudeFable51 = new() { Name = "claude-fable-5-1", Version = "1", Format = "Anthropic" };
 
         /// <summary>
+        /// Claude Fable 5.2 is Anthropic's frontier model for technical work, setting a new bar in coding, finance, and the sciences.
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel ClaudeFable52 = new() { Name = "claude-fable-5-2", Version = "1", Format = "Anthropic" };
+
+        /// <summary>
+        /// Claude Fable 5.2 Fast is Anthropic's frontier model for technical work, setting a new bar in coding, finance, and the sciences in Anthropic's Fast mode.
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel ClaudeFable52Fast = new() { Name = "claude-fable-5-2-fast", Version = "1", Format = "Anthropic" };
+
+        /// <summary>
         /// Claude Haiku 4.5 delivers near-frontier performance for a wide range of use cases, and stands out as one of the best coding and agent models – with the right speed and cost to power free products and scaled sub-agents.
         /// </summary>
         [AspireValue("FoundryModels")]
@@ -47,6 +59,18 @@ public partial class FoundryModel
         /// </summary>
         [AspireValue("FoundryModels")]
         public static readonly FoundryModel ClaudeMythos51 = new() { Name = "claude-mythos-5-1", Version = "1", Format = "Anthropic" };
+
+        /// <summary>
+        /// Claude Mythos 5.2 is Anthropic's frontier model for cybersecurity and life sciences research, available through Anthropic's verification programs.
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel ClaudeMythos52 = new() { Name = "claude-mythos-5-2", Version = "1", Format = "Anthropic" };
+
+        /// <summary>
+        /// Claude Mythos 5.2 Fast is Anthropic's frontier model for cybersecurity and life sciences research in Anthropic's fast mode, available through Anthropic's verification programs
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel ClaudeMythos52Fast = new() { Name = "claude-mythos-5-2-fast", Version = "1", Format = "Anthropic" };
 
         /// <summary>
         /// Claude Mythos Preview (gated research preview) is a new class of intelligence for cybersecurity, coding, and long-running agents. Only available as a gated research preview with access prioritized for defensive cybersecurity use cases
@@ -269,6 +293,12 @@ public partial class FoundryModel
         /// </summary>
         [AspireValue("FoundryModels")]
         public static readonly FoundryModel DeepSeekV41Flash = new() { Name = "DeepSeek-V4.1-Flash", Version = "2026-09-10", Format = "DeepSeek" };
+
+        /// <summary>
+        /// DeepSeek-V4.1-Flash-1017, a multimodal Mixture-of-Experts (MoE) model with 552B backbone parameters and support for contexts of up to one million tokens.
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel DeepSeekV41Flash1017 = new() { Name = "DeepSeek-V4.1-Flash-1017", Version = "2026-10-17", Format = "DeepSeek" };
     }
 
     /// <summary>
@@ -323,12 +353,6 @@ public partial class FoundryModel
         /// </summary>
         [AspireValue("FoundryModels")]
         public static readonly FoundryModel MuseGlimmer30B = new() { Name = "Muse-Glimmer-30B", Version = "1", Format = "Meta" };
-
-        /// <summary>
-        /// Muse-Spark-1.3 is a Meta text-generation model for conversational experiences, drafting, summarization, and question answering.
-        /// </summary>
-        [AspireValue("FoundryModels")]
-        public static readonly FoundryModel MuseSpark13 = new() { Name = "muse-spark-1.3", Version = "1", Format = "Meta" };
     }
 
     /// <summary>
@@ -1495,10 +1519,22 @@ public partial class FoundryModel
         public static readonly FoundryModel MicrosoftDecision1 = new() { Name = "Microsoft-Decision-1", Version = "1", Format = "Microsoft" };
 
         /// <summary>
+        /// Decision-scoring model that returns calibrated probability scores for fixed answer options instead of generated text.
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel MicrosoftDecision11 = new() { Name = "Microsoft-Decision-1.1", Version = "1", Format = "Microsoft" };
+
+        /// <summary>
         /// Model router is a deployable AI model that is trained to select the most suitable large language model (LLM) for a given prompt.
         /// </summary>
         [AspireValue("FoundryModels")]
         public static readonly FoundryModel ModelRouter = new() { Name = "model-router", Version = "2025-11-18", Format = "Microsoft" };
+
+        /// <summary>
+        /// Model router is a deployable AI model that is trained to select the most suitable large language model (LLM) for a given prompt.
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel ModelRouterDev = new() { Name = "model-router-dev", Version = "2025-11-18", Format = "Microsoft" };
 
         /// <summary>
         /// A 7B parameters model, proves better quality than Phi-3-mini, with a focus on high-quality, reasoning-dense data.
@@ -1986,6 +2022,12 @@ public partial class FoundryModel
         public static readonly FoundryModel MistralLarge3 = new() { Name = "Mistral-Large-3", Version = "1", Format = "Mistral AI" };
 
         /// <summary>
+        /// Mistral Large 4 is an open-weight model optimized for long-context, multimodal, and instruction reliability.
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel MistralLarge4Latest = new() { Name = "mistral-large-4-latest", Version = "1", Format = "Mistral AI" };
+
+        /// <summary>
         /// Mistral Medium 3 is an advanced Large Language Model (LLM) with state-of-the-art reasoning, knowledge, coding and vision capabilities.
         /// </summary>
         [AspireValue("FoundryModels")]
@@ -2250,6 +2292,18 @@ public partial class FoundryModel
         public static readonly FoundryModel Gpt61Terra = new() { Name = "gpt-6.1-terra", Version = "2026-10-26", Format = "OpenAI" };
 
         /// <summary>
+        /// GPT-6.2-Astra is OpenAI’s frontier model for the most difficult professional projects, including coding, tool use, and creating documents, spreadsheets, and presentations.
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel Gpt62Astra = new() { Name = "gpt-6.2-astra", Version = "2026-11-17", Format = "OpenAI" };
+
+        /// <summary>
+        /// GPT-6.2 Sol is a more efficient and capable model in areas like technical writing, agentic professional work, coding, and everyday interaction style.
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel Gpt62Sol = new() { Name = "gpt-6.2-sol", Version = "2026-11-17", Format = "OpenAI" };
+
+        /// <summary>
         /// Best suited for rich, asynchronous audio input/output interactions, such as creating spoken summaries from text.
         /// </summary>
         [AspireValue("FoundryModels")]
@@ -2314,12 +2368,6 @@ public partial class FoundryModel
         /// </summary>
         [AspireValue("FoundryModels")]
         public static readonly FoundryModel GptLiveTranscribe = new() { Name = "gpt-live-transcribe", Version = "2026-07-28", Format = "OpenAI" };
-
-        /// <summary>
-        /// Push the open model frontier with GPT-OSS models, released under the permissive Apache 2.0 license, allowing anyone to use, modify, and deploy them freely.
-        /// </summary>
-        [AspireValue("FoundryModels")]
-        public static readonly FoundryModel GptOss120b = new() { Name = "gpt-oss-120b", Version = "4", Format = "OpenAI" };
 
         /// <summary>
         /// Push the open model frontier with GPT-OSS models, released under the permissive Apache 2.0 license, allowing anyone to use, modify, and deploy them freely.
