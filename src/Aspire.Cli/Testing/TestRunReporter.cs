@@ -633,7 +633,7 @@ internal sealed class TestRunReporter
 
 internal sealed class TestRunSummary
 {
-    public int SchemaVersion { get; init; } = 2;
+    public int SchemaVersion { get; init; } = 1;
     public string? RunId { get; init; }
     public string? OutputPath { get; init; }
     public string? SummaryPath { get; init; }

@@ -230,7 +230,7 @@ verdict. `--format json` writes one summary object to stdout, with diagnostics o
 stderr. The persisted `summary.json` tracks observed results during execution and
 is finalized after shutdown, retaining partial evidence on failure or cancellation.
 
-The report uses schema version `2`. `testResults` is an object keyed by logical
+The report uses schema version `1`. `testResults` is an object keyed by logical
 resource name, containing execution `exitCode`/`outcome`, `collectorStatus`, and
 nested `testCases`. Cases carry their name, outcome, optional duration and message,
 without repeating the resource name. `testSummary` contains the overall outcome
@@ -304,7 +304,7 @@ omitted here; the real object includes them:
 
 ```json
 {
-  "schemaVersion": 2,
+  "schemaVersion": 1,
   "cliExitCode": 23,
   "testResults": {
     "go-tests": {

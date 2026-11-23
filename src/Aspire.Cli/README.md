@@ -146,11 +146,21 @@ The CLI prints the output directory and a clickable `summary.json` path, falling
 back to a plain path when terminal hyperlinks are unavailable.
 
 `summary.json` is updated during execution and finalized after shutdown. Its
-versioned JSON includes the run ID, output path, start/completion timestamps,
-summary-file path, overall status, CLI exit code, diagnostic, and each observed resource's name,
-instance ID, state, exit code, expected replica count, and outcome. It also
-contains `testResults`, resource `collections` with output paths/errors/status,
-and `publishedResults` totals derived only from actual published results.
+`schemaVersion: 1` JSON includes `runId`, `outputPath`, `summaryPath`,
+`startedAt`, `completedAt`, `cliExitCode`, and the run diagnostic in `error`.
+`testResults` is an object keyed by logical resource name. Each entry contains
+execution fields (`resourceId`, `state`, `exitCode`, `expectedReplicas`, `outcome`),
+`collectorStatus`, `collectorError`, `outputPath`, and nested `testCases` with
+`name`, `outcome`, nullable `durationMilliseconds`, and nullable `message`.
+Use `testResults[resourceName].outputPath` to find that resource's artifact directory.
+Multi-replica resources retain per-instance execution details in `replicas`;
+different or unavailable replica exits leave the logical `exitCode` null.
+`collectorStatus: "notConfigured"` means no collector is configured; null means
+no collector observation is available, not successful collection. Collector
+failure retains earlier cases and independently fails the run.
+
+`testSummary` contains the overall `outcome` and `passed`, `failed`, and `skipped`
+counts derived only from actual published cases.
 Individual outcomes are preserved as `failed`, `passed`, `skipped`, `inconclusive`,
 `error`, `timedOut`, or `cancelled`. The `failed` total includes all five
 unsuccessful outcomes; `passed` and `skipped` count only their named outcomes.
@@ -175,10 +185,11 @@ It does not replace the separate AppHost startup timeout and has no default.
 Acceptable values are integers from `1` through `4294967` seconds (the timer's
 supported range); invalid values are rejected before creating artifacts.
 On expiry, the CLI cancels execution, allows up to five additional seconds for
-bounded teardown, and returns `17`. Unfinished runs have JSON status `timedOut`
-and an explicit deadline diagnostic, retaining published results and marking
-unfinished resources/collections `incomplete`. If inspection expires after
-collection completed, the completed `passed`/`failed` status and completion time
+bounded teardown, and returns `17`. Unfinished runs have
+`testSummary.outcome: "timedOut"` and an explicit deadline diagnostic, retaining
+published cases and marking still-unfinished execution outcomes and collector
+statuses `incomplete`. If inspection expires after
+collection completed, the completed `passed`/`failed` outcome and completion time
 are preserved while the final file records exit `17` and the timeout diagnostic.
 Explicit user cancellation takes precedence and still returns `130`.
 

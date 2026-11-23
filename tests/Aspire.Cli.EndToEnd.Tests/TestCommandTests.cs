@@ -183,7 +183,7 @@ public sealed class TestCommandTests(ITestOutputHelper output)
                 assert summary == persisted, (summary, persisted)
                 assert summary["cliExitCode"] == expected
                 assert summary["testSummary"]["outcome"] == ("passed" if expected == 0 else "failed")
-            assert summary["schemaVersion"] == 2
+            assert summary["schemaVersion"] == 1
             assert summary["error"] is None, summary
             results = summary["testResults"]
             outcome = "failed" if scenario == "result-failed" else "passed"

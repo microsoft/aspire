@@ -1,5 +1,5 @@
 ﻿{
-  "schemaVersion": 2,
+  "schemaVersion": 1,
   "runId": "run-id",
   "outputPath": "output-directory",
   "summaryPath": "summary-file",
