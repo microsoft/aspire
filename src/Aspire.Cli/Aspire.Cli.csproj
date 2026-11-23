@@ -41,6 +41,13 @@
     <AspireCliChannel Condition="'$(AspireCliChannel)' == ''">local</AspireCliChannel>
   </PropertyGroup>
 
+  <!-- Bundle builds can build the managed CLI in more than one project context.
+       Arcade converts their managed PDBs into the same RID-less SymStore path.
+       The shipped executable uses the native linker PDB staged by clipack instead. -->
+  <PropertyGroup Condition="'$(BundlePayloadPath)' != '' and $([MSBuild]::IsOSPlatform('Windows'))">
+    <PublishWindowsPdb>false</PublishWindowsPdb>
+  </PropertyGroup>
+
   <ItemGroup>
     <AssemblyMetadata Include="AspireCliChannel" Value="$(AspireCliChannel)" />
   </ItemGroup>

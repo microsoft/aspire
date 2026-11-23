@@ -31,6 +31,7 @@ The `.dSYM` bundle directory itself isn't shipped: it has no extension to match 
 Symbols flow through one of two distinct arcade publishing routes, depending on the target platform's symbol format:
 
 * **Windows `.pdb`** — loose-file path via `FilesToPublishToSymbolServer` in `eng/Publishing.props`. Arcade's `PrepLoosePdbsForPublish` hard-filters to `.pdb`/`.dll` only, so this path is Windows-only.
+  Windows CLI bundle builds skip Arcade's separate managed PDB conversion: it writes to a shared path without the RID, and the shipped executable uses the linker-generated PDB from `clipack` instead.
 
 * **Linux `.dbg` / macOS `.dwarf`** — packed into a NuGet symbol package (`.symbols.nupkg`) by `eng/clipack/Aspire.Cli.NativeSymbols.proj` (invoked from `eng/clipack/Common.projitems`'s `_PackNativeAotSymbols` target on the per-RID build agent) and routed via arcade's `_ExistingSymbolPackage` filter to the Symbols asset category. `SymbolUploadHelper` opens the `.symbols.nupkg` with raw `ZipFile.Open` (not NuGet OPC), filters entries by an extension allowlist that includes `.dbg`/`.dwarf`/`.so`/`.dylib`, then runs `symbol.exe adddirectory` on the extracted contents.
 
