@@ -1,0 +1,29 @@
+{
+  "id": "rabbitmq-endtoendlogging-filter-not-matched",
+  "type": "flaky-test",
+  "title": "Flaky: AspireRabbitMQLoggingTests.EndToEndLoggingTest fails with expected log filter not matched",
+  "error_pattern": "Assert.Contains() Failure: Filter not matched in collection\nCollection: [Tuple (Error, \"unexpected connection closure: AMQP close-reason, \"..., Tuple (Information, \"Performing automatic recovery\", ...",
+  "occurrences": [
+    {
+      "run_id": 45232073733,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/45232073733",
+      "job": "Tests / No-package tests (regular, Aspire.RabbitMQ.Client.Tests, RabbitMQ.Client, RabbitMQ.Client, tests/... / RabbitMQ.Client (ubuntu-latest)",
+      "observed_at": "2026-11-23T18:29:10Z",
+      "pr_number": 0,
+      "tests": [
+        {
+          "name": "Aspire.RabbitMQ.Client.Tests.AspireRabbitMQLoggingTests.EndToEndLoggingTest",
+          "job_id": 137895387977,
+          "job": "Tests / No-package tests (regular, Aspire.RabbitMQ.Client.Tests, RabbitMQ.Client, RabbitMQ.Client, tests/... / RabbitMQ.Client (ubuntu-latest)",
+          "error": "Assert.Contains() Failure: Filter not matched in collection\nCollection: [Tuple (Error, \"unexpected connection closure: AMQP close-reason, \"···, [···], 3), Tuple (Information, \"Performing automatic recovery\", [···], 1)]",
+          "stack_trace": "   at Aspire.RabbitMQ.Client.Tests.AspireRabbitMQLoggingTests.EndToEndLoggingTest() in /_/tests/Aspire.RabbitMQ.Client.Tests/AspireRabbitMQLoggingTests.cs:line 69\n   at Aspire.RabbitMQ.Client.Tests.AspireRabbitMQLoggingTests.EndToEndLoggingTest() in /_/tests/Aspire.RabbitMQ.Client.Tests/AspireRabbitMQLoggingTests.cs:line 69\n--- End of stack trace from previous location ---",
+          "standard_output": "",
+          "standard_error": "",
+          "result_file": "00002.trx",
+          "result_format": "trx",
+          "execution_id": "1246008f-7856-407d-b07d-b83c73294001"
+        }
+      ]
+    }
+  ]
+}
