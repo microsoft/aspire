@@ -33,6 +33,16 @@ internal sealed partial class StopCommand : BaseCommand
     private readonly IAppHostInfoResolver _appHostInfoResolver;
     private readonly ILanguageDiscovery _languageDiscovery;
     private readonly DcpWorkloadCleanupService _dcpCleanupService;
+    private readonly TimeProvider _timeProvider;
+
+    // Per-invocation state. A command instance handles a single invocation.
+    private bool _waitForResourceTeardown;
+    private int _appHostsStoppedWithoutTeardownWait;
+    private int _resourceTeardownExitCode;
+
+    // Stopping a container sends SIGTERM and waits up to 10 seconds before SIGKILL, and DCP tears resources down in
+    // parallel, so a healthy teardown takes seconds. The extra headroom covers slow container runtimes.
+    internal static TimeSpan ResourceTeardownTimeout { get; } = TimeSpan.FromMinutes(2);
 
     private const int MinimumHostingMajorVersionForPersistentResourceCleanup = 13;
     private const int MinimumHostingMinorVersionForPersistentResourceCleanup = 5;
@@ -63,6 +73,11 @@ internal sealed partial class StopCommand : BaseCommand
         Description = StopCommandStrings.VolumesOptionDescription
     };
 
+    private static readonly Option<bool> s_waitOption = new("--wait")
+    {
+        Description = StopCommandStrings.WaitOptionDescription
+    };
+
     public StopCommand(
         AppHostConnectionResolver connectionResolver,
         ICliHostEnvironment hostEnvironment,
@@ -78,6 +93,7 @@ internal sealed partial class StopCommand : BaseCommand
         OrphanedAppHostCollector collector,
         ILogger<StopCommand> logger,
         ProfilingTelemetry profilingTelemetry,
+        TimeProvider timeProvider,
         CommonCommandServices services)
         : base("stop", StopCommandStrings.Description, services)
     {
@@ -95,6 +111,7 @@ internal sealed partial class StopCommand : BaseCommand
         _collector = collector;
         _logger = logger;
         _profilingTelemetry = profilingTelemetry;
+        _timeProvider = timeProvider;
 
         Options.Add(s_appHostOption);
         Options.Add(s_allOption);
@@ -104,6 +121,7 @@ internal sealed partial class StopCommand : BaseCommand
         Options.Add(s_startedAtOption);
         Options.Add(s_formatOption);
         Options.Add(s_volumesOption);
+        Options.Add(s_waitOption);
     }
 
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
@@ -125,59 +143,85 @@ internal sealed partial class StopCommand : BaseCommand
         var force = parseResult.GetValue(s_forceOption);
         var processId = parseResult.GetValue(s_pidOption);
         var volumes = parseResult.GetValue(s_volumesOption);
+        _waitForResourceTeardown = parseResult.GetValue(s_waitOption);
+        _appHostsStoppedWithoutTeardownWait = 0;
+        _resourceTeardownExitCode = CliExitCodes.Success;
         using var activity = _profilingTelemetry.StartStopCommand(stopAll, passedAppHostProjectFile is not null);
 
+        var result = await ExecuteStopAsync(passedAppHostProjectFile, stopAll, force, processId, volumes, cancellationToken).ConfigureAwait(false);
+
+        // An unconfirmed resource teardown does not fail the stop itself, so the remaining steps (such as the
+        // persistent resource cleanup of --force) still run, but the command must not report success.
+        if (result.ExitCode == CliExitCodes.Success && _resourceTeardownExitCode != CliExitCodes.Success)
+        {
+            result = CommandResult.FromExitCode(_resourceTeardownExitCode);
+        }
+
+        CompleteStopActivity(activity, result.ExitCode);
+
+        if (_appHostsStoppedWithoutTeardownWait > 0)
+        {
+            // The AppHost process exits before DCP has finished tearing its resources down, so a start issued right
+            // away can still find containers with fixed names running and adopt them just before they are removed.
+            InteractionService.DisplayMessage(KnownEmojis.Information, string.Format(CultureInfo.CurrentCulture, StopCommandStrings.ResourceTeardownMayContinue, s_waitOption.Name));
+        }
+
+        return result;
+    }
+
+    private async Task<CommandResult> ExecuteStopAsync(FileInfo? passedAppHostProjectFile, bool stopAll, bool force, int? processId, bool volumes, CancellationToken cancellationToken)
+    {
         if (processId is { } pid)
         {
             if (pid <= 0)
             {
-                return CommandResult.Failure(CompleteStopActivity(activity, CliExitCodes.InvalidCommand), StopCommandStrings.PidMustBePositive);
+                return CommandResult.Failure(CliExitCodes.InvalidCommand, StopCommandStrings.PidMustBePositive);
             }
 
             if (stopAll || force || volumes)
             {
-                return CommandResult.Failure(CompleteStopActivity(activity, CliExitCodes.InvalidCommand), string.Format(CultureInfo.CurrentCulture, StopCommandStrings.AllAndProjectMutuallyExclusive, s_pidOption.Name, stopAll ? s_allOption.Name : force ? s_forceOption.Name : s_volumesOption.Name));
+                return CommandResult.Failure(CliExitCodes.InvalidCommand, string.Format(CultureInfo.CurrentCulture, StopCommandStrings.AllAndProjectMutuallyExclusive, s_pidOption.Name, stopAll ? s_allOption.Name : force ? s_forceOption.Name : s_volumesOption.Name));
             }
 
             // An instance selector must never fall through to project discovery, project-wide
             // batching, or orphan/persistent cleanup, even when the selected instance disappears.
-            return CommandResult.FromExitCode(CompleteStopActivity(activity, await StopAppHostByPidAsync(pid, passedAppHostProjectFile, cancellationToken).ConfigureAwait(false)));
+            return CommandResult.FromExitCode(await StopAppHostByPidAsync(pid, passedAppHostProjectFile, cancellationToken).ConfigureAwait(false));
         }
 
         // Validate mutual exclusivity of --all and --project
         if (stopAll && passedAppHostProjectFile is not null)
         {
-            return CommandResult.Failure(CompleteStopActivity(activity, CliExitCodes.FailedToFindProject), string.Format(CultureInfo.InvariantCulture, StopCommandStrings.AllAndProjectMutuallyExclusive, s_allOption.Name, s_appHostOption.Name));
+            return CommandResult.Failure(CliExitCodes.FailedToFindProject, string.Format(CultureInfo.InvariantCulture, StopCommandStrings.AllAndProjectMutuallyExclusive, s_allOption.Name, s_appHostOption.Name));
         }
 
         if (stopAll && force)
         {
-            return CommandResult.Failure(CompleteStopActivity(activity, CliExitCodes.InvalidCommand), string.Format(CultureInfo.InvariantCulture, StopCommandStrings.AllAndProjectMutuallyExclusive, s_allOption.Name, s_forceOption.Name));
+            return CommandResult.Failure(CliExitCodes.InvalidCommand, string.Format(CultureInfo.InvariantCulture, StopCommandStrings.AllAndProjectMutuallyExclusive, s_allOption.Name, s_forceOption.Name));
         }
 
         if (volumes && !force)
         {
-            return CommandResult.Failure(CompleteStopActivity(activity, CliExitCodes.InvalidCommand), string.Format(CultureInfo.InvariantCulture, StopCommandStrings.VolumesRequiresForce, s_volumesOption.Name, s_forceOption.Name));
+            return CommandResult.Failure(CliExitCodes.InvalidCommand, string.Format(CultureInfo.InvariantCulture, StopCommandStrings.VolumesRequiresForce, s_volumesOption.Name, s_forceOption.Name));
         }
 
         if (force)
         {
-            return CommandResult.FromExitCode(CompleteStopActivity(activity, await ForceStopAppHostAsync(passedAppHostProjectFile, volumes, cancellationToken).ConfigureAwait(false)));
+            return CommandResult.FromExitCode(await ForceStopAppHostAsync(passedAppHostProjectFile, volumes, cancellationToken).ConfigureAwait(false));
         }
 
         // Handle --all: stop all running AppHosts
         if (stopAll)
         {
-            return CommandResult.FromExitCode(CompleteStopActivity(activity, await StopAllAppHostsAsync(cancellationToken)));
+            return CommandResult.FromExitCode(await StopAllAppHostsAsync(cancellationToken));
         }
 
         // In non-interactive mode, try to auto-resolve without prompting
         if (!_hostEnvironment.SupportsInteractiveInput)
         {
-            return CommandResult.FromExitCode(CompleteStopActivity(activity, await ExecuteNonInteractiveAsync(passedAppHostProjectFile, cancellationToken)));
+            return CommandResult.FromExitCode(await ExecuteNonInteractiveAsync(passedAppHostProjectFile, cancellationToken));
         }
 
-        return CommandResult.FromExitCode(CompleteStopActivity(activity, await ExecuteInteractiveAsync(passedAppHostProjectFile, cancellationToken)));
+        return CommandResult.FromExitCode(await ExecuteInteractiveAsync(passedAppHostProjectFile, cancellationToken));
     }
 
     private async Task<int> StopAppHostByPidAsync(int processId, FileInfo? appHostFile, CancellationToken cancellationToken)
@@ -598,31 +642,117 @@ internal sealed partial class StopCommand : BaseCommand
 
         InteractionService.DisplayMessage(KnownEmojis.StopSign, string.Format(CultureInfo.CurrentCulture, StopCommandStrings.SendingStopSignal, appHostIdentifier));
 
+        Func<CancellationToken, Task<bool>> requestRpcStopAsync = connection.StopAppHostAsync;
+        var teardown = ResourceTeardownOutcome.NotRequested;
+        if (_waitForResourceTeardown)
+        {
+            teardown = await TearDownResourcesAsync(connection, appHostIdentifier, cancellationToken).ConfigureAwait(false);
+            if (teardown is ResourceTeardownOutcome.TornDown or ResourceTeardownOutcome.NotConfirmed or ResourceTeardownOutcome.TimedOut)
+            {
+                // The AppHost received the teardown request and stops itself once it has responded or the wait was
+                // abandoned, and it may already have closed the connection. Requesting the stop again over that
+                // connection could fail even though the stop is underway, so only observe the process from here.
+                requestRpcStopAsync = static _ => Task.FromResult(true);
+            }
+        }
+
         var stopped = await InteractionService.ShowStatusAsync(
             string.Format(CultureInfo.CurrentCulture, StopCommandStrings.StoppingAppHost, appHostIdentifier),
             () => useConnectionOnly
-                ? _processShutdownService.StopAppHostByConnectionAsync(appHostInfo!, connection.StopAppHostAsync, cancellationToken)
-                : _processShutdownService.StopAppHostAsync(appHostInfo, connection.StopAppHostAsync, cancellationToken));
+                ? _processShutdownService.StopAppHostByConnectionAsync(appHostInfo!, requestRpcStopAsync, cancellationToken)
+                : _processShutdownService.StopAppHostAsync(appHostInfo, requestRpcStopAsync, cancellationToken));
 
         // Reset cursor position after spinner
         InteractionService.DisplayPlainText("");
 
-        if (stopped)
-        {
-            // ProcessShutdownService only reports success once it has confirmed the AppHost process has
-            // terminated, so the socket's owner is gone and the file is safe to remove by exact path. Doing
-            // it here is the primary guard against a stale socket tripping up later commands: the AppHost's own
-            // cleanup is skipped if it crashes hard, and the orphan-pruning backstop misfires on Windows when the
-            // dead PID is reused (https://github.com/microsoft/aspire/issues/17587).
-            connection.Socket.TryDelete();
-            InteractionService.DisplaySuccess(string.Format(CultureInfo.CurrentCulture, StopCommandStrings.AppHostStoppedSuccessfully, appHostIdentifier));
-            return CompleteStopActivity(activity, CliExitCodes.Success);
-        }
-        else
+        if (!stopped)
         {
             InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, StopCommandStrings.FailedToStopAppHost, appHostIdentifier));
             return CompleteStopActivity(activity, CliExitCodes.FailedToDotnetRunAppHost);
         }
+
+        // ProcessShutdownService only reports success once it has confirmed the AppHost process has
+        // terminated, so the socket's owner is gone and the file is safe to remove by exact path. Doing
+        // it here is the primary guard against a stale socket tripping up later commands: the AppHost's own
+        // cleanup is skipped if it crashes hard, and the orphan-pruning backstop misfires on Windows when the
+        // dead PID is reused (https://github.com/microsoft/aspire/issues/17587).
+        connection.Socket.TryDelete();
+        InteractionService.DisplaySuccess(string.Format(CultureInfo.CurrentCulture, StopCommandStrings.AppHostStoppedSuccessfully, appHostIdentifier));
+
+        var teardownExitCode = teardown switch
+        {
+            ResourceTeardownOutcome.NotRequested => CountStoppedWithoutTeardownWait(),
+            ResourceTeardownOutcome.TornDown => DisplayTeardownSuccess(appHostIdentifier),
+            ResourceTeardownOutcome.TimedOut => DisplayTeardownError(CliExitCodes.WaitTimeout, StopCommandStrings.ResourceTeardownTimedOut, appHostIdentifier, (int)ResourceTeardownTimeout.TotalSeconds),
+            ResourceTeardownOutcome.Unsupported => DisplayTeardownError(CliExitCodes.AppHostIncompatible, StopCommandStrings.ResourceTeardownUnsupported, appHostIdentifier, s_waitOption.Name),
+            _ => DisplayTeardownError(CliExitCodes.FailedToDotnetRunAppHost, StopCommandStrings.ResourceTeardownNotConfirmed, appHostIdentifier)
+        };
+
+        CompleteStopActivity(activity, teardownExitCode);
+
+        // The AppHost itself stopped, so report this stop as successful to the caller. The teardown failure is
+        // applied to the command's exit code once every requested step has run.
+        return CliExitCodes.Success;
+    }
+
+    /// <summary>
+    /// Asks the AppHost to tear down its resources and waits, up to <see cref="ResourceTeardownTimeout"/>, for it to
+    /// confirm that they are gone.
+    /// </summary>
+    /// <remarks>
+    /// The AppHost process exits before DCP finishes removing its resources, so observing the process alone cannot
+    /// tell when containers with fixed names are gone. The AppHost instead asks DCP to clean up its resources and
+    /// responds once DCP reports the cleanup complete, then stops itself.
+    /// </remarks>
+    private async Task<ResourceTeardownOutcome> TearDownResourcesAsync(IAppHostAuxiliaryBackchannel connection, string appHostIdentifier, CancellationToken cancellationToken)
+    {
+        if (!connection.SupportsStopResourceCleanupV1)
+        {
+            _logger.LogDebug("AppHost {AppHostIdentifier} does not support waiting for resource teardown.", appHostIdentifier);
+            return ResourceTeardownOutcome.Unsupported;
+        }
+
+        using var timeoutCts = new CancellationTokenSource(ResourceTeardownTimeout, _timeProvider);
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
+
+        try
+        {
+            var tornDown = await InteractionService.ShowStatusAsync(
+                string.Format(CultureInfo.CurrentCulture, StopCommandStrings.WaitingForResourceTeardown, appHostIdentifier),
+                () => connection.StopAppHostAndWaitForResourceCleanupAsync(linkedCts.Token)).ConfigureAwait(false);
+
+            return tornDown ? ResourceTeardownOutcome.TornDown : ResourceTeardownOutcome.NotConfirmed;
+        }
+        catch (OperationCanceledException) when (timeoutCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+        {
+            _logger.LogDebug("Timed out waiting for the resources of AppHost {AppHostIdentifier} to be torn down.", appHostIdentifier);
+            return ResourceTeardownOutcome.TimedOut;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // The request may not have reached the AppHost, so the regular stop below must still request it.
+            _logger.LogDebug(ex, "Failed to ask AppHost {AppHostIdentifier} to tear down its resources.", appHostIdentifier);
+            return ResourceTeardownOutcome.Failed;
+        }
+    }
+
+    private int CountStoppedWithoutTeardownWait()
+    {
+        Interlocked.Increment(ref _appHostsStoppedWithoutTeardownWait);
+        return CliExitCodes.Success;
+    }
+
+    private int DisplayTeardownSuccess(string appHostIdentifier)
+    {
+        InteractionService.DisplaySuccess(string.Format(CultureInfo.CurrentCulture, StopCommandStrings.ResourcesTornDown, appHostIdentifier));
+        return CliExitCodes.Success;
+    }
+
+    private int DisplayTeardownError(int exitCode, string format, params object[] args)
+    {
+        InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, format, args));
+        Interlocked.CompareExchange(ref _resourceTeardownExitCode, exitCode, CliExitCodes.Success);
+        return exitCode;
     }
 
     private static int CompleteStopActivity(ProfilingTelemetry.ActivityScope activity, int exitCode)
@@ -689,4 +819,14 @@ internal sealed partial class StopCommand : BaseCommand
     }
 
     private sealed record StopAppHostResult(int ExitCode, FileInfo? AppHostFile);
+
+    private enum ResourceTeardownOutcome
+    {
+        NotRequested,
+        TornDown,
+        NotConfirmed,
+        TimedOut,
+        Unsupported,
+        Failed
+    }
 }

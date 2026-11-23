@@ -101,6 +101,9 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
     /// <inheritdoc />
     public bool SupportsResourceSnapshotVersionsV1 => _capabilities.Contains(AuxiliaryBackchannelCapabilities.ResourceSnapshotVersions_V1);
 
+    /// <inheritdoc />
+    public bool SupportsStopResourceCleanupV1 => _capabilities.Contains(AuxiliaryBackchannelCapabilities.StopResourceCleanup_V1);
+
     /// <summary>
     /// Gets the JSON-RPC proxy for communicating with the AppHost.
     /// </summary>
@@ -949,6 +952,28 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
             "CallMcpToolAsync",
             [request],
             cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
+    public async Task<bool> StopAppHostAndWaitForResourceCleanupAsync(CancellationToken cancellationToken = default)
+    {
+        if (!SupportsStopResourceCleanupV1)
+        {
+            throw new InvalidOperationException("The AppHost does not support waiting for resource cleanup.");
+        }
+
+        var rpc = EnsureConnected();
+
+        _logger.LogDebug("Stopping AppHost and waiting for resource cleanup");
+
+        var response = await rpc.InvokeWithProfilingAsync<StopAppHostResponse>(
+            _profilingTelemetry,
+            "auxiliary",
+            "StopAsync",
+            [new StopAppHostRequest { WaitForResourceCleanup = true }],
+            cancellationToken).ConfigureAwait(false);
+
+        return response?.ResourcesCleanedUp is true;
     }
 
     /// <summary>

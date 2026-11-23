@@ -127,6 +127,31 @@
         <target state="translated">試験段階のトレイ プロトコルには、絶対ファイル パス、正の --pid、正の --started-at (Unix ミリ秒) を含む --protocol-version 1 --format json --apphost が必要です。--all と --force は許可されません。</target>
         <note />
       </trans-unit>
+      <trans-unit id="ResourceTeardownMayContinue">
+        <source>Resources may still be stopping in the background. Use {0} to wait until they are torn down.</source>
+        <target state="new">Resources may still be stopping in the background. Use {0} to wait until they are torn down.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceTeardownNotConfirmed">
+        <source>Could not confirm that the resources of {0} were torn down. They may still be stopping in the background.</source>
+        <target state="new">Could not confirm that the resources of {0} were torn down. They may still be stopping in the background.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceTeardownTimedOut">
+        <source>The resources of {0} were not torn down within {1} seconds. They may still be stopping in the background.</source>
+        <target state="new">The resources of {0} were not torn down within {1} seconds. They may still be stopping in the background.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceTeardownUnsupported">
+        <source>{0} does not support waiting for its resources to be torn down, so they may still be stopping in the background. Update the AppHost to a newer Aspire version to use {1}.</source>
+        <target state="new">{0} does not support waiting for its resources to be torn down, so they may still be stopping in the background. Update the AppHost to a newer Aspire version to use {1}.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourcesTornDown">
+        <source>The resources of {0} were torn down.</source>
+        <target state="new">The resources of {0} were torn down.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="SelectAppHostAction">
         <source>stop</source>
         <target state="translated">停止</target>
@@ -160,6 +185,16 @@
       <trans-unit id="VolumesRequiresForce">
         <source>The {0} option requires the {1} option.</source>
         <target state="translated">{0} オプションには、{1} オプションが必要です。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WaitOptionDescription">
+        <source>Wait until the AppHost's resources, such as containers, are torn down before returning</source>
+        <target state="new">Wait until the AppHost's resources, such as containers, are torn down before returning</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WaitingForResourceTeardown">
+        <source>Waiting for the resources of {0} to be torn down...</source>
+        <target state="new">Waiting for the resources of {0} to be torn down...</target>
         <note />
       </trans-unit>
     </body>

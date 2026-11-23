@@ -295,6 +295,51 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to The resources of {0} were torn down..
+        /// </summary>
+        internal static string ResourcesTornDown {
+            get {
+                return ResourceManager.GetString("ResourcesTornDown", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Resources may still be stopping in the background. Use {0} to wait until they are torn down..
+        /// </summary>
+        internal static string ResourceTeardownMayContinue {
+            get {
+                return ResourceManager.GetString("ResourceTeardownMayContinue", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Could not confirm that the resources of {0} were torn down. They may still be stopping in the background..
+        /// </summary>
+        internal static string ResourceTeardownNotConfirmed {
+            get {
+                return ResourceManager.GetString("ResourceTeardownNotConfirmed", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The resources of {0} were not torn down within {1} seconds. They may still be stopping in the background..
+        /// </summary>
+        internal static string ResourceTeardownTimedOut {
+            get {
+                return ResourceManager.GetString("ResourceTeardownTimedOut", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to {0} does not support waiting for its resources to be torn down, so they may still be stopping in the background. Update the AppHost to a newer Aspire version to use {1}..
+        /// </summary>
+        internal static string ResourceTeardownUnsupported {
+            get {
+                return ResourceManager.GetString("ResourceTeardownUnsupported", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to stop.
         /// </summary>
         internal static string SelectAppHostAction {
@@ -345,6 +390,24 @@ namespace Aspire.Cli.Resources {
         internal static string VolumesRequiresForce {
             get {
                 return ResourceManager.GetString("VolumesRequiresForce", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Waiting for the resources of {0} to be torn down....
+        /// </summary>
+        internal static string WaitingForResourceTeardown {
+            get {
+                return ResourceManager.GetString("WaitingForResourceTeardown", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Wait until the AppHost's resources, such as containers, are torn down before returning.
+        /// </summary>
+        internal static string WaitOptionDescription {
+            get {
+                return ResourceManager.GetString("WaitOptionDescription", resourceCulture);
             }
         }
     }
