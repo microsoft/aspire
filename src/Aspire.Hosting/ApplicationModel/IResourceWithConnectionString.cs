@@ -38,6 +38,10 @@ public interface IResourceWithConnectionString : IResource, IExpressionValue, IV
     /// unless the resource implements <see cref="GetConnectionStringAsync(CancellationToken)"/>. In that case,
     /// the existing custom resolver is preserved. Implement this overload to forward <paramref name="context"/>
     /// through custom resolution for caller attribution and network-specific values.
+    /// <para>
+    /// Known limitation: If a derived resource reimplements only the context-free overload and inherits
+    /// a contextual implementation, contextual calls use that inherited implementation, bypassing the custom resolver.
+    /// </para>
     /// </remarks>
     public ValueTask<string?> GetConnectionStringAsync(ValueProviderContext context, CancellationToken cancellationToken = default) =>
         GetConnectionStringImplementations(this.GetType()).Legacy
