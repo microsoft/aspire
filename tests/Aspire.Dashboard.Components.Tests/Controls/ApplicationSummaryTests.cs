@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Globalization;
 using System.Threading.Channels;
 using System.Web;
 using Aspire.Dashboard.Components.Controls;
@@ -264,13 +263,13 @@ public class ApplicationSummaryTests : DashboardTestContext
             {
                 Assert.Equal(KnownTraceFields.TimestampField, filter.Field);
                 Assert.Equal(FilterCondition.GreaterThanOrEqual, filter.Condition);
-                Assert.Equal(bucketStart.ToString("O", CultureInfo.InvariantCulture), filter.Value);
+                Assert.Equal("2020-01-15T12:00:00Z", filter.Value);
             },
             filter =>
             {
                 Assert.Equal(KnownTraceFields.TimestampField, filter.Field);
                 Assert.Equal(FilterCondition.LessThan, filter.Condition);
-                Assert.Equal(bucketEnd.ToString("O", CultureInfo.InvariantCulture), filter.Value);
+                Assert.Equal("2020-01-15T12:00:30Z", filter.Value);
             });
 
         var result = await Services.GetRequiredService<DashboardDataSource>().TelemetryRepository.GetTraceSummariesAsync(new GetTracesRequest

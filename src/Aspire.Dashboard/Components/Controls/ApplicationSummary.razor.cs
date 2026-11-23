@@ -155,10 +155,11 @@ public sealed partial class ApplicationSummary : ComponentBase, IAsyncDisposable
 
     private string GetActivityBucketTracesUrl(DateTime bucketStart)
     {
+        const string timestampFormat = "yyyy-MM-dd'T'HH:mm:ssK";
         List<FieldTelemetryFilter> filters =
         [
-            new() { Field = KnownTraceFields.TimestampField, Condition = FilterCondition.GreaterThanOrEqual, Value = bucketStart.ToString("O", CultureInfo.InvariantCulture) },
-            new() { Field = KnownTraceFields.TimestampField, Condition = FilterCondition.LessThan, Value = (bucketStart + s_activityBucketSize).ToString("O", CultureInfo.InvariantCulture) }
+            new() { Field = KnownTraceFields.TimestampField, Condition = FilterCondition.GreaterThanOrEqual, Value = bucketStart.ToString(timestampFormat, CultureInfo.InvariantCulture) },
+            new() { Field = KnownTraceFields.TimestampField, Condition = FilterCondition.LessThan, Value = (bucketStart + s_activityBucketSize).ToString(timestampFormat, CultureInfo.InvariantCulture) }
         ];
 
         return DashboardUrls.AddResourceSelection(
