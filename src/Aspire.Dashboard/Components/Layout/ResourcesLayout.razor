@@ -1077,7 +1077,7 @@
             }
             @if (!resource.IsParameter && GetTelemetryResource(resource) is { } activityResource)
             {
-                <ResourcePaneInsights Layout="@this" ResourceKey="@activityResource.ResourceKey" ResourceName="@item.Name" />
+                <ResourcePaneInsights Layout="@this" ResourceKey="@activityResource.ResourceKey" />
             }
             @RenderResourceActions(resource, showLabels: false, item.Row, item.PrimaryUrl)
         </div>

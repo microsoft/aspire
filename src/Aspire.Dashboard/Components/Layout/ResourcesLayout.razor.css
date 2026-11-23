@@ -17,11 +17,7 @@
     /* The full canvas's Started column: a clock, the verb and a short age, up to "Stopped 23h ago". */
     --resource-row-status-width: 128px;
     --resource-insight-icon-size: 14px;
-    --resource-insight-padding: 6px;
     --resource-insight-gap: var(--spacingHorizontalXS);
-    --resource-insight-request-width: 132px;
-    --resource-insight-latency-width: 120px;
-    --resource-insight-failure-width: 36px;
     --resource-row-icon-offset: 10px;
     --resource-row-depth-step: 24px;
     --resource-brand-soft: color-mix(in srgb, var(--colorBrandBackground) 14%, transparent);
@@ -47,11 +43,6 @@
     --resource-row-identity-extra: calc(var(--resource-row-meta-type-width) + 26px);
     --resource-row-line-height: var(--lineHeightBase200);
     --resource-metadata-line-height: 16px;
-    --resource-insight-icon-size: 12px;
-    --resource-insight-padding: var(--spacingHorizontalXS);
-    --resource-insight-request-width: 116px;
-    --resource-insight-latency-width: 108px;
-    --resource-insight-failure-width: 32px;
 }
 
 /* Persistent types, such as "RabbitMQ (persistent)", are wider than the others, so every row's type column widens
@@ -400,7 +391,7 @@
 }
 
 .resource-pane-list {
-    --resource-insight-width: calc(var(--resource-insight-request-width) + var(--resource-insight-latency-width) + var(--resource-insight-failure-width) + var(--spacingHorizontalS));
+    --resource-insight-width: 0px;
     --resource-group-boundary-gap: var(--spacingVerticalXS);
     --resource-group-header-gap: var(--spacingVerticalXS);
     flex: 1 1 auto;
@@ -409,10 +400,17 @@
     overflow: auto;
 }
 
-/* Rows show activity only for resources that have some. When none does, the activity track collapses rather than
-   leaving an empty gap before the actions; the rows' tracks match, since the list decides for all of them. */
-.resource-pane-list:not(:has(.resource-row-insights)) {
-    --resource-insight-width: 0px;
+/* Size the shared track for the row with the most insights so the columns stay aligned. */
+.resource-pane-list:has(.resource-row-insights > .resource-row-insight) {
+    --resource-insight-width: 100px;
+}
+
+.resource-pane-list:has(.resource-row-insights > .resource-row-insight:nth-child(2)) {
+    --resource-insight-width: 150px;
+}
+
+.resource-pane-list:has(.resource-row-insights > .resource-row-insight:nth-child(3)) {
+    --resource-insight-width: 200px;
 }
 
 .resource-pane-section-label {
@@ -1985,8 +1983,6 @@
 }
 
 ::deep .resource-row-insights {
-    --resource-insight-border-width: 1px;
-    --resource-insight-padding-block: 1px;
     display: none;
     min-width: 0;
 }
@@ -2009,56 +2005,42 @@
 }
 
 ::deep .resource-row-insight {
-    display: inline-flex;
-    align-items: center;
-    min-width: 0;
+    --aspire-link-button-color: var(--colorNeutralForeground2);
+    --aspire-link-button-hover-color: var(--aspire-link-button-color);
+    --aspire-link-button-pressed-color: var(--aspire-link-button-color);
+    flex: 0 1 auto;
     box-sizing: border-box;
-    border: var(--resource-insight-border-width) solid var(--colorNeutralStroke1);
-    border-radius: var(--aspire-radius-small);
-    background: var(--colorNeutralBackground1);
-    text-decoration: none;
-}
-
-::deep .resource-row-insight:hover {
-    border-color: var(--aspire-button-hover-border);
-    background: var(--colorNeutralBackground3);
-}
-
-::deep .resource-row-insight-button {
-    justify-self: stretch;
+    min-width: 24px;
+    height: 24px;
+    min-height: 24px;
     gap: var(--resource-insight-gap);
-    padding: var(--resource-insight-padding-block) var(--resource-insight-padding);
-    color: var(--colorNeutralForeground1);
+    padding-inline: var(--spacingHorizontalXS);
     font-size: var(--resource-secondary-font-size);
     line-height: var(--resource-metadata-line-height);
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
 }
 
-::deep .resource-row-insight-button > span {
+::deep .resource-row-insight > svg {
     flex-shrink: 0;
 }
 
-::deep .resource-row-insight svg {
-    flex-shrink: 0;
+::deep .resource-row-insight > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+::deep .resource-row-insight:hover {
+    background-color: var(--colorNeutralBackground2);
 }
 
 ::deep .resource-row-insight:focus-visible {
     outline: 2px solid var(--colorBrandStroke1);
-    outline-offset: 2px;
-}
-
-::deep .resource-row-insight-failed {
-    height: calc(var(--resource-metadata-line-height) + 2 * (var(--resource-insight-padding-block) + var(--resource-insight-border-width)));
-    aspect-ratio: 1;
-    color: var(--error);
 }
 
 @media (forced-colors: active) {
     ::deep .resource-row-insight,
     ::deep .resource-row-insight:hover {
-        border-color: LinkText;
-        background: Canvas;
         color: LinkText;
     }
 }
@@ -2786,35 +2768,12 @@
     }
 
     ::deep .resource-row-insights {
-        position: relative;
-        box-sizing: border-box;
-        display: grid;
-        grid-template-columns: [requests] var(--resource-insight-request-width) [latency] var(--resource-insight-latency-width);
-        padding-inline-start: var(--resource-insight-failure-width);
+        display: flex;
         grid-column: insights;
         grid-row: 1;
         align-items: center;
-        column-gap: var(--spacingHorizontalS);
-    }
-
-    ::deep .resource-row-insight {
-        grid-row: 1;
-    }
-
-    ::deep .resource-row-insight-requests {
-        grid-column: requests;
-    }
-
-    ::deep .resource-row-insight-latency {
-        grid-column: latency;
-    }
-
-    ::deep .resource-row-insight-failed {
-        position: absolute;
-        inset-inline-start: 0;
-        top: 50%;
-        transform: translateY(-50%);
-        justify-content: center;
+        justify-content: flex-end;
+        column-gap: var(--spacingHorizontalXS);
     }
 }
 

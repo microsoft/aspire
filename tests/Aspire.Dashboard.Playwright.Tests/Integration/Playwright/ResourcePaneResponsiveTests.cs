@@ -102,7 +102,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
             }
             await ResourcePaneNavigation.ToggleResourceListAsync(page);
             await Assertions.Expect(page.Locator(".resource-row[data-resource-name='api'] .resource-row-insight-requests").First)
-                .ToHaveTextAsync("20 incoming");
+                .ToHaveTextAsync("20");
             await ResourcePaneNavigation.ToggleResourceListAsync(page);
             await Assertions.Expect(page.Locator(".resource-row-insight")).ToHaveCountAsync(0);
         });
@@ -392,7 +392,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
             var idle = await MeasureAsync();
             await page.EvaluateAsync("() => window.resetActivityMeasure()");
             await fixture.SeedActivityAsync(resources.Select(resource => (resource.Name, 21)).ToArray());
-            await Assertions.Expect(page.Locator(".resource-row-insight-requests > span")).ToHaveTextAsync(Enumerable.Repeat("21 incoming", 56));
+            await Assertions.Expect(page.Locator(".resource-row-insight-requests > span")).ToHaveTextAsync(Enumerable.Repeat("21", 56));
             await page.EvaluateAsync("() => new Promise(resolve=>setTimeout(resolve,500))");
             var refresh = await MeasureAsync();
             await File.WriteAllTextAsync(Path.Combine(AppContext.BaseDirectory, "activity-performance.json"),
@@ -1206,20 +1206,6 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                             const expectedFont = 13;
                             if (parseFloat(getComputedStyle(row.querySelector('.resource-row-name')).fontSize) !== expectedFont)
                                 errors.push(`${row.dataset.resourceName}: density font`);
-                            for (const chip of row.querySelectorAll('.resource-row-insight')) {
-                                const chipBox = chip.getBoundingClientRect();
-                                if (!chipBox.width) continue;
-                                const style = getComputedStyle(chip), glyph = chip.querySelector('svg').getBoundingClientRect();
-                                const line = compact ? 16 : 18;
-                                const hasLabel = !!chip.querySelector('span');
-                                const target = line + 4;
-                                const iconSize = compact ? 12 : 14;
-                                if ((hasLabel && (parseFloat(style.fontSize) !== 12 || parseFloat(style.lineHeight) !== line ||
-                                    style.fontVariantNumeric !== 'tabular-nums')) ||
-                                    chipBox.height !== target || (hasLabel ? chipBox.width < target : chipBox.width !== target) ||
-                                    glyph.width !== iconSize || glyph.height !== iconSize)
-                                    errors.push(`${row.dataset.resourceName}: chip density geometry; font=${style.fontSize}; line=${style.lineHeight}; target=${chipBox.width}x${chipBox.height}; icon=${glyph.width}x${glyph.height}`);
-                            }
                             if (i && b.y < rows[i-1].getBoundingClientRect().bottom + 1) errors.push(`${i}: overlap/gap`);
                             if (i && rows[i-1].nextElementSibling === row &&
                                 b.y - rows[i-1].getBoundingClientRect().bottom !== 1)
@@ -1269,9 +1255,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                             const templates = new Set(rows.map(row => getComputedStyle(row).gridTemplateColumns));
                             if (templates.size !== 1) errors.push('content-dependent grid tracks');
                             for (const selector of ['.resource-row-health','.resource-row-endpoints .url-container',
-                                '.resource-row-source','.resource-row-insights',
-                                '.resource-row-insight-requests','.resource-row-insight-latency','.resource-row-insight-failed',
-                                '.resource-row-actions']) {
+                                '.resource-row-source','.resource-row-insights','.resource-row-actions']) {
                                 const values = rows.map(row => row.querySelector(selector)?.getBoundingClientRect())
                                     .filter(box => box?.width).map(box => box.x);
                                 columns[selector] = values;
@@ -1290,12 +1274,12 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                                     errors.push(`${row.dataset.resourceName}: intersecting tracks`);
                                 if (insights?.width) {
                                     const gap = parseFloat(getComputedStyle(row).columnGap);
-                                    const incoming = box('.resource-row-insight-requests');
-                                    const latency = box('.resource-row-insight-latency');
+                                    const links = [...row.querySelectorAll('.resource-row-insight')].map(link => link.getBoundingClientRect());
                                     if (Math.abs(actions.x - insights.right - gap) > .5)
                                         errors.push(`${row.dataset.resourceName}: activity/action gap; activityRight=${insights.right}; actionX=${actions.x}; expected=${gap}`);
-                                    if (latency?.width && (latency.x < incoming.right - .5 || latency.right > insights.right + .5))
-                                        errors.push(`${row.dataset.resourceName}: latency overlaps an adjacent control; latencyRight=${latency.right}; trackRight=${insights.right}`);
+                                    if (links[0].left < insights.left - .5 || Math.abs(links.at(-1).right - insights.right) > .5 ||
+                                        links.some((link, index) => index > 0 && link.left < links[index - 1].right - .5))
+                                        errors.push(`${row.dataset.resourceName}: activity links overlap or do not fit their shared track`);
                                 }
                                 for (const label of row.querySelectorAll('.resource-relationship-label')) {
                                     if (label.getBoundingClientRect().width && label.scrollWidth > label.clientWidth)
@@ -1392,7 +1376,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
     [InlineData("Compact")]
     [InlineData("Comfortable")]
     [OuterloopTest("Resource-intensive Playwright browser test")]
-    public async Task ActivityLinks_AreClickableAcrossTheirColumns(string density)
+    public async Task ActivityLinks_AreClickableAtTheirEdges(string density)
     {
         await RunTestAsync(async page =>
         {
@@ -1406,20 +1390,20 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
             await ResourcePaneNavigation.ToggleResourceListAsync(page);
 
             var insights = page.Locator(".resource-row[data-resource-name='api'] .resource-row-insights").First;
-            var incoming = insights.Locator(".resource-row-insight-requests");
-            var latency = insights.Locator(".resource-row-insight-latency");
-            foreach (var (link, isIncoming) in new[] { (incoming, true), (latency, false) })
+            foreach (var (selector, traceCount) in new[]
             {
+                (".resource-row-insight-failed", 1),
+                (".resource-row-insight-requests", 20),
+                (".resource-row-insight-latency", 20)
+            })
+            {
+                var link = insights.Locator(selector);
                 await Assertions.Expect(link).ToBeVisibleAsync();
-                var edge = await insights.EvaluateAsync<float>("""
-                    (insights, isIncoming) => isIncoming
-                        ? insights.querySelector('.resource-row-insight-latency').getBoundingClientRect().left - parseFloat(getComputedStyle(insights).columnGap)
-                        : insights.getBoundingClientRect().right
-                    """, isIncoming);
                 var bounds = await link.BoundingBoxAsync();
                 Assert.NotNull(bounds);
-                await page.Mouse.ClickAsync(edge - 2, bounds.Y + bounds.Height / 2);
+                await page.Mouse.ClickAsync(bounds.X + bounds.Width - 2, bounds.Y + bounds.Height / 2);
                 await Assertions.Expect(page).ToHaveURLAsync(new Regex(@"/traces/resource/api\?"));
+                await Assertions.Expect(page.Locator(".trace-name-content")).ToHaveCountAsync(traceCount);
                 await page.GoBackAsync();
                 await Assertions.Expect(page.Locator(".resources-layout.pane-full-canvas")).ToBeVisibleAsync();
             }
