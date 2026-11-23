@@ -422,6 +422,56 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         await app.StopAsync().DefaultTimeout();
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task GetResourceSnapshotsAsync_PreservesKeyVaultConnectionStringSensitivity(bool redirectToSecret)
+    {
+        const string vaultUri = "https://example.vault.azure.net/";
+        const string secret = "test-password";
+        const string composedConnectionString = "Password=" + secret;
+
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+        var vault = builder.AddAzureKeyVault("vault");
+        vault.Resource.Outputs[vault.Resource.VaultUri.Name] = vaultUri;
+
+        var expectedValue = vaultUri;
+        if (redirectToSecret)
+        {
+            var password = builder.AddParameter("password", secret, secret: true);
+            var target = builder.AddConnectionString("target", ReferenceExpression.Create($"Password={password.Resource}"));
+            vault.WithConnectionStringRedirection(target.Resource);
+            expectedValue = composedConnectionString;
+        }
+
+        var consumer = builder.AddResource(new CustomResourceWithEnvironment("consumer"))
+            .WithEnvironment("CONNECTION", vault);
+        using var app = builder.Build();
+
+        var configuration = await ExecutionConfigurationBuilder.Create(consumer.Resource)
+            .WithEnvironmentVariablesConfig()
+            .BuildAsync(builder.ExecutionContext);
+        Assert.Null(configuration.Exception);
+        var resolvedEnvironment = Assert.Single(configuration.EnvironmentVariables);
+        Assert.Equal(new("CONNECTION", expectedValue), resolvedEnvironment);
+
+        var notifications = app.Services.GetRequiredService<ResourceNotificationService>();
+        await notifications.PublishUpdateAsync(consumer.Resource, snapshot => snapshot with
+        {
+            EnvironmentVariables = [new EnvironmentVariableSnapshot(resolvedEnvironment.Key, resolvedEnvironment.Value, true)]
+        }).DefaultTimeout();
+
+        var backchannel = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            app.Services.GetRequiredService<IConfiguration>(),
+            app.Services.GetRequiredService<ProfilingTelemetry>(),
+            app.Services);
+        var snapshots = await backchannel.GetResourceSnapshotsAsync().DefaultTimeout();
+        var consumerSnapshot = Assert.Single(snapshots, resource => resource.Name == consumer.Resource.Name);
+        var connection = Assert.Single(consumerSnapshot.EnvironmentVariables, variable => variable.Name == "CONNECTION");
+        Assert.Equal(redirectToSecret ? null : vaultUri, connection.Value);
+    }
+
     [Fact]
     public async Task GetResourceSnapshotsAsync_RedactsSecretParameterReferencedByOwningResourceEnvironment()
     {

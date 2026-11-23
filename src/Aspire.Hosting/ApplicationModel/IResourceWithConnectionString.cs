@@ -56,6 +56,10 @@ public interface IResourceWithConnectionString : IResource, IExpressionValue, IV
     /// <summary>
     /// Describes the connection string format string used for this resource.
     /// </summary>
+    /// <remarks>
+    /// Aspire evaluates this expression when injecting the connection string into environment variables or command-line
+    /// arguments so it can track parameter waits and redact values derived from secrets.
+    /// </remarks>
     public ReferenceExpression ConnectionStringExpression { get; }
 
     /// <summary>
