@@ -1173,7 +1173,8 @@ extends:
                   displayName: 'Dry Run - List Packages (No Publish)'
 
               # useDotNetTask: false is required for encrypted API keys.
-              - ${{ if eq(parameters.DryRun, false) }}:
+              # Omit the service-connection reference entirely on skipped reruns.
+              - ${{ if and(eq(parameters.DryRun, false), eq(parameters.SkipNuGetPublish, false)) }}:
                 - task: 1ES.PublishNuget@1
                   displayName: 'Push Packages to NuGet.org'
                   inputs:
