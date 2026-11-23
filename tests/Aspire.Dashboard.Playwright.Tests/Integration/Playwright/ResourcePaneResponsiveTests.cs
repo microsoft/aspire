@@ -546,7 +546,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                 }
                 else if (stage is "traces" or "overview")
                 {
-                    await page.GetByRole(AriaRole.Tab, new() { Name = stage == "traces" ? "Traces" : "Overview", Exact = true }).ClickAsync();
+                    await page.Locator(".resources-tab-header").GetByRole(AriaRole.Link, new() { Name = stage == "traces" ? "Traces" : "Overview", Exact = true }).ClickAsync();
                     if (stage == "traces")
                     {
                         await Assertions.Expect(page.Locator("#tracesScrollContainer")).ToBeFocusedAsync();
@@ -600,19 +600,17 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
             await page.SetViewportSizeAsync(1440, 900);
             await page.EmulateMediaAsync(new() { ReducedMotion = reducedMotion ? ReducedMotion.Reduce : ReducedMotion.NoPreference });
             await page.GotoAsync("/resources/cache?pane=tags");
-            var tracesTab = page.GetByRole(AriaRole.Tab, new() { Name = "Traces", Exact = true });
-            await ClickResourceTabAndWaitForRenderAsync(page, async () =>
+            var tracesTab = page.Locator(".resources-tab-header").GetByRole(AriaRole.Link, new() { Name = "Traces", Exact = true });
+            if (reducedMotion)
             {
-                if (reducedMotion)
-                {
-                    await tracesTab.FocusAsync();
-                    await tracesTab.PressAsync("Enter");
-                }
-                else
-                {
-                    await tracesTab.ClickAsync();
-                }
-            });
+                await tracesTab.FocusAsync();
+                await tracesTab.PressAsync("Enter");
+            }
+            else
+            {
+                await tracesTab.ClickAsync();
+            }
+            await Assertions.Expect(tracesTab).ToHaveAttributeAsync("aria-current", "page");
             await Assertions.Expect(page.Locator("#tracesScrollContainer")).ToBeFocusedAsync();
             // The data tabs select resources from the sidebar; the full-page list lives on the Overview tab.
             foreach (var name in new[] { "api", "frontend", "cache" })
@@ -628,8 +626,8 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                 await Assertions.Expect(separator).ToHaveAttributeAsync("aria-valuenow", "420");
                 await Assertions.Expect(separator).ToBeFocusedAsync();
                 Assert.EndsWith($"/traces/resource/{name}", page.Url, StringComparison.Ordinal);
-                await Assertions.Expect(page.GetByRole(AriaRole.Tab, new() { Name = "Traces", Exact = true }))
-                    .ToHaveAttributeAsync("aria-selected", "true");
+                await Assertions.Expect(page.Locator(".resources-tab-header").GetByRole(AriaRole.Link, new() { Name = "Traces", Exact = true }))
+                    .ToHaveAttributeAsync("aria-current", "page");
             }
         });
     }
@@ -2462,7 +2460,7 @@ public sealed class ResourcePaneResponsiveTests(ResourcePaneResponsiveTests.Meta
                             const header = document.querySelector('.layout > header');
                             const nav = header.querySelector('.resource-tabs-nav');
                             // Whichever navigation shows: the strip, its overflow button, or the compact picker.
-                            const shown = [...nav.querySelectorAll('fluent-tab:not([hidden]), .resource-tabs-overflow-button, .resource-tabs-compact-button')]
+                            const shown = [...nav.querySelectorAll('a.resource-tab:not([hidden]), .resource-tabs-overflow-button, .resource-tabs-compact-button')]
                                 .map(box).filter(r => r.width > 0 && r.height > 0);
                             const tabsRight = Math.max(...shown.map(r => r.right));
                             const actions = [...header.children].filter(el => el.matches('.header-context ~ *')).map(box).filter(r => r.width > 0);

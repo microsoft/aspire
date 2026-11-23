@@ -1513,8 +1513,8 @@
     min-width: 0;
 }
 
-/* FluentTabs keeps its horizontal tab list at max-content width. Constrain the host so
-   focus can scroll the selected tab into view when space is limited. */
+/* The tab list keeps its tabs at max-content width. Constrain it so tabs that don't fit can be measured and moved
+   to the "..." menu. */
 .resource-tabs-nav ::deep .resources-tab-header {
     width: max-content;
     max-width: 100%;
@@ -1523,14 +1523,41 @@
     overflow: hidden;
 }
 
-/* Tabs that don't fit are hidden from the right by registerTabOverflow and listed in the "..." menu instead. */
-.resource-tabs-nav ::deep fluent-tab[data-tab-overflow] {
-    display: none;
+/* The tabs are links, styled like the shared tab appearance (.aspire-tab). */
+.resource-tabs-nav ::deep a.resource-tab {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    box-sizing: border-box;
+    white-space: nowrap;
+    text-decoration: none;
+    cursor: pointer;
 }
 
-/* The tab that's active while no tab is shown selected, when the resource content is closed (see
-   RenderTabNavigation). Not displayed, it can't be seen, focused or announced. */
-.resource-tabs-nav ::deep fluent-tab.resource-tab-none {
+.resource-tabs-nav ::deep a.resource-tab:focus-visible {
+    outline: var(--strokeWidthThick) solid var(--colorStrokeFocus2);
+    outline-offset: -2px;
+}
+
+.resource-tabs-nav ::deep a.resource-tab svg {
+    width: 18px;
+    min-width: 18px;
+    height: 18px;
+    margin-right: var(--spacingHorizontalXS);
+    color: var(--colorBrandForeground1);
+}
+
+.resource-tabs-nav ::deep a.resource-tab fluent-badge {
+    min-width: 20px;
+    margin-inline-start: var(--spacingHorizontalXS);
+    padding: 1px 3px;
+    border: 1px solid transparent;
+    border-radius: var(--aspire-radius-round);
+    font-weight: var(--aspire-font-weight-regular);
+}
+
+/* Tabs that don't fit are hidden from the right by registerTabOverflow and listed in the "..." menu instead. */
+.resource-tabs-nav ::deep a.resource-tab[data-tab-overflow] {
     display: none;
 }
 
@@ -1559,7 +1586,7 @@
 
 /* Wraps the tab row in its own layout container so a container query can react to the row's
    actual available width - which depends on sibling pane/toolbar state, not just viewport width -
-   rather than letting FluentTabs grow a horizontal scrollbar once labels no longer fit. */
+   rather than letting the tab list grow a horizontal scrollbar once labels no longer fit. */
 .resource-tabs-nav {
     container-type: inline-size;
     display: flex;

@@ -747,9 +747,8 @@ public class ResourcesLayoutTests : DashboardTestContext
         await cut.InvokeAsync(() => cut.Instance.SetPaneWidthAsync(440));
         ResourceSetupHelpers.ToggleResourceList(cut);
         Assert.True(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
-        var traces = header.FindComponents<FluentTab>().Single(t => t.Instance.Id == "tab-Traces").Instance;
 
-        await header.InvokeAsync(() => header.FindComponent<FluentTabs>().Instance.ActiveTabChanged.InvokeAsync(traces));
+        await header.Find("#tab-Traces").ClickAsync(new MouseEventArgs());
 
         Assert.Equal("http://localhost/traces/resource/api", navigation.Uri);
         Assert.False(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
@@ -1553,29 +1552,21 @@ public class ResourcesLayoutTests : DashboardTestContext
         var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
         cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
         Assert.True(cut.Instance.IsTabAvailable(ResourceTab.Terminal));
-        var terminalTab = cut.FindComponents<FluentTab>().Single(t => t.Instance.Id == "tab-Terminal");
-        Assert.True(terminalTab.Instance.Visible);
-        await cut.InvokeAsync(() => cut.FindComponent<FluentTabs>().Instance.ActiveTabChanged.InvokeAsync(terminalTab.Instance));
+        await cut.Find("#tab-Terminal").ClickAsync(new MouseEventArgs());
         Assert.Equal("http://localhost/resources/shell?terminal=true", navigation.Uri);
         cut.Render();
-        Assert.Equal("tab-Terminal", cut.FindComponent<FluentTabs>().Instance.ActiveTabId);
-        var previousTabs = cut.FindComponent<FluentTabs>().Instance;
-        var previousTabChanged = cut.FindComponent<FluentTabs>().Instance.ActiveTabChanged;
-        var overviewTab = cut.FindComponents<FluentTab>().Single(t => t.Instance.Id == "tab-Overview").Instance;
+        Assert.Equal("page", cut.Find("#tab-Terminal").GetAttribute("aria-current"));
 
         cut.Find(".resource-row-link[aria-label='other-shell']").Click();
         Assert.Equal("http://localhost/resources/other-shell?terminal=true", navigation.Uri);
         cut.Render();
-        Assert.NotSame(previousTabs, cut.FindComponent<FluentTabs>().Instance);
         Assert.Equal(["other-shell"], cut.Instance.SelectedResourceNames);
-        await cut.InvokeAsync(() => previousTabChanged.InvokeAsync(overviewTab));
-        Assert.Equal("http://localhost/resources/other-shell?terminal=true", navigation.Uri);
 
         cut.Find(".resource-row-link[aria-label='api']").Click();
         Assert.Equal("http://localhost/resources/api", navigation.Uri);
         cut.Render();
         Assert.False(cut.Instance.IsTabAvailable(ResourceTab.Terminal));
-        Assert.False(cut.FindComponents<FluentTab>().Single(t => t.Instance.Id == "tab-Terminal").Instance.Visible);
+        Assert.Empty(cut.FindAll("#tab-Terminal"));
     }
 
     [Fact]
@@ -1589,12 +1580,10 @@ public class ResourcesLayoutTests : DashboardTestContext
         navigation.NavigateTo("/resources/shell?pane=tags#output");
         var cut = Render<ResourcesLayout>(p => p.AddCascadingValue(viewport));
         cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
-        var terminal = cut.FindComponents<FluentTab>().Single(t => t.Instance.Id == "tab-Terminal").Instance;
-        await cut.InvokeAsync(() => cut.FindComponent<FluentTabs>().Instance.ActiveTabChanged.InvokeAsync(terminal));
+        await cut.Find("#tab-Terminal").ClickAsync(new MouseEventArgs());
         Assert.Equal("http://localhost/resources/shell?pane=tags&terminal=true#output", navigation.Uri);
         cut.Render();
-        var overview = cut.FindComponents<FluentTab>().Single(t => t.Instance.Id == "tab-Overview").Instance;
-        await cut.InvokeAsync(() => cut.FindComponent<FluentTabs>().Instance.ActiveTabChanged.InvokeAsync(overview));
+        await cut.Find("#tab-Overview").ClickAsync(new MouseEventArgs());
         Assert.Equal("http://localhost/resources/shell?pane=tags#output", navigation.Uri);
     }
 
@@ -1614,7 +1603,7 @@ public class ResourcesLayoutTests : DashboardTestContext
 
         cut.WaitForAssertion(() => Assert.Equal(
             ["resource-tab-home", "tab-Overview", "tab-Console", "tab-StructuredLogs", "tab-Traces", "tab-Metrics"],
-            cut.FindComponents<FluentTab>().Where(t => t.Instance.Visible && t.Instance.Id != "resource-tab-none").Select(t => t.Instance.Id)));
+            cut.FindAll(".resources-tab-header a.resource-tab").Select(t => t.Id)));
     }
 
     [Fact]
@@ -1645,7 +1634,7 @@ public class ResourcesLayoutTests : DashboardTestContext
     }
 
     [Fact]
-    public void Tabs_ShowTheSelectionsPagesAndNeverDisableThoseWithoutTelemetry()
+    public async Task Tabs_ShowTheSelectionsPagesAsLinksAndNeverDisableThoseWithoutTelemetry()
     {
         var viewport = new ViewportInformation(IsDesktop: false, IsUltraLowHeight: false, IsUltraLowWidth: false);
         var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
@@ -1657,58 +1646,57 @@ public class ResourcesLayoutTests : DashboardTestContext
 
         var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
 
-        // "resource-tab-none" is the tab that's active while no view is shown selected. It's never displayed.
         cut.WaitForAssertion(() => Assert.Equal(
             ["resource-tab-home", "tab-Overview", "tab-Console", "tab-StructuredLogs", "tab-Traces", "tab-Metrics"],
-            cut.FindComponents<FluentTab>().Where(t => t.Instance.Visible && t.Instance.Id != "resource-tab-none").Select(t => t.Instance.Id)));
-        Assert.Equal("tab-Console", cut.FindComponent<FluentTabs>().Instance.ActiveTabId);
+            cut.FindAll(".resources-tab-header a.resource-tab").Select(t => t.Id)));
+        // Each tab links to its page for the selection, so it can be opened in a new browser tab.
+        Assert.Equal(
+            [
+                DashboardUrls.HomeUrl(),
+                ResourcesLayout.GetTabUrl(ResourceTab.Overview, ["api", "worker"]),
+                ResourcesLayout.GetTabUrl(ResourceTab.Console, ["api", "worker"]),
+                ResourcesLayout.GetTabUrl(ResourceTab.StructuredLogs, ["api", "worker"]),
+                ResourcesLayout.GetTabUrl(ResourceTab.Traces, ["api", "worker"]),
+                ResourcesLayout.GetTabUrl(ResourceTab.Metrics, ["api", "worker"])
+            ],
+            cut.FindAll(".resources-tab-header a.resource-tab").Select(t => t.GetAttribute("href")));
+        Assert.Equal(["tab-Console"], cut.FindAll(".resources-tab-header a[aria-current='page']").Select(t => t.Id));
         // The resources send no telemetry, so their telemetry tabs are flagged unavailable but stay enabled.
-        Assert.DoesNotContain(cut.FindComponents<FluentTab>(), t => t.Instance.Disabled);
         Assert.Equal(
             ["tab-StructuredLogs", "tab-Traces", "tab-Metrics"],
-            cut.FindComponents<FluentTab>().Where(t => t.Markup.Contains(Resources.Layout.ResourceTabUnavailable)).Select(t => t.Instance.Id));
+            cut.FindAll(".resources-tab-header a[data-tooltip]").Select(t => t.Id));
 
         // Selecting an unavailable tab still navigates.
-        cut.InvokeAsync(() => cut.FindComponent<FluentTabs>().Instance.ActiveTabChanged.InvokeAsync(
-            cut.FindComponents<FluentTab>().Single(t => t.Instance.Id == "tab-Traces").Instance));
+        await cut.Find("#tab-Traces").ClickAsync(new MouseEventArgs());
         Assert.Equal("http://localhost/traces?resource=api&resource=worker", navigation.Uri);
         cut.Render();
 
-        cut.InvokeAsync(() => cut.FindComponent<FluentTabs>().Instance.ActiveTabChanged.InvokeAsync(
-            cut.FindComponents<FluentTab>().Single(t => t.Instance.Id == "tab-Overview").Instance));
+        await cut.Find("#tab-Overview").ClickAsync(new MouseEventArgs());
         Assert.Equal("http://localhost/resources?resource=api&resource=worker", navigation.Uri);
     }
 
     [Fact]
-    public async Task Tabs_ClickedTabStaysActiveUntilItsPageShows()
+    public async Task Tabs_ModifiedClickLeavesTheLinkToTheBrowser()
     {
         // The tab strip is inline on narrow viewports; on desktop it's in the app's header, which isn't rendered here.
         var viewport = new ViewportInformation(IsDesktop: false, IsUltraLowHeight: false, IsUltraLowWidth: false);
-        var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
         ResourceSetupHelpers.SetupResourcesLayout(this, viewport, new TestDashboardClient(isEnabled: true,
             initialResources: [ModelTestHelpers.CreateResource("api")],
-            resourceChannelProvider: () => channel));
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
         var navigation = Services.GetRequiredService<NavigationManager>();
         navigation.NavigateTo(DashboardUrls.ResourceOverviewUrl("api"));
         var cut = Render<ResourcesLayout>(builder => builder.AddCascadingValue(viewport));
-        cut.WaitForAssertion(() => Assert.Equal("tab-Overview", cut.FindComponent<FluentTabs>().Instance.ActiveTabId));
+        cut.WaitForAssertion(() => Assert.True(cut.Instance.IsLoaded));
 
-        Task SelectTabAsync(string id) => cut.InvokeAsync(() => cut.FindComponent<FluentTabs>().Instance.ActiveTabChanged.InvokeAsync(
-            cut.FindComponents<FluentTab>().Single(t => t.Instance.Id == id).Instance));
-
-        await SelectTabAsync("tab-Console");
-
-        // Until the router gives the layout the new page, the strip keeps the clicked tab. Rendering the previous tab
-        // would make the strip report it as a change once the new page shows, which navigated back, endlessly.
-        Assert.Equal("http://localhost/consolelogs/resource/api", navigation.Uri);
-        Assert.Equal("tab-Console", cut.FindComponent<FluentTabs>().Instance.ActiveTabId);
-        await SelectTabAsync("tab-Overview");
-        Assert.Equal("http://localhost/consolelogs/resource/api", navigation.Uri);
-
-        // Once the new page shows (the router sets the layout's parameters again), tab clicks navigate again.
-        cut.Render();
-        await SelectTabAsync("tab-Overview");
+        // A click with a modifier opens the link in a new browser tab or window, so the layout doesn't navigate.
+        await cut.Find("#tab-Console").ClickAsync(new MouseEventArgs { CtrlKey = true });
+        await cut.Find("#tab-Console").ClickAsync(new MouseEventArgs { ShiftKey = true });
+        await cut.Find("#tab-Console").ClickAsync(new MouseEventArgs { MetaKey = true });
+        await cut.Find("#resource-tab-home").ClickAsync(new MouseEventArgs { CtrlKey = true });
         Assert.Equal("http://localhost/resources/api", navigation.Uri);
+
+        await cut.Find("#tab-Console").ClickAsync(new MouseEventArgs());
+        Assert.Equal("http://localhost/consolelogs/resource/api", navigation.Uri);
     }
 
     [Theory]
@@ -2537,23 +2525,16 @@ public class ResourcesLayoutTests : DashboardTestContext
         Assert.Equal("page", allRow.QuerySelector(".resource-row-link")!.GetAttribute("aria-current"));
         Assert.Empty(cut.FindAll(".resource-row.selected[data-resource-name]"));
         // No tab is shown selected, but the overview is kept as the tab to open for a selection.
-        Assert.Equal("resource-tab-none", header.FindComponent<FluentTabs>().Instance.ActiveTabId);
+        Assert.Empty(header.FindAll(".resources-tab-header [aria-current]"));
         Assert.Equal(ResourceTab.Overview, cut.Instance.CurrentTab);
         Assert.Equal(DashboardUrls.ResourceOverviewUrl("api"), cut.Find("[data-resource-name='api'] .resource-row-link").GetAttribute("href"));
 
-        // FluentTabs reports a change of the current tab when it syncs with the active tab too, for example right after
-        // arriving on the home page with that tab focused, so such a change doesn't open the content.
-        var overview = header.FindComponents<FluentTab>().Single(t => t.Instance.Id == "tab-Overview").Instance;
-        await header.InvokeAsync(() => header.FindComponent<FluentTabs>().Instance.ActiveTabChanged.InvokeAsync(overview));
-        cut.Render();
-        Assert.True(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
-
-        // Clicking it, which the layout's script reports, opens the overview of all resources.
-        await cut.InvokeAsync(() => cut.Instance.OpenTabFromFullCanvasAsync("tab-Overview"));
+        // Clicking the current tab opens the overview of all resources.
+        await header.Find("#tab-Overview").ClickAsync(new MouseEventArgs());
         cut.Render();
         Assert.False(cut.Find(".resources-layout").ClassList.Contains("pane-full-canvas"));
         Assert.Equal("resources", navigationManager.ToBaseRelativePath(navigationManager.Uri));
-        Assert.Equal("tab-Overview", header.FindComponent<FluentTabs>().Instance.ActiveTabId);
+        Assert.Equal(["tab-Overview"], header.FindAll(".resources-tab-header [aria-current='page']").Select(t => t.Id));
         Assert.Equal("All resources", cut.Find(".resource-header-title").TextContent.Trim());
     }
 

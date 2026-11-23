@@ -345,7 +345,7 @@
         background: transparent;
     }
 
-    ::deep.layout > header .resources-tab-header fluent-tab {
+    ::deep.layout > header .resources-tab-header a.resource-tab {
         position: relative;
         height: 32px;
         padding: 0 10px;
@@ -355,12 +355,12 @@
         font-weight: var(--aspire-font-weight-semibold);
     }
 
-    ::deep.layout > header .resources-tab-header fluent-tab[aria-selected="true"] {
+    ::deep.layout > header .resources-tab-header a.resource-tab.active {
         color: var(--colorBrandForeground1);
         background: transparent;
     }
 
-    ::deep.layout > header .resources-tab-header fluent-tab[aria-selected="true"]::after {
+    ::deep.layout > header .resources-tab-header a.resource-tab.active::after {
         content: "";
         position: absolute;
         inset-inline: 8px;
@@ -371,15 +371,15 @@
         background: var(--colorBrandBackground);
     }
 
-    ::deep.layout > header .resources-tab-header fluent-tab[aria-selected="false"] {
+    ::deep.layout > header .resources-tab-header a.resource-tab:not(.active) {
         color: var(--colorNeutralForeground2);
     }
 
-    ::deep.layout > header .resources-tab-header fluent-tab[aria-selected="false"] svg {
+    ::deep.layout > header .resources-tab-header a.resource-tab:not(.active) svg {
         color: var(--colorNeutralForeground2);
     }
 
-    ::deep.layout > header .resources-tab-header fluent-tab[aria-selected="false"]:hover {
+    ::deep.layout > header .resources-tab-header a.resource-tab:not(.active):hover {
         background: var(--colorNeutralBackground3);
         color: var(--colorNeutralForeground1);
     }

@@ -792,56 +792,54 @@
     {
         // When the row no longer has room for every label, the container query swaps this for the compact dropdown
         // instead of letting the top navigation grow its own scrollbar.
-        // While a tab click navigates, the strip keeps showing the clicked tab (see OnTabChanged). While home shows the
-        // resource list, its content is closed and no resource tab is selected: each tab then opens that view for the
-        // selection, which is all resources once the content is closed. CurrentTab is kept for the session, so
-        // selecting resources in the list opens the tab that was last shown.
-        ResourceTab? activeTab = IsResourceListShownAsHome ? null : _navigatingToTab ?? CurrentTab;
+        // While home shows the resource list, its content is closed and no resource tab is current: each tab then
+        // opens that view for the selection, which is all resources once the content is closed. CurrentTab is kept for
+        // the session, so selecting resources in the list opens the tab that was last shown.
+        ResourceTab? activeTab = IsResourceListShownAsHome ? null : CurrentTab;
         var showHomeTab = ShowsHomeTab(isDesktop);
         var homeIsActive = showHomeTab && IsResourceListShownAsHome;
         Icon homeIcon = homeIsActive ? new Icons.Filled.Size24.Home() : new Icons.Regular.Size24.Home();
-        var renderedLocation = _lastLocation;
         var currentTabItem = activeTab is { } active ? GetTabs().FirstOrDefault(t => t.Tab == active) : null;
         var compactText = currentTabItem?.Text ?? Loc[homeIsActive ? nameof(Dashboard.Resources.Layout.ResourceTabHome) : nameof(Dashboard.Resources.Layout.ResourceTabsLandmark)];
         var compactIcon = currentTabItem?.Icon ?? (homeIsActive ? homeIcon : null);
     <div class="resource-tabs-nav">
-        @* Keep queued native change events bound to their original location. Reusing the component would
-           rebind its callback before those events arrive, making an old change look like a new user navigation. *@
-        <FluentTabs @key="renderedLocation"
-                    Class="resources-tab-header"
-                    ActiveTabId="@(activeTab is { } activeId ? GetTabId(activeId) : homeIsActive ? HomeTabId : NoActiveTabId)"
-                    ActiveTabChanged="@(tab => OnTabChanged(tab, isDesktop, renderedLocation))"
-                    Size="null">
+        @* The tabs are links, so a middle, Ctrl or Shift click opens a tab in a new browser tab or window. A plain
+           click is handled by the layout instead (see OnTabClickAsync). *@
+        <nav class="resources-tab-header aspire-tab-list" aria-label="@Loc[nameof(Dashboard.Resources.Layout.ResourceTabsLandmark)]">
             @if (showHomeTab)
             {
-                <FluentTab HeaderClass="tab-label" Id="@HomeTabId" IconStart="@homeIcon">
-                    <HeaderTemplate>
-                        <span>@Loc[nameof(Dashboard.Resources.Layout.ResourceTabHome)]</span>
-                    </HeaderTemplate>
-                </FluentTab>
+                <a id="@HomeTabId"
+                   href="@DashboardUrls.HomeUrl()"
+                   class="resource-tab aspire-tab @(homeIsActive ? "active" : null)"
+                   aria-current="@(homeIsActive ? "page" : null)"
+                   @onclick="OnHomeTabClickAsync">
+                    <FluentIcon Value="@homeIcon" Color="Color.Custom" CustomColor="currentColor" />
+                    <span>@Loc[nameof(Dashboard.Resources.Layout.ResourceTabHome)]</span>
+                </a>
             }
             @foreach (var tab in GetTabs())
             {
-                <FluentTab HeaderClass="tab-label"
-                           Id="@GetTabId(tab.Tab)"
-                           Visible="@tab.IsVisible"
-                           data-tooltip="@(tab.IsAvailable ? null : Loc[nameof(Dashboard.Resources.Layout.ResourceTabUnavailable)])"
-                           IconStart="@tab.Icon">
-                    <HeaderTemplate>
-                        <span>@tab.Text</span>
-                        @if (tab.ErrorCount > 0)
-                        {
-                            <FluentBadge Class="resource-tab-error-count" Appearance="BadgeAppearance.Tint" Circular="true">@tab.ErrorCount</FluentBadge>
-                        }
-                    </HeaderTemplate>
-                </FluentTab>
+                if (!tab.IsVisible)
+                {
+                    continue;
+                }
+
+                var isActive = tab.Tab == activeTab;
+                <a id="@GetTabId(tab.Tab)"
+                   href="@tab.Href"
+                   class="resource-tab aspire-tab @(isActive ? "active" : null)"
+                   aria-current="@(isActive ? "page" : null)"
+                   data-tooltip="@(tab.IsAvailable ? null : Loc[nameof(Dashboard.Resources.Layout.ResourceTabUnavailable)].Value)"
+                   @onclick="@(e => OnTabClickAsync(e, tab.Tab))">
+                    <FluentIcon Value="@tab.Icon" Color="Color.Custom" CustomColor="currentColor" />
+                    <span>@tab.Text</span>
+                    @if (tab.ErrorCount > 0)
+                    {
+                        <FluentBadge Class="resource-tab-error-count" Appearance="BadgeAppearance.Tint" Circular="true">@tab.ErrorCount</FluentBadge>
+                    }
+                </a>
             }
-            @* Active while no tab is selected. The tab list selects its first tab when the active id matches no tab,
-               and a tab with Visible="false" isn't rendered, so this one is rendered but not displayed (see the
-               stylesheet): it's never seen, focused or announced. It's last so the visible tabs keep their order.
-               HeaderClass is the class of the fluent-tab element itself. *@
-            <FluentTab Id="@NoActiveTabId" HeaderClass="resource-tab-none" aria-hidden="true" />
-        </FluentTabs>
+        </nav>
         @* Tabs that don't fit the row move here, from the right (see registerTabOverflow). *@
         <div class="resource-tabs-overflow @(_overflowTabIds.Length > 0 ? "has-overflow" : null) @(activeTab is { } overflowTab && _overflowTabIds.Contains(GetTabId(overflowTab)) ? "has-active" : null)">
             <AspireMenuButton ButtonClass="resource-tabs-overflow-button"
