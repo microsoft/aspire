@@ -2046,15 +2046,16 @@ public class ResourcesLayoutTests : DashboardTestContext
     }
 
     [Theory]
-    [InlineData(CommandViewModelState.Enabled, true, true, false, ResourceListDensity.Compact, true)]
-    [InlineData(CommandViewModelState.Disabled, true, true, false, ResourceListDensity.Comfortable, true)]
-    [InlineData(CommandViewModelState.Enabled, true, true, true, ResourceListDensity.Compact, true)]
-    [InlineData(CommandViewModelState.Enabled, false, true, false, ResourceListDensity.Comfortable, false)]
-    [InlineData(CommandViewModelState.Hidden, true, true, false, ResourceListDensity.Compact, false)]
-    [InlineData(CommandViewModelState.Enabled, true, false, false, ResourceListDensity.Comfortable, true)]
-    [InlineData(CommandViewModelState.Enabled, false, false, false, ResourceListDensity.Compact, false)]
+    [InlineData(CommandViewModelState.Enabled, true, true, false, ResourceListDensity.Compact, true, false)]
+    [InlineData(CommandViewModelState.Disabled, true, true, false, ResourceListDensity.Comfortable, true, false)]
+    [InlineData(CommandViewModelState.Enabled, true, true, true, ResourceListDensity.Compact, true, false)]
+    [InlineData(CommandViewModelState.Enabled, false, true, false, ResourceListDensity.Comfortable, false, false)]
+    [InlineData(CommandViewModelState.Hidden, true, true, false, ResourceListDensity.Compact, false, false)]
+    [InlineData(CommandViewModelState.Enabled, true, false, false, ResourceListDensity.Comfortable, true, false)]
+    [InlineData(CommandViewModelState.Enabled, false, false, false, ResourceListDensity.Compact, false, false)]
+    [InlineData(CommandViewModelState.Enabled, true, true, false, ResourceListDensity.Comfortable, true, true)]
     public async Task ParameterRowActions_ShowVisibleHighlightedCommandsInBothViews(
-        CommandViewModelState setState, bool setHighlighted, bool hasValue, bool readOnly, ResourceListDensity density, bool showSetInline)
+        CommandViewModelState setState, bool setHighlighted, bool hasValue, bool readOnly, ResourceListDensity density, bool showSetInline, bool customHighlighted)
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         static CommandViewModel Command(string name, string displayName, CommandViewModelState state, bool highlighted) =>
@@ -2064,7 +2065,7 @@ public class ResourcesLayoutTests : DashboardTestContext
             [
                 ModelTestHelpers.CreateResource("setting-id", displayName: "setting", resourceType: KnownResourceTypes.Parameter, commands:
                 [
-                    Command("custom", "Custom", CommandViewModelState.Enabled, false),
+                    Command("custom", "Custom", CommandViewModelState.Enabled, customHighlighted),
                     Command(CommandViewModel.SetParameterCommand, "Set parameter", setState, setHighlighted),
                     Command(CommandViewModel.DeleteParameterCommand, "Delete parameter", hasValue ? CommandViewModelState.Enabled : CommandViewModelState.Hidden, true)
                 ]),
@@ -2092,12 +2093,17 @@ public class ResourcesLayoutTests : DashboardTestContext
         {
             var actions = cut.FindAll("[data-resource-name='setting-id'] .resource-row-actions fluent-button");
             var expectedActions = new List<(string? Label, bool Disabled)>();
+            if (customHighlighted)
+            {
+                expectedActions.Add(("Custom setting", readOnly));
+            }
+
             if (showSetInline)
             {
                 expectedActions.Add(("Set parameter setting", readOnly || setState == CommandViewModelState.Disabled));
             }
 
-            if (hasValue)
+            if (hasValue && expectedActions.Count < 2)
             {
                 expectedActions.Add(("Delete parameter setting", readOnly));
             }
