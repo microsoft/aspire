@@ -404,6 +404,35 @@ public class AzureWebPubSubExtensionsTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public async Task EventHandlerDeployedUrlPreservesEscapedBraces()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.AddAzureContainerAppEnvironment("env");
+        var serviceA = builder.AddProject<ProjectA>("serviceA", o => o.ExcludeLaunchProfile = true)
+            .WithHttpsEndpoint()
+            .WithExternalHttpEndpoints();
+
+        // AppendLiteral leaves doubled braces as already escaped, so this literal evaluates to "/events/{{event}}".
+        var urlBuilder = new ReferenceExpressionBuilder();
+        urlBuilder.AppendValueProvider(serviceA.GetEndpoint("https"));
+        urlBuilder.AppendLiteral("/events/{{{{event}}}}");
+        var url = urlBuilder.Build();
+
+        var wps = builder.AddAzureWebPubSub("wps1");
+        wps.AddHub("abc").AddEventHandler(url);
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var handlers = Assert.Single(model.Resources.OfType<AzureProvisioningResource>(), r => r.Name == "wps1-abc-handlers");
+        var (handlersManifest, _) = await AzureManifestUtils.GetManifestWithBicep(handlers, skipPreparer: true);
+
+        Assert.Equal("{serviceA.bindings.https.url}/events/{{event}}", url.ValueExpression);
+        Assert.Equal("{serviceA-containerapp.outputs.https_url}/events/{{event}}", handlersManifest["params"]!["abc_url_0"]!.ToString());
+    }
+
+    [Fact]
     public async Task AddEventHandlerWithLiteralUrlTemplateKeepsPlaceholders()
     {
         // A URL template without references is written to Bicep as a literal. Its {hub} and {event}

@@ -551,6 +551,8 @@ public static class AzureWebPubSubExtensions
         // Format is a composite format string with indexed placeholders and doubled literal braces:
         //   "{0}/api/{{event}}"  =>  value provider 0, then the literal "/api/{event}"
         // Placeholders never carry alignment or format specifiers; those live in StringFormats.
+        // Literal segments are passed to AppendLiteral still escaped: it treats doubled braces as
+        // already escaped, so unescaping them first would lose a level for "{{{{" and similar runs.
         var builder = new ReferenceExpressionBuilder();
         var format = expression.Format;
         var literal = new StringBuilder();
@@ -559,7 +561,7 @@ public static class AzureWebPubSubExtensions
             var c = format[i];
             if ((c is '{' or '}') && i + 1 < format.Length && format[i + 1] == c)
             {
-                literal.Append(c);
+                literal.Append(c).Append(c);
                 i++;
             }
             else if (c == '{')
