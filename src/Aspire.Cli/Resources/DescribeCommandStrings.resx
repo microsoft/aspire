@@ -163,4 +163,11 @@
   <data name="HeaderURLs" xml:space="preserve">
     <value>URLs</value>
   </data>
+  <data name="NoTelemetryReceived" xml:space="preserve">
+    <value>OpenTelemetry export is configured, but no telemetry has been received from: {0}</value>
+    <comment>{0} is a comma-separated list of resource names.</comment>
+  </data>
+  <data name="NoTelemetryReceivedHint" xml:space="preserve">
+    <value>The OTEL_* settings only take effect when the app registers an OpenTelemetry SDK. For Node.js apps, install @opentelemetry/auto-instrumentations-node and start the app with --require @opentelemetry/auto-instrumentations-node/register. An idle app may also have nothing to report yet.</value>
+  </data>
 </root>

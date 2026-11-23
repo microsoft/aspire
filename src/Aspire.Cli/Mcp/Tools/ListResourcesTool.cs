@@ -66,6 +66,7 @@ internal sealed class McpResourceJson
     public int? ExitCode { get; init; }
     public string? HealthStatus { get; init; }
     public string? DashboardUrl { get; init; }
+    public bool? TelemetryReceived { get; init; }
     public McpResourceUrlJson[] Urls { get; init; } = [];
     public McpResourceRelationshipJson[] Relationships { get; init; } = [];
     public Dictionary<string, McpResourceCommandJson> Commands { get; init; } = [];
@@ -99,7 +100,7 @@ internal sealed partial class ListResourcesToolJsonContext : JsonSerializerConte
 /// MCP tool for listing application resources.
 /// Gets resource data directly from the AppHost backchannel instead of forwarding to the dashboard.
 /// </summary>
-internal sealed class ListResourcesTool(IAuxiliaryBackchannelMonitor auxiliaryBackchannelMonitor, ILogger<ListResourcesTool> logger) : CliMcpTool
+internal sealed class ListResourcesTool(IAuxiliaryBackchannelMonitor auxiliaryBackchannelMonitor, IHttpClientFactory httpClientFactory, ILogger<ListResourcesTool> logger) : CliMcpTool
 {
     private const int MaxResources = 64;
     private const int MaxUrlsPerResource = 16;
@@ -133,7 +134,7 @@ internal sealed class ListResourcesTool(IAuxiliaryBackchannelMonitor auxiliaryBa
 
     public override string Name => KnownMcpTools.ListResources;
 
-    public override string Description => "List the application resources for the selected AppHost. Includes runtime information such as resource type, state, source, endpoints, health status, relationships, and API-visible command metadata without current or default argument values. Returns up to 64 resources ordered by runtime name; use offset and limit to page through all visible resources.";
+    public override string Description => "List the application resources for the selected AppHost. Includes runtime information such as resource type, state, source, endpoints, health status, whether configured OpenTelemetry export has delivered any telemetry, relationships, and API-visible command metadata without current or default argument values. Returns up to 64 resources ordered by runtime name; use offset and limit to page through all visible resources.";
 
     public override JsonElement GetInputSchema()
     {
@@ -190,6 +191,12 @@ internal sealed class ListResourcesTool(IAuxiliaryBackchannelMonitor auxiliaryBa
                 .OrderBy(snapshot => snapshot.Name, StringComparer.Ordinal)
                 .ToList();
             var pageSnapshots = visibleSnapshots.Skip(offset).Take(limit).ToList();
+            var telemetryStatus = await ResourceTelemetryStatus.TryGetAsync(
+                connection,
+                pageSnapshots,
+                httpClientFactory,
+                logger,
+                cancellationToken).ConfigureAwait(false);
 
             // Use the dashboard base URL if available
             var dashboardBaseUrl = McpToolHelpers.StripLoginPath(dashboardUrls?.BaseUrlWithLoginToken);
@@ -213,6 +220,7 @@ internal sealed class ListResourcesTool(IAuxiliaryBackchannelMonitor auxiliaryBa
                 ExitCode = snapshot.ExitCode,
                 HealthStatus = GetBoundedText(snapshot.HealthStatus),
                 DashboardUrl = GetDashboardUrl(snapshot, dashboardBaseUrl),
+                TelemetryReceived = telemetryStatus?.GetTelemetryReceived(snapshot),
                 Urls = snapshot.Urls.Take(MaxUrlsPerResource).Select(url => new McpResourceUrlJson
                 {
                     Name = GetBoundedText(url.Name),
@@ -231,11 +239,16 @@ internal sealed class ListResourcesTool(IAuxiliaryBackchannelMonitor auxiliaryBa
                 new McpResourcePageJson(offset, limit, visibleSnapshots.Count, nextOffset),
                 ListResourcesToolJsonContext.RelaxedEscaping.McpResourcePageJson);
 
+            // Only spend tokens on the explanation when a resource on this page actually needs it.
+            var telemetryGuidance = boundedResources.Any(resource => resource.TelemetryReceived == false)
+                ? "telemetry_received: false means the AppHost configured OpenTelemetry export for the resource but the dashboard has received no traces, logs, or metrics from it, so an empty trace or log list does not mean nothing happened. Unless the resource is idle, its app likely doesn't register an OpenTelemetry SDK; the OTEL_* settings have no effect without one (for Node.js, @opentelemetry/auto-instrumentations-node with --require @opentelemetry/auto-instrumentations-node/register).\n"
+                : string.Empty;
+
             var response = $"""
             resource_name is the identifier of resources.
             Console logs for a resource can provide more information about why a resource is not in a running state.
             Command names and argument names can be passed to execute_resource_command. Current and default argument values are never included.
-            Use next_offset with the same limit to retrieve the next page. An absent next_offset means there are no more resources.
+            {telemetryGuidance}Use next_offset with the same limit to retrieve the next page. An absent next_offset means there are no more resources.
             Each page reads current state; restart from offset 0 if resource membership changes while paging.
 
             # PAGINATION

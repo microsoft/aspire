@@ -197,6 +197,14 @@ identifiers, choice keys, and their collections remain complete so callers can
 construct an invocation; use a smaller resource `limit` for resources with extensive
 command metadata.
 
+Each resource has a `telemetry_received` boolean when the AppHost configured OTLP
+export for it (its environment contains `OTEL_EXPORTER_OTLP_ENDPOINT`) and the
+dashboard telemetry API could be read. `false` means the dashboard has received no
+traces, logs, or metrics from the resource, typically because the app doesn't
+register an OpenTelemetry SDK. The field is omitted when OTLP isn't configured or
+the dashboard is unavailable, unreachable, or doesn't answer within five seconds;
+those conditions never fail the listing.
+
 The MCP projection never includes current/default input values, placeholders,
 environment values, or arbitrary resource properties. Choice options are emitted
 only for choice inputs, never secret inputs. Descriptions and choice labels are

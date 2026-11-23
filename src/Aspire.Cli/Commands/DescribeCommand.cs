@@ -12,6 +12,7 @@ using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Utils;
+using Aspire.Hosting.ApplicationModel;
 using Aspire.Shared;
 using Aspire.Shared.Model.Serialization;
 using Microsoft.Extensions.Logging;
@@ -78,6 +79,8 @@ internal sealed class DescribeCommand : BaseCommand
     private readonly AppHostConnectionResolver _connectionResolver;
     private readonly ResourceColorMap _resourceColorMap;
     private readonly ILogger<ResourceSnapshotWatcher> _resourceSnapshotWatcherLogger;
+    private readonly IHttpClientFactory _httpClientFactory;
+    private readonly ILogger<DescribeCommand> _logger;
 
     private static readonly Argument<string?> s_resourceArgument = new("resource")
     {
@@ -110,6 +113,7 @@ internal sealed class DescribeCommand : BaseCommand
         AppHostConnectionResolver connectionResolver,
         ResourceColorMap resourceColorMap,
         ILogger<ResourceSnapshotWatcher> resourceSnapshotWatcherLogger,
+        IHttpClientFactory httpClientFactory,
         CommonCommandServices services)
         : base("describe", DescribeCommandStrings.Description, services)
     {
@@ -117,6 +121,8 @@ internal sealed class DescribeCommand : BaseCommand
         _resourceColorMap = resourceColorMap;
         _connectionResolver = connectionResolver;
         _resourceSnapshotWatcherLogger = resourceSnapshotWatcherLogger;
+        _httpClientFactory = httpClientFactory;
+        _logger = services.LoggerFactory.CreateLogger<DescribeCommand>();
 
         Arguments.Add(s_resourceArgument);
         Options.Add(s_appHostOption);
@@ -223,11 +229,19 @@ internal sealed class DescribeCommand : BaseCommand
         }
         else
         {
-            return CommandResult.FromExitCode(ExecuteSnapshot(resourceWatcher.GetResources().ToList(), dashboardBaseUrl, resourceName, format, includeDisabledCommands));
+            var snapshots = resourceWatcher.GetResources().ToList();
+
+            // The telemetry status is a point-in-time read, so it is only reported for snapshots. Mermaid
+            // output exports topology only and never includes it.
+            var telemetryStatus = format is ResourceOutputFormat.Mermaid
+                ? null
+                : await ResourceTelemetryStatus.TryGetAsync(connection, snapshots, _httpClientFactory, _logger, cancellationToken).ConfigureAwait(false);
+
+            return CommandResult.FromExitCode(ExecuteSnapshot(snapshots, dashboardBaseUrl, resourceName, format, includeDisabledCommands, telemetryStatus));
         }
     }
 
-    private int ExecuteSnapshot(IReadOnlyList<ResourceSnapshot> snapshots, string? dashboardBaseUrl, string? resourceName, ResourceOutputFormat format, bool includeDisabledCommands)
+    private int ExecuteSnapshot(IReadOnlyList<ResourceSnapshot> snapshots, string? dashboardBaseUrl, string? resourceName, ResourceOutputFormat format, bool includeDisabledCommands, ResourceTelemetryStatus? telemetryStatus)
     {
         var allSnapshots = snapshots;
 
@@ -261,6 +275,14 @@ internal sealed class DescribeCommand : BaseCommand
         else if (format == ResourceOutputFormat.Json)
         {
             var resourceList = ResourceSnapshotMapper.MapToResourceJsonList(snapshots, dashboardBaseUrl, includeDisabledCommands: includeDisabledCommands);
+            if (telemetryStatus is not null)
+            {
+                for (var i = 0; i < resourceList.Count; i++)
+                {
+                    resourceList[i].TelemetryReceived = telemetryStatus.GetTelemetryReceived(snapshots[i]);
+                }
+            }
+
             var output = new ResourcesOutput { Resources = resourceList.ToArray() };
             var json = JsonSerializer.Serialize(output, ResourcesCommandJsonContext.RelaxedEscaping.ResourcesOutput);
             // Structured output always goes to stdout.
@@ -269,6 +291,7 @@ internal sealed class DescribeCommand : BaseCommand
         else
         {
             DisplayResourcesTable(snapshots, dashboardBaseUrl);
+            DisplayNoTelemetryReceivedHint(snapshots, telemetryStatus);
         }
 
         return CliExitCodes.Success;
@@ -420,6 +443,33 @@ internal sealed class DescribeCommand : BaseCommand
         }
 
         InteractionService.DisplayRenderable(table);
+    }
+
+    private void DisplayNoTelemetryReceivedHint(IReadOnlyList<ResourceSnapshot> snapshots, ResourceTelemetryStatus? telemetryStatus)
+    {
+        if (telemetryStatus is null)
+        {
+            return;
+        }
+
+        // Only running resources are flagged: a resource that hasn't started yet or has stopped is not
+        // expected to be exporting telemetry right now.
+        var resourceNames = snapshots
+            .Where(s => string.Equals(s.State, KnownResourceStates.Running, StringComparison.OrdinalIgnoreCase) &&
+                telemetryStatus.GetTelemetryReceived(s) == false)
+            .Select(s => ResourceSnapshotMapper.GetResourceName(s, snapshots))
+            .Order(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (resourceNames.Count == 0)
+        {
+            return;
+        }
+
+        InteractionService.DisplayMessage(
+            KnownEmojis.Information,
+            string.Format(CultureInfo.CurrentCulture, DescribeCommandStrings.NoTelemetryReceived, string.Join(", ", resourceNames)));
+        InteractionService.DisplaySubtleMessage(DescribeCommandStrings.NoTelemetryReceivedHint);
     }
 
     private static ResourceDisplayState BuildResourceDisplayState(ResourceSnapshot snapshot, IReadOnlyList<ResourceSnapshot> allResources)

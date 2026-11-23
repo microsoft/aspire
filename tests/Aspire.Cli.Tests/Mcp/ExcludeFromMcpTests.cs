@@ -22,6 +22,7 @@ public class ExcludeFromMcpTests
     private const string ApiServiceName = "api-service";
     private const string AppHostPath = "/repo/TestAppHost/TestAppHost.csproj";
     private const string SecretServiceName = "secret-service";
+    private static readonly TestHttpClientFactory s_httpClientFactory = new();
 
     [Fact]
     public void IsExcludedFromMcp_ReturnsFalse_WhenPropertyNotSet()
@@ -136,7 +137,7 @@ public class ExcludeFromMcpTests
         };
         monitor.AddConnection("socket.hash1", connection);
 
-        var tool = new ListResourcesTool(monitor, NullLogger<ListResourcesTool>.Instance);
+        var tool = new ListResourcesTool(monitor, s_httpClientFactory, NullLogger<ListResourcesTool>.Instance);
         var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(), CancellationToken.None).DefaultTimeout();
 
         var textContent = result.Content![0] as TextContentBlock;
@@ -178,7 +179,7 @@ public class ExcludeFromMcpTests
         };
         monitor.AddConnection("socket.hash1", connection);
 
-        var tool = new ListResourcesTool(monitor, NullLogger<ListResourcesTool>.Instance);
+        var tool = new ListResourcesTool(monitor, s_httpClientFactory, NullLogger<ListResourcesTool>.Instance);
         var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(), CancellationToken.None).DefaultTimeout();
 
         var textContent = result.Content![0] as TextContentBlock;

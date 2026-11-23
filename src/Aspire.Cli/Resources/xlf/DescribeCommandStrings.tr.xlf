@@ -57,6 +57,16 @@
         <target state="translated">AppHost projesi bulunamadı.</target>
         <note />
       </trans-unit>
+      <trans-unit id="NoTelemetryReceived">
+        <source>OpenTelemetry export is configured, but no telemetry has been received from: {0}</source>
+        <target state="new">OpenTelemetry export is configured, but no telemetry has been received from: {0}</target>
+        <note>{0} is a comma-separated list of resource names.</note>
+      </trans-unit>
+      <trans-unit id="NoTelemetryReceivedHint">
+        <source>The OTEL_* settings only take effect when the app registers an OpenTelemetry SDK. For Node.js apps, install @opentelemetry/auto-instrumentations-node and start the app with --require @opentelemetry/auto-instrumentations-node/register. An idle app may also have nothing to report yet.</source>
+        <target state="new">The OTEL_* settings only take effect when the app registers an OpenTelemetry SDK. For Node.js apps, install @opentelemetry/auto-instrumentations-node and start the app with --require @opentelemetry/auto-instrumentations-node/register. An idle app may also have nothing to report yet.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ResourceArgumentDescription">
         <source>The name of the resource to display. If not specified, all resources are shown.</source>
         <target state="translated">Görüntülenecek kaynağın adı. Belirtilmezse tüm kaynaklar gösterilir.</target>

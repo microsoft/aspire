@@ -124,6 +124,24 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to OpenTelemetry export is configured, but no telemetry has been received from: {0}.
+        /// </summary>
+        internal static string NoTelemetryReceived {
+            get {
+                return ResourceManager.GetString("NoTelemetryReceived", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The OTEL_* settings only take effect when the app registers an OpenTelemetry SDK. For Node.js apps, install @opentelemetry/auto-instrumentations-node and start the app with --require @opentelemetry/auto-instrumentations-node/register. An idle app may also have nothing to report yet..
+        /// </summary>
+        internal static string NoTelemetryReceivedHint {
+            get {
+                return ResourceManager.GetString("NoTelemetryReceivedHint", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Include hidden resources in the output.
         /// </summary>
         internal static string IncludeHiddenOptionDescription {
