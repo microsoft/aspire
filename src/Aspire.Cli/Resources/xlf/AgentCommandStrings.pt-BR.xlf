@@ -251,12 +251,12 @@
       </trans-unit>
       <trans-unit id="InitCommand_RemovedSkillCopies">
         <source>Deleted {0} copied skill folders</source>
-        <target state="new">Deleted {0} copied skill folders</target>
+        <target state="translated">Foram excluídas {0} pastas de habilidades copiadas</target>
         <note>{0} is the number of deleted skill folders, always greater than one.</note>
       </trans-unit>
       <trans-unit id="InitCommand_RemovedSkillCopy">
         <source>Deleted 1 copied skill folder</source>
-        <target state="new">Deleted 1 copied skill folder</target>
+        <target state="translated">Foi excluída 1 pasta de habilidade copiada</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_ScopeOptionDescription">
@@ -286,7 +286,7 @@
       </trans-unit>
       <trans-unit id="InitCommand_SkillCopiesFound">
         <source>The Aspire skills plugin now provides these skills. Deleting the copied folders also deletes everything inside them, including any changes you made:</source>
-        <target state="new">The Aspire skills plugin now provides these skills. Deleting the copied folders also deletes everything inside them, including any changes you made:</target>
+        <target state="translated">O plugin de habilidades do Aspire agora fornece estas habilidades. Excluir as pastas copiadas também exclui todo o conteúdo delas, incluindo quaisquer alterações que você tenha feito:</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_SkillCopiesRequirePlugin">
